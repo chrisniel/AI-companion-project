@@ -1,40 +1,27 @@
-# Task Tracking: Awaiting User-Authorized Work
+# Task Tracking: Active Task
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: Planning
-- Target: Keep the repository read-only until the user requests a specific review or explicitly authorizes a bounded edit.
-- Scope Guard: Entire repository is read-only by default. Do not edit application code, documentation, configuration, dependencies, Git state, or external systems without explicit task-specific authorization.
+- Status: Ready / Awaiting Next Task
+- Current Sprint: Android UI V1.1 Refinement Completed & Verified
+- Target: Next prioritized milestone (Backend Foundation or Web Productionization).
+- Scope Guard: Read-only by default; edits require explicit user direction and task-specific plan approval.
 
 ## [CURRENT EXECUTION STATE - HANDOFF]
 
-- Active Files: None
-- Current Blocker / Status: Documentation workflow and master-plan reconciliation are complete; awaiting the user's next request.
-- Next Immediate Action: Read the user's requested scope and inspect only the relevant canonical documents and files.
+- Active Files: None (idle)
+- Current Blocker / Status: Android UI V1.1 Refinement completed and verified (106 unit/Robolectric tests passed). Ready for user commit and push.
+- Next Immediate Action: User manual Git review, commit, and push. Stand by for next sprint prioritization.
 
 ## Active Checklist
 
-### Phase 1: Request Intake
+### Next Milestone Options
+- [ ] Backend Foundation Planning (FastAPI, SQLite/FTS5, Local AI Core integration).
+- [ ] Web Productionization Implementation (`docs/02_Planning/plan-web-productionization.md`).
+- [ ] Real Network / WebSocket Companion Integration for Android (`NetworkClient`, PC Core discovery).
 
-- [ ] Receive the exact objective and whether the task is read-only or authorizes edits.
-- [ ] Confirm authorized paths, protected boundaries, and expected outcome.
+## Verification & QA Summary (Last Delivery)
 
-### Phase 2: Task Preparation
-
-- [ ] Read the canonical master plan and only the relevant project material.
-- [ ] Create or update an approval-gated plan for non-trivial authorized changes.
-
-### Phase 3: Verification and Handoff
-
-- [ ] Run safe, proportionate checks and report unverified manual areas honestly.
-- [ ] For a completed major change, update documentation/tracking and provide a proposed commit message for the user's manual commit and push.
-
-## Verification & QA Gates
-
-- [ ] Automated checks: Select after the next task is defined.
-- [ ] Manual/user-owned checks: Select after the next task is defined.
-
-## Archive Instruction
-
-Archive only a completed, verified sprint to `docs/01_Tracking/archive/task-YYYY-MM-DD-feature-name.md`; keep this active file focused and under 80 lines.
-
+- [x] Automated checks: `.\gradlew.bat :app:compileDebugKotlin` and `.\gradlew.bat :app:testDebugUnitTest` (106 tests passed).
+- [x] Static checks: `git diff --check` passed cleanly.
+- [x] Archived task: `docs/01_Tracking/archive/task-2026-09-11-android-ui-v1.1-refinement.md`.
