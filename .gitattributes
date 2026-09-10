@@ -1,0 +1,76 @@
+# =========================================================
+# AI Companion Project
+# .gitattributes
+# =========================================================
+
+# Normalize text files in Git.
+* text=auto
+
+# Use LF in repository for source/config/docs.
+*.md      text eol=lf
+*.txt     text eol=lf
+*.json    text eol=lf
+*.yaml    text eol=lf
+*.yml     text eol=lf
+*.toml    text eol=lf
+*.py      text eol=lf
+*.kt      text eol=lf
+*.kts     text eol=lf
+*.java    text eol=lf
+*.ts      text eol=lf
+*.tsx     text eol=lf
+*.js      text eol=lf
+*.jsx     text eol=lf
+*.css     text eol=lf
+*.html    text eol=lf
+*.xml     text eol=lf
+*.sql     text eol=lf
+*.sh      text eol=lf
+
+# PowerShell and Windows command files use CRLF.
+*.ps1     text eol=crlf
+*.psm1    text eol=crlf
+*.cmd     text eol=crlf
+*.bat     text eol=crlf
+
+# Common binaries.
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.webp    binary
+*.ico     binary
+*.pdf     binary
+*.zip     binary
+*.7z      binary
+*.wav     binary
+*.mp3     binary
+*.ogg     binary
+*.opus    binary
+
+# -----------------------------------------------------------------
+# OPTIONAL: Git LFS patterns for a DEDICATED MODEL REPOSITORY
+# -----------------------------------------------------------------
+#
+# IMPORTANT:
+# The main AI-companion-project repository currently ignores model
+# weights in .gitignore. That is intentional.
+#
+# If you later create a separate Hugging Face model repository,
+# copy/uncomment the relevant patterns below in THAT repository.
+#
+# Git LFS does not "point to Hugging Face" by itself.
+# The Git remote determines where LFS data is uploaded.
+#
+# AI / ML model files
+*.gguf        filter=lfs diff=lfs merge=lfs -text
+*.ggml        filter=lfs diff=lfs merge=lfs -text
+*.safetensors filter=lfs diff=lfs merge=lfs -text
+*.onnx        filter=lfs diff=lfs merge=lfs -text
+*.pt          filter=lfs diff=lfs merge=lfs -text
+*.pth         filter=lfs diff=lfs merge=lfs -text
+*.ckpt        filter=lfs diff=lfs merge=lfs -text
+#
+# Optional large voice/avatar model assets:
+# *.bin         filter=lfs diff=lfs merge=lfs -text
+# *.model       filter=lfs diff=lfs merge=lfs -text
