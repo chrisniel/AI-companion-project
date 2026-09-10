@@ -1,8 +1,168 @@
+# =========================================================
+# AI Companion Project
+# Root .gitignore
+# =========================================================
+
+# ---------------------------------------------------------
+# React / Node / Vite
+# ---------------------------------------------------------
 frontend/web/node_modules/
-frontend/web/build/
 frontend/web/dist/
+frontend/web/build/
 frontend/web/coverage/
-frontend/web/.DS_Store
 frontend/web/*.log
-frontend/web/.env
-frontend/web/.env.example
+frontend/web/.DS_Store
+
+# Frontend environment files
+frontend/web/.env*
+!frontend/web/.env.example
+
+# Package manager / tooling caches
+**/.npm/
+**/.pnpm-store/
+**/.yarn/cache/
+**/.yarn/unplugged/
+
+# ---------------------------------------------------------
+# Python / FastAPI
+# ---------------------------------------------------------
+backend/.venv/
+backend/venv/
+backend/env/
+backend/**/__pycache__/
+backend/**/*.py[cod]
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+backend/htmlcov/
+backend/.coverage
+backend/coverage.xml
+
+# Backend environment files / secrets
+backend/.env*
+!backend/.env.example
+
+# ---------------------------------------------------------
+# Android / Gradle / Android Studio
+# ---------------------------------------------------------
+android/.gradle/
+android/local.properties
+android/**/build/
+android/.idea/
+android/**/*.iml
+android/.cxx/
+android/.externalNativeBuild/
+android/captures/
+
+# Signing keys / certificates
+android/*.jks
+android/*.keystore
+android/**/*.jks
+android/**/*.keystore
+
+# Android packages
+android/**/*.apk
+android/**/*.aab
+
+# ---------------------------------------------------------
+# IDE / Editor
+# ---------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---------------------------------------------------------
+# Operating System
+# ---------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------------------------------------------------------
+# Logs / Temporary / Cache
+# ---------------------------------------------------------
+*.log
+*.tmp
+*.temp
+*.cache
+*.bak
+*.old
+
+cache/
+runtime/
+generated/
+outputs/
+
+# ---------------------------------------------------------
+# Local databases / personal runtime data
+# ---------------------------------------------------------
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+
+data/
+!backend/app/data/
+!backend/app/data/**
+
+# ---------------------------------------------------------
+# Local AI model weights
+# Keep model artifacts outside the main source repository.
+# Use a dedicated Hugging Face model repository when needed.
+# ---------------------------------------------------------
+
+
+# ---------------------------------------------------------
+# Audio / voice runtime artifacts
+# ---------------------------------------------------------
+recordings/
+transcripts/
+audio-cache/
+*.wav.tmp
+*.pcm
+
+# ---------------------------------------------------------
+# Secrets / credentials / certificates
+# ---------------------------------------------------------
+.env
+.env.*
+!.env.example
+
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+
+secrets/
+credentials/
+
+# ---------------------------------------------------------
+# Local config overrides
+# Commit only sanitized examples under config/examples/
+# ---------------------------------------------------------
+config/local/
+config/private/
+config/*.local.yaml
+config/*.local.yml
+config/*.local.json
+
+# ---------------------------------------------------------
+# Test artifacts
+# ---------------------------------------------------------
+.pytest_cache/
+coverage/
+test-results/
+playwright-report/
+
+# ---------------------------------------------------------
+# Large local/downloaded artifacts
+# ---------------------------------------------------------
+downloads/
+artifacts/local/
