@@ -1,0 +1,20 @@
+# Historical logs and completed work
+CHANGELOG.md
+**/CHANGELOG.md
+docs/01_Tracking/archive/
+**/docs/01_Tracking/archive/
+
+# Drafts and scratch material
+docs/00_Drafts/
+docs/00_Draft/
+**/docs/00_Drafts/
+**/docs/00_Draft/
+
+# Superseded documentation
+docs/07_Archive/
+**/docs/07_Archive/
+
+# Human-only starter reference
+docs/ProjectWorkflowStarterKit/
+**/docs/ProjectWorkflowStarterKit/
+
