@@ -166,3 +166,5 @@ playwright-report/
 # ---------------------------------------------------------
 downloads/
 artifacts/local/
+
+temp.txt

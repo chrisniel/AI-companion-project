@@ -2,15 +2,15 @@
 
 A local-first personal AI companion ecosystem centered around a Windows PC running a persistent **Local AI Core**, with a React desktop control center and a native Android companion app.
 
-> **Current status:** The React web UI prototype is largely complete. The Android UI prototype is still in progress. The FastAPI backend, local model runtime integration, voice pipeline, health sync, and real device integrations are planned but not yet implemented.
+> **Development status:** The React web UI prototype and multilingual UI patch are present in this repository. The Android UI/UX prototype is being developed externally in Google AI Studio and is currently at **Batch 12: Offline + Sync + Connection**; Android source has not yet been exported into this repository. The FastAPI backend, local model runtime integration, voice pipeline, health synchronization, and real device integrations remain planned and are not yet repository-verified.
 
 ---
 
 ## Vision
 
-The goal is to build one coherent assistant experience across PC and Android without hardcoding the project around one model, one character, one voice, one device, or one cloud provider.
+The goal is to build one coherent assistant experience across PC and Android without hardcoding the system around one model, one character, one voice, one device, or one cloud provider.
 
-The system is designed to support:
+The project is designed to support:
 
 - Local LLM inference
 - Optional cloud fallback
@@ -24,6 +24,22 @@ The system is designed to support:
 - PC and Android clients
 - Local and remote access
 - Replaceable AI, speech, search, health, and networking providers
+
+The central rule is simple:
+
+```text
+AI / data / scheduling / tools / canonical state
+→ Local AI Core
+
+PC configuration / detailed runtime management
+→ React Web
+
+Mobile interaction / Android capabilities
+→ Android Companion
+
+Replaceable infrastructure
+→ Provider / Repository interfaces
+```
 
 ---
 
@@ -52,12 +68,14 @@ The system is designed to support:
                 Android Companion App
 ```
 
-The **Local AI Core** is the source of truth for assistant logic, memory, tools, tasks, scheduling, and provider orchestration.
+The **Local AI Core** is intended to become the source of truth for assistant logic, memory, tools, tasks, scheduling, provider orchestration, and synchronization.
 
 The clients remain clients:
 
-- **React Web:** PC dashboard, configuration, detailed runtime management
-- **Android:** mobile assistant, voice, alarms, health, notifications, and offline-capable companion features
+- **React Web:** PC dashboard, configuration, detailed runtime management, logs, devices, models, memory administration
+- **Android:** mobile assistant, voice, alarms, health, notifications, tasks, quick actions, offline-capable companion features
+
+Closing the browser should eventually **not** stop the Local AI Core.
 
 ---
 
@@ -84,7 +102,7 @@ The initial runtime strategy is:
 - Idle model unloading
 - Eco / Balanced / Maximum performance profiles
 
-Actual model size, context size, offload parameters, and VRAM allocation must be determined through benchmarking.
+Actual runtime values must be benchmarked before they are treated as defaults.
 
 ---
 
@@ -92,63 +110,45 @@ Actual model size, context size, offload parameters, and VRAM allocation must be
 
 ```text
 AI-companion-project/
+├── AGENTS.md
+├── CHANGELOG.md
 ├── README.md
+├── .aiignore
+├── .cursorignore
 ├── .gitignore
 ├── .gitattributes
-│
+├── .lfsconfig
 ├── docs/
-│   ├── MASTER_IMPLEMENTATION_PLAN.md
-│   ├── WEB_FRONTEND_STATIC_REVIEW.md
-│   ├── LOCAL_AI_RUNTIME_AND_WORKFLOW.md
-│   ├── architecture/
-│   ├── api/
-│   ├── decisions/
-│   └── ui/
-│
+│   ├── 00_Drafts/
+│   ├── 01_Tracking/
+│   ├── 02_Planning/
+│   ├── 03_Walkthroughs/
+│   ├── 04_Architecture/
+│   ├── 05_Design/
+│   ├── 06_Guides/
+│   ├── 07_Archive/
+│   └── ProjectWorkflowStarterKit/
 ├── frontend/
 │   └── web/
-│
 ├── android/
-│
 ├── backend/
-│   ├── app/
-│   │   ├── api/
-│   │   ├── core/
-│   │   ├── db/
-│   │   ├── models/
-│   │   ├── providers/
-│   │   ├── repositories/
-│   │   ├── services/
-│   │   ├── tools/
-│   │   ├── voice/
-│   │   ├── memory/
-│   │   ├── health/
-│   │   ├── scheduling/
-│   │   ├── devices/
-│   │   └── networking/
-│   ├── migrations/
-│   └── tests/
-│
 ├── contracts/
-│   ├── openapi/
-│   └── event-schemas/
-│
 ├── config/
-│   └── examples/
-│
 ├── scripts/
-│
 └── tests/
-    └── integration/
 ```
+
+Some application directories are currently empty local placeholders. Empty directories are not preserved by Git until they contain tracked files.
 
 ---
 
-## Current Development State
+## Development Progress
 
-### React Web
+### React Web Control Center
 
-Implemented as a UI/UX prototype:
+The React/TypeScript UI prototype is largely complete.
+
+Implemented or designed:
 
 - Soft Glass desktop interface
 - Light / Dark / System themes
@@ -165,10 +165,21 @@ Implemented as a UI/UX prototype:
 - Logs
 - Settings
 - Multilingual preferences
+- English / Filipino / Japanese UI support
+- Code-switching configuration
 
-The frontend still uses mock data and requires a cleanup/productionization pass before FastAPI integration.
+Current state:
 
-### Android
+```text
+UI/UX prototype        ✅
+Multilingual UI patch  ✅ Prototype
+Backend integration    ⏳
+Production cleanup     ⏳
+```
+
+Before FastAPI integration, the frontend still needs a focused cleanup pass for mock-data boundaries, dependency cleanup, text selection, theme storage safety, accessibility details, and production configuration.
+
+### Android Companion
 
 Planned stack:
 
@@ -182,7 +193,7 @@ StateFlow
 Coroutines
 ```
 
-During the UI phase Android should use:
+During the UI phase:
 
 ```text
 Compose UI
@@ -194,9 +205,32 @@ Repository Interface
 Fake Repository
 ```
 
-Real integrations such as FastAPI, Room, Health Connect, AlarmManager, WorkManager, microphone capture, STT, TTS, and Bluetooth should be added later.
+Current Android UI/UX progress is user-reported from Google AI Studio and is not yet repository-verifiable:
 
-### Backend
+```text
+Batch 0     Architecture constitution             ✅
+Batch 1     Soft Glass design system              ✅
+Batch 1.1   Visual calibration                    ✅
+Batch 2     App shell + navigation                ✅
+Batch 3     Home                                  ✅
+Batch 4     Assistant                             ✅
+Batch 4.1   Dedicated Voice Mode                  ✅
+Batch 5     Tasks                                 ✅
+Batch 6     Schedule + Alarms                     ✅
+Batch 7     Health                                ✅
+Batch 8     Characters                            ✅
+Batch 9     Models + Devices                      ✅
+Batch 10    Memory + More                         ✅
+Batch 11    Settings + Theme + Languages          ✅
+Batch 12    Offline + Sync + Connection           🚧 Current
+Batch 13    Android Permission UX                 ⏳
+Batch 14    Accessibility + Device Audit          ⏳
+Batch 15    Final Mobile Polish                   ⏳
+```
+
+Real integrations such as FastAPI, Room, DataStore, Health Connect, AlarmManager, WorkManager, microphone capture, STT, TTS, Bluetooth APIs, remote connectivity, and authentication come later.
+
+### Backend / Local AI Core
 
 Planned stack:
 
@@ -208,7 +242,13 @@ FTS5
 llama.cpp
 ```
 
-The backend has not yet been implemented.
+Current state:
+
+```text
+Architecture planned   ✅
+Directory structure    ⏳ Empty local placeholder
+Implementation         ⏳ Not started
+```
 
 ---
 
@@ -230,7 +270,7 @@ Examples:
 "Android UIをチェック."
 ```
 
-Language capability belongs to the system/user profile.
+Language capability belongs to the **system/user profile**.
 
 Character language style is configured separately.
 
@@ -254,6 +294,28 @@ A character may define:
 - Speaking behavior
 
 The Local AI Core must remain generic regardless of which character is active.
+
+Future avatar presentation may support formats such as:
+
+```text
+GIF
+WebP
+Live2D
+VRM
+```
+
+The backend should expose semantic states such as:
+
+```text
+idle
+listening
+thinking
+speaking
+interrupted
+error
+```
+
+The frontend decides which asset or animation represents each state.
 
 ---
 
@@ -296,7 +358,14 @@ OFFLINE
 ERROR
 ```
 
-Barge-in should allow the user to interrupt TTS while the assistant is speaking.
+The voice system should support **barge-in**, allowing the user to interrupt TTS while the assistant is speaking.
+
+Likely candidates to benchmark later include:
+
+```text
+STT: Whisper-family / whisper.cpp-style runtime
+TTS: Piper / Kokoro
+```
 
 ---
 
@@ -318,17 +387,15 @@ Local AI Core
 SQLite
 ```
 
-FitCloudPro is a current data source, not a permanent architectural dependency.
+FitCloudPro is a current source, not a permanent architectural dependency.
 
-The health layer should remain provider-based.
-
-Unavailable data must never be presented as fake zero values.
+Unavailable measurements must never be represented as fake zero values.
 
 ---
 
 ## Networking
 
-Personal V1 may use Tailscale for private connectivity:
+Personal V1 may use Tailscale:
 
 ```text
 Android
@@ -342,7 +409,161 @@ FastAPI
 
 Tailscale does **not** replace application-level authentication.
 
-Future networking may use another `NetworkGateway`, including Cloudflare-based options.
+The networking layer should remain replaceable.
+
+---
+
+## Git and Large-File Storage
+
+### Canonical Source Repository
+
+GitHub is the canonical Git repository:
+
+```text
+GitHub
+chrisniel/AI-companion-project
+```
+
+GitHub stores:
+
+- Git history
+- Source code
+- Documentation
+- Configuration examples
+- Small assets
+- Git LFS pointer files
+
+### Large LFS Objects
+
+Large AI/ML artifacts are configured to use a **private Hugging Face repository as the Git LFS object backend**.
+
+Current `.lfsconfig` points LFS to:
+
+```text
+Hugging Face Dataset
+kwek-kwektenpesos/AI-companion-project
+```
+
+Conceptually:
+
+```text
+git push origin <branch>
+        │
+        ├── Git commits + LFS pointers ──→ GitHub
+        │
+        └── Large LFS objects ───────────→ Hugging Face
+```
+
+Tracked model formats include:
+
+```text
+*.gguf
+*.ggml
+*.safetensors
+*.onnx
+*.pt
+*.pth
+*.ckpt
+```
+
+Because the Hugging Face LFS backend is private, anyone cloning the public GitHub repository will need appropriate Hugging Face authorization to retrieve those private LFS objects.
+
+---
+
+## Security Rules
+
+Never commit:
+
+- `.env`
+- API keys
+- Access tokens
+- Private certificates or keys
+- Android signing keystores
+- Personal SQLite databases
+- Raw private health data
+- Private conversation exports
+- Temporary voice recordings
+- Credentials
+- Local-only configuration containing secrets
+
+Cloud API keys belong only in backend-side secret configuration.
+
+The LLM must not receive unrestricted shell or operating-system access.
+
+Sensitive tools must pass through backend validation and permission checks.
+
+---
+
+## Local Model Runtime
+
+The current preferred local inference direction is:
+
+```text
+llama.cpp
+```
+
+with:
+
+```text
+GGUF models
+Vulkan where practical
+Partial GPU offload
+Lazy loading
+Idle unloading
+```
+
+Recommended model lifecycle:
+
+```text
+Windows starts
+    ↓
+Local AI Core starts
+    ↓
+API / Scheduler / Database ready
+    ↓
+LLM remains unloaded
+    ↓
+First AI request
+    ↓
+Model loads
+    ↓
+Assistant responds
+    ↓
+Idle timeout
+    ↓
+Model unloads
+```
+
+---
+
+## Performance Profiles
+
+The user-facing profiles are:
+
+```text
+Eco
+Balanced
+Maximum
+```
+
+The backend eventually maps them to model selection, context size, GPU offload, CPU threads, idle timeout, and memory strategy.
+
+---
+
+## Routing Modes
+
+Planned provider routing:
+
+```text
+Local Only
+Local First
+Cloud First
+Cloud Only
+```
+
+Cloud providers are optional.
+
+Cloud API keys remain backend-only.
 
 ---
 
@@ -361,6 +582,12 @@ run:
 ```powershell
 npm install
 npm run dev
+```
+
+The configured Vite development URL is:
+
+```text
+http://localhost:3000
 ```
 
 Commit `package-lock.json`.
@@ -406,87 +633,6 @@ scripts/
 
 ---
 
-## Model Storage
-
-Do **not** store model weights in the main application repository.
-
-Recommended local path:
-
-```text
-D:\AI\Models\
-```
-
-For public or shared model artifacts, use a dedicated model registry/repository such as Hugging Face.
-
-The application repository should contain configuration and model metadata, not multi-gigabyte weights.
-
----
-
-## Git / Git LFS Strategy
-
-The main source repository should normally ignore model weights.
-
-A separate Hugging Face model repository can use Git LFS for files such as:
-
-```text
-*.gguf
-*.safetensors
-*.onnx
-*.pt
-*.pth
-```
-
-The `.gitattributes` file in this repository includes safe text-normalization rules and commented example LFS patterns that can be enabled in a dedicated model repository.
-
-Git LFS configuration does not itself select Hugging Face. The repository's Git remote determines where LFS objects are uploaded.
-
----
-
-## Security Rules
-
-Never commit:
-
-- `.env`
-- API keys
-- access tokens
-- certificates/private keys
-- Android keystores
-- personal SQLite databases
-- health data
-- model weights
-- private conversation exports
-- temporary voice recordings
-
-Cloud API keys belong only in backend-side secret configuration.
-
-The LLM must not receive unrestricted operating-system or shell access.
-
-Sensitive tool calls must pass through backend validation and permission checks.
-
----
-
-## Documentation
-
-Important architecture documents belong in:
-
-```text
-docs/
-```
-
-Major architecture decisions should later use ADRs:
-
-```text
-docs/decisions/
-├── ADR-001-fastapi-core.md
-├── ADR-002-llama-cpp-runtime.md
-├── ADR-003-sqlite-v1.md
-├── ADR-004-android-companion-not-core.md
-├── ADR-005-health-connect-provider-path.md
-└── ADR-006-network-auth-separation.md
-```
-
----
-
 ## Recommended Implementation Order
 
 ```text
@@ -514,51 +660,68 @@ docs/decisions/
 
 ## V1 Success Criteria
 
-V1 is operational when:
+V1 is considered operational when:
 
 - Local AI Core starts reliably on Windows
 - React connects to FastAPI
 - Local LLM can load, answer, and unload
 - Eco / Balanced / Maximum profiles work
 - Conversation history persists
-- Tasks and reminders work
 - SQLite migrations are reliable
+- Tasks and reminders work
 - FTS5 memory retrieval works
-- Scheduler continues when React is closed
-- Basic PC voice works
+- Scheduler continues when the React UI is closed
+- Basic PC voice interaction works
 - STT handles English, Tagalog, Japanese, and reasonable code-switching
-- At least one local TTS voice is usable
+- At least one usable local TTS voice works
 - Voice interruption works
 - Android connects to the PC
 - Android chat works
-- Android task/schedule sync works
-- Critical Android alarms stay locally armed
-- Health Connect can sync selected data
+- Android tasks and schedules synchronize
+- Critical Android alarms remain locally armed
+- Health Connect can synchronize selected data
 - Remote access is authenticated
-- Secrets remain outside clients and Git
+- Secrets stay outside clients and normal Git content
 
 ---
 
-## New-Chat Handoff
+## Documentation
 
-When continuing development in a new AI session:
+Important architecture documents belong in:
 
-1. Provide `docs/MASTER_IMPLEMENTATION_PLAN.md`.
+```text
+docs/04_Architecture/
+```
+
+Major architectural decisions are recorded as ADRs under:
+
+```text
+docs/04_Architecture/decisions/
+```
+
+---
+
+## New-Chat / AI Handoff
+
+For a new development session:
+
+1. Provide `docs/04_Architecture/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md`.
 2. State the current implementation phase.
-3. Provide the relevant source files or repository snapshot.
+3. Provide or link the relevant project source.
 4. Mention changes made since the plan was written.
-5. Treat planned features as planned, not already implemented.
+5. Do not assume planned features are already implemented.
 
 Suggested handoff:
 
 ```text
 This is the master implementation plan for my AI Companion project.
+
 Read it first and use it as the architecture source of truth unless I explicitly revise a decision.
 
 Current implementation phase:
 [PHASE]
 
-I will provide the relevant source files next.
+I will provide the relevant project files or repository next.
 
 Do not assume planned features are already implemented.
 ```
@@ -567,10 +730,27 @@ Do not assume planned features are already implemented.
 
 ## License
 
-A license has not yet been selected.
+**No open-source license has been selected yet.**
 
-Do not assume the repository is open source merely because source code is hosted remotely.
+This repository may be publicly visible, but public visibility alone does not grant permission to use, modify, redistribute, or sublicense the project beyond rights provided by applicable law and the hosting platform.
 
-If the repository will remain private, a license is optional.
+A future license is still under consideration.
 
-If it later becomes public, explicitly choose an appropriate license before accepting external contributions.
+Likely candidates include:
+
+- Apache License 2.0
+- MIT License
+
+A license will be added deliberately when the project's distribution and contribution model is decided.
+
+---
+
+## Project Status
+
+This is an experimental personal AI companion project under active development.
+
+Many screens currently use mock data.
+
+Many capabilities described in this README are **planned architecture**, not completed functionality.
+
+Do not treat prototype status indicators, sample device names, example model values, sample health values, or mock runtime metrics as claims about real connected hardware or implemented services.
