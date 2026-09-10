@@ -1,0 +1,8 @@
+frontend/web/node_modules/
+frontend/web/build/
+frontend/web/dist/
+frontend/web/coverage/
+frontend/web/.DS_Store
+frontend/web/*.log
+frontend/web/.env
+frontend/web/.env.example

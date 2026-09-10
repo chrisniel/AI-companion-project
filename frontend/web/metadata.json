@@ -1,0 +1,8 @@
+{
+  "name": "Companion AI Control Center v1.0",
+  "description": "Visual foundation and reusable soft glass \u0026 neumorphic UI design system for the desktop Local AI Control Center.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
