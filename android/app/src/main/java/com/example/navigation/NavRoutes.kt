@@ -58,16 +58,26 @@ sealed class BottomNavItem(
     val route: String,
     val title: String,
     val icon: ImageVector,
-    val testTag: String
+    val testTag: String,
+    val pageIndex: Int
 ) {
-    data object Home : BottomNavItem(Routes.HOME, "Home", Icons.Default.Home, "nav_item_home")
-    data object Assistant : BottomNavItem(Routes.ASSISTANT, "Assistant", Icons.Default.AutoAwesome, "nav_item_assistant")
-    data object Tasks : BottomNavItem(Routes.TASKS, "Tasks", Icons.Default.TaskAlt, "nav_item_tasks")
-    data object Health : BottomNavItem(Routes.HEALTH, "Health", Icons.Default.Favorite, "nav_item_health")
-    data object More : BottomNavItem(Routes.MORE, "More", Icons.Default.MoreHoriz, "nav_item_more")
+    data object Home : BottomNavItem(Routes.HOME, "Home", Icons.Default.Home, "nav_item_home", 0)
+    data object Tasks : BottomNavItem(Routes.TASKS, "Tasks", Icons.Default.TaskAlt, "nav_item_tasks", 1)
+    data object Assistant : BottomNavItem(Routes.ASSISTANT, "Assistant", Icons.Default.AutoAwesome, "nav_item_assistant", 2)
+    data object Health : BottomNavItem(Routes.HEALTH, "Health", Icons.Default.Favorite, "nav_item_health", 3)
+    data object More : BottomNavItem(Routes.MORE, "More", Icons.Default.MoreHoriz, "nav_item_more", 4)
 
     companion object {
-        val items = listOf(Home, Assistant, Tasks, Health, More)
+        val items = listOf(Home, Tasks, Assistant, Health, More)
+
+        fun fromPageIndex(index: Int): BottomNavItem =
+            items.getOrElse(index.coerceIn(0, items.size - 1)) { Home }
+
+        fun fromRoute(route: String?): BottomNavItem? =
+            items.find { it.route == route }
+
+        fun getPageIndexForRoute(route: String?): Int? =
+            fromRoute(route)?.pageIndex
     }
 }
 

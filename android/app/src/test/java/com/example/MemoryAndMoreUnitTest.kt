@@ -220,6 +220,6 @@ class MemoryAndMoreUnitTest {
     fun `bottom navigation maintains exactly 5 primary items without overloading`() {
         val bottomNavItems = BottomNavItem.items
         assertEquals(5, bottomNavItems.size)
-        assertEquals(listOf(Routes.HOME, Routes.ASSISTANT, Routes.TASKS, Routes.HEALTH, Routes.MORE), bottomNavItems.map { it.route })
+        assertEquals(listOf(Routes.HOME, Routes.TASKS, Routes.ASSISTANT, Routes.HEALTH, Routes.MORE), bottomNavItems.map { it.route })
     }
 }

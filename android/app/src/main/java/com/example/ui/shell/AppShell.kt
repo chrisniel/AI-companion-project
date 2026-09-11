@@ -1,25 +1,34 @@
 package com.example.ui.shell
 
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -29,7 +38,10 @@ import com.example.domain.model.EffectsLevel
 import com.example.domain.model.SyncStatus
 import com.example.navigation.AppBottomBar
 import com.example.navigation.AppTopBar
+import com.example.navigation.BottomNavItem
 import com.example.navigation.Routes
+import kotlinx.coroutines.launch
+import kotlin.math.absoluteValue
 import com.example.ui.AppViewModelProvider
 import com.example.ui.components.AmbientGlassBackground
 import com.example.ui.components.CalmConnectionBanner
@@ -71,12 +83,28 @@ fun AppShell(
     val homeData by appViewModel.homeData.collectAsStateWithLifecycle()
     val preferences = LocalAppearancePreferences.current
 
+    val coroutineScope = rememberCoroutineScope()
+    val pagerState = rememberPagerState(initialPage = 0) { 5 }
+
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route ?: Routes.HOME
+    val navHostRoute = navBackStackEntry?.destination?.route ?: Routes.HOME
 
-    val isSubDestination = currentRoute.startsWith("more/")
+    val activePrimaryItem = BottomNavItem.fromPageIndex(pagerState.currentPage)
+    val currentRoute = if (navHostRoute == Routes.HOME) activePrimaryItem.route else navHostRoute
+
+    val isSubDestination = navHostRoute != Routes.HOME
     val canNavigateBack = isSubDestination
+
+    // Intercept back presses on pager: return to Home tab first before system back
+    BackHandler(enabled = navHostRoute == Routes.HOME && pagerState.currentPage != 0) {
+        coroutineScope.launch {
+            pagerState.animateScrollToPage(
+                page = 0,
+                animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
+            )
+        }
+    }
 
     val pageTitle = when (currentRoute) {
         Routes.HOME -> "Local AI Core"
@@ -95,29 +123,27 @@ fun AppShell(
         else -> "Local AI Core"
     }
 
-    val navigateToDestination = { targetRoute: String ->
-        navController.navigate(targetRoute) {
-            popUpTo(navController.graph.findStartDestination().id) {
-                saveState = true
+    val navigateToDestination: (String) -> Unit = { targetRoute: String ->
+        val targetIndex = BottomNavItem.getPageIndexForRoute(targetRoute)
+        if (targetIndex != null) {
+            if (navHostRoute != Routes.HOME) {
+                navController.popBackStack(Routes.HOME, inclusive = false)
             }
-            launchSingleTop = true
-            restoreState = true
-        }
-    }
-
-    val isPrimaryDestination = { route: String ->
-        route == Routes.HOME || route == Routes.ASSISTANT || route == Routes.TASKS ||
-        route == Routes.HEALTH || route == Routes.MORE
-    }
-
-    val onNavigateToRoute = { route: String ->
-        if (isPrimaryDestination(route)) {
-            navigateToDestination(route)
+            coroutineScope.launch {
+                pagerState.animateScrollToPage(
+                    page = targetIndex,
+                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
+                )
+            }
         } else {
-            navController.navigate(route) {
+            navController.navigate(targetRoute) {
                 launchSingleTop = true
             }
         }
+    }
+
+    val onNavigateToRoute: (String) -> Unit = { route: String ->
+        navigateToDestination(route)
     }
 
     val backgroundPreset = preferences.backgroundPreset
@@ -136,8 +162,7 @@ fun AppShell(
                         onNavigateBack = { navController.popBackStack() },
                         connectionInfo = uiState.connectionInfo,
                         onCycleConnectionState = { appViewModel.cycleConnectionState() },
-                        isDarkTheme = uiState.isDarkTheme,
-                        onToggleTheme = { appViewModel.toggleTheme() },
+                        isDarkTheme = SoftTheme.colors.isDark,
                         userName = uiState.userName,
                         onAvatarClick = {
                             if (currentRoute != Routes.SETTINGS) {
@@ -198,34 +223,105 @@ fun AppShell(
                     NavHost(
                         navController = navController,
                         startDestination = Routes.HOME,
-                        enterTransition = { EnterTransition.None },
-                        exitTransition = { ExitTransition.None },
+                        enterTransition = {
+                            slideInHorizontally(
+                                initialOffsetX = { it },
+                                animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)
+                            ) + fadeIn(animationSpec = tween(durationMillis = 240))
+                        },
+                        exitTransition = {
+                            slideOutHorizontally(
+                                targetOffsetX = { -it / 4 },
+                                animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)
+                            ) + fadeOut(animationSpec = tween(durationMillis = 200))
+                        },
+                        popEnterTransition = {
+                            slideInHorizontally(
+                                initialOffsetX = { -it / 4 },
+                                animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)
+                            ) + fadeIn(animationSpec = tween(durationMillis = 240))
+                        },
+                        popExitTransition = {
+                            slideOutHorizontally(
+                                targetOffsetX = { it },
+                                animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)
+                            ) + fadeOut(animationSpec = tween(durationMillis = 200))
+                        },
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        // PRIMARY DESTINATION 1: HOME
+                        // PRIMARY DESTINATIONS: Hosted inside high-performance HorizontalPager (1:1 touch swiping & pre-rendered tabs)
                         composable(Routes.HOME) {
-                            HomeScreen(
-                                homeData = homeData,
-                                connectionInfo = uiState.connectionInfo,
-                                selectedPersona = uiState.selectedPersona,
-                                onSelectPersona = { appViewModel.selectPersona(it) },
-                                onNavigateToRoute = onNavigateToRoute,
-                                onToggleTask = { taskId -> appViewModel.toggleTask(taskId) },
-                                onAddTask = { title, priority -> appViewModel.addNewTask(title, priority) }
-                            )
-                        }
-
-                        // PRIMARY DESTINATION 2: ASSISTANT
-                        composable(Routes.ASSISTANT) {
-                            AssistantScreen(
-                                isDarkTheme = uiState.isDarkTheme,
-                                onToggleTheme = { appViewModel.toggleTheme() },
-                                onOpenVoiceMode = {
-                                    navController.navigate(Routes.VOICE_MODE) {
-                                        launchSingleTop = true
+                            HorizontalPager(
+                                state = pagerState,
+                                beyondViewportPageCount = 1,
+                                modifier = Modifier.fillMaxSize()
+                            ) { page ->
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer {
+                                            val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
+                                            val absOffset = pageOffset.absoluteValue.coerceIn(0f, 1f)
+                                            alpha = 1f - (absOffset * 0.18f)
+                                            scaleX = 1f - (absOffset * 0.02f)
+                                            scaleY = 1f - (absOffset * 0.02f)
+                                        }
+                                ) {
+                                    when (page) {
+                                        0 -> HomeScreen(
+                                            homeData = homeData,
+                                            connectionInfo = uiState.connectionInfo,
+                                            selectedPersona = uiState.selectedPersona,
+                                            onSelectPersona = { appViewModel.selectPersona(it) },
+                                            onNavigateToRoute = onNavigateToRoute,
+                                            onToggleTask = { taskId -> appViewModel.toggleTask(taskId) },
+                                            onAddTask = { title, priority -> appViewModel.addNewTask(title, priority) }
+                                        )
+                                        1 -> TasksScreen()
+                                        2 -> AssistantScreen(
+                                            isDarkTheme = SoftTheme.colors.isDark,
+                                            onOpenVoiceMode = {
+                                                navController.navigate(Routes.VOICE_MODE) {
+                                                    launchSingleTop = true
+                                                }
+                                            }
+                                        )
+                                        3 -> HealthScreen(
+                                            healthConnectState = uiState.capabilitiesState.healthConnectState,
+                                            onSetHealthConnectState = { appViewModel.setHealthConnectState(it) }
+                                        )
+                                        4 -> MoreScreen(
+                                            onNavigateToRoute = onNavigateToRoute
+                                        )
                                     }
                                 }
-                            )
+                            }
+                        }
+
+                        // Fallback alias routes to safely handle direct route navigation if any caller uses it
+                        composable(Routes.TASKS) {
+                            LaunchedEffect(Unit) {
+                                pagerState.scrollToPage(1)
+                                navController.popBackStack(Routes.HOME, false)
+                            }
+                        }
+                        composable(Routes.ASSISTANT) {
+                            LaunchedEffect(Unit) {
+                                pagerState.scrollToPage(2)
+                                navController.popBackStack(Routes.HOME, false)
+                            }
+                        }
+                        composable(Routes.HEALTH) {
+                            LaunchedEffect(Unit) {
+                                pagerState.scrollToPage(3)
+                                navController.popBackStack(Routes.HOME, false)
+                            }
+                        }
+                        composable(Routes.MORE) {
+                            LaunchedEffect(Unit) {
+                                pagerState.scrollToPage(4)
+                                navController.popBackStack(Routes.HOME, false)
+                            }
                         }
 
                         // DEDICATED VOICE MODE (Batch 4.1)
@@ -234,26 +330,6 @@ fun AppShell(
                                 onEndSession = { navController.popBackStack() },
                                 microphoneState = uiState.capabilitiesState.microphoneState,
                                 onSetMicrophoneState = { appViewModel.setMicrophoneState(it) }
-                            )
-                        }
-
-                        // PRIMARY DESTINATION 3: TASKS (Batch 5: Mobile Tasks)
-                        composable(Routes.TASKS) {
-                            TasksScreen()
-                        }
-
-                        // PRIMARY DESTINATION 4: HEALTH (Batch 7: Mobile Health and Wellness)
-                        composable(Routes.HEALTH) {
-                            HealthScreen(
-                                healthConnectState = uiState.capabilitiesState.healthConnectState,
-                                onSetHealthConnectState = { appViewModel.setHealthConnectState(it) }
-                            )
-                        }
-
-                        // PRIMARY DESTINATION 5: MORE
-                        composable(Routes.MORE) {
-                            MoreScreen(
-                                onNavigateToRoute = onNavigateToRoute
                             )
                         }
 
@@ -317,7 +393,6 @@ fun AppShell(
                         composable(Routes.SETTINGS) {
                             SettingsScreen(
                                 onNavigateBack = { navController.popBackStack() },
-                                onLiveThemeChanged = { isDark -> appViewModel.setTheme(isDark) },
                                 onNavigateToPermissions = {
                                     navController.navigate(Routes.PERMISSIONS) {
                                         launchSingleTop = true
@@ -348,13 +423,13 @@ fun AppShell(
                                 category = "Privacy-First Architecture",
                                 description = "Offline-first companion application engineered with Jetpack Compose and Soft Glass design.",
                                 icon = Icons.Default.Info,
-                                statusText = "v1.5.0 Production Build",
+                                statusText = "V1.1 Companion Prototype",
                                 metrics = listOf(
-                                    "Client Build" to "v1.5.0-alpha02",
+                                    "Client Build" to "V1.1 (Prototype)",
                                     "Design Language" to "Soft Glass (Obsidian / Pearl)",
                                     "Target Platform" to "Android 14 / Compose M3",
-                                    "Privacy Standard" to "100% On-Premises Compute",
-                                    "License" to "Open Hardware & Edge Intelligence"
+                                    "Architecture Target" to "Companion to Windows PC Host",
+                                    "License" to "License Not Selected"
                                 ),
                                 actions = listOf("View Release Notes", "Verify Build Hash")
                             )
@@ -388,7 +463,9 @@ fun AppShell(
                 modifier = modifier.fillMaxSize(),
                 showAuraGlow = showAura,
                 primaryGlow = Color(backgroundPreset.primaryGlowHex),
-                secondaryGlow = Color(backgroundPreset.secondaryGlowHex)
+                secondaryGlow = Color(backgroundPreset.secondaryGlowHex),
+                scrimOpacity = preferences.scrimOpacity,
+                brightness = preferences.backgroundBrightness
             ) {
                 renderScaffold()
             }
@@ -400,12 +477,22 @@ fun AppShell(
                     .background(
                         Brush.verticalGradient(
                             listOf(
-                                SoftTheme.colors.backgroundSecondary,
-                                SoftTheme.colors.background
+                                Color(preferences.gradientPreset.startColorHex),
+                                Color(preferences.gradientPreset.endColorHex)
                             )
                         )
                     )
             ) {
+                if (preferences.scrimOpacity > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                (if (SoftTheme.colors.isDark) Color.Black else Color.White)
+                                    .copy(alpha = preferences.scrimOpacity)
+                            )
+                    )
+                }
                 renderScaffold()
             }
         }
@@ -413,15 +500,27 @@ fun AppShell(
             Box(
                 modifier = modifier
                     .fillMaxSize()
-                    .background(SoftTheme.colors.background)
+                    .background(Color(preferences.solidPreset.colorHex))
             ) {
+                if (preferences.scrimOpacity > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                (if (SoftTheme.colors.isDark) Color.Black else Color.White)
+                                    .copy(alpha = preferences.scrimOpacity)
+                            )
+                    )
+                }
                 renderScaffold()
             }
         }
         BackgroundType.CUSTOM_IMAGE -> {
             AmbientGlassBackground(
                 modifier = modifier.fillMaxSize(),
-                showAuraGlow = false
+                showAuraGlow = false,
+                scrimOpacity = preferences.scrimOpacity,
+                brightness = preferences.backgroundBrightness
             ) {
                 renderScaffold()
             }

@@ -118,8 +118,20 @@ fun PrimaryButton(
                 ambientColor = if (enabled) SoftTheme.colors.accentBlue.copy(alpha = 0.40f) else Color.Transparent,
                 spotColor = if (enabled) SoftTheme.colors.accentBlue.copy(alpha = 0.30f) else Color.Transparent
             )
+            .softNeumorphicRaised(
+                shape = shape,
+                isDark = SoftTheme.colors.isDark,
+                elevation = animatedElevation
+            )
             .clip(shape)
             .background(backgroundBrush, shape)
+            .then(
+                if (isPressed) {
+                    Modifier.softInsetWell(shape = shape, isDark = SoftTheme.colors.isDark, depth = 3.dp)
+                } else {
+                    Modifier
+                }
+            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(color = if (SoftTheme.colors.isDark) Color.Black.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.3f)),
@@ -233,9 +245,21 @@ fun SecondaryButton(
                 ambientColor = SoftTheme.colors.shadow,
                 spotColor = SoftTheme.colors.shadow
             )
+            .softNeumorphicRaised(
+                shape = shape,
+                isDark = SoftTheme.colors.isDark,
+                elevation = if (enabled) SoftTheme.tokens.elevations.subtle else SoftTheme.tokens.elevations.none
+            )
             .clip(shape)
             .background(surfaceColor, shape)
             .border(width = SoftTheme.tokens.borders.thin, brush = borderBrush, shape = shape)
+            .then(
+                if (isPressed) {
+                    Modifier.softInsetWell(shape = shape, isDark = SoftTheme.colors.isDark, depth = 3.dp)
+                } else {
+                    Modifier
+                }
+            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(color = SoftTheme.colors.accentCyan),
@@ -423,9 +447,21 @@ fun SoftIconButton(
                 ambientColor = SoftTheme.colors.shadow,
                 spotColor = SoftTheme.colors.shadow
             )
+            .softNeumorphicRaised(
+                shape = shape,
+                isDark = SoftTheme.colors.isDark,
+                elevation = if (enabled) SoftTheme.tokens.elevations.subtle else SoftTheme.tokens.elevations.none
+            )
             .clip(shape)
             .background(surfaceColor, shape)
             .border(width = SoftTheme.tokens.borders.hairline, brush = borderBrush, shape = shape)
+            .then(
+                if (isPressed) {
+                    Modifier.softInsetWell(shape = shape, isDark = SoftTheme.colors.isDark, depth = 2.dp)
+                } else {
+                    Modifier
+                }
+            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(color = SoftTheme.colors.accentCyan),

@@ -113,7 +113,8 @@ fun SoftTextField(
                 .clip(shape)
                 .background(backgroundColor, shape)
                 .border(width = borderWidth, brush = borderBrush, shape = shape)
-                .padding(horizontal = SoftTheme.spacing.lg, vertical = SoftTheme.spacing.md),
+                .softInsetWell(shape = shape, isDark = SoftTheme.colors.isDark, depth = 3.dp)
+                .padding(horizontal = SoftTheme.spacing.md, vertical = SoftTheme.spacing.sm),
             contentAlignment = Alignment.CenterStart
         ) {
             Row(
@@ -219,6 +220,7 @@ fun SoftSearchField(
             .clip(shape)
             .background(if (isFocused) SoftTheme.colors.surfaceElevated else SoftTheme.colors.surface, shape)
             .border(width = borderWidth, brush = borderBrush, shape = shape)
+            .softInsetWell(shape = shape, isDark = SoftTheme.colors.isDark, depth = 3.dp)
             .padding(horizontal = SoftTheme.spacing.lg),
         contentAlignment = Alignment.CenterStart
     ) {

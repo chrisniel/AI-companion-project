@@ -57,11 +57,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,6 +80,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.domain.model.AccentPreset
 import com.example.domain.model.AppLanguage
 import com.example.domain.model.BackgroundType
+import com.example.domain.model.BuiltInBackgroundPreset
 import com.example.domain.model.EffectsLevel
 import com.example.domain.model.JapaneseDisplay
 import com.example.domain.model.ResponseLanguageChoice
@@ -101,7 +105,6 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
     settingsViewModel: SettingsViewModel = viewModel(factory = com.example.ui.AppViewModelProvider.Factory),
-    onLiveThemeChanged: ((Boolean) -> Unit)? = null,
     onNavigateToPermissions: () -> Unit = {}
 ) {
     val uiState by settingsViewModel.uiState.collectAsStateWithLifecycle()
@@ -123,33 +126,50 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = SoftTheme.spacing.lg, vertical = SoftTheme.spacing.md),
-                verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.lg)
-            ) {
-                // Section Tabs
-                SettingsSectionTabs(
-                    selectedSection = uiState.selectedSection,
-                    onSelectSection = { settingsViewModel.selectSection(it) }
-                )
+            val contentScrollState = rememberScrollState()
 
-                // Section Content
-                when (uiState.selectedSection) {
-                    SettingsSection.GENERAL -> GeneralSectionContent(uiState, settingsViewModel)
-                    SettingsSection.APPEARANCE -> AppearanceSectionContent(uiState, settingsViewModel, onLiveThemeChanged)
-                    SettingsSection.ASSISTANT -> AssistantSectionContent(uiState, settingsViewModel)
-                    SettingsSection.VOICE -> VoiceSectionContent(uiState, settingsViewModel)
-                    SettingsSection.CONNECTION -> ConnectionSectionContent(uiState, settingsViewModel)
-                    SettingsSection.ALARMS -> AlarmsSectionContent(uiState, settingsViewModel)
-                    SettingsSection.HEALTH -> HealthSectionContent(uiState, settingsViewModel)
-                    SettingsSection.PRIVACY -> PrivacySectionContent(uiState, settingsViewModel, onNavigateToPermissions)
-                    SettingsSection.ADVANCED -> AdvancedSectionContent(uiState, settingsViewModel)
+            LaunchedEffect(uiState.selectedSection) {
+                contentScrollState.scrollTo(0)
+            }
+
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // Section Tabs (Sticky horizontal row pinned outside vertical scroll)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = SoftTheme.spacing.lg, vertical = SoftTheme.spacing.sm)
+                ) {
+                    SettingsSectionTabs(
+                        selectedSection = uiState.selectedSection,
+                        onSelectSection = { settingsViewModel.selectSection(it) }
+                    )
                 }
 
-                Spacer(modifier = Modifier.height(SoftTheme.spacing.xxl))
+                // Section Content (Scrollable)
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(contentScrollState)
+                        .padding(horizontal = SoftTheme.spacing.lg, vertical = SoftTheme.spacing.xs),
+                    verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.lg)
+                ) {
+                    when (uiState.selectedSection) {
+                        SettingsSection.GENERAL -> GeneralSectionContent(uiState, settingsViewModel)
+                        SettingsSection.APPEARANCE -> AppearanceSectionContent(uiState, settingsViewModel)
+                        SettingsSection.ASSISTANT -> AssistantSectionContent(uiState, settingsViewModel)
+                        SettingsSection.VOICE -> VoiceSectionContent(uiState, settingsViewModel)
+                        SettingsSection.CONNECTION -> ConnectionSectionContent(uiState, settingsViewModel)
+                        SettingsSection.ALARMS -> AlarmsSectionContent(uiState, settingsViewModel)
+                        SettingsSection.HEALTH -> HealthSectionContent(uiState, settingsViewModel)
+                        SettingsSection.PRIVACY -> PrivacySectionContent(uiState, settingsViewModel, onNavigateToPermissions)
+                        SettingsSection.ADVANCED -> AdvancedSectionContent(uiState, settingsViewModel)
+                    }
+
+                    Spacer(modifier = Modifier.height(SoftTheme.spacing.xxl))
+                }
             }
 
             // Status message toast
@@ -564,8 +584,7 @@ private fun LanguagePreferencesCard(
 @Composable
 private fun AppearanceSectionContent(
     uiState: SettingsState,
-    viewModel: SettingsViewModel,
-    onLiveThemeChanged: ((Boolean) -> Unit)?
+    viewModel: SettingsViewModel
 ) {
     SectionCard(
         title = "Appearance & Visual Styling",
@@ -589,7 +608,7 @@ private fun AppearanceSectionContent(
                 SelectablePill(
                     label = mode.label,
                     selected = isSelected,
-                    onClick = { viewModel.setThemeMode(mode, onLiveThemeChanged) },
+                    onClick = { viewModel.setThemeMode(mode) },
                     modifier = Modifier
                         .weight(1f)
                         .testTag("theme_mode_${mode.name}")
@@ -686,18 +705,38 @@ private fun AppearanceSectionContent(
         when (uiState.backgroundType) {
             BackgroundType.BUILT_IN -> {
                 Text(
-                    text = "Built-in Presets",
+                    text = "Light Ambient Presets (Web Parity)",
                     style = MaterialTheme.typography.bodySmall,
-                    color = SoftTheme.colors.textSecondary
+                    fontWeight = FontWeight.SemiBold,
+                    color = SoftTheme.colors.accentCyan
                 )
-                listOf("Obsidian Deep Glass", "Pearl Frost", "Aurora Glass", "Midnight Cyan").forEach { bgName ->
-                    val isSelected = uiState.selectedBuiltInBackground == bgName
+                BuiltInBackgroundPreset.entries.filter { !it.isDarkCategory }.forEach { preset ->
+                    val isSelected = uiState.selectedBuiltInBackground == preset.label
                     SelectionCardItem(
-                        title = bgName,
+                        title = preset.label,
+                        subtitle = "Light ethereal gradient tuned for Pearl and day environments",
+                        selected = isSelected,
+                        onClick = { viewModel.setSelectedBuiltInBackground(preset.label) },
+                        testTag = "bg_preset_${preset.name.lowercase()}"
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(SoftTheme.spacing.xs))
+
+                Text(
+                    text = "Dark Ambient Presets",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = SoftTheme.colors.accentCyan
+                )
+                BuiltInBackgroundPreset.entries.filter { it.isDarkCategory }.forEach { preset ->
+                    val isSelected = uiState.selectedBuiltInBackground == preset.label
+                    SelectionCardItem(
+                        title = preset.label,
                         subtitle = "Curated ambient glass background for OLED and LCD",
                         selected = isSelected,
-                        onClick = { viewModel.setSelectedBuiltInBackground(bgName) },
-                        testTag = "bg_preset_${bgName.replace(" ", "_")}"
+                        onClick = { viewModel.setSelectedBuiltInBackground(preset.label) },
+                        testTag = "bg_preset_${preset.name.lowercase()}"
                     )
                 }
             }
@@ -776,9 +815,34 @@ private fun AppearanceSectionContent(
             }
             BackgroundType.SOLID -> {
                 Text(
-                    text = "Minimalist Solid Finishes",
+                    text = "Light Solid Finishes (Web Parity)",
                     style = MaterialTheme.typography.bodySmall,
-                    color = SoftTheme.colors.textSecondary
+                    fontWeight = FontWeight.SemiBold,
+                    color = SoftTheme.colors.accentCyan
+                )
+                listOf(
+                    "Crisp Cloud (#EAF0F8)",
+                    "Pale Frost (#F1F5F9)",
+                    "Whisper Sky (#E0F2FE)",
+                    "Soft Pearl (#F8FAFC)"
+                ).forEach { solidName ->
+                    val isSelected = uiState.selectedSolidBackground == solidName
+                    SelectionCardItem(
+                        title = solidName,
+                        subtitle = "Light matte foundation matching React web soft glass theme",
+                        selected = isSelected,
+                        onClick = { viewModel.setSelectedSolidBackground(solidName) },
+                        testTag = "bg_solid_${solidName.replace(" ", "_").replace("(", "").replace(")", "").replace("#", "")}"
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(SoftTheme.spacing.xs))
+
+                Text(
+                    text = "Dark Solid Finishes",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = SoftTheme.colors.accentCyan
                 )
                 listOf(
                     "Deep Matte Obsidian (#0D1117)",
@@ -909,6 +973,76 @@ private fun AppearanceSectionContent(
                 )
             }
         }
+
+        HorizontalDivider(color = SoftTheme.colors.borderSubtle)
+
+        // Scrim Opacity Slider
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "CONTRAST SCRIM OPACITY",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = SoftTheme.colors.accentCyan
+            )
+            Text(
+                text = "${(uiState.scrimOpacity * 100).toInt()}%",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold,
+                color = SoftTheme.colors.textPrimary
+            )
+        }
+
+        Slider(
+            value = uiState.scrimOpacity,
+            onValueChange = { viewModel.setScrimOpacity(it) },
+            valueRange = 0.0f..0.60f,
+            colors = SliderDefaults.colors(
+                thumbColor = SoftTheme.colors.accentCyan,
+                activeTrackColor = SoftTheme.colors.accentCyan,
+                inactiveTrackColor = SoftTheme.colors.borderSubtle
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("slider_scrim_opacity")
+        )
+
+        // Background Brightness Slider
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "BACKGROUND BRIGHTNESS",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = SoftTheme.colors.accentCyan
+            )
+            Text(
+                text = "${(uiState.backgroundBrightness * 100).toInt()}%",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold,
+                color = SoftTheme.colors.textPrimary
+            )
+        }
+
+        Slider(
+            value = uiState.backgroundBrightness,
+            onValueChange = { viewModel.setBackgroundBrightness(it) },
+            valueRange = 0.5f..1.5f,
+            colors = SliderDefaults.colors(
+                thumbColor = SoftTheme.colors.accentCyan,
+                activeTrackColor = SoftTheme.colors.accentCyan,
+                inactiveTrackColor = SoftTheme.colors.borderSubtle
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("slider_background_brightness")
+        )
     }
 }
 

@@ -7,6 +7,8 @@ import com.example.domain.model.AccentPreset
 import com.example.domain.model.AppLanguage
 import com.example.domain.model.BackgroundType
 import com.example.domain.model.BuiltInBackgroundPreset
+import com.example.domain.model.BuiltInGradientPreset
+import com.example.domain.model.BuiltInSolidPreset
 import com.example.domain.model.EffectsLevel
 import com.example.domain.model.JapaneseDisplay
 import com.example.domain.model.ResponseLanguageChoice
@@ -46,7 +48,9 @@ class SettingsViewModel(
                         accentPreset = prefs.accentPreset,
                         backgroundType = prefs.backgroundType,
                         effectsLevel = prefs.effectsLevel,
-                        selectedBuiltInBackground = prefs.backgroundPreset.label
+                        selectedBuiltInBackground = prefs.backgroundPreset.label,
+                        scrimOpacity = prefs.scrimOpacity,
+                        backgroundBrightness = prefs.backgroundBrightness
                     )
                 }
             }
@@ -86,14 +90,9 @@ class SettingsViewModel(
 
     // --- APPEARANCE ---
 
-    fun setThemeMode(mode: ThemeMode, onThemeChange: ((Boolean) -> Unit)? = null) {
+    fun setThemeMode(mode: ThemeMode) {
         appearanceRepository.setThemeMode(mode)
         _uiState.update { it.copy(themeMode = mode) }
-        when (mode) {
-            ThemeMode.LIGHT -> onThemeChange?.invoke(false)
-            ThemeMode.DARK -> onThemeChange?.invoke(true)
-            ThemeMode.SYSTEM -> onThemeChange?.invoke(true)
-        }
         showStatus("Theme set to ${mode.label}")
     }
 
@@ -125,12 +124,20 @@ class SettingsViewModel(
     }
 
     fun setSelectedGradientBackground(name: String) {
+        val preset = BuiltInGradientPreset.entries.find {
+            it.label.equals(name, ignoreCase = true) || it.id.equals(name, ignoreCase = true)
+        } ?: BuiltInGradientPreset.CYAN_VIOLET
+        appearanceRepository.setGradientPreset(preset)
         appearanceRepository.setBackgroundType(BackgroundType.GRADIENT)
         _uiState.update { it.copy(selectedGradientBackground = name, backgroundType = BackgroundType.GRADIENT) }
         showStatus("Applied gradient: $name")
     }
 
     fun setSelectedSolidBackground(name: String) {
+        val preset = BuiltInSolidPreset.entries.find {
+            it.label.equals(name, ignoreCase = true) || it.id.equals(name, ignoreCase = true)
+        } ?: BuiltInSolidPreset.MATTE_OBSIDIAN
+        appearanceRepository.setSolidPreset(preset)
         appearanceRepository.setBackgroundType(BackgroundType.SOLID)
         _uiState.update { it.copy(selectedSolidBackground = name, backgroundType = BackgroundType.SOLID) }
         showStatus("Applied solid background: $name")
@@ -149,11 +156,14 @@ class SettingsViewModel(
     }
 
     fun setCustomAccent(hex: String) {
+        appearanceRepository.setCustomAccentHex(hex)
         _uiState.update { it.copy(customAccentHex = hex, isCustomAccentEnabled = true) }
         showStatus("Custom accent color applied: $hex")
     }
 
     fun toggleCustomAccent(enabled: Boolean) {
+        val hex = if (enabled) _uiState.value.customAccentHex else null
+        appearanceRepository.setCustomAccentHex(hex)
         _uiState.update { it.copy(isCustomAccentEnabled = enabled) }
     }
 
@@ -161,6 +171,16 @@ class SettingsViewModel(
         appearanceRepository.setEffectsLevel(level)
         _uiState.update { it.copy(effectsLevel = level) }
         showStatus("Glass effects: ${level.label}")
+    }
+
+    fun setScrimOpacity(opacity: Float) {
+        appearanceRepository.setScrimOpacity(opacity)
+        _uiState.update { it.copy(scrimOpacity = opacity) }
+    }
+
+    fun setBackgroundBrightness(brightness: Float) {
+        appearanceRepository.setBackgroundBrightness(brightness)
+        _uiState.update { it.copy(backgroundBrightness = brightness) }
     }
 
     // --- LANGUAGE PREFERENCES ---
@@ -338,6 +358,17 @@ class SettingsViewModel(
 
     fun resetToDefaults() {
         _uiState.value = SettingsState()
+        appearanceRepository.setThemeMode(ThemeMode.DARK)
+        appearanceRepository.setThemeSource(ThemeSource.PHONE_THEME)
+        appearanceRepository.setAccentPreset(AccentPreset.CYAN)
+        appearanceRepository.setCustomAccentHex(null)
+        appearanceRepository.setBackgroundType(BackgroundType.BUILT_IN)
+        appearanceRepository.setBackgroundPreset(BuiltInBackgroundPreset.AURORA_CYAN)
+        appearanceRepository.setGradientPreset(BuiltInGradientPreset.CYAN_VIOLET)
+        appearanceRepository.setSolidPreset(BuiltInSolidPreset.MATTE_OBSIDIAN)
+        appearanceRepository.setEffectsLevel(EffectsLevel.NORMAL)
+        appearanceRepository.setScrimOpacity(0.20f)
+        appearanceRepository.setBackgroundBrightness(1.0f)
         showStatus("All settings restored to default values")
     }
 

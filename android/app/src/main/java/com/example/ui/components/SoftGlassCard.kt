@@ -89,6 +89,11 @@ fun SoftGlassCard(
                 ambientColor = SoftTheme.colors.shadow,
                 spotColor = SoftTheme.colors.shadow
             )
+            .softNeumorphicRaised(
+                shape = shape,
+                isDark = isDark,
+                elevation = finalElevation
+            )
             .clip(shape)
             .background(actualBackgroundColor, shape)
             .then(borderModifier),
@@ -171,6 +176,11 @@ fun InteractiveSoftGlassCard(
                 ambientColor = SoftTheme.colors.shadow,
                 spotColor = SoftTheme.colors.shadow
             )
+            .softNeumorphicRaised(
+                shape = shape,
+                isDark = isDark,
+                elevation = animatedElevation
+            )
             .clip(shape)
             .background(surfaceColor, shape)
             .then(borderModifier)
@@ -206,7 +216,8 @@ fun SoftWell(
             .testTag(testTag)
             .clip(shape)
             .background(backgroundColor, shape)
-            .border(width = borderWidth, color = borderColor, shape = shape),
+            .border(width = borderWidth, color = borderColor, shape = shape)
+            .softInsetWell(shape = shape, isDark = SoftTheme.colors.isDark),
         contentAlignment = contentAlignment,
         content = content
     )
@@ -249,6 +260,11 @@ fun InteractiveSoftWell(
                 width = borderWidth,
                 color = if (isPressed) SoftTheme.colors.accentPrimary.copy(alpha = 0.5f) else borderColor,
                 shape = shape
+            )
+            .softInsetWell(
+                shape = shape,
+                isDark = SoftTheme.colors.isDark,
+                shadowAlpha = if (isPressed) 0.70f else 0.45f
             )
             .clickable(
                 interactionSource = interactionSource,

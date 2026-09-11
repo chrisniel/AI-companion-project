@@ -61,8 +61,8 @@ fun AssistantHeader(
     providerMode: ProviderMode,
     onOpenHistory: () -> Unit,
     onOpenProviderPicker: () -> Unit,
-    isDarkTheme: Boolean,
-    onToggleTheme: () -> Unit,
+    isDarkTheme: Boolean = false,
+    onToggleTheme: (() -> Unit)? = null,
     onOpenVoiceMode: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -158,22 +158,24 @@ fun AssistantHeader(
                         )
                     }
 
-                    // Theme Toggle
-                    IconButton(
-                        onClick = onToggleTheme,
-                        modifier = Modifier
-                            .size(36.dp)
-                            .testTag("assistant_theme_toggle")
-                            .semantics {
-                                contentDescription = if (isDarkTheme) "Switch to Light theme" else "Switch to Dark theme"
-                            }
-                    ) {
-                        Icon(
-                            imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
-                            contentDescription = null,
-                            tint = SoftTheme.colors.textSecondary,
-                            modifier = Modifier.size(18.dp)
-                        )
+                    // Theme Toggle (only rendered if onToggleTheme handler provided)
+                    if (onToggleTheme != null) {
+                        IconButton(
+                            onClick = onToggleTheme,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .testTag("assistant_theme_toggle")
+                                .semantics {
+                                    contentDescription = if (isDarkTheme) "Switch to Light theme" else "Switch to Dark theme"
+                                }
+                        ) {
+                            Icon(
+                                imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
+                                contentDescription = null,
+                                tint = SoftTheme.colors.textSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
             }

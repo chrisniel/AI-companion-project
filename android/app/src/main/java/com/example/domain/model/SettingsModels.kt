@@ -155,6 +155,8 @@ data class SettingsState(
     val customAccentHex: String = "#00D4FF",
     val isCustomAccentEnabled: Boolean = false,
     val effectsLevel: EffectsLevel = EffectsLevel.NORMAL,
+    val scrimOpacity: Float = 0.20f,
+    val backgroundBrightness: Float = 1.0f,
 
     // Language Preferences
     val primaryLanguage: AppLanguage = AppLanguage.ENGLISH,

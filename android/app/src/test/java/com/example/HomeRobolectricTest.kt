@@ -2,6 +2,7 @@ package com.example
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -56,14 +57,14 @@ class HomeRobolectricTest {
         // 4. Next Up: Scheduled time, countdown, important event flag
         composeTestRule.onNodeWithTag("home_next_section").assertIsDisplayed()
         composeTestRule.onNodeWithText("Primary Wakeup Alarm").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Upcoming").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Upcoming")[0].assertIsDisplayed()
         composeTestRule.onNodeWithText("Important Event").assertIsDisplayed()
 
         // 5. Today's Workflow: Completed count, active reminders, open tasks
         composeTestRule.onNodeWithTag("home_today_section").assertIsDisplayed()
         composeTestRule.onNodeWithText("2 of 8 completed").assertIsDisplayed()
         composeTestRule.onNodeWithText("2 active reminders").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Check backend bukas").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Check backend bukas")[0].assertIsDisplayed()
 
         // 6. Wellness Glance: Sleep, Heart Rate, Steps / Activity
         composeTestRule.onNodeWithTag("home_wellness_section").performScrollTo().assertIsDisplayed()

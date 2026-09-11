@@ -22,12 +22,11 @@ import com.example.domain.model.ThemeMode
 import com.example.domain.repository.AppearanceRepository
 
 data class AppUiState(
-    val isDarkTheme: Boolean = false,
     val connectionInfo: ConnectionInfo = ConnectionInfo(
         state = CoreConnectionState.Local,
         label = "Core Active",
         latencyMs = 22,
-        host = "127.0.0.1",
+        host = "Local AI Core (Simulated)",
         port = 8080,
         syncStatus = SyncStatus.SYNCHRONIZED,
         lastSyncTimestamp = "Just now",
@@ -59,16 +58,7 @@ class AppViewModel(
         )
 
     init {
-        viewModelScope.launch {
-            appearanceRepository.preferences.collect { prefs ->
-                val isDark = when (prefs.themeMode) {
-                    ThemeMode.LIGHT -> false
-                    ThemeMode.DARK -> true
-                    ThemeMode.SYSTEM -> false
-                }
-                _uiState.update { it.copy(isDarkTheme = isDark) }
-            }
-        }
+        // Authoritative appearance preferences are consumed directly from AppearanceRepository
     }
 
     fun toggleTask(taskId: String) {
@@ -120,7 +110,7 @@ class AppViewModel(
                     state = CoreConnectionState.Remote,
                     label = "Remote Node",
                     latencyMs = 45,
-                    host = "mesh.local",
+                    host = "remote-node (Simulated)",
                     port = 8080,
                     syncStatus = current.connectionInfo.syncStatus,
                     lastSyncTimestamp = current.connectionInfo.lastSyncTimestamp,
@@ -130,7 +120,7 @@ class AppViewModel(
                     state = CoreConnectionState.Connecting,
                     label = "Connecting",
                     latencyMs = null,
-                    host = "mesh.local",
+                    host = "remote-node (Simulated)",
                     port = 8080,
                     syncStatus = current.connectionInfo.syncStatus,
                     lastSyncTimestamp = current.connectionInfo.lastSyncTimestamp,
@@ -140,7 +130,7 @@ class AppViewModel(
                     state = CoreConnectionState.Reconnecting,
                     label = "Reconnecting",
                     latencyMs = null,
-                    host = "mesh.local",
+                    host = "remote-node (Simulated)",
                     port = 8080,
                     syncStatus = current.connectionInfo.syncStatus,
                     lastSyncTimestamp = current.connectionInfo.lastSyncTimestamp,
@@ -150,7 +140,7 @@ class AppViewModel(
                     state = CoreConnectionState.Offline,
                     label = "PC Offline",
                     latencyMs = null,
-                    host = "standalone.local",
+                    host = "offline (Disconnected)",
                     port = null,
                     syncStatus = if (current.connectionInfo.syncStatus == SyncStatus.SYNCHRONIZED) SyncStatus.PENDING else current.connectionInfo.syncStatus,
                     lastSyncTimestamp = current.connectionInfo.lastSyncTimestamp,
@@ -160,7 +150,7 @@ class AppViewModel(
                     state = CoreConnectionState.Local,
                     label = "Core Active",
                     latencyMs = 22,
-                    host = "companion.local",
+                    host = "Local AI Core (Simulated)",
                     port = 8080,
                     syncStatus = SyncStatus.SYNCHRONIZED,
                     lastSyncTimestamp = "Just now",
@@ -182,7 +172,7 @@ class AppViewModel(
                     state = CoreConnectionState.Local,
                     label = "Core Active",
                     latencyMs = 22,
-                    host = "companion.local",
+                    host = "Local AI Core (Simulated)",
                     port = 8080,
                     syncStatus = current.connectionInfo.syncStatus,
                     lastSyncTimestamp = current.connectionInfo.lastSyncTimestamp,
@@ -192,7 +182,7 @@ class AppViewModel(
                     state = CoreConnectionState.Remote,
                     label = "Remote Node",
                     latencyMs = 45,
-                    host = "mesh.local",
+                    host = "remote-node (Simulated)",
                     port = 8080,
                     syncStatus = current.connectionInfo.syncStatus,
                     lastSyncTimestamp = current.connectionInfo.lastSyncTimestamp,
@@ -202,7 +192,7 @@ class AppViewModel(
                     state = CoreConnectionState.Connecting,
                     label = "Connecting",
                     latencyMs = null,
-                    host = "mesh.local",
+                    host = "remote-node (Simulated)",
                     port = 8080,
                     syncStatus = current.connectionInfo.syncStatus,
                     lastSyncTimestamp = current.connectionInfo.lastSyncTimestamp,
@@ -212,7 +202,7 @@ class AppViewModel(
                     state = CoreConnectionState.Reconnecting,
                     label = "Reconnecting",
                     latencyMs = null,
-                    host = "mesh.local",
+                    host = "remote-node (Simulated)",
                     port = 8080,
                     syncStatus = current.connectionInfo.syncStatus,
                     lastSyncTimestamp = current.connectionInfo.lastSyncTimestamp,
@@ -222,7 +212,7 @@ class AppViewModel(
                     state = CoreConnectionState.Offline,
                     label = "PC Offline",
                     latencyMs = null,
-                    host = "standalone.local",
+                    host = "offline (Disconnected)",
                     port = null,
                     syncStatus = if (current.connectionInfo.syncStatus == SyncStatus.SYNCHRONIZED) SyncStatus.PENDING else current.connectionInfo.syncStatus,
                     lastSyncTimestamp = current.connectionInfo.lastSyncTimestamp,

@@ -54,6 +54,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.model.ChatMessage
@@ -365,15 +366,16 @@ fun ToolActionBubble(
     SoftGlassCard(
         modifier = modifier
             .testTag("chat_tool_action")
-            .widthIn(max = 340.dp),
+            .widthIn(max = 340.dp)
+            .clickable { expanded = !expanded },
         elevation = SoftTheme.tokens.elevations.subtle,
         shape = RoundedCornerShape(SoftTheme.tokens.corners.md)
     ) {
         Column(
-            modifier = Modifier.padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // Header Row: Tool Icon + Tool Name + Status Badge
+            // Header Row: Tool Icon + Tool Name + Status Badge + Arrow
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -386,8 +388,8 @@ fun ToolActionBubble(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(24.dp)
-                            .clip(RoundedCornerShape(6.dp))
+                            .size(20.dp)
+                            .clip(RoundedCornerShape(4.dp))
                             .background(SoftTheme.colors.accentViolet.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
@@ -395,11 +397,11 @@ fun ToolActionBubble(
                             imageVector = Icons.Default.Build,
                             contentDescription = null,
                             tint = SoftTheme.colors.accentViolet,
-                            modifier = Modifier.size(13.dp)
+                            modifier = Modifier.size(11.dp)
                         )
                     }
                     Text(
-                        text = "TOOL: ${payload.toolName}",
+                        text = "Tool: ${payload.toolName}",
                         style = MonospaceTelemetry,
                         fontWeight = FontWeight.Bold,
                         fontSize = 11.sp,
@@ -407,79 +409,69 @@ fun ToolActionBubble(
                     )
                 }
 
-                // Status chip
                 val (statusColor, statusLabel) = when (payload.status) {
                     ToolExecutionStatus.RUNNING -> SoftTheme.colors.accentCyan to "Running"
                     ToolExecutionStatus.SUCCESS -> SoftTheme.colors.statusSuccess to "Executed"
                     ToolExecutionStatus.FAILED -> SoftTheme.colors.statusError to "Failed"
                 }
 
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(SoftTheme.tokens.corners.pill))
-                        .background(statusColor.copy(alpha = 0.12f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        text = "$statusLabel • ${payload.executionTimeMs}ms",
-                        style = MonospaceTelemetry,
-                        fontSize = 9.sp,
-                        color = statusColor
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(SoftTheme.tokens.corners.pill))
+                            .background(statusColor.copy(alpha = 0.12f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "$statusLabel • ${payload.executionTimeMs}ms",
+                            style = MonospaceTelemetry,
+                            fontSize = 9.sp,
+                            color = statusColor
+                        )
+                    }
+                    Icon(
+                        imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = null,
+                        tint = SoftTheme.colors.textMuted,
+                        modifier = Modifier.size(14.dp)
                     )
                 }
             }
 
-            // Monospace invocation snippet
-            Text(
-                text = payload.functionSignature,
-                style = MonospaceTelemetry,
-                fontSize = 12.sp,
-                color = SoftTheme.colors.accentBlue
-            )
-
-            // Result snippet
-            Text(
-                text = payload.outputSnippet,
-                style = MaterialTheme.typography.bodySmall,
-                color = SoftTheme.colors.textSecondary,
-                fontSize = 12.sp
-            )
-
-            // Expandable raw JSON arguments
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = !expanded }
-                    .padding(vertical = 2.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = if (expanded) "Hide Arguments" else "View JSON Payload",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontSize = 10.sp,
-                    color = SoftTheme.colors.textMuted
-                )
-                Icon(
-                    imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = null,
-                    tint = SoftTheme.colors.textMuted,
-                    modifier = Modifier.size(14.dp)
-                )
-            }
-
             AnimatedVisibility(visible = expanded) {
-                SoftWell(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.padding(top = 4.dp)
                 ) {
-                    Box(modifier = Modifier.padding(8.dp)) {
-                        Text(
-                            text = payload.argumentsJson,
-                            style = MonospaceTelemetry,
-                            fontSize = 11.sp,
-                            color = SoftTheme.colors.textPrimary
-                        )
+                    Text(
+                        text = payload.functionSignature,
+                        style = MonospaceTelemetry,
+                        fontSize = 11.sp,
+                        color = SoftTheme.colors.accentBlue
+                    )
+
+                    Text(
+                        text = payload.outputSnippet,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SoftTheme.colors.textSecondary,
+                        fontSize = 11.sp
+                    )
+
+                    SoftWell(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Box(modifier = Modifier.padding(6.dp)) {
+                            Text(
+                                text = payload.argumentsJson,
+                                style = MonospaceTelemetry,
+                                fontSize = 10.sp,
+                                color = SoftTheme.colors.textPrimary
+                            )
+                        }
                     }
                 }
             }
@@ -496,15 +488,18 @@ fun MemoryRetrievalBubble(
     timestamp: String,
     modifier: Modifier = Modifier
 ) {
+    var expanded by remember { mutableStateOf(false) }
+
     SoftGlassCard(
         modifier = modifier
             .testTag("chat_memory_retrieval")
-            .widthIn(max = 340.dp),
+            .widthIn(max = 340.dp)
+            .clickable { expanded = !expanded },
         elevation = SoftTheme.tokens.elevations.subtle,
         shape = RoundedCornerShape(SoftTheme.tokens.corners.md)
     ) {
         Column(
-            modifier = Modifier.padding(10.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Row(
@@ -514,16 +509,17 @@ fun MemoryRetrievalBubble(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.weight(1f, fill = false)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Psychology,
                         contentDescription = null,
                         tint = SoftTheme.colors.accentViolet,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(15.dp)
                     )
                     Text(
-                        text = "MEMORY RECALL",
+                        text = "Recall: ${payload.memoryKey}",
                         style = MonospaceTelemetry,
                         fontWeight = FontWeight.Bold,
                         fontSize = 11.sp,
@@ -531,39 +527,57 @@ fun MemoryRetrievalBubble(
                     )
                 }
 
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(SoftTheme.tokens.corners.pill))
-                        .background(SoftTheme.colors.accentViolet.copy(alpha = 0.12f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        text = "${(payload.confidenceScore * 100).toInt()}% match",
-                        style = MonospaceTelemetry,
-                        fontSize = 9.sp,
-                        color = SoftTheme.colors.accentViolet
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(SoftTheme.tokens.corners.pill))
+                            .background(SoftTheme.colors.accentViolet.copy(alpha = 0.12f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "${(payload.confidenceScore * 100).toInt()}% match",
+                            style = MonospaceTelemetry,
+                            fontSize = 9.sp,
+                            color = SoftTheme.colors.accentViolet
+                        )
+                    }
+                    Icon(
+                        imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = null,
+                        tint = SoftTheme.colors.textMuted,
+                        modifier = Modifier.size(14.dp)
                     )
                 }
             }
 
-            Text(
-                text = "Key: ${payload.memoryKey} (${payload.category})",
-                style = MonospaceTelemetry,
-                fontSize = 10.sp,
-                color = SoftTheme.colors.textMuted
-            )
-
-            SoftWell(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Box(modifier = Modifier.padding(8.dp)) {
+            AnimatedVisibility(visible = expanded) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.padding(top = 4.dp)
+                ) {
                     Text(
-                        text = "\"${payload.retrievedFact}\"",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontSize = 12.sp,
-                        color = SoftTheme.colors.textPrimary
+                        text = "Category: ${payload.category}",
+                        style = MonospaceTelemetry,
+                        fontSize = 10.sp,
+                        color = SoftTheme.colors.textMuted
                     )
+
+                    SoftWell(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Box(modifier = Modifier.padding(6.dp)) {
+                            Text(
+                                text = "\"${payload.retrievedFact}\"",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontSize = 12.sp,
+                                color = SoftTheme.colors.textPrimary
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -679,6 +693,8 @@ fun WarningMessageBubble(
     timestamp: String,
     modifier: Modifier = Modifier
 ) {
+    var expanded by remember { mutableStateOf(false) }
+
     Box(
         modifier = modifier
             .testTag("chat_warning_card")
@@ -690,7 +706,8 @@ fun WarningMessageBubble(
                 color = SoftTheme.colors.statusWarning.copy(alpha = 0.4f),
                 shape = RoundedCornerShape(SoftTheme.tokens.corners.md)
             )
-            .padding(10.dp)
+            .clickable { expanded = !expanded }
+            .padding(horizontal = 10.dp, vertical = 6.dp)
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(
@@ -700,46 +717,55 @@ fun WarningMessageBubble(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.weight(1f, fill = false)
                 ) {
                     Icon(
                         imageVector = Icons.Default.WarningAmber,
                         contentDescription = null,
                         tint = SoftTheme.colors.statusWarning,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(15.dp)
                     )
                     Text(
-                        text = "SYSTEM WARNING",
-                        style = MonospaceTelemetry,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp,
-                        color = SoftTheme.colors.statusWarning
+                        text = "WARNING: ${payload.message}",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.sp,
+                        color = SoftTheme.colors.statusWarning,
+                        maxLines = if (expanded) Int.MAX_VALUE else 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
-                Text(
-                    text = payload.warningCode,
-                    style = MonospaceTelemetry,
-                    fontSize = 9.sp,
-                    color = SoftTheme.colors.statusWarning
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = payload.warningCode,
+                        style = MonospaceTelemetry,
+                        fontSize = 9.sp,
+                        color = SoftTheme.colors.statusWarning
+                    )
+                    Icon(
+                        imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = null,
+                        tint = SoftTheme.colors.statusWarning,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
             }
 
-            Text(
-                text = payload.message,
-                style = MaterialTheme.typography.bodySmall,
-                color = SoftTheme.colors.textPrimary,
-                fontSize = 13.sp,
-                lineHeight = 18.sp
-            )
-
-            if (payload.details != null) {
-                Text(
-                    text = payload.details,
-                    style = MonospaceTelemetry,
-                    fontSize = 10.sp,
-                    color = SoftTheme.colors.textMuted
-                )
+            AnimatedVisibility(visible = expanded) {
+                if (payload.details != null) {
+                    Text(
+                        text = payload.details,
+                        style = MonospaceTelemetry,
+                        fontSize = 10.sp,
+                        color = SoftTheme.colors.textMuted,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
             }
         }
     }

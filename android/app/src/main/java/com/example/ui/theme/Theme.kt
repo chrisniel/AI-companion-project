@@ -38,20 +38,25 @@ fun SoftGlassTheme(
         ThemeMode.SYSTEM -> isSystemDark
     }
 
-    val activeAccentColor = when (preferences.accentPreset) {
-        AccentPreset.CYAN -> AccentCyan
-        AccentPreset.BLUE -> if (isDark) AccentBlueDark else AccentBlueLight
-        AccentPreset.VIOLET -> AccentViolet
-        AccentPreset.AMBER -> AccentAmber
-        AccentPreset.EMERALD -> AccentEmerald
-    }
+    val fallbackBlueAccent = if (isDark) AccentBlueDark else AccentBlueLight
+    val fallbackBlueSubtle = if (isDark) AccentBlueDarkSubtle else AccentBlueLightSubtle
 
-    val activeAccentSubtle = when (preferences.accentPreset) {
-        AccentPreset.CYAN -> AccentCyanSubtle
-        AccentPreset.BLUE -> if (isDark) AccentBlueDarkSubtle else AccentBlueLightSubtle
-        AccentPreset.VIOLET -> AccentVioletSubtle
-        AccentPreset.AMBER -> AccentAmberSubtle
-        AccentPreset.EMERALD -> AccentEmeraldSubtle
+    val (activeAccentColor, activeAccentSubtle) = if (preferences.customAccentHex != null) {
+        val parsed = parseSafeHexColor(preferences.customAccentHex)
+        if (parsed != null) {
+            parsed to parsed.copy(alpha = 0.16f)
+        } else {
+            // Malformed/invalid hex safely falls back to default BLUE accent
+            fallbackBlueAccent to fallbackBlueSubtle
+        }
+    } else {
+        when (preferences.accentPreset) {
+            AccentPreset.CYAN -> AccentCyan to AccentCyanSubtle
+            AccentPreset.BLUE -> fallbackBlueAccent to fallbackBlueSubtle
+            AccentPreset.VIOLET -> AccentViolet to AccentVioletSubtle
+            AccentPreset.AMBER -> AccentAmber to AccentAmberSubtle
+            AccentPreset.EMERALD -> AccentEmerald to AccentEmeraldSubtle
+        }
     }
 
     val (shadowFactor, specularAlpha) = when (preferences.effectsLevel) {
@@ -253,4 +258,24 @@ object SoftTheme {
         @Composable
         @ReadOnlyComposable
         get() = SoftTypographyTokens(MaterialTheme.typography)
+}
+
+/**
+ * Safely parses a hex color string (e.g. "#RRGGBB", "#AARRGGBB", "RRGGBB", or "AARRGGBB").
+ * Validates the format and returns null if malformed or invalid.
+ */
+fun parseSafeHexColor(hexString: String?): Color? {
+    if (hexString.isNullOrBlank()) return null
+    val cleanHex = hexString.trim().removePrefix("#")
+    if (cleanHex.length != 6 && cleanHex.length != 8) return null
+    return try {
+        val parsedLong = cleanHex.toLong(16)
+        if (cleanHex.length == 6) {
+            Color(0xFF000000 or parsedLong)
+        } else {
+            Color(parsedLong)
+        }
+    } catch (_: Exception) {
+        null
+    }
 }
