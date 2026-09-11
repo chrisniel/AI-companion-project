@@ -86,14 +86,13 @@ fun AlarmsScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(SoftTheme.colors.background)
             .testTag("alarms_screen")
     ) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("alarms_list"),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 88.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 112.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // 1. REDUNDANCY & SYNCHRONIZATION STATUS CARD

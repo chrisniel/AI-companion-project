@@ -55,21 +55,18 @@ fun SoftGlassCard(
 
     val finalBorderWidth = when {
         border != null -> border.width
-        isSelected -> SoftTheme.tokens.borders.medium
         borderWidth != null -> borderWidth
-        isDark -> 0.dp
         else -> SoftTheme.tokens.borders.hairline
     }
 
     val finalBorderBrush = when {
         border != null -> border.brush
-        isSelected -> SoftTheme.colors.accentGradient
         borderBrush != null -> borderBrush
-        else -> SoftTheme.colors.borderGradient
+        else -> Brush.horizontalGradient(listOf(SoftTheme.colors.borderSubtle, SoftTheme.colors.borderSubtle))
     }
 
     val finalElevation = if (isSelected) {
-        SoftTheme.tokens.elevations.elevated
+        SoftTheme.tokens.elevations.subtle
     } else {
         elevation
     }
@@ -83,19 +80,23 @@ fun SoftGlassCard(
     Box(
         modifier = modifier
             .testTag(testTag)
-            .shadow(
-                elevation = finalElevation,
-                shape = shape,
-                ambientColor = SoftTheme.colors.shadow,
-                spotColor = SoftTheme.colors.shadow
-            )
-            .softNeumorphicRaised(
-                shape = shape,
-                isDark = isDark,
-                elevation = finalElevation
+            .then(
+                if (isSelected) {
+                    Modifier.softNeumorphicInset(
+                        shape = shape,
+                        isDark = isDark,
+                        depth = 3.dp
+                    )
+                } else {
+                    Modifier.softNeumorphicRaised(
+                        shape = shape,
+                        isDark = isDark,
+                        elevation = finalElevation
+                    )
+                }
             )
             .clip(shape)
-            .background(actualBackgroundColor, shape)
+            .background(if (isSelected) SoftTheme.colors.surfacePressed else actualBackgroundColor, shape)
             .then(borderModifier),
         contentAlignment = contentAlignment,
         content = content
@@ -126,8 +127,8 @@ fun InteractiveSoftGlassCard(
     val animatedElevation by animateDpAsState(
         targetValue = when {
             !enabled -> SoftTheme.tokens.elevations.none
-            isPressed -> SoftTheme.tokens.elevations.subtle
-            isSelected -> SoftTheme.tokens.elevations.elevated
+            isPressed -> SoftTheme.tokens.elevations.none
+            isSelected -> SoftTheme.tokens.elevations.subtle
             else -> elevation
         },
         label = "card_elevation"
@@ -138,29 +139,20 @@ fun InteractiveSoftGlassCard(
         label = "card_scale"
     )
 
-    val borderBrush = when {
-        !enabled -> Brush.horizontalGradient(listOf(SoftTheme.colors.borderSubtle, SoftTheme.colors.borderSubtle))
-        isSelected -> SoftTheme.colors.accentGradient
-        isPressed -> SoftTheme.colors.accentGradient
-        else -> SoftTheme.colors.borderGradient
-    }
-
-    val borderWidth = when {
-        isSelected -> SoftTheme.tokens.borders.medium
-        isPressed -> SoftTheme.tokens.borders.thin
-        isDark -> 0.dp
-        else -> SoftTheme.tokens.borders.hairline
-    }
+    val borderWidth = SoftTheme.tokens.borders.hairline
 
     val surfaceColor = when {
         !enabled -> SoftTheme.colors.surface.copy(alpha = 0.5f)
-        isPressed -> SoftTheme.colors.surfacePressed
-        isSelected -> SoftTheme.colors.surfaceElevated
+        isPressed || isSelected -> SoftTheme.colors.surfacePressed
         else -> backgroundColor
     }
 
     val borderModifier = if (borderWidth > 0.dp) {
-        Modifier.border(width = borderWidth, brush = borderBrush, shape = shape)
+        Modifier.border(
+            width = borderWidth,
+            color = SoftTheme.colors.borderSubtle,
+            shape = shape
+        )
     } else {
         Modifier
     }
@@ -170,23 +162,27 @@ fun InteractiveSoftGlassCard(
             .testTag(testTag)
             .scale(scale)
             .defaultMinSize(minHeight = 48.dp, minWidth = 48.dp)
-            .shadow(
-                elevation = animatedElevation,
-                shape = shape,
-                ambientColor = SoftTheme.colors.shadow,
-                spotColor = SoftTheme.colors.shadow
-            )
-            .softNeumorphicRaised(
-                shape = shape,
-                isDark = isDark,
-                elevation = animatedElevation
+            .then(
+                if (isPressed || isSelected) {
+                    Modifier.softNeumorphicInset(
+                        shape = shape,
+                        isDark = isDark,
+                        depth = 3.dp
+                    )
+                } else {
+                    Modifier.softNeumorphicRaised(
+                        shape = shape,
+                        isDark = isDark,
+                        elevation = animatedElevation
+                    )
+                }
             )
             .clip(shape)
             .background(surfaceColor, shape)
             .then(borderModifier)
             .clickable(
                 interactionSource = interactionSource,
-                indication = ripple(color = SoftTheme.colors.accentCyan),
+                indication = ripple(color = SoftTheme.colors.accentPrimaryColor),
                 enabled = enabled,
                 role = Role.Button,
                 onClick = onClick

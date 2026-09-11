@@ -112,12 +112,6 @@ fun PrimaryButton(
             .scale(scale)
             .defaultMinSize(minWidth = 128.dp, minHeight = 52.dp)
             .minimumInteractiveComponentSize()
-            .shadow(
-                elevation = animatedElevation,
-                shape = shape,
-                ambientColor = if (enabled) SoftTheme.colors.accentBlue.copy(alpha = 0.40f) else Color.Transparent,
-                spotColor = if (enabled) SoftTheme.colors.accentBlue.copy(alpha = 0.30f) else Color.Transparent
-            )
             .softNeumorphicRaised(
                 shape = shape,
                 isDark = SoftTheme.colors.isDark,
@@ -239,12 +233,6 @@ fun SecondaryButton(
             .scale(scale)
             .defaultMinSize(minWidth = 100.dp, minHeight = 52.dp)
             .minimumInteractiveComponentSize()
-            .shadow(
-                elevation = if (enabled) SoftTheme.tokens.elevations.subtle else SoftTheme.tokens.elevations.none,
-                shape = shape,
-                ambientColor = SoftTheme.colors.shadow,
-                spotColor = SoftTheme.colors.shadow
-            )
             .softNeumorphicRaised(
                 shape = shape,
                 isDark = SoftTheme.colors.isDark,
@@ -252,12 +240,13 @@ fun SecondaryButton(
             )
             .clip(shape)
             .background(surfaceColor, shape)
-            .border(width = SoftTheme.tokens.borders.thin, brush = borderBrush, shape = shape)
             .then(
                 if (isPressed) {
                     Modifier.softInsetWell(shape = shape, isDark = SoftTheme.colors.isDark, depth = 3.dp)
-                } else {
+                } else if (SoftTheme.colors.isDark) {
                     Modifier
+                } else {
+                    Modifier.border(width = SoftTheme.tokens.borders.hairline, brush = borderBrush, shape = shape)
                 }
             )
             .clickable(
@@ -441,12 +430,6 @@ fun SoftIconButton(
             .scale(scale)
             .size(48.dp)
             .minimumInteractiveComponentSize()
-            .shadow(
-                elevation = if (enabled) SoftTheme.tokens.elevations.subtle else SoftTheme.tokens.elevations.none,
-                shape = shape,
-                ambientColor = SoftTheme.colors.shadow,
-                spotColor = SoftTheme.colors.shadow
-            )
             .softNeumorphicRaised(
                 shape = shape,
                 isDark = SoftTheme.colors.isDark,
@@ -454,12 +437,13 @@ fun SoftIconButton(
             )
             .clip(shape)
             .background(surfaceColor, shape)
-            .border(width = SoftTheme.tokens.borders.hairline, brush = borderBrush, shape = shape)
             .then(
                 if (isPressed) {
                     Modifier.softInsetWell(shape = shape, isDark = SoftTheme.colors.isDark, depth = 2.dp)
-                } else {
+                } else if (SoftTheme.colors.isDark) {
                     Modifier
+                } else {
+                    Modifier.border(width = SoftTheme.tokens.borders.hairline, brush = borderBrush, shape = shape)
                 }
             )
             .clickable(

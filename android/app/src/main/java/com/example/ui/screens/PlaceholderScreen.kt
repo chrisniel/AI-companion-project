@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.domain.model.StatusSeverity
 import com.example.ui.components.InteractiveSoftGlassCard
@@ -161,12 +162,15 @@ fun PlaceholderScreen(
                         text = key,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
-                        color = SoftTheme.colors.textPrimary
+                        color = SoftTheme.colors.textPrimary,
+                        modifier = Modifier.padding(end = 8.dp)
                     )
                     Text(
                         text = value,
                         style = MonospaceTelemetry,
-                        color = SoftTheme.colors.accentCyan
+                        color = SoftTheme.colors.accentCyan,
+                        textAlign = TextAlign.End,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                 }
             }

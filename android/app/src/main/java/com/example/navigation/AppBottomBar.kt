@@ -130,7 +130,7 @@ private fun CenterAssistantNavItemView(
     )
 
     val elevation by animateDpAsState(
-        targetValue = if (isSelected) 8.dp else 4.dp,
+        targetValue = if (isSelected) 10.dp else 7.dp,
         animationSpec = tween(durationMillis = 120),
         label = "assistant_elevation"
     )
@@ -158,22 +158,23 @@ private fun CenterAssistantNavItemView(
                     elevation = elevation,
                     shape = CircleShape,
                     ambientColor = SoftTheme.colors.shadow,
-                    spotColor = if (isSelected) SoftTheme.colors.accentPrimaryColor.copy(alpha = 0.25f) else SoftTheme.colors.shadow
+                    spotColor = if (isSelected) SoftTheme.colors.accentPrimaryColor.copy(alpha = 0.35f) else SoftTheme.colors.shadow
                 )
                 .softNeumorphicRaised(
                     shape = CircleShape,
                     isDark = SoftTheme.colors.isDark,
                     elevation = elevation,
-                    highlightAlpha = if (isSelected) 0.12f else (if (SoftTheme.colors.isDark) 0.10f else 0.60f)
+                    highlightAlpha = if (isSelected) 0.20f else (if (SoftTheme.colors.isDark) 0.22f else 0.90f),
+                    shadowAlpha = if (SoftTheme.colors.isDark) 0.75f else 0.40f
                 )
                 .clip(CircleShape)
                 .background(surfaceColor, CircleShape)
                 .border(
                     width = SoftTheme.tokens.borders.hairline,
                     brush = if (SoftTheme.colors.isDark) {
-                        SolidColor(Color.White.copy(alpha = 0.15f))
+                        SolidColor(Color.White.copy(alpha = 0.12f))
                     } else {
-                        SolidColor(Color.White.copy(alpha = 0.70f))
+                        SolidColor(Color.White.copy(alpha = 0.80f))
                     },
                     shape = CircleShape
                 ),

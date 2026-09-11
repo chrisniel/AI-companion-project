@@ -5,19 +5,19 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 
-// Light Mode Foundations: Soft Icy Pearl Canvas + Tactile White/Debossed Wells
-val BackgroundPearl = Color(0xFFE8EEF6)
-val BackgroundPearlSubtle = Color(0xFFDFE7F2)
-val MilkySurfaceBase = Color(0xF2FFFFFF)         // Calibrated soft translucency (~95%)
-val MilkySurfaceElevated = Color(0xF8FFFFFF)     // Raised card surface
-val MilkySurfacePressed = Color(0xFFDFE6F1)
-val MilkySurfaceWell = Color(0xFFE2E9F4)
-val TranslucentPanelLight = Color(0xE6FFFFFF)    // Calibrated panel (~90%)
-val NavSurfaceLight = Color(0xF0FFFFFF)          // Calibrated floating navigation surface
-val BorderLight = Color(0xD9FFFFFF)
-val BorderSubtleLight = Color(0x388298B3)
-val ShadowLight = Color(0x3D7F95AF)
-val ShadowLightSpecular = Color(0xF5FFFFFF)
+// Light Mode Foundations: Authentic Soft Clay Canvas + Tactile Off-White Wells (Banking Reference Parity)
+val BackgroundPearl = Color(0xFFECEDE9)          // Warm off-white clay canvas (KK Theme Parity)
+val BackgroundPearlSubtle = Color(0xFFE5E6E2)    // Subtle clay canvas
+val MilkySurfaceBase = Color(0xF2F3F4F1)         // Soft clay surface base (~95% opacity)
+val MilkySurfaceElevated = Color(0xF8F6F7F5)     // Raised clay card surface
+val MilkySurfacePressed = Color(0xFFDCDED9)      // Pressed tactile clay
+val MilkySurfaceWell = Color(0xFFE0E2DD)         // Recessed sunken clay well
+val TranslucentPanelLight = Color(0xECF3F4F1)    // Translucent clay panel
+val NavSurfaceLight = Color(0xF2F5F6F3)          // Floating clay navigation surface
+val BorderLight = Color(0xD9FFFFFF)              // Soft specular edge
+val BorderSubtleLight = Color(0x339EA3A1)        // Subdued clay edge
+val ShadowLight = Color(0x669EA3A1)              // Physical soft slate clay shadow (40% alpha)
+val ShadowLightSpecular = Color(0xF2FFFFFF)      // Crisp white specular drop shadow (95% alpha)
 
 // Dark Mode Foundations: Stealth Matte Charcoal / Obsidian Graphite (Reference Image Parity)
 val BackgroundCharcoal = Color(0xFF0E1015)

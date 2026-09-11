@@ -12,6 +12,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -133,13 +134,19 @@ fun AppShell(
                 navController.popBackStack(Routes.HOME, inclusive = false)
             }
             coroutineScope.launch {
-                pagerState.animateScrollToPage(
-                    page = targetIndex,
-                    animationSpec = spring(
-                        dampingRatio = 0.84f,
-                        stiffness = Spring.StiffnessMediumLow
+                val distance = kotlin.math.abs(pagerState.currentPage - targetIndex)
+                if (distance > 1) {
+                    // Fast immediate jump for distant tabs (avoids composing intermediate pages on Helio G99)
+                    pagerState.scrollToPage(targetIndex)
+                } else {
+                    pagerState.animateScrollToPage(
+                        page = targetIndex,
+                        animationSpec = tween(
+                            durationMillis = 220,
+                            easing = FastOutSlowInEasing
+                        )
                     )
-                )
+                }
             }
         } else {
             navController.navigate(targetRoute) {
@@ -160,6 +167,7 @@ fun AppShell(
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("app_shell_scaffold"),
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
                 if (currentRoute != Routes.HOME && currentRoute != Routes.ASSISTANT && currentRoute != Routes.VOICE_MODE && currentRoute != Routes.CHARACTERS && currentRoute != Routes.SETTINGS && currentRoute != Routes.CONNECTION && currentRoute != Routes.PERMISSIONS) {
                     AppTopBar(
@@ -285,6 +293,8 @@ fun AppShell(
                                             homeData = homeData,
                                             connectionInfo = uiState.connectionInfo,
                                             selectedPersona = uiState.selectedPersona,
+                                            selectedLanguage = uiState.language,
+                                            onSelectLanguage = { appViewModel.setLanguage(it) },
                                             onSelectPersona = { appViewModel.selectPersona(it) },
                                             onNavigateToRoute = onNavigateToRoute,
                                             onToggleTask = { taskId -> appViewModel.toggleTask(taskId) },
@@ -371,23 +381,17 @@ fun AppShell(
 
                         // SECONDARY DESTINATION: MODELS (Batch 9)
                         composable(Routes.MODELS) {
-                            ModelsScreen(
-                                onNavigateBack = { navController.popBackStack() }
-                            )
+                            ModelsScreen()
                         }
 
                         // SECONDARY DESTINATION: DEVICES (Batch 9)
                         composable(Routes.DEVICES) {
-                            DevicesScreen(
-                                onNavigateBack = { navController.popBackStack() }
-                            )
+                            DevicesScreen()
                         }
 
                         // SECONDARY DESTINATION: MEMORY (Batch 10)
                         composable(Routes.MEMORY) {
-                            MemoryScreen(
-                                onNavigateBack = { navController.popBackStack() }
-                            )
+                            MemoryScreen()
                         }
 
                         // SECONDARY DESTINATION: CONNECTION & OFFLINE SYNC (Batch 12)

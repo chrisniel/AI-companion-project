@@ -78,6 +78,7 @@ import androidx.compose.ui.unit.sp
 import com.example.domain.model.ConnectionInfo
 import com.example.domain.model.CoreConnectionState
 import com.example.domain.model.HomeData
+import com.example.domain.model.LanguageOption
 import com.example.domain.model.NextScheduleItem
 import com.example.domain.model.ScheduleItemType
 import com.example.domain.model.StatusSeverity
@@ -123,6 +124,8 @@ fun HomeScreen(
     onNavigateToRoute: (String) -> Unit,
     onToggleTask: (String) -> Unit,
     onAddTask: (title: String, priority: String) -> Unit,
+    selectedLanguage: LanguageOption = LanguageOption.AUTO,
+    onSelectLanguage: (LanguageOption) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -152,6 +155,8 @@ fun HomeScreen(
             assistantState = homeData.assistantStateText,
             connectionInfo = connectionInfo,
             modelSummary = homeData.activeModelSummary,
+            selectedLanguage = selectedLanguage,
+            onSelectLanguage = onSelectLanguage,
             onSelectPersona = onSelectPersona,
             onCardClick = { onNavigateToRoute(Routes.ASSISTANT) }
         )
@@ -381,12 +386,13 @@ private fun HomeAssistantHero(
     assistantState: String,
     connectionInfo: ConnectionInfo,
     modelSummary: String,
+    selectedLanguage: LanguageOption,
+    onSelectLanguage: (LanguageOption) -> Unit,
     onSelectPersona: (String) -> Unit,
     onCardClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val isReachable = connectionInfo.state == CoreConnectionState.Local || connectionInfo.state == CoreConnectionState.Remote
-    var selectedLang by remember { mutableStateOf("Auto") }
     var isLangDropdownOpen by remember { mutableStateOf(false) }
 
     InteractiveSoftGlassCard(
@@ -459,8 +465,14 @@ private fun HomeAssistantHero(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
+                            val flagLabel = when (selectedLanguage) {
+                                LanguageOption.AUTO -> "🌐 Auto"
+                                LanguageOption.ENGLISH -> "🇺🇸 English"
+                                LanguageOption.FILIPINO -> "🇵🇭 Filipino"
+                                LanguageOption.JAPANESE -> "🇯🇵 Japanese"
+                            }
                             Text(
-                                text = "🌐 $selectedLang",
+                                text = flagLabel,
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                                 fontWeight = FontWeight.Bold,
                                 color = SoftTheme.colors.accentPrimaryColor
@@ -480,23 +492,23 @@ private fun HomeAssistantHero(
                         modifier = Modifier.background(SoftTheme.colors.surfaceElevated)
                     ) {
                         listOf(
-                            "Auto" to "🌐 Auto (Detect)",
-                            "US EN" to "🇺🇸 English (US)",
-                            "PH FIL" to "🇵🇭 Filipino (Tagalog)",
-                            "JP JA" to "🇯🇵 Japanese (日本語)",
-                            "Mixed" to "✨ Mixed Mode"
-                        ).forEach { (code, label) ->
+                            LanguageOption.AUTO to "🌐 Auto (Detect)",
+                            LanguageOption.ENGLISH to "🇺🇸 English (US)",
+                            LanguageOption.FILIPINO to "🇵🇭 Filipino (Tagalog)",
+                            LanguageOption.JAPANESE to "🇯🇵 Japanese (日本語)"
+                        ).forEach { (opt, label) ->
+                            val isCurrent = selectedLanguage == opt
                             DropdownMenuItem(
                                 text = {
                                     Text(
                                         text = label,
                                         style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = if (selectedLang == code) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (selectedLang == code) SoftTheme.colors.accentPrimaryColor else SoftTheme.colors.textPrimary
+                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isCurrent) SoftTheme.colors.accentPrimaryColor else SoftTheme.colors.textPrimary
                                     )
                                 },
                                 onClick = {
-                                    selectedLang = code
+                                    onSelectLanguage(opt)
                                     isLangDropdownOpen = false
                                 }
                             )
@@ -604,7 +616,7 @@ private fun HomeAssistantHero(
 
 /**
  * 3. Quick Actions:
- * Four large tactile mobile-friendly action buttons with generous touch targets.
+ * Four large tactile mobile-friendly action buttons with hero text typography.
  */
 @Composable
 private fun HomeQuickActionsGrid(
@@ -623,7 +635,6 @@ private fun HomeQuickActionsGrid(
             horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
         ) {
             QuickActionButton(
-                icon = Icons.Default.AutoAwesome,
                 title = "Ask",
                 subtitle = "Local AI Chat",
                 accentColor = SoftTheme.colors.accentBlue,
@@ -633,7 +644,6 @@ private fun HomeQuickActionsGrid(
             )
 
             QuickActionButton(
-                icon = Icons.Default.Add,
                 title = "Add Task",
                 subtitle = "New To-Do",
                 accentColor = SoftTheme.colors.accentCyan,
@@ -648,7 +658,6 @@ private fun HomeQuickActionsGrid(
             horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
         ) {
             QuickActionButton(
-                icon = Icons.Default.Alarm,
                 title = "Alarm",
                 subtitle = "Smart Circadian",
                 accentColor = SoftTheme.colors.accentAmber,
@@ -658,7 +667,6 @@ private fun HomeQuickActionsGrid(
             )
 
             QuickActionButton(
-                icon = Icons.AutoMirrored.Filled.EventNote,
                 title = "Reminder",
                 subtitle = "Schedule & Alert",
                 accentColor = SoftTheme.colors.accentViolet,
@@ -672,7 +680,6 @@ private fun HomeQuickActionsGrid(
 
 @Composable
 private fun QuickActionButton(
-    icon: ImageVector,
     title: String,
     subtitle: String,
     accentColor: Color,
@@ -686,49 +693,28 @@ private fun QuickActionButton(
         testTag = testTag,
         modifier = modifier.height(72.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = SoftTheme.spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
+                .padding(horizontal = SoftTheme.spacing.md, vertical = SoftTheme.spacing.xs),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.Start
         ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(SoftTheme.tokens.corners.md))
-                    .background(accentColor.copy(alpha = 0.15f))
-                    .border(
-                        width = SoftTheme.tokens.borders.hairline,
-                        color = accentColor.copy(alpha = 0.35f),
-                        shape = RoundedCornerShape(SoftTheme.tokens.corners.md)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = accentColor,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = SoftTheme.colors.textPrimary,
-                    maxLines = 1
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                    color = SoftTheme.colors.textSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp),
+                fontWeight = FontWeight.Bold,
+                color = SoftTheme.colors.textPrimary,
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                color = SoftTheme.colors.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -1227,13 +1213,13 @@ private fun WellnessGlanceCard(
         onClick = onClick,
         elevation = SoftTheme.tokens.elevations.subtle,
         testTag = testTag,
-        modifier = modifier.height(104.dp)
+        modifier = modifier.height(110.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(SoftTheme.spacing.sm),
-            verticalArrangement = Arrangement.SpaceBetween
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1243,6 +1229,7 @@ private fun WellnessGlanceCard(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
                     color = SoftTheme.colors.textMuted,
                     maxLines = 1
                 )
@@ -1250,21 +1237,28 @@ private fun WellnessGlanceCard(
                     imageVector = icon,
                     contentDescription = null,
                     tint = accentColor,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
 
-            Column {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Text(
                     text = mainValue,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
                     fontWeight = FontWeight.Bold,
                     color = SoftTheme.colors.textPrimary,
                     maxLines = 1
                 )
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                     color = SoftTheme.colors.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis

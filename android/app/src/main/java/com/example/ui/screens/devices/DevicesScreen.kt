@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -363,8 +364,13 @@ private fun DeviceRowCard(
             ) {
                 Text(
                     text = device.details,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                    color = SoftTheme.colors.textMuted
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .padding(end = 8.dp),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                    color = SoftTheme.colors.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
 
                 if (device.latencyMs != null && device.status == DeviceStatus.ONLINE) {
@@ -372,7 +378,8 @@ private fun DeviceRowCard(
                         text = "${device.latencyMs} ms",
                         style = MonospaceTelemetry.copy(fontSize = 11.sp),
                         fontWeight = FontWeight.Medium,
-                        color = SoftTheme.colors.accentBlue
+                        color = SoftTheme.colors.accentBlue,
+                        softWrap = false
                     )
                 }
             }

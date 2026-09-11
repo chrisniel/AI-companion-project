@@ -19,11 +19,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -63,6 +65,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -73,6 +77,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -80,6 +87,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -100,6 +108,7 @@ import com.example.domain.model.VoiceCapability
 import com.example.domain.model.VoiceRecognitionLanguage
 import com.example.ui.components.SoftGlassButton
 import com.example.ui.components.SoftGlassCard
+import com.example.ui.components.softNeumorphicInset
 import com.example.ui.components.softNeumorphicRaised
 import com.example.ui.theme.SoftTheme
 
@@ -121,7 +130,7 @@ fun SettingsScreen(
         modifier = modifier
             .fillMaxSize()
             .testTag("screen_settings"),
-        containerColor = SoftTheme.colors.background,
+        containerColor = Color.Transparent,
         topBar = {
             SettingsTopBar(
                 onNavigateBack = onNavigateBack,
@@ -227,6 +236,7 @@ private fun SettingsTopBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .statusBarsPadding()
             .padding(horizontal = SoftTheme.spacing.md, vertical = SoftTheme.spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -282,56 +292,60 @@ private fun SettingsSectionTabs(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
+            .horizontalScroll(rememberScrollState())
+            .padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         SettingsSection.entries.forEach { section ->
             val isSelected = section == selectedSection
             val icon = getSectionIcon(section)
+            val isDark = SoftTheme.colors.isDark
+            val shape = RoundedCornerShape(10.dp)
 
-            FilterChip(
-                selected = isSelected,
-                onClick = { onSelectSection(section) },
-                leadingIcon = {
+            Box(
+                modifier = Modifier
+                    .testTag("settings_tab_${section.id}")
+                    .then(
+                        if (isSelected) {
+                            Modifier.softNeumorphicRaised(
+                                shape = shape,
+                                isDark = isDark,
+                                elevation = 2.5.dp,
+                                highlightAlpha = if (isDark) 0.18f else 0.85f,
+                                shadowAlpha = if (isDark) 0.65f else 0.35f
+                            )
+                        } else {
+                            Modifier
+                        }
+                    )
+                    .clip(shape)
+                    .background(
+                        if (isSelected) SoftTheme.colors.surfaceElevated else Color.Transparent,
+                        shape
+                    )
+                    .clickable { onSelectSection(section) }
+                    .padding(horizontal = 14.dp, vertical = 9.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
-                        tint = if (isSelected) SoftTheme.colors.accentBlue else SoftTheme.colors.textMuted
+                        tint = if (isSelected) SoftTheme.colors.accentPrimaryColor else SoftTheme.colors.textMuted
                     )
-                },
-                label = {
                     Text(
                         text = section.title,
                         style = MaterialTheme.typography.labelMedium,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isSelected) SoftTheme.colors.accentPrimaryColor else SoftTheme.colors.textSecondary
                     )
-                },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = SoftTheme.colors.accentBlue.copy(alpha = 0.18f),
-                    selectedLabelColor = SoftTheme.colors.accentBlue,
-                    containerColor = SoftTheme.colors.surfaceElevated,
-                    labelColor = SoftTheme.colors.textSecondary
-                ),
-                border = FilterChipDefaults.filterChipBorder(
-                    enabled = true,
-                    selected = isSelected,
-                    borderColor = if (isSelected) SoftTheme.colors.accentBlue.copy(alpha = 0.6f) else SoftTheme.colors.borderSubtle
-                ),
-                modifier = Modifier
-                    .then(
-                        if (isSelected) {
-                            Modifier.softNeumorphicRaised(
-                                shape = RoundedCornerShape(8.dp),
-                                isDark = SoftTheme.colors.isDark,
-                                elevation = 2.dp,
-                                highlightAlpha = 0.15f,
-                                shadowAlpha = 0.35f
-                            )
-                        } else Modifier
-                    )
-                    .testTag("settings_tab_${section.id}")
-            )
+                }
+            }
         }
     }
 }
@@ -374,7 +388,7 @@ private fun GeneralSectionContent(
             text = "NOTIFICATIONS",
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color = SoftTheme.colors.accentCyan
+            color = SoftTheme.colors.accentPrimaryColor
         )
 
         SettingSwitchRow(
@@ -420,7 +434,7 @@ private fun GeneralSectionContent(
             text = "STARTUP & RESUME BEHAVIOR",
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color = SoftTheme.colors.accentCyan
+            color = SoftTheme.colors.accentPrimaryColor
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.xs)) {
@@ -462,7 +476,7 @@ private fun LanguagePreferencesCard(
                 Icon(
                     imageVector = Icons.Default.Translate,
                     contentDescription = null,
-                    tint = SoftTheme.colors.accentCyan
+                    tint = SoftTheme.colors.accentPrimaryColor
                 )
                 Text(
                     text = "Language Preferences",
@@ -637,7 +651,7 @@ private fun AppearanceSectionContent(
             text = "THEME MODE",
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color = SoftTheme.colors.accentCyan
+            color = SoftTheme.colors.accentPrimaryColor
         )
 
         Row(
@@ -664,7 +678,7 @@ private fun AppearanceSectionContent(
             text = "THEME SOURCE",
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color = SoftTheme.colors.accentCyan
+            color = SoftTheme.colors.accentPrimaryColor
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.xs)) {
@@ -687,7 +701,7 @@ private fun AppearanceSectionContent(
             text = "MOBILE BACKGROUND",
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color = SoftTheme.colors.accentCyan
+            color = SoftTheme.colors.accentPrimaryColor
         )
 
         Row(
@@ -710,7 +724,7 @@ private fun AppearanceSectionContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("bg_mobile_notice"),
-            containerColor = SoftTheme.colors.accentCyan.copy(alpha = 0.08f),
+            containerColor = SoftTheme.colors.accentPrimaryColor.copy(alpha = 0.08f),
             elevation = SoftTheme.tokens.elevations.flat
         ) {
             Row(
@@ -723,7 +737,7 @@ private fun AppearanceSectionContent(
                 Icon(
                     imageVector = Icons.Default.Wallpaper,
                     contentDescription = null,
-                    tint = SoftTheme.colors.accentCyan,
+                    tint = SoftTheme.colors.accentPrimaryColor,
                     modifier = Modifier.size(24.dp)
                 )
                 Column {
@@ -749,7 +763,7 @@ private fun AppearanceSectionContent(
                     text = "Light Ambient Presets (Web Parity)",
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = SoftTheme.colors.accentCyan
+                    color = SoftTheme.colors.accentPrimaryColor
                 )
                 BuiltInBackgroundPreset.entries.filter { !it.isDarkCategory }.forEach { preset ->
                     val isSelected = uiState.selectedBuiltInBackground == preset.label
@@ -768,7 +782,7 @@ private fun AppearanceSectionContent(
                     text = "Dark Ambient Presets",
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = SoftTheme.colors.accentCyan
+                    color = SoftTheme.colors.accentPrimaryColor
                 )
                 BuiltInBackgroundPreset.entries.filter { it.isDarkCategory }.forEach { preset ->
                     val isSelected = uiState.selectedBuiltInBackground == preset.label
@@ -797,7 +811,7 @@ private fun AppearanceSectionContent(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
                         ) {
-                            Icon(Icons.Default.Image, contentDescription = null, tint = SoftTheme.colors.accentCyan)
+                            Icon(Icons.Default.Image, contentDescription = null, tint = SoftTheme.colors.accentPrimaryColor)
                             Text(
                                 text = "Current: ${uiState.customImageName}",
                                 style = MaterialTheme.typography.bodyMedium,
@@ -859,7 +873,7 @@ private fun AppearanceSectionContent(
                     text = "Light Solid Finishes (Web Parity)",
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = SoftTheme.colors.accentCyan
+                    color = SoftTheme.colors.accentPrimaryColor
                 )
                 listOf(
                     "Crisp Cloud (#EAF0F8)",
@@ -883,7 +897,7 @@ private fun AppearanceSectionContent(
                     text = "Dark Solid Finishes",
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = SoftTheme.colors.accentCyan
+                    color = SoftTheme.colors.accentPrimaryColor
                 )
                 listOf(
                     "Deep Matte Obsidian (#0D1117)",
@@ -910,7 +924,7 @@ private fun AppearanceSectionContent(
             text = "ACCENT COLOR",
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color = SoftTheme.colors.accentCyan
+            color = SoftTheme.colors.accentPrimaryColor
         )
 
         Row(
@@ -955,14 +969,107 @@ private fun AppearanceSectionContent(
                 checked = uiState.isCustomAccentEnabled,
                 onCheckedChange = { viewModel.toggleCustomAccent(it) },
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = SoftTheme.colors.accentCyan,
-                    checkedTrackColor = SoftTheme.colors.accentCyan.copy(alpha = 0.3f)
+                    checkedThumbColor = SoftTheme.colors.accentPrimaryColor,
+                    checkedTrackColor = SoftTheme.colors.accentPrimaryColor.copy(alpha = 0.3f)
                 ),
                 modifier = Modifier.testTag("custom_accent_toggle")
             )
         }
 
         if (uiState.isCustomAccentEnabled) {
+            var hexText by remember(uiState.customAccentHex) { mutableStateOf(uiState.customAccentHex) }
+            var isHexValid by remember { mutableStateOf(true) }
+
+            val parsedLiveColor = remember(hexText) {
+                try {
+                    val clean = if (hexText.startsWith("#")) hexText else "#$hexText"
+                    Color(android.graphics.Color.parseColor(clean))
+                } catch (_: Throwable) {
+                    null
+                }
+            }
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.xs)
+            ) {
+                Text(
+                    text = "TYPE OR PASTE HEX COLOR",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = SoftTheme.colors.accentPrimaryColor
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
+                ) {
+                    // Live Color Preview Swatch
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(parsedLiveColor ?: SoftTheme.colors.accentPrimaryColor)
+                            .border(
+                                width = 1.5.dp,
+                                color = if (isHexValid) Color.White.copy(alpha = 0.6f) else SoftTheme.colors.statusError,
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .testTag("custom_hex_preview_swatch"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (parsedLiveColor != null) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    // Hex Text Input Field
+                    OutlinedTextField(
+                        value = hexText,
+                        onValueChange = { input ->
+                            hexText = input
+                            val formatted = if (input.startsWith("#")) input else "#$input"
+                            val isValid = try {
+                                android.graphics.Color.parseColor(formatted)
+                                true
+                            } catch (_: Throwable) {
+                                false
+                            }
+                            isHexValid = isValid
+                            if (isValid) {
+                                viewModel.setCustomAccent(formatted.uppercase())
+                            }
+                        },
+                        placeholder = { Text("#10B981 or #FF007F", color = SoftTheme.colors.textMuted) },
+                        isError = !isHexValid && hexText.isNotBlank(),
+                        supportingText = {
+                            if (!isHexValid && hexText.isNotBlank()) {
+                                Text("Invalid hex code (e.g. #10B981)", color = SoftTheme.colors.statusError)
+                            }
+                        },
+                        singleLine = true,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("custom_hex_text_input"),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = SoftTheme.colors.accentPrimaryColor,
+                            unfocusedBorderColor = SoftTheme.colors.borderSubtle,
+                            focusedTextColor = SoftTheme.colors.textPrimary,
+                            unfocusedTextColor = SoftTheme.colors.textPrimary
+                        ),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(SoftTheme.spacing.xs))
+
             Text(
                 text = "Quick Custom Swatches",
                 style = MaterialTheme.typography.labelSmall,
@@ -978,14 +1085,17 @@ private fun AppearanceSectionContent(
                     "#FF5722" to "Orange",
                     "#8B5CF6" to "Violet",
                     "#F59E0B" to "Gold",
-                    "#00E5FF" to "Cyan"
+                    "#10B981" to "Emerald"
                 ).forEach { (hex, label) ->
                     val isSelected = uiState.customAccentHex.equals(hex, ignoreCase = true)
                     AccentColorDot(
                         color = Color(android.graphics.Color.parseColor(hex)),
                         label = label,
                         selected = isSelected,
-                        onClick = { viewModel.setCustomAccent(hex) },
+                        onClick = {
+                            hexText = hex
+                            viewModel.setCustomAccent(hex)
+                        },
                         testTag = "custom_swatch_$label"
                     )
                 }
@@ -999,7 +1109,7 @@ private fun AppearanceSectionContent(
             text = "GLASS VISUAL EFFECTS",
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color = SoftTheme.colors.accentCyan
+            color = SoftTheme.colors.accentPrimaryColor
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.xs)) {
@@ -1027,7 +1137,7 @@ private fun AppearanceSectionContent(
                 text = "CONTRAST SCRIM OPACITY",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
-                color = SoftTheme.colors.accentCyan
+                color = SoftTheme.colors.accentPrimaryColor
             )
             Text(
                 text = "${(uiState.scrimOpacity * 100).toInt()}%",
@@ -1042,8 +1152,8 @@ private fun AppearanceSectionContent(
             onValueChange = { viewModel.setScrimOpacity(it) },
             valueRange = 0.0f..0.60f,
             colors = SliderDefaults.colors(
-                thumbColor = SoftTheme.colors.accentCyan,
-                activeTrackColor = SoftTheme.colors.accentCyan,
+                thumbColor = SoftTheme.colors.accentPrimaryColor,
+                activeTrackColor = SoftTheme.colors.accentPrimaryColor,
                 inactiveTrackColor = SoftTheme.colors.borderSubtle
             ),
             modifier = Modifier
@@ -1061,7 +1171,7 @@ private fun AppearanceSectionContent(
                 text = "BACKGROUND BRIGHTNESS",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
-                color = SoftTheme.colors.accentCyan
+                color = SoftTheme.colors.accentPrimaryColor
             )
             Text(
                 text = "${(uiState.backgroundBrightness * 100).toInt()}%",
@@ -1076,8 +1186,8 @@ private fun AppearanceSectionContent(
             onValueChange = { viewModel.setBackgroundBrightness(it) },
             valueRange = 0.5f..1.5f,
             colors = SliderDefaults.colors(
-                thumbColor = SoftTheme.colors.accentCyan,
-                activeTrackColor = SoftTheme.colors.accentCyan,
+                thumbColor = SoftTheme.colors.accentPrimaryColor,
+                activeTrackColor = SoftTheme.colors.accentPrimaryColor,
                 inactiveTrackColor = SoftTheme.colors.borderSubtle
             ),
             modifier = Modifier
@@ -1105,7 +1215,7 @@ private fun AssistantSectionContent(
             text = "RESPONSE DETAIL LEVEL",
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color = SoftTheme.colors.accentCyan
+            color = SoftTheme.colors.accentPrimaryColor
         )
 
         Row(
@@ -1166,7 +1276,7 @@ private fun VoiceSectionContent(
             text = "SPEECH RECOGNITION LANGUAGE",
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color = SoftTheme.colors.accentCyan
+            color = SoftTheme.colors.accentPrimaryColor
         )
 
         Row(
@@ -1203,7 +1313,7 @@ private fun VoiceSectionContent(
             text = "VOICE-LANGUAGE CAPABILITY",
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color = SoftTheme.colors.accentCyan
+            color = SoftTheme.colors.accentPrimaryColor
         )
 
         // Capability Status Legend (Supported, Limited, Unsupported, Unknown)
@@ -1351,7 +1461,7 @@ private fun ConnectionSectionContent(
                         Icon(
                             imageVector = Icons.Default.Devices,
                             contentDescription = null,
-                            tint = SoftTheme.colors.accentCyan
+                            tint = SoftTheme.colors.accentPrimaryColor
                         )
                         Text(
                             text = "Local AI Core Studio",
@@ -1439,7 +1549,7 @@ private fun ConnectionMetricRow(label: String, value: String) {
             text = value,
             style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.SemiBold,
-            color = SoftTheme.colors.accentCyan
+            color = SoftTheme.colors.accentPrimaryColor
         )
     }
 }
@@ -1462,7 +1572,7 @@ private fun AlarmsSectionContent(
             text = "DEFAULT ALARM MELODY",
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color = SoftTheme.colors.accentCyan
+            color = SoftTheme.colors.accentPrimaryColor
         )
 
         Row(
@@ -1486,7 +1596,7 @@ private fun AlarmsSectionContent(
             text = "DEFAULT SNOOZE INTERVAL",
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color = SoftTheme.colors.accentCyan
+            color = SoftTheme.colors.accentPrimaryColor
         )
 
         Row(
@@ -1557,7 +1667,7 @@ private fun HealthSectionContent(
             text = "LOCAL DATA RETENTION",
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color = SoftTheme.colors.accentCyan
+            color = SoftTheme.colors.accentPrimaryColor
         )
 
         Row(
@@ -1740,7 +1850,7 @@ private fun AdvancedSectionContent(
             text = "DATABASE MAINTENANCE",
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color = SoftTheme.colors.accentCyan
+            color = SoftTheme.colors.accentPrimaryColor
         )
 
         Row(
@@ -1809,7 +1919,7 @@ private fun SectionCard(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = SoftTheme.colors.accentCyan,
+                    tint = SoftTheme.colors.accentPrimaryColor,
                     modifier = Modifier.size(24.dp)
                 )
                 Column {
@@ -1880,8 +1990,8 @@ private fun SettingSwitchRow(
             checked = checked,
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = SoftTheme.colors.accentCyan,
-                checkedTrackColor = SoftTheme.colors.accentCyan.copy(alpha = 0.3f)
+                checkedThumbColor = SoftTheme.colors.accentPrimaryColor,
+                checkedTrackColor = SoftTheme.colors.accentPrimaryColor.copy(alpha = 0.3f)
             ),
             modifier = Modifier.testTag(testTag)
         )
@@ -1895,28 +2005,43 @@ private fun SelectablePill(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(
+    val isDark = SoftTheme.colors.isDark
+    val shape = RoundedCornerShape(10.dp)
+
+    Box(
         modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
-        color = if (selected) SoftTheme.colors.accentCyan.copy(alpha = 0.15f) else SoftTheme.colors.surfaceElevated,
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            if (selected) SoftTheme.colors.accentCyan else SoftTheme.colors.borderSubtle
-        )
-    ) {
-        Box(
-            modifier = Modifier.padding(horizontal = SoftTheme.spacing.md, vertical = SoftTheme.spacing.sm),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                color = if (selected) SoftTheme.colors.accentCyan else SoftTheme.colors.textSecondary
+            .defaultMinSize(minHeight = 44.dp)
+            .then(
+                if (selected) {
+                    Modifier.softNeumorphicInset(
+                        shape = shape,
+                        isDark = isDark,
+                        depth = 3.dp
+                    )
+                } else {
+                    Modifier.softNeumorphicRaised(
+                        shape = shape,
+                        isDark = isDark,
+                        elevation = 3.dp
+                    )
+                }
             )
-        }
+            .clip(shape)
+            .background(
+                if (selected) SoftTheme.colors.surfacePressed else SoftTheme.colors.surfaceElevated,
+                shape
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = SoftTheme.spacing.md, vertical = SoftTheme.spacing.sm),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = if (selected) SoftTheme.colors.accentPrimaryColor else SoftTheme.colors.textSecondary,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
@@ -1928,22 +2053,38 @@ private fun SelectionCardItem(
     onClick: () -> Unit,
     testTag: String
 ) {
-    SoftGlassCard(
+    val isDark = SoftTheme.colors.isDark
+    val shape = RoundedCornerShape(12.dp)
+
+    Box(
         modifier = Modifier
             .fillMaxWidth()
+            .testTag(testTag)
+            .then(
+                if (selected) {
+                    Modifier.softNeumorphicInset(
+                        shape = shape,
+                        isDark = isDark,
+                        depth = 3.dp
+                    )
+                } else {
+                    Modifier.softNeumorphicRaised(
+                        shape = shape,
+                        isDark = isDark,
+                        elevation = 2.5.dp
+                    )
+                }
+            )
+            .clip(shape)
+            .background(
+                if (selected) SoftTheme.colors.surfacePressed else SoftTheme.colors.surface,
+                shape
+            )
             .clickable(onClick = onClick)
-            .testTag(testTag),
-        containerColor = if (selected) SoftTheme.colors.accentCyan.copy(alpha = 0.10f) else SoftTheme.colors.surfaceElevated,
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            if (selected) SoftTheme.colors.accentCyan else SoftTheme.colors.borderSubtle
-        ),
-        elevation = SoftTheme.tokens.elevations.flat
+            .padding(SoftTheme.spacing.md)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(SoftTheme.spacing.md),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -1951,8 +2092,8 @@ private fun SelectionCardItem(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = SoftTheme.colors.textPrimary
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                    color = if (selected) SoftTheme.colors.accentPrimaryColor else SoftTheme.colors.textPrimary
                 )
                 Text(
                     text = subtitle,
@@ -1965,7 +2106,7 @@ private fun SelectionCardItem(
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
                     contentDescription = "Selected",
-                    tint = SoftTheme.colors.accentCyan,
+                    tint = SoftTheme.colors.accentPrimaryColor,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -1981,6 +2122,7 @@ private fun AccentColorDot(
     onClick: () -> Unit,
     testTag: String
 ) {
+    val isDark = SoftTheme.colors.isDark
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -1990,21 +2132,31 @@ private fun AccentColorDot(
     ) {
         Box(
             modifier = Modifier
-                .size(36.dp)
+                .size(38.dp)
+                .then(
+                    if (selected) {
+                        Modifier.softNeumorphicInset(
+                            shape = CircleShape,
+                            isDark = isDark,
+                            depth = 3.dp
+                        )
+                    } else {
+                        Modifier.softNeumorphicRaised(
+                            shape = CircleShape,
+                            isDark = isDark,
+                            elevation = 2.dp
+                        )
+                    }
+                )
                 .clip(CircleShape)
-                .background(color)
-                .border(
-                    width = if (selected) 3.dp else 1.dp,
-                    color = if (selected) Color.White else Color.Transparent,
-                    shape = CircleShape
-                ),
+                .background(color),
             contentAlignment = Alignment.Center
         ) {
             if (selected) {
                 Icon(
                     imageVector = Icons.Default.Check,
                     contentDescription = null,
-                    tint = Color.Black,
+                    tint = Color.White,
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -2012,7 +2164,8 @@ private fun AccentColorDot(
         Text(
             text = label.split(" ").first(),
             style = MaterialTheme.typography.labelSmall,
-            color = if (selected) SoftTheme.colors.accentCyan else SoftTheme.colors.textMuted
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            color = if (selected) SoftTheme.colors.accentPrimaryColor else SoftTheme.colors.textMuted
         )
     }
 }
@@ -2028,7 +2181,7 @@ private fun StatusFeedbackBanner(
             .fillMaxWidth()
             .testTag("status_feedback_banner"),
         containerColor = SoftTheme.colors.surfaceElevated,
-        border = androidx.compose.foundation.BorderStroke(1.dp, SoftTheme.colors.accentCyan.copy(alpha = 0.5f))
+        border = androidx.compose.foundation.BorderStroke(1.dp, SoftTheme.colors.accentPrimaryColor.copy(alpha = 0.5f))
     ) {
         Row(
             modifier = Modifier

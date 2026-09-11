@@ -34,6 +34,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Eliminated notch, hole-punch camera, and status bar clock collisions across custom top-bar screens (`SettingsScreen`, `PermissionsScreen`, `CharactersScreen`, `ConnectionScreen`, and `AssistantScreen`) by applying explicit `statusBarsPadding()` to their root header layouts.
+- Removed duplicate top navigation bars and double back buttons in System Hub sub-screens (`ModelsScreen`, `DevicesScreen`, and `MemoryScreen`) by omitting redundant local headers when embedded within `AppShell`'s authoritative `AppTopBar`.
+- Fixed off-center, bottom-crowded telemetry layout in Home screen `WellnessGlanceCard` items, vertically and horizontally centering metrics (`Arrangement.Center`, `Alignment.CenterHorizontally`) with balanced breathing room.
+- Eliminated multi-color neon rainbow borders on `ScheduleScreen` agenda cards, unifying them with the standard `SoftGlassTheme` subtle hairline border while enabling 2-line title wrapping (`maxLines = 2`) to prevent mid-word truncation.
+- Fixed awkward vertical letter wrapping in metadata tags across `TaskRowItem` (using `FlowRow`), `DevicesScreen` latency text, `RedundancyStatusCard` failover status, and `MemoryScreen` tags via `softWrap = false` and `TextOverflow.Ellipsis`.
+- Resolved asymmetrical button heights in Settings language toggles (`[English]` vs `[Filipino / Tagalog]`) by establishing a uniform `minHeight = 44.dp` touch target with centered text alignment.
+- Prevented floating action buttons (FAB) from obscuring the bottom-most list items in `AlarmsScreen` and `MemoryScreen` by expanding `LazyColumn` bottom content padding to `112.dp`.
+- Restored subtle hairline borders on dark mode glass cards (`SoftGlassCard.kt`) for crisp edge definition without heavy visual outlines.
 - Eliminated the artificial glowing border ring around selected bottom navigation items by replacing high-opacity 1.5dp strokes and cyan gradients with delicate 0.75dp hairline borders (`rgba(255, 255, 255, 0.12)` in dark mode, `0.35` in light mode) and soft dual drop shadows matching the web client `--neu-nav-embossed` design tokens.
 - Fixed transition lag and frame drops during bottom navigation switching by eliminating screen destruction and re-instantiation through pager pre-composition.
 - Resolved pre-composition semantics ambiguity in Robolectric UI tests by scoping duplicate element selectors.

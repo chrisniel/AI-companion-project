@@ -111,7 +111,6 @@ fun TasksScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(SoftTheme.colors.background)
             .testTag("tasks_screen")
     ) {
         Column(
@@ -319,7 +318,7 @@ private fun TasksTabRow(
 
     TabRow(
         selectedTabIndex = selectedTab.ordinal,
-        containerColor = SoftTheme.colors.background,
+        containerColor = Color.Transparent,
         contentColor = SoftTheme.colors.accentBlue,
         indicator = { tabPositions ->
             if (selectedTab.ordinal < tabPositions.size) {

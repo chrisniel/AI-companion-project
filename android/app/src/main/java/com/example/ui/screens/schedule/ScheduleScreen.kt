@@ -96,7 +96,6 @@ fun ScheduleScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(SoftTheme.colors.background)
             .testTag("schedule_screen")
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -592,8 +591,7 @@ private fun ScheduleEntryCard(
             )
             .border(
                 width = SoftTheme.tokens.borders.hairline,
-                color = if (entry.isCompleted) SoftTheme.colors.borderSubtle
-                else typeColor.copy(alpha = 0.35f),
+                color = SoftTheme.colors.borderSubtle,
                 shape = RoundedCornerShape(SoftTheme.tokens.corners.md)
             )
             .padding(12.dp)
@@ -604,7 +602,7 @@ private fun ScheduleEntryCard(
         // Time & Timeline Pill
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.width(62.dp)
+            modifier = Modifier.width(66.dp)
         ) {
             Text(
                 text = entry.time,
@@ -618,13 +616,13 @@ private fun ScheduleEntryCard(
                 modifier = Modifier
                     .clip(RoundedCornerShape(SoftTheme.tokens.corners.pill))
                     .background(typeColor.copy(alpha = 0.16f))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                    .padding(horizontal = 7.dp, vertical = 3.dp)
             ) {
                 Text(
                     text = entry.type.label,
                     style = MaterialTheme.typography.labelSmall,
                     color = typeColor,
-                    fontSize = 9.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -652,7 +650,7 @@ private fun ScheduleEntryCard(
                 fontWeight = FontWeight.SemiBold,
                 color = if (entry.isCompleted) SoftTheme.colors.textMuted else SoftTheme.colors.textPrimary,
                 textDecoration = if (entry.isCompleted) TextDecoration.LineThrough else null,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
 
@@ -661,7 +659,7 @@ private fun ScheduleEntryCard(
                     text = entry.subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = SoftTheme.colors.textSecondary,
-                    fontSize = 11.sp,
+                    fontSize = 12.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -671,8 +669,8 @@ private fun ScheduleEntryCard(
                 Text(
                     text = entry.locationOrSource,
                     style = MaterialTheme.typography.labelSmall,
-                    color = SoftTheme.colors.textMuted,
-                    fontSize = 10.sp
+                    color = SoftTheme.colors.textSecondary,
+                    fontSize = 11.sp
                 )
             }
         }

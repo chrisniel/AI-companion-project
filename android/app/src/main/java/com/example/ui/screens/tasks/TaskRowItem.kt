@@ -9,6 +9,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -75,6 +77,7 @@ import com.example.ui.theme.SoftTheme
  * - due date/time indicator
  * - Quick Actions: complete, edit, delete, snooze/remind later
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TaskRowItem(
     task: MobileTask,
@@ -204,10 +207,10 @@ fun TaskRowItem(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // METADATA CHIPS ROW: Category/Project, Priority, Due Date/Time, Reminder
-                Row(
+                // METADATA CHIPS: Category/Project, Priority, Due Date/Time, Reminder
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     // Category / Project Pill
@@ -229,8 +232,9 @@ fun TaskRowItem(
                             text = task.category.label,
                             style = MaterialTheme.typography.labelSmall,
                             color = SoftTheme.colors.textSecondary,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            softWrap = false
                         )
                     }
 
@@ -253,8 +257,9 @@ fun TaskRowItem(
                             text = task.priority.label,
                             style = MaterialTheme.typography.labelSmall,
                             color = priorityColor,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            softWrap = false
                         )
                     }
 
@@ -286,8 +291,9 @@ fun TaskRowItem(
                             text = dueString,
                             style = MaterialTheme.typography.labelSmall,
                             color = if (task.isSnoozed) SoftTheme.colors.statusWarning else SoftTheme.colors.textSecondary,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            softWrap = false
                         )
                     }
                 }
