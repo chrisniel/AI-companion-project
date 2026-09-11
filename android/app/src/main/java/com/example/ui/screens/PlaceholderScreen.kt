@@ -82,13 +82,9 @@ fun PlaceholderScreen(
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.md)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.md)
-                    ) {
                         Box(
                             modifier = Modifier
                                 .size(48.dp)
@@ -104,7 +100,10 @@ fun PlaceholderScreen(
                             )
                         }
 
-                        Column {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
                             Text(
                                 text = category.uppercase(),
                                 style = MaterialTheme.typography.labelSmall,
@@ -117,15 +116,13 @@ fun PlaceholderScreen(
                                 fontWeight = FontWeight.Bold,
                                 color = SoftTheme.colors.textPrimary
                             )
+                            StatusBadge(
+                                text = statusText,
+                                severity = StatusSeverity.Success,
+                                hasDot = true
+                            )
                         }
                     }
-
-                    StatusBadge(
-                        text = statusText,
-                        severity = StatusSeverity.Success,
-                        hasDot = true
-                    )
-                }
 
                 Text(
                     text = description,

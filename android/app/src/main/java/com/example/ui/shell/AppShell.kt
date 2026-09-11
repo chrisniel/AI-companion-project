@@ -7,8 +7,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,7 +27,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -45,7 +42,6 @@ import com.example.navigation.AppTopBar
 import com.example.navigation.BottomNavItem
 import com.example.navigation.Routes
 import kotlinx.coroutines.launch
-import kotlin.math.absoluteValue
 import com.example.ui.AppViewModelProvider
 import com.example.ui.components.AmbientGlassBackground
 import com.example.ui.components.CalmConnectionBanner
@@ -134,19 +130,13 @@ fun AppShell(
                 navController.popBackStack(Routes.HOME, inclusive = false)
             }
             coroutineScope.launch {
-                val distance = kotlin.math.abs(pagerState.currentPage - targetIndex)
-                if (distance > 1) {
-                    // Fast immediate jump for distant tabs (avoids composing intermediate pages on Helio G99)
-                    pagerState.scrollToPage(targetIndex)
-                } else {
-                    pagerState.animateScrollToPage(
-                        page = targetIndex,
-                        animationSpec = tween(
-                            durationMillis = 220,
-                            easing = FastOutSlowInEasing
-                        )
+                pagerState.animateScrollToPage(
+                    page = targetIndex,
+                    animationSpec = tween(
+                        durationMillis = 180,
+                        easing = FastOutSlowInEasing
                     )
-                }
+                )
             }
         } else {
             navController.navigate(targetRoute) {
@@ -240,53 +230,45 @@ fun AppShell(
                         enterTransition = {
                             slideInHorizontally(
                                 initialOffsetX = { it },
-                                animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)
-                            ) + fadeIn(animationSpec = tween(durationMillis = 240))
+                                animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)
+                            ) + fadeIn(animationSpec = tween(durationMillis = 180))
                         },
                         exitTransition = {
                             slideOutHorizontally(
                                 targetOffsetX = { -it / 4 },
-                                animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)
-                            ) + fadeOut(animationSpec = tween(durationMillis = 200))
+                                animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)
+                            ) + fadeOut(animationSpec = tween(durationMillis = 150))
                         },
                         popEnterTransition = {
                             slideInHorizontally(
                                 initialOffsetX = { -it / 4 },
-                                animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)
-                            ) + fadeIn(animationSpec = tween(durationMillis = 240))
+                                animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)
+                            ) + fadeIn(animationSpec = tween(durationMillis = 180))
                         },
                         popExitTransition = {
                             slideOutHorizontally(
                                 targetOffsetX = { it },
-                                animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)
-                            ) + fadeOut(animationSpec = tween(durationMillis = 200))
+                                animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)
+                            ) + fadeOut(animationSpec = tween(durationMillis = 150))
                         },
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        // PRIMARY DESTINATIONS: Hosted inside high-performance HorizontalPager (1:1 touch swiping & pre-rendered tabs)
+                        // PRIMARY DESTINATIONS: Hosted inside high-performance HorizontalPager (1:1 clean touch swiping)
                         composable(Routes.HOME) {
                             HorizontalPager(
                                 state = pagerState,
-                                beyondViewportPageCount = 1,
+                                beyondViewportPageCount = 0,
                                 flingBehavior = PagerDefaults.flingBehavior(
                                     state = pagerState,
-                                    snapAnimationSpec = spring(
-                                        dampingRatio = 0.82f,
-                                        stiffness = Spring.StiffnessMediumLow
+                                    snapAnimationSpec = tween(
+                                        durationMillis = 200,
+                                        easing = FastOutSlowInEasing
                                     )
                                 ),
                                 modifier = Modifier.fillMaxSize()
                             ) { page ->
                                 Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .graphicsLayer {
-                                            val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
-                                            val absOffset = pageOffset.absoluteValue.coerceIn(0f, 1f)
-                                            alpha = 1f - (absOffset * 0.18f)
-                                            scaleX = 1f - (absOffset * 0.02f)
-                                            scaleY = 1f - (absOffset * 0.02f)
-                                        }
+                                    modifier = Modifier.fillMaxSize()
                                 ) {
                                     when (page) {
                                         0 -> HomeScreen(

@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -25,9 +26,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -50,16 +51,6 @@ fun CharacterAvatarView(
     val secondaryColor = Color(avatarStyle.secondaryColorHex)
     val accentColor = Color(avatarStyle.accentColorHex)
 
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse_avatar")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = if (isAuditioning) 1.08f else 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "avatar_scale"
-    )
 
     when (displayMode) {
         AvatarDisplayMode.HIDDEN -> {
@@ -153,13 +144,7 @@ fun CharacterAvatarView(
 
         AvatarDisplayMode.FULL -> {
             // Rich multi-layered glowing avatar
-            Box(
-                modifier = modifier
-                    .size(size)
-                    .scale(pulseScale)
-                    .testTag("avatar_display_full"),
-                contentAlignment = Alignment.Center
-            ) {
+            val avatarContent: @Composable BoxScope.() -> Unit = {
                 // Outer ambient glow ring
                 Box(
                     modifier = Modifier
@@ -216,6 +201,49 @@ fun CharacterAvatarView(
                     )
                 }
             }
+
+            if (isAuditioning) {
+                AuditioningPulseContainer(
+                    modifier = modifier
+                        .size(size)
+                        .testTag("avatar_display_full"),
+                    content = avatarContent
+                )
+            } else {
+                Box(
+                    modifier = modifier
+                        .size(size)
+                        .testTag("avatar_display_full"),
+                    contentAlignment = Alignment.Center,
+                    content = avatarContent
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun AuditioningPulseContainer(
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse_avatar")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "avatar_scale"
+    )
+
+    Box(
+        modifier = modifier.graphicsLayer {
+            scaleX = pulseScale
+            scaleY = pulseScale
+        },
+        contentAlignment = Alignment.Center,
+        content = content
+    )
 }

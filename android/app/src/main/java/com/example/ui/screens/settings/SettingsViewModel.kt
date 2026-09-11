@@ -21,6 +21,8 @@ import com.example.domain.model.VoiceCapability
 import com.example.domain.model.VoiceCapabilityItem
 import com.example.domain.model.VoiceRecognitionLanguage
 import com.example.domain.repository.AppearanceRepository
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,6 +39,8 @@ class SettingsViewModel(
 
     private val _uiState = MutableStateFlow(SettingsState())
     val uiState: StateFlow<SettingsState> = _uiState.asStateFlow()
+
+    private var statusJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -373,10 +377,17 @@ class SettingsViewModel(
     }
 
     fun showStatus(message: String) {
+        statusJob?.cancel()
         _uiState.update { it.copy(statusMessage = message) }
+        statusJob = viewModelScope.launch {
+            delay(1400)
+            _uiState.update { it.copy(statusMessage = null) }
+        }
     }
 
     fun dismissStatus() {
+        statusJob?.cancel()
+        statusJob = null
         _uiState.update { it.copy(statusMessage = null) }
     }
 }

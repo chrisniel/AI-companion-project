@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Auto-dismissing elevated status toast in `SettingsScreen` (2.6s cancellable coroutine timeout, full-screen tap-anywhere overlay dismiss, elevated 68dp above bottom navigation bar, enlarged typography and CheckCircle status icon).
 - Interactive profile avatar popover on Home screen revealing user profile, host connection status indicator, and settings link.
 - Compact language selection dropdown menu in Home Assistant Hero (`[ 🌐 Auto ▾ ]`) supporting English, Filipino, Japanese, and Mixed Mode.
 - Subtle spring bounce physics to `HorizontalPager` fling gestures (`dampingRatio = 0.82f`) and bottom tab navigation clicks.
@@ -34,6 +35,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Calibrated physical dual-shadow neumorphic engine in `SoftNeumorphic.kt`: tightened top-left specular highlight offset and blur radius (down to 1.5–4dp) and lowered specular alpha (`0.10f` in dark mode), completely eliminating upward foggy shadow bleed over section headers and container borders above.
+- Enhanced authentic neumorphic inset well accuracy in `softNeumorphicInset` and `SoftGlassCard.kt`: increased inner shadow blur radius up to 16dp for soft, deep concave recession, and preserved natural surface background color (`SoftTheme.colors.surface` / `actualBackgroundColor`) on selected cards instead of swapping to an artificial darker slab color (`surfacePressed`).
+- Resolved monstrous 1-character-wide vertical letter-snake bug in `CapabilityHubCard` (`PermissionsScreen.kt`) and `PlaceholderScreen.kt` (`About` screen) caused by horizontal row crowding; repositioned `StatusBadge` cleanly below long titles inside `Column(modifier = Modifier.weight(1f))` with full horizontal clearance.
+- Eliminated touch-intercepting full-screen overlay in `SettingsScreen.kt` so users can immediately interact with other controls during toast display without extra dismissal taps; reduced auto-dismiss timeout from 2.6s to a snappy 1.4 seconds with smooth fade-out.
+- Streamlined Home screen user avatar by removing redundant, clipped online status dot, and upgraded `SoftAvatar` to render an integrated 1.5dp glowing status border ring around the avatar circle (Green = Online, Orange = Reconnecting, Red = Offline) that is completely impervious to container clipping.
+- Expanded vertical selection card spacing in `SettingsScreen.kt` to `10.dp` across Theme Source, Glass Visual Effects, and Ambient Presets, adding generous `8.dp` negative space below section titles.
+- Resolved indefinitely persisting status toast in `SettingsScreen` that required manual tapping on "X"; implemented auto-dismiss timer and smooth 240ms vertical fade transitions.
+- Restored authentic physical dual-shadow `BlurMaskFilter` neumorphic rendering engine (`softNeumorphicRaised` and `softNeumorphicInset`) as default across the application, preserving physical 3D clay extrusion and concave inset depth while integrating `EffectsLevel` under Appearance settings so users can freely choose between Authentic Neumorphic (default) and Lightweight GPU fallback mode (battery saver).
+- Eliminated continuous 120Hz infinite recomposition loops in `ConnectionIndicator`, `CompactConnectionIndicator`, `PulsingConnectingDot`, and `AuditioningPulseContainer` that drained battery and starved UI threads; steady states (`Local`, `Remote`, `Offline`) now render static calm dots with 0 Choreographer overhead, while active connecting animations defer properties to off-thread `Modifier.graphicsLayer`.
+- Resolved motion dizziness and visual disorientation during tab swiping by removing 3D scale dips and alpha damping from `HorizontalPager` containers, establishing clean 1:1 lateral tracking.
+- Eliminated jarring teleportation during bottom tab navigation clicks; unified tab transitions to smooth 180ms tween animations (`FastOutSlowInEasing`).
+- Reduced memory consumption and background rendering work by setting `HorizontalPager` `beyondViewportPageCount` to 0.
 - Eliminated notch, hole-punch camera, and status bar clock collisions across custom top-bar screens (`SettingsScreen`, `PermissionsScreen`, `CharactersScreen`, `ConnectionScreen`, and `AssistantScreen`) by applying explicit `statusBarsPadding()` to their root header layouts.
 - Removed duplicate top navigation bars and double back buttons in System Hub sub-screens (`ModelsScreen`, `DevicesScreen`, and `MemoryScreen`) by omitting redundant local headers when embedded within `AppShell`'s authoritative `AppTopBar`.
 - Fixed off-center, bottom-crowded telemetry layout in Home screen `WellnessGlanceCard` items, vertically and horizontally centering metrics (`Arrangement.Center`, `Alignment.CenterHorizontally`) with balanced breathing room.

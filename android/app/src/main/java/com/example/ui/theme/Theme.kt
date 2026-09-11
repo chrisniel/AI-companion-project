@@ -187,7 +187,7 @@ fun SoftGlassTheme(
         )
     }
 
-    val tokens = GlassTokens()
+    val tokens = GlassTokens(effectsLevel = preferences.effectsLevel)
     val spacing = SoftSpacing()
 
     CompositionLocalProvider(

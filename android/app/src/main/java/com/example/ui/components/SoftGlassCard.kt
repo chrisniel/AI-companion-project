@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.example.domain.model.EffectsLevel
 import com.example.ui.theme.SoftTheme
 
 /**
@@ -71,6 +72,8 @@ fun SoftGlassCard(
         elevation
     }
 
+    val isLightweight = SoftTheme.tokens.effectsLevel == EffectsLevel.REDUCED
+
     val borderModifier = if (finalBorderWidth > 0.dp) {
         Modifier.border(width = finalBorderWidth, brush = finalBorderBrush, shape = shape)
     } else {
@@ -85,18 +88,20 @@ fun SoftGlassCard(
                     Modifier.softNeumorphicInset(
                         shape = shape,
                         isDark = isDark,
-                        depth = 3.dp
+                        depth = 3.dp,
+                        isLightweight = isLightweight
                     )
                 } else {
                     Modifier.softNeumorphicRaised(
                         shape = shape,
                         isDark = isDark,
-                        elevation = finalElevation
+                        elevation = finalElevation,
+                        isLightweight = isLightweight
                     )
                 }
             )
             .clip(shape)
-            .background(if (isSelected) SoftTheme.colors.surfacePressed else actualBackgroundColor, shape)
+            .background(if (isLightweight && isSelected) SoftTheme.colors.surfacePressed else actualBackgroundColor, shape)
             .then(borderModifier),
         contentAlignment = contentAlignment,
         content = content
@@ -140,10 +145,11 @@ fun InteractiveSoftGlassCard(
     )
 
     val borderWidth = SoftTheme.tokens.borders.hairline
+    val isLightweight = SoftTheme.tokens.effectsLevel == EffectsLevel.REDUCED
 
     val surfaceColor = when {
         !enabled -> SoftTheme.colors.surface.copy(alpha = 0.5f)
-        isPressed || isSelected -> SoftTheme.colors.surfacePressed
+        isLightweight && (isPressed || isSelected) -> SoftTheme.colors.surfacePressed
         else -> backgroundColor
     }
 
@@ -167,13 +173,15 @@ fun InteractiveSoftGlassCard(
                     Modifier.softNeumorphicInset(
                         shape = shape,
                         isDark = isDark,
-                        depth = 3.dp
+                        depth = 3.dp,
+                        isLightweight = isLightweight
                     )
                 } else {
                     Modifier.softNeumorphicRaised(
                         shape = shape,
                         isDark = isDark,
-                        elevation = animatedElevation
+                        elevation = animatedElevation,
+                        isLightweight = isLightweight
                     )
                 }
             )

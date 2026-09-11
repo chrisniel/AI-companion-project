@@ -8,11 +8,14 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -210,15 +213,28 @@ fun SettingsScreen(
                 }
             }
 
-            // Status message toast
-            uiState.statusMessage?.let { msg ->
-                StatusFeedbackBanner(
-                    message = msg,
-                    onDismiss = { settingsViewModel.dismissStatus() },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(SoftTheme.spacing.lg)
-                )
+
+            // Status message toast with smooth fade & slide, elevated positioning
+            AnimatedVisibility(
+                visible = uiState.statusMessage != null,
+                enter = fadeIn(animationSpec = tween(200)) + slideInVertically(
+                    initialOffsetY = { it / 3 },
+                    animationSpec = tween(200)
+                ),
+                exit = fadeOut(animationSpec = tween(240)) + slideOutVertically(
+                    targetOffsetY = { it / 3 },
+                    animationSpec = tween(240)
+                ),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 68.dp, start = 20.dp, end = 20.dp)
+            ) {
+                uiState.statusMessage?.let { msg ->
+                    StatusFeedbackBanner(
+                        message = msg,
+                        onDismiss = { settingsViewModel.dismissStatus() }
+                    )
+                }
             }
         }
     }
@@ -680,8 +696,9 @@ private fun AppearanceSectionContent(
             fontWeight = FontWeight.Bold,
             color = SoftTheme.colors.accentPrimaryColor
         )
+        Spacer(modifier = Modifier.height(8.dp))
 
-        Column(verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.xs)) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             ThemeSource.entries.forEach { source ->
                 val isSelected = uiState.themeSource == source
                 SelectionCardItem(
@@ -765,15 +782,18 @@ private fun AppearanceSectionContent(
                     fontWeight = FontWeight.SemiBold,
                     color = SoftTheme.colors.accentPrimaryColor
                 )
-                BuiltInBackgroundPreset.entries.filter { !it.isDarkCategory }.forEach { preset ->
-                    val isSelected = uiState.selectedBuiltInBackground == preset.label
-                    SelectionCardItem(
-                        title = preset.label,
-                        subtitle = "Light ethereal gradient tuned for Pearl and day environments",
-                        selected = isSelected,
-                        onClick = { viewModel.setSelectedBuiltInBackground(preset.label) },
-                        testTag = "bg_preset_${preset.name.lowercase()}"
-                    )
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    BuiltInBackgroundPreset.entries.filter { !it.isDarkCategory }.forEach { preset ->
+                        val isSelected = uiState.selectedBuiltInBackground == preset.label
+                        SelectionCardItem(
+                            title = preset.label,
+                            subtitle = "Light ethereal gradient tuned for Pearl and day environments",
+                            selected = isSelected,
+                            onClick = { viewModel.setSelectedBuiltInBackground(preset.label) },
+                            testTag = "bg_preset_${preset.name.lowercase()}"
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(SoftTheme.spacing.xs))
@@ -784,15 +804,18 @@ private fun AppearanceSectionContent(
                     fontWeight = FontWeight.SemiBold,
                     color = SoftTheme.colors.accentPrimaryColor
                 )
-                BuiltInBackgroundPreset.entries.filter { it.isDarkCategory }.forEach { preset ->
-                    val isSelected = uiState.selectedBuiltInBackground == preset.label
-                    SelectionCardItem(
-                        title = preset.label,
-                        subtitle = "Curated ambient glass background for OLED and LCD",
-                        selected = isSelected,
-                        onClick = { viewModel.setSelectedBuiltInBackground(preset.label) },
-                        testTag = "bg_preset_${preset.name.lowercase()}"
-                    )
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    BuiltInBackgroundPreset.entries.filter { it.isDarkCategory }.forEach { preset ->
+                        val isSelected = uiState.selectedBuiltInBackground == preset.label
+                        SelectionCardItem(
+                            title = preset.label,
+                            subtitle = "Curated ambient glass background for OLED and LCD",
+                            selected = isSelected,
+                            onClick = { viewModel.setSelectedBuiltInBackground(preset.label) },
+                            testTag = "bg_preset_${preset.name.lowercase()}"
+                        )
+                    }
                 }
             }
             BackgroundType.CUSTOM_IMAGE -> {
@@ -852,20 +875,23 @@ private fun AppearanceSectionContent(
                     style = MaterialTheme.typography.bodySmall,
                     color = SoftTheme.colors.textSecondary
                 )
-                listOf(
-                    "Cyan-Violet Fluid Mesh",
-                    "Aurora Emerald Flow",
-                    "Deep Space Nebula",
-                    "Sunset Amber Radiant"
-                ).forEach { gradientName ->
-                    val isSelected = uiState.selectedGradientBackground == gradientName
-                    SelectionCardItem(
-                        title = gradientName,
-                        subtitle = "Multi-stop CSS shader gradient tuned for low handheld power draw",
-                        selected = isSelected,
-                        onClick = { viewModel.setSelectedGradientBackground(gradientName) },
-                        testTag = "bg_gradient_${gradientName.replace(" ", "_")}"
-                    )
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    listOf(
+                        "Cyan-Violet Fluid Mesh",
+                        "Aurora Emerald Flow",
+                        "Deep Space Nebula",
+                        "Sunset Amber Radiant"
+                    ).forEach { gradientName ->
+                        val isSelected = uiState.selectedGradientBackground == gradientName
+                        SelectionCardItem(
+                            title = gradientName,
+                            subtitle = "Multi-stop CSS shader gradient tuned for low handheld power draw",
+                            selected = isSelected,
+                            onClick = { viewModel.setSelectedGradientBackground(gradientName) },
+                            testTag = "bg_gradient_${gradientName.replace(" ", "_")}"
+                        )
+                    }
                 }
             }
             BackgroundType.SOLID -> {
@@ -875,20 +901,23 @@ private fun AppearanceSectionContent(
                     fontWeight = FontWeight.SemiBold,
                     color = SoftTheme.colors.accentPrimaryColor
                 )
-                listOf(
-                    "Crisp Cloud (#EAF0F8)",
-                    "Pale Frost (#F1F5F9)",
-                    "Whisper Sky (#E0F2FE)",
-                    "Soft Pearl (#F8FAFC)"
-                ).forEach { solidName ->
-                    val isSelected = uiState.selectedSolidBackground == solidName
-                    SelectionCardItem(
-                        title = solidName,
-                        subtitle = "Light matte foundation matching React web soft glass theme",
-                        selected = isSelected,
-                        onClick = { viewModel.setSelectedSolidBackground(solidName) },
-                        testTag = "bg_solid_${solidName.replace(" ", "_").replace("(", "").replace(")", "").replace("#", "")}"
-                    )
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    listOf(
+                        "Crisp Cloud (#EAF0F8)",
+                        "Pale Frost (#F1F5F9)",
+                        "Whisper Sky (#E0F2FE)",
+                        "Soft Pearl (#F8FAFC)"
+                    ).forEach { solidName ->
+                        val isSelected = uiState.selectedSolidBackground == solidName
+                        SelectionCardItem(
+                            title = solidName,
+                            subtitle = "Light matte foundation matching React web soft glass theme",
+                            selected = isSelected,
+                            onClick = { viewModel.setSelectedSolidBackground(solidName) },
+                            testTag = "bg_solid_${solidName.replace(" ", "_").replace("(", "").replace(")", "").replace("#", "")}"
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(SoftTheme.spacing.xs))
@@ -899,20 +928,23 @@ private fun AppearanceSectionContent(
                     fontWeight = FontWeight.SemiBold,
                     color = SoftTheme.colors.accentPrimaryColor
                 )
-                listOf(
-                    "Deep Matte Obsidian (#0D1117)",
-                    "Charcoal Glass (#161B22)",
-                    "Pearl Slate (#1F242C)",
-                    "OLED True Black (#000000)"
-                ).forEach { solidName ->
-                    val isSelected = uiState.selectedSolidBackground == solidName
-                    SelectionCardItem(
-                        title = solidName,
-                        subtitle = "Untextured flat surface maximizing battery life on OLED displays",
-                        selected = isSelected,
-                        onClick = { viewModel.setSelectedSolidBackground(solidName) },
-                        testTag = "bg_solid_${solidName.replace(" ", "_").replace("(", "").replace(")", "").replace("#", "")}"
-                    )
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    listOf(
+                        "Deep Matte Obsidian (#0D1117)",
+                        "Charcoal Glass (#161B22)",
+                        "Pearl Slate (#1F242C)",
+                        "OLED True Black (#000000)"
+                    ).forEach { solidName ->
+                        val isSelected = uiState.selectedSolidBackground == solidName
+                        SelectionCardItem(
+                            title = solidName,
+                            subtitle = "Untextured flat surface maximizing battery life on OLED displays",
+                            selected = isSelected,
+                            onClick = { viewModel.setSelectedSolidBackground(solidName) },
+                            testTag = "bg_solid_${solidName.replace(" ", "_").replace("(", "").replace(")", "").replace("#", "")}"
+                        )
+                    }
                 }
             }
         }
@@ -1111,8 +1143,9 @@ private fun AppearanceSectionContent(
             fontWeight = FontWeight.Bold,
             color = SoftTheme.colors.accentPrimaryColor
         )
+        Spacer(modifier = Modifier.height(8.dp))
 
-        Column(verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.xs)) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             EffectsLevel.entries.forEach { level ->
                 val isSelected = uiState.effectsLevel == level
                 SelectionCardItem(
@@ -2028,7 +2061,7 @@ private fun SelectablePill(
             )
             .clip(shape)
             .background(
-                if (selected) SoftTheme.colors.surfacePressed else SoftTheme.colors.surfaceElevated,
+                if (SoftTheme.tokens.effectsLevel == EffectsLevel.REDUCED && selected) SoftTheme.colors.surfacePressed else SoftTheme.colors.surfaceElevated,
                 shape
             )
             .clickable(onClick = onClick)
@@ -2077,7 +2110,7 @@ private fun SelectionCardItem(
             )
             .clip(shape)
             .background(
-                if (selected) SoftTheme.colors.surfacePressed else SoftTheme.colors.surface,
+                if (SoftTheme.tokens.effectsLevel == EffectsLevel.REDUCED && selected) SoftTheme.colors.surfacePressed else SoftTheme.colors.surface,
                 shape
             )
             .clickable(onClick = onClick)
@@ -2179,29 +2212,41 @@ private fun StatusFeedbackBanner(
     SoftGlassCard(
         modifier = modifier
             .fillMaxWidth()
-            .testTag("status_feedback_banner"),
+            .testTag("status_feedback_banner")
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onDismiss
+            ),
         containerColor = SoftTheme.colors.surfaceElevated,
-        border = androidx.compose.foundation.BorderStroke(1.dp, SoftTheme.colors.accentPrimaryColor.copy(alpha = 0.5f))
+        border = androidx.compose.foundation.BorderStroke(1.dp, SoftTheme.colors.accentPrimaryColor.copy(alpha = 0.55f))
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = SoftTheme.spacing.md, vertical = SoftTheme.spacing.sm),
+                .padding(horizontal = 20.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            Icon(
+                imageVector = Icons.Default.CheckCircle,
+                contentDescription = null,
+                tint = SoftTheme.colors.accentPrimaryColor,
+                modifier = Modifier.size(22.dp)
+            )
             Text(
                 text = message,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
                 color = SoftTheme.colors.textPrimary,
                 modifier = Modifier.weight(1f)
             )
-            IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
+            IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
                 Icon(
                     imageVector = Icons.Default.Close,
                     contentDescription = "Dismiss",
                     tint = SoftTheme.colors.textSecondary,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }

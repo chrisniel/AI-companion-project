@@ -6,8 +6,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
@@ -17,7 +17,6 @@ import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.Dp
@@ -26,12 +25,13 @@ import androidx.compose.ui.unit.dp
 /**
  * SoftNeumorphic rendering engine for Jetpack Compose.
  *
- * Casts physical directional dual-light neumorphic drop shadows:
- * - Raised surfaces: top-left light specular reflection + bottom-right dark ambient drop shadow.
- * - Recessed / Inset wells: inward top-left shadow + inward bottom-right specular reflection.
- *
- * Uses hardware-accelerated BlurMaskFilter for authentic 3D tactile extrusion
- * matching the reference clay and matte neumorphic identity.
+ * Supports two distinct rendering tiers:
+ * 1. Authentic Neumorphic (Default / Normal & Enhanced):
+ *    Dual-light physical drop shadows using Android's native BlurMaskFilter:
+ *    - Raised surfaces: top-left light specular reflection + bottom-right dark ambient drop shadow.
+ *    - Recessed / Inset wells: concave inward top-left shadow + inward bottom-right specular reflection.
+ * 2. Lightweight (Reduced / Battery Saver):
+ *    GPU-accelerated RenderNode shadow + directional specular gradient stroke for minimal overhead.
  */
 
 /**
@@ -41,17 +41,61 @@ fun Modifier.softNeumorphicRaised(
     shape: Shape,
     isDark: Boolean = true,
     elevation: Dp = 5.dp,
-    highlightAlpha: Float = if (isDark) 0.22f else 0.85f,
-    shadowAlpha: Float = if (isDark) 0.70f else 0.35f,
+    highlightAlpha: Float = if (isDark) 0.10f else 0.55f,
+    shadowAlpha: Float = if (isDark) 0.60f else 0.30f,
     highlightColor: Color = if (isDark) Color(0xFF7A8A9E) else Color.White,
-    shadowColor: Color = if (isDark) Color(0xFF000000) else Color(0xFF9EA3A1)
-): Modifier = this.drawWithCache {
-    if (elevation <= 0.dp) {
-        onDrawBehind { }
-    } else {
+    shadowColor: Color = if (isDark) Color(0xFF000000) else Color(0xFF9EA3A1),
+    isLightweight: Boolean = false
+): Modifier {
+    if (elevation <= 0.dp) return this
+
+    if (isLightweight) {
+        val shadowModifier = Modifier.shadow(
+            elevation = elevation,
+            shape = shape,
+            clip = false,
+            ambientColor = shadowColor.copy(alpha = shadowAlpha * 0.75f),
+            spotColor = shadowColor.copy(alpha = shadowAlpha)
+        )
+
+        val specularHighlightModifier = Modifier.drawWithCache {
+            val outline = shape.createOutline(size, layoutDirection, this)
+            val specularBrush = Brush.linearGradient(
+                colors = listOf(
+                    highlightColor.copy(alpha = highlightAlpha),
+                    highlightColor.copy(alpha = highlightAlpha * 0.3f),
+                    Color.Transparent,
+                    shadowColor.copy(alpha = shadowAlpha * 0.25f)
+                ),
+                start = Offset.Zero,
+                end = Offset(size.width, size.height)
+            )
+
+            onDrawWithContent {
+                drawContent()
+                drawOutline(
+                    outline = outline,
+                    brush = specularBrush,
+                    style = Stroke(width = 1.dp.toPx())
+                )
+            }
+        }
+
+        return this
+            .then(shadowModifier)
+            .then(specularHighlightModifier)
+    }
+
+    // Authentic Dual-Shadow Neumorphic Engine (BlurMaskFilter)
+    return this.drawWithCache {
         val elevationPx = elevation.toPx()
-        val offsetPx = (elevationPx * 0.75f).coerceIn(2.dp.toPx(), 7.dp.toPx())
-        val blurRadiusPx = (elevationPx * 1.3f).coerceIn(3.dp.toPx(), 14.dp.toPx())
+        // Calibrated specular highlight: tight offset & blur to eliminate upward fog bleed over containers above
+        val lightOffsetPx = (elevationPx * 0.35f).coerceIn(1.dp.toPx(), 2.5.dp.toPx())
+        val lightBlurRadiusPx = (elevationPx * 0.5f).coerceIn(1.5.dp.toPx(), 4.dp.toPx())
+
+        // Bottom-right dark ambient drop shadow
+        val darkOffsetPx = (elevationPx * 0.55f).coerceIn(1.5.dp.toPx(), 4.5.dp.toPx())
+        val darkBlurRadiusPx = (elevationPx * 0.85f).coerceIn(2.dp.toPx(), 6.5.dp.toPx())
 
         val outline = shape.createOutline(size, layoutDirection, this)
         val path = Path().apply { addOutline(outline) }
@@ -60,16 +104,16 @@ fun Modifier.softNeumorphicRaised(
         val lightPaint = Paint().apply {
             isAntiAlias = true
             color = highlightColor.copy(alpha = highlightAlpha).toArgb()
-            if (blurRadiusPx > 0f) {
-                maskFilter = BlurMaskFilter(blurRadiusPx, BlurMaskFilter.Blur.NORMAL)
+            if (lightBlurRadiusPx > 0f) {
+                maskFilter = BlurMaskFilter(lightBlurRadiusPx, BlurMaskFilter.Blur.NORMAL)
             }
         }
 
         val darkPaint = Paint().apply {
             isAntiAlias = true
             color = shadowColor.copy(alpha = shadowAlpha).toArgb()
-            if (blurRadiusPx > 0f) {
-                maskFilter = BlurMaskFilter(blurRadiusPx, BlurMaskFilter.Blur.NORMAL)
+            if (darkBlurRadiusPx > 0f) {
+                maskFilter = BlurMaskFilter(darkBlurRadiusPx, BlurMaskFilter.Blur.NORMAL)
             }
         }
 
@@ -78,7 +122,7 @@ fun Modifier.softNeumorphicRaised(
 
             // 1. Physical top-left light reflection (negative offset: -dx, -dy)
             nativeCanvas.save()
-            nativeCanvas.translate(-offsetPx, -offsetPx)
+            nativeCanvas.translate(-lightOffsetPx, -lightOffsetPx)
             try {
                 nativeCanvas.drawPath(androidPath, lightPaint)
             } catch (_: Throwable) {}
@@ -86,7 +130,7 @@ fun Modifier.softNeumorphicRaised(
 
             // 2. Physical bottom-right dark drop shadow (positive offset: +dx, +dy)
             nativeCanvas.save()
-            nativeCanvas.translate(offsetPx, offsetPx)
+            nativeCanvas.translate(darkOffsetPx, darkOffsetPx)
             try {
                 nativeCanvas.drawPath(androidPath, darkPaint)
             } catch (_: Throwable) {}
@@ -98,27 +142,58 @@ fun Modifier.softNeumorphicRaised(
 /**
  * Applies authentic concave inner / recessed well depth to containers, pressed buttons,
  * search inputs, and selected items.
- * Uses an inverted path difference mask with BlurMaskFilter for genuine curved inner shadows.
+ * Uses an inverted path difference mask with BlurMaskFilter for genuine curved inner shadows,
+ * or GPU inner gradient shaders when in lightweight mode.
  */
 fun Modifier.softNeumorphicInset(
     shape: Shape,
     isDark: Boolean = true,
     depth: Dp = 4.dp,
     shadowAlpha: Float = if (isDark) 0.65f else 0.35f,
-    highlightAlpha: Float = if (isDark) 0.18f else 0.80f,
+    highlightAlpha: Float = if (isDark) 0.15f else 0.70f,
     shadowColor: Color = if (isDark) Color(0xFF000000) else Color(0xFF9EA3A1),
-    highlightColor: Color = if (isDark) Color(0xFF7A8A9E) else Color.White
-): Modifier = this.drawWithCache {
-    if (depth <= 0.dp) {
-        onDrawWithContent { drawContent() }
-    } else {
+    highlightColor: Color = if (isDark) Color(0xFF7A8A9E) else Color.White,
+    isLightweight: Boolean = false
+): Modifier {
+    if (depth <= 0.dp) return this
+
+    if (isLightweight) {
+        return this.drawWithCache {
+            val outline = shape.createOutline(size, layoutDirection, this)
+            val depthPx = depth.toPx()
+
+            val insetBorderBrush = Brush.linearGradient(
+                colors = listOf(
+                    shadowColor.copy(alpha = shadowAlpha * 0.6f),
+                    shadowColor.copy(alpha = shadowAlpha * 0.2f),
+                    Color.Transparent,
+                    highlightColor.copy(alpha = highlightAlpha * 0.5f)
+                ),
+                start = Offset.Zero,
+                end = Offset(size.width, size.height)
+            )
+
+            onDrawWithContent {
+                drawContent()
+                drawOutline(
+                    outline = outline,
+                    brush = insetBorderBrush,
+                    style = Stroke(width = depthPx.coerceAtMost(2.dp.toPx()))
+                )
+            }
+        }
+    }
+
+    // Authentic Concave Inset Well Engine (BlurMaskFilter with difference path)
+    return this.drawWithCache {
         val outline = shape.createOutline(size, layoutDirection, this)
         val shapePath = Path().apply { addOutline(outline) }
         val androidPath = shapePath.asAndroidPath()
 
         val depthPx = depth.toPx()
-        val blurRadiusPx = (depthPx * 1.3f).coerceAtLeast(1.dp.toPx())
-        val offsetPx = (depthPx * 0.75f).coerceAtLeast(1.dp.toPx())
+        // Calibrated inner shadow spread: higher blur radius for soft, deep concave recession
+        val blurRadiusPx = (depthPx * 2.5f).coerceIn(6.dp.toPx(), 16.dp.toPx())
+        val offsetPx = (depthPx * 0.85f).coerceIn(2.dp.toPx(), 5.dp.toPx())
 
         // Inverted path: create an outer boundary with the shape carved out
         val pad = blurRadiusPx * 3f
@@ -179,7 +254,8 @@ fun Modifier.softInsetWell(
     shadowAlpha: Float = if (isDark) 0.65f else 0.35f,
     highlightAlpha: Float = if (isDark) 0.18f else 0.80f,
     shadowColor: Color = if (isDark) Color(0xFF000000) else Color(0xFF9EA3A1),
-    highlightColor: Color = if (isDark) Color(0xFF7A8A9E) else Color.White
+    highlightColor: Color = if (isDark) Color(0xFF7A8A9E) else Color.White,
+    isLightweight: Boolean = false
 ): Modifier = this.softNeumorphicInset(
     shape = shape,
     isDark = isDark,
@@ -187,5 +263,6 @@ fun Modifier.softInsetWell(
     shadowAlpha = shadowAlpha,
     highlightAlpha = highlightAlpha,
     shadowColor = shadowColor,
-    highlightColor = highlightColor
+    highlightColor = highlightColor,
+    isLightweight = isLightweight
 )

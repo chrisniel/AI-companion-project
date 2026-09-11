@@ -46,8 +46,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -387,13 +387,9 @@ private fun DeviceRowCard(
     }
 }
 
-/**
- * Accessible pill badge for DeviceStatus: Online, Offline, Connecting.
- */
 @Composable
-private fun DeviceStatusBadge(
-    status: DeviceStatus,
-    testTag: String,
+private fun PulsingConnectingDot(
+    color: Color,
     modifier: Modifier = Modifier
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse_connecting")
@@ -407,6 +403,27 @@ private fun DeviceStatusBadge(
         label = "pulse_scale"
     )
 
+    Box(
+        modifier = modifier
+            .size(6.dp)
+            .graphicsLayer {
+                scaleX = pulseScale
+                scaleY = pulseScale
+            }
+            .clip(CircleShape)
+            .background(color)
+    )
+}
+
+/**
+ * Accessible pill badge for DeviceStatus: Online, Offline, Connecting.
+ */
+@Composable
+private fun DeviceStatusBadge(
+    status: DeviceStatus,
+    testTag: String,
+    modifier: Modifier = Modifier
+) {
     val (bgColor, textColor, borderColor) = when (status) {
         DeviceStatus.ONLINE -> Triple(
             SoftTheme.colors.statusSuccess.copy(alpha = 0.12f),
@@ -442,15 +459,16 @@ private fun DeviceStatusBadge(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .then(
-                        if (status == DeviceStatus.CONNECTING) Modifier.scale(pulseScale) else Modifier
-                    )
-                    .clip(CircleShape)
-                    .background(textColor)
-            )
+            if (status == DeviceStatus.CONNECTING) {
+                PulsingConnectingDot(color = textColor)
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(textColor)
+                )
+            }
             Text(
                 text = status.label,
                 style = MaterialTheme.typography.labelSmall,

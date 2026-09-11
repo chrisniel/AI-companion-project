@@ -67,9 +67,9 @@ enum class AccentPreset(val label: String, val colorHex: Long) {
  * Visual effects level for mobile performance and battery efficiency.
  */
 enum class EffectsLevel(val label: String, val description: String) {
-    REDUCED("Reduced", "Disable specular highlights and blurs for maximum battery"),
-    NORMAL("Normal", "Balanced translucent glass with soft rim illumination"),
-    ENHANCED("Enhanced", "Full specular gloss, responsive glow, and fluid physics")
+    REDUCED("Reduced (Lightweight)", "Fast GPU shadows and minimal blur for high battery efficiency"),
+    NORMAL("Normal (Authentic Neumorphic)", "Physical dual-light drop shadows and tactile 3D clay depth"),
+    ENHANCED("Enhanced Neumorphic", "Deep dual-light shadows, specular highlights, and atmospheric depth")
 }
 
 /**

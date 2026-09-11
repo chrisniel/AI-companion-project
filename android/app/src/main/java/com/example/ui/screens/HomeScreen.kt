@@ -288,7 +288,7 @@ private fun HomeHeaderGreeting(
                 SoftAvatar(
                     name = profile.name,
                     size = 40.dp,
-                    statusColor = if (isReachable) SoftTheme.colors.statusSuccess else SoftTheme.colors.statusWarning
+                    statusColor = null
                 )
             }
         }
@@ -955,7 +955,7 @@ private fun HomeTodaySection(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "${todaySummary.completedCount} of ${todaySummary.totalCount} completed",
                             style = MaterialTheme.typography.titleMedium,

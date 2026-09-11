@@ -35,10 +35,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -127,6 +127,47 @@ fun StatusBadge(
 }
 
 /**
+ * Restrained aura dot animation activated ONLY during transient connecting/reconnecting states.
+ * Deferring values to graphicsLayer bypasses composition & layout passes entirely.
+ */
+@Composable
+private fun PulsingConnectionAura(
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse_transition")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.35f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse_scale"
+    )
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 0.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse_alpha"
+    )
+
+    Box(
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = pulseScale
+                scaleY = pulseScale
+                alpha = pulseAlpha
+            }
+            .clip(CircleShape)
+            .background(color)
+    )
+}
+
+/**
  * ConnectionIndicator: Displays core connection status with restrained pulsing aura dot
  * and latency telemetry tag (e.g. "Core Active 22ms").
  */
@@ -145,26 +186,6 @@ fun ConnectionIndicator(
         CoreConnectionState.Reconnecting -> SoftTheme.colors.statusWarning
         CoreConnectionState.Offline -> SoftTheme.colors.textMuted
     }
-
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse_transition")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.95f,
-        targetValue = 1.35f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse_scale"
-    )
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 0.05f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse_alpha"
-    )
 
     Row(
         modifier = modifier
@@ -188,18 +209,15 @@ fun ConnectionIndicator(
             .padding(horizontal = SoftTheme.spacing.md, vertical = SoftTheme.spacing.xs),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Glowing dot
+        // Glowing dot: static on normal local/remote/offline, gentle pulse only when connecting
         Box(
             modifier = Modifier.size(16.dp),
             contentAlignment = Alignment.Center
         ) {
-            if (state == CoreConnectionState.Local || state == CoreConnectionState.Connecting || state == CoreConnectionState.Reconnecting) {
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .scale(pulseScale)
-                        .clip(CircleShape)
-                        .background(stateColor.copy(alpha = pulseAlpha))
+            if (state == CoreConnectionState.Connecting || state == CoreConnectionState.Reconnecting) {
+                PulsingConnectionAura(
+                    color = stateColor,
+                    modifier = Modifier.size(12.dp)
                 )
             }
             Box(
@@ -257,26 +275,6 @@ fun CompactConnectionIndicator(
         CoreConnectionState.Offline -> SoftTheme.colors.textMuted
     }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "compact_pulse_transition")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.95f,
-        targetValue = 1.35f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "compact_pulse_scale"
-    )
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 0.05f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "compact_pulse_alpha"
-    )
-
     Row(
         modifier = modifier
             .testTag(testTag)
@@ -303,13 +301,10 @@ fun CompactConnectionIndicator(
             modifier = Modifier.size(12.dp),
             contentAlignment = Alignment.Center
         ) {
-            if (state == CoreConnectionState.Local || state == CoreConnectionState.Connecting || state == CoreConnectionState.Reconnecting) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .scale(pulseScale)
-                        .clip(CircleShape)
-                        .background(stateColor.copy(alpha = pulseAlpha))
+            if (state == CoreConnectionState.Connecting || state == CoreConnectionState.Reconnecting) {
+                PulsingConnectionAura(
+                    color = stateColor,
+                    modifier = Modifier.size(10.dp)
                 )
             }
             Box(
@@ -371,8 +366,8 @@ fun SoftAvatar(
                 .clip(CircleShape)
                 .background(brush)
                 .border(
-                    width = SoftTheme.tokens.borders.hairline,
-                    brush = SoftTheme.colors.borderGradient,
+                    width = if (statusColor != null) 1.5.dp else SoftTheme.tokens.borders.hairline,
+                    brush = if (statusColor != null) androidx.compose.ui.graphics.SolidColor(statusColor) else SoftTheme.colors.borderGradient,
                     shape = CircleShape
                 ),
             contentAlignment = Alignment.Center
@@ -398,19 +393,6 @@ fun SoftAvatar(
                     color = avatarContentColor
                 )
             }
-        }
-
-        if (statusColor != null) {
-            Box(
-                modifier = Modifier
-                    .size(size * 0.30f)
-                    .align(Alignment.BottomEnd)
-                    .clip(CircleShape)
-                    .background(SoftTheme.colors.surfaceElevated)
-                    .padding(2.dp)
-                    .clip(CircleShape)
-                    .background(statusColor)
-            )
         }
     }
 }

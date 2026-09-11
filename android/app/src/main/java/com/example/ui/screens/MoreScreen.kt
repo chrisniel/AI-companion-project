@@ -122,7 +122,7 @@ fun MoreScreen(
                         )
                     }
 
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Design System Catalog",
                             style = MaterialTheme.typography.titleMedium,

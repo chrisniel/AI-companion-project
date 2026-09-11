@@ -112,9 +112,9 @@ fun AppTopBar(
                             statusColor = when (connectionInfo.state) {
                                 CoreConnectionState.Local -> SoftTheme.colors.statusSuccess
                                 CoreConnectionState.Remote -> SoftTheme.colors.accentCyan
-                                CoreConnectionState.Connecting -> SoftTheme.colors.accentCyan
+                                CoreConnectionState.Connecting -> SoftTheme.colors.statusWarning
                                 CoreConnectionState.Reconnecting -> SoftTheme.colors.statusWarning
-                                CoreConnectionState.Offline -> SoftTheme.colors.textMuted
+                                CoreConnectionState.Offline -> SoftTheme.colors.statusError
                             },
                             testTag = "topbar_user_avatar"
                         )

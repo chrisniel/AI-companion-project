@@ -3,6 +3,7 @@ package com.example.ui.theme
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.example.domain.model.EffectsLevel
 
 @Immutable
 data class GlassCorners(
@@ -47,5 +48,6 @@ data class GlassTokens(
     val corners: GlassCorners = GlassCorners(),
     val elevations: GlassElevations = GlassElevations(),
     val alphas: GlassAlphas = GlassAlphas(),
-    val borders: GlassBorders = GlassBorders()
+    val borders: GlassBorders = GlassBorders(),
+    val effectsLevel: EffectsLevel = EffectsLevel.NORMAL
 )

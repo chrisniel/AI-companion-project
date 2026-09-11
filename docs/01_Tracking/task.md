@@ -3,37 +3,33 @@
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - Status: Completed (Ready for User Visual Inspection & Commit)
-- Current Sprint: Android UI/UX Adjustments (Dual-Shadow Neumorphism, Glass Parity & Tactile Polish)
-- Target: Implement authentic dual-direction drop shadow neumorphic engine (`BlurMaskFilter`), translucent glass parity across all screens, uniform top insets, persistent language selection, dynamic accent colors in Settings with custom hex text input, bold hero typography on Home quick actions, balanced Wellness telemetry, and Helio G99 far-jump optimizations.
-- Scope Guard: Approved plan in docs/02_Planning/plan-android-v1.4-neumorphic-engine-and-ui-parity.md.
+- Current Sprint: Android UI/UX Responsiveness, Neumorphic Calibration & Responsive Badges
+- Target: Eliminate shadow bleed, enhance authentic inset well depth and material matching, expand selection card spacing, remove touch-intercepting toast overlay (1.4s fast auto-dismiss), integrate 1.5dp glowing status border ring on model avatars (clean user avatar), and fix the 1-character-wide vertical snake badge bug on Permissions and About screens.
+- Scope Guard: Approved plan in implementation_plan.md.
 
 ## [CURRENT EXECUTION STATE - HANDOFF]
 
 - Active Files:
   - `android/app/src/main/java/com/example/ui/components/SoftNeumorphic.kt`
-  - `android/app/src/main/java/com/example/ui/shell/AppShell.kt`
-  - `android/app/src/main/java/com/example/ui/screens/HomeScreen.kt`
-  - `android/app/src/main/java/com/example/ui/screens/tasks/TaskRowItem.kt`
-  - `android/app/src/main/java/com/example/ui/screens/AssistantScreen.kt`
+  - `android/app/src/main/java/com/example/ui/components/SoftGlassCard.kt`
+  - `android/app/src/main/java/com/example/ui/components/SoftIndicators.kt`
+  - `android/app/src/main/java/com/example/ui/components/CapabilityComponents.kt`
   - `android/app/src/main/java/com/example/ui/screens/settings/SettingsScreen.kt`
-  - `android/app/src/main/java/com/example/ui/screens/schedule/ScheduleScreen.kt`
-  - `android/app/src/main/java/com/example/ui/screens/alarms/AlarmsScreen.kt`
-  - `android/app/src/main/java/com/example/ui/screens/memory/MemoryScreen.kt`
-  - `android/app/src/main/java/com/example/ui/screens/devices/DevicesScreen.kt`
-- Current Blocker / Status: All 10 phases verified via unit tests and physical device ADB screencap audit. Ready for manual user visual testing and Git commit.
-- Next Immediate Action: User conducts final visual walk on Infinix device, reviews proposed commit message, and commits/pushes.
+  - `android/app/src/main/java/com/example/ui/screens/settings/SettingsViewModel.kt`
+  - `android/app/src/main/java/com/example/ui/screens/PlaceholderScreen.kt`
+  - `android/app/src/main/java/com/example/ui/screens/HomeScreen.kt`
+  - `android/app/src/main/java/com/example/ui/screens/MoreScreen.kt`
+  - `android/app/src/main/java/com/example/navigation/AppTopBar.kt`
+- Current Blocker / Status: All automated unit tests (`testDebugUnitTest`) pass cleanly. Debug APK built successfully. Changes ready for user visual review and Git commit.
+- Next Immediate Action: User reviews physical device / emulator behavior, verifies proposed Conventional Commit message, and manually commits/pushes.
 
 ## Active Checklist
 
-### Android UI/UX Adjustments (Neumorphic Engine, Glass Parity & Tactile Polish)
-- [x] Phase 0: Branch Setup (`feature/android-ui-ux-adjustments` active, `DEVELOPMENT.md` standardized).
-- [x] Phase 1: Authentic Dual-Shadow Neumorphic Engine (`SoftNeumorphic.kt` with `BlurMaskFilter` top-left light + bottom-right dark drop shadows).
-- [x] Phase 2: Translucent Glass Parity (Remove opaque background fills from Tasks, Assistant, Settings, and secondary screens).
-- [x] Phase 3: Top Inset & Spacing Normalization (Calibrate Scaffold, statusBarsPadding, and eliminate duplicate top bars).
-- [x] Phase 4: Persistent Language State (Lift `selectedLanguage` to `AppViewModel` across Home and Assistant).
-- [x] Phase 5: Dynamic Accent Colors & Custom Hex Input (Replace hardcoded cyan in Settings, add Hex text field with live preview swatch).
-- [x] Phase 6: Home Screen Typography & Wellness Cards (Hero text on 4 quick actions, centered telemetry on Wellness cards).
-- [x] Phase 7: Helio G99 Far-Jump Tab Navigation (Direct `scrollToPage` on distant tab clicks, silky 1:1 swipe tracking).
-- [x] Phase 8: Light Theme Clay Neumorphic Parity (Tune light canvas and dual shadows to off-white clay `#ECEDE9`).
-- [x] Phase 9: Automated Test Suite & Physical Device Verification (Run unit tests and verify via live ADB screencap on Infinix X6820).
-- [x] Phase 10: Changelog, Walkthrough & Commit Handoff.
+### UI/UX Responsiveness, Neumorphic Calibration & Responsive Badges
+- [x] Neumorphic Specular Shadow Bleed Calibration: Tightened top-left specular highlight offset (`1–2.5dp`), blur radius (`1.5–4dp`), and dark-mode alpha (`0.10f`) in `SoftNeumorphic.kt`, eliminating upward foggy shadow bleed over section titles and container borders above.
+- [x] Inset Neumorphic Well Accuracy: Preserved natural surface background color on inset/selected cards (`SoftTheme.colors.surface` / `actualBackgroundColor`) instead of swapping to artificial darker slab color (`surfacePressed`); expanded inner shadow blur radius up to 16dp for soft, deep concave recession.
+- [x] Permissions & About Screen Responsive Badges: Repositioned `StatusBadge` cleanly below titles inside weighted columns in `CapabilityComponents.kt` and `PlaceholderScreen.kt`, eliminating the 1-character vertical snake wrapping bug.
+- [x] Non-Blocking Snappy Toast UX: Removed full-screen touch-intercepting overlay in `SettingsScreen.kt` so touches register immediately; shortened auto-dismiss timer in `SettingsViewModel.kt` from 2.6s to 1.4s.
+- [x] Avatar Status Border Ring: Removed redundant, clipped online status dot from Home screen user avatar (`U`); upgraded `SoftAvatar` to draw an integrated 1.5dp glowing status border ring around the circle (Green = Online, Orange = Reconnecting, Red = Offline) that is completely impervious to container clipping.
+- [x] Selection Card Spacing: Expanded vertical card spacing to `10.dp` across Theme Source, Glass Visual Effects, and Ambient Presets, adding generous `8.dp` negative space below section titles.
+- [x] Automated Unit Test Suite: All Gradle unit tests (`testDebugUnitTest`) pass cleanly. Debug APK built.
