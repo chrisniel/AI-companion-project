@@ -7,6 +7,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
@@ -120,7 +123,7 @@ fun AppShell(
         Routes.MEMORY -> "Memory & Cache"
         Routes.SETTINGS -> "Settings"
         Routes.DESIGN_SYSTEM -> "Design System"
-        else -> "Local AI Core"
+        else -> "AI Companion"
     }
 
     val navigateToDestination: (String) -> Unit = { targetRoute: String ->
@@ -132,7 +135,10 @@ fun AppShell(
             coroutineScope.launch {
                 pagerState.animateScrollToPage(
                     page = targetIndex,
-                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
+                    animationSpec = spring(
+                        dampingRatio = 0.84f,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
                 )
             }
         } else {
@@ -155,7 +161,7 @@ fun AppShell(
                 .fillMaxSize()
                 .testTag("app_shell_scaffold"),
             topBar = {
-                if (currentRoute != Routes.ASSISTANT && currentRoute != Routes.VOICE_MODE && currentRoute != Routes.CHARACTERS && currentRoute != Routes.SETTINGS && currentRoute != Routes.CONNECTION && currentRoute != Routes.PERMISSIONS) {
+                if (currentRoute != Routes.HOME && currentRoute != Routes.ASSISTANT && currentRoute != Routes.VOICE_MODE && currentRoute != Routes.CHARACTERS && currentRoute != Routes.SETTINGS && currentRoute != Routes.CONNECTION && currentRoute != Routes.PERMISSIONS) {
                     AppTopBar(
                         title = pageTitle,
                         canNavigateBack = canNavigateBack,
@@ -254,6 +260,13 @@ fun AppShell(
                             HorizontalPager(
                                 state = pagerState,
                                 beyondViewportPageCount = 1,
+                                flingBehavior = PagerDefaults.flingBehavior(
+                                    state = pagerState,
+                                    snapAnimationSpec = spring(
+                                        dampingRatio = 0.82f,
+                                        stiffness = Spring.StiffnessMediumLow
+                                    )
+                                ),
                                 modifier = Modifier.fillMaxSize()
                             ) { page ->
                                 Box(

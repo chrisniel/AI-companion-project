@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Interactive profile avatar popover on Home screen revealing user profile, host connection status indicator, and settings link.
+- Compact language selection dropdown menu in Home Assistant Hero (`[ 🌐 Auto ▾ ]`) supporting English, Filipino, Japanese, and Mixed Mode.
+- Subtle spring bounce physics to `HorizontalPager` fling gestures (`dampingRatio = 0.82f`) and bottom tab navigation clicks.
+- Smooth animated horizontal spring transitions (`AnimatedContent`) for Settings section category switching.
 - Horizontal swipe navigation across 5 primary tabs (`Home | Tasks | Assistant | Health | More`) via `HorizontalPager` with 1:1 physical finger tracking and neighbor screen pre-composition (`beyondViewportPageCount = 1`).
 - Directional sliding transitions between primary tabs and animated push/pop sliding for secondary destinations in `NavHost`.
 - Liquid glass transition depth transformation (`graphicsLayer` scale and alpha damping during swipe gestures) to eliminate abrupt screen content pop-in.
@@ -40,6 +44,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Renamed Android application label and fallback navigation title to "AI Companion".
+- Aligned dark mode canvas and surface tokens to neutral stealth matte charcoal and obsidian graphite (`#0E1015`, `#14161C`, `#1F2229`, `#121419`) matching pure neumorphic depth references while retaining subtle translucent glass headers.
+- Switched default brand accent from cyan to deep Royal Blue (`#1D4ED8` / `#60A5FA`).
+- Streamlined Home screen header: removed redundant `AppTopBar`, added dynamic model status subtitle (`● Aura is online`), and nested profile telemetry inside the interactive avatar popover card.
+- Refined Assistant composer layout: constrained action buttons to 36dp with 8dp spacing and explicit touch bounds to eliminate touch collision, styled Send with raised soft neumorphic elevation, and added dynamic inset-to-emboss morphing on the message text box.
 - Reordered bottom navigation to `Home | Tasks | Assistant | Health | More` with floating center action button.
 - Eliminated screen transition lag by replacing un-animated NavHost mount/unmount with 120ms GPU-accelerated crossfades (`fadeIn` 120ms / `fadeOut` 90ms with `LinearOutSlowInEasing`) and decoupled background canvas.
 - Converted Assistant chat system events, tool actions, and memory recalls into compact single-line expandable notification pills that do not dominate the conversation.

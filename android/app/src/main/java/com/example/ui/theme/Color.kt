@@ -19,18 +19,18 @@ val BorderSubtleLight = Color(0x388298B3)
 val ShadowLight = Color(0x3D7F95AF)
 val ShadowLightSpecular = Color(0xF5FFFFFF)
 
-// Dark Mode Foundations: Deep Obsidian Midnight Slate + Restrained Specular Accents
-val BackgroundCharcoal = Color(0xFF0A0E17)
-val BackgroundGraphite = Color(0xFF0F1422)
-val DarkSurfaceBase = Color(0xF0121726)
-val DarkSurfaceElevated = Color(0xF8162034)
-val DarkSurfacePressed = Color(0xFF0A0D15)
-val DarkSurfaceWell = Color(0xFF0D121E)
-val TranslucentPanelDark = Color(0xEB111624)
-val NavSurfaceDark = Color(0xF2111624)
-val BorderDark = Color(0x14FFFFFF)               // Restrained subtle hairline border (8% alpha)
-val BorderSubtleDark = Color(0x0AFFFFFF)         // Subdued border (4% alpha)
-val ShadowDark = Color(0xB8000000)
+// Dark Mode Foundations: Stealth Matte Charcoal / Obsidian Graphite (Reference Image Parity)
+val BackgroundCharcoal = Color(0xFF0E1015)
+val BackgroundGraphite = Color(0xFF14161C)
+val DarkSurfaceBase = Color(0xF0181A22)
+val DarkSurfaceElevated = Color(0xF81F2229)          // Neutral matte dark charcoal (Raised Element)
+val DarkSurfacePressed = Color(0xFF0F1115)
+val DarkSurfaceWell = Color(0xFF121419)              // Recessed matte well (Sunken Element / Input Field)
+val TranslucentPanelDark = Color(0xEB1A1D24)         // Matte glass panel
+val NavSurfaceDark = Color(0xF2181B22)               // Floating navigation surface
+val BorderDark = Color(0x14FFFFFF)                   // Restrained subtle hairline border (8% alpha)
+val BorderSubtleDark = Color(0x0AFFFFFF)             // Subdued border (4% alpha)
+val ShadowDark = Color(0xCC000000)                   // Deep soft ambient drop shadow
 val ShadowDarkSpecular = Color(0x14FFFFFF)
 
 // Accent Blue Foundations: Darker shade of blue for light mode, Light shade of blue for dark mode

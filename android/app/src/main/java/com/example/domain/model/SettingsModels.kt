@@ -57,7 +57,7 @@ enum class BackgroundType(val label: String, val description: String) {
  */
 enum class AccentPreset(val label: String, val colorHex: Long) {
     CYAN("Cyan Neon", 0xFF00E5FF),
-    BLUE("Electric Blue", 0xFF3B82F6),
+    BLUE("Royal Blue", 0xFF1D4ED8),
     EMERALD("Emerald Mint", 0xFF10B981),
     AMBER("Amber Glow", 0xFFF59E0B),
     VIOLET("Soft Violet", 0xFF8B5CF6)
@@ -151,7 +151,7 @@ data class SettingsState(
     val selectedGradientBackground: String = "Cyan-Violet Fluid Mesh",
     val selectedSolidBackground: String = "Deep Matte Obsidian (#0D1117)",
     val customImageName: String = "mobile_aurora_custom.jpg",
-    val accentPreset: AccentPreset = AccentPreset.CYAN,
+    val accentPreset: AccentPreset = AccentPreset.BLUE,
     val customAccentHex: String = "#00D4FF",
     val isCustomAccentEnabled: Boolean = false,
     val effectsLevel: EffectsLevel = EffectsLevel.NORMAL,

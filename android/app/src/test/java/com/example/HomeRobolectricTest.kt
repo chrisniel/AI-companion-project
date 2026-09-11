@@ -39,7 +39,7 @@ class HomeRobolectricTest {
 
         // 1. Header: Contextual greeting with profile name (never hardcoded)
         composeTestRule.onNodeWithTag("home_header_greeting").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Local AI Core reachable & ready").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Aura is online").assertIsDisplayed()
 
         // 2. Assistant Hero: Reachability, active character, assistant state, model summary
         composeTestRule.onNodeWithTag("home_assistant_hero").assertIsDisplayed()

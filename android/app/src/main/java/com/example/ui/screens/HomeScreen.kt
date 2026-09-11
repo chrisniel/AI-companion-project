@@ -1,12 +1,15 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,7 +41,11 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TaskAlt
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -79,6 +86,7 @@ import com.example.domain.model.TodaySummary
 import com.example.domain.model.UserProfile
 import com.example.domain.model.WellnessGlance
 import com.example.navigation.Routes
+import com.example.ui.components.CompactConnectionIndicator
 import com.example.ui.components.InteractiveSoftGlassCard
 import com.example.ui.components.InteractiveSoftWell
 import com.example.ui.components.PrimaryButton
@@ -125,13 +133,17 @@ fun HomeScreen(
             .fillMaxSize()
             .testTag("home_screen")
             .verticalScroll(scrollState)
+            .statusBarsPadding()
             .padding(horizontal = SoftTheme.spacing.lg, vertical = SoftTheme.spacing.sm),
         verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.lg)
     ) {
         // 1. CONTEXTUAL PROFILE GREETING HEADER (Never hardcoded)
         HomeHeaderGreeting(
             profile = homeData.profile,
-            isReachable = connectionInfo.state == CoreConnectionState.Local || connectionInfo.state == CoreConnectionState.Remote
+            isReachable = connectionInfo.state == CoreConnectionState.Local || connectionInfo.state == CoreConnectionState.Remote,
+            activeModelName = selectedPersona,
+            connectionInfo = connectionInfo,
+            onNavigateToSettings = { onNavigateToRoute(Routes.SETTINGS) }
         )
 
         // 2. ASSISTANT HERO (Calm, prominent, active character, reachability, model summary, no loud telemetry)
@@ -204,6 +216,9 @@ fun HomeScreen(
 private fun HomeHeaderGreeting(
     profile: UserProfile,
     isReachable: Boolean,
+    activeModelName: String = "Aura",
+    connectionInfo: ConnectionInfo? = null,
+    onNavigateToSettings: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val greetingTime = remember {
@@ -214,6 +229,7 @@ private fun HomeHeaderGreeting(
             else -> "Good evening"
         }
     }
+    var isProfileMenuExpanded by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -246,19 +262,110 @@ private fun HomeHeaderGreeting(
                             )
                     )
                     Text(
-                        text = if (isReachable) "Local AI Core reachable & ready" else "PC Core unreachable (Offline Mode active)",
+                        text = if (isReachable) "$activeModelName is online" else "Offline Mode active",
                         style = MaterialTheme.typography.bodySmall,
                         color = SoftTheme.colors.textSecondary
                     )
                 }
             }
 
-            SoftAvatar(
-                name = profile.name,
-                size = 40.dp,
-                statusColor = if (isReachable) SoftTheme.colors.statusSuccess else SoftTheme.colors.statusWarning,
-                testTag = "home_user_avatar"
-            )
+            Box(
+                modifier = Modifier
+                    .testTag("home_user_avatar")
+                    .clip(CircleShape)
+                    .clickable(
+                        role = Role.Button,
+                        onClickLabel = "Open Profile and Connection Status"
+                    ) {
+                        isProfileMenuExpanded = !isProfileMenuExpanded
+                    }
+            ) {
+                SoftAvatar(
+                    name = profile.name,
+                    size = 40.dp,
+                    statusColor = if (isReachable) SoftTheme.colors.statusSuccess else SoftTheme.colors.statusWarning
+                )
+            }
+        }
+
+        // Smooth interactive Profile & Connection Card dropdown below avatar
+        AnimatedVisibility(
+            visible = isProfileMenuExpanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = SoftTheme.spacing.sm)
+            ) {
+                SoftGlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    elevation = SoftTheme.tokens.elevations.card
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(SoftTheme.spacing.md),
+                        verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = profile.name.ifBlank { "Companion User" },
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = SoftTheme.colors.textPrimary
+                                )
+                                Text(
+                                    text = if (isReachable) "Connected to host core" else "Local Mobile Offline Node",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = SoftTheme.colors.textSecondary
+                                )
+                            }
+                            if (connectionInfo != null) {
+                                Box(modifier = Modifier.testTag("topbar_connection_indicator")) {
+                                    CompactConnectionIndicator(
+                                        state = connectionInfo.state,
+                                        label = connectionInfo.label,
+                                        latencyMs = connectionInfo.latencyMs
+                                    )
+                                }
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(SoftTheme.tokens.corners.sm))
+                                .clickable {
+                                    isProfileMenuExpanded = false
+                                    onNavigateToSettings()
+                                }
+                                .padding(vertical = SoftTheme.spacing.xs),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.xs)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = null,
+                                tint = SoftTheme.colors.accentPrimaryColor,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Open Settings & Preferences",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = SoftTheme.colors.accentPrimaryColor
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -280,7 +387,7 @@ private fun HomeAssistantHero(
 ) {
     val isReachable = connectionInfo.state == CoreConnectionState.Local || connectionInfo.state == CoreConnectionState.Remote
     var selectedLang by remember { mutableStateOf("Auto") }
-    val languages = listOf("Auto", "US EN", "PH FIL", "JP JA", "Mixed")
+    var isLangDropdownOpen by remember { mutableStateOf(false) }
 
     InteractiveSoftGlassCard(
         onClick = onCardClick,
@@ -294,7 +401,7 @@ private fun HomeAssistantHero(
                 .padding(SoftTheme.spacing.md),
             verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
         ) {
-            // Top Meta Row: Core status + Language selector pills
+            // Top Meta Row: Core status + Language selector dropdown
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -334,32 +441,63 @@ private fun HomeAssistantHero(
                     )
                 }
 
-                // Language Engine Pills from Image 3 & 4
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    languages.forEach { lang ->
-                        val isLangSelected = lang == selectedLang
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(SoftTheme.tokens.corners.pill))
-                                .background(
-                                    if (isLangSelected) SoftTheme.colors.accentBlue
-                                    else SoftTheme.colors.surfaceWell
-                                )
-                                .clickable { selectedLang = lang }
-                                .padding(horizontal = 7.dp, vertical = 3.dp),
-                            contentAlignment = Alignment.Center
+                // Compact Language Dropdown Pill
+                Box {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(SoftTheme.tokens.corners.pill))
+                            .background(SoftTheme.colors.surfaceElevated)
+                            .border(
+                                width = SoftTheme.tokens.borders.hairline,
+                                color = SoftTheme.colors.borderSubtle,
+                                shape = RoundedCornerShape(SoftTheme.tokens.corners.pill)
+                            )
+                            .clickable { isLangDropdownOpen = true }
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
-                                text = lang,
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                                fontWeight = if (isLangSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isLangSelected) {
-                                    if (SoftTheme.colors.isDark) Color(0xFF070B14) else Color.White
-                                } else {
-                                    SoftTheme.colors.textSecondary
+                                text = "🌐 $selectedLang",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                fontWeight = FontWeight.Bold,
+                                color = SoftTheme.colors.accentPrimaryColor
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = "Select language",
+                                tint = SoftTheme.colors.textMuted,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = isLangDropdownOpen,
+                        onDismissRequest = { isLangDropdownOpen = false },
+                        modifier = Modifier.background(SoftTheme.colors.surfaceElevated)
+                    ) {
+                        listOf(
+                            "Auto" to "🌐 Auto (Detect)",
+                            "US EN" to "🇺🇸 English (US)",
+                            "PH FIL" to "🇵🇭 Filipino (Tagalog)",
+                            "JP JA" to "🇯🇵 Japanese (日本語)",
+                            "Mixed" to "✨ Mixed Mode"
+                        ).forEach { (code, label) ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (selectedLang == code) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (selectedLang == code) SoftTheme.colors.accentPrimaryColor else SoftTheme.colors.textPrimary
+                                    )
+                                },
+                                onClick = {
+                                    selectedLang = code
+                                    isLangDropdownOpen = false
                                 }
                             )
                         }

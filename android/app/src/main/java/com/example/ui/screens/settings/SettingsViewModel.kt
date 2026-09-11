@@ -360,7 +360,7 @@ class SettingsViewModel(
         _uiState.value = SettingsState()
         appearanceRepository.setThemeMode(ThemeMode.DARK)
         appearanceRepository.setThemeSource(ThemeSource.PHONE_THEME)
-        appearanceRepository.setAccentPreset(AccentPreset.CYAN)
+        appearanceRepository.setAccentPreset(AccentPreset.BLUE)
         appearanceRepository.setCustomAccentHex(null)
         appearanceRepository.setBackgroundType(BackgroundType.BUILT_IN)
         appearanceRepository.setBackgroundPreset(BuiltInBackgroundPreset.AURORA_CYAN)

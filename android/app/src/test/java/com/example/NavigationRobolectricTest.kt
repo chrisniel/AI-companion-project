@@ -70,7 +70,10 @@ class NavigationRobolectricTest {
 
         // Initially on Home
         composeTestRule.onNodeWithTag("nav_item_home").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("home_user_avatar").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("home_user_avatar").performClick()
         composeTestRule.onNodeWithTag("topbar_connection_indicator").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("home_user_avatar").performClick()
 
         // Navigate to Assistant
         composeTestRule.onNodeWithTag("nav_item_assistant").performClick()

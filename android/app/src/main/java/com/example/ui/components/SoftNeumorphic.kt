@@ -33,7 +33,7 @@ import androidx.compose.ui.unit.dp
  */
 fun Modifier.softNeumorphicRaised(
     shape: Shape,
-    isDark: Boolean,
+    isDark: Boolean = true,
     elevation: Dp = 6.dp,
     highlightAlpha: Float = if (isDark) 0.10f else 0.60f,
     shadowAlpha: Float = if (isDark) 0.65f else 0.26f,
@@ -73,7 +73,7 @@ fun Modifier.softNeumorphicRaised(
  */
 fun Modifier.softInsetWell(
     shape: Shape,
-    isDark: Boolean,
+    isDark: Boolean = true,
     depth: Dp = 4.dp,
     shadowAlpha: Float = if (isDark) 0.55f else 0.22f,
     highlightAlpha: Float = if (isDark) 0.05f else 0.70f,

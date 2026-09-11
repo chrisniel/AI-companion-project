@@ -75,7 +75,7 @@ enum class BuiltInSolidPreset(
 data class AppearancePreferences(
     val themeMode: ThemeMode = ThemeMode.DARK,
     val themeSource: ThemeSource = ThemeSource.PHONE_THEME,
-    val accentPreset: AccentPreset = AccentPreset.CYAN,
+    val accentPreset: AccentPreset = AccentPreset.BLUE,
     val backgroundType: BackgroundType = BackgroundType.BUILT_IN,
     val backgroundPreset: BuiltInBackgroundPreset = BuiltInBackgroundPreset.AURORA_CYAN,
     val gradientPreset: BuiltInGradientPreset = BuiltInGradientPreset.CYAN_VIOLET,

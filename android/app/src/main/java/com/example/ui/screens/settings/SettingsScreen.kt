@@ -1,8 +1,15 @@
 package com.example.ui.screens.settings
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -93,6 +100,7 @@ import com.example.domain.model.VoiceCapability
 import com.example.domain.model.VoiceRecognitionLanguage
 import com.example.ui.components.SoftGlassButton
 import com.example.ui.components.SoftGlassCard
+import com.example.ui.components.softNeumorphicRaised
 import com.example.ui.theme.SoftTheme
 
 /**
@@ -147,28 +155,49 @@ fun SettingsScreen(
                     )
                 }
 
-                // Section Content (Scrollable)
+                // Section Content (Scrollable with smooth horizontal spring transition)
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
                         .verticalScroll(contentScrollState)
-                        .padding(horizontal = SoftTheme.spacing.lg, vertical = SoftTheme.spacing.xs),
-                    verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.lg)
+                        .padding(horizontal = SoftTheme.spacing.lg, vertical = SoftTheme.spacing.xs)
                 ) {
-                    when (uiState.selectedSection) {
-                        SettingsSection.GENERAL -> GeneralSectionContent(uiState, settingsViewModel)
-                        SettingsSection.APPEARANCE -> AppearanceSectionContent(uiState, settingsViewModel)
-                        SettingsSection.ASSISTANT -> AssistantSectionContent(uiState, settingsViewModel)
-                        SettingsSection.VOICE -> VoiceSectionContent(uiState, settingsViewModel)
-                        SettingsSection.CONNECTION -> ConnectionSectionContent(uiState, settingsViewModel)
-                        SettingsSection.ALARMS -> AlarmsSectionContent(uiState, settingsViewModel)
-                        SettingsSection.HEALTH -> HealthSectionContent(uiState, settingsViewModel)
-                        SettingsSection.PRIVACY -> PrivacySectionContent(uiState, settingsViewModel, onNavigateToPermissions)
-                        SettingsSection.ADVANCED -> AdvancedSectionContent(uiState, settingsViewModel)
+                    AnimatedContent(
+                        targetState = uiState.selectedSection,
+                        transitionSpec = {
+                            val forward = targetState.ordinal > initialState.ordinal
+                            (slideInHorizontally(
+                                initialOffsetX = { if (forward) it / 3 else -it / 3 },
+                                animationSpec = spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)
+                            ) + fadeIn(animationSpec = tween(220)))
+                            .togetherWith(
+                                slideOutHorizontally(
+                                    targetOffsetX = { if (forward) -it / 4 else it / 4 },
+                                    animationSpec = tween(180)
+                                ) + fadeOut(animationSpec = tween(180))
+                            )
+                        },
+                        label = "settingsSectionTransition"
+                    ) { section ->
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.lg)
+                        ) {
+                            when (section) {
+                                SettingsSection.GENERAL -> GeneralSectionContent(uiState, settingsViewModel)
+                                SettingsSection.APPEARANCE -> AppearanceSectionContent(uiState, settingsViewModel)
+                                SettingsSection.ASSISTANT -> AssistantSectionContent(uiState, settingsViewModel)
+                                SettingsSection.VOICE -> VoiceSectionContent(uiState, settingsViewModel)
+                                SettingsSection.CONNECTION -> ConnectionSectionContent(uiState, settingsViewModel)
+                                SettingsSection.ALARMS -> AlarmsSectionContent(uiState, settingsViewModel)
+                                SettingsSection.HEALTH -> HealthSectionContent(uiState, settingsViewModel)
+                                SettingsSection.PRIVACY -> PrivacySectionContent(uiState, settingsViewModel, onNavigateToPermissions)
+                                SettingsSection.ADVANCED -> AdvancedSectionContent(uiState, settingsViewModel)
+                            }
+                            Spacer(modifier = Modifier.height(SoftTheme.spacing.xxl))
+                        }
                     }
-
-                    Spacer(modifier = Modifier.height(SoftTheme.spacing.xxl))
                 }
             }
 
@@ -268,7 +297,7 @@ private fun SettingsSectionTabs(
                         imageVector = icon,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
-                        tint = if (isSelected) SoftTheme.colors.accentCyan else SoftTheme.colors.textMuted
+                        tint = if (isSelected) SoftTheme.colors.accentBlue else SoftTheme.colors.textMuted
                     )
                 },
                 label = {
@@ -279,17 +308,29 @@ private fun SettingsSectionTabs(
                     )
                 },
                 colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = SoftTheme.colors.accentCyan.copy(alpha = 0.15f),
-                    selectedLabelColor = SoftTheme.colors.accentCyan,
-                    containerColor = SoftTheme.colors.surface,
+                    selectedContainerColor = SoftTheme.colors.accentBlue.copy(alpha = 0.18f),
+                    selectedLabelColor = SoftTheme.colors.accentBlue,
+                    containerColor = SoftTheme.colors.surfaceElevated,
                     labelColor = SoftTheme.colors.textSecondary
                 ),
                 border = FilterChipDefaults.filterChipBorder(
                     enabled = true,
                     selected = isSelected,
-                    borderColor = if (isSelected) SoftTheme.colors.accentCyan else SoftTheme.colors.borderSubtle
+                    borderColor = if (isSelected) SoftTheme.colors.accentBlue.copy(alpha = 0.6f) else SoftTheme.colors.borderSubtle
                 ),
-                modifier = Modifier.testTag("settings_tab_${section.id}")
+                modifier = Modifier
+                    .then(
+                        if (isSelected) {
+                            Modifier.softNeumorphicRaised(
+                                shape = RoundedCornerShape(8.dp),
+                                isDark = SoftTheme.colors.isDark,
+                                elevation = 2.dp,
+                                highlightAlpha = 0.15f,
+                                shadowAlpha = 0.35f
+                            )
+                        } else Modifier
+                    )
+                    .testTag("settings_tab_${section.id}")
             )
         }
     }
