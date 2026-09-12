@@ -66,7 +66,8 @@ data class ConnectionInfo(
     val syncStatus: SyncStatus = SyncStatus.SYNCHRONIZED,
     val lastSyncTimestamp: String = "Just now",
     val pendingChangesCount: Int = 0,
-    val isCloudFallbackEnabled: Boolean = false // Future setting only, strictly disabled
+    val isCloudFallbackEnabled: Boolean = false, // Future setting only, strictly disabled
+    val token: String? = null
 )
 
 /**

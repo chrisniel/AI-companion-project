@@ -556,7 +556,10 @@ fun AppShell(
                                 onSetSyncStatus = { appViewModel.setSyncStatus(it) },
                                 onResolveConflict = { appViewModel.resolveSyncConflict(it) },
                                 onRetrySync = { appViewModel.retrySync() },
-                                onNavigateBack = { navController.popBackStack() }
+                                onNavigateBack = { navController.popBackStack() },
+                                onSaveHostConfig = { host, port, token ->
+                                    appViewModel.saveHostConfig(host, port, token)
+                                }
                             )
                         }
 

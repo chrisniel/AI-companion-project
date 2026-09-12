@@ -11,10 +11,13 @@ import com.example.data.fake.FakeMemoryRepository
 import com.example.data.fake.FakeModelsAndDevicesRepository
 import com.example.data.fake.FakeScheduleRepository
 import com.example.data.fake.FakeTasksRepository
+import com.example.data.repository.HttpTasksRepository
+import com.example.data.repository.SharedPreferencesConnectionRepository
 import com.example.domain.repository.AlarmsRepository
 import com.example.domain.repository.AppearanceRepository
 import com.example.domain.repository.AssistantRepository
 import com.example.domain.repository.CharactersRepository
+import com.example.domain.repository.ConnectionRepository
 import com.example.domain.repository.DesignSystemRepository
 import com.example.domain.repository.HomeRepository
 import com.example.domain.repository.MemoryRepository
@@ -26,6 +29,7 @@ import com.example.domain.repository.TasksRepository
  * Application-scoped manual dependency container interface.
  */
 interface AppContainer {
+    val connectionRepository: ConnectionRepository
     val tasksRepository: TasksRepository
     val scheduleRepository: ScheduleRepository
     val alarmsRepository: AlarmsRepository
@@ -42,8 +46,12 @@ interface AppContainer {
  * Default implementation of AppContainer wiring shared repositories.
  */
 class DefaultAppContainer(private val context: Context) : AppContainer {
+    override val connectionRepository: ConnectionRepository by lazy {
+        SharedPreferencesConnectionRepository(context)
+    }
+
     override val tasksRepository: TasksRepository by lazy {
-        FakeTasksRepository()
+        HttpTasksRepository(connectionRepository)
     }
 
     override val scheduleRepository: ScheduleRepository by lazy {

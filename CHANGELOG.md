@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added (2026-09-12)
+
+- Android Backend Connection & Reachability Probe: Added persistent connection preferences (`SharedPreferencesConnectionRepository`) for host IP, port, and pairing key. Added real-time reachability probing (`GET /api/v1/health` with latency calculation) and pairing token validation (`POST /api/v1/auth/verify`) in `LocalAiRuntimeClient` (OkHttp 4.12.0) with dynamic UI connection status updates.
+- Cleartext LAN Network Security Configuration: Configured Android network security config permitting cleartext HTTP on private RFC 1918 subnets (`192.168.x.x`, `10.x.x.x`, `172.16.x.x`, Tailscale `100.x.x.x`, and emulator loopbacks) while enforcing HTTPS globally. Added `INTERNET` and `ACCESS_NETWORK_STATE` permissions.
+- Live Tasks CRUD Synchronization & Offline Resilience: Implemented `HttpTasksRepository` with optimistic local UI mutations and asynchronous PC SQLite database synchronization. Provided air-gapped fallback so the app functions seamlessly and retains local tasks when the PC runtime is offline or disconnected.
+- Automated Integration Tests & APK Build: Added 5 integration tests in `NetworkIntegrationUnitTest.kt` (115/115 unit tests passing in 1m 42s with zero warnings) and compiled debug APK (`app-debug.apk`).
+
 ### Security & Hardening (2026-09-12)
 
 - Backend Security Hardening V1.1: Eliminated raw pairing token logging on application startup. Enforced default-deny authentication architecture at FastAPI sub-router boundaries (`/auth`, `/tasks`), keeping only `/health` explicitly public.

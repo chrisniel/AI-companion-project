@@ -100,6 +100,7 @@ fun ConnectionScreen(
     onResolveConflict: (keepLocal: Boolean) -> Unit,
     onRetrySync: () -> Unit,
     onNavigateBack: () -> Unit,
+    onSaveHostConfig: ((String, Int, String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -310,8 +311,13 @@ fun ConnectionScreen(
             HostConfigurationCard(
                 initialHost = connectionInfo.host,
                 initialPort = connectionInfo.port,
-                onSaveHostConfig = { host, port, _ ->
-                    statusMessage = "Local AI Core configuration saved: $host:$port (Connected)"
+                initialToken = connectionInfo.token ?: "",
+                onSaveHostConfig = { host, port, token ->
+                    if (onSaveHostConfig != null) {
+                        onSaveHostConfig(host, port, token)
+                    } else {
+                        statusMessage = "Local AI Core configuration saved: $host:$port"
+                    }
                 }
             )
 
@@ -713,11 +719,12 @@ private fun FeatureItemRow(item: OfflineCapabilityItem, isAvailable: Boolean) {
 private fun HostConfigurationCard(
     initialHost: String,
     initialPort: Int?,
+    initialToken: String = "",
     onSaveHostConfig: (String, Int, String) -> Unit
 ) {
     var hostText by remember { mutableStateOf(if (initialHost.contains("Simulated")) "192.168.1.15" else initialHost) }
     var portText by remember { mutableStateOf(if (initialPort == 8080 || initialPort == null) "8000" else initialPort.toString()) }
-    var tokenText by remember { mutableStateOf("") }
+    var tokenText by remember { mutableStateOf(initialToken) }
     var isVerifying by remember { mutableStateOf(false) }
 
     SoftGlassCard(
