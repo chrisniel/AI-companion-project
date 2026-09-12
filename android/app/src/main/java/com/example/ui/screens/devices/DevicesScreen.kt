@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import com.example.ui.components.softBounceOverscroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -88,6 +89,7 @@ fun DevicesScreen(
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
+            .softBounceOverscroll()
             .testTag("devices_screen")
             .padding(horizontal = SoftTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.md)

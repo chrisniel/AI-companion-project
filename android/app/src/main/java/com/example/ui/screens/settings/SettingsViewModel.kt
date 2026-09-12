@@ -11,6 +11,7 @@ import com.example.domain.model.BuiltInGradientPreset
 import com.example.domain.model.BuiltInSolidPreset
 import com.example.domain.model.EffectsLevel
 import com.example.domain.model.JapaneseDisplay
+import com.example.domain.model.RefreshRateMode
 import com.example.domain.model.ResponseLanguageChoice
 import com.example.domain.model.SettingsSection
 import com.example.domain.model.SettingsState
@@ -54,7 +55,8 @@ class SettingsViewModel(
                         effectsLevel = prefs.effectsLevel,
                         selectedBuiltInBackground = prefs.backgroundPreset.label,
                         scrimOpacity = prefs.scrimOpacity,
-                        backgroundBrightness = prefs.backgroundBrightness
+                        backgroundBrightness = prefs.backgroundBrightness,
+                        refreshRateMode = prefs.refreshRateMode
                     )
                 }
             }
@@ -185,6 +187,12 @@ class SettingsViewModel(
     fun setBackgroundBrightness(brightness: Float) {
         appearanceRepository.setBackgroundBrightness(brightness)
         _uiState.update { it.copy(backgroundBrightness = brightness) }
+    }
+
+    fun setRefreshRateMode(mode: RefreshRateMode) {
+        appearanceRepository.setRefreshRateMode(mode)
+        _uiState.update { it.copy(refreshRateMode = mode) }
+        showStatus("Display refresh rate: ${mode.label}")
     }
 
     // --- LANGUAGE PREFERENCES ---
@@ -373,6 +381,7 @@ class SettingsViewModel(
         appearanceRepository.setEffectsLevel(EffectsLevel.NORMAL)
         appearanceRepository.setScrimOpacity(0.20f)
         appearanceRepository.setBackgroundBrightness(1.0f)
+        appearanceRepository.setRefreshRateMode(RefreshRateMode.SYSTEM_DEFAULT)
         showStatus("All settings restored to default values")
     }
 

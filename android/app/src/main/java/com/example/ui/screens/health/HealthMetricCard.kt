@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import com.example.domain.model.HealthDataAvailability
 import com.example.domain.model.HealthMetric
 import com.example.domain.model.HealthMetricType
+import com.example.ui.components.SoftGlassCard
 import com.example.ui.theme.SoftTheme
 
 /**
@@ -74,17 +75,9 @@ fun HealthMetricCard(
     val metricIcon = getMetricIcon(metric.type)
     val accentColor = getMetricAccentColor(metric.type)
 
-    Column(
+    SoftGlassCard(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(SoftTheme.tokens.corners.md))
-            .background(SoftTheme.colors.surfaceElevated)
-            .border(
-                width = SoftTheme.tokens.borders.hairline,
-                color = SoftTheme.colors.borderSubtle,
-                shape = RoundedCornerShape(SoftTheme.tokens.corners.md)
-            )
-            .padding(14.dp)
             .testTag("health_metric_${metric.type.name.lowercase()}")
             .semantics {
                 this.contentDescription = if (metric.availability == HealthDataAvailability.AVAILABLE) {
@@ -93,8 +86,16 @@ fun HealthMetricCard(
                     "${metric.type.displayName}: ${metric.availability.displayName}. ${metric.unavailableMessage ?: "No data recorded, not zero."}"
                 }
             },
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        elevation = SoftTheme.tokens.elevations.card,
+        containerColor = SoftTheme.colors.surfaceElevated,
+        shape = RoundedCornerShape(SoftTheme.tokens.corners.md)
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
         // TOP ROW: ICON + TITLE + AVAILABILITY BADGE
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -172,6 +173,7 @@ fun HealthMetricCard(
                 )
             }
         }
+    }
     }
 }
 

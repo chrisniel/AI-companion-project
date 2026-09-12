@@ -198,15 +198,16 @@ private fun BottomNavItemView(
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    val unselectedColor = if (SoftTheme.colors.isDark) SoftTheme.colors.textMuted else Color.Black
 
     val iconColor by animateColorAsState(
-        targetValue = if (isSelected) SoftTheme.colors.accentPrimaryColor else SoftTheme.colors.textMuted,
+        targetValue = if (isSelected) SoftTheme.colors.accentPrimaryColor else unselectedColor,
         animationSpec = tween(durationMillis = 120),
         label = "nav_icon_color"
     )
 
     val textColor by animateColorAsState(
-        targetValue = if (isSelected) SoftTheme.colors.accentPrimaryColor else SoftTheme.colors.textMuted,
+        targetValue = if (isSelected) SoftTheme.colors.accentPrimaryColor else unselectedColor,
         animationSpec = tween(durationMillis = 120),
         label = "nav_text_color"
     )

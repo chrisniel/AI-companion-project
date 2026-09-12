@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import com.example.ui.components.softBounceOverscroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -119,6 +120,7 @@ fun AssistantScreen(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
+                .softBounceOverscroll()
                 .testTag("assistant_messages_list"),
             contentPadding = PaddingValues(
                 horizontal = SoftTheme.spacing.md,

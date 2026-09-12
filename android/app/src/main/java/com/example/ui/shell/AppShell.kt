@@ -158,26 +158,7 @@ fun AppShell(
                 .fillMaxSize()
                 .testTag("app_shell_scaffold"),
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            topBar = {
-                if (currentRoute != Routes.HOME && currentRoute != Routes.ASSISTANT && currentRoute != Routes.VOICE_MODE && currentRoute != Routes.CHARACTERS && currentRoute != Routes.SETTINGS && currentRoute != Routes.CONNECTION && currentRoute != Routes.PERMISSIONS) {
-                    AppTopBar(
-                        title = pageTitle,
-                        canNavigateBack = canNavigateBack,
-                        onNavigateBack = { navController.popBackStack() },
-                        connectionInfo = uiState.connectionInfo,
-                        onCycleConnectionState = { appViewModel.cycleConnectionState() },
-                        isDarkTheme = SoftTheme.colors.isDark,
-                        userName = uiState.userName,
-                        onAvatarClick = {
-                            if (currentRoute != Routes.SETTINGS) {
-                                navController.navigate(Routes.SETTINGS) {
-                                    launchSingleTop = true
-                                }
-                            }
-                        }
-                    )
-                }
-            },
+            topBar = {},
             bottomBar = {
                 if (currentRoute != Routes.VOICE_MODE) {
                     AppBottomBar(
@@ -193,7 +174,7 @@ fun AppShell(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
+                    .padding(bottom = paddingValues.calculateBottomPadding())
             ) {
                 // Calm Connection Banner across screens when active and enabled
                 if (uiState.showConnectionBanner) {
@@ -257,7 +238,7 @@ fun AppShell(
                         composable(Routes.HOME) {
                             HorizontalPager(
                                 state = pagerState,
-                                beyondViewportPageCount = 0,
+                                beyondViewportPageCount = 1,
                                 flingBehavior = PagerDefaults.flingBehavior(
                                     state = pagerState,
                                     snapAnimationSpec = tween(
@@ -282,7 +263,21 @@ fun AppShell(
                                             onToggleTask = { taskId -> appViewModel.toggleTask(taskId) },
                                             onAddTask = { title, priority -> appViewModel.addNewTask(title, priority) }
                                         )
-                                        1 -> TasksScreen()
+                                        1 -> Column(modifier = Modifier.fillMaxSize()) {
+                                            AppTopBar(
+                                                title = "Tasks",
+                                                canNavigateBack = false,
+                                                onNavigateBack = {},
+                                                connectionInfo = uiState.connectionInfo,
+                                                onCycleConnectionState = { appViewModel.cycleConnectionState() },
+                                                isDarkTheme = SoftTheme.colors.isDark,
+                                                userName = uiState.userName,
+                                                onAvatarClick = {
+                                                    navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
+                                                }
+                                            )
+                                            TasksScreen()
+                                        }
                                         2 -> AssistantScreen(
                                             isDarkTheme = SoftTheme.colors.isDark,
                                             onOpenVoiceMode = {
@@ -291,13 +286,41 @@ fun AppShell(
                                                 }
                                             }
                                         )
-                                        3 -> HealthScreen(
-                                            healthConnectState = uiState.capabilitiesState.healthConnectState,
-                                            onSetHealthConnectState = { appViewModel.setHealthConnectState(it) }
-                                        )
-                                        4 -> MoreScreen(
-                                            onNavigateToRoute = onNavigateToRoute
-                                        )
+                                        3 -> Column(modifier = Modifier.fillMaxSize()) {
+                                            AppTopBar(
+                                                title = "Biometric Health",
+                                                canNavigateBack = false,
+                                                onNavigateBack = {},
+                                                connectionInfo = uiState.connectionInfo,
+                                                onCycleConnectionState = { appViewModel.cycleConnectionState() },
+                                                isDarkTheme = SoftTheme.colors.isDark,
+                                                userName = uiState.userName,
+                                                onAvatarClick = {
+                                                    navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
+                                                }
+                                            )
+                                            HealthScreen(
+                                                healthConnectState = uiState.capabilitiesState.healthConnectState,
+                                                onSetHealthConnectState = { appViewModel.setHealthConnectState(it) }
+                                            )
+                                        }
+                                        4 -> Column(modifier = Modifier.fillMaxSize()) {
+                                            AppTopBar(
+                                                title = "System Hub",
+                                                canNavigateBack = false,
+                                                onNavigateBack = {},
+                                                connectionInfo = uiState.connectionInfo,
+                                                onCycleConnectionState = { appViewModel.cycleConnectionState() },
+                                                isDarkTheme = SoftTheme.colors.isDark,
+                                                userName = uiState.userName,
+                                                onAvatarClick = {
+                                                    navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
+                                                }
+                                            )
+                                            MoreScreen(
+                                                onNavigateToRoute = onNavigateToRoute
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -340,15 +363,43 @@ fun AppShell(
 
                         // SECONDARY DESTINATION: SCHEDULE (Batch 6)
                         composable(Routes.SCHEDULE) {
-                            ScheduleScreen()
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                AppTopBar(
+                                    title = "Schedule",
+                                    canNavigateBack = true,
+                                    onNavigateBack = { navController.popBackStack() },
+                                    connectionInfo = uiState.connectionInfo,
+                                    onCycleConnectionState = { appViewModel.cycleConnectionState() },
+                                    isDarkTheme = SoftTheme.colors.isDark,
+                                    userName = uiState.userName,
+                                    onAvatarClick = {
+                                        navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
+                                    }
+                                )
+                                ScheduleScreen()
+                            }
                         }
 
                         // SECONDARY DESTINATION: ALARMS (Batch 6)
                         composable(Routes.ALARMS) {
-                            AlarmsScreen(
-                                alarmCapabilityState = uiState.capabilitiesState.alarmCapabilityState,
-                                onSetAlarmCapabilityState = { appViewModel.setAlarmCapabilityState(it) }
-                            )
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                AppTopBar(
+                                    title = "Alarms",
+                                    canNavigateBack = true,
+                                    onNavigateBack = { navController.popBackStack() },
+                                    connectionInfo = uiState.connectionInfo,
+                                    onCycleConnectionState = { appViewModel.cycleConnectionState() },
+                                    isDarkTheme = SoftTheme.colors.isDark,
+                                    userName = uiState.userName,
+                                    onAvatarClick = {
+                                        navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
+                                    }
+                                )
+                                AlarmsScreen(
+                                    alarmCapabilityState = uiState.capabilitiesState.alarmCapabilityState,
+                                    onSetAlarmCapabilityState = { appViewModel.setAlarmCapabilityState(it) }
+                                )
+                            }
                         }
 
                         // SECONDARY DESTINATION: CHARACTERS (Batch 8)
@@ -363,17 +414,59 @@ fun AppShell(
 
                         // SECONDARY DESTINATION: MODELS (Batch 9)
                         composable(Routes.MODELS) {
-                            ModelsScreen()
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                AppTopBar(
+                                    title = "Local Models",
+                                    canNavigateBack = true,
+                                    onNavigateBack = { navController.popBackStack() },
+                                    connectionInfo = uiState.connectionInfo,
+                                    onCycleConnectionState = { appViewModel.cycleConnectionState() },
+                                    isDarkTheme = SoftTheme.colors.isDark,
+                                    userName = uiState.userName,
+                                    onAvatarClick = {
+                                        navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
+                                    }
+                                )
+                                ModelsScreen()
+                            }
                         }
 
                         // SECONDARY DESTINATION: DEVICES (Batch 9)
                         composable(Routes.DEVICES) {
-                            DevicesScreen()
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                AppTopBar(
+                                    title = "Devices",
+                                    canNavigateBack = true,
+                                    onNavigateBack = { navController.popBackStack() },
+                                    connectionInfo = uiState.connectionInfo,
+                                    onCycleConnectionState = { appViewModel.cycleConnectionState() },
+                                    isDarkTheme = SoftTheme.colors.isDark,
+                                    userName = uiState.userName,
+                                    onAvatarClick = {
+                                        navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
+                                    }
+                                )
+                                DevicesScreen()
+                            }
                         }
 
                         // SECONDARY DESTINATION: MEMORY (Batch 10)
                         composable(Routes.MEMORY) {
-                            MemoryScreen()
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                AppTopBar(
+                                    title = "Memory & Cache",
+                                    canNavigateBack = true,
+                                    onNavigateBack = { navController.popBackStack() },
+                                    connectionInfo = uiState.connectionInfo,
+                                    onCycleConnectionState = { appViewModel.cycleConnectionState() },
+                                    isDarkTheme = SoftTheme.colors.isDark,
+                                    userName = uiState.userName,
+                                    onAvatarClick = {
+                                        navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
+                                    }
+                                )
+                                MemoryScreen()
+                            }
                         }
 
                         // SECONDARY DESTINATION: CONNECTION & OFFLINE SYNC (Batch 12)
@@ -436,10 +529,24 @@ fun AppShell(
 
                         // SECONDARY DESTINATION: DESIGN SYSTEM CATALOG
                         composable(Routes.DESIGN_SYSTEM) {
-                            DesignSystemPreviewScreen(
-                                modifier = Modifier.fillMaxSize(),
-                                viewModel = designSystemViewModel
-                            )
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                AppTopBar(
+                                    title = "Design System",
+                                    canNavigateBack = true,
+                                    onNavigateBack = { navController.popBackStack() },
+                                    connectionInfo = uiState.connectionInfo,
+                                    onCycleConnectionState = { appViewModel.cycleConnectionState() },
+                                    isDarkTheme = SoftTheme.colors.isDark,
+                                    userName = uiState.userName,
+                                    onAvatarClick = {
+                                        navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
+                                    }
+                                )
+                                DesignSystemPreviewScreen(
+                                    modifier = Modifier.fillMaxSize(),
+                                    viewModel = designSystemViewModel
+                                )
+                            }
                         }
                     }
                 }

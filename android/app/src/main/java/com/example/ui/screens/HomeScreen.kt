@@ -1,13 +1,22 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.zIndex
+import com.example.ui.components.softBounceOverscroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.Arrangement
@@ -135,6 +144,7 @@ fun HomeScreen(
         modifier = modifier
             .fillMaxSize()
             .testTag("home_screen")
+            .softBounceOverscroll()
             .verticalScroll(scrollState)
             .statusBarsPadding()
             .padding(horizontal = SoftTheme.spacing.lg, vertical = SoftTheme.spacing.sm),
@@ -146,7 +156,8 @@ fun HomeScreen(
             isReachable = connectionInfo.state == CoreConnectionState.Local || connectionInfo.state == CoreConnectionState.Remote,
             activeModelName = selectedPersona,
             connectionInfo = connectionInfo,
-            onNavigateToSettings = { onNavigateToRoute(Routes.SETTINGS) }
+            onNavigateToSettings = { onNavigateToRoute(Routes.SETTINGS) },
+            modifier = Modifier.zIndex(100f)
         )
 
         // 2. ASSISTANT HERO (Calm, prominent, active character, reachability, model summary, no loud telemetry)
@@ -293,32 +304,63 @@ private fun HomeHeaderGreeting(
             }
         }
 
-        // Smooth interactive Profile & Connection Card dropdown below avatar
-        AnimatedVisibility(
+        // Floating Animated Vault Popover Overlay
+        androidx.compose.animation.AnimatedVisibility(
             visible = isProfileMenuExpanded,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
+            modifier = Modifier
+                .fillMaxWidth()
+                .zIndex(50f)
+                .padding(top = 10.dp),
+            enter = scaleIn(
+                initialScale = 0.82f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            ) + fadeIn(),
+            exit = scaleOut(
+                targetScale = 0.85f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            ) + fadeOut()
         ) {
-            Column(
+            // Plain Glassmorphism Vault Card (Clean frosted surface, hairline rim, zero muddy shadows)
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = SoftTheme.spacing.sm)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(
+                        if (SoftTheme.colors.isDark) Color(0xF2181B22)
+                        else Color(0xF5EDF0EB)
+                    )
+                    .border(
+                        width = SoftTheme.tokens.borders.hairline,
+                        color = if (SoftTheme.colors.isDark) Color(0x2EFFFFFF) else Color(0x28000000),
+                        shape = RoundedCornerShape(22.dp)
+                    )
+                    .padding(20.dp)
             ) {
-                SoftGlassCard(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    elevation = SoftTheme.tokens.elevations.card
+                    verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.md)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(SoftTheme.spacing.md),
-                        verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
+                    // Vault Header
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
+                            SoftAvatar(
+                                name = profile.name,
+                                size = 46.dp,
+                                statusColor = if (isReachable) SoftTheme.colors.statusSuccess else null
+                            )
                             Column {
                                 Text(
                                     text = profile.name.ifBlank { "Companion User" },
@@ -332,42 +374,45 @@ private fun HomeHeaderGreeting(
                                     color = SoftTheme.colors.textSecondary
                                 )
                             }
-                            if (connectionInfo != null) {
-                                Box(modifier = Modifier.testTag("topbar_connection_indicator")) {
-                                    CompactConnectionIndicator(
-                                        state = connectionInfo.state,
-                                        label = connectionInfo.label,
-                                        latencyMs = connectionInfo.latencyMs
-                                    )
-                                }
+                        }
+                        if (connectionInfo != null) {
+                            Box(modifier = Modifier.testTag("topbar_connection_indicator")) {
+                                CompactConnectionIndicator(
+                                    state = connectionInfo.state,
+                                    label = connectionInfo.label,
+                                    latencyMs = connectionInfo.latencyMs
+                                )
                             }
                         }
+                    }
 
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(SoftTheme.tokens.corners.sm))
-                                .clickable {
-                                    isProfileMenuExpanded = false
-                                    onNavigateToSettings()
-                                }
-                                .padding(vertical = SoftTheme.spacing.xs),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.xs)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = null,
-                                tint = SoftTheme.colors.accentPrimaryColor,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Text(
-                                text = "Open Settings & Preferences",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = SoftTheme.colors.accentPrimaryColor
-                            )
-                        }
+                    HorizontalDivider(color = SoftTheme.colors.borderSubtle)
+
+                    // Quick Action: Settings
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(SoftTheme.tokens.corners.sm))
+                            .clickable {
+                                isProfileMenuExpanded = false
+                                onNavigateToSettings()
+                            }
+                            .padding(vertical = SoftTheme.spacing.xs),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = null,
+                            tint = SoftTheme.colors.accentPrimaryColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = "Open Settings & Preferences",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = SoftTheme.colors.accentPrimaryColor
+                        )
                     }
                 }
             }

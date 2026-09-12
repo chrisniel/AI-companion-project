@@ -7,6 +7,7 @@ import com.example.domain.model.BuiltInBackgroundPreset
 import com.example.domain.model.BuiltInGradientPreset
 import com.example.domain.model.BuiltInSolidPreset
 import com.example.domain.model.EffectsLevel
+import com.example.domain.model.RefreshRateMode
 import com.example.domain.model.ThemeMode
 import com.example.domain.model.ThemeSource
 import kotlinx.coroutines.flow.StateFlow
@@ -30,4 +31,5 @@ interface AppearanceRepository {
     fun setEffectsLevel(level: EffectsLevel)
     fun setScrimOpacity(opacity: Float)
     fun setBackgroundBrightness(brightness: Float)
+    fun setRefreshRateMode(mode: RefreshRateMode)
 }

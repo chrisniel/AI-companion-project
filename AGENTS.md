@@ -1,105 +1,128 @@
 # AI Agent Working Rules
 
-These rules govern AI-assisted work in the AI Companion Project. Explicit system instructions and the user's immediate request take precedence.
+Template Component: Docs_ProjectWorkflowStarterKit_v2.0
 
-## Project Profile
+These rules are a reusable baseline for AI-assisted work across software, game, and web projects, whether working solo or in a team of 2 to 5 developers. Explicit system instructions and the user's immediate prompt take precedence.
+
+Configure project-specific paths and boundaries in the Project Profile below. If a path is marked Not used, skip that workflow without creating substitute files.
+
+---
+
+## Project Profile — Configure Per Project
 
 - Project Name: AI Companion Project
-- Project State: Existing early-stage monorepo; React web prototype is repository-verified, Android UI/UX Batch 12 is in progress in Google AI Studio but not yet available in this repository, and backend/runtime integrations are planned
 - Active Task File: docs/01_Tracking/task.md
 - Task Archive Directory: docs/01_Tracking/archive/
 - Implementation Plan Directory: docs/02_Planning/
 - Walkthrough Folder: docs/03_Walkthroughs/
-- Canonical Architecture Document: docs/04_Architecture/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md
 - Changelog File: CHANGELOG.md
-- Major Change Commit Policy: Every completed major change must be committed as one coherent user-owned Git commit; the AI supplies a proposed commit message, while the user manually reviews, commits, and pushes
+- Canonical Architecture Document: docs/04_Architecture/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md
+- Primary Tech Stack: React 19, TypeScript 5.8, Vite 6, Tailwind CSS 4; Kotlin, Jetpack Compose for Android; Python, FastAPI, SQLAlchemy 2, Alembic, SQLite/FTS5 (planned); llama.cpp / ONNX Runtime
 - Execution Mode: Read-only by default; inspect and report unless the user explicitly authorizes the specific edit or other state-changing action
-- Implemented Stack: React 19, TypeScript 5.8, Vite 6, Tailwind CSS 4
-- Planned Stack: Python, FastAPI, Pydantic, SQLAlchemy 2, Alembic, SQLite/FTS5; Kotlin and Jetpack Compose for Android; llama.cpp for local inference
+- Major Change Commit Policy: Every completed major change must be committed as one coherent user-owned Git commit; the AI supplies a proposed commit message, while the user manually reviews, commits, and pushes
 - Manual Verification Areas: Responsive desktop UI, themes and accessibility, Windows runtime behavior, RX 580 model benchmarks, microphone/Bluetooth audio, Android physical-device behavior, alarms, Health Connect, and remote authentication
 - Protected Boundaries: Preserve uncommitted user work; never expose secrets; do not alter Git/LFS policy, external services, dependencies, branches, remotes, or source code without an approved task-specific plan
 
-## 1. Documentation Structure
+---
 
-- Use lowercase `docs/` paths consistently.
-- New documentation belongs in the numbered lifecycle directories:
-  - `docs/00_Drafts/` — raw ideas and unapproved material
-  - `docs/01_Tracking/` — the active task and per-task archives
-  - `docs/02_Planning/` — feature-specific plans, technical designs, and acceptance criteria
-  - `docs/03_Walkthroughs/` — verified delivery walkthroughs and handoffs
-  - `docs/04_Architecture/` — canonical architecture, contracts, schemas, and ADRs
-  - `docs/05_Design/` — product, UX, visual, voice, character, and interaction design
-  - `docs/06_Guides/` — setup, contributor, testing, and maintenance guides
-  - `docs/07_Archive/` — superseded documents retained for history
+## 1. Strict Numbered Documentation Hierarchy
+
+- When a documentation directory (`docs/`) is maintained, all subdirectories must follow strict two-digit zero-padded numbering:
+  - `docs/00_Drafts/` (Raw ideas, scratchpads, unreviewed notes)
+  - `docs/01_Tracking/` (Active task.md and archive/ directory)
+  - `docs/02_Planning/` (Feature-named implementation plans, TDDs, acceptance criteria)
+  - `docs/03_Walkthroughs/` (Delivery walkthroughs, developer handovers)
+  - `docs/04_Architecture/` (System contracts, API schemas, core technical specs)
+  - `docs/05_Design/` (Product/Game design docs, wireframes, UI/UX, narrative)
+  - `docs/06_Guides/` (Contributor onboarding, setup steps, testing standards)
+  - `docs/07_Archive/` (Superseded drafts, old audits, deprecated documentation)
+- Never create unnumbered directories or loose documentation files at the root of `docs/`.
 - `docs/ProjectWorkflowStarterKit/` is a permanent user-owned starter reference and is exempt from the numbered layout. Do not move, rewrite, or delete it unless the user explicitly requests that exact change.
-- Historical planning material is preserved under `docs/00_Drafts/` as non-canonical reference. Do not promote draft claims over the canonical master plan.
 
-## 2. Context Boundaries
+## 2. Context Ignore Boundaries & Token Preservation
 
-- Do not load `docs/00_Drafts/`, `docs/07_Archive/`, or `docs/01_Tracking/archive/` unless the active request requires a specific file there.
-- Treat `docs/ProjectWorkflowStarterKit/` as a human reference. Use root `AGENTS.md` for normal repository work.
-- Read only the top portion of `CHANGELOG.md` needed to place a new entry under `Unreleased`; do not load its full history by default.
-- Architecture and design documents remain available when relevant to the active task.
+- `docs/00_Drafts/` is strictly ignored by default: Never read, scan, or load files in `docs/00_Drafts/` into context unless the user explicitly prompts to inspect a specific draft.
+- `docs/07_Archive/` and the `docs/01_Tracking/archive/` directory are strictly ignored: Never load historical archives into context unless explicitly asked to perform a retrospective.
+- `CHANGELOG.md` is append-only: Never read the full changelog history into context. Read only the top 15 lines if needed to match entry formatting.
+- Technical specs in `docs/04_Architecture/` and design specs in `docs/05_Design/` remain accessible on demand when relevant to the active task.
+- If `.aiignore`, `.cursorignore`, or `.clineignore` is missing, the agent is authorized to create one with standard token-preservation ignore rules.
 
-## 3. Planning and Approval
+## 3. Feature-Specific Plans & In-Place Plan Updates
 
-- For non-trivial features, refactors, migrations, or bug fixes, create or update a feature-named plan in `docs/02_Planning/`.
-- Plans must identify evidence, scope, affected files, step-by-step pseudocode, acceptance criteria, verification, risks, and rollback.
-- Update a plan in place. Do not prepend duplicate plans or status blocks.
-- Obtain explicit user approval before implementing the plan.
-- After approval, use `docs/01_Tracking/task.md` for execution state. Reopen the full plan only when revising scope or architecture.
-- Planned architecture is not implemented behavior. Mark claims as Planned, In Progress, Implemented, Verified, Deferred, or Unverified as appropriate.
+- For non-trivial features, refactors, or bug fixes, provide step-by-step logic in plain pseudocode for user review before writing code.
+- Feature-Named Planning: To prevent team merge conflicts, name implementation plans after the specific feature or fix (e.g., `docs/02_Planning/plan-[feature-name].md`) rather than writing to a single shared document.
+- Update In-Place: During the planning phase, update existing sections (affected files, acceptance criteria, steps) directly in place. Never prepend duplicate plans or drafts above existing content.
+- Obtain explicit user approval on the plan before implementing code.
+- Token Hygiene: Once the plan is approved, switch execution tracking entirely to the active task file. Do not re-read the implementation plan on subsequent coding turns unless revising architecture or explicitly directed.
 
-## 4. Active Task Continuity
+## 4. In-Place Task Continuity & Per-File Archiving (task.md)
 
-- Read `docs/01_Tracking/task.md` before resuming implementation work.
-- Keep its handoff block, status, checklist, blockers, and next action current by editing them in place.
-- Keep the active task focused on the current sprint and preferably under 80 lines.
-- After a delivery is verified, move its completed checklist into `docs/01_Tracking/archive/task-YYYY-MM-DD-feature-name.md` and reset the active task for the next sprint.
+- Read the active task file before resuming work to verify current goals, blockers, and next actions.
+- Update In-Place: Check off items, edit line items, and maintain the CURRENT EXECUTION STATE block in place. Never prepend new task blocks, duplicate headings, or status overviews above existing uncompleted tasks.
+- Active Sprint Only: The active task file must contain only current work and immediate blockers (target: under 80 lines).
+- Per-File Archiving: When a feature or sprint is verified and completed, move its completed checklist into a new dedicated archive file: `docs/01_Tracking/archive/task-[YYYY-MM-DD]-[feature-name].md`. Never accumulate completed checklists in the active `task.md`, and never append to a single monolithic archive file.
 
-## 5. Source of Truth and Documentation Alignment
+## 5. Team Concurrency & Feature Branch Isolation
 
-- Prefer one canonical document for each decision or contract and link to it rather than duplicating it.
-- Treat drafts, prototype labels, mock telemetry, and external work as non-authoritative until verified.
-- When behavior, setup, contracts, configuration, or architecture changes, update the closest canonical document in the same delivery.
-- Do not silently resolve contradictions. Record the evidence and obtain user direction when the choice affects architecture, security, data, cost, hardware, or external systems.
+- Multi-Developer Concurrency: When working concurrently across a team, active tasks must be maintained on dedicated feature branches (e.g., `feature/[feature-name]`).
+- Each feature branch owns its active `task.md`. When a feature is completed and merged to main via pull request, its verified tasks are archived into `docs/01_Tracking/archive/`, leaving the `task.md` on main clean for the next sprint.
 
-## 6. Surgical Changes and User Work
+## 6. Append-Only Changelog (CHANGELOG.md)
 
-- Default to read-only inspection and reporting. Do not edit files, install dependencies, run write-producing commands, or change local/external state unless the user explicitly authorizes that specific work.
-- An authorization to edit documentation does not authorize application-code changes, and an authorization to edit one subsystem does not authorize adjacent subsystems.
-- Touch only files required by the approved task.
-- Preserve unrelated and uncommitted user changes, including the current `README.md` working-tree edit.
-- Do not rewrite working code, add dependencies, or populate placeholder subsystems without task-specific approval.
-- Do not remove or relocate existing documentation unless its destination and canonical status are approved.
-
-## 7. Verification
-
-- Run only safe checks proportionate to the change.
-- Never claim a check passed unless it was executed and confirmed.
-- Separate automated results from manual, visual, hardware, Android-device, health, and audio checks.
-- Documentation-only work should at minimum verify paths, links or references where practical, `git diff --check`, and the final working-tree scope.
-
-## 8. Changelog, Walkthroughs, and Commit Handoff
-
-- Record completed user-visible or structural deliveries under the current `Unreleased` section in `CHANGELOG.md`.
+- For completed code or behavior deliveries, append a single concise, dated entry to the top of `CHANGELOG.md` under `## [Unreleased]`.
+- Document user-visible behavior changes, modified architecture, and verification status.
 - Preserve historical changelog entries; do not rewrite them.
-- Create a walkthrough in `docs/03_Walkthroughs/` when a completed delivery needs developer or user handoff.
-- Treat a major change as a coherent feature, architecture update, workflow migration, substantial refactor, or other reviewable delivery—not every small save or intermediate edit.
-- At the end of every completed major change, provide a concise Conventional Commit-style message describing the delivered scope.
-- The user owns commit and push execution. Do not claim work is committed merely because a commit message was prepared.
 
-## 9. Privacy, Security, and Data Integrity
+## 7. Educational Walkthroughs & Handoffs
 
-- Never expose, log, or commit passwords, tokens, API keys, credentials, private health data, personal conversations, signing keys, or private certificates.
-- Use environment-variable names and sanitized placeholders in documentation.
+- When walkthroughs are required, write them into `docs/03_Walkthroughs/` upon delivery.
+- Follow the official template structure in `docs/03_Walkthroughs/walkthrough-template.md` (and `docs/ProjectWorkflowStarterKit/walkthrough-template.md`) with the 7 required sections:
+  1. What Was Delivered
+  2. Files Changed
+  3. How the Logic Works (Event trigger, Validation, Core processing, Completion, Recovery/cancellation)
+  4. Key Concepts (Define at least three relevant programming, architectural, or domain concepts in accessible language)
+  5. Verification Steps (Automated checks, Manual/User-owned checks)
+  6. Safe Customization & Invariants (Tunable parameters, Invariants)
+  7. Troubleshooting (Symptom, Likely cause, Resolution)
+- Explain the core logic flow sequentially without dumping full source files.
+- Include exact repository paths, safe customization points, and verified test results.
+
+## 8. Single Source of Truth & Documentation Alignment
+
+- When contracts, APIs, configurations, or behaviors change, update the closest canonical document in the same delivery.
+- Prefer linking or referring to canonical documents over duplicating content across multiple markdown files.
+- Treat drafts, legacy notes, and attached documents as reference material unless explicitly approved as current requirements.
+
+## 9. Surgical & Minimal Changes
+
+- Touch only the files and lines necessary for the approved task.
+- Preserve unrelated user edits and existing working behavior.
+- Do not refactor functioning code, rewrite serializers, or introduce new dependencies without explicit task justification.
+- Adhere strictly to project-specific performance constraints (e.g., zero-allocation per-frame loops, memory budgets, strict typing).
+
+## 10. Truthful Verification & Safety Boundaries
+
+- The AI agent may author test fixtures, run non-destructive automated checks, and provide manual checklists.
+- Never claim tests passed unless executed and confirmed: Never simulate engine execution, fabricate test results, or mark user-assigned checks as passed without explicit confirmation.
+- Clearly separate automated script/command results from pending manual or hardware-dependent user checks.
+- Provide step-by-step reproduction and verification steps for all visual, physical, or experiential checks.
+
+## 11. Clarify Material Unknowns
+
+- If missing information impacts security, architecture, performance, data integrity, or costs, ask before proceeding.
+- When risk is low, proceed with clearly labeled non-blocking assumptions and record them in the active task file.
+
+## 12. Privacy, Secrets & Data Integrity
+
+- Never expose, log, or commit passwords, tokens, private API keys, credentials, or personal data.
+- Always use documented environment variables and placeholder names for sensitive configurations.
 - Do not give an LLM unrestricted shell, filesystem, database, device, or network authority in the product architecture.
 - Sensitive tools require backend validation, authorization, and auditable execution.
 
-## 10. Git and External Boundaries
+## 13. Git & External Boundary Protections
 
-- Read-only Git inspection is allowed when relevant.
-- Do not run `git add`, `git commit`, `git push`, branch switching/creation, tags, history rewrites, or pull-request mutations unless the user explicitly authorizes that specific action.
-- By default, stop after verification and give the user the proposed commit message for manual commit and push.
+- Do not execute git add, git commit, git push, branch switching, tag creation, or pull request commands unless the user explicitly authorizes that specific command.
+- Stop after verification and provide the user with a concise Conventional Commit-style message describing the delivered scope. The user manually reviews, commits, and pushes.
+- Treat external repositories, package caches, and system paths outside the workspace as strictly read-only.
+- Resolve exact target paths before executing any file deletion or overwrite.
 - The accepted model-storage policy keeps Git source and LFS pointers on GitHub while the private Hugging Face dataset stores LFS objects. Do not change `.gitattributes`, `.lfsconfig`, model tracking, either remote, or that policy without explicit authorization.
-- Treat paths outside this workspace, package caches, and external repositories as read-only unless the user explicitly places them in scope.

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import com.example.ui.components.softBounceOverscroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -335,6 +336,7 @@ fun MemoryScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
+                        .softBounceOverscroll()
                         .testTag("memory_list"),
                     contentPadding = PaddingValues(
                         start = SoftTheme.spacing.lg,
@@ -672,6 +674,7 @@ private fun MemoryDetailSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = SoftTheme.spacing.xl, vertical = SoftTheme.spacing.lg)
+                .softBounceOverscroll()
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.md)
         ) {
@@ -864,6 +867,7 @@ private fun MemoryEditorDialog(
             elevation = SoftTheme.tokens.elevations.overlay,
             modifier = Modifier
                 .fillMaxWidth()
+                .softBounceOverscroll()
                 .verticalScroll(rememberScrollState())
         ) {
             Column(

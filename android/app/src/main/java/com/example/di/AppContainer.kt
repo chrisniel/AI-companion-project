@@ -55,7 +55,7 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
     }
 
     override val appearanceRepository: AppearanceRepository by lazy {
-        FakeAppearanceRepository()
+        com.example.data.repository.SharedPreferencesAppearanceRepository(context)
     }
 
     override val homeRepository: HomeRepository by lazy {

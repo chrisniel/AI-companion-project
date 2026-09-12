@@ -57,6 +57,7 @@ import com.example.domain.model.HealthUiState
 import com.example.domain.model.MockPermissionAction
 import com.example.ui.components.CapabilityAlertBanner
 import com.example.ui.components.MockActionDetailsSheet
+import com.example.ui.components.softBounceOverscroll
 import com.example.ui.theme.SoftTheme
 
 /**
@@ -92,6 +93,7 @@ fun HealthScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
+                .softBounceOverscroll()
                 .testTag("health_content_list"),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 80.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)

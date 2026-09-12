@@ -30,6 +30,7 @@ enum class StartupBehavior(val label: String, val description: String) {
 enum class ThemeMode(val label: String) {
     LIGHT("Light"),
     DARK("Dark"),
+    OLED_BATTERY_SAVER("OLED Battery Saver"),
     SYSTEM("System")
 }
 
@@ -40,6 +41,15 @@ enum class ThemeSource(val label: String, val description: String) {
     PHONE_THEME("Phone Theme", "Follow device native appearance schedule"),
     ACCOUNT_THEME("Account Theme", "Persist across companion user profiles"),
     SYNC_PC_THEME("Sync with PC Theme", "Mirror active Local AI Core PC theme")
+}
+
+/**
+ * Display refresh rate mode controlling window display refresh rate and fluid motion sync.
+ */
+enum class RefreshRateMode(val label: String, val description: String) {
+    SYSTEM_DEFAULT("System Dynamic (120Hz)", "Adaptive sync matched to device display capability"),
+    FORCE_HIGH("Force High (120Hz)", "Lock maximum refresh rate for ultra-smooth fluid motion"),
+    POWER_SAVER("Battery Saver (60Hz)", "Cap at 60Hz to conserve battery life")
 }
 
 /**
@@ -157,6 +167,7 @@ data class SettingsState(
     val effectsLevel: EffectsLevel = EffectsLevel.NORMAL,
     val scrimOpacity: Float = 0.20f,
     val backgroundBrightness: Float = 1.0f,
+    val refreshRateMode: RefreshRateMode = RefreshRateMode.SYSTEM_DEFAULT,
 
     // Language Preferences
     val primaryLanguage: AppLanguage = AppLanguage.ENGLISH,

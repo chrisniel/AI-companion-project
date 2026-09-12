@@ -101,6 +101,7 @@ import com.example.domain.model.BackgroundType
 import com.example.domain.model.BuiltInBackgroundPreset
 import com.example.domain.model.EffectsLevel
 import com.example.domain.model.JapaneseDisplay
+import com.example.domain.model.RefreshRateMode
 import com.example.domain.model.ResponseLanguageChoice
 import com.example.domain.model.SettingsSection
 import com.example.domain.model.SettingsState
@@ -111,6 +112,7 @@ import com.example.domain.model.VoiceCapability
 import com.example.domain.model.VoiceRecognitionLanguage
 import com.example.ui.components.SoftGlassButton
 import com.example.ui.components.SoftGlassCard
+import com.example.ui.components.softBounceOverscroll
 import com.example.ui.components.softNeumorphicInset
 import com.example.ui.components.softNeumorphicRaised
 import com.example.ui.theme.SoftTheme
@@ -172,6 +174,7 @@ fun SettingsScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
+                        .softBounceOverscroll()
                         .verticalScroll(contentScrollState)
                         .padding(horizontal = SoftTheme.spacing.lg, vertical = SoftTheme.spacing.xs)
                 ) {
@@ -670,20 +673,24 @@ private fun AppearanceSectionContent(
             color = SoftTheme.colors.accentPrimaryColor
         )
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
-        ) {
-            ThemeMode.entries.forEach { mode ->
-                val isSelected = uiState.themeMode == mode
-                SelectablePill(
-                    label = mode.label,
-                    selected = isSelected,
-                    onClick = { viewModel.setThemeMode(mode) },
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("theme_mode_${mode.name}")
-                )
+        Column(verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.xs)) {
+            ThemeMode.entries.chunked(2).forEach { rowModes ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
+                ) {
+                    rowModes.forEach { mode ->
+                        val isSelected = uiState.themeMode == mode
+                        SelectablePill(
+                            label = mode.label,
+                            selected = isSelected,
+                            onClick = { viewModel.setThemeMode(mode) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("theme_mode_${mode.name}")
+                        )
+                    }
+                }
             }
         }
 
@@ -1227,6 +1234,30 @@ private fun AppearanceSectionContent(
                 .fillMaxWidth()
                 .testTag("slider_background_brightness")
         )
+
+        HorizontalDivider(color = SoftTheme.colors.borderSubtle)
+
+        // Display Refresh Rate
+        Text(
+            text = "DISPLAY REFRESH RATE (120HZ / 60HZ)",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = SoftTheme.colors.accentPrimaryColor
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            RefreshRateMode.entries.forEach { mode ->
+                val isSelected = uiState.refreshRateMode == mode
+                SelectionCardItem(
+                    title = mode.label,
+                    subtitle = mode.description,
+                    selected = isSelected,
+                    onClick = { viewModel.setRefreshRateMode(mode) },
+                    testTag = "refresh_rate_${mode.name}"
+                )
+            }
+        }
     }
 }
 

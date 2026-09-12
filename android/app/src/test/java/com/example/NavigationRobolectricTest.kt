@@ -2,6 +2,8 @@ package com.example
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -72,7 +74,9 @@ class NavigationRobolectricTest {
         composeTestRule.onNodeWithTag("nav_item_home").assertIsDisplayed()
         composeTestRule.onNodeWithTag("home_user_avatar").assertIsDisplayed()
         composeTestRule.onNodeWithTag("home_user_avatar").performClick()
-        composeTestRule.onNodeWithTag("topbar_connection_indicator").assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag("topbar_connection_indicator")
+            .onFirst()
+            .assertIsDisplayed()
         composeTestRule.onNodeWithTag("home_user_avatar").performClick()
 
         // Navigate to Assistant

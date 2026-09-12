@@ -3,6 +3,7 @@ package com.example.ui.screens.tasks
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -66,6 +67,8 @@ import androidx.compose.ui.unit.sp
 import com.example.domain.model.MobileTask
 import com.example.domain.model.TaskCategory
 import com.example.domain.model.TaskPriority
+import com.example.ui.components.SoftGlassCard
+import com.example.ui.components.softNeumorphicInset
 import com.example.ui.theme.SoftTheme
 
 /**
@@ -100,7 +103,7 @@ fun TaskRowItem(
 
     val cardBackground by animateColorAsState(
         targetValue = if (task.isCompleted) {
-            SoftTheme.colors.surfaceElevated.copy(alpha = 0.55f)
+            SoftTheme.colors.surfaceWell.copy(alpha = 0.60f)
         } else {
             SoftTheme.colors.surfaceElevated
         },
@@ -112,22 +115,32 @@ fun TaskRowItem(
         label = "contentAlpha"
     )
 
-    Box(
+    SoftGlassCard(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(SoftTheme.tokens.corners.md))
-            .background(cardBackground)
-            .border(
-                width = SoftTheme.tokens.borders.hairline,
-                color = if (task.isCompleted) SoftTheme.colors.borderSubtle.copy(alpha = 0.5f) else SoftTheme.colors.borderSubtle,
-                shape = RoundedCornerShape(SoftTheme.tokens.corners.md)
-            )
-            .clickable(onClick = onEdit)
-            .padding(14.dp)
             .testTag("task_item_${task.id}")
+            .clickable(onClick = onEdit),
+        elevation = if (task.isCompleted) SoftTheme.tokens.elevations.flat else SoftTheme.tokens.elevations.card,
+        containerColor = cardBackground,
+        shape = RoundedCornerShape(SoftTheme.tokens.corners.md),
+        border = BorderStroke(
+            SoftTheme.tokens.borders.hairline,
+            if (task.isCompleted) SoftTheme.colors.borderSubtle.copy(alpha = 0.5f) else SoftTheme.colors.borderSubtle
+        )
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (task.isCompleted) {
+                        Modifier.softNeumorphicInset(
+                            shape = RoundedCornerShape(SoftTheme.tokens.corners.md),
+                            isDark = SoftTheme.colors.isDark,
+                            depth = 2.dp
+                        )
+                    } else Modifier
+                )
+                .padding(14.dp),
             verticalAlignment = Alignment.Top
         ) {
             // 1. COMPLETION CONTROL (Touch target 48dp friendly)

@@ -65,4 +65,8 @@ class FakeAppearanceRepository(
     override fun setBackgroundBrightness(brightness: Float) {
         _preferences.update { it.copy(backgroundBrightness = brightness.coerceIn(0.5f, 1.5f)) }
     }
+
+    override fun setRefreshRateMode(mode: com.example.domain.model.RefreshRateMode) {
+        _preferences.update { it.copy(refreshRateMode = mode) }
+    }
 }

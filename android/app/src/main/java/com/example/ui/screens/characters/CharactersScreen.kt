@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import com.example.ui.components.softBounceOverscroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -164,6 +165,7 @@ fun CharactersScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
+                    .softBounceOverscroll()
                     .padding(horizontal = 16.dp),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 96.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)

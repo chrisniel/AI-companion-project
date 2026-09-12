@@ -83,5 +83,6 @@ data class AppearancePreferences(
     val customAccentHex: String? = null,
     val effectsLevel: EffectsLevel = EffectsLevel.NORMAL,
     val scrimOpacity: Float = 0.20f,
-    val backgroundBrightness: Float = 1.0f
+    val backgroundBrightness: Float = 1.0f,
+    val refreshRateMode: RefreshRateMode = RefreshRateMode.SYSTEM_DEFAULT
 )

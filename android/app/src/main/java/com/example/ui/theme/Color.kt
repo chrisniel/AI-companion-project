@@ -6,18 +6,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 
 // Light Mode Foundations: Authentic Soft Clay Canvas + Tactile Off-White Wells (Banking Reference Parity)
-val BackgroundPearl = Color(0xFFECEDE9)          // Warm off-white clay canvas (KK Theme Parity)
-val BackgroundPearlSubtle = Color(0xFFE5E6E2)    // Subtle clay canvas
-val MilkySurfaceBase = Color(0xF2F3F4F1)         // Soft clay surface base (~95% opacity)
-val MilkySurfaceElevated = Color(0xF8F6F7F5)     // Raised clay card surface
-val MilkySurfacePressed = Color(0xFFDCDED9)      // Pressed tactile clay
-val MilkySurfaceWell = Color(0xFFE0E2DD)         // Recessed sunken clay well
-val TranslucentPanelLight = Color(0xECF3F4F1)    // Translucent clay panel
-val NavSurfaceLight = Color(0xF2F5F6F3)          // Floating clay navigation surface
-val BorderLight = Color(0xD9FFFFFF)              // Soft specular edge
-val BorderSubtleLight = Color(0x339EA3A1)        // Subdued clay edge
-val ShadowLight = Color(0x669EA3A1)              // Physical soft slate clay shadow (40% alpha)
-val ShadowLightSpecular = Color(0xF2FFFFFF)      // Crisp white specular drop shadow (95% alpha)
+val BackgroundPearl = Color(0xFFE6E9E5)          // Warm matte off-white clay canvas (KK Theme Parity)
+val BackgroundPearlSubtle = Color(0xFFDFE2DE)    // Subtle clay canvas
+val MilkySurfaceBase = Color(0xFFE2E5E0)         // Soft clay surface base (~95% opacity)
+val MilkySurfaceElevated = Color(0xFFEDF0EB)     // Raised tactile clay card surface
+val MilkySurfacePressed = Color(0xFFCDD2CA)      // Pressed tactile clay
+val MilkySurfaceWell = Color(0xFFD6DAD3)         // Recessed sunken clay well
+val TranslucentPanelLight = Color(0xECE2E5E0)    // Translucent clay panel
+val NavSurfaceLight = Color(0xF2EDF0EB)          // Floating clay navigation surface
+val BorderLight = Color(0x40FFFFFF)              // Soft specular edge (40% alpha)
+val BorderSubtleLight = Color(0x1F000000)        // Subdued hairline clay edge (12% black alpha)
+val ShadowLight = Color(0x38737A75)              // Physical soft slate clay shadow (22% alpha)
+val ShadowLightSpecular = Color(0xB3FFFFFF)      // Crisp white specular drop shadow (70% alpha)
 
 // Dark Mode Foundations: Stealth Matte Charcoal / Obsidian Graphite (Reference Image Parity)
 val BackgroundCharcoal = Color(0xFF0E1015)
@@ -77,12 +77,32 @@ val StatusInfoSubtle = Color(0x1F0284C7)
 
 // Accessible Typography Text Colors
 val TextPrimaryLight = Color(0xFF0F172A)
-val TextSecondaryLight = Color(0xFF475569)
-val TextMutedLight = Color(0xFF818FA3)
+val TextSecondaryLight = Color(0xFF334155)
+val TextMutedLight = Color(0xFF334155) // Slate-700 for high-contrast crisp readability on light clay
 
 val TextPrimaryDark = Color(0xFFF8FAFC)
-val TextSecondaryDark = Color(0xFF94A3B8)
-val TextMutedDark = Color(0xFF5E6D82)
+val TextSecondaryDark = Color(0xFFCBD5E1)
+val TextMutedDark = Color(0xFF94A3B8) // Slate-400 so icons illuminate clearly against charcoal
+
+// OLED Battery Saver Foundations: Pure Pitch Black (#000000) for AMOLED Subpixel Power-Off
+val OledBackground = Color(0xFF000000)
+val OledBackgroundSecondary = Color(0xFF000000)
+val OledSurfaceBase = Color(0xFF050505)
+val OledSurfaceElevated = Color(0xFF0A0A0A)
+val OledSurfacePressed = Color(0xFF000000)
+val OledSurfaceWell = Color(0xFF000000)
+val TranslucentPanelOled = Color(0xCC050505)
+val NavSurfaceOled = Color(0xFF000000)
+val BorderOled = Color(0x33FFFFFF)       // Crisp luminous hairline border (20% white)
+val BorderSubtleOled = Color(0x1AFFFFFF) // Subdued luminous hairline (10% white)
+val ShadowOled = Color(0x00000000)       // Zero elevation drop-shadows on OLED black
+val ShadowOledSpecular = Color(0x00000000)
+val TextPrimaryOled = Color(0xFFFFFFFF)
+val TextSecondaryOled = Color(0xFFCBD5E1)
+val TextMutedOled = Color(0xFF94A3B8)
+val AccentBlueOled = Color(0xFF38BDF8)   // Vibrant glowing azure
+val AccentBlueOledSubtle = Color(0x2638BDF8)
+
 
 @Immutable
 data class SoftGlassColors(

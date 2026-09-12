@@ -15,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import com.example.ui.components.softBounceOverscroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
@@ -65,6 +66,7 @@ fun PlaceholderScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .softBounceOverscroll()
             .verticalScroll(scrollState)
             .padding(horizontal = SoftTheme.spacing.lg, vertical = SoftTheme.spacing.md),
         verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.lg)

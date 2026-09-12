@@ -1,8 +1,8 @@
 # Local AI Control Center
 ## Master Implementation Roadmap v2
 
-> **Status:** PC Web UI/UX prototype completed through Batch 12.  
-> **Current scope:** UI/UX prototype only. Backend, local AI runtime, voice, device control, health ingestion, persistence, authentication, and real synchronization are **not yet implemented** unless explicitly stated otherwise.
+> **Status:** PC Web UI/UX prototype completed; Native Android Companion App repository-verified in Kotlin/Jetpack Compose with 17 screens, SoftGlass neumorphic theme engine, AMOLED-tailored OLED Battery Saver pure pitch-black theme, persistent SharedPreferences storage, fluid momentum overscroll physics, Local AI Core Host IP configuration, and On-Device Hybrid Failover UI (Gemma-2-2B / Qwen-2.5-1.5B LLM + Kokoro-82M ONNX TTS).
+> **Current scope:** Frontend UI/UX and client repositories are implemented and verified. Backend FastAPI Core, local model runtime, database, voice pipeline, authentication, and live synchronization are planned for next delivery phases.
 >
 > This document replaces the original batch-by-batch implementation dump with a cleaner roadmap that separates:
 > 1. what already exists in the UI prototype,
@@ -94,21 +94,25 @@ The web frontend should consume a typed FastAPI API later. During prototype deve
 - ViewModel
 - StateFlow
 - Coroutines
-- Room
+- SharedPreferences (persistent appearance & connection configuration)
+- Room (local context cache & message persistence)
 - DataStore
 - WorkManager
 - AlarmManager
 - OkHttp or Ktor
+- llama.cpp Android NDK (on-device LLM failover: Gemma-2-2B / Qwen-2.5-1.5B)
+- ONNX Runtime Mobile (on-device neural TTS: Kokoro-82M)
 
 **Primary responsibilities**
 - assistant chat and voice
 - mobile alarms/reminders
-- tasks
-- health/wellness access
+- tasks and schedule
+- health/wellness access (Health Connect)
 - notifications
-- synchronization
-- mobile audio
-- Android-specific services
+- synchronization with Local AI Core
+- mobile audio routing and speech interaction
+- On-Device Edge Node Failover when PC is offline/disconnected
+- AMOLED-tailored OLED Battery Saver theme (`#000000` pitch black, zero shadows, luminous borders)
 
 The mobile app is **not** a miniature copy of the PC control panel.
 

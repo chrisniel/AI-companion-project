@@ -6,6 +6,7 @@ import com.example.domain.model.BackgroundType
 import com.example.domain.model.BuiltInBackgroundPreset
 import com.example.domain.model.EffectsLevel
 import com.example.domain.model.JapaneseDisplay
+import com.example.domain.model.RefreshRateMode
 import com.example.domain.model.ResponseLanguageChoice
 import com.example.domain.model.SettingsSection
 import com.example.domain.model.StartupBehavior
@@ -111,8 +112,8 @@ class SettingsUnitTest {
     // ==========================================
 
     @Test
-    fun `theme mode supports Light, Dark, System`() {
-        val expectedModes = setOf(ThemeMode.LIGHT, ThemeMode.DARK, ThemeMode.SYSTEM)
+    fun `theme mode supports Light, Dark, OLED Battery Saver, System`() {
+        val expectedModes = setOf(ThemeMode.LIGHT, ThemeMode.DARK, ThemeMode.OLED_BATTERY_SAVER, ThemeMode.SYSTEM)
         assertEquals(expectedModes, ThemeMode.entries.toSet())
 
         viewModel.setThemeMode(ThemeMode.LIGHT)
@@ -120,6 +121,9 @@ class SettingsUnitTest {
 
         viewModel.setThemeMode(ThemeMode.DARK)
         assertEquals(ThemeMode.DARK, viewModel.uiState.value.themeMode)
+
+        viewModel.setThemeMode(ThemeMode.OLED_BATTERY_SAVER)
+        assertEquals(ThemeMode.OLED_BATTERY_SAVER, viewModel.uiState.value.themeMode)
 
         viewModel.setThemeMode(ThemeMode.SYSTEM)
         assertEquals(ThemeMode.SYSTEM, viewModel.uiState.value.themeMode)
@@ -228,6 +232,25 @@ class SettingsUnitTest {
 
         viewModel.setEffectsLevel(EffectsLevel.ENHANCED)
         assertEquals(EffectsLevel.ENHANCED, viewModel.uiState.value.effectsLevel)
+    }
+
+    @Test
+    fun `refresh rate mode supports System Dynamic, Force High 120Hz, and Battery Saver 60Hz`() {
+        val expectedModes = setOf(
+            RefreshRateMode.SYSTEM_DEFAULT,
+            RefreshRateMode.FORCE_HIGH,
+            RefreshRateMode.POWER_SAVER
+        )
+        assertEquals(expectedModes, RefreshRateMode.entries.toSet())
+
+        // Default should be SYSTEM_DEFAULT
+        assertEquals(RefreshRateMode.SYSTEM_DEFAULT, viewModel.uiState.value.refreshRateMode)
+
+        viewModel.setRefreshRateMode(RefreshRateMode.FORCE_HIGH)
+        assertEquals(RefreshRateMode.FORCE_HIGH, viewModel.uiState.value.refreshRateMode)
+
+        viewModel.setRefreshRateMode(RefreshRateMode.POWER_SAVER)
+        assertEquals(RefreshRateMode.POWER_SAVER, viewModel.uiState.value.refreshRateMode)
     }
 
     // ==========================================

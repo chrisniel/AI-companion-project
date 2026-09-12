@@ -3,7 +3,16 @@ package com.example.ui.preview
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import com.example.ui.components.softBounceOverscroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -102,6 +111,7 @@ fun DesignSystemPreviewScreen(
     val scrollState = rememberLazyListState()
 
     var interactiveCardSelected by remember { mutableStateOf(false) }
+    var showPaletteTweaker by remember { mutableStateOf(false) }
 
     AmbientGlassBackground(modifier = modifier) {
         Scaffold(
@@ -127,6 +137,7 @@ fun DesignSystemPreviewScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .widthIn(max = 640.dp)
+                        .softBounceOverscroll()
                         .testTag("design_system_preview_scroll")
                 ) {
                     // Header Bar: Brand, Theme Switcher & Connection Indicator
@@ -134,6 +145,7 @@ fun DesignSystemPreviewScreen(
                         PreviewTopBar(
                             isDark = uiState.isDarkTheme,
                             onToggleTheme = { viewModel.toggleDarkTheme() },
+                            onTuneClick = { showPaletteTweaker = true },
                             connection = uiState.config.connection
                         )
                     }
@@ -277,6 +289,13 @@ fun DesignSystemPreviewScreen(
                     onDismiss = { viewModel.setShowDialog(false) }
                 )
             }
+
+            // Live Palette & Shadow Inspector BottomSheet
+            if (showPaletteTweaker) {
+                PaletteTweakerBottomSheet(
+                    onDismissRequest = { showPaletteTweaker = false }
+                )
+            }
         }
     }
 }
@@ -285,6 +304,7 @@ fun DesignSystemPreviewScreen(
 private fun PreviewTopBar(
     isDark: Boolean,
     onToggleTheme: () -> Unit,
+    onTuneClick: () -> Unit,
     connection: com.example.domain.model.ConnectionInfo
 ) {
     NavigationGlassSurface(
@@ -343,10 +363,203 @@ private fun PreviewTopBar(
                 )
 
                 SoftIconButton(
+                    icon = Icons.Default.Tune,
+                    contentDescription = "Tune Palette & Shadows",
+                    onClick = onTuneClick,
+                    testTag = "palette_tweaker_button"
+                )
+
+                SoftIconButton(
                     icon = if (isDark) Icons.Default.LightMode else Icons.Default.DarkMode,
                     contentDescription = if (isDark) "Switch to Light Mode" else "Switch to Dark Mode",
                     onClick = onToggleTheme,
                     testTag = "theme_toggle_button"
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PaletteTweakerBottomSheet(
+    onDismissRequest: () -> Unit
+) {
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+
+    var selectedFoundation by remember { mutableStateOf("#EDF0EB") }
+    var shadowAlpha by remember { mutableStateOf(0.24f) }
+    var specularAlpha by remember { mutableStateOf(0.70f) }
+    var selectedTextMode by remember { mutableStateOf("#0F172A") }
+
+    val foundations = listOf(
+        "#EDF0EB" to "Matte Clay",
+        "#E6E9E5" to "Warm Pearl",
+        "#EAF0F8" to "Crisp Frost",
+        "#D6DAD3" to "Sunken Well"
+    )
+
+    SoftGlassBottomSheet(
+        onDismissRequest = onDismissRequest,
+        title = "Live Palette & Shadow Inspector"
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = SoftTheme.spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.md)
+        ) {
+            Text(
+                text = "SURFACE FOUNDATION PRESET",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = SoftTheme.colors.accentPrimaryColor
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
+            ) {
+                foundations.forEach { (hex, label) ->
+                    val isSelected = selectedFoundation.equals(hex, ignoreCase = true)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(SoftTheme.tokens.corners.pill))
+                            .background(
+                                if (isSelected) SoftTheme.colors.accentPrimaryColor.copy(alpha = 0.15f)
+                                else SoftTheme.colors.surfaceWell
+                            )
+                            .border(
+                                width = if (isSelected) 1.5.dp else SoftTheme.tokens.borders.hairline,
+                                color = if (isSelected) SoftTheme.colors.accentPrimaryColor else SoftTheme.colors.borderSubtle,
+                                shape = RoundedCornerShape(SoftTheme.tokens.corners.pill)
+                            )
+                            .clickable { selectedFoundation = hex }
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = "$label ($hex)",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) SoftTheme.colors.accentPrimaryColor else SoftTheme.colors.textPrimary
+                        )
+                    }
+                }
+            }
+
+            // Shadow Alpha Slider
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "SLATE SHADOW ALPHA",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = SoftTheme.colors.accentPrimaryColor
+                )
+                Text(
+                    text = "${(shadowAlpha * 100).toInt()}%",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = SoftTheme.colors.textPrimary
+                )
+            }
+            SoftSlider(
+                value = shadowAlpha,
+                onValueChange = { shadowAlpha = it },
+                valueRange = 0.10f..0.50f
+            )
+
+            // Specular Alpha Slider
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "SPECULAR HIGHLIGHT ALPHA",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = SoftTheme.colors.accentPrimaryColor
+                )
+                Text(
+                    text = "${(specularAlpha * 100).toInt()}%",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = SoftTheme.colors.textPrimary
+                )
+            }
+            SoftSlider(
+                value = specularAlpha,
+                onValueChange = { specularAlpha = it },
+                valueRange = 0.30f..1.0f
+            )
+
+            // Live Preview Card Swatch
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(SoftTheme.tokens.corners.md))
+                    .background(Color(android.graphics.Color.parseColor(selectedFoundation)))
+                    .border(
+                        width = 1.dp,
+                        color = Color.White.copy(alpha = specularAlpha),
+                        shape = RoundedCornerShape(SoftTheme.tokens.corners.md)
+                    )
+                    .padding(16.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Live Surface Preview: $selectedFoundation",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(android.graphics.Color.parseColor(selectedTextMode))
+                    )
+                    Text(
+                        text = "Dual-light tactile neumorphic depth • Shadow alpha ${(shadowAlpha * 100).toInt()}%",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(android.graphics.Color.parseColor(selectedTextMode)).copy(alpha = 0.75f)
+                    )
+                }
+            }
+
+            // Export Code & Actions
+            val exportSnippet = buildString {
+                appendLine("// Exported Calibrated Tokens")
+                appendLine("val MilkySurfaceElevated = Color(0xFF${selectedFoundation.removePrefix("#")})")
+                appendLine("val ShadowLight = Color(0x${((shadowAlpha * 255).toInt()).toString(16).uppercase().padStart(2, '0')}737A75)")
+                appendLine("val ShadowLightSpecular = Color(0x${((specularAlpha * 255).toInt()).toString(16).uppercase().padStart(2, '0')}FFFFFF)")
+                appendLine("val TextPrimaryLight = Color(0xFF${selectedTextMode.removePrefix("#")})")
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
+            ) {
+                SecondaryButton(
+                    text = "Reset Defaults",
+                    onClick = {
+                        selectedFoundation = "#EDF0EB"
+                        shadowAlpha = 0.24f
+                        specularAlpha = 0.70f
+                        selectedTextMode = "#0F172A"
+                        Toast.makeText(context, "Reset to defaults", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+
+                PrimaryButton(
+                    text = "Copy Tokens",
+                    onClick = {
+                        clipboardManager.setText(AnnotatedString(exportSnippet))
+                        Toast.makeText(context, "Copied tokens to clipboard!", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
