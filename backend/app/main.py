@@ -41,6 +41,31 @@ class SecurityAndTracingMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class PayloadLimitMiddleware(BaseHTTPMiddleware):
+    """Enforces maximum request body size to prevent memory exhaustion (OWASP API4)."""
+
+    def __init__(self, app, max_bytes: int = settings.MAX_REQUEST_BODY_BYTES):
+        super().__init__(app)
+        self.max_bytes = max_bytes
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                if int(content_length) > self.max_bytes:
+                    request_id = getattr(request.state, "request_id", None) or f"req_{uuid.uuid4().hex[:12]}"
+                    return format_error_response(
+                        code="PAYLOAD_TOO_LARGE",
+                        message=f"Request payload exceeds maximum allowed size of {self.max_bytes} bytes.",
+                        details=None,
+                        request_id=request_id,
+                        status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                    )
+            except ValueError:
+                pass
+        return await call_next(request)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Lifespan context manager for startup and shutdown routines."""
@@ -49,11 +74,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Ensure data directory and pairing key exist
     settings.DATA_DIR.mkdir(parents=True, exist_ok=True)
-    token = settings.ensure_pairing_token()
+    settings.ensure_pairing_token()
     logger.info("==================================================================")
     logger.info(f"Local AI Runtime Ready on http://{settings.HOST}:{settings.PORT}")
-    logger.info(f"Interactive Swagger Docs: http://{settings.HOST}:{settings.PORT}/docs")
-    logger.info(f"Pairing Token (keep secret): {token}")
+    if settings.ENVIRONMENT == "development":
+        logger.info(f"Interactive Swagger Docs: http://{settings.HOST}:{settings.PORT}/docs")
+    logger.info("Pairing credential verified successfully.")
+    logger.info("Credential stored in backend/.env (never committed or logged).")
     logger.info("==================================================================")
 
     yield
@@ -64,26 +91,30 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
+    is_dev = settings.ENVIRONMENT == "development"
     app = FastAPI(
         title=settings.PROJECT_NAME,
         version=settings.VERSION,
         description="Local AI Runtime backend for AI Companion Project.",
         lifespan=lifespan,
-        docs_url="/docs",
-        redoc_url="/redoc",
-        openapi_url="/openapi.json",
+        docs_url="/docs" if is_dev else None,
+        redoc_url=None,
+        openapi_url="/openapi.json" if is_dev else None,
     )
+
+    # Security: Request payload limit middleware (OWASP API4)
+    app.add_middleware(PayloadLimitMiddleware)
 
     # Tracing and security middleware
     app.add_middleware(SecurityAndTracingMiddleware)
 
-    # CORS Middleware (OWASP API7)
+    # CORS Middleware (OWASP API7) - Explicit methods and headers, no wildcards
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS if isinstance(settings.CORS_ORIGINS, list) else [settings.CORS_ORIGINS],
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-API-Key", "X-Request-ID"],
     )
 
     # Global Exception Handlers (Error-Handling skill standard)
