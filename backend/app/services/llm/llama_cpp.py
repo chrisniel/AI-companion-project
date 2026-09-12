@@ -3,6 +3,7 @@
 import asyncio
 from datetime import datetime, timezone
 import gc
+import importlib
 import json
 import logging
 from pathlib import Path
@@ -189,7 +190,7 @@ class LlamaCppProvider(BaseLLMProvider):
                 return False
 
             try:
-                import llama_cpp
+                llama_cpp = importlib.import_module("llama_cpp")
             except ImportError:
                 logger.info(
                     f"llama-cpp-python not installed in-process. "
