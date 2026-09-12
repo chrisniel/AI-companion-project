@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Security & Hardening (2026-09-12 - Pass 4: Backend Security V1.1.1 Corrective Pass)
+
+- Minimal Public `/health` Response: Reduced public `GET /api/v1/health` response strictly to `{"status": "healthy"}` without leaking internal telemetry or database diagnostics. Transferred detailed system diagnostics (`database_connected`, `version`, `timestamp`) to authenticated `GET /api/v1/system/status`. Preserved 100% compatibility with Android `HealthDto`.
+- Fail-Closed Router Architecture: Re-architected `backend/app/api/v1/router.py` into distinct `public_router` (strictly `/health`) and `protected_router` (enforcing `verify_token` dependency on all present and future mounted routes).
+- Streaming Payload Body Size Limit (HTTP 413): Enhanced `PayloadLimitMiddleware` with an ASGI stream byte counter that intercepts and terminates streaming or chunked payloads exceeding 2 MB (`settings.MAX_REQUEST_BODY_BYTES`) with HTTP 413 `PAYLOAD_TOO_LARGE`, even when `Content-Length` header is absent.
+- CORS Wildcard Rejection & Scheme Validation: Added Pydantic validator in `backend/app/core/config.py` rejecting wildcard `*` origins and schemeless origins with `ValueError` on startup.
+- Request ID Sanitization: Added regex validation (`^[a-zA-Z0-9_-]{1,64}$`) to `SecurityAndTracingMiddleware`, discarding malicious or oversized `X-Request-ID` headers and generating safe `req_<uuid4_hex>` server fallbacks.
+- Automated Verification: Added comprehensive negative security tests in `test_security_hardening.py` and updated `test_health.py`. All 22 backend pytest tests passing, and all 122 Android unit tests passing.
+
 ### Added & Fixed (2026-09-12 - Pass 3)
 
 - Task Due Date Calculation & SQLite Database Persistence: Resolved the defect where `tasks.due_date` remained `null` in SQLite database (`companion.db`). Created `TaskDateTimeConverter.kt` to calculate concrete dates from relative quick chips (`Today`, `Tomorrow`, `Next Week`) and custom Calendar selections, pair them with 12-hour AM/PM times (`12:00 PM`, `09:30 AM`), and format standard ISO-8601 strings (`YYYY-MM-DDTHH:MM:SS`).

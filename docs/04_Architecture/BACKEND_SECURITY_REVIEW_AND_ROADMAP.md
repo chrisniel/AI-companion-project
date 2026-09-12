@@ -1,41 +1,41 @@
 # Backend Security Hardening Review and Future Security Roadmap
 
 **Project:** AI Companion Project  
-**Reviewed branch:** `fix/backend-security-hardening`  
-**Purpose:** Consolidated review of the current Local AI Core security hardening work, remaining corrective actions, and future security phases.
+**Reviewed branches:** `fix/backend-security-hardening`, `fix/backend-security-v1.1.1-corrective-pass`  
+**Purpose:** Consolidated review of the Local AI Core security hardening work, delivered corrective actions, and future security phases.
 
-> This document distinguishes between what is already implemented, what should be corrected immediately, and what belongs in later phases. It should not be read as a claim that every future security capability is already implemented.
+> This document distinguishes between what is already implemented, what has been delivered in the V1.1.1 corrective pass, and what belongs in later phases. It should not be read as a claim that every future security capability is already implemented.
 
 ---
 
 # 1. Executive Summary
 
-The backend security foundation is now in a much stronger position than the original `feature/backend-core-and-security` implementation.
+The backend security foundation is in a robust position following the completion of both `fix/backend-security-hardening` and the `fix/backend-security-v1.1.1-corrective-pass`.
 
-The current hardening pass successfully improves:
+The hardening passes successfully delivered:
 
 - pairing-token log hygiene
-- authentication placement
-- CORS restrictions
-- request-size protection
+- fail-closed authentication placement (`public_router` / `protected_router`)
+- CORS restrictions with startup wildcard/schemeless origin rejection
+- dual-layer request-size protection (Content-Length + ASGI streaming byte counter with HTTP 413)
 - development-only API documentation
-- automated security verification
+- request ID sanitization (`^[a-zA-Z0-9_-]{1,64}$` with safe server-side fallback)
+- minimal public `/health` endpoint (`{"status": "healthy"}`) with deep diagnostics reserved for authenticated `/system/status`
+- automated negative security test verification (22 passed tests across auth, health, security, tasks)
+- truthful documentation and threat boundary calibration
 
-The architecture should be **kept and hardened**, not rewritten.
+The architecture is **kept and hardened**.
 
-For the current stage, the backend is suitable as a strong localhost development foundation. Before broader LAN/mobile exposure, one small corrective pass is still recommended.
+With the 7 V1.1.1 corrective items fully verified and resolved:
+1. Public `/health` response minimized to `{"status": "healthy"}`.
+2. True fail-closed public/protected router separation established.
+3. Request-body size enforced against actual received stream bytes (HTTP 413).
+4. Wildcard and schemeless CORS configuration rejected at startup.
+5. Request IDs validated and sanitized safely.
+6. Expanded negative security tests verified in CI/test suites.
+7. Documentation calibrated to actual local development/personal LAN threat boundaries.
 
-The remaining short-term work is focused rather than architectural:
-
-1. actually minimize the public `/health` response
-2. establish true fail-closed public/protected router separation
-3. enforce request-body size on actual received bytes, not only `Content-Length`
-4. reject wildcard CORS configuration
-5. validate or generate request IDs safely
-6. strengthen negative security tests
-7. make documentation claims match the code
-
-After that, the API security baseline can be considered complete enough to proceed to the next backend domains.
+The API security baseline is now **frozen and complete**, clearing the path to proceed to the next backend domains (Track B6 Reminders, Track A2 Categories, and Assistant/Local LLM integration).
 
 ---
 

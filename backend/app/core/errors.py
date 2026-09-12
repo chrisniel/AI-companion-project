@@ -70,6 +70,18 @@ class CompanionConflictError(CompanionAppError):
         )
 
 
+class CompanionPayloadTooLargeError(CompanionAppError):
+    """Request payload or stream exceeds maximum size."""
+
+    def __init__(self, message: str = "Request payload exceeds maximum allowed size.", details: Optional[Any] = None):
+        super().__init__(
+            message=message,
+            code="PAYLOAD_TOO_LARGE",
+            status_code=413,
+            details=details,
+        )
+
+
 def format_error_response(
     code: str,
     message: str,
