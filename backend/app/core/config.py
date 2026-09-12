@@ -52,10 +52,23 @@ class Settings(BaseSettings):
     @classmethod
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
         if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",") if i.strip()]
-        elif isinstance(v, (list, str)):
-            return v
-        raise ValueError(v)
+            origins = [i.strip() for i in v.split(",") if i.strip()]
+        elif isinstance(v, list):
+            origins = [str(i).strip() for i in v if str(i).strip()]
+        elif isinstance(v, str):
+            origins = [v.strip()]
+        else:
+            raise ValueError(f"Invalid CORS origins value: {v}")
+
+        for origin in origins:
+            if origin == "*":
+                raise ValueError("CORS wildcard '*' is strictly forbidden for security.")
+            if not (origin.startswith("http://") or origin.startswith("https://")):
+                raise ValueError(
+                    f"CORS origin '{origin}' is invalid. Explicit scheme (http:// or https://) is required."
+                )
+
+        return origins
 
     def ensure_pairing_token(self) -> str:
         """Ensure a valid 32-byte pairing token exists, generating one if missing."""

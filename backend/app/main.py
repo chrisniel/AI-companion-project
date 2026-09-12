@@ -1,5 +1,4 @@
-"""FastAPI application factory, lifespan management, CORS, and error interceptors."""
-
+import re
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -8,21 +7,33 @@ from typing import AsyncGenerator
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from app.api.v1.router import api_v1_router
 from app.core.config import settings
-from app.core.errors import CompanionAppError, format_error_response
+from app.core.errors import (
+    CompanionAppError,
+    CompanionPayloadTooLargeError,
+    format_error_response,
+)
 from app.core.logging import logger, setup_logging
 from app.db.session import engine
 
+REQUEST_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
+
 
 class SecurityAndTracingMiddleware(BaseHTTPMiddleware):
-    """Assigns unique request IDs, measures request duration, and strips server headers."""
+    """Assigns sanitized unique request IDs, measures request duration, and strips server headers."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        request_id = request.headers.get("X-Request-ID") or f"req_{uuid.uuid4().hex[:12]}"
+        raw_request_id = request.headers.get("X-Request-ID")
+        if raw_request_id and REQUEST_ID_PATTERN.match(raw_request_id):
+            request_id = raw_request_id
+        else:
+            request_id = f"req_{uuid.uuid4().hex[:12]}"
+
         request.state.request_id = request_id
 
         start_time = time.perf_counter()
@@ -42,13 +53,14 @@ class SecurityAndTracingMiddleware(BaseHTTPMiddleware):
 
 
 class PayloadLimitMiddleware(BaseHTTPMiddleware):
-    """Enforces maximum request body size to prevent memory exhaustion (OWASP API4)."""
+    """Enforces maximum request body size on Content-Length and streaming chunks (OWASP API4)."""
 
     def __init__(self, app, max_bytes: int = settings.MAX_REQUEST_BODY_BYTES):
         super().__init__(app)
         self.max_bytes = max_bytes
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        # 1. Fast path check on Content-Length header
         content_length = request.headers.get("content-length")
         if content_length:
             try:
@@ -63,7 +75,47 @@ class PayloadLimitMiddleware(BaseHTTPMiddleware):
                     )
             except ValueError:
                 pass
-        return await call_next(request)
+
+        # 2. Stream byte counter for chunked/streaming requests without Content-Length
+        original_receive = request._receive
+        total_received = 0
+
+        async def streaming_counter_receive():
+            nonlocal total_received
+            message = await original_receive()
+            if message.get("type") == "http.request":
+                body_bytes = message.get("body", b"")
+                total_received += len(body_bytes)
+                if total_received > self.max_bytes:
+                    request.state.stream_bytes_exceeded = True
+                    raise CompanionPayloadTooLargeError(
+                        message=f"Request stream exceeded maximum allowed size of {self.max_bytes} bytes."
+                    )
+            return message
+
+        request._receive = streaming_counter_receive
+
+        try:
+            response = await call_next(request)
+            if getattr(request.state, "stream_bytes_exceeded", False):
+                request_id = getattr(request.state, "request_id", None) or f"req_{uuid.uuid4().hex[:12]}"
+                return format_error_response(
+                    code="PAYLOAD_TOO_LARGE",
+                    message=f"Request payload exceeds maximum allowed size of {self.max_bytes} bytes.",
+                    details=None,
+                    request_id=request_id,
+                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                )
+            return response
+        except CompanionPayloadTooLargeError:
+            request_id = getattr(request.state, "request_id", None) or f"req_{uuid.uuid4().hex[:12]}"
+            return format_error_response(
+                code="PAYLOAD_TOO_LARGE",
+                message=f"Request payload exceeds maximum allowed size of {self.max_bytes} bytes.",
+                details=None,
+                request_id=request_id,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            )
 
 
 @asynccontextmanager
@@ -144,6 +196,25 @@ def create_app() -> FastAPI:
             details=formatted_details,
             request_id=request_id,
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        )
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+        request_id = getattr(request.state, "request_id", None)
+        if getattr(request.state, "stream_bytes_exceeded", False):
+            return format_error_response(
+                code="PAYLOAD_TOO_LARGE",
+                message=f"Request payload exceeds maximum allowed size of {settings.MAX_REQUEST_BODY_BYTES} bytes.",
+                details=None,
+                request_id=request_id,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            )
+        return format_error_response(
+            code="HTTP_ERROR",
+            message=str(exc.detail),
+            details=None,
+            request_id=request_id,
+            status_code=exc.status_code,
         )
 
     @app.exception_handler(Exception)
