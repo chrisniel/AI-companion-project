@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added
+
+- Local AI Core Backend Bootstrapping & OWASP API Security: Initialized `backend/` using Python 3.13, FastAPI, SQLAlchemy 2.0 (asyncio + `aiosqlite`), and Alembic migrations. Implemented zero-configuration 32-byte pairing token authentication (`secrets.token_urlsafe(32)`), constant-time token verification (`secrets.compare_digest`), strict Pydantic v2 mass-assignment guards (`extra="forbid"`), and strict CORS origin whitelisting.
+- First Vertical Slice (Health & Tasks CRUD): Delivered public probe (`/api/v1/health`), protected host telemetry (`/api/v1/system/status`), pairing check (`/api/v1/auth/verify`), and complete Tasks CRUD endpoints with status/priority filtering, backed by asynchronous SQLite with Write-Ahead Logging (`PRAGMA journal_mode=WAL`).
+- Automated Pytest Suite & OpenAPI Contract Export: Added 12 automated unit and integration tests passing in 0.22s with in-memory SQLite fixtures (`pytest` + `httpx`), exported OpenAPI 3.1 contract to `contracts/openapi/openapi.json`, and published interactive Swagger documentation at `http://127.0.0.1:8000/docs`.
+
 ### Added & Fixed
 
 - Assistant Tab Autoscroll Optimization: Pre-positioned `listState` at the latest message upon entering the Assistant workspace with zero animated scrolling lag; `animateScrollToItem` is now selectively triggered only when new messages are appended or during active LLM token streaming.
