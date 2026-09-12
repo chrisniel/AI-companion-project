@@ -72,7 +72,7 @@ class SharedPreferencesConnectionRepository(
                 if (cleanToken != null) putString(KEY_TOKEN, cleanToken)
                 else remove(KEY_TOKEN)
             }
-            .apply()
+            .commit()
     }
 
     override fun setConnectionState(state: CoreConnectionState) {
@@ -117,7 +117,7 @@ class SharedPreferencesConnectionRepository(
 
     companion object {
         const val PREFS_NAME = "app_connection_prefs"
-        const val DEFAULT_HOST = "192.168.1.15"
+        const val DEFAULT_HOST = "192.168.254.100"
         const val DEFAULT_PORT = 8000
 
         private const val KEY_HOST = "host_address"

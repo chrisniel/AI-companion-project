@@ -41,7 +41,8 @@ data class AppUiState(
     val showOfflineCapabilitiesSheet: Boolean = false,
     val showSyncBanner: Boolean = true,
     val showConnectionBanner: Boolean = true,
-    val capabilitiesState: com.example.domain.model.CapabilitiesState = com.example.domain.model.CapabilitiesState()
+    val capabilitiesState: com.example.domain.model.CapabilitiesState = com.example.domain.model.CapabilitiesState(),
+    val isRefreshing: Boolean = false
 )
 
 class AppViewModel(
@@ -260,8 +261,82 @@ class AppViewModel(
      * Persist host configuration and immediately test network reachability.
      */
     fun saveHostConfig(host: String, port: Int, token: String?, onResult: ((Boolean, String) -> Unit)? = null) {
-        connectionRepository?.saveHostConfig(host, port, token)
-        testConnectionReachability(host, port, token, onResult)
+        val cleanHost = host.trim().removePrefix("http://").removePrefix("https://").trimEnd('/')
+        val cleanToken = token?.trim()?.ifEmpty { null }
+        connectionRepository?.saveHostConfig(cleanHost, port, cleanToken)
+        _uiState.update { current ->
+            current.copy(
+                connectionInfo = current.connectionInfo.copy(
+                    host = cleanHost,
+                    port = port,
+                    token = cleanToken
+                )
+            )
+        }
+        testConnectionReachability(cleanHost, port, cleanToken, onResult)
+    }
+
+    /**
+     * Auto-saves configuration drafts without triggering a network probe.
+     */
+    fun updateDraftConfig(host: String, port: Int, token: String?) {
+        val cleanHost = host.trim().removePrefix("http://").removePrefix("https://").trimEnd('/')
+        val cleanToken = token?.trim()?.ifEmpty { null }
+        connectionRepository?.saveHostConfig(cleanHost, port, cleanToken)
+        _uiState.update { current ->
+            current.copy(
+                connectionInfo = current.connectionInfo.copy(
+                    host = cleanHost,
+                    port = port,
+                    token = cleanToken
+                )
+            )
+        }
+    }
+
+    /**
+     * Triggers a complete network synchronization and reachability check.
+     */
+    fun refreshAll() {
+        _uiState.update { it.copy(isRefreshing = true) }
+        viewModelScope.launch {
+            val baseUrl = connectionRepository?.getBaseUrl() ?: "http://192.168.254.100:8000"
+            val token = connectionRepository?.getToken()
+
+            runtimeClient.checkHealth(baseUrl).fold(
+                onSuccess = { health ->
+                    connectionRepository?.setConnectionState(CoreConnectionState.Local)
+                    connectionRepository?.updateLatency(health.latencyMs)
+                    connectionRepository?.setSyncStatus(SyncStatus.SYNCHRONIZED)
+                    _uiState.update { current ->
+                        current.copy(
+                            isRefreshing = false,
+                            connectionInfo = current.connectionInfo.copy(
+                                state = CoreConnectionState.Local,
+                                label = "Local LAN Active",
+                                latencyMs = health.latencyMs,
+                                syncStatus = SyncStatus.SYNCHRONIZED,
+                                lastSyncTimestamp = "Just now"
+                            )
+                        )
+                    }
+                },
+                onFailure = {
+                    connectionRepository?.setConnectionState(CoreConnectionState.Offline)
+                    connectionRepository?.setSyncStatus(SyncStatus.FAILED)
+                    _uiState.update { current ->
+                        current.copy(
+                            isRefreshing = false,
+                            connectionInfo = current.connectionInfo.copy(
+                                state = CoreConnectionState.Offline,
+                                label = "PC Offline",
+                                syncStatus = SyncStatus.FAILED
+                            )
+                        )
+                    }
+                }
+            )
+        }
     }
 
     /**
@@ -277,13 +352,17 @@ class AppViewModel(
         val targetPort = port ?: connectionRepository?.connectionInfo?.value?.port ?: _uiState.value.connectionInfo.port ?: 8000
         val targetToken = token ?: connectionRepository?.connectionInfo?.value?.token ?: _uiState.value.connectionInfo.token
         val cleanHost = targetHost.trim().removePrefix("http://").removePrefix("https://").trimEnd('/')
+        val cleanToken = targetToken?.trim()?.ifEmpty { null }
         val baseUrl = "http://$cleanHost:$targetPort"
 
         _uiState.update { current ->
             current.copy(
                 connectionInfo = current.connectionInfo.copy(
                     state = CoreConnectionState.Connecting,
-                    label = "Connecting..."
+                    label = "Connecting...",
+                    host = cleanHost,
+                    port = targetPort,
+                    token = cleanToken
                 )
             )
         }
@@ -302,6 +381,7 @@ class AppViewModel(
                                 latencyMs = latency,
                                 host = cleanHost,
                                 port = targetPort,
+                                token = cleanToken,
                                 syncStatus = SyncStatus.SYNCHRONIZED
                             )
                         )
@@ -310,8 +390,8 @@ class AppViewModel(
                     connectionRepository?.updateLatency(latency)
                     connectionRepository?.setSyncStatus(SyncStatus.SYNCHRONIZED)
 
-                    if (!targetToken.isNullOrBlank()) {
-                        runtimeClient.verifyToken(baseUrl, targetToken).fold(
+                    if (!cleanToken.isNullOrBlank()) {
+                        runtimeClient.verifyToken(baseUrl, cleanToken).fold(
                             onSuccess = { verified ->
                                 if (verified) {
                                     onResult?.invoke(true, "Connected to Local AI Runtime ($cleanHost:$targetPort) • Token verified (${latency}ms)")
@@ -336,6 +416,9 @@ class AppViewModel(
                                 state = nextState,
                                 label = "PC Offline",
                                 latencyMs = null,
+                                host = cleanHost,
+                                port = targetPort,
+                                token = cleanToken,
                                 syncStatus = SyncStatus.FAILED
                             )
                         )

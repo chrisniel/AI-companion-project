@@ -43,9 +43,21 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.TimePickerDefaults
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -104,8 +116,14 @@ fun TaskCreateEditSheet(
     var selectedCategory by remember(taskToEdit) { mutableStateOf(taskToEdit?.category ?: TaskCategory.GENERAL) }
     var selectedPriority by remember(taskToEdit) { mutableStateOf(taskToEdit?.priority ?: TaskPriority.MEDIUM) }
     var dueDate by remember(taskToEdit) { mutableStateOf(taskToEdit?.dueDate ?: "Today") }
-    var dueTime by remember(taskToEdit) { mutableStateOf(taskToEdit?.dueTime ?: "12:00") }
-    var reminder by remember(taskToEdit) { mutableStateOf(taskToEdit?.reminder ?: "15 mins before") }
+    var dueTime by remember(taskToEdit) { mutableStateOf(taskToEdit?.dueTime ?: "12:00 PM") }
+    var reminder by remember(taskToEdit) { mutableStateOf(taskToEdit?.reminder ?: "15m before") }
+
+    var showDatePickerDialog by remember { mutableStateOf(false) }
+    var showTimePickerDialog by remember { mutableStateOf(false) }
+
+    val datePickerState = rememberDatePickerState()
+    val timePickerState = rememberTimePickerState(is24Hour = false)
 
     val isEditing = taskToEdit != null
     val scrollState = rememberScrollState()
@@ -165,21 +183,27 @@ fun TaskCreateEditSheet(
             }
 
             // 1. TITLE FIELD (Multilingual prompt support)
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = "Title *",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = SoftTheme.colors.textSecondary
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = SoftTheme.colors.textPrimary,
+                    fontSize = 15.sp
                 )
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        fontSize = 16.sp,
+                        color = SoftTheme.colors.textPrimary,
+                        fontWeight = FontWeight.Normal
+                    ),
                     placeholder = {
                         Text(
                             text = "e.g., Check backend bukas, Android UIを確認",
                             color = SoftTheme.colors.textMuted,
-                            fontSize = 13.sp
+                            fontSize = 14.sp
                         )
                     },
                     singleLine = true,
@@ -199,21 +223,27 @@ fun TaskCreateEditSheet(
             }
 
             // 2. DESCRIPTION FIELD
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = "Description",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = SoftTheme.colors.textSecondary
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = SoftTheme.colors.textPrimary,
+                    fontSize = 15.sp
                 )
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        fontSize = 15.sp,
+                        color = SoftTheme.colors.textPrimary,
+                        fontWeight = FontWeight.Normal
+                    ),
                     placeholder = {
                         Text(
                             text = "Add context, links, or sub-task notes...",
                             color = SoftTheme.colors.textMuted,
-                            fontSize = 13.sp
+                            fontSize = 14.sp
                         )
                     },
                     minLines = 2,
@@ -233,17 +263,18 @@ fun TaskCreateEditSheet(
                 )
             }
 
-            // 3. PROJECT / CATEGORY SELECTOR
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            // 3. PROJECT / CATEGORY SELECTOR (Enlarged for senior readability)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     text = "Project / Category",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = SoftTheme.colors.textSecondary
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = SoftTheme.colors.textPrimary,
+                    fontSize = 15.sp
                 )
                 FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     TaskCategory.entries.forEach { category ->
@@ -253,45 +284,46 @@ fun TaskCreateEditSheet(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(SoftTheme.tokens.corners.pill))
                                 .background(
-                                    if (isSelected) SoftTheme.colors.accentBlue.copy(alpha = 0.18f)
+                                    if (isSelected) SoftTheme.colors.accentBlue.copy(alpha = 0.22f)
                                     else SoftTheme.colors.surfaceWell
                                 )
                                 .border(
-                                    width = if (isSelected) 1.5.dp else SoftTheme.tokens.borders.hairline,
+                                    width = if (isSelected) 2.dp else SoftTheme.tokens.borders.hairline,
                                     color = if (isSelected) SoftTheme.colors.accentBlue else SoftTheme.colors.borderSubtle,
                                     shape = RoundedCornerShape(SoftTheme.tokens.corners.pill)
                                 )
                                 .clickable { selectedCategory = category }
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                .padding(horizontal = 14.dp, vertical = 10.dp)
                                 .testTag("task_category_${category.name.lowercase()}"),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Icon(
                                 imageVector = catIcon,
                                 contentDescription = null,
                                 tint = if (isSelected) SoftTheme.colors.accentBlue else SoftTheme.colors.textSecondary,
-                                modifier = Modifier.size(13.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                             Text(
                                 text = category.label,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isSelected) SoftTheme.colors.accentBlue else SoftTheme.colors.textPrimary,
-                                fontSize = 11.sp
+                                fontSize = 14.sp
                             )
                         }
                     }
                 }
             }
 
-            // 4. PRIORITY SELECTOR
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            // 4. PRIORITY SELECTOR (Accessible large buttons)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     text = "Priority",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = SoftTheme.colors.textSecondary
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = SoftTheme.colors.textPrimary,
+                    fontSize = 15.sp
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -309,18 +341,18 @@ fun TaskCreateEditSheet(
                         Row(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(
-                                    if (isSelected) pColor.copy(alpha = 0.16f)
+                                    if (isSelected) pColor.copy(alpha = 0.22f)
                                     else SoftTheme.colors.surfaceWell
                                 )
                                 .border(
-                                    width = if (isSelected) 1.5.dp else SoftTheme.tokens.borders.hairline,
+                                    width = if (isSelected) 2.dp else SoftTheme.tokens.borders.hairline,
                                     color = if (isSelected) pColor else SoftTheme.colors.borderSubtle,
-                                    shape = RoundedCornerShape(10.dp)
+                                    shape = RoundedCornerShape(12.dp)
                                 )
                                 .clickable { selectedPriority = priority }
-                                .padding(vertical = 8.dp),
+                                .padding(vertical = 12.dp),
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -328,135 +360,365 @@ fun TaskCreateEditSheet(
                                 imageVector = Icons.Default.Flag,
                                 contentDescription = null,
                                 tint = if (isSelected) pColor else SoftTheme.colors.textMuted,
-                                modifier = Modifier.size(12.dp)
+                                modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Spacer(modifier = Modifier.width(5.dp))
                             Text(
                                 text = priority.label,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isSelected) pColor else SoftTheme.colors.textSecondary,
-                                fontSize = 11.sp
+                                fontSize = 13.sp
                             )
                         }
                     }
                 }
             }
 
-            // 5. DUE DATE & DUE TIME ROW
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Due Date
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+            // 5. DUE DATE SELECTOR (3 Large Quick Options + Dedicated Calendar Picker Button)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = "Due Date",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = SoftTheme.colors.textSecondary
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = SoftTheme.colors.textPrimary,
+                        fontSize = 15.sp
                     )
-                    OutlinedTextField(
-                        value = dueDate,
-                        onValueChange = { dueDate = it },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.CalendarMonth,
-                                contentDescription = null,
-                                tint = SoftTheme.colors.accentBlue,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = SoftTheme.colors.accentBlue,
-                            unfocusedBorderColor = SoftTheme.colors.borderSubtle,
-                            focusedContainerColor = SoftTheme.colors.surfaceWell,
-                            unfocusedContainerColor = SoftTheme.colors.surfaceWell,
-                            focusedTextColor = SoftTheme.colors.textPrimary,
-                            unfocusedTextColor = SoftTheme.colors.textPrimary
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("task_input_due_date")
+                    Text(
+                        text = dueDate,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = SoftTheme.colors.accentBlue,
+                        fontSize = 15.sp
                     )
                 }
 
-                // Due Time
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                // 3 Large Quick Chips (limit to 3 options for high readability)
+                val datePresets = listOf("Today", "Tomorrow", "Next Week")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text(
-                        text = "Due Time",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = SoftTheme.colors.textSecondary
-                    )
-                    OutlinedTextField(
-                        value = dueTime,
-                        onValueChange = { dueTime = it },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Schedule,
-                                contentDescription = null,
-                                tint = SoftTheme.colors.accentCyan,
-                                modifier = Modifier.size(16.dp)
+                    datePresets.forEach { preset ->
+                        val isSelected = dueDate == preset
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    if (isSelected) SoftTheme.colors.accentBlue.copy(alpha = 0.22f)
+                                    else SoftTheme.colors.surfaceWell
+                                )
+                                .border(
+                                    width = if (isSelected) 2.dp else SoftTheme.tokens.borders.hairline,
+                                    color = if (isSelected) SoftTheme.colors.accentBlue else SoftTheme.colors.borderSubtle,
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .clickable { dueDate = preset }
+                                .padding(vertical = 12.dp)
+                                .testTag("task_date_preset_${preset.lowercase().replace(" ", "_")}"),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = preset,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) SoftTheme.colors.accentBlue else SoftTheme.colors.textPrimary,
+                                fontSize = 14.sp
                             )
-                        },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = SoftTheme.colors.accentBlue,
-                            unfocusedBorderColor = SoftTheme.colors.borderSubtle,
-                            focusedContainerColor = SoftTheme.colors.surfaceWell,
-                            unfocusedContainerColor = SoftTheme.colors.surfaceWell,
-                            focusedTextColor = SoftTheme.colors.textPrimary,
-                            unfocusedTextColor = SoftTheme.colors.textPrimary
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("task_input_due_time")
+                        }
+                    }
+                }
+
+                // Dedicated Prominent Calendar Picker Button
+                val isCustomDate = !datePresets.contains(dueDate)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (isCustomDate) SoftTheme.colors.accentBlue.copy(alpha = 0.18f)
+                            else SoftTheme.colors.surfaceElevated
+                        )
+                        .border(
+                            width = if (isCustomDate) 2.dp else SoftTheme.tokens.borders.hairline,
+                            color = if (isCustomDate) SoftTheme.colors.accentBlue else SoftTheme.colors.borderSubtle,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .clickable { showDatePickerDialog = true }
+                        .padding(horizontal = 16.dp, vertical = 13.dp)
+                        .testTag("task_date_pick_calendar_button"),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CalendarMonth,
+                        contentDescription = null,
+                        tint = if (isCustomDate) SoftTheme.colors.accentBlue else SoftTheme.colors.accentCyan,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isCustomDate) "📅 Date: $dueDate (Tap to change)" else "📅 Pick Specific Date from Calendar...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (isCustomDate) FontWeight.Bold else FontWeight.SemiBold,
+                        color = if (isCustomDate) SoftTheme.colors.accentBlue else SoftTheme.colors.textPrimary,
+                        fontSize = 14.sp
                     )
                 }
             }
 
-            // 6. REMINDER FIELD
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = "Reminder",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = SoftTheme.colors.textSecondary
-                )
-                OutlinedTextField(
-                    value = reminder,
-                    onValueChange = { reminder = it },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.Notifications,
-                            contentDescription = null,
-                            tint = SoftTheme.colors.accentViolet,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = SoftTheme.colors.accentBlue,
-                        unfocusedBorderColor = SoftTheme.colors.borderSubtle,
-                        focusedContainerColor = SoftTheme.colors.surfaceWell,
-                        unfocusedContainerColor = SoftTheme.colors.surfaceWell,
-                        focusedTextColor = SoftTheme.colors.textPrimary,
-                        unfocusedTextColor = SoftTheme.colors.textPrimary
-                    ),
-                    shape = RoundedCornerShape(12.dp),
+            // 6. DUE TIME SELECTOR (12-Hour AM/PM: 3 Large Quick Options + Dedicated Time Picker Button)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Due Time (12-Hour AM/PM)",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = SoftTheme.colors.textPrimary,
+                        fontSize = 15.sp
+                    )
+                    Text(
+                        text = dueTime,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = SoftTheme.colors.accentCyan,
+                        fontSize = 15.sp
+                    )
+                }
+
+                // 3 Large Quick Time Chips
+                val timePresets = listOf("09:00 AM", "12:00 PM", "06:00 PM")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    timePresets.forEach { preset ->
+                        val isSelected = dueTime == preset
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    if (isSelected) SoftTheme.colors.accentCyan.copy(alpha = 0.22f)
+                                    else SoftTheme.colors.surfaceWell
+                                )
+                                .border(
+                                    width = if (isSelected) 2.dp else SoftTheme.tokens.borders.hairline,
+                                    color = if (isSelected) SoftTheme.colors.accentCyan else SoftTheme.colors.borderSubtle,
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .clickable { dueTime = preset }
+                                .padding(vertical = 12.dp)
+                                .testTag("task_time_preset_${preset.lowercase().replace(" ", "_").replace(":", "_")}"),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = preset,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) SoftTheme.colors.accentCyan else SoftTheme.colors.textPrimary,
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
+                }
+
+                // Dedicated Prominent Time Picker Button
+                val isCustomTime = !timePresets.contains(dueTime)
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("task_input_reminder")
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (isCustomTime) SoftTheme.colors.accentCyan.copy(alpha = 0.18f)
+                            else SoftTheme.colors.surfaceElevated
+                        )
+                        .border(
+                            width = if (isCustomTime) 2.dp else SoftTheme.tokens.borders.hairline,
+                            color = if (isCustomTime) SoftTheme.colors.accentCyan else SoftTheme.colors.borderSubtle,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .clickable { showTimePickerDialog = true }
+                        .padding(horizontal = 16.dp, vertical = 13.dp)
+                        .testTag("task_time_pick_clock_button"),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Schedule,
+                        contentDescription = null,
+                        tint = if (isCustomTime) SoftTheme.colors.accentCyan else SoftTheme.colors.accentBlue,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isCustomTime) "⏰ Time: $dueTime (Tap to change)" else "⏰ Pick Exact Time (AM/PM)...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (isCustomTime) FontWeight.Bold else FontWeight.SemiBold,
+                        color = if (isCustomTime) SoftTheme.colors.accentCyan else SoftTheme.colors.textPrimary,
+                        fontSize = 14.sp
+                    )
+                }
+            }
+
+            // 7. REMINDER SELECTOR (Structured Large Presets)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Reminder Notification",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = SoftTheme.colors.textPrimary,
+                        fontSize = 15.sp
+                    )
+                    Text(
+                        text = reminder,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = SoftTheme.colors.accentViolet,
+                        fontSize = 15.sp
+                    )
+                }
+
+                val reminderOptions = listOf(
+                    "None",
+                    "At due time",
+                    "15m before",
+                    "1h before",
+                    "1d before"
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    reminderOptions.forEach { option ->
+                        val isSelected = reminder == option || (option == "15m before" && reminder.contains("15"))
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(SoftTheme.tokens.corners.pill))
+                                .background(
+                                    if (isSelected) SoftTheme.colors.accentViolet.copy(alpha = 0.22f)
+                                    else SoftTheme.colors.surfaceWell
+                                )
+                                .border(
+                                    width = if (isSelected) 2.dp else SoftTheme.tokens.borders.hairline,
+                                    color = if (isSelected) SoftTheme.colors.accentViolet else SoftTheme.colors.borderSubtle,
+                                    shape = RoundedCornerShape(SoftTheme.tokens.corners.pill)
+                                )
+                                .clickable { reminder = option }
+                                .padding(horizontal = 14.dp, vertical = 10.dp)
+                                .testTag("task_reminder_${option.lowercase().replace(" ", "_")}"),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = null,
+                                tint = if (isSelected) SoftTheme.colors.accentViolet else SoftTheme.colors.textSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = option,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) SoftTheme.colors.accentViolet else SoftTheme.colors.textPrimary,
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            // DATE PICKER DIALOG
+            if (showDatePickerDialog) {
+                DatePickerDialog(
+                    onDismissRequest = { showDatePickerDialog = false },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            datePickerState.selectedDateMillis?.let { millis ->
+                                val calendar = Calendar.getInstance().apply { timeInMillis = millis }
+                                val today = Calendar.getInstance()
+                                val isToday = calendar.get(Calendar.YEAR) == today.get(Calendar.YEAR) &&
+                                        calendar.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR)
+                                today.add(Calendar.DAY_OF_YEAR, 1)
+                                val isTomorrow = calendar.get(Calendar.YEAR) == today.get(Calendar.YEAR) &&
+                                        calendar.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR)
+                                dueDate = when {
+                                    isToday -> "Today"
+                                    isTomorrow -> "Tomorrow"
+                                    else -> SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(calendar.time)
+                                }
+                            }
+                            showDatePickerDialog = false
+                        }) {
+                            Text("Select", color = SoftTheme.colors.accentBlue)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDatePickerDialog = false }) {
+                            Text("Cancel", color = SoftTheme.colors.textSecondary)
+                        }
+                    },
+                    colors = DatePickerDefaults.colors(
+                        containerColor = SoftTheme.colors.surfaceElevated
+                    )
+                ) {
+                    DatePicker(state = datePickerState)
+                }
+            }
+
+            // 12-HOUR TIME PICKER DIALOG
+            if (showTimePickerDialog) {
+                AlertDialog(
+                    onDismissRequest = { showTimePickerDialog = false },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            val hour = timePickerState.hour
+                            val minute = timePickerState.minute
+                            val amPm = if (hour < 12) "AM" else "PM"
+                            val displayHour = when {
+                                hour == 0 -> 12
+                                hour > 12 -> hour - 12
+                                else -> hour
+                            }
+                            dueTime = String.format(Locale.getDefault(), "%02d:%02d %s", displayHour, minute, amPm)
+                            showTimePickerDialog = false
+                        }) {
+                            Text("Select", color = SoftTheme.colors.accentCyan)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showTimePickerDialog = false }) {
+                            Text("Cancel", color = SoftTheme.colors.textSecondary)
+                        }
+                    },
+                    text = {
+                        TimePicker(
+                            state = timePickerState,
+                            colors = TimePickerDefaults.colors(
+                                clockDialColor = SoftTheme.colors.surfaceWell,
+                                selectorColor = SoftTheme.colors.accentCyan
+                            )
+                        )
+                    },
+                    containerColor = SoftTheme.colors.surfaceElevated
                 )
             }
 
@@ -471,7 +733,7 @@ fun TaskCreateEditSheet(
                     onClick = onDismiss,
                     modifier = Modifier
                         .weight(1f)
-                        .height(48.dp)
+                        .height(54.dp)
                         .testTag("task_sheet_cancel_button"),
                     shape = RoundedCornerShape(12.dp),
                     border = androidx.compose.foundation.BorderStroke(
@@ -482,7 +744,8 @@ fun TaskCreateEditSheet(
                     Text(
                         text = "Cancel",
                         color = SoftTheme.colors.textSecondary,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp
                     )
                 }
 
@@ -503,7 +766,7 @@ fun TaskCreateEditSheet(
                     enabled = title.isNotBlank(),
                     modifier = Modifier
                         .weight(1f)
-                        .height(48.dp)
+                        .height(54.dp)
                         .testTag("task_sheet_save_button"),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
@@ -514,6 +777,7 @@ fun TaskCreateEditSheet(
                     Text(
                         text = if (isEditing) "Save Changes" else "Create Task",
                         fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
                         color = if (title.isNotBlank()) Color.White else SoftTheme.colors.textMuted
                     )
                 }

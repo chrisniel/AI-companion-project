@@ -113,13 +113,15 @@ class LocalAiRuntimeClient(
         token: String?,
         title: String,
         notes: String?,
-        priority: String
+        priority: String,
+        dueDate: String? = null
     ): Result<RemoteTaskDto> = withContext(Dispatchers.IO) {
         val url = "$baseUrl/api/v1/tasks"
         val payload = JSONObject().apply {
             put("title", title)
             if (!notes.isNullOrBlank()) put("notes", notes)
             put("priority", priority.lowercase())
+            if (!dueDate.isNullOrBlank()) put("due_date", dueDate)
         }
 
         val builder = Request.Builder()
@@ -152,13 +154,15 @@ class LocalAiRuntimeClient(
         taskId: String,
         status: String? = null,
         title: String? = null,
-        priority: String? = null
+        priority: String? = null,
+        dueDate: String? = null
     ): Result<RemoteTaskDto> = withContext(Dispatchers.IO) {
         val url = "$baseUrl/api/v1/tasks/$taskId"
         val payload = JSONObject().apply {
             if (status != null) put("status", status)
             if (title != null) put("title", title)
             if (priority != null) put("priority", priority.lowercase())
+            if (!dueDate.isNullOrBlank()) put("due_date", dueDate)
         }
 
         val builder = Request.Builder()

@@ -40,6 +40,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
@@ -82,6 +88,7 @@ import com.example.ui.theme.SoftTheme
  * - Floating Action Button to quickly add tasks
  * - In-app snackbar/feedback banner
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TasksScreen(
     modifier: Modifier = Modifier,
@@ -132,35 +139,53 @@ fun TasksScreen(
                 completedCount = uiState.tasks.count { it.isCompleted }
             )
 
-            // TASKS LIST OR EMPTY STATE
-            if (filteredTasks.isEmpty()) {
-                EmptyTasksView(
-                    tab = uiState.selectedTab,
-                    searchQuery = uiState.searchQuery,
-                    onAddNewTask = { viewModel.openCreateSheet() },
-                    modifier = Modifier.weight(1f)
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .softBounceOverscroll()
-                        .testTag("tasks_list"),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 88.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(
-                        items = filteredTasks,
-                        key = { it.id }
-                    ) { task ->
-                        TaskRowItem(
-                            task = task,
-                            onToggleComplete = { viewModel.toggleTaskComplete(task.id) },
-                            onEdit = { viewModel.openEditSheet(task.id) },
-                            onDelete = { viewModel.deleteTask(task.id) },
-                            onSnooze = { viewModel.snoozeTask(task.id) }
-                        )
+            // TASKS LIST OR EMPTY STATE WITH PULL-TO-REFRESH
+            val pullToRefreshState = rememberPullToRefreshState()
+            PullToRefreshBox(
+                isRefreshing = uiState.isRefreshing,
+                onRefresh = { viewModel.refreshTasks() },
+                state = pullToRefreshState,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                indicator = {
+                    PullToRefreshDefaults.Indicator(
+                        state = pullToRefreshState,
+                        isRefreshing = uiState.isRefreshing,
+                        modifier = Modifier.align(Alignment.TopCenter),
+                        containerColor = SoftTheme.colors.surfaceElevated,
+                        color = SoftTheme.colors.accentBlue
+                    )
+                }
+            ) {
+                if (filteredTasks.isEmpty()) {
+                    EmptyTasksView(
+                        tab = uiState.selectedTab,
+                        searchQuery = uiState.searchQuery,
+                        onAddNewTask = { viewModel.openCreateSheet() },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .softBounceOverscroll()
+                            .testTag("tasks_list"),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 88.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(
+                            items = filteredTasks,
+                            key = { it.id }
+                        ) { task ->
+                            TaskRowItem(
+                                task = task,
+                                onToggleComplete = { viewModel.toggleTaskComplete(task.id) },
+                                onEdit = { viewModel.openEditSheet(task.id) },
+                                onDelete = { viewModel.deleteTask(task.id) },
+                                onSnooze = { viewModel.snoozeTask(task.id) }
+                            )
+                        }
                     }
                 }
             }
@@ -406,6 +431,7 @@ private fun EmptyTasksView(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center

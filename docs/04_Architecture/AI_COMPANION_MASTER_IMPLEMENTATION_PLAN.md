@@ -625,6 +625,26 @@ Use migrations.
 
 Use FTS5 for initial memory retrieval.
 
+### 16.1 Soft Deletion, User Scoping & Retention Policy (Recycle Bin)
+
+To prevent accidental data loss and maintain user trust across client deletions (tasks, reminders, conversations, files):
+
+1. **Soft Deletion Mechanism**:
+   - Deletions initiated from the client (Android or Web) do not issue hard `DELETE` queries.
+   - Entities implement a soft-delete mixin with `deleted_at: Optional[datetime] = None`.
+   - Client deletion sets `deleted_at = datetime.utcnow()`.
+   - Default application queries automatically filter `WHERE deleted_at IS NULL`.
+2. **Strict User Scoping (`owner_id`)**:
+   - Soft-deleted items remain strictly partitioned by `owner_id`.
+   - A user can only inspect, restore, or manage deleted records belonging to their own profile: `WHERE owner_id == current_user.id AND deleted_at IS NOT NULL`.
+   - Prevents cross-user data leakage and accidental authorization bypass during recovery.
+3. **Retention Duration & Automated Purge**:
+   - Configurable retention window: 15 to 30 days (default: 30 days via `DATA_RETENTION_DAYS=30`).
+   - Items remain recoverable in a client "Trash / Recently Deleted" view during the retention period.
+   - A scheduled backend maintenance script / background cleanup task executes hard deletion only after retention expires:
+     `DELETE FROM [table] WHERE deleted_at <= :purge_cutoff AND owner_id = :owner_id`.
+   - Permanent manual purge requires explicit double-confirmation with authenticated ownership check.
+
 ---
 
 # 17. Contracts

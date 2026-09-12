@@ -2,6 +2,7 @@ package com.example.data.repository
 
 import com.example.data.network.LocalAiRuntimeClient
 import com.example.data.network.dto.RemoteTaskDto
+import com.example.data.util.TaskDateTimeConverter
 import com.example.domain.model.MobileTask
 import com.example.domain.model.SyncStatus
 import com.example.domain.model.TaskCategory
@@ -40,24 +41,44 @@ class HttpTasksRepository(
     }
 
     /**
-     * Fetch all tasks from the PC runtime.
+     * Fetch all tasks from the PC runtime with result.
+     */
+    suspend fun syncAll(): Result<List<MobileTask>> {
+        val baseUrl = connectionRepository.getBaseUrl()
+        val token = connectionRepository.getToken()
+
+        return runtimeClient.getTasks(baseUrl, token).fold(
+            onSuccess = { remoteList ->
+                val existingMap = _tasks.value.associateBy { it.id }
+                val mapped = remoteList.map { remote ->
+                    val local = existingMap[remote.id]
+                    val base = remote.toMobileTask()
+                    if (local != null) {
+                        base.copy(
+                            category = local.category,
+                            reminder = local.reminder
+                        )
+                    } else {
+                        base
+                    }
+                }
+                _tasks.value = mapped
+                connectionRepository.setSyncStatus(SyncStatus.SYNCHRONIZED)
+                Result.success(mapped)
+            },
+            onFailure = { error ->
+                connectionRepository.setSyncStatus(SyncStatus.FAILED)
+                Result.failure(error)
+            }
+        )
+    }
+
+    /**
+     * Trigger background refresh of tasks from runtime.
      */
     fun refreshTasks() {
         coroutineScope.launch {
-            val baseUrl = connectionRepository.getBaseUrl()
-            val token = connectionRepository.getToken()
-
-            runtimeClient.getTasks(baseUrl, token).fold(
-                onSuccess = { remoteList ->
-                    val mapped = remoteList.map { it.toMobileTask() }
-                    _tasks.value = mapped
-                    connectionRepository.setSyncStatus(SyncStatus.SYNCHRONIZED)
-                },
-                onFailure = {
-                    // Set sync failed but preserve existing in-memory tasks
-                    connectionRepository.setSyncStatus(SyncStatus.FAILED)
-                }
-            )
+            syncAll()
         }
     }
 
@@ -89,9 +110,14 @@ class HttpTasksRepository(
                 token = token,
                 taskId = taskToSync.id,
                 status = nextStatus
-            ).onFailure {
-                connectionRepository.setSyncStatus(SyncStatus.PENDING)
-            }
+            ).fold(
+                onSuccess = {
+                    connectionRepository.setSyncStatus(SyncStatus.SYNCHRONIZED)
+                },
+                onFailure = {
+                    connectionRepository.setSyncStatus(SyncStatus.PENDING)
+                }
+            )
         }
     }
 
@@ -118,6 +144,8 @@ class HttpTasksRepository(
         // Optimistic local add
         _tasks.update { listOf(newTask) + it }
 
+        val isoDueDate = TaskDateTimeConverter.toIsoLocal("Today", dueTime)
+
         // Sync creation to PC
         coroutineScope.launch {
             val baseUrl = connectionRepository.getBaseUrl()
@@ -128,7 +156,8 @@ class HttpTasksRepository(
                 token = token,
                 title = title,
                 notes = "",
-                priority = parsedPriority.name.lowercase()
+                priority = parsedPriority.name.lowercase(),
+                dueDate = isoDueDate
             ).fold(
                 onSuccess = { created ->
                     // Replace temporary local UUID with authoritative backend UUID
@@ -145,6 +174,8 @@ class HttpTasksRepository(
     }
 
     override fun saveTask(task: MobileTask) {
+        val isNew = !_tasks.value.any { it.id == task.id }
+
         // Optimistic update
         _tasks.update { list ->
             val index = list.indexOfFirst { it.id == task.id }
@@ -155,19 +186,48 @@ class HttpTasksRepository(
             }
         }
 
+        val isoDueDate = TaskDateTimeConverter.toIsoLocal(task.dueDate, task.dueTime)
+
         coroutineScope.launch {
             val baseUrl = connectionRepository.getBaseUrl()
             val token = connectionRepository.getToken()
 
-            runtimeClient.updateTask(
-                baseUrl = baseUrl,
-                token = token,
-                taskId = task.id,
-                title = task.title,
-                status = if (task.isCompleted) "completed" else "pending",
-                priority = task.priority.name.lowercase()
-            ).onFailure {
-                connectionRepository.setSyncStatus(SyncStatus.PENDING)
+            if (isNew) {
+                runtimeClient.createTask(
+                    baseUrl = baseUrl,
+                    token = token,
+                    title = task.title,
+                    notes = task.description.ifBlank { null },
+                    priority = task.priority.name.lowercase(),
+                    dueDate = isoDueDate
+                ).fold(
+                    onSuccess = { created ->
+                        _tasks.update { list ->
+                            list.map { if (it.id == task.id) created.toMobileTask().copy(category = task.category, reminder = task.reminder) else it }
+                        }
+                        connectionRepository.setSyncStatus(SyncStatus.SYNCHRONIZED)
+                    },
+                    onFailure = {
+                        connectionRepository.setSyncStatus(SyncStatus.PENDING)
+                    }
+                )
+            } else {
+                runtimeClient.updateTask(
+                    baseUrl = baseUrl,
+                    token = token,
+                    taskId = task.id,
+                    title = task.title,
+                    status = if (task.isCompleted) "completed" else "pending",
+                    priority = task.priority.name.lowercase(),
+                    dueDate = isoDueDate
+                ).fold(
+                    onSuccess = {
+                        connectionRepository.setSyncStatus(SyncStatus.SYNCHRONIZED)
+                    },
+                    onFailure = {
+                        connectionRepository.setSyncStatus(SyncStatus.PENDING)
+                    }
+                )
             }
         }
     }
@@ -193,6 +253,7 @@ class HttpTasksRepository(
             else -> TaskPriority.LOW
         }
         val isDone = status.lowercase() == "completed"
+        val (displayDate, displayTime) = TaskDateTimeConverter.fromIsoToDisplay(dueDate)
 
         return MobileTask(
             id = id,
@@ -200,8 +261,8 @@ class HttpTasksRepository(
             description = notes.orEmpty(),
             category = TaskCategory.GENERAL,
             priority = parsedPriority,
-            dueDate = dueDate ?: "Today",
-            dueTime = null,
+            dueDate = displayDate,
+            dueTime = displayTime,
             reminder = null,
             isCompleted = isDone,
             completedAt = if (isDone) updatedAt ?: "Completed" else null

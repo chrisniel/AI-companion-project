@@ -101,6 +101,7 @@ fun ConnectionScreen(
     onRetrySync: () -> Unit,
     onNavigateBack: () -> Unit,
     onSaveHostConfig: ((String, Int, String) -> Unit)? = null,
+    onDraftConfigChange: ((String, Int, String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -312,13 +313,15 @@ fun ConnectionScreen(
                 initialHost = connectionInfo.host,
                 initialPort = connectionInfo.port,
                 initialToken = connectionInfo.token ?: "",
+                isConnecting = connectionInfo.state == CoreConnectionState.Connecting,
                 onSaveHostConfig = { host, port, token ->
                     if (onSaveHostConfig != null) {
                         onSaveHostConfig(host, port, token)
                     } else {
                         statusMessage = "Local AI Core configuration saved: $host:$port"
                     }
-                }
+                },
+                onDraftConfigChange = onDraftConfigChange
             )
 
             // SECTION: PC ONLINE VS PC OFFLINE FUNCTIONALITY
@@ -720,12 +723,26 @@ private fun HostConfigurationCard(
     initialHost: String,
     initialPort: Int?,
     initialToken: String = "",
-    onSaveHostConfig: (String, Int, String) -> Unit
+    isConnecting: Boolean = false,
+    onSaveHostConfig: (String, Int, String) -> Unit,
+    onDraftConfigChange: ((String, Int, String) -> Unit)? = null
 ) {
-    var hostText by remember { mutableStateOf(if (initialHost.contains("Simulated")) "192.168.1.15" else initialHost) }
-    var portText by remember { mutableStateOf(if (initialPort == 8080 || initialPort == null) "8000" else initialPort.toString()) }
-    var tokenText by remember { mutableStateOf(initialToken) }
-    var isVerifying by remember { mutableStateOf(false) }
+    val cleanInitialHost = remember(initialHost) {
+        if (initialHost.contains("Simulated") || initialHost.isBlank()) "192.168.254.100" else initialHost
+    }
+    val cleanInitialPort = remember(initialPort) {
+        if (initialPort == 8080 || initialPort == null) "8000" else initialPort.toString()
+    }
+
+    var hostText by remember(cleanInitialHost) { mutableStateOf(cleanInitialHost) }
+    var portText by remember(cleanInitialPort) { mutableStateOf(cleanInitialPort) }
+    var tokenText by remember(initialToken) { mutableStateOf(initialToken) }
+
+    androidx.compose.runtime.LaunchedEffect(cleanInitialHost, cleanInitialPort, initialToken) {
+        if (hostText.isBlank() && cleanInitialHost.isNotBlank()) hostText = cleanInitialHost
+        if (portText.isBlank() && cleanInitialPort.isNotBlank()) portText = cleanInitialPort
+        if (tokenText.isBlank() && initialToken.isNotBlank()) tokenText = initialToken
+    }
 
     SoftGlassCard(
         modifier = Modifier
@@ -768,7 +785,11 @@ private fun HostConfigurationCard(
 
             OutlinedTextField(
                 value = hostText,
-                onValueChange = { hostText = it },
+                onValueChange = {
+                    hostText = it
+                    val port = portText.toIntOrNull() ?: 8000
+                    onDraftConfigChange?.invoke(it, port, tokenText)
+                },
                 label = { Text("PC Host IP / Hostname") },
                 placeholder = { Text("e.g. 192.168.1.15 or my-pc.local") },
                 singleLine = true,
@@ -790,7 +811,11 @@ private fun HostConfigurationCard(
             ) {
                 OutlinedTextField(
                     value = portText,
-                    onValueChange = { portText = it },
+                    onValueChange = {
+                        portText = it
+                        val port = it.toIntOrNull() ?: 8000
+                        onDraftConfigChange?.invoke(hostText, port, tokenText)
+                    },
                     label = { Text("Port") },
                     placeholder = { Text("8000") },
                     singleLine = true,
@@ -808,7 +833,11 @@ private fun HostConfigurationCard(
 
                 OutlinedTextField(
                     value = tokenText,
-                    onValueChange = { tokenText = it },
+                    onValueChange = {
+                        tokenText = it
+                        val port = portText.toIntOrNull() ?: 8000
+                        onDraftConfigChange?.invoke(hostText, port, it)
+                    },
                     label = { Text("API Token (Optional)") },
                     placeholder = { Text("Bearer token") },
                     singleLine = true,
@@ -828,7 +857,8 @@ private fun HostConfigurationCard(
             Spacer(modifier = Modifier.height(4.dp))
 
             SoftGlassButton(
-                text = if (isVerifying) "Testing Reachability..." else "Save & Test Reachability",
+                text = if (isConnecting) "Testing Reachability..." else "Save & Test Reachability",
+                enabled = !isConnecting,
                 onClick = {
                     val port = portText.toIntOrNull() ?: 8000
                     onSaveHostConfig(hostText, port, tokenText)
