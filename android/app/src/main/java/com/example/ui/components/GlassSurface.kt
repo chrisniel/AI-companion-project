@@ -15,6 +15,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -97,6 +98,8 @@ fun AmbientGlassBackground(
     showAuraGlow: Boolean = true,
     primaryGlow: Color? = null,
     secondaryGlow: Color? = null,
+    scrimOpacity: Float = 0.20f,
+    brightness: Float = 1.0f,
     content: @Composable BoxScope.() -> Unit
 ) {
     val isDark = SoftTheme.colors.isDark
@@ -111,7 +114,13 @@ fun AmbientGlassBackground(
             .background(bg)
     ) {
         if (showAuraGlow) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        this.alpha = brightness.coerceIn(0.5f, 1.5f)
+                    }
+            ) {
                 val width = size.width
                 val height = size.height
 
@@ -215,6 +224,16 @@ fun AmbientGlassBackground(
                 }
             }
         }
+
+        // Environmental Scrim / Overlay Layer for Contrast & Readability
+        if (scrimOpacity > 0f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(bg.copy(alpha = scrimOpacity.coerceIn(0f, 1f)))
+            )
+        }
+
         content()
     }
 }

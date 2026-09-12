@@ -15,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import com.example.ui.components.softBounceOverscroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
@@ -29,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.domain.model.StatusSeverity
 import com.example.ui.components.InteractiveSoftGlassCard
@@ -64,6 +66,7 @@ fun PlaceholderScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .softBounceOverscroll()
             .verticalScroll(scrollState)
             .padding(horizontal = SoftTheme.spacing.lg, vertical = SoftTheme.spacing.md),
         verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.lg)
@@ -81,13 +84,9 @@ fun PlaceholderScreen(
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.md)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.md)
-                    ) {
                         Box(
                             modifier = Modifier
                                 .size(48.dp)
@@ -103,7 +102,10 @@ fun PlaceholderScreen(
                             )
                         }
 
-                        Column {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
                             Text(
                                 text = category.uppercase(),
                                 style = MaterialTheme.typography.labelSmall,
@@ -116,15 +118,13 @@ fun PlaceholderScreen(
                                 fontWeight = FontWeight.Bold,
                                 color = SoftTheme.colors.textPrimary
                             )
+                            StatusBadge(
+                                text = statusText,
+                                severity = StatusSeverity.Success,
+                                hasDot = true
+                            )
                         }
                     }
-
-                    StatusBadge(
-                        text = statusText,
-                        severity = StatusSeverity.Success,
-                        hasDot = true
-                    )
-                }
 
                 Text(
                     text = description,
@@ -161,12 +161,15 @@ fun PlaceholderScreen(
                         text = key,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
-                        color = SoftTheme.colors.textPrimary
+                        color = SoftTheme.colors.textPrimary,
+                        modifier = Modifier.padding(end = 8.dp)
                     )
                     Text(
                         text = value,
                         style = MonospaceTelemetry,
-                        color = SoftTheme.colors.accentCyan
+                        color = SoftTheme.colors.accentCyan,
+                        textAlign = TextAlign.End,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                 }
             }

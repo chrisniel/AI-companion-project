@@ -361,52 +361,49 @@ fun CapabilityHubCard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Header Row: Icon + Title + Status Badge
+            // Header Row: Icon + Title/Subtitle Column (with Status Badge below)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(statusBadgeColor.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(statusBadgeColor.copy(alpha = 0.12f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = capabilityType.icon,
-                            contentDescription = null,
-                            tint = statusBadgeColor,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    Column {
-                        Text(
-                            text = capabilityType.title,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = SoftTheme.colors.textPrimary
-                        )
-                        Text(
-                            text = "Android System Capability",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = SoftTheme.colors.textMuted,
-                            fontSize = 11.sp
-                        )
-                    }
+                    Icon(
+                        imageVector = capabilityType.icon,
+                        contentDescription = null,
+                        tint = statusBadgeColor,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
 
-                // Status Badge Pill
-                StatusBadge(
-                    text = statusText,
-                    severity = explanation.severity
-                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = capabilityType.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = SoftTheme.colors.textPrimary
+                    )
+                    Text(
+                        text = "Android System Capability",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SoftTheme.colors.textMuted,
+                        fontSize = 11.sp
+                    )
+
+                    StatusBadge(
+                        text = statusText,
+                        severity = explanation.severity
+                    )
+                }
             }
 
             // Optional future toggle (e.g. for Bluetooth peripheral integration)

@@ -2,7 +2,7 @@
 
 > **Purpose:** Explain how the current repository is intended to run, what each directory is for, how the local AI model will operate on the PC, how TTS/STT/audio fit into the system, and what the development and production workflows should look like.
 >
-> **Current state:** Only the React web frontend is implemented and runnable. The other top-level folders are placeholders for planned subsystems.
+> **Current state:** Both the React web frontend (`frontend/web/`) and the native Android companion app (`android/`) are implemented and runnable. The other top-level folders are placeholders for planned backend and runtime subsystems.
 
 ---
 
@@ -11,7 +11,7 @@
 Current project root:
 
 ```text
-companion-ai-project/
+AI-companion-project/
 ├── android/
 ├── backend/
 ├── config/
@@ -28,13 +28,13 @@ companion-ai-project/
 | Folder | Purpose | Current State |
 |---|---|---|
 | `frontend/web/` | React PC Control Center | Implemented and runnable |
-| `android/` | Kotlin / Jetpack Compose companion app | Planned / empty |
-| `backend/` | Python FastAPI Local AI Core | Planned / empty |
-| `config/` | Runtime/provider configuration examples | Planned / empty |
-| `contracts/` | OpenAPI + realtime event schemas | Planned / empty |
-| `docs/` | Master roadmap, architecture, decisions | Ready for documentation |
-| `scripts/` | Start/stop/install/dev helper scripts | Planned / empty |
-| `tests/` | Cross-system and integration tests | Planned / empty |
+| `android/` | Kotlin / Jetpack Compose companion app | Implemented and runnable (17 screens, OLED Battery Saver theme, persistent SharedPreferences, Host config, Hybrid Failover UI) |
+| `backend/` | Python FastAPI Local AI Core | Planned / placeholder |
+| `config/` | Runtime/provider configuration examples | Planned / placeholder |
+| `contracts/` | OpenAPI + realtime event schemas | Planned / placeholder |
+| `docs/` | Master roadmap, architecture, decisions | Active documentation |
+| `scripts/` | Start/stop/install/dev helper scripts | Planned / placeholder |
+| `tests/` | Cross-system and integration tests | Planned / placeholder |
 
 The empty folders are not broken exports. They are placeholders for the planned architecture.
 
@@ -42,12 +42,14 @@ The empty folders are not broken exports. They are placeholders for the planned 
 
 # 2. What Can Run Right Now
 
-At the moment, only the React frontend is runnable.
+At the moment, both the React web frontend and the native Android companion app are runnable.
+
+### 2.1 React PC Control Center
 
 From:
 
 ```text
-D:\Anything\OtherProjects\companion-ai-project\frontend\web
+d:\OtherProjects\AI-companion-project\frontend\web
 ```
 
 run:
@@ -57,10 +59,25 @@ npm install
 npm run dev
 ```
 
-Vite will usually expose a local development URL such as:
+Vite will expose a local development URL such as:
 
 ```text
 http://localhost:5173/
+```
+
+### 2.2 Native Android Companion App
+
+From:
+
+```text
+d:\OtherProjects\AI-companion-project\android
+```
+
+run:
+
+```powershell
+.\gradlew.bat testDebugUnitTest   # Run comprehensive unit test suite
+.\gradlew.bat installDebug         # Build and deploy debug APK to connected Android device
 ```
 
 After `npm install`, the following will normally appear:

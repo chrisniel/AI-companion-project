@@ -8,18 +8,42 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import com.example.ui.components.softBounceOverscroll
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.ui.components.SoftGlassCard
 import com.example.ui.screens.assistant.AssistantComposer
 import com.example.ui.screens.assistant.AssistantHeader
 import com.example.ui.screens.assistant.AssistantHistorySheet
@@ -60,26 +84,31 @@ import com.example.ui.theme.SoftTheme
  */
 @Composable
 fun AssistantScreen(
-    isDarkTheme: Boolean,
-    onToggleTheme: () -> Unit,
+    isDarkTheme: Boolean = false,
+    onToggleTheme: (() -> Unit)? = null,
     onOpenVoiceMode: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: AssistantViewModel = viewModel(factory = com.example.ui.AppViewModelProvider.Factory)
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val listState = rememberLazyListState()
+    val initialIndex = remember { if (uiState.messages.isNotEmpty()) uiState.messages.size - 1 else 0 }
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
+    var previousMessageCount by remember { mutableIntStateOf(uiState.messages.size) }
 
-    // Auto-scroll to bottom when new messages arrive or when generating
+    // Auto-scroll to bottom only when new messages arrive or actively generating
     LaunchedEffect(uiState.messages.size, uiState.isGenerating) {
-        if (uiState.messages.isNotEmpty()) {
-            listState.animateScrollToItem(uiState.messages.size - 1)
+        if (uiState.messages.size > previousMessageCount || uiState.isGenerating) {
+            if (uiState.messages.isNotEmpty()) {
+                listState.animateScrollToItem(uiState.messages.size - 1)
+            }
         }
+        previousMessageCount = uiState.messages.size
     }
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(SoftTheme.colors.background)
+            .statusBarsPadding()
             .testTag("assistant_screen")
     ) {
         // Pinned Header
@@ -99,6 +128,7 @@ fun AssistantScreen(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
+                .softBounceOverscroll()
                 .testTag("assistant_messages_list"),
             contentPadding = PaddingValues(
                 horizontal = SoftTheme.spacing.md,
@@ -106,11 +136,21 @@ fun AssistantScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            items(uiState.messages, key = { it.id }) { message ->
-                AssistantMessageItem(
-                    message = message,
-                    onRetry = { viewModel.retryLastMessage() }
-                )
+            if (uiState.messages.isEmpty()) {
+                item {
+                    AssistantCleanStatePrompt(
+                        onSelectPrompt = { prompt ->
+                            viewModel.updateInputText(prompt)
+                        }
+                    )
+                }
+            } else {
+                items(uiState.messages, key = { it.id }) { message ->
+                    AssistantMessageItem(
+                        message = message,
+                        onRetry = { viewModel.retryLastMessage() }
+                    )
+                }
             }
         }
 
@@ -154,4 +194,85 @@ fun AssistantScreen(
         availableModes = uiState.availableProviderModes,
         onSelectMode = { viewModel.switchProviderMode(it) }
     )
+}
+
+@Composable
+private fun AssistantCleanStatePrompt(
+    onSelectPrompt: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = SoftTheme.spacing.xl),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.md)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(SoftTheme.colors.accentBlue.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.AutoAwesome,
+                contentDescription = null,
+                tint = SoftTheme.colors.accentBlue,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+
+        Text(
+            text = "Local Assistant Ready",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = SoftTheme.colors.textPrimary
+        )
+
+        Text(
+            text = "Offline-first companion connected to PC Local AI Core.\nAsk anything or pick a quick starter below:",
+            style = MaterialTheme.typography.bodySmall,
+            color = SoftTheme.colors.textSecondary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = SoftTheme.spacing.lg)
+        )
+
+        Spacer(modifier = Modifier.height(SoftTheme.spacing.xs))
+
+        listOf(
+            "Check device battery and memory telemetry",
+            "Schedule a reminder for tomorrow at 7 AM",
+            "Help me write a concise task list for today"
+        ).forEach { prompt ->
+            SoftGlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSelectPrompt(prompt) },
+                elevation = SoftTheme.tokens.elevations.subtle,
+                shape = RoundedCornerShape(SoftTheme.tokens.corners.md)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = prompt,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SoftTheme.colors.textPrimary,
+                        fontSize = 13.sp
+                    )
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = SoftTheme.colors.accentBlue,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+    }
 }

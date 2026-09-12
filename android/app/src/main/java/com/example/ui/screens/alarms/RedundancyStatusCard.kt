@@ -82,7 +82,8 @@ fun RedundancyStatusCard(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.weight(1f, fill = false)
             ) {
                 Icon(
                     imageVector = Icons.Default.Security,
@@ -113,7 +114,8 @@ fun RedundancyStatusCard(
                     text = "Tap to test failover",
                     style = MaterialTheme.typography.labelSmall,
                     color = SoftTheme.colors.textMuted,
-                    fontSize = 10.sp
+                    fontSize = 11.sp,
+                    softWrap = false
                 )
             }
         }
@@ -171,15 +173,19 @@ fun RedundancyStatusCard(
             Text(
                 text = if (isDesktopSynced) "Failover: Dual node acoustic replication active"
                 else "Failover: Standalone mode active • Zero alarm misses guaranteed",
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp),
                 style = MaterialTheme.typography.labelSmall,
                 color = SoftTheme.colors.textSecondary,
-                fontSize = 10.sp
+                fontSize = 11.sp
             )
             Text(
                 text = redundancy.lastHeartbeat,
                 style = MaterialTheme.typography.labelSmall,
                 color = SoftTheme.colors.textMuted,
-                fontSize = 10.sp
+                fontSize = 11.sp,
+                softWrap = false
             )
         }
     }

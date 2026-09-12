@@ -62,7 +62,7 @@ data class ConnectionInfo(
     val label: String = "Core Active",
     val latencyMs: Int? = 22,
     val port: Int? = 8080,
-    val host: String = "127.0.0.1",
+    val host: String = "Local AI Core (Simulated)",
     val syncStatus: SyncStatus = SyncStatus.SYNCHRONIZED,
     val lastSyncTimestamp: String = "Just now",
     val pendingChangesCount: Int = 0,

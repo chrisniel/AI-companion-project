@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import com.example.ui.components.softBounceOverscroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -46,11 +47,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -87,6 +89,7 @@ fun DevicesScreen(
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
+            .softBounceOverscroll()
             .testTag("devices_screen")
             .padding(horizontal = SoftTheme.spacing.lg),
         verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.md)
@@ -363,8 +366,13 @@ private fun DeviceRowCard(
             ) {
                 Text(
                     text = device.details,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                    color = SoftTheme.colors.textMuted
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .padding(end = 8.dp),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                    color = SoftTheme.colors.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
 
                 if (device.latencyMs != null && device.status == DeviceStatus.ONLINE) {
@@ -372,7 +380,8 @@ private fun DeviceRowCard(
                         text = "${device.latencyMs} ms",
                         style = MonospaceTelemetry.copy(fontSize = 11.sp),
                         fontWeight = FontWeight.Medium,
-                        color = SoftTheme.colors.accentBlue
+                        color = SoftTheme.colors.accentBlue,
+                        softWrap = false
                     )
                 }
             }
@@ -380,13 +389,9 @@ private fun DeviceRowCard(
     }
 }
 
-/**
- * Accessible pill badge for DeviceStatus: Online, Offline, Connecting.
- */
 @Composable
-private fun DeviceStatusBadge(
-    status: DeviceStatus,
-    testTag: String,
+private fun PulsingConnectingDot(
+    color: Color,
     modifier: Modifier = Modifier
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse_connecting")
@@ -400,6 +405,27 @@ private fun DeviceStatusBadge(
         label = "pulse_scale"
     )
 
+    Box(
+        modifier = modifier
+            .size(6.dp)
+            .graphicsLayer {
+                scaleX = pulseScale
+                scaleY = pulseScale
+            }
+            .clip(CircleShape)
+            .background(color)
+    )
+}
+
+/**
+ * Accessible pill badge for DeviceStatus: Online, Offline, Connecting.
+ */
+@Composable
+private fun DeviceStatusBadge(
+    status: DeviceStatus,
+    testTag: String,
+    modifier: Modifier = Modifier
+) {
     val (bgColor, textColor, borderColor) = when (status) {
         DeviceStatus.ONLINE -> Triple(
             SoftTheme.colors.statusSuccess.copy(alpha = 0.12f),
@@ -435,15 +461,16 @@ private fun DeviceStatusBadge(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .then(
-                        if (status == DeviceStatus.CONNECTING) Modifier.scale(pulseScale) else Modifier
-                    )
-                    .clip(CircleShape)
-                    .background(textColor)
-            )
+            if (status == DeviceStatus.CONNECTING) {
+                PulsingConnectingDot(color = textColor)
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(textColor)
+                )
+            }
             Text(
                 text = status.label,
                 style = MaterialTheme.typography.labelSmall,

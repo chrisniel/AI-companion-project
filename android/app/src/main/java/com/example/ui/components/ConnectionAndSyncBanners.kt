@@ -381,6 +381,7 @@ fun OfflineCapabilitiesSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .softBounceOverscroll()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = SoftTheme.spacing.lg, vertical = SoftTheme.spacing.sm)
                 .testTag("offline_capabilities_sheet"),

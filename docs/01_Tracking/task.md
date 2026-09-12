@@ -2,26 +2,37 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: Ready / Awaiting Next Task
-- Current Sprint: Android UI V1.1 Refinement Completed & Verified
-- Target: Next prioritized milestone (Backend Foundation or Web Productionization).
-- Scope Guard: Read-only by default; edits require explicit user direction and task-specific plan approval.
+- Status: Planning & Transition
+- Current Sprint: Backend Core Foundation & API Security Architecture
+- Target: Initialize FastAPI backend, SQLite/SQLAlchemy 2 database foundation, token authentication, and first vertical slice (Health & Task endpoints) matching full-stack blueprint and OWASP API security standards.
+- Scope Guard: `backend/`, `contracts/`, `docs/02_Planning/`, and API client interfaces. Preserve all working Android and Web frontend UI implementations.
 
-## [CURRENT EXECUTION STATE - HANDOFF]
+## [CURRENT EXECUTION STATE - PLANNING & ARCHITECTURE]
 
-- Active Files: None (idle)
-- Current Blocker / Status: Android UI V1.1 Refinement completed and verified (106 unit/Robolectric tests passed). Ready for user commit and push.
-- Next Immediate Action: User manual Git review, commit, and push. Stand by for next sprint prioritization.
+- Active Files:
+  - `README.md`
+  - `docs/04_Architecture/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md`
+  - `docs/02_Planning/plan-backend-core-and-security.md`
+  - `docs/01_Tracking/task.md`
+- Current Status: Section 1 complete. Android UI/UX sprint archived, README.md updated with repository-verified Android baseline, and documentation audit complete.
+- Next Action: User commits Section 1 changes and merges `feature/android-ui-ux-adjustments` into `develop`, then creates `feature/backend-core-and-security`.
 
 ## Active Checklist
 
-### Next Milestone Options
-- [ ] Backend Foundation Planning (FastAPI, SQLite/FTS5, Local AI Core integration).
-- [ ] Web Productionization Implementation (`docs/02_Planning/plan-web-productionization.md`).
-- [ ] Real Network / WebSocket Companion Integration for Android (`NetworkClient`, PC Core discovery).
+### 1. Documentation & Standard Synchronization
+- [x] Archive completed Android UI/UX polish task to `docs/01_Tracking/archive/`
+- [x] Update `README.md` to reflect repository-verified status of Android app (17 screens, 110 tests)
+- [x] Audit remaining project documentation for outdated external/prototype claims
 
-## Verification & QA Summary (Last Delivery)
+### 2. Architecture & Security Planning
+- [ ] Reconcile `full_stack_blueprint.md` with Master Architecture (FastAPI + SQLite + SQLAlchemy 2 + Alembic)
+- [ ] Define OWASP API Security Top 10 controls (Token Auth, CORS whitelist, Pydantic v2 schemas, rate limits)
+- [ ] Create implementation plan `docs/02_Planning/plan-backend-core-and-security.md` for user approval
 
-- [x] Automated checks: `.\gradlew.bat :app:compileDebugKotlin` and `.\gradlew.bat :app:testDebugUnitTest` (106 tests passed).
-- [x] Static checks: `git diff --check` passed cleanly.
-- [x] Archived task: `docs/01_Tracking/archive/task-2026-09-11-android-ui-v1.1-refinement.md`.
+### 3. Backend Foundation Implementation (Upon Approval)
+- [ ] Initialize `backend/` directory structure, `pyproject.toml` / dependencies, and virtual environment
+- [ ] Implement secure configuration (`core/config.py`) with pairing token and CORS middleware
+- [ ] Implement database session management and base model (`core/database.py`) with SQLite/FTS5
+- [ ] Implement token authentication dependency (`core/security.py`)
+- [ ] Implement `/api/v1/health` and first vertical slice (Tasks CRUD: model, schema, routes)
+- [ ] Add automated pytest suite for health, auth, and CRUD endpoints

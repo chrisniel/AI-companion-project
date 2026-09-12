@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import com.example.ui.components.softBounceOverscroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -115,7 +116,7 @@ import com.example.ui.theme.SoftTheme
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MemoryScreen(
-    onNavigateBack: () -> Unit,
+    onNavigateBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: MemoryViewModel = viewModel(factory = com.example.ui.AppViewModelProvider.Factory)
 ) {
@@ -153,67 +154,109 @@ fun MemoryScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Screen Top Header with back button & archive mode toggle
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = SoftTheme.spacing.lg, vertical = SoftTheme.spacing.sm),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            // Screen Top Header with back button & archive mode toggle (only when standalone)
+            if (onNavigateBack != null) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
-                ) {
-                    IconButton(
-                        onClick = onNavigateBack,
-                        modifier = Modifier.testTag("memory_back_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = SoftTheme.colors.textPrimary
-                        )
-                    }
-
-                    Column {
-                        Text(
-                            text = "Memory",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = SoftTheme.colors.textPrimary
-                        )
-                        Text(
-                            text = if (uiState.showArchivedOnly) "Archived Records" else "Persistent Facts & Context",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = SoftTheme.colors.textMuted
-                        )
-                    }
-                }
-
-                // Archive mode toggle button
-                InteractiveSoftGlassCard(
-                    onClick = { viewModel.toggleShowArchived() },
-                    elevation = SoftTheme.tokens.elevations.subtle,
-                    testTag = "memory_archive_toggle"
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = SoftTheme.spacing.lg, vertical = SoftTheme.spacing.sm),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = SoftTheme.spacing.md, vertical = SoftTheme.spacing.xs),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.xs)
+                        horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
                     ) {
-                        Icon(
-                            imageVector = if (uiState.showArchivedOnly) Icons.Default.Unarchive else Icons.Default.Archive,
-                            contentDescription = null,
-                            tint = if (uiState.showArchivedOnly) SoftTheme.colors.accentAmber else SoftTheme.colors.textSecondary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = if (uiState.showArchivedOnly) "Archived" else "Active",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (uiState.showArchivedOnly) SoftTheme.colors.accentAmber else SoftTheme.colors.textPrimary
-                        )
+                        IconButton(
+                            onClick = onNavigateBack,
+                            modifier = Modifier.testTag("memory_back_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = SoftTheme.colors.textPrimary
+                            )
+                        }
+
+                        Column {
+                            Text(
+                                text = "Memory",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = SoftTheme.colors.textPrimary
+                            )
+                            Text(
+                                text = if (uiState.showArchivedOnly) "Archived Records" else "Persistent Facts & Context",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SoftTheme.colors.textMuted
+                            )
+                        }
+                    }
+
+                    // Archive mode toggle button
+                    InteractiveSoftGlassCard(
+                        onClick = { viewModel.toggleShowArchived() },
+                        elevation = SoftTheme.tokens.elevations.subtle,
+                        testTag = "memory_archive_toggle"
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = SoftTheme.spacing.md, vertical = SoftTheme.spacing.xs),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.xs)
+                        ) {
+                            Icon(
+                                imageVector = if (uiState.showArchivedOnly) Icons.Default.Unarchive else Icons.Default.Archive,
+                                contentDescription = null,
+                                tint = if (uiState.showArchivedOnly) SoftTheme.colors.accentAmber else SoftTheme.colors.textSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = if (uiState.showArchivedOnly) "Archived" else "Active",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (uiState.showArchivedOnly) SoftTheme.colors.accentAmber else SoftTheme.colors.textPrimary
+                            )
+                        }
+                    }
+                }
+            } else {
+                // Embedded in AppShell (AppTopBar handles navigation): render compact subtitle and archive toggle
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = SoftTheme.spacing.lg, vertical = SoftTheme.spacing.xs),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (uiState.showArchivedOnly) "Archived Records" else "Persistent Facts & Context",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SoftTheme.colors.textSecondary
+                    )
+
+                    InteractiveSoftGlassCard(
+                        onClick = { viewModel.toggleShowArchived() },
+                        elevation = SoftTheme.tokens.elevations.subtle,
+                        testTag = "memory_archive_toggle"
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = SoftTheme.spacing.md, vertical = SoftTheme.spacing.xs),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.xs)
+                        ) {
+                            Icon(
+                                imageVector = if (uiState.showArchivedOnly) Icons.Default.Unarchive else Icons.Default.Archive,
+                                contentDescription = null,
+                                tint = if (uiState.showArchivedOnly) SoftTheme.colors.accentAmber else SoftTheme.colors.textSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = if (uiState.showArchivedOnly) "Archived" else "Active",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (uiState.showArchivedOnly) SoftTheme.colors.accentAmber else SoftTheme.colors.textPrimary
+                            )
+                        }
                     }
                 }
             }
@@ -293,12 +336,13 @@ fun MemoryScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
+                        .softBounceOverscroll()
                         .testTag("memory_list"),
                     contentPadding = PaddingValues(
                         start = SoftTheme.spacing.lg,
                         end = SoftTheme.spacing.lg,
                         top = SoftTheme.spacing.xs,
-                        bottom = 80.dp // Leave space for FAB
+                        bottom = 112.dp // Leave space for FAB and bottom navigation bar
                     ),
                     verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.md)
                 ) {
@@ -536,7 +580,10 @@ private fun MemoryItemCard(
                             Text(
                                 text = "#$tag",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = SoftTheme.colors.textMuted
+                                color = SoftTheme.colors.textMuted,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -627,6 +674,7 @@ private fun MemoryDetailSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = SoftTheme.spacing.xl, vertical = SoftTheme.spacing.lg)
+                .softBounceOverscroll()
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.md)
         ) {
@@ -819,6 +867,7 @@ private fun MemoryEditorDialog(
             elevation = SoftTheme.tokens.elevations.overlay,
             modifier = Modifier
                 .fillMaxWidth()
+                .softBounceOverscroll()
                 .verticalScroll(rememberScrollState())
         ) {
             Column(

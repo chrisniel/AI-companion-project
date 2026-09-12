@@ -45,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.model.HealthSourceStatus
+import com.example.ui.components.SoftGlassCard
 import com.example.ui.theme.SoftTheme
 
 /**
@@ -71,20 +72,20 @@ fun HealthSourceCard(
 ) {
     var isPipelineExpanded by remember { mutableStateOf(false) }
 
-    Column(
+    SoftGlassCard(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(SoftTheme.tokens.corners.md))
-            .background(SoftTheme.colors.surfaceElevated)
-            .border(
-                width = SoftTheme.tokens.borders.hairline,
-                color = SoftTheme.colors.borderSubtle,
-                shape = RoundedCornerShape(SoftTheme.tokens.corners.md)
-            )
-            .padding(14.dp)
             .testTag("health_source_status_card"),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        elevation = SoftTheme.tokens.elevations.card,
+        containerColor = SoftTheme.colors.surfaceElevated,
+        shape = RoundedCornerShape(SoftTheme.tokens.corners.md)
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
         // TOP HEADER: TITLE + REFRESH BUTTON
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -298,5 +299,6 @@ fun HealthSourceCard(
                 }
             }
         }
+    }
     }
 }

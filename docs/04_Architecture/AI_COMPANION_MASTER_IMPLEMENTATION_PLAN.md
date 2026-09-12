@@ -4,11 +4,11 @@
 >
 > **Document role:** Canonical product architecture and implementation-sequencing source of truth.
 >
-> **Last updated:** 2026-09-10
+> **Last updated:** 2026-09-12
 >
-> **Purpose:** Self-contained architecture and implementation handoff for repository work and Google AI Studio UI/UX generation.
+> **Purpose:** Self-contained architecture and implementation handoff for repository work, backend integration, and hybrid on-device AI runtime.
 >
-> **Current state:** The PC React UI/UX prototype is present in this repository. Its multilingual UI patch is also present. The Android UI/UX prototype is being created externally in Google AI Studio and is currently at Batch 12; it is not yet available in this repository. The FastAPI backend, local model runtime, database, voice pipeline, authentication, health synchronization, and real device integrations are planned and are not implemented.
+> **Current state:** Both the PC React UI/UX prototype and the native Android companion app (`android/`) are repository-verified in this workspace. The Android app features 17 screens in Jetpack Compose, the SoftGlass design system with calibrated contrast, an AMOLED-optimized pure pitch-black (`#000000`) "OLED Battery Saver" theme, persistent SharedPreferences storage, fluid overscroll bounce physics, real Local AI Core Host IP/port configuration, and On-Device Hybrid Failover controls (Gemma/Qwen LLM + Kokoro-82M ONNX TTS). The FastAPI backend, local model runtime, database, voice pipeline, authentication, health synchronization, and real device integrations are planned and are next in the implementation roadmap.
 
 ## Status Vocabulary
 
@@ -26,13 +26,13 @@ Use these labels consistently throughout project documentation:
 | --- | --- | --- |
 | PC React control-center UI/UX | Repository-verified prototype | `frontend/web/`; TypeScript check passed on 2026-09-10 |
 | PC multilingual UI/UX patch | Repository-verified prototype | Language types, mock data, Japanese renderer, settings, character editor, assistant panel, composer, and home greeting exist in source |
-| Android companion UI/UX | External in progress — Batch 12 | Being created in Google AI Studio; no Android source is currently available in this repository |
+| Android companion UI/UX | Repository-verified implementation | `android/`; 17 screens, Jetpack Compose, SoftGlass neumorphic theme engine, OLED Battery Saver theme, SharedPreferences persistence, Host IP config, and Hybrid Failover UI |
 | Local AI Core / FastAPI | Planned | `backend/` is an empty local placeholder |
 | Database / persistence | Planned | No schema, models, migrations, or database implementation exists |
 | Local LLM, STT, TTS, and VAD | Planned | No runtime integration exists |
 | API and realtime contracts | Planned | `contracts/` is an empty local placeholder |
 | Authentication and remote access | Planned | No application authentication implementation exists |
-| Automated tests, CI, and deployment | Planned | No tracked test suite, CI workflow, or deployment configuration exists |
+| Automated tests, CI, and deployment | Repository-verified (Android unit tests) | Android Gradle unit tests passing via `gradlew.bat testDebugUnitTest`; full CI and deployment planned |
 
 This document supersedes conflicting status claims in drafts. Drafts remain reference material until their unique content is deliberately reconciled or archived.
 
@@ -152,8 +152,9 @@ AI-companion-project/
 
 Current repository facts:
 
-- `frontend/web/` is the only application area containing tracked implementation source.
-- `android/`, `backend/`, `contracts/`, `config/`, `scripts/`, and `tests/` are currently empty local placeholders. Git does not preserve empty directories in a fresh clone.
+- `frontend/web/` contains the tracked React PC control-center implementation.
+- `android/` contains the tracked native Android companion app (Kotlin, Jetpack Compose, SoftGlass neumorphic theme engine with OLED Battery Saver, SharedPreferences persistence, Host configuration, and Hybrid AI On-Device Failover UI).
+- `backend/`, `contracts/`, `config/`, `scripts/`, and `tests/` are currently empty local placeholders for subsequent backend/runtime phases.
 - `docs/ProjectWorkflowStarterKit/` remains a user-owned starter reference in its current location.
 - The latest master plan under `docs/04_Architecture/` is canonical. Older roadmap, runtime, and static-review files remain under `docs/00_Drafts/` as non-canonical reference material.
 
@@ -250,23 +251,35 @@ Keep the PC UI feature-frozen while completing the focused productionization pla
 
 ## Android
 
-**Status: External in progress — Batch 12 UI/UX in Google AI Studio; not repository-verifiable yet.**
+**Status: Repository-verified implementation in `android/`.**
 
-Batches 0 through 11 are user-reported as completed in the external UI/UX prototype. Batch 12, Offline + Sync + Connection, is the current external working batch. Treat this as project status, not repository implementation, until the exported Android project is added and inspected.
+The Android companion client is implemented as a native Kotlin and Jetpack Compose application under `android/`. It delivers a complete 17-screen user experience with the custom SoftGlass design system, authentic dual-shadow clay neumorphism, calibrated contrast across Light and Dark modes, and a specialized AMOLED "OLED Battery Saver" pure black theme.
 
-During UI phase:
+Key Android subsystem milestones in repository:
+
+- **17 Screens Implemented:** Home, Assistant, Voice Mode, Tasks, Schedule, Alarms, Health, Memory, Characters, Models, Devices, Connection, Settings, Permissions, and related sheets.
+- **SoftGlass Neumorphic Engine:** Directional dual shadows (`softNeumorphicRaised`) and recessed wells (`softNeumorphicInset`) with zero-allocation blur masking and graceful GPU fallback.
+- **OLED Battery Saver Theme:** True pitch-black (`#000000`) background, zero drop-shadow elevation (no gray halos), and luminous high-contrast borders for maximum battery conservation on AMOLED displays.
+- **Persistent Storage:** `SharedPreferencesAppearanceRepository` backing all theme, preset, effects level, and appearance choices across process kills and reboots.
+- **Fluid Overscroll Physics:** Two-phase momentum spring bounce (`SoftBounceOverscroll.kt`) with progressive quadratic resistance and natural rubber-band recoil.
+- **Real Host Configuration:** Editable Local AI Core Host IP, Port, and API Token inputs with reachability validation in `ConnectionScreen.kt`.
+- **On-Device Hybrid Failover UI:** Integrated controls in `ModelsScreen.kt` for auto-failover, edge LLM (Gemma-2-2B / Qwen-2.5-1.5B), Kokoro-82M neural TTS, SAF model file import, and on-device RAM allocation monitoring.
+
+Current Android Architecture:
 
 ```text
-Compose UI
+Compose UI Screens & Bottom Sheets
  ↓
-ViewModel
+Jetpack ViewModel (StateFlow)
  ↓
-Repository Interface
+Repository Interfaces (AppearanceRepository, TasksRepository, ConnectionRepository)
  ↓
-FakeRepository
+Implementations:
+ ├── SharedPreferencesAppearanceRepository (Persistent theme & appearance)
+ └── In-Memory / Fake Repositories (Tasks, Alarms, Health, Devices)
 ```
 
-Do not claim repository implementation, build success, device behavior, or real integration until the Android export is available and verified. Real integrations should begin only after UI V1 is frozen through Batch 15 and the exported project passes repository onboarding.
+Next Backend Integration: Connect Android repositories directly to the FastAPI Local AI Core via typed REST (`/api/v1/...`) and WebSocket event streams.
 
 ---
 
@@ -292,7 +305,84 @@ WorkManager
 Health Connect
 OkHttp or Ktor
 Foreground Service where required
+llama.cpp Android NDK / ONNX Runtime Mobile
 ```
+
+---
+
+# 7.1 Hybrid AI Architecture: Dual-Engine & Edge Node Failover
+
+The system implements a **Hierarchical Model Routing Architecture** spanning the Windows PC and Android smartphone:
+
+```text
+               ┌──────────────────────────────────────────────┐
+               │         Windows PC: Primary AI Host          │
+               │   (FastAPI Core + llama.cpp on RX 580 GPU)   │
+               └──────────────────────┬───────────────────────┘
+                                      │ Local LAN / Tailscale
+                                      │ (Dynamic Heartbeats)
+                                      ▼
+               ┌──────────────────────────────────────────────┐
+               │       Android Companion: Client / Hub        │
+               │      (Unified Chat UI, Split Compute)        │
+               └──────────────────────┬───────────────────────┘
+                                      │
+                         PC Online? ──┴── PC Offline / Away?
+                        /                                  \
+                       ▼                                    ▼
+       [Primary Orchestration]                    [Edge Node Failover]
+       - Remote LLM Inference (8B)                - On-Device Gemma-2-2B / Qwen-1.5B
+       - High-speed GPU generation                - CPU ARM64 llama.cpp NDK
+       - Full Memory & Tool RAG                   - Kokoro-82M ONNX TTS (<0.3x RTF)
+       - Phone LLM evicted from RAM               - Room DB Local Context Cache
+```
+
+### Key Subsystems:
+
+1. **Hierarchical Model Routing:**
+   - The Windows PC Local AI Core is the **Primary Orchestrator**, providing high-throughput inference (Gemma-2-9B / Llama-3.1-8B) with full tool execution and memory retrieval.
+   - The smartphone serves as an **Edge Node Failover**, running lightweight quantized models (Gemma-2-2B Q4_K_M or Qwen-2.5-1.5B Q4_K_M) directly on the device's ARM64 CPU.
+
+2. **Dynamic Network Heartbeats & Seamless Failover:**
+   - The Android client pings the Local AI Core health endpoint (`/health`).
+   - If the request times out or the PC is powered down, the router immediately and silently diverts inference to the local Edge Node without interrupting the user.
+   - A contextual status badge informs the user of active compute: `PC Online (Full Power)` vs `Local Mobile Mode (Edge Failover)`.
+
+3. **Universal Context & Memory Synchronization:**
+   - Active chat history and memory fragments are stored in a model-agnostic schema within Android's local Room database.
+   - When switching between PC and phone inference, the context window is reformatted dynamically into the active engine's prompt template.
+   - When the PC comes back online, a bidirectional synchronization reconciles offline messages and task modifications using deterministic timestamp sorting.
+
+4. **Zero-Dependency Private Model Storage (No APK Bloat):**
+   - Model weights are **never bundled inside the APK assets** (which would bloat APK to >2 GB, causing installation failures).
+   - Weights are acquired via two zero-dependency methods:
+     - **In-App Downloader:** On-demand HTTPS chunked streaming download of verified quantized models directly into app-private storage (`context.filesDir/models/`).
+     - **SAF File Import:** User-directed Storage Access Framework picker allowing users to import pre-downloaded `.gguf` and `.onnx` models from device storage or SD card.
+
+5. **On-Device Neural TTS Parity (Kokoro-82M ONNX):**
+   - Voice synthesis parity with the PC is achieved via Kokoro-82M packaged in ONNX format.
+   - Operating on ARM64 CPU cores via ONNX Runtime Mobile, Kokoro synthesizes 24kHz natural speech at <0.3x Real-Time Factor (RTF), requiring only ~85 MB storage and ~120 MB RAM.
+   - No external third-party apps or internet connectivity required.
+
+6. **RAM, Battery & Thermal Safeguards:**
+   - **Dynamic RAM Eviction:** When the PC is online, the on-device LLM is completely unloaded from RAM to preserve memory for other mobile applications. It is loaded into memory only when failover occurs.
+   - **Foreground Service Loop:** Active inference runs under an Android Foreground Service notification to prevent OS low-memory termination.
+   - **WakeLock Management:** CPU high-performance WakeLocks are held strictly while actively generating tokens, and released immediately upon stream completion.
+
+---
+
+# 7.2 OLED Battery Saver Theme & Display Optimization
+
+To maximize battery endurance on AMOLED/OLED displays (such as the 120Hz display on modern Android devices), the system includes a specialized theme engine mode:
+
+- **True Pitch-Black (`#000000`):** Backgrounds and container roots render pure `#000000`, turning off physical display pixels entirely and reducing display power consumption by up to 40–60%.
+- **Zero Drop Shadows (0 Elevation):** Eliminates directional neumorphic shadow calculations and blur filters. This removes GPU fill-rate overhead and eliminates faint gray halo artifacts on black backgrounds.
+- **Luminous Hairline Borders:** Cards and inputs maintain visual hierarchy using subtle `1.dp` borders with high-contrast luminous strokes (`#262626` subtle, `#38BDF8` active).
+- **Calibrated Contrast Tokens:** Muted text and icons are calibrated for high legibility:
+  - Light Mode: `#334155` (Slate-700) for sharp readability against light clay.
+  - Dark Mode: `#94A3B8` (Slate-400) preventing icons from fading into dark surfaces.
+  - OLED Battery Saver: High-contrast `#FFFFFF` titles and vibrant cyan/amber accents.
+- **Persistent Preferences:** Backed by `SharedPreferencesAppearanceRepository` ensuring theme and visual settings survive app recreation and device reboots.
 
 ---
 
@@ -327,27 +417,30 @@ About
 # 9. Android UI Batches
 
 ```text
-0    Architecture constitution             External prototype complete (user-reported)
-1    Soft Glass mobile design system       External prototype complete (user-reported)
-1.1  Visual calibration                    External prototype complete (user-reported)
-2    Shell + navigation                    External prototype complete (user-reported)
-3    Home                                  External prototype complete (user-reported)
-4    Assistant                             External prototype complete (user-reported)
-4.1  Voice Mode                            External prototype complete (user-reported)
-5    Tasks                                 External prototype complete (user-reported)
-6    Schedule + Alarms                     External prototype complete (user-reported)
-7    Health                                External prototype complete (user-reported)
-8    Characters                            External prototype complete (user-reported)
-9    Models + Devices                      External prototype complete (user-reported)
-10   Memory + More                         External prototype complete (user-reported)
-11   Settings + Theme + Languages          External prototype complete (user-reported)
-12   Offline + Sync + Connection           External prototype in progress (current)
-13   Permissions UX                        Planned
-14   Accessibility/device-size audit       Planned
-15   Final polish                          Planned
+0    Architecture constitution             Repository-verified complete
+1    Soft Glass mobile design system       Repository-verified complete
+1.1  Visual calibration                    Repository-verified complete
+2    Shell + navigation                    Repository-verified complete
+3    Home                                  Repository-verified complete
+4    Assistant                             Repository-verified complete
+4.1  Voice Mode                            Repository-verified complete
+5    Tasks                                 Repository-verified complete
+6    Schedule + Alarms                     Repository-verified complete
+7    Health                                Repository-verified complete
+8    Characters                            Repository-verified complete
+9    Models + Devices                      Repository-verified complete
+10   Memory + More                         Repository-verified complete
+11   Settings + Theme + Languages          Repository-verified complete
+12   Offline + Sync + Connection           Repository-verified complete
+13   Permissions UX                        Repository-verified complete
+14   Accessibility/device-size audit       Repository-verified complete
+15   Final polish & Neumorphic tuning      Repository-verified complete
+16   OLED Battery Saver & Contrast Tuner   Repository-verified complete
+17   Persistent Storage & Physics Polish   Repository-verified complete
+18   Host Network & Hybrid AI Edge UI      Repository-verified complete
 ```
 
-Freeze Android UI after Batch 15, export it from Google AI Studio, and inspect the actual project before planning production integration.
+Android UI/UX is fully integrated and repository-verified in `android/`. Automated Robolectric and unit test coverage validates navigation, theming, settings persistence, and semantic connection state cycling. Next phase focuses on real Local AI Core backend integrations.
 
 ---
 

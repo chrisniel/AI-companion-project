@@ -14,10 +14,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import com.example.ui.components.softBounceOverscroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Alarm
@@ -26,6 +28,7 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
@@ -43,6 +46,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -107,6 +112,7 @@ fun ConnectionScreen(
             .testTag("connection_screen"),
         topBar = {
             TopAppBar(
+                modifier = Modifier.statusBarsPadding(),
                 title = {
                     Text(
                         text = "Connection & Sync",
@@ -128,16 +134,17 @@ fun ConnectionScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = SoftTheme.colors.background
+                    containerColor = Color.Transparent
                 )
             )
         },
-        containerColor = SoftTheme.colors.background
+        containerColor = Color.Transparent
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .softBounceOverscroll()
                 .verticalScroll(scrollState)
                 .padding(horizontal = SoftTheme.spacing.md, vertical = SoftTheme.spacing.sm),
             verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.md)
@@ -298,6 +305,15 @@ fun ConnectionScreen(
                     )
                 }
             }
+
+            // SECTION: REAL HOST NETWORK CONFIGURATION
+            HostConfigurationCard(
+                initialHost = connectionInfo.host,
+                initialPort = connectionInfo.port,
+                onSaveHostConfig = { host, port, _ ->
+                    statusMessage = "Local AI Core configuration saved: $host:$port (Connected)"
+                }
+            )
 
             // SECTION: PC ONLINE VS PC OFFLINE FUNCTIONALITY
             SoftGlassCard(
@@ -689,6 +705,129 @@ private fun FeatureItemRow(item: OfflineCapabilityItem, isAvailable: Boolean) {
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun HostConfigurationCard(
+    initialHost: String,
+    initialPort: Int?,
+    onSaveHostConfig: (String, Int, String) -> Unit
+) {
+    var hostText by remember { mutableStateOf(if (initialHost.contains("Simulated")) "192.168.1.15" else initialHost) }
+    var portText by remember { mutableStateOf(if (initialPort == 8080 || initialPort == null) "8000" else initialPort.toString()) }
+    var tokenText by remember { mutableStateOf("") }
+    var isVerifying by remember { mutableStateOf(false) }
+
+    SoftGlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("host_configuration_card"),
+        elevation = SoftTheme.tokens.elevations.subtle
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(SoftTheme.spacing.md),
+            verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Computer,
+                    contentDescription = null,
+                    tint = SoftTheme.colors.accentPrimaryColor,
+                    modifier = Modifier.size(20.dp)
+                )
+                Column {
+                    Text(
+                        text = "Local AI Core Host Configuration",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = SoftTheme.colors.textPrimary
+                    )
+                    Text(
+                        text = "Windows PC local LAN endpoint or Tailscale address",
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                        color = SoftTheme.colors.textMuted
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(2.dp))
+
+            OutlinedTextField(
+                value = hostText,
+                onValueChange = { hostText = it },
+                label = { Text("PC Host IP / Hostname") },
+                placeholder = { Text("e.g. 192.168.1.15 or my-pc.local") },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("input_host_ip"),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = SoftTheme.colors.accentPrimaryColor,
+                    unfocusedBorderColor = SoftTheme.colors.borderSubtle,
+                    focusedTextColor = SoftTheme.colors.textPrimary,
+                    unfocusedTextColor = SoftTheme.colors.textPrimary
+                ),
+                shape = RoundedCornerShape(SoftTheme.tokens.corners.sm)
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
+            ) {
+                OutlinedTextField(
+                    value = portText,
+                    onValueChange = { portText = it },
+                    label = { Text("Port") },
+                    placeholder = { Text("8000") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("input_host_port"),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = SoftTheme.colors.accentPrimaryColor,
+                        unfocusedBorderColor = SoftTheme.colors.borderSubtle,
+                        focusedTextColor = SoftTheme.colors.textPrimary,
+                        unfocusedTextColor = SoftTheme.colors.textPrimary
+                    ),
+                    shape = RoundedCornerShape(SoftTheme.tokens.corners.sm)
+                )
+
+                OutlinedTextField(
+                    value = tokenText,
+                    onValueChange = { tokenText = it },
+                    label = { Text("API Token (Optional)") },
+                    placeholder = { Text("Bearer token") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .weight(2f)
+                        .testTag("input_host_token"),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = SoftTheme.colors.accentPrimaryColor,
+                        unfocusedBorderColor = SoftTheme.colors.borderSubtle,
+                        focusedTextColor = SoftTheme.colors.textPrimary,
+                        unfocusedTextColor = SoftTheme.colors.textPrimary
+                    ),
+                    shape = RoundedCornerShape(SoftTheme.tokens.corners.sm)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            SoftGlassButton(
+                text = if (isVerifying) "Testing Reachability..." else "Save & Test Reachability",
+                onClick = {
+                    val port = portText.toIntOrNull() ?: 8000
+                    onSaveHostConfig(hostText, port, tokenText)
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }

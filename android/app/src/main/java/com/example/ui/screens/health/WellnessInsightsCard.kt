@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.model.HealthMetricType
 import com.example.domain.model.WellnessInsight
+import com.example.ui.components.SoftGlassCard
 import com.example.ui.theme.SoftTheme
 
 /**
@@ -52,20 +53,20 @@ fun WellnessInsightsCard(
     insights: List<WellnessInsight>,
     modifier: Modifier = Modifier
 ) {
-    Column(
+    SoftGlassCard(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(SoftTheme.tokens.corners.md))
-            .background(SoftTheme.colors.surfaceElevated)
-            .border(
-                width = SoftTheme.tokens.borders.hairline,
-                color = SoftTheme.colors.borderSubtle,
-                shape = RoundedCornerShape(SoftTheme.tokens.corners.md)
-            )
-            .padding(14.dp)
             .testTag("wellness_insights_card"),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        elevation = SoftTheme.tokens.elevations.card,
+        containerColor = SoftTheme.colors.surfaceElevated,
+        shape = RoundedCornerShape(SoftTheme.tokens.corners.md)
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
         // HEADER
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -146,6 +147,7 @@ fun WellnessInsightsCard(
                 lineHeight = 14.sp
             )
         }
+    }
     }
 }
 

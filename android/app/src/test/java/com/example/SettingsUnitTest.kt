@@ -3,8 +3,10 @@ package com.example
 import com.example.domain.model.AccentPreset
 import com.example.domain.model.AppLanguage
 import com.example.domain.model.BackgroundType
+import com.example.domain.model.BuiltInBackgroundPreset
 import com.example.domain.model.EffectsLevel
 import com.example.domain.model.JapaneseDisplay
+import com.example.domain.model.RefreshRateMode
 import com.example.domain.model.ResponseLanguageChoice
 import com.example.domain.model.SettingsSection
 import com.example.domain.model.StartupBehavior
@@ -13,9 +15,17 @@ import com.example.domain.model.ThemeSource
 import com.example.domain.model.VoiceCapability
 import com.example.domain.model.VoiceRecognitionLanguage
 import com.example.ui.screens.settings.SettingsViewModel
+import com.example.ui.theme.parseSafeHexColor
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -23,13 +33,21 @@ import org.junit.Test
 /**
  * Comprehensive unit test suite for Batch 11: Mobile Settings, Appearance and Language.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class SettingsUnitTest {
 
+    private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var viewModel: SettingsViewModel
 
     @Before
     fun setUp() {
+        Dispatchers.setMain(testDispatcher)
         viewModel = SettingsViewModel()
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
     }
 
     // ==========================================
@@ -94,22 +112,18 @@ class SettingsUnitTest {
     // ==========================================
 
     @Test
-    fun `theme mode supports Light, Dark, System`() {
-        val expectedModes = setOf(ThemeMode.LIGHT, ThemeMode.DARK, ThemeMode.SYSTEM)
+    fun `theme mode supports Light, Dark, OLED Battery Saver, System`() {
+        val expectedModes = setOf(ThemeMode.LIGHT, ThemeMode.DARK, ThemeMode.OLED_BATTERY_SAVER, ThemeMode.SYSTEM)
         assertEquals(expectedModes, ThemeMode.entries.toSet())
 
-        var themeCallbackInvoked = false
-        viewModel.setThemeMode(ThemeMode.LIGHT) { isDark ->
-            assertFalse(isDark)
-            themeCallbackInvoked = true
-        }
+        viewModel.setThemeMode(ThemeMode.LIGHT)
         assertEquals(ThemeMode.LIGHT, viewModel.uiState.value.themeMode)
-        assertTrue(themeCallbackInvoked)
 
-        viewModel.setThemeMode(ThemeMode.DARK) { isDark ->
-            assertTrue(isDark)
-        }
+        viewModel.setThemeMode(ThemeMode.DARK)
         assertEquals(ThemeMode.DARK, viewModel.uiState.value.themeMode)
+
+        viewModel.setThemeMode(ThemeMode.OLED_BATTERY_SAVER)
+        assertEquals(ThemeMode.OLED_BATTERY_SAVER, viewModel.uiState.value.themeMode)
 
         viewModel.setThemeMode(ThemeMode.SYSTEM)
         assertEquals(ThemeMode.SYSTEM, viewModel.uiState.value.themeMode)
@@ -162,6 +176,15 @@ class SettingsUnitTest {
     }
 
     @Test
+    fun `built-in background presets match domain entries and apply cleanly`() {
+        BuiltInBackgroundPreset.entries.forEach { preset ->
+            viewModel.setSelectedBuiltInBackground(preset.label)
+            assertEquals(preset.label, viewModel.uiState.value.selectedBuiltInBackground)
+            assertEquals(BackgroundType.BUILT_IN, viewModel.uiState.value.backgroundType)
+        }
+    }
+
+    @Test
     fun `accent supports presets and custom hex`() {
         viewModel.setAccentPreset(AccentPreset.EMERALD)
         assertEquals(AccentPreset.EMERALD, viewModel.uiState.value.accentPreset)
@@ -173,6 +196,26 @@ class SettingsUnitTest {
 
         viewModel.toggleCustomAccent(false)
         assertFalse(viewModel.uiState.value.isCustomAccentEnabled)
+    }
+
+    @Test
+    fun `custom accent hex parsing is safe and rejects malformed values`() {
+        // Valid 6-digit hex
+        assertNotNull(parseSafeHexColor("#FF0055"))
+        assertNotNull(parseSafeHexColor("FF0055"))
+
+        // Valid 8-digit hex (ARGB)
+        assertNotNull(parseSafeHexColor("#80FF0055"))
+        assertNotNull(parseSafeHexColor("80FF0055"))
+
+        // Malformed / invalid values must safely return null without throwing
+        assertNull(parseSafeHexColor("invalid"))
+        assertNull(parseSafeHexColor("#123"))
+        assertNull(parseSafeHexColor("#GGGGGG"))
+        assertNull(parseSafeHexColor("ZZZZZZ"))
+        assertNull(parseSafeHexColor(""))
+        assertNull(parseSafeHexColor("   "))
+        assertNull(parseSafeHexColor(null))
     }
 
     @Test
@@ -189,6 +232,25 @@ class SettingsUnitTest {
 
         viewModel.setEffectsLevel(EffectsLevel.ENHANCED)
         assertEquals(EffectsLevel.ENHANCED, viewModel.uiState.value.effectsLevel)
+    }
+
+    @Test
+    fun `refresh rate mode supports System Dynamic, Force High 120Hz, and Battery Saver 60Hz`() {
+        val expectedModes = setOf(
+            RefreshRateMode.SYSTEM_DEFAULT,
+            RefreshRateMode.FORCE_HIGH,
+            RefreshRateMode.POWER_SAVER
+        )
+        assertEquals(expectedModes, RefreshRateMode.entries.toSet())
+
+        // Default should be SYSTEM_DEFAULT
+        assertEquals(RefreshRateMode.SYSTEM_DEFAULT, viewModel.uiState.value.refreshRateMode)
+
+        viewModel.setRefreshRateMode(RefreshRateMode.FORCE_HIGH)
+        assertEquals(RefreshRateMode.FORCE_HIGH, viewModel.uiState.value.refreshRateMode)
+
+        viewModel.setRefreshRateMode(RefreshRateMode.POWER_SAVER)
+        assertEquals(RefreshRateMode.POWER_SAVER, viewModel.uiState.value.refreshRateMode)
     }
 
     // ==========================================

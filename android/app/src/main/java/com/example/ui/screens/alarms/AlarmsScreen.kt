@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import com.example.ui.components.softBounceOverscroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -86,14 +87,14 @@ fun AlarmsScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(SoftTheme.colors.background)
             .testTag("alarms_screen")
     ) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
+                .softBounceOverscroll()
                 .testTag("alarms_list"),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 88.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 112.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // 1. REDUNDANCY & SYNCHRONIZATION STATUS CARD

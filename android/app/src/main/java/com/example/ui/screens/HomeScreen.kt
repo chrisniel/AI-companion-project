@@ -1,12 +1,24 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.zIndex
+import com.example.ui.components.softBounceOverscroll
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,7 +50,11 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TaskAlt
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -71,6 +87,7 @@ import androidx.compose.ui.unit.sp
 import com.example.domain.model.ConnectionInfo
 import com.example.domain.model.CoreConnectionState
 import com.example.domain.model.HomeData
+import com.example.domain.model.LanguageOption
 import com.example.domain.model.NextScheduleItem
 import com.example.domain.model.ScheduleItemType
 import com.example.domain.model.StatusSeverity
@@ -79,6 +96,7 @@ import com.example.domain.model.TodaySummary
 import com.example.domain.model.UserProfile
 import com.example.domain.model.WellnessGlance
 import com.example.navigation.Routes
+import com.example.ui.components.CompactConnectionIndicator
 import com.example.ui.components.InteractiveSoftGlassCard
 import com.example.ui.components.InteractiveSoftWell
 import com.example.ui.components.PrimaryButton
@@ -115,6 +133,9 @@ fun HomeScreen(
     onNavigateToRoute: (String) -> Unit,
     onToggleTask: (String) -> Unit,
     onAddTask: (title: String, priority: String) -> Unit,
+    onAvatarClick: () -> Unit = {},
+    selectedLanguage: LanguageOption = LanguageOption.AUTO,
+    onSelectLanguage: (LanguageOption) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -124,14 +145,19 @@ fun HomeScreen(
         modifier = modifier
             .fillMaxSize()
             .testTag("home_screen")
+            .softBounceOverscroll()
             .verticalScroll(scrollState)
+            .statusBarsPadding()
             .padding(horizontal = SoftTheme.spacing.lg, vertical = SoftTheme.spacing.sm),
         verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.lg)
     ) {
         // 1. CONTEXTUAL PROFILE GREETING HEADER (Never hardcoded)
         HomeHeaderGreeting(
             profile = homeData.profile,
-            isReachable = connectionInfo.state == CoreConnectionState.Local || connectionInfo.state == CoreConnectionState.Remote
+            isReachable = connectionInfo.state == CoreConnectionState.Local || connectionInfo.state == CoreConnectionState.Remote,
+            activeModelName = selectedPersona,
+            onAvatarClick = onAvatarClick,
+            modifier = Modifier.fillMaxWidth()
         )
 
         // 2. ASSISTANT HERO (Calm, prominent, active character, reachability, model summary, no loud telemetry)
@@ -140,6 +166,8 @@ fun HomeScreen(
             assistantState = homeData.assistantStateText,
             connectionInfo = connectionInfo,
             modelSummary = homeData.activeModelSummary,
+            selectedLanguage = selectedLanguage,
+            onSelectLanguage = onSelectLanguage,
             onSelectPersona = onSelectPersona,
             onCardClick = { onNavigateToRoute(Routes.ASSISTANT) }
         )
@@ -204,6 +232,8 @@ fun HomeScreen(
 private fun HomeHeaderGreeting(
     profile: UserProfile,
     isReachable: Boolean,
+    activeModelName: String = "Aura",
+    onAvatarClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val greetingTime = remember {
@@ -215,7 +245,7 @@ private fun HomeHeaderGreeting(
         }
     }
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .testTag("home_header_greeting")
@@ -225,7 +255,7 @@ private fun HomeHeaderGreeting(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = if (profile.name.isNotBlank() && profile.name != "User") "$greetingTime, ${profile.name}" else greetingTime,
                     style = MaterialTheme.typography.headlineSmall,
@@ -246,19 +276,30 @@ private fun HomeHeaderGreeting(
                             )
                     )
                     Text(
-                        text = if (isReachable) "Local AI Core reachable & ready" else "PC Core unreachable (Offline Mode active)",
+                        text = if (isReachable) "$activeModelName is online" else "Offline Mode active",
                         style = MaterialTheme.typography.bodySmall,
                         color = SoftTheme.colors.textSecondary
                     )
                 }
             }
 
-            SoftAvatar(
-                name = profile.name,
-                size = 40.dp,
-                statusColor = if (isReachable) SoftTheme.colors.statusSuccess else SoftTheme.colors.statusWarning,
-                testTag = "home_user_avatar"
-            )
+            Box(
+                modifier = Modifier
+                    .testTag("home_user_avatar")
+                    .clip(CircleShape)
+                    .clickable(
+                        role = Role.Button,
+                        onClickLabel = "Open Profile and Vault Status"
+                    ) {
+                        onAvatarClick()
+                    }
+            ) {
+                SoftAvatar(
+                    name = profile.name,
+                    size = 40.dp,
+                    statusColor = null
+                )
+            }
         }
     }
 }
@@ -274,13 +315,14 @@ private fun HomeAssistantHero(
     assistantState: String,
     connectionInfo: ConnectionInfo,
     modelSummary: String,
+    selectedLanguage: LanguageOption,
+    onSelectLanguage: (LanguageOption) -> Unit,
     onSelectPersona: (String) -> Unit,
     onCardClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val isReachable = connectionInfo.state == CoreConnectionState.Local || connectionInfo.state == CoreConnectionState.Remote
-    var selectedLang by remember { mutableStateOf("Auto") }
-    val languages = listOf("Auto", "US EN", "PH FIL", "JP JA", "Mixed")
+    var isLangDropdownOpen by remember { mutableStateOf(false) }
 
     InteractiveSoftGlassCard(
         onClick = onCardClick,
@@ -294,7 +336,7 @@ private fun HomeAssistantHero(
                 .padding(SoftTheme.spacing.md),
             verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
         ) {
-            // Top Meta Row: Core status + Language selector pills
+            // Top Meta Row: Core status + Language selector dropdown
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -334,32 +376,69 @@ private fun HomeAssistantHero(
                     )
                 }
 
-                // Language Engine Pills from Image 3 & 4
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    languages.forEach { lang ->
-                        val isLangSelected = lang == selectedLang
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(SoftTheme.tokens.corners.pill))
-                                .background(
-                                    if (isLangSelected) SoftTheme.colors.accentBlue
-                                    else SoftTheme.colors.surfaceWell
-                                )
-                                .clickable { selectedLang = lang }
-                                .padding(horizontal = 7.dp, vertical = 3.dp),
-                            contentAlignment = Alignment.Center
+                // Compact Language Dropdown Pill
+                Box {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(SoftTheme.tokens.corners.pill))
+                            .background(SoftTheme.colors.surfaceElevated)
+                            .border(
+                                width = SoftTheme.tokens.borders.hairline,
+                                color = SoftTheme.colors.borderSubtle,
+                                shape = RoundedCornerShape(SoftTheme.tokens.corners.pill)
+                            )
+                            .clickable { isLangDropdownOpen = true }
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
+                            val flagLabel = when (selectedLanguage) {
+                                LanguageOption.AUTO -> "🌐 Auto"
+                                LanguageOption.ENGLISH -> "🇺🇸 English"
+                                LanguageOption.FILIPINO -> "🇵🇭 Filipino"
+                                LanguageOption.JAPANESE -> "🇯🇵 Japanese"
+                            }
                             Text(
-                                text = lang,
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                                fontWeight = if (isLangSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isLangSelected) {
-                                    if (SoftTheme.colors.isDark) Color(0xFF070B14) else Color.White
-                                } else {
-                                    SoftTheme.colors.textSecondary
+                                text = flagLabel,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                fontWeight = FontWeight.Bold,
+                                color = SoftTheme.colors.accentPrimaryColor
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = "Select language",
+                                tint = SoftTheme.colors.textMuted,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = isLangDropdownOpen,
+                        onDismissRequest = { isLangDropdownOpen = false },
+                        modifier = Modifier.background(SoftTheme.colors.surfaceElevated)
+                    ) {
+                        listOf(
+                            LanguageOption.AUTO to "🌐 Auto (Detect)",
+                            LanguageOption.ENGLISH to "🇺🇸 English (US)",
+                            LanguageOption.FILIPINO to "🇵🇭 Filipino (Tagalog)",
+                            LanguageOption.JAPANESE to "🇯🇵 Japanese (日本語)"
+                        ).forEach { (opt, label) ->
+                            val isCurrent = selectedLanguage == opt
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isCurrent) SoftTheme.colors.accentPrimaryColor else SoftTheme.colors.textPrimary
+                                    )
+                                },
+                                onClick = {
+                                    onSelectLanguage(opt)
+                                    isLangDropdownOpen = false
                                 }
                             )
                         }
@@ -466,7 +545,7 @@ private fun HomeAssistantHero(
 
 /**
  * 3. Quick Actions:
- * Four large tactile mobile-friendly action buttons with generous touch targets.
+ * Four large tactile mobile-friendly action buttons with hero text typography.
  */
 @Composable
 private fun HomeQuickActionsGrid(
@@ -485,7 +564,6 @@ private fun HomeQuickActionsGrid(
             horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
         ) {
             QuickActionButton(
-                icon = Icons.Default.AutoAwesome,
                 title = "Ask",
                 subtitle = "Local AI Chat",
                 accentColor = SoftTheme.colors.accentBlue,
@@ -495,7 +573,6 @@ private fun HomeQuickActionsGrid(
             )
 
             QuickActionButton(
-                icon = Icons.Default.Add,
                 title = "Add Task",
                 subtitle = "New To-Do",
                 accentColor = SoftTheme.colors.accentCyan,
@@ -510,7 +587,6 @@ private fun HomeQuickActionsGrid(
             horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
         ) {
             QuickActionButton(
-                icon = Icons.Default.Alarm,
                 title = "Alarm",
                 subtitle = "Smart Circadian",
                 accentColor = SoftTheme.colors.accentAmber,
@@ -520,7 +596,6 @@ private fun HomeQuickActionsGrid(
             )
 
             QuickActionButton(
-                icon = Icons.AutoMirrored.Filled.EventNote,
                 title = "Reminder",
                 subtitle = "Schedule & Alert",
                 accentColor = SoftTheme.colors.accentViolet,
@@ -534,7 +609,6 @@ private fun HomeQuickActionsGrid(
 
 @Composable
 private fun QuickActionButton(
-    icon: ImageVector,
     title: String,
     subtitle: String,
     accentColor: Color,
@@ -548,49 +622,28 @@ private fun QuickActionButton(
         testTag = testTag,
         modifier = modifier.height(72.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = SoftTheme.spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
+                .padding(horizontal = SoftTheme.spacing.md, vertical = SoftTheme.spacing.xs),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.Start
         ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(SoftTheme.tokens.corners.md))
-                    .background(accentColor.copy(alpha = 0.15f))
-                    .border(
-                        width = SoftTheme.tokens.borders.hairline,
-                        color = accentColor.copy(alpha = 0.35f),
-                        shape = RoundedCornerShape(SoftTheme.tokens.corners.md)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = accentColor,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = SoftTheme.colors.textPrimary,
-                    maxLines = 1
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                    color = SoftTheme.colors.textSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp),
+                fontWeight = FontWeight.Bold,
+                color = SoftTheme.colors.textPrimary,
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                color = SoftTheme.colors.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -831,7 +884,7 @@ private fun HomeTodaySection(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "${todaySummary.completedCount} of ${todaySummary.totalCount} completed",
                             style = MaterialTheme.typography.titleMedium,
@@ -1089,13 +1142,13 @@ private fun WellnessGlanceCard(
         onClick = onClick,
         elevation = SoftTheme.tokens.elevations.subtle,
         testTag = testTag,
-        modifier = modifier.height(104.dp)
+        modifier = modifier.height(110.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(SoftTheme.spacing.sm),
-            verticalArrangement = Arrangement.SpaceBetween
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1105,6 +1158,7 @@ private fun WellnessGlanceCard(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
                     color = SoftTheme.colors.textMuted,
                     maxLines = 1
                 )
@@ -1112,21 +1166,28 @@ private fun WellnessGlanceCard(
                     imageVector = icon,
                     contentDescription = null,
                     tint = accentColor,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
 
-            Column {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Text(
                     text = mainValue,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
                     fontWeight = FontWeight.Bold,
                     color = SoftTheme.colors.textPrimary,
                     maxLines = 1
                 )
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                     color = SoftTheme.colors.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis

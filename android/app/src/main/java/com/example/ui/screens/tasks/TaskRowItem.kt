@@ -3,12 +3,15 @@ package com.example.ui.screens.tasks
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -64,6 +67,8 @@ import androidx.compose.ui.unit.sp
 import com.example.domain.model.MobileTask
 import com.example.domain.model.TaskCategory
 import com.example.domain.model.TaskPriority
+import com.example.ui.components.SoftGlassCard
+import com.example.ui.components.softNeumorphicInset
 import com.example.ui.theme.SoftTheme
 
 /**
@@ -75,6 +80,7 @@ import com.example.ui.theme.SoftTheme
  * - due date/time indicator
  * - Quick Actions: complete, edit, delete, snooze/remind later
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TaskRowItem(
     task: MobileTask,
@@ -97,7 +103,7 @@ fun TaskRowItem(
 
     val cardBackground by animateColorAsState(
         targetValue = if (task.isCompleted) {
-            SoftTheme.colors.surfaceElevated.copy(alpha = 0.55f)
+            SoftTheme.colors.surfaceWell.copy(alpha = 0.60f)
         } else {
             SoftTheme.colors.surfaceElevated
         },
@@ -109,22 +115,32 @@ fun TaskRowItem(
         label = "contentAlpha"
     )
 
-    Box(
+    SoftGlassCard(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(SoftTheme.tokens.corners.md))
-            .background(cardBackground)
-            .border(
-                width = SoftTheme.tokens.borders.hairline,
-                color = if (task.isCompleted) SoftTheme.colors.borderSubtle.copy(alpha = 0.5f) else SoftTheme.colors.borderSubtle,
-                shape = RoundedCornerShape(SoftTheme.tokens.corners.md)
-            )
-            .clickable(onClick = onEdit)
-            .padding(14.dp)
             .testTag("task_item_${task.id}")
+            .clickable(onClick = onEdit),
+        elevation = if (task.isCompleted) SoftTheme.tokens.elevations.flat else SoftTheme.tokens.elevations.card,
+        containerColor = cardBackground,
+        shape = RoundedCornerShape(SoftTheme.tokens.corners.md),
+        border = BorderStroke(
+            SoftTheme.tokens.borders.hairline,
+            if (task.isCompleted) SoftTheme.colors.borderSubtle.copy(alpha = 0.5f) else SoftTheme.colors.borderSubtle
+        )
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (task.isCompleted) {
+                        Modifier.softNeumorphicInset(
+                            shape = RoundedCornerShape(SoftTheme.tokens.corners.md),
+                            isDark = SoftTheme.colors.isDark,
+                            depth = 2.dp
+                        )
+                    } else Modifier
+                )
+                .padding(14.dp),
             verticalAlignment = Alignment.Top
         ) {
             // 1. COMPLETION CONTROL (Touch target 48dp friendly)
@@ -204,10 +220,10 @@ fun TaskRowItem(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // METADATA CHIPS ROW: Category/Project, Priority, Due Date/Time, Reminder
-                Row(
+                // METADATA CHIPS: Category/Project, Priority, Due Date/Time, Reminder
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     // Category / Project Pill
@@ -229,8 +245,9 @@ fun TaskRowItem(
                             text = task.category.label,
                             style = MaterialTheme.typography.labelSmall,
                             color = SoftTheme.colors.textSecondary,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            softWrap = false
                         )
                     }
 
@@ -253,8 +270,9 @@ fun TaskRowItem(
                             text = task.priority.label,
                             style = MaterialTheme.typography.labelSmall,
                             color = priorityColor,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            softWrap = false
                         )
                     }
 
@@ -286,8 +304,9 @@ fun TaskRowItem(
                             text = dueString,
                             style = MaterialTheme.typography.labelSmall,
                             color = if (task.isSnoozed) SoftTheme.colors.statusWarning else SoftTheme.colors.textSecondary,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            softWrap = false
                         )
                     }
                 }

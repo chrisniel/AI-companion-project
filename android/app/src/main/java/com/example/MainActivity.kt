@@ -1,5 +1,6 @@
 package com.example
 
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -22,6 +23,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        configureDisplayRefreshRate()
 
         val appContainer = (application as CompanionApplication).appContainer
 
@@ -35,6 +37,32 @@ class MainActivity : ComponentActivity() {
                     designSystemViewModel = designSystemViewModel
                 )
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        configureDisplayRefreshRate()
+    }
+
+    private fun configureDisplayRefreshRate() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                display
+            } else {
+                @Suppress("DEPRECATION")
+                windowManager.defaultDisplay
+            }
+            val modes = display?.supportedModes ?: emptyArray()
+            val maxMode = modes.maxByOrNull { it.refreshRate }
+            val layoutParams = window.attributes
+
+            if (maxMode != null) {
+                layoutParams.preferredDisplayModeId = maxMode.modeId
+                layoutParams.preferredRefreshRate = maxMode.refreshRate
+            }
+
+            window.attributes = layoutParams
         }
     }
 }

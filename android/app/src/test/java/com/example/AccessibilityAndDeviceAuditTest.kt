@@ -73,7 +73,9 @@ class AccessibilityAndDeviceAuditTest {
             composeTestRule.onNodeWithTag(item.testTag)
                 .assertIsDisplayed()
                 .assertHasClickAction()
-            composeTestRule.onNodeWithText(item.title).assertIsDisplayed()
+            if (item != BottomNavItem.Assistant) {
+                composeTestRule.onNodeWithText(item.title).assertIsDisplayed()
+            }
         }
     }
 

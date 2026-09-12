@@ -57,8 +57,8 @@ fun AppTopBar(
     onNavigateBack: () -> Unit,
     connectionInfo: ConnectionInfo,
     onCycleConnectionState: () -> Unit,
-    isDarkTheme: Boolean,
-    onToggleTheme: () -> Unit,
+    isDarkTheme: Boolean = false,
+    onToggleTheme: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     userName: String = "Chris",
     onAvatarClick: () -> Unit = {}
@@ -103,6 +103,7 @@ fun AppTopBar(
                             .clip(CircleShape)
                             .clickable(
                                 role = Role.Button,
+                                onClickLabel = "Open Vault and Profile",
                                 onClick = onAvatarClick
                             )
                     ) {
@@ -112,9 +113,9 @@ fun AppTopBar(
                             statusColor = when (connectionInfo.state) {
                                 CoreConnectionState.Local -> SoftTheme.colors.statusSuccess
                                 CoreConnectionState.Remote -> SoftTheme.colors.accentCyan
-                                CoreConnectionState.Connecting -> SoftTheme.colors.accentCyan
+                                CoreConnectionState.Connecting -> SoftTheme.colors.statusWarning
                                 CoreConnectionState.Reconnecting -> SoftTheme.colors.statusWarning
-                                CoreConnectionState.Offline -> SoftTheme.colors.textMuted
+                                CoreConnectionState.Offline -> SoftTheme.colors.statusError
                             },
                             testTag = "topbar_user_avatar"
                         )
@@ -156,22 +157,24 @@ fun AppTopBar(
                     )
                 }
 
-                // Theme switch button
-                IconButton(
-                    onClick = onToggleTheme,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .testTag("topbar_theme_toggle")
-                        .semantics {
-                            contentDescription = if (isDarkTheme) "Switch to Light theme" else "Switch to Dark theme"
-                        }
-                ) {
-                    Icon(
-                        imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
-                        contentDescription = null,
-                        tint = SoftTheme.colors.textSecondary,
-                        modifier = Modifier.size(18.dp)
-                    )
+                // Theme switch button (only rendered if onToggleTheme handler provided)
+                if (onToggleTheme != null) {
+                    IconButton(
+                        onClick = onToggleTheme,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("topbar_theme_toggle")
+                            .semantics {
+                                contentDescription = if (isDarkTheme) "Switch to Light theme" else "Switch to Dark theme"
+                            }
+                    ) {
+                        Icon(
+                            imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
+                            contentDescription = null,
+                            tint = SoftTheme.colors.textSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }

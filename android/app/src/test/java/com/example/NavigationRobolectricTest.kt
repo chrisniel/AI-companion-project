@@ -2,10 +2,15 @@ package com.example
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
 import com.example.domain.model.CoreConnectionState
 import com.example.navigation.Routes
 import com.example.ui.preview.DesignSystemViewModel
@@ -67,7 +72,12 @@ class NavigationRobolectricTest {
 
         // Initially on Home
         composeTestRule.onNodeWithTag("nav_item_home").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("topbar_connection_indicator").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("home_user_avatar").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("home_user_avatar").performClick()
+        composeTestRule.onAllNodesWithTag("topbar_connection_indicator")
+            .onFirst()
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithTag("home_user_avatar").performClick()
 
         // Navigate to Assistant
         composeTestRule.onNodeWithTag("nav_item_assistant").performClick()
@@ -99,5 +109,44 @@ class NavigationRobolectricTest {
         // Return to Home
         composeTestRule.onNodeWithTag("nav_item_home").performClick()
         composeTestRule.onNodeWithText("NEXT UP").assertIsDisplayed()
+    }
+
+    @Test
+    fun `horizontal swipe gestures smoothly navigate across primary tabs`() {
+        val appViewModel = AppViewModel()
+        val designSystemViewModel = DesignSystemViewModel()
+
+        composeTestRule.setContent {
+            SoftGlassTheme(darkTheme = false) {
+                AppShell(
+                    appViewModel = appViewModel,
+                    designSystemViewModel = designSystemViewModel
+                )
+            }
+        }
+
+        // Initially on Home
+        composeTestRule.onNodeWithTag("home_screen").assertIsDisplayed()
+
+        // Swipe left from Home to Tasks
+        composeTestRule.onNodeWithTag("home_screen").performTouchInput {
+            swipeLeft()
+        }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("tasks_screen").assertIsDisplayed()
+
+        // Swipe left from Tasks to Assistant
+        composeTestRule.onNodeWithTag("tasks_screen").performTouchInput {
+            swipeLeft()
+        }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Local Assistant").assertIsDisplayed()
+
+        // Swipe right from Assistant back to Tasks
+        composeTestRule.onNodeWithTag("assistant_screen").performTouchInput {
+            swipeRight()
+        }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("tasks_screen").assertIsDisplayed()
     }
 }

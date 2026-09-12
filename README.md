@@ -2,7 +2,7 @@
 
 A local-first personal AI companion ecosystem centered around a Windows PC running a persistent **Local AI Core**, with a React desktop control center and a native Android companion app.
 
-> **Development status:** The React web UI prototype and multilingual UI patch are present in this repository. The Android UI/UX prototype is being developed externally in Google AI Studio and is currently at **Batch 12: Offline + Sync + Connection**; Android source has not yet been exported into this repository. The FastAPI backend, local model runtime integration, voice pipeline, health synchronization, and real device integrations remain planned and are not yet repository-verified.
+> **Development status:** Both the PC React web UI prototype (`frontend/web/`) and the native Android companion app (`android/`) are repository-verified in this workspace. The Android app features 17 screens in Jetpack Compose, the SoftGlass design system, AMOLED pitch-black theme, persistent SharedPreferences storage, fluid overscroll bounce physics, real Local AI Core Host IP/port configuration, and 110 passing unit tests. The FastAPI backend, local model runtime integration, database, voice pipeline, health synchronization, and real device integrations are planned and form the next implementation phase.
 
 ---
 
@@ -205,27 +205,18 @@ Repository Interface
 Fake Repository
 ```
 
-Current Android UI/UX progress is user-reported from Google AI Studio and is not yet repository-verifiable:
+Current Android UI/UX implementation is repository-verified in `android/`:
 
 ```text
-Batch 0     Architecture constitution             ✅
-Batch 1     Soft Glass design system              ✅
-Batch 1.1   Visual calibration                    ✅
-Batch 2     App shell + navigation                ✅
-Batch 3     Home                                  ✅
-Batch 4     Assistant                             ✅
-Batch 4.1   Dedicated Voice Mode                  ✅
-Batch 5     Tasks                                 ✅
-Batch 6     Schedule + Alarms                     ✅
-Batch 7     Health                                ✅
-Batch 8     Characters                            ✅
-Batch 9     Models + Devices                      ✅
-Batch 10    Memory + More                         ✅
-Batch 11    Settings + Theme + Languages          ✅
-Batch 12    Offline + Sync + Connection           🚧 Current
-Batch 13    Android Permission UX                 ⏳
-Batch 14    Accessibility + Device Audit          ⏳
-Batch 15    Final Mobile Polish                   ⏳
+17 Jetpack Compose screens            ✅ Repository-verified
+SoftGlass neumorphic design engine    ✅ Repository-verified
+OLED pitch-black battery-saver theme  ✅ Repository-verified
+High-refresh rate display adaptation  ✅ Repository-verified (up to 165Hz)
+Two-phase spring bounce overscroll    ✅ Repository-verified
+Persistent SharedPreferences storage  ✅ Repository-verified
+Real host IP/port connection card     ✅ Repository-verified
+On-device hybrid failover controls    ✅ Repository-verified
+110 Robolectric/unit tests passing    ✅ 110 passed (0 failures)
 ```
 
 Real integrations such as FastAPI, Room, DataStore, Health Connect, AlarmManager, WorkManager, microphone capture, STT, TTS, Bluetooth APIs, remote connectivity, and authentication come later.

@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.example.ui.components.softBounceOverscroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -195,6 +196,7 @@ fun AssistantHistorySheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
+                    .softBounceOverscroll()
                     .testTag("history_conversations_list"),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {

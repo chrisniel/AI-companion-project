@@ -56,10 +56,16 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.model.LanguageOption
 import com.example.ui.components.NavigationGlassSurface
+import com.example.ui.components.softInsetWell
+import com.example.ui.components.softNeumorphicRaised
 import com.example.ui.theme.SoftTheme
 
 /**
@@ -90,6 +96,7 @@ fun AssistantComposer(
 ) {
     var showAttachmentMenu by remember { mutableStateOf(false) }
     var showLanguageMenu by remember { mutableStateOf(false) }
+    var isFocused by remember { mutableStateOf(false) }
 
     val sampleMixedPrompts = listOf(
         "Remind me bukas.",
@@ -312,100 +319,143 @@ fun AssistantComposer(
                 }
 
                 // Middle & Bottom Row: Text input + Mic + Send / Stop Button
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    // Text Input
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = 40.dp, max = 120.dp)
-                            .clip(RoundedCornerShape(SoftTheme.tokens.corners.md))
-                            .background(SoftTheme.colors.surfaceWell)
-                            .border(
-                                width = SoftTheme.tokens.borders.hairline,
-                                color = SoftTheme.colors.borderSubtle,
-                                shape = RoundedCornerShape(SoftTheme.tokens.corners.md)
-                            )
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        contentAlignment = Alignment.CenterStart
+                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        if (inputText.isEmpty()) {
-                            Text(
-                                text = "Message Local Core (mixed language supported)...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = SoftTheme.colors.textMuted,
-                                fontSize = 14.sp
-                            )
-                        }
-                        BasicTextField(
-                            value = inputText,
-                            onValueChange = onInputTextChange,
-                            textStyle = TextStyle(
-                                color = SoftTheme.colors.textPrimary,
-                                fontSize = 14.sp,
-                                lineHeight = 20.sp
-                            ),
-                            cursorBrush = SolidColor(SoftTheme.colors.accentBlue),
+                        // Text Input: Inset well when idle, embossed raised when active/focused
+                        val isInputActive = isFocused || inputText.isNotEmpty()
+                        val textShape = RoundedCornerShape(SoftTheme.tokens.corners.md)
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("composer_text_input")
-                        )
-                    }
-
-                    // Microphone Toggle Button (Simulated voice recording)
-                    MicrophoneButton(
-                        isActive = isMicrophoneActive,
-                        onClick = onToggleMicrophone
-                    )
-
-                    // Send or Stop Generation Button
-                    if (isGenerating) {
-                        // Stop Generation Button
-                        IconButton(
-                            onClick = onStopGeneration,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .testTag("composer_stop_button")
-                                .clip(CircleShape)
-                                .background(SoftTheme.colors.statusWarning.copy(alpha = 0.2f))
-                                .border(
-                                    width = 1.dp,
-                                    color = SoftTheme.colors.statusWarning,
-                                    shape = CircleShape
+                                .weight(1f)
+                                .heightIn(min = 40.dp, max = 120.dp)
+                                .then(
+                                    if (isInputActive) {
+                                        Modifier.softNeumorphicRaised(
+                                            shape = textShape,
+                                            isDark = SoftTheme.colors.isDark,
+                                            elevation = 2.dp,
+                                            highlightAlpha = 0.12f,
+                                            shadowAlpha = 0.35f
+                                        )
+                                    } else {
+                                        Modifier.softInsetWell(
+                                            shape = textShape,
+                                            isDark = SoftTheme.colors.isDark,
+                                            depth = 2.dp
+                                        )
+                                    }
                                 )
-                                .semantics { contentDescription = "Stop generation" }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Stop,
-                                contentDescription = "Stop",
-                                tint = SoftTheme.colors.statusWarning,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    } else {
-                        // Send Button
-                        val canSend = inputText.isNotBlank() || attachments.isNotEmpty()
-                        IconButton(
-                            onClick = { onSendMessage(null) },
-                            enabled = canSend,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .testTag("composer_send_button")
-                                .clip(CircleShape)
                                 .background(
-                                    if (canSend) SoftTheme.colors.accentBlue else SoftTheme.colors.surfaceWell
+                                    if (isInputActive) SoftTheme.colors.surfaceElevated else SoftTheme.colors.surfaceWell,
+                                    textShape
                                 )
-                                .semantics { contentDescription = "Send message" }
+                                .border(
+                                    width = SoftTheme.tokens.borders.hairline,
+                                    color = if (isInputActive) SoftTheme.colors.accentBlue.copy(alpha = 0.5f) else SoftTheme.colors.borderSubtle,
+                                    shape = textShape
+                                )
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.CenterStart
                         ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Send,
-                                contentDescription = "Send",
-                                tint = if (canSend) Color.White else SoftTheme.colors.textMuted,
-                                modifier = Modifier.size(18.dp)
+                            if (inputText.isEmpty()) {
+                                Text(
+                                    text = "Message AI Companion...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = SoftTheme.colors.textMuted,
+                                    fontSize = 14.sp
+                                )
+                            }
+                            BasicTextField(
+                                value = inputText,
+                                onValueChange = onInputTextChange,
+                                textStyle = TextStyle(
+                                    color = SoftTheme.colors.textPrimary,
+                                    fontSize = 14.sp,
+                                    lineHeight = 20.sp
+                                ),
+                                cursorBrush = SolidColor(SoftTheme.colors.accentBlue),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .onFocusChanged { isFocused = it.isFocused }
+                                    .testTag("composer_text_input")
                             )
+                        }
+
+                        // Microphone Toggle Button (Simulated voice recording)
+                        MicrophoneButton(
+                            isActive = isMicrophoneActive,
+                            onClick = onToggleMicrophone
+                        )
+
+                        // Send or Stop Generation Button
+                        if (isGenerating) {
+                            // Stop Generation Button
+                            IconButton(
+                                onClick = onStopGeneration,
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .testTag("composer_stop_button")
+                                    .softNeumorphicRaised(
+                                        shape = CircleShape,
+                                        isDark = SoftTheme.colors.isDark,
+                                        elevation = 2.dp,
+                                        highlightAlpha = 0.2f,
+                                        shadowAlpha = 0.4f
+                                    )
+                                    .background(SoftTheme.colors.statusWarning.copy(alpha = 0.2f), CircleShape)
+                                    .border(
+                                        width = 1.dp,
+                                        color = SoftTheme.colors.statusWarning,
+                                        shape = CircleShape
+                                    )
+                                    .semantics { contentDescription = "Stop generation" }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Stop,
+                                    contentDescription = "Stop",
+                                    tint = SoftTheme.colors.statusWarning,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        } else {
+                            // Send Button
+                            val canSend = inputText.isNotBlank() || attachments.isNotEmpty()
+                            IconButton(
+                                onClick = { onSendMessage(null) },
+                                enabled = canSend,
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .testTag("composer_send_button")
+                                    .then(
+                                        if (canSend) {
+                                            Modifier.softNeumorphicRaised(
+                                                shape = CircleShape,
+                                                isDark = SoftTheme.colors.isDark,
+                                                elevation = 3.dp,
+                                                highlightAlpha = 0.25f,
+                                                shadowAlpha = 0.5f
+                                            )
+                                        } else {
+                                            Modifier.clip(CircleShape)
+                                        }
+                                    )
+                                    .background(
+                                        if (canSend) SoftTheme.colors.accentBlue else SoftTheme.colors.surfaceWell,
+                                        CircleShape
+                                    )
+                                    .semantics { contentDescription = "Send message" }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Send,
+                                    contentDescription = "Send",
+                                    tint = if (canSend) Color.White else SoftTheme.colors.textMuted,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -423,7 +473,7 @@ fun MicrophoneButton(
     val infiniteTransition = rememberInfiniteTransition(label = "micPulse")
     val scale by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue = if (isActive) 1.2f else 1f,
+        targetValue = if (isActive) 1.15f else 1f,
         animationSpec = infiniteRepeatable(
             animation = tween(500),
             repeatMode = RepeatMode.Reverse
@@ -432,7 +482,7 @@ fun MicrophoneButton(
     )
 
     val bgColor by animateColorAsState(
-        targetValue = if (isActive) SoftTheme.colors.statusError.copy(alpha = 0.2f) else SoftTheme.colors.surfaceWell,
+        targetValue = if (isActive) SoftTheme.colors.statusError.copy(alpha = 0.2f) else SoftTheme.colors.surfaceElevated,
         label = "micBg"
     )
 
@@ -444,10 +494,22 @@ fun MicrophoneButton(
     IconButton(
         onClick = onClick,
         modifier = modifier
-            .size(40.dp)
+            .size(36.dp)
             .testTag("composer_mic_button")
-            .clip(CircleShape)
-            .background(bgColor)
+            .then(
+                if (!isActive) {
+                    Modifier.softNeumorphicRaised(
+                        shape = CircleShape,
+                        isDark = SoftTheme.colors.isDark,
+                        elevation = 2.dp,
+                        highlightAlpha = 0.15f,
+                        shadowAlpha = 0.4f
+                    )
+                } else {
+                    Modifier.clip(CircleShape)
+                }
+            )
+            .background(bgColor, CircleShape)
             .border(
                 width = SoftTheme.tokens.borders.hairline,
                 color = if (isActive) SoftTheme.colors.statusError else SoftTheme.colors.borderSubtle,
@@ -460,7 +522,7 @@ fun MicrophoneButton(
             contentDescription = null,
             tint = iconTint,
             modifier = Modifier
-                .size(18.dp)
+                .size(16.dp)
                 .scale(if (isActive) scale else 1f)
         )
     }

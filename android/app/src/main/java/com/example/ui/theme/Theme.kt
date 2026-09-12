@@ -1,5 +1,7 @@
 package com.example.ui.theme
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalOverscrollConfiguration
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -32,164 +34,248 @@ fun SoftGlassTheme(
     isSystemDark: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
+    val isOled = preferences.themeMode == ThemeMode.OLED_BATTERY_SAVER
     val isDark = when (preferences.themeMode) {
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
+        ThemeMode.OLED_BATTERY_SAVER -> true
         ThemeMode.SYSTEM -> isSystemDark
     }
 
-    val activeAccentColor = when (preferences.accentPreset) {
-        AccentPreset.CYAN -> AccentCyan
-        AccentPreset.BLUE -> if (isDark) AccentBlueDark else AccentBlueLight
-        AccentPreset.VIOLET -> AccentViolet
-        AccentPreset.AMBER -> AccentAmber
-        AccentPreset.EMERALD -> AccentEmerald
+    val fallbackBlueAccent = when {
+        isOled -> AccentBlueOled
+        isDark -> AccentBlueDark
+        else -> AccentBlueLight
+    }
+    val fallbackBlueSubtle = when {
+        isOled -> AccentBlueOledSubtle
+        isDark -> AccentBlueDarkSubtle
+        else -> AccentBlueLightSubtle
     }
 
-    val activeAccentSubtle = when (preferences.accentPreset) {
-        AccentPreset.CYAN -> AccentCyanSubtle
-        AccentPreset.BLUE -> if (isDark) AccentBlueDarkSubtle else AccentBlueLightSubtle
-        AccentPreset.VIOLET -> AccentVioletSubtle
-        AccentPreset.AMBER -> AccentAmberSubtle
-        AccentPreset.EMERALD -> AccentEmeraldSubtle
+    val (activeAccentColor, activeAccentSubtle) = if (preferences.customAccentHex != null) {
+        val parsed = parseSafeHexColor(preferences.customAccentHex)
+        if (parsed != null) {
+            parsed to parsed.copy(alpha = 0.16f)
+        } else {
+            // Malformed/invalid hex safely falls back to default BLUE accent
+            fallbackBlueAccent to fallbackBlueSubtle
+        }
+    } else {
+        when (preferences.accentPreset) {
+            AccentPreset.CYAN -> AccentCyan to AccentCyanSubtle
+            AccentPreset.BLUE -> fallbackBlueAccent to fallbackBlueSubtle
+            AccentPreset.VIOLET -> AccentViolet to AccentVioletSubtle
+            AccentPreset.AMBER -> AccentAmber to AccentAmberSubtle
+            AccentPreset.EMERALD -> AccentEmerald to AccentEmeraldSubtle
+        }
     }
 
     val (shadowFactor, specularAlpha) = when (preferences.effectsLevel) {
-        EffectsLevel.REDUCED -> 0.4f to 0.05f
-        EffectsLevel.NORMAL -> 1.0f to 0.18f
-        EffectsLevel.ENHANCED -> 1.3f to 0.30f
+        EffectsLevel.REDUCED -> 0.20f to 0.22f
+        EffectsLevel.NORMAL -> 1.0f to 0.22f
+        EffectsLevel.ENHANCED -> 1.5f to 0.35f
     }
 
-    val colors = if (isDark) {
-        SoftGlassColors(
-            isDark = true,
-            background = BackgroundCharcoal,
-            backgroundSecondary = BackgroundGraphite,
-            surface = DarkSurfaceBase,
-            surfaceElevated = DarkSurfaceElevated,
-            surfacePressed = DarkSurfacePressed,
-            surfaceWell = DarkSurfaceWell,
-            panelTranslucent = TranslucentPanelDark,
-            navSurface = NavSurfaceDark,
-            border = BorderDark,
-            borderSubtle = BorderSubtleDark,
-            borderGradient = Brush.verticalGradient(
-                listOf(
-                    Color.White.copy(alpha = 0.14f * specularAlpha),
-                    Color.White.copy(alpha = 0.04f * specularAlpha),
-                    Color.Transparent
-                )
-            ),
-            textPrimary = TextPrimaryDark,
-            textSecondary = TextSecondaryDark,
-            textMuted = TextMutedDark,
-            accentCyan = AccentCyan,
-            accentBlue = AccentBlueDark,
-            accentViolet = AccentViolet,
-            accentAmber = AccentAmber,
-            accentAmberSubtle = AccentAmberSubtle,
-            accentPrimaryColor = activeAccentColor,
-            accentGradient = SolidColor(activeAccentColor),
-            shadow = ShadowDark.copy(alpha = (0.72f * shadowFactor).coerceIn(0f, 1f)),
-            specularHighlight = ShadowDarkSpecular.copy(alpha = specularAlpha),
-            statusSuccess = StatusSuccess,
-            statusSuccessSubtle = StatusSuccessSubtle,
-            statusWarning = StatusWarning,
-            statusWarningSubtle = StatusWarningSubtle,
-            statusError = StatusError,
-            statusErrorSubtle = StatusErrorSubtle,
-            statusInfo = StatusInfo,
-            statusInfoSubtle = StatusInfoSubtle
-        )
-    } else {
-        SoftGlassColors(
-            isDark = false,
-            background = BackgroundPearl,
-            backgroundSecondary = BackgroundPearlSubtle,
-            surface = MilkySurfaceBase,
-            surfaceElevated = MilkySurfaceElevated,
-            surfacePressed = MilkySurfacePressed,
-            surfaceWell = MilkySurfaceWell,
-            panelTranslucent = TranslucentPanelLight,
-            navSurface = NavSurfaceLight,
-            border = BorderLight,
-            borderSubtle = BorderSubtleLight,
-            borderGradient = Brush.verticalGradient(
-                listOf(
-                    Color.White.copy(alpha = 0.95f),
-                    Color.White.copy(alpha = 0.50f),
-                    Color(0x288298B3)
-                )
-            ),
-            textPrimary = TextPrimaryLight,
-            textSecondary = TextSecondaryLight,
-            textMuted = TextMutedLight,
-            accentCyan = AccentCyan,
-            accentBlue = AccentBlueLight,
-            accentViolet = AccentViolet,
-            accentAmber = AccentAmber,
-            accentAmberSubtle = AccentAmberSubtle,
-            accentPrimaryColor = activeAccentColor,
-            accentGradient = SolidColor(activeAccentColor),
-            shadow = ShadowLight.copy(alpha = (0.24f * shadowFactor).coerceIn(0f, 1f)),
-            specularHighlight = ShadowLightSpecular,
-            statusSuccess = StatusSuccess,
-            statusSuccessSubtle = StatusSuccessSubtle,
-            statusWarning = StatusWarning,
-            statusWarningSubtle = StatusWarningSubtle,
-            statusError = StatusError,
-            statusErrorSubtle = StatusErrorSubtle,
-            statusInfo = StatusInfo,
-            statusInfoSubtle = StatusInfoSubtle
-        )
+    val colors = when {
+        isOled -> {
+            SoftGlassColors(
+                isDark = true,
+                isOled = true,
+                background = OledBackground,
+                backgroundSecondary = OledBackgroundSecondary,
+                surface = OledSurfaceBase,
+                surfaceElevated = OledSurfaceElevated,
+                surfacePressed = OledSurfacePressed,
+                surfaceWell = OledSurfaceWell,
+                panelTranslucent = TranslucentPanelOled,
+                navSurface = NavSurfaceOled,
+                border = BorderOled,
+                borderSubtle = BorderSubtleOled,
+                borderGradient = Brush.verticalGradient(
+                    listOf(
+                        BorderSubtleOled,
+                        BorderSubtleOled
+                    )
+                ),
+                textPrimary = TextPrimaryOled,
+                textSecondary = TextSecondaryOled,
+                textMuted = TextMutedOled,
+                accentCyan = AccentCyan,
+                accentBlue = AccentBlueOled,
+                accentViolet = AccentViolet,
+                accentAmber = AccentAmber,
+                accentAmberSubtle = AccentAmberSubtle,
+                accentPrimaryColor = activeAccentColor,
+                accentGradient = SolidColor(activeAccentColor),
+                shadow = ShadowOled, // Zero drop-shadows on OLED pitch black (no gray halo artifacts)
+                specularHighlight = ShadowOledSpecular,
+                statusSuccess = StatusSuccess,
+                statusSuccessSubtle = StatusSuccessSubtle,
+                statusWarning = StatusWarning,
+                statusWarningSubtle = StatusWarningSubtle,
+                statusError = StatusError,
+                statusErrorSubtle = StatusErrorSubtle,
+                statusInfo = StatusInfo,
+                statusInfoSubtle = StatusInfoSubtle
+            )
+        }
+        isDark -> {
+            SoftGlassColors(
+                isDark = true,
+                background = BackgroundCharcoal,
+                backgroundSecondary = BackgroundGraphite,
+                surface = DarkSurfaceBase,
+                surfaceElevated = DarkSurfaceElevated,
+                surfacePressed = DarkSurfacePressed,
+                surfaceWell = DarkSurfaceWell,
+                panelTranslucent = TranslucentPanelDark,
+                navSurface = NavSurfaceDark,
+                border = BorderDark,
+                borderSubtle = BorderSubtleDark,
+                borderGradient = Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.14f * specularAlpha),
+                        Color.White.copy(alpha = 0.04f * specularAlpha),
+                        Color.Transparent
+                    )
+                ),
+                textPrimary = TextPrimaryDark,
+                textSecondary = TextSecondaryDark,
+                textMuted = TextMutedDark,
+                accentCyan = AccentCyan,
+                accentBlue = AccentBlueDark,
+                accentViolet = AccentViolet,
+                accentAmber = AccentAmber,
+                accentAmberSubtle = AccentAmberSubtle,
+                accentPrimaryColor = activeAccentColor,
+                accentGradient = SolidColor(activeAccentColor),
+                shadow = ShadowDark.copy(alpha = (0.72f * shadowFactor).coerceIn(0f, 1f)),
+                specularHighlight = ShadowDarkSpecular.copy(alpha = specularAlpha),
+                statusSuccess = StatusSuccess,
+                statusSuccessSubtle = StatusSuccessSubtle,
+                statusWarning = StatusWarning,
+                statusWarningSubtle = StatusWarningSubtle,
+                statusError = StatusError,
+                statusErrorSubtle = StatusErrorSubtle,
+                statusInfo = StatusInfo,
+                statusInfoSubtle = StatusInfoSubtle
+            )
+        }
+        else -> {
+            SoftGlassColors(
+                isDark = false,
+                background = BackgroundPearl,
+                backgroundSecondary = BackgroundPearlSubtle,
+                surface = MilkySurfaceBase,
+                surfaceElevated = MilkySurfaceElevated,
+                surfacePressed = MilkySurfacePressed,
+                surfaceWell = MilkySurfaceWell,
+                panelTranslucent = TranslucentPanelLight,
+                navSurface = NavSurfaceLight,
+                border = BorderLight,
+                borderSubtle = BorderSubtleLight,
+                borderGradient = Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.60f),
+                        Color.White.copy(alpha = 0.20f),
+                        Color(0x1F000000)
+                    )
+                ),
+                textPrimary = TextPrimaryLight,
+                textSecondary = TextSecondaryLight,
+                textMuted = TextMutedLight,
+                accentCyan = AccentCyan,
+                accentBlue = AccentBlueLight,
+                accentViolet = AccentViolet,
+                accentAmber = AccentAmber,
+                accentAmberSubtle = AccentAmberSubtle,
+                accentPrimaryColor = activeAccentColor,
+                accentGradient = SolidColor(activeAccentColor),
+                shadow = ShadowLight.copy(alpha = (0.28f * shadowFactor).coerceIn(0f, 1f)),
+                specularHighlight = ShadowLightSpecular.copy(alpha = (0.75f * specularAlpha).coerceIn(0f, 1f)),
+                statusSuccess = StatusSuccess,
+                statusSuccessSubtle = StatusSuccessSubtle,
+                statusWarning = StatusWarning,
+                statusWarningSubtle = StatusWarningSubtle,
+                statusError = StatusError,
+                statusErrorSubtle = StatusErrorSubtle,
+                statusInfo = StatusInfo,
+                statusInfoSubtle = StatusInfoSubtle
+            )
+        }
     }
 
-    val m3Colors = if (isDark) {
-        darkColorScheme(
-            primary = activeAccentColor,
-            onPrimary = Color(0xFF070B14),
-            primaryContainer = activeAccentSubtle,
-            onPrimaryContainer = activeAccentColor,
-            secondary = AccentCyan,
-            onSecondary = Color.Black,
-            tertiary = AccentViolet,
-            onTertiary = Color.White,
-            background = BackgroundCharcoal,
-            onBackground = TextPrimaryDark,
-            surface = DarkSurfaceBase,
-            onSurface = TextPrimaryDark,
-            surfaceVariant = DarkSurfaceElevated,
-            onSurfaceVariant = TextSecondaryDark,
-            outline = BorderSubtleDark
-        )
-    } else {
-        lightColorScheme(
-            primary = activeAccentColor,
-            onPrimary = Color.White,
-            primaryContainer = activeAccentSubtle,
-            onPrimaryContainer = activeAccentColor,
-            secondary = AccentCyan,
-            onSecondary = Color.White,
-            tertiary = AccentViolet,
-            onTertiary = Color.White,
-            background = BackgroundPearl,
-            onBackground = TextPrimaryLight,
-            surface = MilkySurfaceBase,
-            onSurface = TextPrimaryLight,
-            surfaceVariant = MilkySurfaceElevated,
-            onSurfaceVariant = TextSecondaryLight,
-            outline = BorderSubtleLight
-        )
+    val m3Colors = when {
+        isOled -> {
+            darkColorScheme(
+                primary = activeAccentColor,
+                onPrimary = Color.Black,
+                primaryContainer = activeAccentSubtle,
+                onPrimaryContainer = activeAccentColor,
+                secondary = AccentCyan,
+                onSecondary = Color.Black,
+                tertiary = AccentViolet,
+                onTertiary = Color.White,
+                background = OledBackground,
+                onBackground = TextPrimaryOled,
+                surface = OledSurfaceBase,
+                onSurface = TextPrimaryOled,
+                surfaceVariant = OledSurfaceElevated,
+                onSurfaceVariant = TextSecondaryOled,
+                outline = BorderSubtleOled
+            )
+        }
+        isDark -> {
+            darkColorScheme(
+                primary = activeAccentColor,
+                onPrimary = Color(0xFF070B14),
+                primaryContainer = activeAccentSubtle,
+                onPrimaryContainer = activeAccentColor,
+                secondary = AccentCyan,
+                onSecondary = Color.Black,
+                tertiary = AccentViolet,
+                onTertiary = Color.White,
+                background = BackgroundCharcoal,
+                onBackground = TextPrimaryDark,
+                surface = DarkSurfaceBase,
+                onSurface = TextPrimaryDark,
+                surfaceVariant = DarkSurfaceElevated,
+                onSurfaceVariant = TextSecondaryDark,
+                outline = BorderSubtleDark
+            )
+        }
+        else -> {
+            lightColorScheme(
+                primary = activeAccentColor,
+                onPrimary = Color.White,
+                primaryContainer = activeAccentSubtle,
+                onPrimaryContainer = activeAccentColor,
+                secondary = AccentCyan,
+                onSecondary = Color.White,
+                tertiary = AccentViolet,
+                onTertiary = Color.White,
+                background = BackgroundPearl,
+                onBackground = TextPrimaryLight,
+                surface = MilkySurfaceBase,
+                onSurface = TextPrimaryLight,
+                surfaceVariant = MilkySurfaceElevated,
+                onSurfaceVariant = TextSecondaryLight,
+                outline = BorderSubtleLight
+            )
+        }
     }
 
-    val tokens = GlassTokens()
+    val tokens = GlassTokens(effectsLevel = preferences.effectsLevel)
     val spacing = SoftSpacing()
 
+    @OptIn(ExperimentalFoundationApi::class)
     CompositionLocalProvider(
         LocalAppearancePreferences provides preferences,
         LocalSoftGlassColors provides colors,
         LocalGlassTokens provides tokens,
-        LocalSpacing provides spacing
+        LocalSpacing provides spacing,
+        LocalOverscrollConfiguration provides null
     ) {
         MaterialTheme(
             colorScheme = m3Colors,
@@ -253,4 +339,24 @@ object SoftTheme {
         @Composable
         @ReadOnlyComposable
         get() = SoftTypographyTokens(MaterialTheme.typography)
+}
+
+/**
+ * Safely parses a hex color string (e.g. "#RRGGBB", "#AARRGGBB", "RRGGBB", or "AARRGGBB").
+ * Validates the format and returns null if malformed or invalid.
+ */
+fun parseSafeHexColor(hexString: String?): Color? {
+    if (hexString.isNullOrBlank()) return null
+    val cleanHex = hexString.trim().removePrefix("#")
+    if (cleanHex.length != 6 && cleanHex.length != 8) return null
+    return try {
+        val parsedLong = cleanHex.toLong(16)
+        if (cleanHex.length == 6) {
+            Color(0xFF000000 or parsedLong)
+        } else {
+            Color(parsedLong)
+        }
+    } catch (_: Exception) {
+        null
+    }
 }

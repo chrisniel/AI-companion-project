@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -66,6 +67,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.domain.model.ScheduleEntry
 import com.example.domain.model.ScheduleEntryType
 import com.example.domain.model.ScheduleViewMode
+import com.example.ui.components.SoftGlassCard
+import com.example.ui.components.softBounceOverscroll
+import com.example.ui.components.softNeumorphicInset
 import com.example.ui.theme.SoftTheme
 
 /**
@@ -96,7 +100,6 @@ fun ScheduleScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(SoftTheme.colors.background)
             .testTag("schedule_screen")
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -354,6 +357,7 @@ private fun DayTimelineView(
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
+            .softBounceOverscroll()
             .testTag("schedule_day_timeline"),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -421,6 +425,7 @@ private fun AgendaListView(
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
+            .softBounceOverscroll()
             .testTag("schedule_agenda_list"),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -486,6 +491,7 @@ private fun CompactWeekView(
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
+            .softBounceOverscroll()
             .testTag("schedule_week_view"),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -582,29 +588,38 @@ private fun ScheduleEntryCard(
         ScheduleEntryType.CALENDAR_EVENT -> SoftTheme.colors.accentViolet
     }
 
-    Row(
+    SoftGlassCard(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(SoftTheme.tokens.corners.md))
-            .background(
-                if (entry.isCompleted) SoftTheme.colors.surfaceWell.copy(alpha = 0.6f)
-                else SoftTheme.colors.surfaceElevated
-            )
-            .border(
-                width = SoftTheme.tokens.borders.hairline,
-                color = if (entry.isCompleted) SoftTheme.colors.borderSubtle
-                else typeColor.copy(alpha = 0.35f),
-                shape = RoundedCornerShape(SoftTheme.tokens.corners.md)
-            )
-            .padding(12.dp)
             .testTag("schedule_item_${entry.id}"),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        elevation = if (entry.isCompleted) SoftTheme.tokens.elevations.flat else SoftTheme.tokens.elevations.card,
+        containerColor = if (entry.isCompleted) SoftTheme.colors.surfaceWell.copy(alpha = 0.60f) else SoftTheme.colors.surfaceElevated,
+        shape = RoundedCornerShape(SoftTheme.tokens.corners.md),
+        border = BorderStroke(
+            SoftTheme.tokens.borders.hairline,
+            if (entry.isCompleted) SoftTheme.colors.borderSubtle.copy(alpha = 0.5f) else SoftTheme.colors.borderSubtle
+        )
     ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (entry.isCompleted) {
+                        Modifier.softNeumorphicInset(
+                            shape = RoundedCornerShape(SoftTheme.tokens.corners.md),
+                            isDark = SoftTheme.colors.isDark,
+                            depth = 2.dp
+                        )
+                    } else Modifier
+                )
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
         // Time & Timeline Pill
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.width(62.dp)
+            modifier = Modifier.width(66.dp)
         ) {
             Text(
                 text = entry.time,
@@ -618,13 +633,13 @@ private fun ScheduleEntryCard(
                 modifier = Modifier
                     .clip(RoundedCornerShape(SoftTheme.tokens.corners.pill))
                     .background(typeColor.copy(alpha = 0.16f))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                    .padding(horizontal = 7.dp, vertical = 3.dp)
             ) {
                 Text(
                     text = entry.type.label,
                     style = MaterialTheme.typography.labelSmall,
                     color = typeColor,
-                    fontSize = 9.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -652,7 +667,7 @@ private fun ScheduleEntryCard(
                 fontWeight = FontWeight.SemiBold,
                 color = if (entry.isCompleted) SoftTheme.colors.textMuted else SoftTheme.colors.textPrimary,
                 textDecoration = if (entry.isCompleted) TextDecoration.LineThrough else null,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
 
@@ -661,7 +676,7 @@ private fun ScheduleEntryCard(
                     text = entry.subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = SoftTheme.colors.textSecondary,
-                    fontSize = 11.sp,
+                    fontSize = 12.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -671,8 +686,8 @@ private fun ScheduleEntryCard(
                 Text(
                     text = entry.locationOrSource,
                     style = MaterialTheme.typography.labelSmall,
-                    color = SoftTheme.colors.textMuted,
-                    fontSize = 10.sp
+                    color = SoftTheme.colors.textSecondary,
+                    fontSize = 11.sp
                 )
             }
         }
@@ -721,6 +736,7 @@ private fun ScheduleEntryCard(
                 )
             }
         }
+    }
     }
 }
 

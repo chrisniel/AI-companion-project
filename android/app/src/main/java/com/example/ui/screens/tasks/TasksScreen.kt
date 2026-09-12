@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import com.example.ui.components.softBounceOverscroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -111,7 +112,6 @@ fun TasksScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(SoftTheme.colors.background)
             .testTag("tasks_screen")
     ) {
         Column(
@@ -145,6 +145,7 @@ fun TasksScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
+                        .softBounceOverscroll()
                         .testTag("tasks_list"),
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 88.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -319,7 +320,7 @@ private fun TasksTabRow(
 
     TabRow(
         selectedTabIndex = selectedTab.ordinal,
-        containerColor = SoftTheme.colors.background,
+        containerColor = Color.Transparent,
         contentColor = SoftTheme.colors.accentBlue,
         indicator = { tabPositions ->
             if (selectedTab.ordinal < tabPositions.size) {
