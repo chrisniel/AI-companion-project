@@ -106,7 +106,7 @@ outputs/
 *.sqlite-shm
 *.sqlite-wal
 
-data/
+/data/
 !backend/app/data/
 !backend/app/data/**
 

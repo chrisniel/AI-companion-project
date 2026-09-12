@@ -1,40 +1,38 @@
-# Task Tracking: Awaiting User-Authorized Work
+# Task Tracking: Active Task
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: Planning
-- Target: Keep the repository read-only until the user requests a specific review or explicitly authorizes a bounded edit.
-- Scope Guard: Entire repository is read-only by default. Do not edit application code, documentation, configuration, dependencies, Git state, or external systems without explicit task-specific authorization.
+- Status: Planning & Transition
+- Current Sprint: Backend Core Foundation & API Security Architecture
+- Target: Initialize FastAPI backend, SQLite/SQLAlchemy 2 database foundation, token authentication, and first vertical slice (Health & Task endpoints) matching full-stack blueprint and OWASP API security standards.
+- Scope Guard: `backend/`, `contracts/`, `docs/02_Planning/`, and API client interfaces. Preserve all working Android and Web frontend UI implementations.
 
-## [CURRENT EXECUTION STATE - HANDOFF]
+## [CURRENT EXECUTION STATE - PLANNING & ARCHITECTURE]
 
-- Active Files: None
-- Current Blocker / Status: Documentation workflow and master-plan reconciliation are complete; awaiting the user's next request.
-- Next Immediate Action: Read the user's requested scope and inspect only the relevant canonical documents and files.
+- Active Files:
+  - `README.md`
+  - `docs/04_Architecture/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md`
+  - `docs/02_Planning/plan-backend-core-and-security.md`
+  - `docs/01_Tracking/task.md`
+- Current Status: Section 3 complete. Backend Foundation and API Security Architecture implemented, verified, and passing 100% of automated tests (12/12 passed). Database migrations applied, OpenAPI contract exported, and Swagger documentation ready.
+- Next Action: Deliver educational walkthrough to user and provide manual verification steps.
 
 ## Active Checklist
 
-### Phase 1: Request Intake
+### 1. Documentation & Standard Synchronization
+- [x] Archive completed Android UI/UX polish task to `docs/01_Tracking/archive/`
+- [x] Update `README.md` to reflect repository-verified status of Android app (17 screens, 110 tests)
+- [x] Audit remaining project documentation for outdated external/prototype claims
 
-- [ ] Receive the exact objective and whether the task is read-only or authorizes edits.
-- [ ] Confirm authorized paths, protected boundaries, and expected outcome.
+### 2. Architecture & Security Planning
+- [x] Reconcile `full_stack_blueprint.md` with Master Architecture (FastAPI + SQLite + SQLAlchemy 2 + Alembic)
+- [x] Define OWASP API Security Top 10 controls (Token Auth, CORS whitelist, Pydantic v2 schemas, rate limits)
+- [x] Create implementation plan `docs/02_Planning/plan-backend-core-and-security.md` for user approval
 
-### Phase 2: Task Preparation
-
-- [ ] Read the canonical master plan and only the relevant project material.
-- [ ] Create or update an approval-gated plan for non-trivial authorized changes.
-
-### Phase 3: Verification and Handoff
-
-- [ ] Run safe, proportionate checks and report unverified manual areas honestly.
-- [ ] For a completed major change, update documentation/tracking and provide a proposed commit message for the user's manual commit and push.
-
-## Verification & QA Gates
-
-- [ ] Automated checks: Select after the next task is defined.
-- [ ] Manual/user-owned checks: Select after the next task is defined.
-
-## Archive Instruction
-
-Archive only a completed, verified sprint to `docs/01_Tracking/archive/task-YYYY-MM-DD-feature-name.md`; keep this active file focused and under 80 lines.
-
+### 3. Backend Foundation Implementation (Upon Approval)
+- [x] Initialize `backend/` directory structure, `pyproject.toml` / dependencies, and virtual environment
+- [x] Implement secure configuration (`core/config.py`) with pairing token and CORS middleware
+- [x] Implement database session management and base model (`core/database.py` / `db/session.py`) with SQLite/FTS5
+- [x] Implement token authentication dependency (`core/security.py`)
+- [x] Implement `/api/v1/health` and first vertical slice (Tasks CRUD: model, schema, routes)
+- [x] Add automated pytest suite for health, auth, and CRUD endpoints
