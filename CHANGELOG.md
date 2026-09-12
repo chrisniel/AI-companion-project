@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Security & Hardening (2026-09-12)
+
+- Backend Security Hardening V1.1: Eliminated raw pairing token logging on application startup. Enforced default-deny authentication architecture at FastAPI sub-router boundaries (`/auth`, `/tasks`), keeping only `/health` explicitly public.
+- Request Boundaries & CORS Tightening: Added `PayloadLimitMiddleware` rejecting payloads > 2 MB with HTTP 413, restricted CORS to explicit HTTP methods and headers without wildcards, and gated Swagger UI/OpenAPI docs to `ENVIRONMENT == "development"`.
+- Automated Verification Suite: Added 6 automated security tests in `backend/tests/test_security_hardening.py` (18 total tests passing in 0.31s with zero warnings).
+
 ### Added
 
 - Local AI Core Backend Bootstrapping & OWASP API Security: Initialized `backend/` using Python 3.13, FastAPI, SQLAlchemy 2.0 (asyncio + `aiosqlite`), and Alembic migrations. Implemented zero-configuration 32-byte pairing token authentication (`secrets.token_urlsafe(32)`), constant-time token verification (`secrets.compare_digest`), strict Pydantic v2 mass-assignment guards (`extra="forbid"`), and strict CORS origin whitelisting.
