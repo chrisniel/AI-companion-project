@@ -35,6 +35,10 @@ class MockLLMProvider(BaseLLMProvider):
         self._is_loaded = False
         return True
 
+    async def set_profile(self, profile: str) -> bool:
+        self._active_profile = profile
+        return True
+
     def is_loaded(self) -> bool:
         return self._is_loaded
 

@@ -30,6 +30,11 @@ class BaseLLMProvider(ABC):
         pass
 
     @abstractmethod
+    async def set_profile(self, profile: str) -> bool:
+        """Update hardware performance profile."""
+        pass
+
+    @abstractmethod
     async def get_status(self) -> ModelStatusResponse:
         """Return real-time model status and profile telemetry."""
         pass

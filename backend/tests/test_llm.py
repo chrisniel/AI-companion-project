@@ -97,3 +97,61 @@ async def test_chat_completions_validation_error(client: AsyncClient, auth_heade
     }
     response = await client.post("/api/v1/chat/completions", json=payload, headers=auth_headers)
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_unload_and_load_model_endpoints(client: AsyncClient, auth_headers: dict):
+    """Admin controls: unload releases model; load restores model into memory."""
+    # 1. Unload model
+    resp_unload = await client.post("/api/v1/models/unload", headers=auth_headers)
+    assert resp_unload.status_code == 200
+    data_unload = resp_unload.json()
+    assert data_unload["is_loaded"] is False
+
+    # 2. Load model
+    resp_load = await client.post(
+        "/api/v1/models/load",
+        json={"model_name": "Qwen2.5-7B-Instruct-Q4_K_M.gguf", "profile": "balanced"},
+        headers=auth_headers,
+    )
+    assert resp_load.status_code == 200
+    data_load = resp_load.json()
+    assert data_load["is_loaded"] is True
+    assert data_load["active_profile"] == "balanced"
+
+
+@pytest.mark.asyncio
+async def test_update_model_profile_endpoint(client: AsyncClient, auth_headers: dict):
+    """Admin controls: patch profile updates GPU layer targets and context sizes."""
+    # Switch to Eco
+    resp_eco = await client.patch(
+        "/api/v1/models/profile",
+        json={"profile": "eco"},
+        headers=auth_headers,
+    )
+    assert resp_eco.status_code == 200
+    data_eco = resp_eco.json()
+    assert data_eco["active_profile"] == "eco"
+    assert data_eco["gpu_layers"] == 0
+    assert data_eco["context_size"] == 2048
+
+    # Switch to Maximum
+    resp_max = await client.patch(
+        "/api/v1/models/profile",
+        json={"profile": "maximum"},
+        headers=auth_headers,
+    )
+    assert resp_max.status_code == 200
+    data_max = resp_max.json()
+    assert data_max["active_profile"] == "maximum"
+    assert data_max["gpu_layers"] == 33
+    assert data_max["context_size"] == 8192
+
+    # Invalid profile
+    resp_invalid = await client.patch(
+        "/api/v1/models/profile",
+        json={"profile": "ultra_extreme_invalid"},
+        headers=auth_headers,
+    )
+    assert resp_invalid.status_code == 422
+

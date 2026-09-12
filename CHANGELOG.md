@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added & Enhanced (2026-09-13 - Pass 7: React Web Dashboard & Local AI Admin Controls - Track C2)
+
+- Web Admin VRAM Controls: Added `POST /api/v1/models/load`, `POST /api/v1/models/unload`, and `PATCH /api/v1/models/profile` endpoints. Integrated tactile single-click **[ Load to VRAM ]** and **[ Unload VRAM ]** buttons into `ModelsView` and `CurrentModelHero`, allowing instant release of ~5 GB GPU memory without terminal commands.
+- Windows Subprocess Reliability & Log Isolation: Switched `llama-server.exe` process spawning to `subprocess.Popen` to resolve Windows `NotImplementedError`, and relocated runtime logs outside `backend/` to root `data/llama_server.log` to prevent WatchFiles development auto-reload loops.
+- Live SSE Streaming Chat: Connected `AssistantView.tsx` to `POST /api/v1/chat/completions` with real-time token streaming (`text/event-stream`), auto-scrolling message view, unloaded model warning notice with quick-load action, and user-interruptible generation via `AbortController`.
+- Frontend API & Context Architecture: Created typed service layer in `frontend/web/src/services/api/` (`client.ts`, `healthApi.ts`, `modelApi.ts`, `chatApi.ts`) and `BackendContext.tsx` with 5-second health heartbeat polling and model telemetry.
+- Telemetry & Model Selection Parity: Decoupled model selection in `ModelsView.tsx` so selected library cards preserve true identity, and fixed `CurrentModelHero.tsx` to display accurate `0.0 GB VRAM`, `0 tokens in use`, and `Vulkan Offload (AMD RX 580)` when unloaded.
+- Verification: 33/33 backend pytest tests passing; frontend typecheck (`tsc --noEmit`) and Vite production bundle verified.
+
 ### Added & Enhanced (2026-09-12 - Pass 6: Local LLM Runtime Integration - Track B4)
 
 - Abstract LLM Provider Architecture: Implemented `BaseLLMProvider` contract with `MockLLMProvider` (deterministic, instant testing engine) and `LlamaCppProvider` (dual-mode standalone `llama-server.exe` and in-process execution with AMD RX 580 VRAM offload).

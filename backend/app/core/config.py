@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     DATA_RETENTION_DAYS: int = 30
 
     # Local LLM Runtime (Track B4 & Sections 11-14)
+    BASE_DIR: Path = BASE_DIR
+    BIN_DIR: Path = BASE_DIR.parent / "bin"
     MODELS_DIR: Path = BASE_DIR.parent / "models"
     DEFAULT_MODEL_NAME: str = "Qwen2.5-7B-Instruct-Q4_K_M.gguf"
     LLM_PROVIDER: str = "auto"  # "auto" | "llama_cpp" | "mock"

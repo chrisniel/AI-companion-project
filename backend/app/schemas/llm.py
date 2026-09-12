@@ -79,3 +79,15 @@ class ModelStatusResponse(BaseSchema):
     gpu_layers: int
     idle_timeout_seconds: int
     seconds_until_unload: Optional[int] = None
+
+
+class ModelLoadRequest(BaseSchema):
+    """Payload to trigger loading a model into memory/VRAM."""
+    model_name: Optional[str] = None
+    profile: Optional[Literal["eco", "balanced", "maximum"]] = None
+
+
+class ModelProfileUpdateRequest(BaseSchema):
+    """Payload to update hardware profile."""
+    profile: Literal["eco", "balanced", "maximum"]
+

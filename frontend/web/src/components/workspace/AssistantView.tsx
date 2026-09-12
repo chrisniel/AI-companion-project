@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Bot,
   User,
@@ -21,10 +21,14 @@ import {
   Layers,
   ChevronDown,
   Info,
+  RefreshCw,
+  AlertCircle,
 } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { NeumorphicButton } from '../ui/NeumorphicButton';
 import { StatusIndicator } from '../ui/StatusIndicator';
+import { useBackend } from '../../context/BackendContext';
+import { streamChatCompletion, ChatMessage } from '../../services/api';
 import {
   AssistantMessage,
   AssistantState,
@@ -60,6 +64,10 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
   const [webSearchMode, setWebSearchMode] = useState<'airgapped' | 'web'>('airgapped');
   const [inputPrompt, setInputPrompt] = useState('');
   const [attachments, setAttachments] = useState<string[]>([]);
+
+  const { isOnline, modelStatus, loadModel, isModelLoading } = useBackend();
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const assistantState = propAssistantState !== undefined ? propAssistantState : internalAssistantState;
   const setAssistantState = (st: AssistantState) => {
@@ -177,49 +185,117 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     },
   ]);
 
-  // Handle Send Message
-  const handleSendMessage = () => {
-    if (!inputPrompt.trim() && attachments.length === 0) return;
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
+  // Handle Send Message with real-time SSE streaming
+  const handleSendMessage = async () => {
+    if (!inputPrompt.trim() && attachments.length === 0) return;
+    if (isBusy) return;
+
+    const userText = inputPrompt.trim() || 'Shared attachment for processing.';
     const userMsg: AssistantMessage = {
       id: `msg-${Date.now()}`,
       type: 'user',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      content: inputPrompt.trim() || 'Shared attachment for processing.',
+      content: userText,
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    const assistantMsgId = `ast-${Date.now() + 1}`;
+    const assistantMsg: AssistantMessage = {
+      id: assistantMsgId,
+      type: 'assistant',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      content: '',
+    };
+
+    setMessages((prev) => [...prev, userMsg, assistantMsg]);
     setInputPrompt('');
     setAttachments([]);
 
-    // Simulate Assistant Workflow
     setAssistantState('thinking');
 
-    setTimeout(() => {
-      setAssistantState('executing_tool');
-    }, 1000);
+    // Build context history for backend completion
+    const apiMessages: ChatMessage[] = [
+      {
+        role: 'system',
+        content: `You are ${activeCharacterName}, an AI companion assistant running locally on Windows. Help ${userName} clearly, concisely, and supportively.`,
+      },
+      ...messages
+        .filter((m) => (m.type === 'user' || m.type === 'assistant') && m.content.trim())
+        .map((m) => ({
+          role: (m.type === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+          content: m.content,
+        })),
+      { role: 'user', content: userText },
+    ];
 
-    setTimeout(() => {
-      setAssistantState('speaking');
-      const responseMsg: AssistantMessage = {
-        id: `msg-${Date.now() + 1}`,
-        type: 'assistant',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        content: `I processed your request using local weights. All inference occurred on-device via your GPU with 0ms cloud latency. Ready for your next command.`,
-      };
-      setMessages((prev) => [...prev, responseMsg]);
-    }, 2400);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
-    setTimeout(() => {
+    let hasReceivedToken = false;
+
+    try {
+      await streamChatCompletion({
+        messages: apiMessages,
+        profile: modelStatus?.active_profile,
+        signal: controller.signal,
+        onToken: (token) => {
+          if (!hasReceivedToken) {
+            hasReceivedToken = true;
+            setAssistantState('speaking');
+          }
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMsgId ? { ...msg, content: msg.content + token } : msg
+            )
+          );
+        },
+        onDone: () => {
+          setAssistantState('idle');
+          abortControllerRef.current = null;
+        },
+        onError: (err) => {
+          setAssistantState('idle');
+          abortControllerRef.current = null;
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMsgId
+                ? {
+                    ...msg,
+                    content:
+                      msg.content ||
+                      `[Notice]: ${err.message}. Check that Local AI Core is running on :8000 and model is loaded.`,
+                  }
+                : msg
+            )
+          );
+        },
+      });
+    } catch (err: unknown) {
       setAssistantState('idle');
-    }, 3800);
+      abortControllerRef.current = null;
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error during inference.';
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMsgId
+            ? { ...msg, content: msg.content || `[Error]: ${errorMsg}` }
+            : msg
+        )
+      );
+    }
   };
 
   const handleStopGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
     setAssistantState('interrupted');
     setTimeout(() => {
       setAssistantState('idle');
-    }, 1500);
+    }, 800);
   };
 
   const handleNewConversation = () => {
@@ -438,17 +514,37 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
               <span>
                 {assistantState === 'thinking' && 'Reasoning & processing context...'}
                 {assistantState === 'executing_tool' && 'Executing tool function on local runtime...'}
-                {assistantState === 'speaking' && 'Streaming response tokens @ 42.8 t/s...'}
+                {assistantState === 'speaking' && 'Streaming response tokens in real time...'}
               </span>
             </div>
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* ========================================================= */}
       {/* 4. INPUT COMPOSER: Polished Soft Glass Docked Composer    */}
       {/* ========================================================= */}
       <div className="sticky bottom-4 z-20 max-w-4xl mx-auto">
+        {/* Unloaded Model Alert Notice */}
+        {modelStatus && !modelStatus.is_loaded && (
+          <div className="p-3 mb-2 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs text-amber-400">
+            <div className="flex items-center gap-2">
+              <Zap className="w-4 h-4 flex-shrink-0" />
+              <span>Model is unloaded (0 MB VRAM used). Queries will auto-load weights, or click Load to warm up GPU.</span>
+            </div>
+            <button
+              type="button"
+              disabled={isModelLoading}
+              onClick={() => loadModel()}
+              className="px-3 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 font-semibold flex items-center gap-1.5 transition-all disabled:opacity-50"
+            >
+              {isModelLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+              <span>Load Model</span>
+            </button>
+          </div>
+        )}
+
         <div className="p-3 rounded-3xl glass-panel-elevated border border-[var(--color-surface-glass-border)] shadow-2xl space-y-2.5">
           {/* Attachment Tags (if added) */}
           {attachments.length > 0 && (

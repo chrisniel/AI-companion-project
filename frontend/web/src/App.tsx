@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ThemeProvider } from './context/ThemeContext';
+import { BackendProvider } from './context/BackendContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { AssistantPanel } from './components/layout/AssistantPanel';
@@ -268,7 +269,9 @@ function MainApp() {
 export default function App() {
   return (
     <ThemeProvider>
-      <MainApp />
+      <BackendProvider>
+        <MainApp />
+      </BackendProvider>
     </ThemeProvider>
   );
 }

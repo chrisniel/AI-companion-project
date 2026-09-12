@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Cpu, Layers, HardDrive, Zap, RefreshCw, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Cpu, Layers, HardDrive, Zap, RefreshCw, CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { Badge } from '../ui/Badge';
+import { useBackend } from '../../context/BackendContext';
 import {
   mockLocalModels,
   mockModelProviders,
@@ -33,18 +34,49 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
   performanceProfile: controlledProfile = 'balanced',
   onChangePerformanceProfile,
 }) => {
+  const {
+    isOnline,
+    modelStatus,
+    isModelLoading,
+    loadModel,
+    unloadModel,
+    changeProfile,
+    lastError,
+    clearError,
+    apiKey,
+    setApiKey,
+    refreshStatus,
+  } = useBackend();
+
+  const [keyInput, setKeyInput] = useState(apiKey || '');
+
+  useEffect(() => {
+    if (apiKey) {
+      setKeyInput(apiKey);
+    }
+  }, [apiKey]);
+
   // Local state for models and active selections
   const [models, setModels] = useState<LocalModel[]>(mockLocalModels);
   const [internalModelId, setInternalModelId] = useState<string>('m-1');
   const activeModelId = controlledModelId || internalModelId;
 
-  // Performance Profile state
-  const [internalProfile, setInternalProfile] = useState<PerformanceProfile>(controlledProfile);
-  const activeProfile = controlledProfile || internalProfile;
+  // Performance Profile state (prefer backend profile if available)
+  const backendProfile = modelStatus?.active_profile as PerformanceProfile | undefined;
+  const [internalProfile, setInternalProfile] = useState<PerformanceProfile>(backendProfile || controlledProfile);
+  const activeProfile = backendProfile || controlledProfile || internalProfile;
 
-  const handleProfileChange = (newProfile: PerformanceProfile) => {
+  const handleProfileChange = async (newProfile: PerformanceProfile) => {
     setInternalProfile(newProfile);
     onChangePerformanceProfile?.(newProfile);
+
+    if (newProfile === 'eco' || newProfile === 'balanced' || newProfile === 'maximum') {
+      try {
+        await changeProfile(newProfile);
+      } catch {
+        // Handled in context
+      }
+    }
 
     // Contextually adjust VRAM target based on selected profile
     if (newProfile === 'eco') {
@@ -76,29 +108,68 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
   const currentModel =
     models.find((m) => m.id === activeModelId) || models[0];
 
-  // Actions
-  const handleActivateModel = (modelId: string) => {
-    setModels((prev) =>
-      prev.map((m) => {
-        if (m.id === modelId) {
-          return { ...m, status: 'loaded' };
-        }
-        return m;
-      })
-    );
-    setInternalModelId(modelId);
-    onSelectModel?.(modelId);
+  const isQwenModel = currentModel.id === 'm-1' || currentModel.name.toLowerCase().includes('qwen');
+  const isSelectedModelLoaded = Boolean(
+    modelStatus?.is_loaded && (
+      (isQwenModel && (modelStatus.active_model?.includes('Qwen') || !modelStatus.active_model)) ||
+      (modelStatus.active_model && currentModel.name.includes(modelStatus.active_model))
+    )
+  );
+
+  // Dynamic active model reflecting real backend status without overriding selected model identity
+  const liveActiveModel: LocalModel = {
+    ...currentModel,
+    status: isSelectedModelLoaded ? 'loaded' : 'unloaded',
+    engine: currentModel.isCloud
+      ? currentModel.engine
+      : (modelStatus?.provider === 'llama_cpp' ? 'llama.cpp (Vulkan)' : currentModel.engine),
+    contextWindow: isSelectedModelLoaded && modelStatus?.context_size ? modelStatus.context_size : currentModel.contextWindow,
+    layersOffloaded: isSelectedModelLoaded && modelStatus?.gpu_layers !== undefined ? modelStatus.gpu_layers : (isSelectedModelLoaded ? 28 : 0),
+    vramUsageGb: isSelectedModelLoaded ? 4.5 : 0.0,
   };
 
-  const handleUnloadModel = (modelId: string) => {
-    setModels((prev) =>
-      prev.map((m) => {
-        if (m.id === modelId) {
-          return { ...m, status: 'unloaded' };
+  // Actions
+  const handleActivateModel = async (modelId: string) => {
+    const selected = models.find((m) => m.id === modelId) || currentModel;
+    setInternalModelId(modelId);
+    onSelectModel?.(modelId);
+
+    // Only attempt local VRAM loading if model is local and on disk
+    if (!selected.isCloud) {
+      const isTargetOnDisk = selected.id === 'm-1' || Boolean(
+        modelStatus?.available_models?.some((avail) =>
+          avail.toLowerCase().includes(selected.name.toLowerCase()) ||
+          selected.name.toLowerCase().includes(avail.toLowerCase())
+        )
+      );
+
+      if (isTargetOnDisk) {
+        try {
+          await loadModel(
+            selected.id === 'm-1' ? (modelStatus?.available_models?.[0] || 'Qwen2.5-7B-Instruct-Q4_K_M.gguf') : selected.name,
+            (activeProfile === 'turbo' ? 'maximum' : activeProfile) as 'eco' | 'balanced' | 'maximum'
+          );
+        } catch {
+          // Handled in context error state
         }
-        return m;
-      })
-    );
+      }
+    }
+  };
+
+  const handleUnloadModel = async () => {
+    try {
+      await unloadModel();
+      setModels((prev) =>
+        prev.map((m) => {
+          if (m.id === activeModelId) {
+            return { ...m, status: 'unloaded' };
+          }
+          return m;
+        })
+      );
+    } catch {
+      // Handled in context error state
+    }
   };
 
   const handleOpenDetails = (model: LocalModel) => {
@@ -108,6 +179,45 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
 
   return (
     <div id="models-and-runtime-view" className="space-y-6 max-w-7xl mx-auto pb-12">
+      {/* Error Banner / Pairing Input */}
+      {lastError && (
+        <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-500 text-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span className="font-semibold">{lastError}</span>
+            </div>
+            <button type="button" onClick={clearError} className="p-1 hover:bg-rose-500/20 rounded-lg">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          {(lastError.toLowerCase().includes('auth') || lastError.toLowerCase().includes('credential')) && (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-2 border-t border-rose-500/20">
+              <div className="relative flex-1">
+                <input
+                  type="password"
+                  value={keyInput}
+                  onChange={(e) => setKeyInput(e.target.value)}
+                  placeholder="Paste COMPANION_API_KEY here..."
+                  className="w-full px-3 py-1.5 rounded-xl bg-[var(--color-surface-elevated)] border border-rose-500/40 text-xs text-[var(--color-text-primary)] font-mono focus:outline-none focus:border-[var(--color-accent)] transition-all shadow-xs"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  setApiKey(keyInput.trim());
+                  clearError();
+                  await refreshStatus();
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold tracking-wide transition-all shadow-xs flex-shrink-0"
+              >
+                Save & Connect
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 1. View Header */}
       <div className="p-5 sm:p-6 rounded-3xl surface-raised border border-[var(--color-border-subtle)] flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-start sm:items-center gap-3.5">
@@ -131,20 +241,23 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
 
         <div className="flex items-center gap-2 self-start md:self-center">
           <div className="px-3 py-1.5 rounded-xl surface-recessed border border-[var(--color-border-subtle)] flex items-center gap-2 text-xs font-mono text-[var(--color-text-secondary)]">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Local Engine:</span>
+            <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+            <span>Local AI Core:</span>
             <span className="font-semibold text-[var(--color-text-primary)]">
-              {currentModel.engine}
+              {isOnline ? (modelStatus?.is_loaded ? 'VRAM Active' : 'Online (Standby)') : 'Offline (:8000)'}
             </span>
           </div>
         </div>
       </div>
 
-      {/* 2. Current Model Hero (Rich Telemetry without Terminal Clutter) */}
+      {/* 2. Current Model Hero (Rich Telemetry with Load/Unload Admin Actions) */}
       <CurrentModelHero
-        model={currentModel}
+        model={liveActiveModel}
+        isModelLoading={isModelLoading}
+        onLoad={() => handleActivateModel(activeModelId)}
         onUnload={handleUnloadModel}
         onOpenDetails={handleOpenDetails}
+        idleCountdownSeconds={modelStatus?.seconds_until_unload}
       />
 
       {/* 3. Performance Profiles & VRAM Target (Tactile Grid) */}

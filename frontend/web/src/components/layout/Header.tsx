@@ -19,6 +19,7 @@ import {
   Search,
 } from 'lucide-react';
 import { useTheme, ACCENT_PRESETS } from '../../context/ThemeContext';
+import { useBackend } from '../../context/BackendContext';
 import {
   AccentPresetId,
   AssistantPanelMode,
@@ -77,11 +78,15 @@ export const Header: React.FC<HeaderProps> = ({
   actualWidth = 1440,
 }) => {
   const { mode, toggleTheme, accent, setAccent, currentAccentPreset } = useTheme();
+  const { isOnline, modelStatus } = useBackend();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState(mockNotifications);
 
   const activeModel =
     mockLocalModels.find((m) => m.id === currentModelId) || mockLocalModels[0];
+  const activeModelLabel = modelStatus?.active_model
+    ? modelStatus.active_model.replace('.gguf', '')
+    : (modelStatus?.available_models?.[0]?.replace('.gguf', '') || activeModel.name);
   const activePersona =
     mockAssistantPersonas.find((p) => p.id === activeCharacterId) ||
     mockAssistantPersonas[0];
@@ -205,8 +210,8 @@ export const Header: React.FC<HeaderProps> = ({
                 title="Current Local Model"
               >
                 <Cpu className="w-3.5 h-3.5 text-[var(--color-accent)]" />
-                <span className="font-mono font-medium max-w-[110px] sm:max-w-[140px] truncate">
-                  {activeModel.name.replace('-Instruct', '')}
+                <span className="font-mono font-medium max-w-[110px] sm:max-w-[160px] truncate">
+                  {activeModelLabel}
                 </span>
                 <ChevronDown className="w-3 h-3 text-[var(--color-text-muted)]" />
               </button>
@@ -239,11 +244,21 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right Tools & User */}
         <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
-          {/* Local AI Core Status Badge */}
+          {/* Local AI Core & VRAM Status Badges */}
+          <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-xl surface-recessed border border-[var(--color-border-subtle)] text-[11px] font-mono">
+            <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+            <span className="text-[var(--color-text-secondary)] font-medium">Core :8000</span>
+            <span className={isOnline ? 'text-emerald-500 font-semibold' : 'text-rose-400'}>
+              {isOnline ? 'Online' : 'Offline'}
+            </span>
+          </div>
+
           <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-xl surface-recessed border border-[var(--color-border-subtle)] text-[11px] font-mono">
-            <StatusIndicator status="online" size="sm" showLabel={false} />
-            <span className="text-[var(--color-text-secondary)] font-medium">Core Active</span>
-            <span className="text-[var(--color-accent)]">22ms</span>
+            <Cpu className="w-3.5 h-3.5 text-[var(--color-accent)]" />
+            <span className="text-[var(--color-text-secondary)]">VRAM:</span>
+            <span className={`font-semibold ${modelStatus?.is_loaded ? 'text-emerald-400' : 'text-[var(--color-text-muted)]'}`}>
+              {modelStatus?.is_loaded ? 'Loaded' : 'Free (0 MB)'}
+            </span>
           </div>
 
           {/* Notification Bell with Popover */}

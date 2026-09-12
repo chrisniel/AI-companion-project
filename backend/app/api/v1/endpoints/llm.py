@@ -3,7 +3,7 @@
 import json
 import time
 import uuid
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -18,6 +18,8 @@ from app.schemas.llm import (
     ChatCompletionStreamChunk,
     ChatCompletionUsage,
     ChatMessage,
+    ModelLoadRequest,
+    ModelProfileUpdateRequest,
     ModelStatusResponse,
 )
 from app.services.llm.base import BaseLLMProvider
@@ -36,6 +38,63 @@ async def get_model_status(
     provider: BaseLLMProvider = Depends(get_llm_provider),
 ) -> ModelStatusResponse:
     """Return active model, loaded state, VRAM profile, and available GGUF files."""
+    return await provider.get_status()
+
+
+@router.post(
+    "/models/load",
+    response_model=ModelStatusResponse,
+    summary="Load LLM model into VRAM",
+    dependencies=[Depends(verify_token)],
+)
+async def load_model(
+    request: Optional[ModelLoadRequest] = None,
+    provider: BaseLLMProvider = Depends(get_llm_provider),
+) -> ModelStatusResponse:
+    """Load model weights into GPU VRAM or memory."""
+    model_name = request.model_name if request else None
+    profile = request.profile if request else None
+    success = await provider.load_model(model_name=model_name, profile=profile)
+    if not success:
+        error_msg = getattr(provider, "_last_error", None) or "Failed to load model into memory."
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_msg,
+        )
+    return await provider.get_status()
+
+
+@router.post(
+    "/models/unload",
+    response_model=ModelStatusResponse,
+    summary="Unload LLM model and release VRAM",
+    dependencies=[Depends(verify_token)],
+)
+async def unload_model(
+    provider: BaseLLMProvider = Depends(get_llm_provider),
+) -> ModelStatusResponse:
+    """Unload model from GPU memory to free VRAM immediately."""
+    await provider.unload_model()
+    return await provider.get_status()
+
+
+@router.patch(
+    "/models/profile",
+    response_model=ModelStatusResponse,
+    summary="Update hardware performance profile",
+    dependencies=[Depends(verify_token)],
+)
+async def update_profile(
+    request: ModelProfileUpdateRequest,
+    provider: BaseLLMProvider = Depends(get_llm_provider),
+) -> ModelStatusResponse:
+    """Switch hardware profile (eco, balanced, maximum)."""
+    success = await provider.set_profile(request.profile)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid hardware profile '{request.profile}'.",
+        )
     return await provider.get_status()
 
 

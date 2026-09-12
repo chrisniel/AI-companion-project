@@ -6,6 +6,7 @@ import gc
 import json
 import logging
 from pathlib import Path
+import subprocess
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
 import httpx
@@ -31,6 +32,7 @@ class LlamaCppProvider(BaseLLMProvider):
     def __init__(self):
         self._llm = None
         self._server_client: Optional[httpx.AsyncClient] = None
+        self._server_process: Optional[subprocess.Popen] = None
         self._server_is_active: bool = False
         self._active_model_name: Optional[str] = None
         self._active_profile: str = settings.LLM_PROFILE
@@ -82,11 +84,11 @@ class LlamaCppProvider(BaseLLMProvider):
             }
 
     async def _check_external_server(self) -> bool:
-        """Check if a local standalone llama-server or OpenAI-compatible server is running."""
+        """Check if a local standalone llama-server is active on port 8080."""
         try:
-            async with httpx.AsyncClient(timeout=1.0) as client:
-                # Most llama-server builds provide /health or /v1/models
-                resp = await client.get(f"{settings.LLAMA_SERVER_URL}/models")
+            async with httpx.AsyncClient(timeout=0.3) as client:
+                base_health_url = settings.LLAMA_SERVER_URL.replace("/v1", "") + "/health"
+                resp = await client.get(base_health_url)
                 if resp.status_code == 200:
                     self._server_is_active = True
                     return True
@@ -97,19 +99,91 @@ class LlamaCppProvider(BaseLLMProvider):
 
     async def load_model(self, model_name: Optional[str] = None, profile: Optional[str] = None) -> bool:
         async with self._lock:
+            self._last_error = None
             if profile:
                 self._active_profile = profile
 
-            # Mode 1: Check if standalone llama-server is running
+            model_path = self._resolve_model_path(model_name)
+
+            # Mode 1: Check if standalone llama-server is already running
             if await self._check_external_server():
                 logger.info(f"Connected to active external llama-server at {settings.LLAMA_SERVER_URL}")
-                self._active_model_name = model_name or settings.DEFAULT_MODEL_NAME
+                self._active_model_name = model_path.name if model_path.exists() else (model_name or settings.DEFAULT_MODEL_NAME)
                 self._last_active_at = datetime.now(timezone.utc)
                 self._start_idle_monitor()
                 return True
 
-            # Mode 2: In-process llama_cpp
-            model_path = self._resolve_model_path(model_name)
+            # Mode 2: Launch standalone llama-server.exe if present
+            bin_dir = settings.BIN_DIR
+            server_exe = bin_dir / "llama-server.exe"
+            if not server_exe.exists():
+                self._last_error = f"Engine binary not found: {server_exe}"
+                logger.error(self._last_error)
+            elif not model_path.exists():
+                self._last_error = f"Model file not found: {model_path}"
+                logger.error(self._last_error)
+            else:
+                params = self._get_profile_params(self._active_profile)
+                logger.info(
+                    f"Launching standalone llama-server with Vulkan offload "
+                    f"({params['n_gpu_layers']} GPU layers, model={model_path.name})..."
+                )
+                # Relocate log file outside backend/ to root data/ so uvicorn's file watcher does not trigger a reload
+                runtime_log_dir = settings.BASE_DIR.parent / "data"
+                runtime_log_dir.mkdir(parents=True, exist_ok=True)
+                log_file_path = runtime_log_dir / "llama_server.log"
+                try:
+                    if log_file_path.exists():
+                        log_file_path.write_text("", encoding="utf-8")
+                except Exception:
+                    pass
+                cmd = [
+                    str(server_exe),
+                    "-m", str(model_path),
+                    "--port", "8080",
+                    "-ngl", str(params["n_gpu_layers"]),
+                    "-c", str(params["n_ctx"]),
+                    "-t", str(params["n_threads"]),
+                    "--log-file", str(log_file_path),
+                ]
+                if params["n_gpu_layers"] > 0:
+                    cmd.extend(["-dev", "Vulkan0"])
+
+                try:
+                    self._server_process = subprocess.Popen(
+                        cmd,
+                        cwd=str(bin_dir),
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    # Poll for readiness up to 45 seconds (4.7GB GGUF model takes ~15-25s to load into VRAM)
+                    for _ in range(90):
+                        await asyncio.sleep(0.5)
+                        poll_res = self._server_process.poll()
+                        if poll_res is not None:
+                            err_snippet = ""
+                            try:
+                                with open(log_file_path, "r", encoding="utf-8", errors="ignore") as rf:
+                                    err_snippet = "".join(rf.readlines()[-10:])
+                            except Exception:
+                                pass
+                            self._last_error = f"llama-server exited with code {poll_res}: {err_snippet.strip()}"
+                            logger.error(self._last_error)
+                            break
+                        if await self._check_external_server():
+                            logger.info("Standalone llama-server is ready and responding.")
+                            self._active_model_name = model_path.name
+                            self._last_active_at = datetime.now(timezone.utc)
+                            self._start_idle_monitor()
+                            return True
+                except Exception as e:
+                    self._last_error = f"Failed to launch standalone llama-server: {type(e).__name__}: {e}"
+                    logger.error(self._last_error)
+
+            if not self._last_error:
+                self._last_error = "In-process llama_cpp binding not installed on system."
+
+            # Mode 3: In-process llama_cpp
             if not model_path.exists():
                 logger.warning(f"Model file '{model_path}' not found on disk.")
                 return False
@@ -125,7 +199,7 @@ class LlamaCppProvider(BaseLLMProvider):
 
             params = self._get_profile_params(self._active_profile)
             logger.info(
-                f"Loading model '{model_path.name}' with profile '{self._active_profile}' "
+                f"Loading in-process model '{model_path.name}' with profile '{self._active_profile}' "
                 f"(ctx={params['n_ctx']}, gpu_layers={params['n_gpu_layers']})..."
             )
 
@@ -147,14 +221,51 @@ class LlamaCppProvider(BaseLLMProvider):
 
     async def unload_model(self) -> bool:
         async with self._lock:
+            # 1. Free in-process model
             if self._llm is not None:
                 logger.info(f"Unloading in-process model '{self._active_model_name}' to free VRAM (Section 12)...")
                 del self._llm
                 self._llm = None
-                self._active_model_name = None
                 gc.collect()
-                logger.info("Model unloaded successfully.")
+
+            # 2. Terminate managed server subprocess
+            if self._server_process and self._server_process.poll() is None:
+                logger.info("Terminating managed llama-server subprocess...")
+                try:
+                    self._server_process.terminate()
+                    try:
+                        self._server_process.wait(timeout=3.0)
+                    except Exception:
+                        self._server_process.kill()
+                except Exception:
+                    pass
+                self._server_process = None
+
+            # 3. Stop running llama-server.exe process to guarantee VRAM release
+            if self._server_is_active or await self._check_external_server():
+                logger.info("Stopping running llama-server process to free VRAM...")
+                try:
+                    subprocess.run(
+                        ["taskkill", "/IM", "llama-server.exe", "/F"],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        check=False,
+                    )
+                except Exception:
+                    pass
+
             self._server_is_active = False
+            self._active_model_name = None
+            logger.info("Model unloaded successfully. VRAM released.")
+            return True
+
+    async def set_profile(self, profile: str) -> bool:
+        async with self._lock:
+            p = profile.lower()
+            if p not in ("eco", "balanced", "maximum"):
+                return False
+            self._active_profile = p
+            logger.info(f"LLM hardware profile set to '{p}'")
             return True
 
     def is_loaded(self) -> bool:
@@ -180,6 +291,17 @@ class LlamaCppProvider(BaseLLMProvider):
                     break
 
     async def get_status(self) -> ModelStatusResponse:
+        # Live probe external llama-server process if not in-process
+        if self._llm is None:
+            if await self._check_external_server():
+                if not self._active_model_name:
+                    model_path = self._resolve_model_path()
+                    self._active_model_name = model_path.name if model_path.exists() else settings.DEFAULT_MODEL_NAME
+                if not self._last_active_at:
+                    self._last_active_at = datetime.now(timezone.utc)
+            else:
+                self._server_is_active = False
+
         params = self._get_profile_params(self._active_profile)
         available = []
         if settings.MODELS_DIR.exists():
@@ -196,7 +318,7 @@ class LlamaCppProvider(BaseLLMProvider):
         return ModelStatusResponse(
             provider=self.provider_name,
             is_loaded=self.is_loaded(),
-            active_model=self._active_model_name,
+            active_model=self._active_model_name if self.is_loaded() else None,
             active_profile=self._active_profile,
             available_models=available,
             context_size=params["n_ctx"],

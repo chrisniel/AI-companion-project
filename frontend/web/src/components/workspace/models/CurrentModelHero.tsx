@@ -13,6 +13,7 @@ import {
   Info,
   Maximize2,
   Power,
+  RefreshCw,
 } from 'lucide-react';
 import { Badge } from '../../ui/Badge';
 import { Card } from '../../ui/Card';
@@ -20,24 +21,29 @@ import { LocalModel } from '../../../types';
 
 interface CurrentModelHeroProps {
   model: LocalModel;
+  isModelLoading?: boolean;
+  onLoad?: (modelId: string) => void;
   onUnload?: (modelId: string) => void;
   onOpenDetails?: (model: LocalModel) => void;
+  idleCountdownSeconds?: number | null;
 }
 
 export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
   model,
+  isModelLoading = false,
+  onLoad,
   onUnload,
   onOpenDetails,
+  idleCountdownSeconds,
 }) => {
   const isCloud = model.isCloud || model.engine === 'gemini';
   const isLoaded = model.status === 'loaded';
 
-  // Context calculations (mock active tokens vs context window)
-  const activeTokens = Math.min(3840, model.contextWindow);
-  const contextPercentage = Math.min(
-    Math.round((activeTokens / model.contextWindow) * 100),
-    100
-  );
+  // Context calculations (active tokens only allocated when model is pinned in VRAM)
+  const activeTokens = isLoaded ? Math.min(3840, model.contextWindow) : 0;
+  const contextPercentage = isLoaded && model.contextWindow > 0
+    ? Math.min(Math.round((activeTokens / model.contextWindow) * 100), 100)
+    : 0;
 
   return (
     <Card
@@ -73,13 +79,19 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
                 {isCloud ? 'Cloud API' : 'Local (On-Device)'}
               </Badge>
               <Badge variant={isLoaded ? 'success' : 'warning'} size="sm">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse mr-1" />
+                <span className={`w-1.5 h-1.5 rounded-full mr-1 ${isLoaded ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
                 {isLoaded
                   ? isCloud
                     ? 'Active & Ready'
                     : 'Pinned in VRAM'
-                  : 'Standby on Disk'}
+                  : 'Standby on Disk (VRAM Free)'}
               </Badge>
+              {isLoaded && idleCountdownSeconds !== undefined && idleCountdownSeconds !== null && (
+                <Badge variant="default" size="sm">
+                  <Clock className="w-3 h-3 mr-1 text-[var(--color-text-muted)]" />
+                  Auto-unload in {Math.floor(idleCountdownSeconds / 60)}m {idleCountdownSeconds % 60}s
+                </Badge>
+              )}
             </div>
             <p className="text-xs text-[var(--color-text-secondary)] mt-1">
               {model.family} • {model.parameters} parameters • {model.description || 'General instruction model'}
@@ -101,12 +113,34 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
           {!isCloud && isLoaded && (
             <button
               type="button"
+              disabled={isModelLoading}
               onClick={() => onUnload?.(model.id)}
-              className="px-3 py-1.5 rounded-xl surface-recessed border border-[var(--color-border-subtle)] hover:border-rose-500/50 text-xs font-medium text-rose-500 hover:bg-rose-500/10 flex items-center gap-1.5 transition-all"
-              title="Release VRAM allocation"
+              className="px-3.5 py-1.5 rounded-xl surface-recessed border border-rose-500/30 hover:border-rose-500/60 text-xs font-semibold text-rose-500 hover:bg-rose-500/10 flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
+              title="Release VRAM allocation back to GPU"
             >
-              <Power className="w-3.5 h-3.5" />
-              <span>Unload</span>
+              {isModelLoading ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Power className="w-3.5 h-3.5" />
+              )}
+              <span>{isModelLoading ? 'Unloading...' : 'Unload VRAM'}</span>
+            </button>
+          )}
+
+          {!isCloud && !isLoaded && (
+            <button
+              type="button"
+              disabled={isModelLoading}
+              onClick={() => onLoad?.(model.id)}
+              className="px-3.5 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 hover:border-emerald-500/80 text-xs font-semibold text-emerald-500 hover:bg-emerald-500/25 flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
+              title="Load model weights into VRAM for fast inference"
+            >
+              {isModelLoading ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Zap className="w-3.5 h-3.5" />
+              )}
+              <span>{isModelLoading ? 'Loading VRAM...' : 'Load to VRAM'}</span>
             </button>
           )}
         </div>
@@ -152,7 +186,7 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
             {model.engine}
           </div>
           <div className="text-[10px] text-[var(--color-text-muted)] font-mono">
-            {isCloud ? 'Cloud GenAI' : 'CUDA Offload'}
+            {isCloud ? 'Cloud GenAI' : 'Vulkan Offload (AMD RX 580)'}
           </div>
         </div>
 
@@ -163,10 +197,10 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
             <span>Latency (TTFT)</span>
           </div>
           <div className="text-base sm:text-lg font-bold font-mono text-[var(--color-text-primary)]">
-            {model.estimatedLatencyMs || 18} ms
+            {isLoaded ? (model.estimatedLatencyMs || 18) : 0} ms
           </div>
           <div className="text-[10px] text-emerald-500 font-mono">
-            {model.tokensPerSec ? `${model.tokensPerSec} t/s` : '42.8 t/s'}
+            {isLoaded ? (model.tokensPerSec ? `${model.tokensPerSec} t/s` : '42.8 t/s') : 'Standby'}
           </div>
         </div>
 
@@ -177,10 +211,10 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
             <span>VRAM Usage</span>
           </div>
           <div className="text-base sm:text-lg font-bold font-mono text-[var(--color-text-primary)]">
-            {isCloud ? '0.0 GB' : `${model.vramUsageGb || 4.9} GB`}
+            {isCloud ? '0.0 GB' : isLoaded ? `${(model.vramUsageGb || 4.5).toFixed(1)} GB` : '0.0 GB'}
           </div>
           <div className="text-[10px] text-[var(--color-text-muted)] font-mono">
-            {isCloud ? 'Remote Server' : `${model.layersOffloaded || 33}/${model.layersTotal || 33} layers GPU`}
+            {isCloud ? 'Remote Server' : isLoaded ? `${model.layersOffloaded || 28}/${model.layersTotal || 28} layers GPU` : '0/28 layers (VRAM Free)'}
           </div>
         </div>
 
@@ -218,7 +252,7 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
           </div>
 
           <div className="flex items-center justify-between text-[10px] text-[var(--color-text-muted)] font-mono pt-0.5">
-            <span>KV Cache: {isCloud ? 'Cloud Managed' : '1.2 GB'}</span>
+            <span>KV Cache: {isCloud ? 'Cloud Managed' : isLoaded ? '1.2 GB' : '0.0 GB'}</span>
             <span>{contextPercentage}% in use</span>
           </div>
         </div>
