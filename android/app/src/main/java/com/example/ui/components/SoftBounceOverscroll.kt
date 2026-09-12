@@ -98,7 +98,9 @@ fun Modifier.softBounceOverscroll(
                 available: Offset,
                 source: NestedScrollSource
             ): Offset {
-                if (source == NestedScrollSource.UserInput && available.y != 0f) {
+                // If user pulls down (available.y > 0f) at the top, let PullToRefreshBox handle it!
+                // Only absorb upward overscroll (available.y < 0f) at the bottom content boundary.
+                if (source == NestedScrollSource.UserInput && available.y < 0f) {
                     val current = offsetState
                     // Authentic progressive quadratic rubber-band resistance curve
                     val dragRatio = (abs(current) / maxOverscrollPx).coerceIn(0f, 1f)

@@ -346,6 +346,8 @@ fun AppShell(
                                                 connectionInfo = uiState.connectionInfo,
                                                 selectedPersona = uiState.selectedPersona,
                                                 selectedLanguage = uiState.language,
+                                                isRefreshing = uiState.isRefreshing,
+                                                onRefresh = { appViewModel.refreshAll() },
                                                 onSelectLanguage = { appViewModel.setLanguage(it) },
                                                 onSelectPersona = { appViewModel.selectPersona(it) },
                                                 onNavigateToRoute = onNavigateToRoute,
@@ -556,7 +558,13 @@ fun AppShell(
                                 onSetSyncStatus = { appViewModel.setSyncStatus(it) },
                                 onResolveConflict = { appViewModel.resolveSyncConflict(it) },
                                 onRetrySync = { appViewModel.retrySync() },
-                                onNavigateBack = { navController.popBackStack() }
+                                onNavigateBack = { navController.popBackStack() },
+                                onSaveHostConfig = { host, port, token ->
+                                    appViewModel.saveHostConfig(host, port, token)
+                                },
+                                onDraftConfigChange = { host, port, token ->
+                                    appViewModel.updateDraftConfig(host, port, token)
+                                }
                             )
                         }
 

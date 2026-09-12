@@ -74,5 +74,6 @@ data class TasksUiState(
     val searchQuery: String = "",
     val isCreateOrEditSheetOpen: Boolean = false,
     val editingTaskId: String? = null, // null means creating new
-    val quickActionFeedbackMessage: String? = null
+    val quickActionFeedbackMessage: String? = null,
+    val isRefreshing: Boolean = false
 )

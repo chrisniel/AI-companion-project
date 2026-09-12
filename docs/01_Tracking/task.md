@@ -2,38 +2,49 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: Completed & Verified
-- Current Sprint: Backend Security Hardening V1.1
-- Target: Execute critical security hardening items flagged in team review: eliminate pairing token log leakage, enforce default-deny route authentication, restrict CORS methods/headers, gate Swagger/docs by environment, enforce request body limits, and minimize public health telemetry.
-- Scope Guard: `backend/app/`, `backend/tests/`, `contracts/`. Preserve 100% test pass rate and backward-compatible contract.
+- Status: In Progress
+- Current Sprint: Backend Security V1.1.1 Corrective Pass
+- Target: Close 7 security hygiene items in the Local AI Core backend: minimal public /health response, fail-closed router separation, streaming payload size guard, strict CORS origin validation, request ID sanitization, negative security tests, and documentation claim calibration.
+- Scope Guard: `backend/`, `docs/`. Preserve Android connectivity (`HealthDto`) and all existing 18 backend tests.
 
-## [CURRENT EXECUTION STATE - VERIFIED & COMPLETED]
+## [CURRENT EXECUTION STATE - IN PROGRESS]
 
 - Active Files:
-  - `backend/app/main.py`
-  - `backend/app/core/config.py`
+  - `backend/app/api/v1/endpoints/health.py`
   - `backend/app/api/v1/router.py`
+  - `backend/app/core/middleware.py`
+  - `backend/app/core/config.py`
   - `backend/tests/test_security_hardening.py`
-  - `contracts/openapi/openapi.json`
-- Current Status: All 18 automated unit and security tests passing in 0.31s with zero warnings. Secret log leakage eliminated, default-deny router boundary enforced, CORS tightened, request body size limited to 2 MB, and documentation gated by environment.
-- Next Action: Present delivered scope and Conventional Commit proposal to user.
+  - `backend/tests/test_health.py`
+  - `docs/02_Planning/plan-backend-security-v1.1.1-corrective-pass.md`
+- Current Status: Task file initialized. Ready to apply security hardening updates.
+- Next Action: Implement minimal `/health` response and verify Android `HealthDto` compatibility.
 
 ## Active Checklist
 
-### 1. Secret & Logging Hygiene
-- [x] Remove pairing token printout from `main.py` lifespan (log only non-sensitive confirmation)
-- [x] Verify logger redaction covers all custom token patterns
+### 1. Minimal Public `/health` Response & Diagnostics Boundary
+- [ ] Reduce public `GET /api/v1/health` response to `{"status": "healthy"}`
+- [ ] Keep detailed telemetry (`database_connected`, `version`, `timestamp`, etc.) strictly under authenticated `GET /api/v1/system/status`
+- [ ] Verify Android `HealthDto` parses minimal payload without error
 
-### 2. Default-Deny & Route Hardening
-- [x] Configure `api_v1_router` so all endpoints require authentication by default, with only `/health` explicitly public
-- [x] Maintain public liveness probe on `GET /api/v1/health` for client reachability
+### 2. Fail-Closed Router Architecture
+- [ ] Refactor `backend/app/api/v1/router.py` into explicit `public_router` and `protected_router`
+- [ ] Enforce `dependencies=[Depends(verify_token)]` on `protected_router` so all future routes fail closed by default
 
-### 3. Transport & Request Boundaries
-- [x] Tighten CORS middleware: explicit methods (`GET`, `POST`, `PATCH`, `DELETE`, `OPTIONS`) and explicit allowed headers
-- [x] Add Request Body Size Limit Middleware (reject payloads > 2 MB with HTTP 413)
-- [x] Gate `/docs`, `/redoc`, and `/openapi.json` to only be exposed when `ENVIRONMENT == "development"`
+### 3. Streaming Request-Body Size Enforcement
+- [ ] Update `PayloadLimitMiddleware` in `backend/app/core/middleware.py` to count actual stream bytes
+- [ ] Immediately reject streaming/chunked requests exceeding 2 MB with HTTP 413, even without `Content-Length` header
 
-### 4. Verification & Testing
-- [x] Author automated security tests in `backend/tests/test_security_hardening.py`
-- [x] Run full pytest suite (`pytest -v`) and verify 100% pass rate (18/18 passed in 0.31s)
-- [x] Export updated OpenAPI contract to `contracts/openapi/openapi.json`
+### 4. CORS Wildcard Rejection & Scheme Validation
+- [ ] Add Pydantic validator to `Settings.CORS_ORIGINS` in `backend/app/core/config.py`
+- [ ] Reject `*` wildcards and reject origins without valid `http://` or `https://` schemes on application startup
+
+### 5. Request ID Sanitization
+- [ ] Sanitize incoming `X-Request-ID` header against `^[a-zA-Z0-9_-]{1,64}$` in `backend/app/core/middleware.py`
+- [ ] Discard invalid IDs and generate clean fallback `req_<uuid4_hex>`
+
+### 6. Negative Security Tests & Claim Calibration
+- [ ] Add tests in `backend/tests/test_security_hardening.py` for chunked 413 rejection, wildcard CORS failure, and request ID sanitization
+- [ ] Update `backend/tests/test_health.py` for minimal public payload
+- [ ] Run full backend pytest suite and confirm all tests pass
+- [ ] Calibrate documentation claims in `BACKEND_SECURITY_REVIEW_AND_ROADMAP.md`

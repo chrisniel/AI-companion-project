@@ -28,7 +28,8 @@ object AppViewModelProvider {
             val app = companionApplication()
             AppViewModel(
                 homeRepository = app.appContainer.homeRepository,
-                appearanceRepository = app.appContainer.appearanceRepository
+                appearanceRepository = app.appContainer.appearanceRepository,
+                connectionRepository = app.appContainer.connectionRepository
             )
         }
         initializer {

@@ -64,6 +64,9 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -136,23 +139,42 @@ fun HomeScreen(
     onAvatarClick: () -> Unit = {},
     selectedLanguage: LanguageOption = LanguageOption.AUTO,
     onSelectLanguage: (LanguageOption) -> Unit = {},
+    isRefreshing: Boolean = false,
+    onRefresh: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
     var showAddTaskSheet by remember { mutableStateOf(false) }
 
-    Column(
+    val pullToRefreshState = rememberPullToRefreshState()
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        state = pullToRefreshState,
         modifier = modifier
             .fillMaxSize()
-            .testTag("home_screen")
-            .softBounceOverscroll()
-            .verticalScroll(scrollState)
-            .statusBarsPadding()
-            .padding(horizontal = SoftTheme.spacing.lg, vertical = SoftTheme.spacing.sm),
-        verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.lg)
+            .testTag("home_screen"),
+        indicator = {
+            PullToRefreshDefaults.Indicator(
+                state = pullToRefreshState,
+                isRefreshing = isRefreshing,
+                modifier = Modifier.align(Alignment.TopCenter),
+                containerColor = SoftTheme.colors.surfaceElevated,
+                color = SoftTheme.colors.accentBlue
+            )
+        }
     ) {
-        // 1. CONTEXTUAL PROFILE GREETING HEADER (Never hardcoded)
-        HomeHeaderGreeting(
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .softBounceOverscroll()
+                .verticalScroll(scrollState)
+                .statusBarsPadding()
+                .padding(horizontal = SoftTheme.spacing.lg, vertical = SoftTheme.spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.lg)
+        ) {
+            // 1. CONTEXTUAL PROFILE GREETING HEADER (Never hardcoded)
+            HomeHeaderGreeting(
             profile = homeData.profile,
             isReachable = connectionInfo.state == CoreConnectionState.Local || connectionInfo.state == CoreConnectionState.Remote,
             activeModelName = selectedPersona,
@@ -207,6 +229,7 @@ fun HomeScreen(
 
         Spacer(modifier = Modifier.height(SoftTheme.spacing.md))
     }
+}
 
     // Modal Bottom Sheet for Quick Add Task
     if (showAddTaskSheet) {

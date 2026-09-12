@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added & Fixed (2026-09-12 - Pass 3)
+
+- Task Due Date Calculation & SQLite Database Persistence: Resolved the defect where `tasks.due_date` remained `null` in SQLite database (`companion.db`). Created `TaskDateTimeConverter.kt` to calculate concrete dates from relative quick chips (`Today`, `Tomorrow`, `Next Week`) and custom Calendar selections, pair them with 12-hour AM/PM times (`12:00 PM`, `09:30 AM`), and format standard ISO-8601 strings (`YYYY-MM-DDTHH:MM:SS`).
+- Authoritative Task Due Date Serialization: Updated `LocalAiRuntimeClient.kt` and `HttpTasksRepository.kt` to dispatch `due_date` in `createTask` (`POST /api/v1/tasks`) and `updateTask` (`PATCH /api/v1/tasks/{id}`). Reconstructed relative labels (`Today`, `Tomorrow`, or `MMM dd, yyyy`) and 12-hour times upon retrieval, while safely preserving local `reminder` and `category` selections.
+- Unit Testing Suite & Verification: Added 7 unit tests in `TaskDateTimeConverterTest.kt` (122/122 total unit tests passing in 1m) and compiled fresh debug APK (`app-debug.apk`).
+
+### Added & Fixed (2026-09-12 - Pass 2)
+
+- Reachability Button & Continuous Draft Persistence: Bound "Save & Test Reachability" button to `Connecting` state, eliminating button freeze. Added continuous draft auto-saving on text field changes in `ConnectionScreen.kt` and preserved token in `AppViewModel.kt` so inputs never wipe when leaving or refocusing menus.
+- Task Creation Form Senior Accessibility & Readability Redesign: Overhauled `TaskCreateEditSheet.kt` for senior readability with large 14-16sp typography, 48-54dp touch targets, 3 large quick date/time options (`Today`, `Tomorrow`, `Next Week` / `09:00 AM`, `12:00 PM`, `06:00 PM`), prominent dedicated full-width `Calendar` and `Time` picker buttons, and enlarged category/priority chips with high-contrast borders.
+- Pull-to-Refresh Gesture Unblocking: Fixed `SoftBounceOverscroll.kt` to allow downward scroll deltas (`available.y > 0f`) to pass through directly to `PullToRefreshBox`. Added vertical scrolling to `EmptyTasksView` so pull-to-refresh triggers even on empty lists, with custom glassmorphic indicators on both Home and Tasks screens.
+- Verified with 115/115 passing unit tests (`gradlew.bat testDebugUnitTest`) and fresh APK build (`app-debug.apk`).
+
+### Added & Fixed (2026-09-12)
+
+- Android Sync Resilience & State Persistence: Fixed `SharedPreferencesConnectionRepository` with synchronous `.commit()` disk writes and default host `192.168.254.100`. Keyed `remember` and `LaunchedEffect` in `ConnectionScreen.kt` preventing form state resets when switching tabs or reopening the screen.
+- Bi-Directional SQLite Task Completion Synchronization: Resolved task completion mismatch where phone UI toggled locally but the PC SQLite database (`companion.db`) remained pending. Corrected `HttpTasksRepository` to transmit `PATCH /api/v1/tasks/{id}` with `nextStatus` to the active runtime, and properly partitioned `POST` for new tasks and `PATCH` for existing tasks.
+- Material 3 Calendar DatePicker & 12-Hour AM/PM TimePicker: Replaced free-text date/time inputs in `TaskCreateEditSheet.kt` with native Material 3 `DatePickerDialog` (with quick chips `Today`, `Tomorrow`, `Next Week`), 12-hour AM/PM `TimePicker` dialog (with quick chips `09:00 AM`, `12:00 PM`, `06:00 PM`), and structured reminder interval chips.
+- Pull-to-Refresh Integration: Added Material 3 `PullToRefreshBox` on `HomeScreen.kt` (refreshing backend health and tasks) and `TasksScreen.kt` (refreshing remote tasks from SQLite database).
+- Verified with 115/115 passing unit tests (`gradlew.bat testDebugUnitTest`) and clean APK build (`app-debug.apk`).
+
+### Added (2026-09-12)
+
+- Android Backend Connection & Reachability Probe: Added persistent connection preferences (`SharedPreferencesConnectionRepository`) for host IP, port, and pairing key. Added real-time reachability probing (`GET /api/v1/health` with latency calculation) and pairing token validation (`POST /api/v1/auth/verify`) in `LocalAiRuntimeClient` (OkHttp 4.12.0) with dynamic UI connection status updates.
+- Cleartext LAN Network Security Configuration: Configured Android network security config permitting cleartext HTTP on private RFC 1918 subnets (`192.168.x.x`, `10.x.x.x`, `172.16.x.x`, Tailscale `100.x.x.x`, and emulator loopbacks) while enforcing HTTPS globally. Added `INTERNET` and `ACCESS_NETWORK_STATE` permissions.
+- Live Tasks CRUD Synchronization & Offline Resilience: Implemented `HttpTasksRepository` with optimistic local UI mutations and asynchronous PC SQLite database synchronization. Provided air-gapped fallback so the app functions seamlessly and retains local tasks when the PC runtime is offline or disconnected.
+- Automated Integration Tests & APK Build: Added 5 integration tests in `NetworkIntegrationUnitTest.kt` (115/115 unit tests passing in 1m 42s with zero warnings) and compiled debug APK (`app-debug.apk`).
+
 ### Security & Hardening (2026-09-12)
 
 - Backend Security Hardening V1.1: Eliminated raw pairing token logging on application startup. Enforced default-deny authentication architecture at FastAPI sub-router boundaries (`/auth`, `/tasks`), keeping only `/health` explicitly public.

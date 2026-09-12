@@ -46,7 +46,19 @@ class TasksViewModel(
         _uiState.update { it.copy(searchQuery = query) }
     }
 
-    // --- QUICK ACTIONS ---
+    /**
+     * Pull-to-refresh: Sync tasks with backend runtime.
+     */
+    fun refreshTasks() {
+        _uiState.update { it.copy(isRefreshing = true) }
+        viewModelScope.launch {
+            if (tasksRepository is com.example.data.repository.HttpTasksRepository) {
+                tasksRepository.syncAll()
+            }
+            delay(350)
+            _uiState.update { it.copy(isRefreshing = false) }
+        }
+    }
 
     /**
      * Quick Action: Complete / Toggle Task
