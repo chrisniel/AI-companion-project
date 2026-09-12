@@ -1,5 +1,10 @@
 package com.example.ui.screens.settings
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
@@ -88,6 +93,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -101,7 +107,6 @@ import com.example.domain.model.BackgroundType
 import com.example.domain.model.BuiltInBackgroundPreset
 import com.example.domain.model.EffectsLevel
 import com.example.domain.model.JapaneseDisplay
-import com.example.domain.model.RefreshRateMode
 import com.example.domain.model.ResponseLanguageChoice
 import com.example.domain.model.SettingsSection
 import com.example.domain.model.SettingsState
@@ -320,29 +325,43 @@ private fun SettingsSectionTabs(
             val isSelected = section == selectedSection
             val icon = getSectionIcon(section)
             val isDark = SoftTheme.colors.isDark
+            val isOled = SoftTheme.colors.isOled
+            val isLightweight = SoftTheme.tokens.effectsLevel == EffectsLevel.REDUCED
             val shape = RoundedCornerShape(10.dp)
+
+            val borderModifier = if (isOled) {
+                Modifier.border(
+                    width = SoftTheme.tokens.borders.hairline,
+                    color = if (isSelected) SoftTheme.colors.accentPrimaryColor else Color(0xFF1F1F23),
+                    shape = shape
+                )
+            } else Modifier
+
+            val neumorphicModifier = when {
+                isOled || !isSelected -> Modifier
+                else -> Modifier.softNeumorphicRaised(
+                    shape = shape,
+                    isDark = isDark,
+                    elevation = if (isLightweight) 1.dp else 2.5.dp,
+                    highlightAlpha = if (isLightweight) 0.10f else (if (isDark) 0.18f else 0.85f),
+                    shadowAlpha = if (isLightweight) 0.15f else (if (isDark) 0.65f else 0.35f),
+                    isLightweight = isLightweight
+                )
+            }
+
+            val backgroundColor = when {
+                isOled -> if (isSelected) Color(0xFF181B22) else Color(0xFF121214)
+                isSelected -> SoftTheme.colors.surfaceElevated
+                else -> Color.Transparent
+            }
 
             Box(
                 modifier = Modifier
                     .testTag("settings_tab_${section.id}")
-                    .then(
-                        if (isSelected) {
-                            Modifier.softNeumorphicRaised(
-                                shape = shape,
-                                isDark = isDark,
-                                elevation = 2.5.dp,
-                                highlightAlpha = if (isDark) 0.18f else 0.85f,
-                                shadowAlpha = if (isDark) 0.65f else 0.35f
-                            )
-                        } else {
-                            Modifier
-                        }
-                    )
+                    .then(neumorphicModifier)
                     .clip(shape)
-                    .background(
-                        if (isSelected) SoftTheme.colors.surfaceElevated else Color.Transparent,
-                        shape
-                    )
+                    .background(backgroundColor, shape)
+                    .then(borderModifier)
                     .clickable { onSelectSection(section) }
                     .padding(horizontal = 14.dp, vertical = 9.dp),
                 contentAlignment = Alignment.Center
@@ -729,7 +748,9 @@ private fun AppearanceSectionContent(
         )
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
         ) {
             BackgroundType.entries.forEach { type ->
@@ -826,6 +847,21 @@ private fun AppearanceSectionContent(
                 }
             }
             BackgroundType.CUSTOM_IMAGE -> {
+                val context = LocalContext.current
+                val photoPickerLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.PickVisualMedia()
+                ) { uri: Uri? ->
+                    if (uri != null) {
+                        try {
+                            context.contentResolver.takePersistableUriPermission(
+                                uri,
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            )
+                        } catch (_: SecurityException) {}
+                        viewModel.setCustomImageName(uri.toString())
+                    }
+                }
+
                 SoftGlassCard(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -843,36 +879,28 @@ private fun AppearanceSectionContent(
                         ) {
                             Icon(Icons.Default.Image, contentDescription = null, tint = SoftTheme.colors.accentPrimaryColor)
                             Text(
-                                text = "Current: ${uiState.customImageName}",
+                                text = if (uiState.customImageName.isBlank()) "No wallpaper selected" else "Custom Wallpaper Active",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = SoftTheme.colors.textPrimary
                             )
                         }
                         Text(
-                            text = "Simulate picking a mobile photo or custom rendered graphic:",
+                            text = "Select any high-resolution photo from your phone gallery to use as your mobile companion background:",
                             style = MaterialTheme.typography.bodySmall,
                             color = SoftTheme.colors.textSecondary
                         )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(SoftTheme.spacing.sm)
-                        ) {
-                            SoftGlassButton(
-                                text = "Select Mobile Aurora",
-                                onClick = { viewModel.setCustomImageName("mobile_aurora_custom.jpg") },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("btn_pick_aurora")
-                            )
-                            SoftGlassButton(
-                                text = "Select Cyber Glass",
-                                onClick = { viewModel.setCustomImageName("cyber_glass_mobile.png") },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("btn_pick_cyber")
-                            )
-                        }
+                        SoftGlassButton(
+                            text = "Choose Photo from Device",
+                            onClick = {
+                                photoPickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("btn_pick_photo_device")
+                        )
                     }
                 }
             }
@@ -1145,7 +1173,7 @@ private fun AppearanceSectionContent(
 
         // Effects Level
         Text(
-            text = "GLASS VISUAL EFFECTS",
+            text = "NEUMORPHIC VISUAL EFFECTS",
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
             color = SoftTheme.colors.accentPrimaryColor
@@ -1234,30 +1262,6 @@ private fun AppearanceSectionContent(
                 .fillMaxWidth()
                 .testTag("slider_background_brightness")
         )
-
-        HorizontalDivider(color = SoftTheme.colors.borderSubtle)
-
-        // Display Refresh Rate
-        Text(
-            text = "DISPLAY REFRESH RATE (120HZ / 60HZ)",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = SoftTheme.colors.accentPrimaryColor
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            RefreshRateMode.entries.forEach { mode ->
-                val isSelected = uiState.refreshRateMode == mode
-                SelectionCardItem(
-                    title = mode.label,
-                    subtitle = mode.description,
-                    selected = isSelected,
-                    onClick = { viewModel.setRefreshRateMode(mode) },
-                    testTag = "refresh_rate_${mode.name}"
-                )
-            }
-        }
     }
 }
 
@@ -2070,31 +2074,47 @@ private fun SelectablePill(
     modifier: Modifier = Modifier
 ) {
     val isDark = SoftTheme.colors.isDark
+    val isOled = SoftTheme.colors.isOled
+    val isLightweight = SoftTheme.tokens.effectsLevel == EffectsLevel.REDUCED
     val shape = RoundedCornerShape(10.dp)
+
+    val borderModifier = if (isOled) {
+        Modifier.border(
+            width = SoftTheme.tokens.borders.hairline,
+            color = if (selected) SoftTheme.colors.accentPrimaryColor else Color(0xFF1F1F23),
+            shape = shape
+        )
+    } else Modifier
+
+    val neumorphicModifier = when {
+        isOled -> Modifier
+        selected -> Modifier.softNeumorphicInset(
+            shape = shape,
+            isDark = isDark,
+            depth = if (isLightweight) 1.dp else 3.dp,
+            isLightweight = isLightweight
+        )
+        else -> Modifier.softNeumorphicRaised(
+            shape = shape,
+            isDark = isDark,
+            elevation = if (isLightweight) 1.dp else 3.dp,
+            isLightweight = isLightweight
+        )
+    }
+
+    val backgroundColor = when {
+        isOled -> if (selected) Color(0xFF181B22) else Color(0xFF121214)
+        isLightweight && selected -> SoftTheme.colors.surfacePressed
+        else -> SoftTheme.colors.surfaceElevated
+    }
 
     Box(
         modifier = modifier
             .defaultMinSize(minHeight = 44.dp)
-            .then(
-                if (selected) {
-                    Modifier.softNeumorphicInset(
-                        shape = shape,
-                        isDark = isDark,
-                        depth = 3.dp
-                    )
-                } else {
-                    Modifier.softNeumorphicRaised(
-                        shape = shape,
-                        isDark = isDark,
-                        elevation = 3.dp
-                    )
-                }
-            )
+            .then(neumorphicModifier)
             .clip(shape)
-            .background(
-                if (SoftTheme.tokens.effectsLevel == EffectsLevel.REDUCED && selected) SoftTheme.colors.surfacePressed else SoftTheme.colors.surfaceElevated,
-                shape
-            )
+            .background(backgroundColor, shape)
+            .then(borderModifier)
             .clickable(onClick = onClick)
             .padding(horizontal = SoftTheme.spacing.md, vertical = SoftTheme.spacing.sm),
         contentAlignment = Alignment.Center
@@ -2118,32 +2138,48 @@ private fun SelectionCardItem(
     testTag: String
 ) {
     val isDark = SoftTheme.colors.isDark
+    val isOled = SoftTheme.colors.isOled
+    val isLightweight = SoftTheme.tokens.effectsLevel == EffectsLevel.REDUCED
     val shape = RoundedCornerShape(12.dp)
+
+    val borderModifier = if (isOled) {
+        Modifier.border(
+            width = SoftTheme.tokens.borders.hairline,
+            color = if (selected) SoftTheme.colors.accentPrimaryColor else Color(0xFF1F1F23),
+            shape = shape
+        )
+    } else Modifier
+
+    val neumorphicModifier = when {
+        isOled -> Modifier
+        selected -> Modifier.softNeumorphicInset(
+            shape = shape,
+            isDark = isDark,
+            depth = if (isLightweight) 1.dp else 3.dp,
+            isLightweight = isLightweight
+        )
+        else -> Modifier.softNeumorphicRaised(
+            shape = shape,
+            isDark = isDark,
+            elevation = if (isLightweight) 1.dp else 2.5.dp,
+            isLightweight = isLightweight
+        )
+    }
+
+    val backgroundColor = when {
+        isOled -> if (selected) Color(0xFF181B22) else Color(0xFF121214)
+        isLightweight && selected -> SoftTheme.colors.surfacePressed
+        else -> SoftTheme.colors.surface
+    }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(testTag)
-            .then(
-                if (selected) {
-                    Modifier.softNeumorphicInset(
-                        shape = shape,
-                        isDark = isDark,
-                        depth = 3.dp
-                    )
-                } else {
-                    Modifier.softNeumorphicRaised(
-                        shape = shape,
-                        isDark = isDark,
-                        elevation = 2.5.dp
-                    )
-                }
-            )
+            .then(neumorphicModifier)
             .clip(shape)
-            .background(
-                if (SoftTheme.tokens.effectsLevel == EffectsLevel.REDUCED && selected) SoftTheme.colors.surfacePressed else SoftTheme.colors.surface,
-                shape
-            )
+            .background(backgroundColor, shape)
+            .then(borderModifier)
             .clickable(onClick = onClick)
             .padding(SoftTheme.spacing.md)
     ) {

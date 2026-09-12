@@ -42,6 +42,10 @@ class FakeAppearanceRepository(
         _preferences.update { it.copy(backgroundType = type) }
     }
 
+    override fun setCustomImageUri(uri: String?) {
+        _preferences.update { it.copy(customImageUri = uri) }
+    }
+
     override fun setBackgroundPreset(preset: BuiltInBackgroundPreset) {
         _preferences.update { it.copy(backgroundPreset = preset) }
     }

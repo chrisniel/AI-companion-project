@@ -133,6 +133,7 @@ fun HomeScreen(
     onNavigateToRoute: (String) -> Unit,
     onToggleTask: (String) -> Unit,
     onAddTask: (title: String, priority: String) -> Unit,
+    onAvatarClick: () -> Unit = {},
     selectedLanguage: LanguageOption = LanguageOption.AUTO,
     onSelectLanguage: (LanguageOption) -> Unit = {},
     modifier: Modifier = Modifier
@@ -155,9 +156,8 @@ fun HomeScreen(
             profile = homeData.profile,
             isReachable = connectionInfo.state == CoreConnectionState.Local || connectionInfo.state == CoreConnectionState.Remote,
             activeModelName = selectedPersona,
-            connectionInfo = connectionInfo,
-            onNavigateToSettings = { onNavigateToRoute(Routes.SETTINGS) },
-            modifier = Modifier.zIndex(100f)
+            onAvatarClick = onAvatarClick,
+            modifier = Modifier.fillMaxWidth()
         )
 
         // 2. ASSISTANT HERO (Calm, prominent, active character, reachability, model summary, no loud telemetry)
@@ -233,8 +233,7 @@ private fun HomeHeaderGreeting(
     profile: UserProfile,
     isReachable: Boolean,
     activeModelName: String = "Aura",
-    connectionInfo: ConnectionInfo? = null,
-    onNavigateToSettings: () -> Unit = {},
+    onAvatarClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val greetingTime = remember {
@@ -245,9 +244,8 @@ private fun HomeHeaderGreeting(
             else -> "Good evening"
         }
     }
-    var isProfileMenuExpanded by remember { mutableStateOf(false) }
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .testTag("home_header_greeting")
@@ -257,7 +255,7 @@ private fun HomeHeaderGreeting(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = if (profile.name.isNotBlank() && profile.name != "User") "$greetingTime, ${profile.name}" else greetingTime,
                     style = MaterialTheme.typography.headlineSmall,
@@ -291,9 +289,9 @@ private fun HomeHeaderGreeting(
                     .clip(CircleShape)
                     .clickable(
                         role = Role.Button,
-                        onClickLabel = "Open Profile and Connection Status"
+                        onClickLabel = "Open Profile and Vault Status"
                     ) {
-                        isProfileMenuExpanded = !isProfileMenuExpanded
+                        onAvatarClick()
                     }
             ) {
                 SoftAvatar(
@@ -301,120 +299,6 @@ private fun HomeHeaderGreeting(
                     size = 40.dp,
                     statusColor = null
                 )
-            }
-        }
-
-        // Floating Animated Vault Popover Overlay
-        androidx.compose.animation.AnimatedVisibility(
-            visible = isProfileMenuExpanded,
-            modifier = Modifier
-                .fillMaxWidth()
-                .zIndex(50f)
-                .padding(top = 10.dp),
-            enter = scaleIn(
-                initialScale = 0.82f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                )
-            ) + fadeIn(),
-            exit = scaleOut(
-                targetScale = 0.85f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                )
-            ) + fadeOut()
-        ) {
-            // Plain Glassmorphism Vault Card (Clean frosted surface, hairline rim, zero muddy shadows)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(
-                        if (SoftTheme.colors.isDark) Color(0xF2181B22)
-                        else Color(0xF5EDF0EB)
-                    )
-                    .border(
-                        width = SoftTheme.tokens.borders.hairline,
-                        color = if (SoftTheme.colors.isDark) Color(0x2EFFFFFF) else Color(0x28000000),
-                        shape = RoundedCornerShape(22.dp)
-                    )
-                    .padding(20.dp)
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.md)
-                ) {
-                    // Vault Header
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            SoftAvatar(
-                                name = profile.name,
-                                size = 46.dp,
-                                statusColor = if (isReachable) SoftTheme.colors.statusSuccess else null
-                            )
-                            Column {
-                                Text(
-                                    text = profile.name.ifBlank { "Companion User" },
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = SoftTheme.colors.textPrimary
-                                )
-                                Text(
-                                    text = if (isReachable) "Connected to host core" else "Local Mobile Offline Node",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = SoftTheme.colors.textSecondary
-                                )
-                            }
-                        }
-                        if (connectionInfo != null) {
-                            Box(modifier = Modifier.testTag("topbar_connection_indicator")) {
-                                CompactConnectionIndicator(
-                                    state = connectionInfo.state,
-                                    label = connectionInfo.label,
-                                    latencyMs = connectionInfo.latencyMs
-                                )
-                            }
-                        }
-                    }
-
-                    HorizontalDivider(color = SoftTheme.colors.borderSubtle)
-
-                    // Quick Action: Settings
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(SoftTheme.tokens.corners.sm))
-                            .clickable {
-                                isProfileMenuExpanded = false
-                                onNavigateToSettings()
-                            }
-                            .padding(vertical = SoftTheme.spacing.xs),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = null,
-                            tint = SoftTheme.colors.accentPrimaryColor,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Text(
-                            text = "Open Settings & Preferences",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            color = SoftTheme.colors.accentPrimaryColor
-                        )
-                    }
-                }
             }
         }
     }

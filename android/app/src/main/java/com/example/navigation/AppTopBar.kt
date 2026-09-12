@@ -103,6 +103,7 @@ fun AppTopBar(
                             .clip(CircleShape)
                             .clickable(
                                 role = Role.Button,
+                                onClickLabel = "Open Vault and Profile",
                                 onClick = onAvatarClick
                             )
                     ) {

@@ -72,15 +72,16 @@ fun SoftGlassTheme(
     }
 
     val (shadowFactor, specularAlpha) = when (preferences.effectsLevel) {
-        EffectsLevel.REDUCED -> 0.4f to 0.05f
-        EffectsLevel.NORMAL -> 1.0f to 0.18f
-        EffectsLevel.ENHANCED -> 1.3f to 0.30f
+        EffectsLevel.REDUCED -> 0.20f to 0.22f
+        EffectsLevel.NORMAL -> 1.0f to 0.22f
+        EffectsLevel.ENHANCED -> 1.5f to 0.35f
     }
 
     val colors = when {
         isOled -> {
             SoftGlassColors(
                 isDark = true,
+                isOled = true,
                 background = OledBackground,
                 backgroundSecondary = OledBackgroundSecondary,
                 surface = OledSurfaceBase,
@@ -93,9 +94,8 @@ fun SoftGlassTheme(
                 borderSubtle = BorderSubtleOled,
                 borderGradient = Brush.verticalGradient(
                     listOf(
-                        Color.White.copy(alpha = 0.24f),
-                        Color.White.copy(alpha = 0.08f),
-                        Color.Transparent
+                        BorderSubtleOled,
+                        BorderSubtleOled
                     )
                 ),
                 textPrimary = TextPrimaryOled,

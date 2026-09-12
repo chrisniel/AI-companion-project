@@ -1,18 +1,24 @@
 package com.example.ui.components
 
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.Velocity
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.sign
@@ -25,7 +31,7 @@ import kotlin.math.sign
  *
  * Performance guarantee:
  * Mutates layout strictly via [Modifier.graphicsLayer] translation, eliminating recomposition
- * passes and guaranteeing full 120Hz (8.33ms) frame rate budget execution.
+ * passes and guaranteeing full high-refresh-rate (60Hz, 90Hz, 120Hz, 144Hz, 165Hz) frame budget execution.
  */
 @Composable
 fun Modifier.softBounceOverscroll(
@@ -35,30 +41,51 @@ fun Modifier.softBounceOverscroll(
     if (!enabled) return this
 
     val coroutineScope = rememberCoroutineScope()
-    val overscrollOffset = remember { Animatable(0f) }
+    var offsetState by remember { mutableFloatStateOf(0f) }
+    var animJob by remember { mutableStateOf<Job?>(null) }
+
+    fun animateToZero(initialVelocity: Float = 0f) {
+        animJob?.cancel()
+        animJob = coroutineScope.launch {
+            try {
+                animate(
+                    initialValue = offsetState,
+                    targetValue = 0f,
+                    initialVelocity = initialVelocity.coerceIn(-1500f, 1500f),
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessLow
+                    )
+                ) { value, _ ->
+                    offsetState = value
+                }
+            } finally {
+                offsetState = 0f
+            }
+        }
+    }
 
     val nestedScrollConnection = remember(coroutineScope, maxOverscrollPx) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 // If an animation is active and user touches down, stop animation immediately
-                if (overscrollOffset.isRunning && source == NestedScrollSource.UserInput) {
-                    coroutineScope.launch {
-                        overscrollOffset.stop()
-                    }
+                if (source == NestedScrollSource.UserInput) {
+                    animJob?.cancel()
+                    animJob = null
                 }
 
-                // If we are currently stretched past bounds, consume movement towards center
-                val current = overscrollOffset.value
-                if (current != 0f && source == NestedScrollSource.UserInput) {
+                // If we are currently stretched past bounds, consume movement towards center synchronously
+                val current = offsetState
+                if (abs(current) > 0.01f && source == NestedScrollSource.UserInput) {
                     val isPullingBack = (current > 0f && available.y < 0f) || (current < 0f && available.y > 0f)
                     if (isPullingBack) {
                         val newOffset = current + available.y
                         return if (sign(newOffset) != sign(current)) {
-                            // We crossed zero: snap to zero and let remaining delta scroll list
-                            coroutineScope.launch { overscrollOffset.snapTo(0f) }
+                            // Crossed zero: snap to zero synchronously and pass remaining delta to list
+                            offsetState = 0f
                             Offset(0f, -current)
                         } else {
-                            coroutineScope.launch { overscrollOffset.snapTo(newOffset) }
+                            offsetState = newOffset
                             Offset(0f, available.y)
                         }
                     }
@@ -72,74 +99,79 @@ fun Modifier.softBounceOverscroll(
                 source: NestedScrollSource
             ): Offset {
                 if (source == NestedScrollSource.UserInput && available.y != 0f) {
-                    val current = overscrollOffset.value
+                    val current = offsetState
                     // Authentic progressive quadratic rubber-band resistance curve
                     val dragRatio = (abs(current) / maxOverscrollPx).coerceIn(0f, 1f)
                     val friction = ((1f - dragRatio) * (1f - dragRatio)) * 0.32f
                     val delta = available.y * friction
-                    val newOffset = (current + delta).coerceIn(-maxOverscrollPx, maxOverscrollPx)
-
-                    coroutineScope.launch {
-                        overscrollOffset.snapTo(newOffset)
-                    }
+                    offsetState = (current + delta).coerceIn(-maxOverscrollPx, maxOverscrollPx)
                     return Offset(0f, available.y)
                 }
                 return Offset.Zero
             }
 
             override suspend fun onPreFling(available: Velocity): Velocity {
-                if (overscrollOffset.value != 0f) {
-                    // Spring release on finger lift while stretched
-                    overscrollOffset.animateTo(
-                        targetValue = 0f,
-                        initialVelocity = (available.y * 0.25f).coerceIn(-1500f, 1500f),
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessLow
-                        )
-                    )
-                    return available
+                val current = offsetState
+
+                // CRITICAL FIX: If stretched, but user flings back into content (e.g. swiping up to scroll down):
+                // NEVER intercept fling! Let 100% of velocity flow to the LazyColumn or verticalScroll!
+                if (current > 1f && available.y < 0f) {
+                    animateToZero()
+                    return Velocity.Zero
                 }
-                return Velocity.Zero
+                if (current < -1f && available.y > 0f) {
+                    animateToZero()
+                    return Velocity.Zero
+                }
+
+                // If resting or sub-pixel, never touch fling
+                if (abs(current) <= 1f) {
+                    offsetState = 0f
+                    return Velocity.Zero
+                }
+
+                // Only consume if flinging further outward past the boundary
+                animateToZero(initialVelocity = available.y)
+                return available
             }
 
             override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-                val current = overscrollOffset.value
-                if (current != 0f) {
-                    // Content already stretched past boundary: snap back to center
-                    overscrollOffset.animateTo(
-                        targetValue = 0f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessLow
-                        )
-                    )
+                val current = offsetState
+                if (abs(current) > 1f) {
+                    animateToZero()
                     return available
                 } else if (abs(available.y) > 650f) {
-                    // High-velocity fling collision against boundary (raised threshold stops premature mid-swipe kicking):
-                    // 1. Coast outward past bounds into visible overscroll space absorbing inertia
-                    val momentumDistance =
-                        (available.y * 0.045f).coerceIn(-85f, 85f)
+                    // High-velocity fling collision against boundary (absorb inertia and spring recoil)
+                    val momentumDistance = (available.y * 0.045f).coerceIn(-85f, 85f)
                     if (abs(momentumDistance) > 8f) {
-                        try {
-                            // Phase 1: Smooth deceleration to momentum apex
-                            overscrollOffset.animateTo(
-                                targetValue = momentumDistance,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioNoBouncy,
-                                    stiffness = Spring.StiffnessMedium
-                                )
-                            )
-                            // Phase 2: Authentic rubber-band spring recoil back to resting center
-                            overscrollOffset.animateTo(
-                                targetValue = 0f,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessLow
-                                )
-                            )
-                        } catch (_: Exception) {
-                            // Interrupted by user touch: cleanly caught
+                        animJob?.cancel()
+                        animJob = coroutineScope.launch {
+                            try {
+                                // Phase 1: Smooth deceleration to momentum apex
+                                animate(
+                                    initialValue = 0f,
+                                    targetValue = momentumDistance,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioNoBouncy,
+                                        stiffness = Spring.StiffnessMedium
+                                    )
+                                ) { value, _ ->
+                                    offsetState = value
+                                }
+                                // Phase 2: Authentic rubber-band spring recoil back to resting center
+                                animate(
+                                    initialValue = momentumDistance,
+                                    targetValue = 0f,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessLow
+                                    )
+                                ) { value, _ ->
+                                    offsetState = value
+                                }
+                            } finally {
+                                offsetState = 0f
+                            }
                         }
                         return available
                     }
@@ -150,8 +182,10 @@ fun Modifier.softBounceOverscroll(
     }
 
     return this
+        .clipToBounds()
         .nestedScroll(nestedScrollConnection)
         .graphicsLayer {
-            translationY = overscrollOffset.value
+            translationY = offsetState
         }
 }
+

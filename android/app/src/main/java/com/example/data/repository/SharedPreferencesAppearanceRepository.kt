@@ -82,6 +82,8 @@ class SharedPreferencesAppearanceRepository(
         val refreshRate = runCatching { RefreshRateMode.valueOf(refreshRateStr ?: RefreshRateMode.SYSTEM_DEFAULT.name) }
             .getOrDefault(RefreshRateMode.SYSTEM_DEFAULT)
 
+        val customImageUri = sharedPreferences.getString(KEY_CUSTOM_IMAGE_URI, null)
+
         return AppearancePreferences(
             themeMode = themeMode,
             themeSource = themeSource,
@@ -91,6 +93,7 @@ class SharedPreferencesAppearanceRepository(
             gradientPreset = gradientPreset,
             solidPreset = solidPreset,
             customAccentHex = customAccentHex,
+            customImageUri = customImageUri,
             effectsLevel = effectsLevel,
             scrimOpacity = scrimOpacity,
             backgroundBrightness = backgroundBrightness,
@@ -130,6 +133,15 @@ class SharedPreferencesAppearanceRepository(
     override fun setBackgroundType(type: BackgroundType) {
         _preferences.update { it.copy(backgroundType = type) }
         sharedPreferences.edit().putString(KEY_BACKGROUND_TYPE, type.name).apply()
+    }
+
+    override fun setCustomImageUri(uri: String?) {
+        _preferences.update { it.copy(customImageUri = uri) }
+        if (uri != null) {
+            sharedPreferences.edit().putString(KEY_CUSTOM_IMAGE_URI, uri).apply()
+        } else {
+            sharedPreferences.edit().remove(KEY_CUSTOM_IMAGE_URI).apply()
+        }
     }
 
     override fun setBackgroundPreset(preset: BuiltInBackgroundPreset) {
@@ -176,6 +188,7 @@ class SharedPreferencesAppearanceRepository(
         private const val KEY_ACCENT_PRESET = "accent_preset"
         private const val KEY_CUSTOM_ACCENT_HEX = "custom_accent_hex"
         private const val KEY_BACKGROUND_TYPE = "background_type"
+        private const val KEY_CUSTOM_IMAGE_URI = "custom_image_uri"
         private const val KEY_BACKGROUND_PRESET = "background_preset"
         private const val KEY_GRADIENT_PRESET = "gradient_preset"
         private const val KEY_SOLID_PRESET = "solid_preset"

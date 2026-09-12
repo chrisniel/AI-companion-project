@@ -47,6 +47,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.example.domain.model.EffectsLevel
 import com.example.ui.theme.SoftTheme
 
 /**
@@ -106,26 +107,30 @@ fun PrimaryButton(
         else -> Color.White
     }
 
+    val isOled = SoftTheme.colors.isOled
+    val isLightweight = SoftTheme.tokens.effectsLevel == EffectsLevel.REDUCED
+
+    val neumorphicModifier = if (isOled) Modifier else Modifier.softNeumorphicRaised(
+        shape = shape,
+        isDark = SoftTheme.colors.isDark,
+        elevation = animatedElevation,
+        isLightweight = isLightweight
+    )
+
+    val insetModifier = if (isPressed && !isOled) {
+        Modifier.softInsetWell(shape = shape, isDark = SoftTheme.colors.isDark, depth = 3.dp, isLightweight = isLightweight)
+    } else Modifier
+
     Box(
         modifier = modifier
             .testTag(testTag)
             .scale(scale)
             .defaultMinSize(minWidth = 128.dp, minHeight = 52.dp)
             .minimumInteractiveComponentSize()
-            .softNeumorphicRaised(
-                shape = shape,
-                isDark = SoftTheme.colors.isDark,
-                elevation = animatedElevation
-            )
+            .then(neumorphicModifier)
             .clip(shape)
             .background(backgroundBrush, shape)
-            .then(
-                if (isPressed) {
-                    Modifier.softInsetWell(shape = shape, isDark = SoftTheme.colors.isDark, depth = 3.dp)
-                } else {
-                    Modifier
-                }
-            )
+            .then(insetModifier)
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(color = if (SoftTheme.colors.isDark) Color.Black.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.3f)),
@@ -210,8 +215,12 @@ fun SecondaryButton(
         label = "secondary_btn_scale"
     )
 
+    val isOled = SoftTheme.colors.isOled
+    val isLightweight = SoftTheme.tokens.effectsLevel == EffectsLevel.REDUCED
+
     val surfaceColor = when {
-        !enabled -> SoftTheme.colors.surface.copy(alpha = 0.4f)
+        !enabled -> SoftTheme.colors.surface.copy(alpha = 0.5f)
+        isOled -> if (isPressed) Color(0xFF18181B) else Color(0xFF000000)
         isPressed -> SoftTheme.colors.surfacePressed
         else -> SoftTheme.colors.surface
     }
@@ -227,28 +236,30 @@ fun SecondaryButton(
         else -> SoftTheme.colors.borderGradient
     }
 
+    val neumorphicModifier = if (isOled) Modifier else Modifier.softNeumorphicRaised(
+        shape = shape,
+        isDark = SoftTheme.colors.isDark,
+        elevation = if (enabled) SoftTheme.tokens.elevations.subtle else SoftTheme.tokens.elevations.none,
+        isLightweight = isLightweight
+    )
+
+    val borderModifier = when {
+        isOled -> Modifier.border(width = SoftTheme.tokens.borders.hairline, color = SoftTheme.colors.borderSubtle, shape = shape)
+        isPressed -> Modifier.softInsetWell(shape = shape, isDark = SoftTheme.colors.isDark, depth = 3.dp, isLightweight = isLightweight)
+        SoftTheme.colors.isDark -> Modifier
+        else -> Modifier.border(width = SoftTheme.tokens.borders.hairline, brush = borderBrush, shape = shape)
+    }
+
     Box(
         modifier = modifier
             .testTag(testTag)
             .scale(scale)
             .defaultMinSize(minWidth = 100.dp, minHeight = 52.dp)
             .minimumInteractiveComponentSize()
-            .softNeumorphicRaised(
-                shape = shape,
-                isDark = SoftTheme.colors.isDark,
-                elevation = if (enabled) SoftTheme.tokens.elevations.subtle else SoftTheme.tokens.elevations.none
-            )
+            .then(neumorphicModifier)
             .clip(shape)
             .background(surfaceColor, shape)
-            .then(
-                if (isPressed) {
-                    Modifier.softInsetWell(shape = shape, isDark = SoftTheme.colors.isDark, depth = 3.dp)
-                } else if (SoftTheme.colors.isDark) {
-                    Modifier
-                } else {
-                    Modifier.border(width = SoftTheme.tokens.borders.hairline, brush = borderBrush, shape = shape)
-                }
-            )
+            .then(borderModifier)
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(color = SoftTheme.colors.accentCyan),
@@ -405,8 +416,12 @@ fun SoftIconButton(
         label = "icon_btn_scale"
     )
 
+    val isOled = SoftTheme.colors.isOled
+    val isLightweight = SoftTheme.tokens.effectsLevel == EffectsLevel.REDUCED
+
     val surfaceColor = when {
-        !enabled -> SoftTheme.colors.surface.copy(alpha = 0.4f)
+        !enabled -> SoftTheme.colors.surface.copy(alpha = 0.5f)
+        isOled -> if (isPressed) Color(0xFF18181B) else Color(0xFF000000)
         isSelected -> SoftTheme.colors.surfaceElevated
         isPressed -> SoftTheme.colors.surfacePressed
         else -> SoftTheme.colors.surface
@@ -424,28 +439,30 @@ fun SoftIconButton(
         else -> SoftTheme.colors.borderGradient
     }
 
+    val neumorphicModifier = if (isOled) Modifier else Modifier.softNeumorphicRaised(
+        shape = shape,
+        isDark = SoftTheme.colors.isDark,
+        elevation = if (enabled) SoftTheme.tokens.elevations.subtle else SoftTheme.tokens.elevations.none,
+        isLightweight = isLightweight
+    )
+
+    val borderModifier = when {
+        isOled -> Modifier.border(width = SoftTheme.tokens.borders.hairline, color = if (isSelected) SoftTheme.colors.accentPrimaryColor else SoftTheme.colors.borderSubtle, shape = shape)
+        isPressed -> Modifier.softInsetWell(shape = shape, isDark = SoftTheme.colors.isDark, depth = 2.dp, isLightweight = isLightweight)
+        SoftTheme.colors.isDark -> Modifier
+        else -> Modifier.border(width = SoftTheme.tokens.borders.hairline, brush = borderBrush, shape = shape)
+    }
+
     Box(
         modifier = modifier
             .testTag(testTag)
             .scale(scale)
             .size(48.dp)
             .minimumInteractiveComponentSize()
-            .softNeumorphicRaised(
-                shape = shape,
-                isDark = SoftTheme.colors.isDark,
-                elevation = if (enabled) SoftTheme.tokens.elevations.subtle else SoftTheme.tokens.elevations.none
-            )
+            .then(neumorphicModifier)
             .clip(shape)
             .background(surfaceColor, shape)
-            .then(
-                if (isPressed) {
-                    Modifier.softInsetWell(shape = shape, isDark = SoftTheme.colors.isDark, depth = 2.dp)
-                } else if (SoftTheme.colors.isDark) {
-                    Modifier
-                } else {
-                    Modifier.border(width = SoftTheme.tokens.borders.hairline, brush = borderBrush, shape = shape)
-                }
-            )
+            .then(borderModifier)
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(color = SoftTheme.colors.accentCyan),

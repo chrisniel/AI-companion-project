@@ -6,7 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added & Fixed
+
+- Assistant Tab Autoscroll Optimization: Pre-positioned `listState` at the latest message upon entering the Assistant workspace with zero animated scrolling lag; `animateScrollToItem` is now selectively triggered only when new messages are appended or during active LLM token streaming.
+- Custom UI Wallpaper Frosted Blur: Added `Modifier.blur(18.dp)` to custom image background rendering in `AppShell.kt`, bringing gallery wallpapers into visual parity with built-in aura presets.
+- Viewport-Level Floating Vault Popover on Home: Replaced the inline layout-expanding card in `HomeScreen.kt` with a direct trigger to the root `VaultPopoverOverlay`, ensuring the Vault displays as a floating glassmorphic popover with a dismissible scrim without shifting or pushing down feed content.
+- Real-Time Horizontal Swipe Tracking: Implemented 1:1 tactile touch translation (`swipeOffset` with `graphicsLayer { translationX }`) across root destinations in `AppShell.kt`, providing immediate visual feedback during finger drag with natural spring snapping.
+- Direction-Aware Bottom Navigation Slide Transitions: Aligned bottom navigation destination transitions in `AppShell.kt` with `AnimatedContent` direction-aware spring slide and fade animations (`dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow`, `slideInHorizontally(it/3) + fadeIn(220)` & `slideOutHorizontally(-it/4) + fadeOut(180)`), eliminating intermediate screen flashes when jumping between non-adjacent tabs while keeping horizontal swipe gestures responsive.
+- OLED Battery Saver & Reduced Mode Button/Pill Parity: Updated `SelectablePill`, `SelectionCardItem`, and `SettingsSectionTabs` in `SettingsScreen.kt` to strictly honor `ThemeMode.OLED_BATTERY_SAVER` (flat `#121214` obsidian containers with `#1F1F23` hairline borders and zero drop shadows) and `EffectsLevel.REDUCED` (`isLightweight = true`, minimal shadow depth).
+- Settings Appearance Neumorphic Naming & Scrollable Background Row: Renamed visual effects header to `"NEUMORPHIC VISUAL EFFECTS"` and added `.horizontalScroll(rememberScrollState())` to the Mobile Background row in `SettingsScreen.kt` so all 4 options (`[Built-in]`, `[Custom Image UI]`, `[Gradient]`, `[Solid]`) are fully visible and selectable.
+- Decoupled Background Layer & Custom Wallpaper Photo Decoding: Fixed custom image decoding in `AppShell.kt` to decode device gallery images, rendered under glass with contrast scrim, and decoupled `AppBackgroundLayer` beneath `renderScaffold()` so selecting background types never recreates the Scaffold or resets scroll position.
+- Overscroll Viewport Boundary Clipping: Added `.clipToBounds()` before the graphics layer in `SoftBounceOverscroll.kt`, ensuring bouncing content strictly stays within the scrollable viewport without rendering over top bars or tabs.
+- Global Animated Vault Popover Overlay: Wired top bar avatar across all primary and secondary screens to open the floating animated glassmorphic Vault Popover overlay showing on-device SQLite vault status, host connection details, and a direct settings link.
+
+### Fixed
+
+- 60Hz Display Lock on High-Refresh Screens: Dynamically query `display.supportedModes` in `MainActivity.kt` to configure `preferredDisplayModeId` and `preferredRefreshRate` matching the hardware's maximum available capability (60Hz, 90Hz, 120Hz, 144Hz, 165Hz), unlocking native 120Hz fluid motion on Infinix ZERO ULTRA and modern devices instead of falling back to the 60Hz battery-saver default.
+- Multi-Tab Traversal Spike on Bottom Navigation: In `AppShell.kt`, bottom navigation taps to non-adjacent destinations (e.g. Home to More) now execute a direct jump via `scrollToPage(targetIndex)`, bypassing the layout and composition spikes of traversing screens 1, 2, and 3. Physical horizontal swiping retains 1:1 finger tracking between adjacent screens.
+- Horizontal Swipe Lag & Tab Hitching: Set `beyondViewportPageCount = 2` in `HorizontalPager` to keep adjacent tab screens pre-warmed in memory, and replaced fixed 200ms tweens with natural velocity-tracking spring physics (`dampingRatio = 0.90f`).
+- Restored Authentic Dual-Light Neumorphism: Reverted `isLightweight` default to `false` in `SoftNeumorphic.kt`, `SoftGlassCard.kt`, and `SoftButtons.kt`, fully restoring rich 3D physical dual-light clay depth and specular highlights in Light and Dark modes. Retained thread-safe `BlurFilterCache` (`ConcurrentHashMap<Int, BlurMaskFilter>`) to eliminate native Skia object reallocations and GC stutter.
+- Scroll Momentum & Fast Fling Recovery: Fixed `SoftBounceOverscroll.kt` fling velocity interception where fast downward/upward swipes bounced back instead of flinging through content; implemented direction-aware velocity filtering (`onPreFling` returns `Velocity.Zero` when flinging into content to pass 100% velocity to child scrollables while spring-animating overscroll to 0 concurrently), immediate touch-down gesture cancellation (`animJob?.cancel()`), and synchronous state updates via `mutableFloatStateOf(0f)`.
+
+### Changed
+
+- Effects Level Semantics (`Reduced`, `Normal`, `Enhanced`): On `Reduced`, glass visual effects (frosted border gradient, translucent surface, specular highlight, ambient aura glow) remain identical to `Normal` (`specularAlpha = 0.22f`), while only the neumorphic 3D shadow depth is reduced (`shadowFactor = 0.20f`). `Enhanced` delivers visibly deeper shadow contrast (`shadowFactor = 1.5f`) and boosted specular highlights (`specularAlpha = 0.35f`).
+- Native Infinix Zero Ultra OLED Pitch-Black Theme: Refined `ThemeMode.OLED_BATTERY_SAVER` across `Theme.kt`, `Color.kt`, `AppShell.kt`, `SoftGlassCard.kt`, and `SoftButtons.kt` to pure pitch black (`#000000`) with zero glassmorphism, zero ambient glows, and zero neumorphic drop/inset shadows. Cards render as flat obsidian containers (`#121214`) with subtle hairline dividers (`#1F1F23`) and high-contrast typography (`#FFFFFF`).
+
 ### Added
+
+- Real Android Photo Picker for Custom UI Wallpapers: Integrated `ActivityResultContracts.PickVisualMedia()` in `SettingsScreen.kt` with persistent URI permissions and safe full-screen decoding (`ImageDecoder` / `BitmapFactory`) in `AppShell.kt`.
 
 - "OLED Battery Saver" pure pitch-black (`#000000`) theme mode for AMOLED displays in `SoftGlassTheme`: completely turns off physical screen pixels, sets drop-shadow elevation to 0 (eliminating GPU fill-rate overhead and gray halo artifacts), renders luminous hairline borders, and emphasizes high-contrast glowing accents and typography.
 - Persistent appearance and theme storage via `SharedPreferencesAppearanceRepository`, ensuring user selections for theme mode (`Light`, `Dark`, `OLED Battery Saver`), built-in background presets, solid finishes, and effects level survive process recreation and device reboots.

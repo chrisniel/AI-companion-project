@@ -81,6 +81,7 @@ data class AppearancePreferences(
     val gradientPreset: BuiltInGradientPreset = BuiltInGradientPreset.CYAN_VIOLET,
     val solidPreset: BuiltInSolidPreset = BuiltInSolidPreset.MATTE_OBSIDIAN,
     val customAccentHex: String? = null,
+    val customImageUri: String? = null,
     val effectsLevel: EffectsLevel = EffectsLevel.NORMAL,
     val scrimOpacity: Float = 0.20f,
     val backgroundBrightness: Float = 1.0f,

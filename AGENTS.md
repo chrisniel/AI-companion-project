@@ -21,7 +21,7 @@ Configure project-specific paths and boundaries in the Project Profile below. If
 - Execution Mode: Read-only by default; inspect and report unless the user explicitly authorizes the specific edit or other state-changing action
 - Major Change Commit Policy: Every completed major change must be committed as one coherent user-owned Git commit; the AI supplies a proposed commit message, while the user manually reviews, commits, and pushes
 - Manual Verification Areas: Responsive desktop UI, themes and accessibility, Windows runtime behavior, RX 580 model benchmarks, microphone/Bluetooth audio, Android physical-device behavior, alarms, Health Connect, and remote authentication
-- Protected Boundaries: Preserve uncommitted user work; never expose secrets; do not alter Git/LFS policy, external services, dependencies, branches, remotes, or source code without an approved task-specific plan
+- Protected Boundaries: Preserve uncommitted user work; never expose secrets; do not alter Git/LFS policy, external services, dependencies, remotes, or source code without an approved task-specific plan. Creating dedicated feature/fix branches for task isolation is explicitly permitted.
 
 ---
 
@@ -66,6 +66,7 @@ Configure project-specific paths and boundaries in the Project Profile below. If
 
 - Multi-Developer Concurrency: When working concurrently across a team, active tasks must be maintained on dedicated feature branches (e.g., `feature/[feature-name]`).
 - Each feature branch owns its active `task.md`. When a feature is completed and merged to main via pull request, its verified tasks are archived into `docs/01_Tracking/archive/`, leaving the `task.md` on main clean for the next sprint.
+- Autonomous Branch Creation: The AI agent is authorized to create and switch to a new dedicated feature or fix branch (e.g., `feature/[feature-name]` or `fix/[fix-name]`) whenever applicable to isolate task work, without needing separate user permission before creating the branch.
 
 ## 6. Append-Only Changelog (CHANGELOG.md)
 
@@ -121,7 +122,7 @@ Configure project-specific paths and boundaries in the Project Profile below. If
 
 ## 13. Git & External Boundary Protections
 
-- Do not execute git add, git commit, git push, branch switching, tag creation, or pull request commands unless the user explicitly authorizes that specific command.
+- Do not execute git add, git commit, git push, tag creation, or pull request commands unless the user explicitly authorizes that specific command. Branch creation and checkout for task isolation (e.g., `git checkout -b feature/...` or `git switch -c fix/...`) are explicitly authorized when starting new tasks or features.
 - Stop after verification and provide the user with a concise Conventional Commit-style message describing the delivered scope. The user manually reviews, commits, and pushes.
 - Treat external repositories, package caches, and system paths outside the workspace as strictly read-only.
 - Resolve exact target paths before executing any file deletion or overwrite.

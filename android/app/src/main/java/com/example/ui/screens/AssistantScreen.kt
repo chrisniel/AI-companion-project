@@ -30,6 +30,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -88,13 +91,18 @@ fun AssistantScreen(
     viewModel: AssistantViewModel = viewModel(factory = com.example.ui.AppViewModelProvider.Factory)
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val listState = rememberLazyListState()
+    val initialIndex = remember { if (uiState.messages.isNotEmpty()) uiState.messages.size - 1 else 0 }
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
+    var previousMessageCount by remember { mutableIntStateOf(uiState.messages.size) }
 
-    // Auto-scroll to bottom when new messages arrive or when generating
+    // Auto-scroll to bottom only when new messages arrive or actively generating
     LaunchedEffect(uiState.messages.size, uiState.isGenerating) {
-        if (uiState.messages.isNotEmpty()) {
-            listState.animateScrollToItem(uiState.messages.size - 1)
+        if (uiState.messages.size > previousMessageCount || uiState.isGenerating) {
+            if (uiState.messages.isNotEmpty()) {
+                listState.animateScrollToItem(uiState.messages.size - 1)
+            }
         }
+        previousMessageCount = uiState.messages.size
     }
 
     Column(

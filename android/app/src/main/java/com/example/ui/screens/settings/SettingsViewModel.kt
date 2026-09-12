@@ -56,6 +56,7 @@ class SettingsViewModel(
                         selectedBuiltInBackground = prefs.backgroundPreset.label,
                         scrimOpacity = prefs.scrimOpacity,
                         backgroundBrightness = prefs.backgroundBrightness,
+                        customImageName = prefs.customImageUri ?: current.customImageName,
                         refreshRateMode = prefs.refreshRateMode
                     )
                 }
@@ -151,8 +152,9 @@ class SettingsViewModel(
 
     fun setCustomImageName(name: String) {
         appearanceRepository.setBackgroundType(BackgroundType.CUSTOM_IMAGE)
+        appearanceRepository.setCustomImageUri(name)
         _uiState.update { it.copy(customImageName = name, backgroundType = BackgroundType.CUSTOM_IMAGE) }
-        showStatus("Custom wallpaper selected: $name (Mobile-only)")
+        showStatus("Custom wallpaper selected (Mobile-only)")
     }
 
     fun setAccentPreset(preset: AccentPreset) {

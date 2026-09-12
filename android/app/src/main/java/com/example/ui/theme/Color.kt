@@ -87,19 +87,19 @@ val TextMutedDark = Color(0xFF94A3B8) // Slate-400 so icons illuminate clearly a
 // OLED Battery Saver Foundations: Pure Pitch Black (#000000) for AMOLED Subpixel Power-Off
 val OledBackground = Color(0xFF000000)
 val OledBackgroundSecondary = Color(0xFF000000)
-val OledSurfaceBase = Color(0xFF050505)
-val OledSurfaceElevated = Color(0xFF0A0A0A)
-val OledSurfacePressed = Color(0xFF000000)
-val OledSurfaceWell = Color(0xFF000000)
-val TranslucentPanelOled = Color(0xCC050505)
+val OledSurfaceBase = Color(0xFF000000)
+val OledSurfaceElevated = Color(0xFF000000)
+val OledSurfacePressed = Color(0xFF18181B)
+val OledSurfaceWell = Color(0xFF121214) // Flat obsidian well, matching Infinix settings search pill
+val TranslucentPanelOled = Color(0xFF000000)
 val NavSurfaceOled = Color(0xFF000000)
 val BorderOled = Color(0x33FFFFFF)       // Crisp luminous hairline border (20% white)
-val BorderSubtleOled = Color(0x1AFFFFFF) // Subdued luminous hairline (10% white)
+val BorderSubtleOled = Color(0x26FFFFFF) // Subdued luminous hairline (15% white)
 val ShadowOled = Color(0x00000000)       // Zero elevation drop-shadows on OLED black
 val ShadowOledSpecular = Color(0x00000000)
-val TextPrimaryOled = Color(0xFFFFFFFF)
-val TextSecondaryOled = Color(0xFFCBD5E1)
-val TextMutedOled = Color(0xFF94A3B8)
+val TextPrimaryOled = Color(0xFFFFFFFF)  // High-contrast pure white
+val TextSecondaryOled = Color(0xFFE2E8F0) // Clean high-contrast silver
+val TextMutedOled = Color(0xFF94A3B8)    // Crisp legible slate
 val AccentBlueOled = Color(0xFF38BDF8)   // Vibrant glowing azure
 val AccentBlueOledSubtle = Color(0x2638BDF8)
 
@@ -107,6 +107,7 @@ val AccentBlueOledSubtle = Color(0x2638BDF8)
 @Immutable
 data class SoftGlassColors(
     val isDark: Boolean,
+    val isOled: Boolean = false,
     val background: Color,
     val backgroundSecondary: Color,
     val surface: Color,

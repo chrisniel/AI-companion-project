@@ -25,6 +25,7 @@ interface AppearanceRepository {
     fun setAccentPreset(accent: AccentPreset)
     fun setCustomAccentHex(hex: String?)
     fun setBackgroundType(type: BackgroundType)
+    fun setCustomImageUri(uri: String?)
     fun setBackgroundPreset(preset: BuiltInBackgroundPreset)
     fun setGradientPreset(preset: BuiltInGradientPreset)
     fun setSolidPreset(preset: BuiltInSolidPreset)

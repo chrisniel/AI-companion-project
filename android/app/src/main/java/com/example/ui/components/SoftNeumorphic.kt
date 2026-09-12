@@ -34,6 +34,17 @@ import androidx.compose.ui.unit.dp
  *    GPU-accelerated RenderNode shadow + directional specular gradient stroke for minimal overhead.
  */
 
+private object BlurFilterCache {
+    private val cache = java.util.concurrent.ConcurrentHashMap<Int, BlurMaskFilter>()
+
+    fun get(radiusPx: Float): BlurMaskFilter {
+        val key = (radiusPx * 10f).toInt()
+        return cache.computeIfAbsent(key) {
+            BlurMaskFilter(radiusPx.coerceAtLeast(0.1f), BlurMaskFilter.Blur.NORMAL)
+        }
+    }
+}
+
 /**
  * Applies physical dual-direction drop shadows to raised surfaces.
  */
@@ -86,7 +97,7 @@ fun Modifier.softNeumorphicRaised(
             .then(specularHighlightModifier)
     }
 
-    // Authentic Dual-Shadow Neumorphic Engine (BlurMaskFilter)
+    // Authentic Dual-Shadow Neumorphic Engine (BlurMaskFilter with static Skia cache)
     return this.drawWithCache {
         val elevationPx = elevation.toPx()
         // Calibrated specular highlight: tight offset & blur to eliminate upward fog bleed over containers above
@@ -105,7 +116,7 @@ fun Modifier.softNeumorphicRaised(
             isAntiAlias = true
             color = highlightColor.copy(alpha = highlightAlpha).toArgb()
             if (lightBlurRadiusPx > 0f) {
-                maskFilter = BlurMaskFilter(lightBlurRadiusPx, BlurMaskFilter.Blur.NORMAL)
+                maskFilter = BlurFilterCache.get(lightBlurRadiusPx)
             }
         }
 
@@ -113,7 +124,7 @@ fun Modifier.softNeumorphicRaised(
             isAntiAlias = true
             color = shadowColor.copy(alpha = shadowAlpha).toArgb()
             if (darkBlurRadiusPx > 0f) {
-                maskFilter = BlurMaskFilter(darkBlurRadiusPx, BlurMaskFilter.Blur.NORMAL)
+                maskFilter = BlurFilterCache.get(darkBlurRadiusPx)
             }
         }
 
@@ -184,7 +195,7 @@ fun Modifier.softNeumorphicInset(
         }
     }
 
-    // Authentic Concave Inset Well Engine (BlurMaskFilter with difference path)
+    // Authentic Concave Inset Well Engine (BlurMaskFilter with difference path and static Skia cache)
     return this.drawWithCache {
         val outline = shape.createOutline(size, layoutDirection, this)
         val shapePath = Path().apply { addOutline(outline) }
@@ -206,13 +217,13 @@ fun Modifier.softNeumorphicInset(
         val darkPaint = Paint().apply {
             isAntiAlias = true
             color = shadowColor.copy(alpha = shadowAlpha).toArgb()
-            maskFilter = BlurMaskFilter(blurRadiusPx, BlurMaskFilter.Blur.NORMAL)
+            maskFilter = BlurFilterCache.get(blurRadiusPx)
         }
 
         val lightPaint = Paint().apply {
             isAntiAlias = true
             color = highlightColor.copy(alpha = highlightAlpha).toArgb()
-            maskFilter = BlurMaskFilter(blurRadiusPx, BlurMaskFilter.Blur.NORMAL)
+            maskFilter = BlurFilterCache.get(blurRadiusPx)
         }
 
         onDrawWithContent {

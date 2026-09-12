@@ -72,7 +72,30 @@ fun SoftGlassCard(
         elevation
     }
 
+    val isOled = SoftTheme.colors.isOled
     val isLightweight = SoftTheme.tokens.effectsLevel == EffectsLevel.REDUCED
+
+    val neumorphicModifier = when {
+        isOled -> Modifier
+        isSelected -> Modifier.softNeumorphicInset(
+            shape = shape,
+            isDark = isDark,
+            depth = 3.dp,
+            isLightweight = isLightweight
+        )
+        else -> Modifier.softNeumorphicRaised(
+            shape = shape,
+            isDark = isDark,
+            elevation = finalElevation,
+            isLightweight = isLightweight
+        )
+    }
+
+    val cardBg = when {
+        isOled -> Color(0xFF000000)
+        isLightweight && isSelected -> SoftTheme.colors.surfacePressed
+        else -> actualBackgroundColor
+    }
 
     val borderModifier = if (finalBorderWidth > 0.dp) {
         Modifier.border(width = finalBorderWidth, brush = finalBorderBrush, shape = shape)
@@ -83,25 +106,9 @@ fun SoftGlassCard(
     Box(
         modifier = modifier
             .testTag(testTag)
-            .then(
-                if (isSelected) {
-                    Modifier.softNeumorphicInset(
-                        shape = shape,
-                        isDark = isDark,
-                        depth = 3.dp,
-                        isLightweight = isLightweight
-                    )
-                } else {
-                    Modifier.softNeumorphicRaised(
-                        shape = shape,
-                        isDark = isDark,
-                        elevation = finalElevation,
-                        isLightweight = isLightweight
-                    )
-                }
-            )
+            .then(neumorphicModifier)
             .clip(shape)
-            .background(if (isLightweight && isSelected) SoftTheme.colors.surfacePressed else actualBackgroundColor, shape)
+            .background(cardBg, shape)
             .then(borderModifier),
         contentAlignment = contentAlignment,
         content = content
@@ -128,10 +135,12 @@ fun InteractiveSoftGlassCard(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val isDark = SoftTheme.colors.isDark
+    val isOled = SoftTheme.colors.isOled
+    val isLightweight = SoftTheme.tokens.effectsLevel == EffectsLevel.REDUCED
 
     val animatedElevation by animateDpAsState(
         targetValue = when {
-            !enabled -> SoftTheme.tokens.elevations.none
+            !enabled || isOled -> SoftTheme.tokens.elevations.none
             isPressed -> SoftTheme.tokens.elevations.none
             isSelected -> SoftTheme.tokens.elevations.subtle
             else -> elevation
@@ -145,12 +154,28 @@ fun InteractiveSoftGlassCard(
     )
 
     val borderWidth = SoftTheme.tokens.borders.hairline
-    val isLightweight = SoftTheme.tokens.effectsLevel == EffectsLevel.REDUCED
 
     val surfaceColor = when {
-        !enabled -> SoftTheme.colors.surface.copy(alpha = 0.5f)
+        !enabled -> if (isOled) Color(0xFF000000).copy(alpha = 0.5f) else SoftTheme.colors.surface.copy(alpha = 0.5f)
+        isOled -> if (isPressed) Color(0xFF18181B) else Color(0xFF000000)
         isLightweight && (isPressed || isSelected) -> SoftTheme.colors.surfacePressed
         else -> backgroundColor
+    }
+
+    val neumorphicModifier = when {
+        isOled -> Modifier
+        isPressed || isSelected -> Modifier.softNeumorphicInset(
+            shape = shape,
+            isDark = isDark,
+            depth = 3.dp,
+            isLightweight = isLightweight
+        )
+        else -> Modifier.softNeumorphicRaised(
+            shape = shape,
+            isDark = isDark,
+            elevation = animatedElevation,
+            isLightweight = isLightweight
+        )
     }
 
     val borderModifier = if (borderWidth > 0.dp) {
@@ -168,23 +193,7 @@ fun InteractiveSoftGlassCard(
             .testTag(testTag)
             .scale(scale)
             .defaultMinSize(minHeight = 48.dp, minWidth = 48.dp)
-            .then(
-                if (isPressed || isSelected) {
-                    Modifier.softNeumorphicInset(
-                        shape = shape,
-                        isDark = isDark,
-                        depth = 3.dp,
-                        isLightweight = isLightweight
-                    )
-                } else {
-                    Modifier.softNeumorphicRaised(
-                        shape = shape,
-                        isDark = isDark,
-                        elevation = animatedElevation,
-                        isLightweight = isLightweight
-                    )
-                }
-            )
+            .then(neumorphicModifier)
             .clip(shape)
             .background(surfaceColor, shape)
             .then(borderModifier)
@@ -215,13 +224,22 @@ fun SoftWell(
     testTag: String = "soft_well",
     content: @Composable BoxScope.() -> Unit
 ) {
+    val isOled = SoftTheme.colors.isOled
+    val isLightweight = SoftTheme.tokens.effectsLevel == EffectsLevel.REDUCED
+
+    val insetModifier = if (isOled) Modifier else Modifier.softInsetWell(
+        shape = shape,
+        isDark = SoftTheme.colors.isDark,
+        isLightweight = isLightweight
+    )
+
     Box(
         modifier = modifier
             .testTag(testTag)
             .clip(shape)
-            .background(backgroundColor, shape)
+            .background(if (isOled) Color(0xFF121214) else backgroundColor, shape)
             .border(width = borderWidth, color = borderColor, shape = shape)
-            .softInsetWell(shape = shape, isDark = SoftTheme.colors.isDark),
+            .then(insetModifier),
         contentAlignment = contentAlignment,
         content = content
     )
@@ -245,31 +263,39 @@ fun InteractiveSoftWell(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val isOled = SoftTheme.colors.isOled
+    val isLightweight = SoftTheme.tokens.effectsLevel == EffectsLevel.REDUCED
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed && enabled) 0.985f else 1f,
         label = "well_scale"
     )
 
+    val insetModifier = if (isOled) Modifier else Modifier.softInsetWell(
+        shape = shape,
+        isDark = SoftTheme.colors.isDark,
+        shadowAlpha = if (isPressed) 0.70f else 0.45f,
+        isLightweight = isLightweight
+    )
+
+    val wellBg = when {
+        isOled -> if (isPressed) Color(0xFF18181B) else Color(0xFF121214)
+        isPressed -> SoftTheme.colors.surfacePressed
+        else -> backgroundColor
+    }
+
     Box(
         modifier = modifier
             .testTag(testTag)
             .scale(scale)
             .clip(shape)
-            .background(
-                if (isPressed) SoftTheme.colors.surfacePressed else backgroundColor,
-                shape
-            )
+            .background(wellBg, shape)
             .border(
                 width = borderWidth,
                 color = if (isPressed) SoftTheme.colors.accentPrimary.copy(alpha = 0.5f) else borderColor,
                 shape = shape
             )
-            .softInsetWell(
-                shape = shape,
-                isDark = SoftTheme.colors.isDark,
-                shadowAlpha = if (isPressed) 0.70f else 0.45f
-            )
+            .then(insetModifier)
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(color = SoftTheme.colors.accentPrimary),

@@ -1,52 +1,102 @@
 package com.example.ui.shell
 
+import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
+import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerDefaults
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.domain.model.AppearancePreferences
 import com.example.domain.model.BackgroundType
+import com.example.domain.model.ConnectionInfo
+import com.example.domain.model.CoreConnectionState
 import com.example.domain.model.EffectsLevel
 import com.example.domain.model.SyncStatus
+import com.example.domain.model.ThemeMode
 import com.example.navigation.AppBottomBar
 import com.example.navigation.AppTopBar
 import com.example.navigation.BottomNavItem
 import com.example.navigation.Routes
+import kotlin.math.abs
 import kotlinx.coroutines.launch
 import com.example.ui.AppViewModelProvider
 import com.example.ui.components.AmbientGlassBackground
 import com.example.ui.components.CalmConnectionBanner
 import com.example.ui.components.CalmSyncBanner
+import com.example.ui.components.CompactConnectionIndicator
 import com.example.ui.components.OfflineCapabilitiesSheet
+import com.example.ui.components.SoftAvatar
 import com.example.ui.preview.DesignSystemPreviewScreen
 import com.example.ui.preview.DesignSystemViewModel
 import com.example.ui.screens.AssistantScreen
@@ -84,26 +134,24 @@ fun AppShell(
     val preferences = LocalAppearancePreferences.current
 
     val coroutineScope = rememberCoroutineScope()
-    val pagerState = rememberPagerState(initialPage = 0) { 5 }
+    var isVaultExpanded by remember { mutableStateOf(false) }
+    var selectedPageIndex by rememberSaveable { mutableIntStateOf(0) }
+    var previousPageIndex by rememberSaveable { mutableIntStateOf(0) }
 
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val navHostRoute = navBackStackEntry?.destination?.route ?: Routes.HOME
 
-    val activePrimaryItem = BottomNavItem.fromPageIndex(pagerState.currentPage)
+    val activePrimaryItem = BottomNavItem.fromPageIndex(selectedPageIndex)
     val currentRoute = if (navHostRoute == Routes.HOME) activePrimaryItem.route else navHostRoute
 
     val isSubDestination = navHostRoute != Routes.HOME
     val canNavigateBack = isSubDestination
 
-    // Intercept back presses on pager: return to Home tab first before system back
-    BackHandler(enabled = navHostRoute == Routes.HOME && pagerState.currentPage != 0) {
-        coroutineScope.launch {
-            pagerState.animateScrollToPage(
-                page = 0,
-                animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
-            )
-        }
+    // Intercept back presses on primary tabs: return to Home tab first before system back
+    BackHandler(enabled = navHostRoute == Routes.HOME && selectedPageIndex != 0) {
+        previousPageIndex = selectedPageIndex
+        selectedPageIndex = 0
     }
 
     val pageTitle = when (currentRoute) {
@@ -129,14 +177,9 @@ fun AppShell(
             if (navHostRoute != Routes.HOME) {
                 navController.popBackStack(Routes.HOME, inclusive = false)
             }
-            coroutineScope.launch {
-                pagerState.animateScrollToPage(
-                    page = targetIndex,
-                    animationSpec = tween(
-                        durationMillis = 180,
-                        easing = FastOutSlowInEasing
-                    )
-                )
+            if (selectedPageIndex != targetIndex) {
+                previousPageIndex = selectedPageIndex
+                selectedPageIndex = targetIndex
             }
         } else {
             navController.navigate(targetRoute) {
@@ -150,7 +193,7 @@ fun AppShell(
     }
 
     val backgroundPreset = preferences.backgroundPreset
-    val showAura = preferences.effectsLevel != EffectsLevel.REDUCED
+    val showAura = !SoftTheme.colors.isOled
 
     val renderScaffold: @Composable () -> Unit = {
         Scaffold(
@@ -234,92 +277,134 @@ fun AppShell(
                         },
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        // PRIMARY DESTINATIONS: Hosted inside high-performance HorizontalPager (1:1 clean touch swiping)
+                        // PRIMARY DESTINATIONS: Hosted with smooth direction-aware spring slide transitions
                         composable(Routes.HOME) {
-                            HorizontalPager(
-                                state = pagerState,
-                                beyondViewportPageCount = 1,
-                                flingBehavior = PagerDefaults.flingBehavior(
-                                    state = pagerState,
-                                    snapAnimationSpec = tween(
-                                        durationMillis = 200,
-                                        easing = FastOutSlowInEasing
-                                    )
-                                ),
-                                modifier = Modifier.fillMaxSize()
-                            ) { page ->
-                                Box(
-                                    modifier = Modifier.fillMaxSize()
-                                ) {
-                                    when (page) {
-                                        0 -> HomeScreen(
-                                            homeData = homeData,
-                                            connectionInfo = uiState.connectionInfo,
-                                            selectedPersona = uiState.selectedPersona,
-                                            selectedLanguage = uiState.language,
-                                            onSelectLanguage = { appViewModel.setLanguage(it) },
-                                            onSelectPersona = { appViewModel.selectPersona(it) },
-                                            onNavigateToRoute = onNavigateToRoute,
-                                            onToggleTask = { taskId -> appViewModel.toggleTask(taskId) },
-                                            onAddTask = { title, priority -> appViewModel.addNewTask(title, priority) }
-                                        )
-                                        1 -> Column(modifier = Modifier.fillMaxSize()) {
-                                            AppTopBar(
-                                                title = "Tasks",
-                                                canNavigateBack = false,
-                                                onNavigateBack = {},
-                                                connectionInfo = uiState.connectionInfo,
-                                                onCycleConnectionState = { appViewModel.cycleConnectionState() },
-                                                isDarkTheme = SoftTheme.colors.isDark,
-                                                userName = uiState.userName,
-                                                onAvatarClick = {
-                                                    navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
+                            val swipeOffset = remember { Animatable(0f) }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .pointerInput(selectedPageIndex) {
+                                        detectHorizontalDragGestures(
+                                            onDragStart = {},
+                                            onDragEnd = {
+                                                val currentOffset = swipeOffset.value
+                                                if (currentOffset < -80f && selectedPageIndex < 4) {
+                                                    previousPageIndex = selectedPageIndex
+                                                    selectedPageIndex++
+                                                } else if (currentOffset > 80f && selectedPageIndex > 0) {
+                                                    previousPageIndex = selectedPageIndex
+                                                    selectedPageIndex--
                                                 }
-                                            )
-                                            TasksScreen()
-                                        }
-                                        2 -> AssistantScreen(
-                                            isDarkTheme = SoftTheme.colors.isDark,
-                                            onOpenVoiceMode = {
-                                                navController.navigate(Routes.VOICE_MODE) {
-                                                    launchSingleTop = true
+                                                coroutineScope.launch {
+                                                    swipeOffset.animateTo(
+                                                        0f,
+                                                        animationSpec = spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)
+                                                    )
+                                                }
+                                            },
+                                            onHorizontalDrag = { change, dragAmount ->
+                                                if (kotlin.math.abs(swipeOffset.value + dragAmount) > 4f) {
+                                                    change.consume()
+                                                    coroutineScope.launch {
+                                                        swipeOffset.snapTo(
+                                                            (swipeOffset.value + dragAmount * 0.75f).coerceIn(-300f, 300f)
+                                                        )
+                                                    }
                                                 }
                                             }
                                         )
-                                        3 -> Column(modifier = Modifier.fillMaxSize()) {
-                                            AppTopBar(
-                                                title = "Biometric Health",
-                                                canNavigateBack = false,
-                                                onNavigateBack = {},
-                                                connectionInfo = uiState.connectionInfo,
-                                                onCycleConnectionState = { appViewModel.cycleConnectionState() },
-                                                isDarkTheme = SoftTheme.colors.isDark,
-                                                userName = uiState.userName,
-                                                onAvatarClick = {
-                                                    navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
-                                                }
-                                            )
-                                            HealthScreen(
-                                                healthConnectState = uiState.capabilitiesState.healthConnectState,
-                                                onSetHealthConnectState = { appViewModel.setHealthConnectState(it) }
-                                            )
+                                    }
+                            ) {
+                                AnimatedContent(
+                                    targetState = selectedPageIndex,
+                                    transitionSpec = {
+                                        val forward = targetState > initialState
+                                        (slideInHorizontally(
+                                            initialOffsetX = { if (forward) it / 3 else -it / 3 },
+                                            animationSpec = spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)
+                                        ) + fadeIn(animationSpec = tween(220)))
+                                        .togetherWith(
+                                            slideOutHorizontally(
+                                                targetOffsetX = { if (forward) -it / 4 else it / 4 },
+                                                animationSpec = tween(180)
+                                            ) + fadeOut(animationSpec = tween(180))
+                                        )
+                                    },
+                                    label = "primaryBottomNavTransition",
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer {
+                                            translationX = swipeOffset.value
                                         }
-                                        4 -> Column(modifier = Modifier.fillMaxSize()) {
-                                            AppTopBar(
-                                                title = "System Hub",
-                                                canNavigateBack = false,
-                                                onNavigateBack = {},
+                                ) { page ->
+                                    Box(
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {
+                                        when (page) {
+                                            0 -> HomeScreen(
+                                                homeData = homeData,
                                                 connectionInfo = uiState.connectionInfo,
-                                                onCycleConnectionState = { appViewModel.cycleConnectionState() },
+                                                selectedPersona = uiState.selectedPersona,
+                                                selectedLanguage = uiState.language,
+                                                onSelectLanguage = { appViewModel.setLanguage(it) },
+                                                onSelectPersona = { appViewModel.selectPersona(it) },
+                                                onNavigateToRoute = onNavigateToRoute,
+                                                onToggleTask = { taskId -> appViewModel.toggleTask(taskId) },
+                                                onAddTask = { title, priority -> appViewModel.addNewTask(title, priority) },
+                                                onAvatarClick = { isVaultExpanded = !isVaultExpanded }
+                                            )
+                                            1 -> Column(modifier = Modifier.fillMaxSize()) {
+                                                AppTopBar(
+                                                    title = "Tasks",
+                                                    canNavigateBack = false,
+                                                    onNavigateBack = {},
+                                                    connectionInfo = uiState.connectionInfo,
+                                                    onCycleConnectionState = { appViewModel.cycleConnectionState() },
+                                                    isDarkTheme = SoftTheme.colors.isDark,
+                                                    userName = uiState.userName,
+                                                    onAvatarClick = { isVaultExpanded = true }
+                                                )
+                                                TasksScreen()
+                                            }
+                                            2 -> AssistantScreen(
                                                 isDarkTheme = SoftTheme.colors.isDark,
-                                                userName = uiState.userName,
-                                                onAvatarClick = {
-                                                    navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
+                                                onOpenVoiceMode = {
+                                                    navController.navigate(Routes.VOICE_MODE) {
+                                                        launchSingleTop = true
+                                                    }
                                                 }
                                             )
-                                            MoreScreen(
-                                                onNavigateToRoute = onNavigateToRoute
-                                            )
+                                            3 -> Column(modifier = Modifier.fillMaxSize()) {
+                                                AppTopBar(
+                                                    title = "Biometric Health",
+                                                    canNavigateBack = false,
+                                                    onNavigateBack = {},
+                                                    connectionInfo = uiState.connectionInfo,
+                                                    onCycleConnectionState = { appViewModel.cycleConnectionState() },
+                                                    isDarkTheme = SoftTheme.colors.isDark,
+                                                    userName = uiState.userName,
+                                                    onAvatarClick = { isVaultExpanded = true }
+                                                )
+                                                HealthScreen(
+                                                    healthConnectState = uiState.capabilitiesState.healthConnectState,
+                                                    onSetHealthConnectState = { appViewModel.setHealthConnectState(it) }
+                                                )
+                                            }
+                                            4 -> Column(modifier = Modifier.fillMaxSize()) {
+                                                AppTopBar(
+                                                    title = "System Hub",
+                                                    canNavigateBack = false,
+                                                    onNavigateBack = {},
+                                                    connectionInfo = uiState.connectionInfo,
+                                                    onCycleConnectionState = { appViewModel.cycleConnectionState() },
+                                                    isDarkTheme = SoftTheme.colors.isDark,
+                                                    userName = uiState.userName,
+                                                    onAvatarClick = { isVaultExpanded = true }
+                                                )
+                                                MoreScreen(
+                                                    onNavigateToRoute = onNavigateToRoute
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -329,25 +414,29 @@ fun AppShell(
                         // Fallback alias routes to safely handle direct route navigation if any caller uses it
                         composable(Routes.TASKS) {
                             LaunchedEffect(Unit) {
-                                pagerState.scrollToPage(1)
+                                previousPageIndex = selectedPageIndex
+                                selectedPageIndex = 1
                                 navController.popBackStack(Routes.HOME, false)
                             }
                         }
                         composable(Routes.ASSISTANT) {
                             LaunchedEffect(Unit) {
-                                pagerState.scrollToPage(2)
+                                previousPageIndex = selectedPageIndex
+                                selectedPageIndex = 2
                                 navController.popBackStack(Routes.HOME, false)
                             }
                         }
                         composable(Routes.HEALTH) {
                             LaunchedEffect(Unit) {
-                                pagerState.scrollToPage(3)
+                                previousPageIndex = selectedPageIndex
+                                selectedPageIndex = 3
                                 navController.popBackStack(Routes.HOME, false)
                             }
                         }
                         composable(Routes.MORE) {
                             LaunchedEffect(Unit) {
-                                pagerState.scrollToPage(4)
+                                previousPageIndex = selectedPageIndex
+                                selectedPageIndex = 4
                                 navController.popBackStack(Routes.HOME, false)
                             }
                         }
@@ -372,9 +461,7 @@ fun AppShell(
                                     onCycleConnectionState = { appViewModel.cycleConnectionState() },
                                     isDarkTheme = SoftTheme.colors.isDark,
                                     userName = uiState.userName,
-                                    onAvatarClick = {
-                                        navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
-                                    }
+                                    onAvatarClick = { isVaultExpanded = true }
                                 )
                                 ScheduleScreen()
                             }
@@ -391,9 +478,7 @@ fun AppShell(
                                     onCycleConnectionState = { appViewModel.cycleConnectionState() },
                                     isDarkTheme = SoftTheme.colors.isDark,
                                     userName = uiState.userName,
-                                    onAvatarClick = {
-                                        navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
-                                    }
+                                    onAvatarClick = { isVaultExpanded = true }
                                 )
                                 AlarmsScreen(
                                     alarmCapabilityState = uiState.capabilitiesState.alarmCapabilityState,
@@ -423,9 +508,7 @@ fun AppShell(
                                     onCycleConnectionState = { appViewModel.cycleConnectionState() },
                                     isDarkTheme = SoftTheme.colors.isDark,
                                     userName = uiState.userName,
-                                    onAvatarClick = {
-                                        navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
-                                    }
+                                    onAvatarClick = { isVaultExpanded = true }
                                 )
                                 ModelsScreen()
                             }
@@ -442,9 +525,7 @@ fun AppShell(
                                     onCycleConnectionState = { appViewModel.cycleConnectionState() },
                                     isDarkTheme = SoftTheme.colors.isDark,
                                     userName = uiState.userName,
-                                    onAvatarClick = {
-                                        navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
-                                    }
+                                    onAvatarClick = { isVaultExpanded = true }
                                 )
                                 DevicesScreen()
                             }
@@ -461,9 +542,7 @@ fun AppShell(
                                     onCycleConnectionState = { appViewModel.cycleConnectionState() },
                                     isDarkTheme = SoftTheme.colors.isDark,
                                     userName = uiState.userName,
-                                    onAvatarClick = {
-                                        navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
-                                    }
+                                    onAvatarClick = { isVaultExpanded = true }
                                 )
                                 MemoryScreen()
                             }
@@ -538,9 +617,7 @@ fun AppShell(
                                     onCycleConnectionState = { appViewModel.cycleConnectionState() },
                                     isDarkTheme = SoftTheme.colors.isDark,
                                     userName = uiState.userName,
-                                    onAvatarClick = {
-                                        navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
-                                    }
+                                    onAvatarClick = { isVaultExpanded = true }
                                 )
                                 DesignSystemPreviewScreen(
                                     modifier = Modifier.fillMaxSize(),
@@ -563,22 +640,60 @@ fun AppShell(
         )
     }
 
+    Box(modifier = modifier.fillMaxSize()) {
+        // Unified persistent background layer (never causes Scaffold recreation on background/theme switches)
+        AppBackgroundLayer(
+            preferences = preferences,
+            showAura = showAura
+        )
+
+        // Main app scaffold (STABLE: retains all internal scroll states and backstack)
+        renderScaffold()
+
+        // Floating Animated Vault Popover Overlay (Accessible across all screens)
+        VaultPopoverOverlay(
+            visible = isVaultExpanded,
+            onDismiss = { isVaultExpanded = false },
+            profileName = uiState.userName,
+            connectionInfo = uiState.connectionInfo,
+            onNavigateToSettings = {
+                if (navHostRoute != Routes.SETTINGS) {
+                    navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun AppBackgroundLayer(
+    preferences: AppearancePreferences,
+    showAura: Boolean
+) {
+    if (preferences.themeMode == ThemeMode.OLED_BATTERY_SAVER) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+        )
+        return
+    }
+
     when (preferences.backgroundType) {
         BackgroundType.BUILT_IN -> {
+            val backgroundPreset = preferences.backgroundPreset
             AmbientGlassBackground(
-                modifier = modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize(),
                 showAuraGlow = showAura,
                 primaryGlow = Color(backgroundPreset.primaryGlowHex),
                 secondaryGlow = Color(backgroundPreset.secondaryGlowHex),
                 scrimOpacity = preferences.scrimOpacity,
                 brightness = preferences.backgroundBrightness
-            ) {
-                renderScaffold()
-            }
+            ) {}
         }
         BackgroundType.GRADIENT -> {
             Box(
-                modifier = modifier
+                modifier = Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
@@ -599,12 +714,11 @@ fun AppShell(
                             )
                     )
                 }
-                renderScaffold()
             }
         }
         BackgroundType.SOLID -> {
             Box(
-                modifier = modifier
+                modifier = Modifier
                     .fillMaxSize()
                     .background(Color(preferences.solidPreset.colorHex))
             ) {
@@ -618,17 +732,212 @@ fun AppShell(
                             )
                     )
                 }
-                renderScaffold()
             }
         }
         BackgroundType.CUSTOM_IMAGE -> {
-            AmbientGlassBackground(
-                modifier = modifier.fillMaxSize(),
-                showAuraGlow = false,
-                scrimOpacity = preferences.scrimOpacity,
-                brightness = preferences.backgroundBrightness
+            val context = LocalContext.current
+            val customImageUri = preferences.customImageUri
+            val customBitmap = remember(customImageUri) {
+                if (customImageUri.isNullOrBlank()) {
+                    null
+                } else {
+                    runCatching {
+                        val uri = Uri.parse(customImageUri)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            val source = ImageDecoder.createSource(context.contentResolver, uri)
+                            ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                                decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                                val maxDim = 1920
+                                if (info.size.width > maxDim || info.size.height > maxDim) {
+                                    val scale = maxDim.toFloat() / maxOf(info.size.width, info.size.height)
+                                    decoder.setTargetSize(
+                                        (info.size.width * scale).toInt(),
+                                        (info.size.height * scale).toInt()
+                                    )
+                                }
+                            }.asImageBitmap()
+                        } else {
+                            context.contentResolver.openInputStream(uri)?.use { stream ->
+                                BitmapFactory.decodeStream(stream)?.asImageBitmap()
+                            }
+                        }
+                    }.getOrNull()
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(if (SoftTheme.colors.isDark) Color.Black else Color.White)
             ) {
-                renderScaffold()
+                if (customBitmap != null) {
+                    Image(
+                        bitmap = customBitmap,
+                        contentDescription = "Custom background",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .blur(
+                                radius = if (preferences.effectsLevel == EffectsLevel.REDUCED) 10.dp else 20.dp,
+                                edgeTreatment = BlurredEdgeTreatment.Unbounded
+                            )
+                            .graphicsLayer {
+                                alpha = preferences.backgroundBrightness.coerceIn(0.2f, 1.0f)
+                            }
+                    )
+                }
+                // Contrast scrim over photo so glass cards remain readable
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            (if (SoftTheme.colors.isDark) Color.Black else Color.White)
+                                .copy(alpha = preferences.scrimOpacity.coerceIn(0.1f, 0.7f))
+                        )
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun VaultPopoverOverlay(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    profileName: String,
+    connectionInfo: ConnectionInfo,
+    onNavigateToSettings: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (visible) {
+        // Scrim backdrop
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .zIndex(90f)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss
+                )
+        )
+    }
+
+    androidx.compose.animation.AnimatedVisibility(
+        visible = visible,
+        modifier = modifier
+            .fillMaxWidth()
+            .zIndex(100f)
+            .statusBarsPadding()
+            .padding(top = 56.dp, start = 16.dp, end = 16.dp),
+        enter = scaleIn(
+            initialScale = 0.85f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            )
+        ) + fadeIn(),
+        exit = scaleOut(
+            targetScale = 0.88f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            )
+        ) + fadeOut()
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(22.dp))
+                .background(
+                    if (SoftTheme.colors.isDark) Color(0xF2181B22)
+                    else Color(0xF5EDF0EB)
+                )
+                .border(
+                    width = SoftTheme.tokens.borders.hairline,
+                    color = if (SoftTheme.colors.isDark) Color(0x2EFFFFFF) else Color(0x28000000),
+                    shape = RoundedCornerShape(22.dp)
+                )
+                .padding(20.dp)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(SoftTheme.spacing.md)
+            ) {
+                // Vault Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        SoftAvatar(
+                            name = profileName,
+                            size = 46.dp,
+                            statusColor = when (connectionInfo.state) {
+                                CoreConnectionState.Local -> SoftTheme.colors.statusSuccess
+                                CoreConnectionState.Remote -> SoftTheme.colors.accentCyan
+                                CoreConnectionState.Connecting, CoreConnectionState.Reconnecting -> SoftTheme.colors.statusWarning
+                                CoreConnectionState.Offline -> SoftTheme.colors.statusError
+                            }
+                        )
+                        Column {
+                            Text(
+                                text = profileName.ifBlank { "Companion User" },
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = SoftTheme.colors.textPrimary
+                            )
+                            Text(
+                                text = if (connectionInfo.state == CoreConnectionState.Local || connectionInfo.state == CoreConnectionState.Remote)
+                                    "Encrypted Vault Online"
+                                else "Local SQLite Vault (Offline)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SoftTheme.colors.textSecondary
+                            )
+                        }
+                    }
+
+                    Box(modifier = Modifier.testTag("topbar_connection_indicator")) {
+                        CompactConnectionIndicator(
+                            state = connectionInfo.state,
+                            label = connectionInfo.label,
+                            latencyMs = connectionInfo.latencyMs
+                        )
+                    }
+                }
+
+                HorizontalDivider(color = SoftTheme.colors.borderSubtle)
+
+                // Quick Action: Settings
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(SoftTheme.tokens.corners.sm))
+                        .clickable {
+                            onDismiss()
+                            onNavigateToSettings()
+                        }
+                        .padding(vertical = SoftTheme.spacing.xs),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = null,
+                        tint = SoftTheme.colors.accentPrimaryColor,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "Open Settings & Preferences",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = SoftTheme.colors.accentPrimaryColor
+                    )
+                }
             }
         }
     }
