@@ -1,8 +1,8 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Local AI Core",
-    "description": "Local AI Core backend for AI Companion Project.",
+    "title": "Local AI Runtime",
+    "description": "Local AI Runtime backend for AI Companion Project.",
     "version": "0.1.0"
   },
   "paths": {

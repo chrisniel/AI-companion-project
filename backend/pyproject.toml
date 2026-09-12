@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "companion-core"
+name = "companion-runtime"
 version = "0.1.0"
-description = "Local AI Core Backend for AI Companion Project"
+description = "Local AI Runtime Backend for AI Companion Project"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

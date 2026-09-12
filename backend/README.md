@@ -1,6 +1,6 @@
-# Local AI Core Backend
+# Local AI Runtime Backend
 
-The central nervous system of the **AI Companion Project**, built with **Python 3.13, FastAPI, SQLAlchemy 2.0 (asyncio + aiosqlite), Alembic, and SQLite with FTS5**.
+The central host runtime of the **AI Companion Project**, built with **Python 3.13, FastAPI, SQLAlchemy 2.0 (asyncio + aiosqlite), Alembic, and SQLite with FTS5**.
 
 ---
 

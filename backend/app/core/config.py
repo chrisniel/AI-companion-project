@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     )
 
     # Server Info
-    PROJECT_NAME: str = "Local AI Core"
+    PROJECT_NAME: str = "Local AI Runtime"
     VERSION: str = "0.1.0"
     API_V1_STR: str = "/api/v1"
     HOST: str = "127.0.0.1"

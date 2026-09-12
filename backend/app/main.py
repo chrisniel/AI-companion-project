@@ -45,20 +45,20 @@ class SecurityAndTracingMiddleware(BaseHTTPMiddleware):
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Lifespan context manager for startup and shutdown routines."""
     setup_logging(debug=settings.DEBUG)
-    logger.info("Initializing Local AI Core...")
+    logger.info("Initializing Local AI Runtime...")
 
     # Ensure data directory and pairing key exist
     settings.DATA_DIR.mkdir(parents=True, exist_ok=True)
     token = settings.ensure_pairing_token()
     logger.info("==================================================================")
-    logger.info(f"Local AI Core Ready on http://{settings.HOST}:{settings.PORT}")
+    logger.info(f"Local AI Runtime Ready on http://{settings.HOST}:{settings.PORT}")
     logger.info(f"Interactive Swagger Docs: http://{settings.HOST}:{settings.PORT}/docs")
     logger.info(f"Pairing Token (keep secret): {token}")
     logger.info("==================================================================")
 
     yield
 
-    logger.info("Shutting down Local AI Core, disposing database connections...")
+    logger.info("Shutting down Local AI Runtime, disposing database connections...")
     await engine.dispose()
 
 
@@ -67,7 +67,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.PROJECT_NAME,
         version=settings.VERSION,
-        description="Local AI Core backend for AI Companion Project.",
+        description="Local AI Runtime backend for AI Companion Project.",
         lifespan=lifespan,
         docs_url="/docs",
         redoc_url="/redoc",
