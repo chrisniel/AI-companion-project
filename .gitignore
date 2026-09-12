@@ -94,6 +94,7 @@ cache/
 runtime/
 generated/
 outputs/
+bin/
 
 # ---------------------------------------------------------
 # Local databases / personal runtime data
@@ -115,6 +116,13 @@ outputs/
 # Keep model artifacts outside the main source repository.
 # Use a dedicated Hugging Face model repository when needed.
 # ---------------------------------------------------------
+models/*
+!models/lfs-test.gguf
+!models/.gitkeep
+*.gguf
+*.onnx
+*.safetensors
+*.bin
 
 
 # ---------------------------------------------------------

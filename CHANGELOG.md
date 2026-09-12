@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added & Enhanced (2026-09-12 - Pass 6: Local LLM Runtime Integration - Track B4)
+
+- Abstract LLM Provider Architecture: Implemented `BaseLLMProvider` contract with `MockLLMProvider` (deterministic, instant testing engine) and `LlamaCppProvider` (dual-mode standalone `llama-server.exe` and in-process execution with AMD RX 580 VRAM offload).
+- Hardware Profiles (Section 13): Configured `Eco` (2048 ctx, low threads), `Balanced` (4096 ctx, 28 GPU layers on RX 580), and `Maximum` (8192 ctx, 33 layers) performance tiers.
+- Auto-Unload VRAM Lifecycle (Section 12): Added background activity monitor that automatically unloads model weights after 15 minutes (`LLM_IDLE_TIMEOUT_SECONDS = 900`) of inactivity, freeing VRAM for system and gaming.
+- OpenAI-Compatible Chat Completions: Added `POST /api/v1/chat/completions` supporting streaming Server-Sent Events (`text/event-stream`) and synchronous JSON fallback, plus `GET /api/v1/models` for status inspection.
+- Auto-Detection & Fallback: Added `LLMManager` singleton auto-detecting real GGUF weights in `models/` (>100 MB) and falling back gracefully to mock provider when weights are downloading.
+- Verification: Added 5 comprehensive tests in `backend/tests/test_llm.py` (31/31 backend tests passing, 124/124 Android tests passing, live SSE streaming verified).
+
 ### Added & Enhanced (2026-09-12 - Pass 5: Task Reminders, Categories, and Soft Deletion)
 
 - Task Categories & Reminders (Track B6): Added `category` (`general`, `work`, `personal`, `dev`, `shopping`, `health`) and reminder fields (`reminder_minutes_before`, `reminder_at`) to the SQLite `Task` model, Pydantic schemas, and API endpoints. Automatically calculates `reminder_at` timestamp from `due_date` and `reminder_minutes_before` during task creation and updates.

@@ -49,6 +49,15 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///./data/companion.db"
     DATA_RETENTION_DAYS: int = 30
 
+    # Local LLM Runtime (Track B4 & Sections 11-14)
+    MODELS_DIR: Path = BASE_DIR.parent / "models"
+    DEFAULT_MODEL_NAME: str = "Qwen2.5-7B-Instruct-Q4_K_M.gguf"
+    LLM_PROVIDER: str = "auto"  # "auto" | "llama_cpp" | "mock"
+    LLM_PROFILE: str = "balanced"  # "eco" | "balanced" | "maximum"
+    LLM_IDLE_TIMEOUT_SECONDS: int = 900  # 15 minutes auto-unload
+    LLM_GPU_LAYERS: int = 28  # default GPU layers offload for RX 580
+    LLAMA_SERVER_URL: str = "http://127.0.0.1:8080/v1"
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:

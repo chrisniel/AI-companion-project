@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 from app.api.deps import verify_token
 from app.api.v1.endpoints.auth import router as auth_router
 from app.api.v1.endpoints.health import public_health_router, system_router
+from app.api.v1.endpoints.llm import router as llm_router
 from app.api.v1.endpoints.tasks import router as tasks_router
 
 api_v1_router = APIRouter()
@@ -18,6 +19,7 @@ protected_router = APIRouter(dependencies=[Depends(verify_token)])
 protected_router.include_router(system_router)
 protected_router.include_router(auth_router)
 protected_router.include_router(tasks_router)
+protected_router.include_router(llm_router)
 
 # Mount both routers under V1 prefix
 api_v1_router.include_router(public_router)
