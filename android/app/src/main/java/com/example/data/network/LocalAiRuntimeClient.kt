@@ -114,7 +114,9 @@ class LocalAiRuntimeClient(
         title: String,
         notes: String?,
         priority: String,
-        dueDate: String? = null
+        dueDate: String? = null,
+        category: String? = null,
+        reminderMinutesBefore: Int? = null
     ): Result<RemoteTaskDto> = withContext(Dispatchers.IO) {
         val url = "$baseUrl/api/v1/tasks"
         val payload = JSONObject().apply {
@@ -122,6 +124,8 @@ class LocalAiRuntimeClient(
             if (!notes.isNullOrBlank()) put("notes", notes)
             put("priority", priority.lowercase())
             if (!dueDate.isNullOrBlank()) put("due_date", dueDate)
+            if (!category.isNullOrBlank()) put("category", category.lowercase())
+            if (reminderMinutesBefore != null) put("reminder_minutes_before", reminderMinutesBefore)
         }
 
         val builder = Request.Builder()
@@ -155,7 +159,9 @@ class LocalAiRuntimeClient(
         status: String? = null,
         title: String? = null,
         priority: String? = null,
-        dueDate: String? = null
+        dueDate: String? = null,
+        category: String? = null,
+        reminderMinutesBefore: Int? = null
     ): Result<RemoteTaskDto> = withContext(Dispatchers.IO) {
         val url = "$baseUrl/api/v1/tasks/$taskId"
         val payload = JSONObject().apply {
@@ -163,6 +169,8 @@ class LocalAiRuntimeClient(
             if (title != null) put("title", title)
             if (priority != null) put("priority", priority.lowercase())
             if (!dueDate.isNullOrBlank()) put("due_date", dueDate)
+            if (!category.isNullOrBlank()) put("category", category.lowercase())
+            if (reminderMinutesBefore != null) put("reminder_minutes_before", reminderMinutesBefore)
         }
 
         val builder = Request.Builder()
@@ -218,6 +226,10 @@ class LocalAiRuntimeClient(
             status = json.optString("status", "pending"),
             priority = json.optString("priority", "medium"),
             dueDate = if (json.has("due_date") && !json.isNull("due_date")) json.getString("due_date") else null,
+            category = json.optString("category", "general"),
+            reminderMinutesBefore = if (json.has("reminder_minutes_before") && !json.isNull("reminder_minutes_before")) json.getInt("reminder_minutes_before") else null,
+            reminderAt = if (json.has("reminder_at") && !json.isNull("reminder_at")) json.getString("reminder_at") else null,
+            isDeleted = json.optBoolean("is_deleted", false),
             createdAt = if (json.has("created_at") && !json.isNull("created_at")) json.getString("created_at") else null,
             updatedAt = if (json.has("updated_at") && !json.isNull("updated_at")) json.getString("updated_at") else null
         )

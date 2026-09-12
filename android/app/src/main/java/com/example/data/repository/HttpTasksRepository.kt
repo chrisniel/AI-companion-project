@@ -49,19 +49,7 @@ class HttpTasksRepository(
 
         return runtimeClient.getTasks(baseUrl, token).fold(
             onSuccess = { remoteList ->
-                val existingMap = _tasks.value.associateBy { it.id }
-                val mapped = remoteList.map { remote ->
-                    val local = existingMap[remote.id]
-                    val base = remote.toMobileTask()
-                    if (local != null) {
-                        base.copy(
-                            category = local.category,
-                            reminder = local.reminder
-                        )
-                    } else {
-                        base
-                    }
-                }
+                val mapped = remoteList.map { it.toMobileTask() }
                 _tasks.value = mapped
                 connectionRepository.setSyncStatus(SyncStatus.SYNCHRONIZED)
                 Result.success(mapped)
@@ -192,6 +180,8 @@ class HttpTasksRepository(
             val baseUrl = connectionRepository.getBaseUrl()
             val token = connectionRepository.getToken()
 
+            val reminderMinutes = TaskDateTimeConverter.reminderToMinutes(task.reminder)
+
             if (isNew) {
                 runtimeClient.createTask(
                     baseUrl = baseUrl,
@@ -199,11 +189,13 @@ class HttpTasksRepository(
                     title = task.title,
                     notes = task.description.ifBlank { null },
                     priority = task.priority.name.lowercase(),
-                    dueDate = isoDueDate
+                    dueDate = isoDueDate,
+                    category = task.category.name.lowercase(),
+                    reminderMinutesBefore = reminderMinutes
                 ).fold(
                     onSuccess = { created ->
                         _tasks.update { list ->
-                            list.map { if (it.id == task.id) created.toMobileTask().copy(category = task.category, reminder = task.reminder) else it }
+                            list.map { if (it.id == task.id) created.toMobileTask() else it }
                         }
                         connectionRepository.setSyncStatus(SyncStatus.SYNCHRONIZED)
                     },
@@ -219,7 +211,9 @@ class HttpTasksRepository(
                     title = task.title,
                     status = if (task.isCompleted) "completed" else "pending",
                     priority = task.priority.name.lowercase(),
-                    dueDate = isoDueDate
+                    dueDate = isoDueDate,
+                    category = task.category.name.lowercase(),
+                    reminderMinutesBefore = reminderMinutes
                 ).fold(
                     onSuccess = {
                         connectionRepository.setSyncStatus(SyncStatus.SYNCHRONIZED)
@@ -254,16 +248,18 @@ class HttpTasksRepository(
         }
         val isDone = status.lowercase() == "completed"
         val (displayDate, displayTime) = TaskDateTimeConverter.fromIsoToDisplay(dueDate)
+        val mappedCategory = TaskCategory.fromString(category.orEmpty())
+        val mappedReminder = TaskDateTimeConverter.minutesToReminder(reminderMinutesBefore)
 
         return MobileTask(
             id = id,
             title = title,
             description = notes.orEmpty(),
-            category = TaskCategory.GENERAL,
+            category = mappedCategory,
             priority = parsedPriority,
             dueDate = displayDate,
             dueTime = displayTime,
-            reminder = null,
+            reminder = mappedReminder,
             isCompleted = isDone,
             completedAt = if (isDone) updatedAt ?: "Completed" else null
         )

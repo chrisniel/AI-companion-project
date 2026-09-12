@@ -190,4 +190,45 @@ object TaskDateTimeConverter {
 
         return null
     }
+
+    /**
+     * Converts a user-facing reminder label (e.g. "None", "At due time", "15m before", "1h before", "1d before")
+     * into integer minutes before the due date, matching the backend Task schema.
+     */
+    fun reminderToMinutes(reminder: String?): Int? {
+        if (reminder.isNullOrBlank() || reminder.equals("None", ignoreCase = true)) return null
+        val clean = reminder.trim().lowercase()
+        return when {
+            clean.contains("at due") || clean == "due" -> 0
+            clean.contains("15") -> 15
+            clean.contains("1h") || clean.contains("1 hour") || clean.contains("60") -> 60
+            clean.contains("1d") || clean.contains("1 day") -> 1440
+            else -> {
+                val num = Regex("\\d+").find(clean)?.value?.toIntOrNull()
+                if (num != null) {
+                    if (clean.contains("h")) num * 60
+                    else if (clean.contains("d")) num * 1440
+                    else num
+                } else 15
+            }
+        }
+    }
+
+    /**
+     * Converts integer minutes before due date from the backend into a friendly mobile display label.
+     */
+    fun minutesToReminder(minutes: Int?): String? {
+        if (minutes == null) return null
+        return when (minutes) {
+            0 -> "At due time"
+            15 -> "15m before"
+            60 -> "1h before"
+            1440 -> "1d before"
+            else -> {
+                if (minutes % 1440 == 0) "${minutes / 1440}d before"
+                else if (minutes % 60 == 0) "${minutes / 60}h before"
+                else "${minutes}m before"
+            }
+        }
+    }
 }

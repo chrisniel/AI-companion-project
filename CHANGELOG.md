@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added & Enhanced (2026-09-12 - Pass 5: Task Reminders, Categories, and Soft Deletion)
+
+- Task Categories & Reminders (Track B6): Added `category` (`general`, `work`, `personal`, `dev`, `shopping`, `health`) and reminder fields (`reminder_minutes_before`, `reminder_at`) to the SQLite `Task` model, Pydantic schemas, and API endpoints. Automatically calculates `reminder_at` timestamp from `due_date` and `reminder_minutes_before` during task creation and updates.
+- Android Client Synchronization: Connected Android client to backend task categories and reminders. Updated `RemoteTaskDto`, `LocalAiRuntimeClient`, and `HttpTasksRepository` to serialize and parse `category` and `reminder_minutes_before`. Added `TaskDateTimeConverter.reminderToMinutes` and `minutesToReminder` for bidirectional conversions between mobile reminder labels and backend minute offsets.
+- Soft Deletion & Recycle Bin (Section 16.1): Implemented safe two-stage deletion across backend endpoints. `DELETE /api/v1/tasks/{id}` now soft-deletes records (`is_deleted=True`, `deleted_at=utcnow()`), excluding them from default `GET /api/v1/tasks` listings while preserving database rows.
+- Recycle Bin (Trash) APIs: Added `GET /api/v1/tasks/trash` (listing soft-deleted tasks with dynamic `expires_in_days` retention countdown), `POST /api/v1/tasks/{id}/restore` (recovering soft-deleted tasks back to active state), and `DELETE /api/v1/tasks/{id}/permanent` (hard deletion from trash).
+- Automated Retention Policy: Added `DATA_RETENTION_DAYS: int = 30` setting in `config.py` and `purge_expired_trash()` service in `retention.py` with standalone CLI job runner (`python -m app.services.retention --days 30`).
+- Database Migration: Created and applied non-destructive Alembic migration `002_tasks_reminders_and_soft_delete.py` with safe server defaults, ensuring zero data loss on existing records.
+- Verification: Added comprehensive test scenarios in `backend/tests/test_tasks.py` and unit tests in `TaskDateTimeConverterTest.kt` (26/26 backend pytest tests passing, 124/124 Android unit tests passing, debug APK assembled).
+
 ### Security & Hardening (2026-09-12 - Pass 4: Backend Security V1.1.1 Corrective Pass)
 
 - Minimal Public `/health` Response: Reduced public `GET /api/v1/health` response strictly to `{"status": "healthy"}` without leaking internal telemetry or database diagnostics. Transferred detailed system diagnostics (`database_connected`, `version`, `timestamp`) to authenticated `GET /api/v1/system/status`. Preserved 100% compatibility with Android `HealthDto`.
