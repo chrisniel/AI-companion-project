@@ -2,47 +2,37 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: Verification & User Handover
-- Current Sprint: Android UI/UX Polish: Assistant Autoscroll, Custom Wallpaper Blur, Viewport Vault Overlay & Gesture Fluidity
-- Target: Pre-position Assistant chat without entry autoscroll, add frosted blur to custom wallpapers, wire HomeScreen avatar to root Vault popover overlay, and provide real-time 1:1 tactile swipe tracking.
-- Scope Guard: Android touch physics, overscroll clipping, background persistence, appearance settings, button components, and vault popover overlay.
+- Status: Planning & Transition
+- Current Sprint: Backend Core Foundation & API Security Architecture
+- Target: Initialize FastAPI backend, SQLite/SQLAlchemy 2 database foundation, token authentication, and first vertical slice (Health & Task endpoints) matching full-stack blueprint and OWASP API security standards.
+- Scope Guard: `backend/`, `contracts/`, `docs/02_Planning/`, and API client interfaces. Preserve all working Android and Web frontend UI implementations.
 
-## [CURRENT EXECUTION STATE - VERIFICATION & HANDOVER]
+## [CURRENT EXECUTION STATE - PLANNING & ARCHITECTURE]
 
 - Active Files:
-  - `android/app/src/main/java/com/example/ui/shell/AppShell.kt`
-  - `android/app/src/main/java/com/example/ui/screens/HomeScreen.kt`
-  - `android/app/src/main/java/com/example/ui/screens/AssistantScreen.kt`
-  - `android/app/src/main/java/com/example/ui/components/SoftBounceOverscroll.kt`
-  - `CHANGELOG.md`
-  - `docs/03_Walkthroughs/walkthrough-android-scroll-fluidity-performance-and-oled.md`
+  - `README.md`
+  - `docs/04_Architecture/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md`
+  - `docs/02_Planning/plan-backend-core-and-security.md`
   - `docs/01_Tracking/task.md`
-- Current Status: All code changes implemented. `gradlew testDebugUnitTest` and `gradlew assembleDebug` passed with 0 errors. Debug APK generated. Ready for manual user verification on Infinix ZERO ULTRA.
-- Next Action: Deliver educational walkthrough and manual test checklist to user.
+- Current Status: Section 1 complete. Android UI/UX sprint archived, README.md updated with repository-verified Android baseline, and documentation audit complete.
+- Next Action: User commits Section 1 changes and merges `feature/android-ui-ux-adjustments` into `develop`, then creates `feature/backend-core-and-security`.
 
 ## Active Checklist
 
-### 1. Investigation & Acceptance Criteria
-- [x] Trace symptoms to root causes across navigation, theming, wallpaper, and clipping
-- [x] Define testable acceptance criteria (AC-1 to AC-7 + Polish AC-1 to AC-4)
+### 1. Documentation & Standard Synchronization
+- [x] Archive completed Android UI/UX polish task to `docs/01_Tracking/archive/`
+- [x] Update `README.md` to reflect repository-verified status of Android app (17 screens, 110 tests)
+- [x] Audit remaining project documentation for outdated external/prototype claims
 
-### 2. Implementation Phase
-- [x] Implement direction-aware slide/fade transitions on bottom navigation tabs in `AppShell.kt`
-- [x] Rename header to "NEUMORPHIC VISUAL EFFECTS" in `SettingsScreen.kt`
-- [x] Update `SelectablePill`, `SelectionCardItem`, and `SettingsSectionTabs` to honor `isOled` (flat) and `EffectsLevel.REDUCED` (lightweight)
-- [x] Add horizontal scrolling to Mobile Background options row in `SettingsScreen.kt`
-- [x] Fix custom wallpaper decoding and decouple background layer from Scaffold to prevent scroll reset
-- [x] Add `.clipToBounds()` to `SoftBounceOverscroll.kt` to eliminate header overlay bleed
-- [x] Connect top bar avatar to the floating animated Vault popover overlay across screens
-- [x] Pre-position Assistant listState at newest message without entry autoscroll
-- [x] Add 18.dp frosted blur to custom wallpaper rendering in `AppShell.kt`
-- [x] Eliminate inline HomeScreen layout push and wire avatar to root `VaultPopoverOverlay`
-- [x] Add real-time 1:1 finger tracking (`swipeOffset`) with natural spring snapping
+### 2. Architecture & Security Planning
+- [ ] Reconcile `full_stack_blueprint.md` with Master Architecture (FastAPI + SQLite + SQLAlchemy 2 + Alembic)
+- [ ] Define OWASP API Security Top 10 controls (Token Auth, CORS whitelist, Pydantic v2 schemas, rate limits)
+- [ ] Create implementation plan `docs/02_Planning/plan-backend-core-and-security.md` for user approval
 
-### 3. Verification & Delivery
-- [x] Run `gradlew testDebugUnitTest` and `gradlew assembleDebug`
-- [x] Update `CHANGELOG.md` and delivery walkthrough
-- [ ] User verifies on physical Infinix ZERO ULTRA
-
-
-
+### 3. Backend Foundation Implementation (Upon Approval)
+- [ ] Initialize `backend/` directory structure, `pyproject.toml` / dependencies, and virtual environment
+- [ ] Implement secure configuration (`core/config.py`) with pairing token and CORS middleware
+- [ ] Implement database session management and base model (`core/database.py`) with SQLite/FTS5
+- [ ] Implement token authentication dependency (`core/security.py`)
+- [ ] Implement `/api/v1/health` and first vertical slice (Tasks CRUD: model, schema, routes)
+- [ ] Add automated pytest suite for health, auth, and CRUD endpoints
