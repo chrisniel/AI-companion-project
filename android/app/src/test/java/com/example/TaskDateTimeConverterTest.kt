@@ -108,4 +108,24 @@ class TaskDateTimeConverterTest {
         assertEquals("Nov 20, 2028", displayDate)
         assertEquals("06:45 PM", displayTime)
     }
+
+    @Test
+    fun `reminderToMinutes converts user-facing reminder labels correctly`() {
+        assertEquals(0, TaskDateTimeConverter.reminderToMinutes("At due time"))
+        assertEquals(15, TaskDateTimeConverter.reminderToMinutes("15m before"))
+        assertEquals(60, TaskDateTimeConverter.reminderToMinutes("1h before"))
+        assertEquals(1440, TaskDateTimeConverter.reminderToMinutes("1d before"))
+        assertNull(TaskDateTimeConverter.reminderToMinutes("None"))
+        assertNull(TaskDateTimeConverter.reminderToMinutes(null))
+        assertNull(TaskDateTimeConverter.reminderToMinutes(""))
+    }
+
+    @Test
+    fun `minutesToReminder converts backend minutes into user-facing labels correctly`() {
+        assertEquals("At due time", TaskDateTimeConverter.minutesToReminder(0))
+        assertEquals("15m before", TaskDateTimeConverter.minutesToReminder(15))
+        assertEquals("1h before", TaskDateTimeConverter.minutesToReminder(60))
+        assertEquals("1d before", TaskDateTimeConverter.minutesToReminder(1440))
+        assertNull(TaskDateTimeConverter.minutesToReminder(null))
+    }
 }

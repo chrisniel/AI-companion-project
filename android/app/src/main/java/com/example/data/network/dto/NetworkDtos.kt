@@ -19,6 +19,10 @@ data class RemoteTaskDto(
     val status: String = "pending", // "pending", "in_progress", "completed", "cancelled"
     val priority: String = "medium", // "low", "medium", "high", "urgent"
     val dueDate: String? = null,
+    val category: String? = "general",
+    val reminderMinutesBefore: Int? = null,
+    val reminderAt: String? = null,
+    val isDeleted: Boolean = false,
     val createdAt: String? = null,
     val updatedAt: String? = null
 )

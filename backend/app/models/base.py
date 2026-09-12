@@ -2,7 +2,8 @@
 
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import DateTime, String, func
+from typing import Optional
+from sqlalchemy import Boolean, DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 
@@ -54,3 +55,22 @@ class OwnerMixin:
         nullable=False,
         index=True,
     )
+
+
+class SoftDeleteMixin:
+    """Provides soft deletion state and timestamp for client-side deletion safety (Section 16.1)."""
+
+    is_deleted: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default=func.false(),
+        nullable=False,
+        index=True,
+    )
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        default=None,
+        nullable=True,
+        index=True,
+    )
+

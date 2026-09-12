@@ -44,9 +44,10 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
     ]
 
-    # Database
+    # Database & Retention Policy (Section 16.1)
     DATA_DIR: Path = DEFAULT_DATA_DIR
     DATABASE_URL: str = "sqlite+aiosqlite:///./data/companion.db"
+    DATA_RETENTION_DAYS: int = 30
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
