@@ -243,7 +243,7 @@ export const ConversationMessageItem: React.FC<ConversationMessageItemProps> = (
                   </Badge>
                 </div>
                 <span className="text-[10px] text-[var(--color-text-muted)] font-mono">
-                  Query: {message.searchMetadata?.query || 'CUDA benchmarks'}
+                  Query: {message.searchMetadata?.query || 'local documentation'}
                 </span>
               </div>
             </div>
@@ -259,13 +259,13 @@ export const ConversationMessageItem: React.FC<ConversationMessageItemProps> = (
           <div className="pt-2 border-t border-[var(--color-border-subtle)] space-y-1">
             <div className="p-2 rounded-xl surface-recessed border border-[var(--color-border-subtle)] flex items-center justify-between text-[11px]">
               <span className="font-mono text-[var(--color-accent)] truncate">
-                llama.cpp/docs/backend-cuda.md
+                docs/04_Architecture/local-runtime.md
               </span>
               <span className="text-[10px] text-[var(--color-text-muted)] font-mono">Local Doc</span>
             </div>
             <div className="p-2 rounded-xl surface-recessed border border-[var(--color-border-subtle)] flex items-center justify-between text-[11px]">
               <span className="font-mono text-[var(--color-accent)] truncate">
-                benchmarks/vram-alloc-q4km.json
+                benchmarks/vram-measurements.json
               </span>
               <span className="text-[10px] text-[var(--color-text-muted)] font-mono">Telemetry Log</span>
             </div>
@@ -309,7 +309,6 @@ export const ConversationMessageItem: React.FC<ConversationMessageItemProps> = (
         <div className="flex items-center justify-between gap-4 pb-1.5 border-b border-[var(--color-border-subtle)] text-[11px] text-[var(--color-text-muted)] font-mono">
           <div className="flex items-center gap-2">
             <span className="font-bold text-[var(--color-accent)]">{activeCharacterName}</span>
-            <span className="text-[10px] text-emerald-500 font-medium">42.8 t/s • 22ms</span>
           </div>
           <span>{message.timestamp}</span>
         </div>

@@ -63,22 +63,39 @@ class MockLLMProvider(BaseLLMProvider):
         registry_entries = [m.primary_file for m in build_model_list() if m.primary_file_exists]
 
         is_loaded = self._is_loaded
+        applied_ctx = context_sizes.get(self._active_profile, 4096)
+        applied_ngl = gpu_layers.get(self._active_profile, settings.LLM_GPU_LAYERS)
+        is_eco = self._active_profile == "eco"
+        mmproj_flag = not is_eco
+
         return ModelStatusResponse(
             provider=self.provider_name,
-            is_loaded=is_loaded,
+            engine_version="mock-v1",
+            router_running=True,
+            managed_by_core=True,
+            runtime_state=LLMRuntimeState.MODEL_READY if is_loaded else LLMRuntimeState.MODEL_UNLOADED,
             active_model=self._active_model if is_loaded else None,
+            model_resident=is_loaded,
+            model_loaded=is_loaded,
+            model_awake=is_loaded,
+            requested_profile=self._active_profile,
+            applied_profile=self._active_profile,
+            applied_context_size=applied_ctx,
+            applied_gpu_layers=applied_ngl,
+            requested_mmproj_offload=mmproj_flag,
+            applied_mmproj_offload=mmproj_flag,
+            mmproj_offload=mmproj_flag,
+            generation_active=False,
+            last_runtime_error=None,
+            is_loaded=is_loaded,
             active_profile=self._active_profile,
             available_models=available,
             available_registry=registry_entries,
-            context_size=context_sizes.get(self._active_profile, 4096),
-            gpu_layers=gpu_layers.get(self._active_profile, settings.LLM_GPU_LAYERS),
-            idle_timeout_seconds=settings.LLM_IDLE_TIMEOUT_SECONDS,
-            seconds_until_unload=settings.LLM_IDLE_TIMEOUT_SECONDS if is_loaded else None,
-            seconds_until_idle=settings.LLM_IDLE_TIMEOUT_SECONDS if is_loaded else None,
-            runtime_state=LLMRuntimeState.MODEL_READY if is_loaded else LLMRuntimeState.MODEL_UNLOADED,
-            generation_active=False,
-            managed_by_core=True,
-            engine_version="mock-v1",
+            context_size=applied_ctx,
+            gpu_layers=applied_ngl,
+            idle_timeout_seconds=settings.LLAMA_ROUTER_IDLE_TIMEOUT,
+            seconds_until_idle=settings.LLAMA_ROUTER_IDLE_TIMEOUT if is_loaded else None,
+            seconds_until_unload=None,
         )
 
     async def generate(

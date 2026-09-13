@@ -2,46 +2,26 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: In Progress
-- Current Sprint: Router & Model Registry Integration Fix
+- Status: In Review / Awaiting User Approval
+- Current Sprint: PC Runtime, Models UI, and Assistant Stabilization
 - Branch: `feature/assistant-orchestration-and-memory`
-- Target: Fix llama-server router discovery, port 8085 migration, model ID routing, provider detection, and live status synchronization; all tests passing + live RX 580 smoke test.
-- Scope Guard: No new DB migrations. No voice/audio tracks. No LFS/git policy changes.
-- Plan: `docs/02_Planning/plan-llama-router-and-model-registry-fix.md`
+- Target: Enforce singleton llama.cpp router ownership, truthful context & profile application, fix AssistantView React crash, stabilize SSE stream error handling, reconcile Web UI state from backend truth, and fix database message constraints.
+- Scope Guard: PC-first stabilization only. No Android/mobile runtime changes. No STT/TTS voice audio tracks. No Git LFS policy changes.
+- Plan: `docs/02_Planning/plan-pc-runtime-web-assistant-stabilization.md`
 
-## [CURRENT EXECUTION STATE - VERIFIED & READY FOR COMMIT]
+## [CURRENT EXECUTION STATE - PHASE 5 ERROR CLASSIFICATION & REGRESSION RESOLVED]
 
-- Active Files:
-  - `backend/app/core/config.py`
-  - `backend/app/services/llm/manager.py`
-  - `backend/app/services/llm/mock.py`
-  - `backend/app/schemas/model_registry.py`
-  - `backend/app/services/model_registry.py`
-  - `backend/app/services/llm/llama_cpp.py`
-  - `frontend/web/src/components/workspace/ModelsView.tsx`
-  - `backend/tests/conftest.py`
-  - `backend/tests/test_llm.py`
-  - `backend/tests/test_model_registry.py`
-  - `CHANGELOG.md`
-- Current Status: All 56 automated tests passing. Frontend build passed cleanly. Live smoke test on port 8085 with Vulkan GPU offload passed 100%.
-- Next Action: Present commit proposal to user; await user review and manual commit.
+- Active Plan: `docs/02_Planning/plan-pc-runtime-web-assistant-stabilization.md`
+- Current Status: Phase 5 runtime error classification and regression resolved and verified. Root cause of original error was resolved (missing `is_deleted` column in SQLite migration 003). Assistant error classification logic was upgraded in `AssistantView.tsx` so user-facing messages are strictly based on authoritative runtime state (`isOnline`, `modelStatus.model_loaded`, `modelStatus.runtime_state`). Distinct user-facing error codes and concise diagnostic messages implemented: `CORE_OFFLINE`, `MODEL_NOT_LOADED`, `MODEL_SLEEPING`, `WAKE_FAILED`, `STREAM_CONNECTION_FAILED`, `STREAM_TERMINATED`, `MODEL_GENERATION_FAILED`, and `USER_CANCELLED`. Generic "Ensure Local AI Core is running and model is loaded" is eliminated when Core is online and model is loaded/awake. All 38 frontend vitest tests pass, `npx tsc --noEmit` passes with 0 errors, `npm run build` passes cleanly, and 79/79 backend pytest tests pass.
+- Next Action: STOP and report Phase 5 runtime error classification and live streaming verification; await user manual testing and review before Phase 6.
 
-## Active Checklist — Router & Model Registry Fix
+## Active Checklist — PC Stabilization
 
-- [x] Task 1: Update `backend/app/core/config.py` (port 8085, LLAMA_MODELS_DIR, URL)
-- [x] Task 2: Fix `manager.py` (rglob for GGUF discovery) & `mock.py` (cold boot truthfulness)
-- [x] Task 3: Schema & Registry (`runtime_model_id` field and resolver helper)
-- [x] Task 4: LlamaCppProvider core (launch args, runtime ID routing, status polling, completion payload)
-- [x] Task 5: Frontend `ModelsView.tsx` (exact ID matching and activation)
-- [x] Task 6: Automated test suite verification (`pytest tests/ -v` [56/56] and `npm run build`)
-- [x] Task 7: Live smoke test with `llama-server.exe` on port 8085 (Vulkan RX 580)
-
-## Completed — Track B5 (archived after manual verification)
-
-- [x] Task Pre-B5.1: Reconcile `AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md`.
-- [x] Task Pre-B5.2: Create canonical `LLAMA_CPP_RUNTIME_ARCHITECTURE.md`.
-- [x] Task Pre-B5.3: Create canonical `VOICE_AND_AUDIO_ARCHITECTURE.md`.
-- [x] Task Pre-B5.4: Document Qwen3-VL portfolio and ModelRegistry.
-- [x] Task B5.0–B5.6: Full B5 backend + frontend + 49 tests passing.
-- [x] Task B5.7: Committed by user (`6cff4aaf`).
-
+- [x] Phase 0: Reproduce and Instrument (add failing test matrix for router ownership, profile args, and SSE stream errors)
+- [x] Phase 1: Single Runtime Ownership & Router Correctness (PID liveness guard, 2s health check, fix polling return on timeout)
+- [x] Phase 2: Resource Profile Correctness & VRAM Management (pass `--ctx-size`, handle router restart on profile change, disable conflicting Python idle loop)
+- [x] Phase 3: Backend Runtime Truth & Telemetry Schema (`router_running`, `model_resident`, `applied_context_size`, `applied_gpu_layers`)
+- [x] Phase 4: Models Web UI State Reconciliation (hydrate `currentModelId` from backend truth, fix `liveModels` precedence, truthful VRAM & settings labels)
+- [x] Phase 5: Assistant Web UI Crash Fix, Error Boundary, & SSE Reliability (import `useCallback`, add `ErrorBoundary.tsx`, emit SSE error frame, stabilize conversation init)
+- [ ] Phase 6: Database Invariants (migration 004 for `UNIQUE(conversation_id, sequence_no)` and scoped `client_message_id`)
+- [ ] Phase 7: Full PC Integration Verification & Benchmarking (clean cold boot, single PID, VRAM check, 56+ pytest pass, clean build)

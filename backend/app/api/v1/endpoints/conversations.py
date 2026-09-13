@@ -157,6 +157,7 @@ async def delete_conversation(
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
+    conversation.is_deleted = True
     conversation.deleted_at = datetime.now(timezone.utc)
     await db.commit()
 

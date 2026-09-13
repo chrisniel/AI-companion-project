@@ -21,17 +21,21 @@ def upgrade() -> None:
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("is_deleted", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("owner_id", sa.String(36), nullable=False, index=True),
         sa.Column("title", sa.String(255), nullable=False, server_default="New Conversation"),
         sa.Column("character_id", sa.String(64), nullable=False, server_default="default"),
     )
+    op.create_index("ix_conversations_is_deleted", "conversations", ["is_deleted"])
+    op.create_index("ix_conversations_deleted_at", "conversations", ["deleted_at"])
 
     op.create_table(
         "messages",
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("is_deleted", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("owner_id", sa.String(36), nullable=False, index=True),
         sa.Column(
@@ -51,12 +55,15 @@ def upgrade() -> None:
         sa.Column("completion_tokens", sa.Integer(), nullable=True),
     )
     op.create_index("ix_messages_conv_seq", "messages", ["conversation_id", "sequence_no"])
+    op.create_index("ix_messages_is_deleted", "messages", ["is_deleted"])
+    op.create_index("ix_messages_deleted_at", "messages", ["deleted_at"])
 
     op.create_table(
         "memories",
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("is_deleted", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("owner_id", sa.String(36), nullable=False, index=True),
         sa.Column("category", sa.String(32), nullable=False, server_default="fact"),
@@ -66,6 +73,8 @@ def upgrade() -> None:
         sa.Column("source_message_id", sa.String(36), nullable=True),
         sa.Column("user_verified", sa.Boolean(), nullable=False, server_default="1"),
     )
+    op.create_index("ix_memories_is_deleted", "memories", ["is_deleted"])
+    op.create_index("ix_memories_deleted_at", "memories", ["deleted_at"])
 
     # SQLite FTS5 Virtual Table and sync triggers
     op.execute("""

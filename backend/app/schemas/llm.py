@@ -70,22 +70,54 @@ class ChatCompletionStreamChunk(BaseSchema):
 
 
 class ModelStatusResponse(BaseSchema):
-    """Runtime inspection of active models and hardware profiles."""
+    """
+    Runtime inspection of active models, router lifecycle, and truthful applied hardware profiles.
+    Phase 3 Truthful Telemetry Contract:
+    - Distinguishes router process liveness (`router_running`) from model residency (`model_resident`).
+    - Distinguishes requested profile configuration (`requested_profile`) from actually verified
+      applied launch parameters (`applied_profile`, `applied_context_size`, `applied_gpu_layers`, `mmproj_offload`).
+    - Expressive MODEL_SLEEPING semantics via dual fields:
+        `model_loaded = True` (Logical model residency: worker process exists, model registered in router)
+        `model_awake = False` (VRAM/Compute readiness: allocations unmapped while sleeping)
+        `model_resident = False` (VRAM residency: GPU memory released while sleeping)
+    """
     provider: str
-    is_loaded: bool
-    active_model: Optional[str] = None
-    active_profile: str
-    available_models: List[str]
-    available_registry: Optional[List[str]] = None
-    context_size: int
-    gpu_layers: int
-    idle_timeout_seconds: int
-    seconds_until_unload: Optional[int] = None
-    seconds_until_idle: Optional[int] = None
-    runtime_state: LLMRuntimeState = LLMRuntimeState.SERVER_STOPPED
-    generation_active: bool = False
-    managed_by_core: bool = False
     engine_version: Optional[str] = "b10936"
+
+    # Router process state
+    router_running: bool = False
+    managed_by_core: bool = False
+    runtime_state: LLMRuntimeState = LLMRuntimeState.SERVER_STOPPED
+
+    # Model status & residency
+    active_model: Optional[str] = None
+    model_resident: bool = False   # Physical VRAM compute residency (True ONLY when MODEL_READY)
+    model_loaded: bool = False     # Logical residency: worker exists, model registered in router (READY or SLEEPING)
+    model_awake: bool = False      # GPU/RAM compute readiness (True for READY, False for SLEEPING)
+
+    # Hardware profile & configurations: requested vs verified applied
+    requested_profile: str = "balanced"
+    applied_profile: Optional[str] = None
+    applied_context_size: Optional[int] = None
+    applied_gpu_layers: Optional[int] = None
+    requested_mmproj_offload: bool = True           # True if requested profile config offloads mmproj to GPU; False if CPU
+    applied_mmproj_offload: Optional[bool] = None   # Verified applied projector device on running router; null when stopped/pending
+
+    # Activity & diagnostics
+    generation_active: bool = False
+    last_runtime_error: Optional[str] = None
+
+    # Backward-compatibility fields (preserved for existing Web UI clients until Phase 4 reconciliation)
+    mmproj_offload: bool = True             # Compatibility fallback: applied_mmproj_offload if applied else requested_mmproj_offload
+    is_loaded: bool = False                 # Semantics: equivalent to model_loaded (True for READY or SLEEPING)
+    active_profile: str = "balanced"        # Semantics: equivalent to requested_profile
+    context_size: int = 4096                # Semantics: applied_context_size if applied, else requested profile default
+    gpu_layers: int = 28                    # Semantics: applied_gpu_layers if applied, else requested profile default
+    idle_timeout_seconds: int = 900         # Native sleep idle timeout in seconds
+    seconds_until_idle: Optional[int] = None   # Native llama.cpp sleep countdown; 0 when MODEL_SLEEPING; null when unloaded/stopped
+    seconds_until_unload: Optional[int] = None # Strictly null: auto-unload is disabled; native idle sleeps rather than unloads
+    available_models: List[str] = []
+    available_registry: Optional[List[str]] = None
 
 
 class ModelLoadRequest(BaseSchema):

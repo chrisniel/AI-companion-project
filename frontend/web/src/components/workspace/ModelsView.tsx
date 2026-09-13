@@ -23,14 +23,16 @@ import { ModelDetailsModal } from './models/ModelDetailsModal';
 import { AdvancedRuntimeSettings } from './models/AdvancedRuntimeSettings';
 
 export interface ModelsViewProps {
-  currentModelId?: string;
+  selectedModelId?: string | null;
   onSelectModel?: (modelId: string) => void;
+  currentModelId?: string; // Backwards-compatible alias
   performanceProfile?: PerformanceProfile;
   onChangePerformanceProfile?: (profile: PerformanceProfile) => void;
 }
 
 export const ModelsView: React.FC<ModelsViewProps> = ({
-  currentModelId: controlledModelId,
+  selectedModelId: controlledSelectedId,
+  currentModelId: legacyControlledId,
   onSelectModel,
   performanceProfile: controlledProfile,
   onChangePerformanceProfile,
@@ -47,6 +49,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
     apiKey,
     setApiKey,
     refreshStatus,
+    registry,
   } = useBackend();
 
   const [keyInput, setKeyInput] = useState(apiKey || '');
@@ -57,30 +60,41 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
     }
   }, [apiKey]);
 
-  // Local state for models and active selections
+  // Local state for models registry
   const [models, setModels] = useState<LocalModel[]>(mockLocalModels);
-  const [internalModelId, setInternalModelId] = useState<string>('m-1');
-  const activeModelId = controlledModelId || internalModelId;
 
-  // Sync active model ID when backend reports a verified loaded active_model
+  // Authoritative Backend Active Model:
+  // Derived directly from backend truth (model_loaded = True and active_model populated).
+  const backendActiveModelId = (modelStatus?.model_loaded && modelStatus?.active_model)
+    ? modelStatus.active_model
+    : null;
+
+  // Selected Model (model the user is currently viewing/intends to act on)
+  const initialControlled = controlledSelectedId ?? legacyControlledId ?? null;
+  const [internalSelectedId, setInternalSelectedId] = useState<string | null>(initialControlled);
+  const [hasHydratedSelection, setHasHydratedSelection] = useState(Boolean(initialControlled));
+
+  // On initial startup only: if no explicit selection exists, hydrate selectedModelId from activeModelId
   useEffect(() => {
-    if (modelStatus?.is_loaded && modelStatus?.active_model) {
-      const match = models.find(
-        (m) =>
-          m.id === modelStatus.active_model ||
-          m.filePath === modelStatus.active_model ||
-          (m.filePath && m.filePath.endsWith(modelStatus.active_model))
-      );
-      if (match) {
-        setInternalModelId(match.id);
+    if (!hasHydratedSelection) {
+      if (initialControlled) {
+        setInternalSelectedId(initialControlled);
+        setHasHydratedSelection(true);
+      } else if (backendActiveModelId) {
+        setInternalSelectedId(backendActiveModelId);
+        setHasHydratedSelection(true);
       }
     }
-  }, [modelStatus?.active_model, modelStatus?.is_loaded, models]);
+  }, [initialControlled, backendActiveModelId, hasHydratedSelection]);
 
-  // Performance Profile state (prefer backend profile if available)
-  const backendProfile = modelStatus?.active_profile as PerformanceProfile | undefined;
-  const [internalProfile, setInternalProfile] = useState<PerformanceProfile>(backendProfile || controlledProfile || 'balanced');
-  const activeProfile = backendProfile || controlledProfile || internalProfile;
+  const selectedModelId = controlledSelectedId ?? legacyControlledId ?? internalSelectedId;
+
+  // Performance Profile state (requested profile)
+  const backendRequestedProfile = modelStatus?.requested_profile as PerformanceProfile | undefined;
+  const [internalProfile, setInternalProfile] = useState<PerformanceProfile>(
+    backendRequestedProfile || controlledProfile || 'balanced'
+  );
+  const activeProfile = backendRequestedProfile || controlledProfile || internalProfile;
 
   const handleProfileChange = async (newProfile: PerformanceProfile) => {
     setInternalProfile(newProfile);
@@ -104,7 +118,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
     }
   };
 
-  // VRAM Target Slider state
+  // VRAM Target Slider state (informational headroom guide)
   const [vramTargetGb, setVramTargetGb] = useState<number>(2.5);
 
   // Provider filter for library
@@ -120,47 +134,42 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
   const [selectedDetailsModel, setSelectedDetailsModel] = useState<LocalModel | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
-  // Load live model list from backend registry on mount
+  // Sync live model list from backend registry
   useEffect(() => {
-    fetchModelRegistry(apiKey)
-      .then((entries) => {
-        if (!entries || entries.length === 0) return; // keep mock fallback if empty or offline
-        const live: LocalModel[] = entries.map((e: RegistryEntry) => ({
-          id: e.id,
-          name: e.display_name,
-          family: e.family,
-          parameters: e.parameters,
-          quantization: e.quantization,
-          sizeGb: e.size_gb ?? 0,
-          contextWindow: e.context_limit,
-          status: 'unloaded' as const,
-          engine: 'llama.cpp',
-          isCloud: false,
-          vramUsageGb: e.estimated_vram_gb,
-          ramUsageGb: e.estimated_ram_gb,
-          filePath: e.primary_file,
-          description: `${e.variant} · ${e.capabilities.join(', ')} · ${e.license}`,
-          variant: e.variant,
-          capabilities: e.capabilities,
-          validationStatus: e.validation_status,
-          hasCompanion: e.companion_files.length > 0,
-          companionFilesValid: e.companion_files_valid,
-        }));
-        setModels(live);
-      })
-      .catch(() => { /* silent fallback to mockLocalModels */ });
-  }, [apiKey]);
+    if (registry && registry.length > 0) {
+      const live: LocalModel[] = registry.map((e: RegistryEntry) => ({
+        id: e.id,
+        name: e.display_name,
+        family: e.family,
+        parameters: e.parameters,
+        quantization: e.quantization,
+        sizeGb: e.size_gb ?? 0,
+        contextWindow: e.context_limit,
+        status: (backendActiveModelId === e.id ? 'loaded' : 'unloaded') as 'loaded' | 'unloaded',
+        engine: 'llama.cpp',
+        isCloud: false,
+        vramUsageGb: e.estimated_vram_gb,
+        ramUsageGb: e.estimated_ram_gb,
+        filePath: e.primary_file,
+        description: `${e.variant} · ${e.capabilities.join(', ')} · ${e.license}`,
+        variant: e.variant,
+        capabilities: e.capabilities,
+        validationStatus: e.validation_status,
+        hasCompanion: e.companion_files.length > 0,
+        companionFilesValid: e.companion_files_valid,
+      }));
+      setModels(live);
+    }
+  }, [registry, backendActiveModelId]);
 
-  // Compute live per-model loaded status based on real backend residency
+  // Compute live per-model loaded status based on authoritative backend active_model
   const liveModels = useMemo(() => {
     return models.map((m) => {
       const isThisLoaded = Boolean(
-        modelStatus?.is_loaded &&
-        modelStatus?.active_model &&
+        backendActiveModelId &&
         (
-          m.id === modelStatus.active_model ||
-          m.filePath === modelStatus.active_model ||
-          (m.filePath && m.filePath.endsWith(modelStatus.active_model))
+          m.id === backendActiveModelId ||
+          (m.filePath && m.filePath === backendActiveModelId)
         )
       );
       return {
@@ -168,58 +177,53 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
         status: isThisLoaded ? ('loaded' as const) : ('unloaded' as const),
       };
     });
-  }, [models, modelStatus?.is_loaded, modelStatus?.active_model]);
+  }, [models, backendActiveModelId]);
 
-  // Find active model object
-  const currentModel =
-    liveModels.find((m) => m.id === activeModelId) || liveModels[0] || models[0];
+  // Find currently selected model object (the one user is viewing in Hero)
+  const currentSelectedModel =
+    liveModels.find((m) => m.id === selectedModelId) ||
+    (backendActiveModelId ? liveModels.find((m) => m.id === backendActiveModelId) : null) ||
+    liveModels[0] ||
+    models[0];
 
-  const isSelectedModelLoaded = Boolean(
-    modelStatus?.is_loaded &&
-    modelStatus?.active_model &&
-    (
-      currentModel.id === modelStatus.active_model ||
-      currentModel.filePath === modelStatus.active_model ||
-      (currentModel.filePath && modelStatus.active_model && currentModel.filePath.endsWith(modelStatus.active_model))
-    )
-  );
+  const isSelectedLoaded = Boolean(backendActiveModelId && currentSelectedModel.id === backendActiveModelId);
 
-  // Dynamic active model reflecting real backend status without overriding selected model identity
+  // Dynamic active model reflecting real backend status
   const liveActiveModel: LocalModel = {
-    ...currentModel,
-    status: isSelectedModelLoaded ? 'loaded' : 'unloaded',
-    engine: currentModel.isCloud
-      ? currentModel.engine
-      : (modelStatus?.provider === 'llama_cpp' ? 'llama.cpp (Vulkan)' : currentModel.engine),
-    contextWindow: isSelectedModelLoaded && modelStatus?.context_size ? modelStatus.context_size : currentModel.contextWindow,
-    layersOffloaded: isSelectedModelLoaded && modelStatus?.gpu_layers !== undefined ? modelStatus.gpu_layers : (isSelectedModelLoaded ? 28 : 0),
-    vramUsageGb: isSelectedModelLoaded ? (currentModel.vramUsageGb || 4.5) : 0.0,
+    ...currentSelectedModel,
+    status: isSelectedLoaded ? 'loaded' : 'unloaded',
+    engine: currentSelectedModel.isCloud
+      ? currentSelectedModel.engine
+      : (modelStatus?.router_running ? 'llama.cpp (Vulkan)' : currentSelectedModel.engine),
+    contextWindow: isSelectedLoaded && modelStatus?.applied_context_size
+      ? modelStatus.applied_context_size
+      : currentSelectedModel.contextWindow,
+    layersOffloaded: isSelectedLoaded && modelStatus?.applied_gpu_layers !== undefined && modelStatus.applied_gpu_layers !== null
+      ? modelStatus.applied_gpu_layers
+      : (isSelectedLoaded ? 28 : 0),
+    vramUsageGb: isSelectedLoaded ? (currentSelectedModel.vramUsageGb || 4.5) : 0.0,
   };
 
   // Actions
-  const handleActivateModel = async (modelId: string) => {
-    const selected = models.find((m) => m.id === modelId) || currentModel;
-    setInternalModelId(modelId);
+  const handleSelectModel = (modelId: string) => {
+    setInternalSelectedId(modelId);
+    setHasHydratedSelection(true);
     onSelectModel?.(modelId);
+  };
 
-    // Only attempt local VRAM loading if model is local and on disk
+  const handleActivateModel = async (modelId: string) => {
+    handleSelectModel(modelId);
+    const selected = models.find((m) => m.id === modelId) || currentSelectedModel;
+
+    // Local VRAM loading
     if (!selected.isCloud) {
-      const isTargetOnDisk = Boolean(selected.filePath) || selected.validationStatus === 'verified' || selected.id === 'm-1' || Boolean(
-        modelStatus?.available_models?.some((avail) =>
-          avail.toLowerCase().includes(selected.name.toLowerCase()) ||
-          selected.name.toLowerCase().includes(avail.toLowerCase())
-        )
-      );
-
-      if (isTargetOnDisk) {
-        try {
-          await loadModel(
-            selected.id || selected.filePath || selected.name,
-            (activeProfile === 'turbo' ? 'maximum' : activeProfile) as 'eco' | 'balanced' | 'maximum'
-          );
-        } catch {
-          // Handled in context error state
-        }
+      try {
+        await loadModel(
+          selected.id || selected.filePath || selected.name,
+          (activeProfile === 'turbo' ? 'maximum' : activeProfile) as 'eco' | 'balanced' | 'maximum'
+        );
+      } catch {
+        // Handled in context error state
       }
     }
   };
@@ -227,14 +231,6 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
   const handleUnloadModel = async () => {
     try {
       await unloadModel();
-      setModels((prev) =>
-        prev.map((m) => {
-          if (m.id === activeModelId) {
-            return { ...m, status: 'unloaded' };
-          }
-          return m;
-        })
-      );
     } catch {
       // Handled in context error state
     }
@@ -249,25 +245,25 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
     if (!online) return { label: 'Offline (:8000)', dotClass: 'bg-rose-500' };
     switch (state) {
       case 'SERVER_STOPPED':
-        return { label: 'Router: Offline', dotClass: 'bg-zinc-500' };
+        return { label: 'Router Offline', dotClass: 'bg-zinc-500' };
       case 'SERVER_STARTING':
-        return { label: 'Router: Starting…', dotClass: 'bg-amber-500 animate-pulse' };
+        return { label: 'Router Starting…', dotClass: 'bg-amber-500 animate-pulse' };
       case 'MODEL_UNLOADED':
-        return { label: 'Router: Ready · Model: Unloaded', dotClass: 'bg-sky-500' };
+        return { label: 'Router Ready / No Model Loaded', dotClass: 'bg-sky-500' };
       case 'MODEL_LOADING':
-        return { label: 'Router: Ready · Model: Loading…', dotClass: 'bg-amber-500 animate-pulse' };
+        return { label: 'Loading…', dotClass: 'bg-amber-500 animate-pulse' };
       case 'MODEL_READY':
-        return { label: 'Router: Ready · Model: Loaded ✓', dotClass: 'bg-emerald-500 animate-pulse' };
+        return { label: 'Loaded / Awake', dotClass: 'bg-emerald-500 animate-pulse' };
       case 'MODEL_SLEEPING':
-        return { label: 'Router: Ready · Model: Sleeping 💤', dotClass: 'bg-purple-500' };
+        return { label: 'Loaded / Sleeping 💤', dotClass: 'bg-purple-500' };
       case 'MODEL_UNLOADING':
-        return { label: 'Router: Ready · Model: Unloading…', dotClass: 'bg-amber-500 animate-pulse' };
+        return { label: 'Unloading…', dotClass: 'bg-amber-500 animate-pulse' };
       case 'MODEL_ERROR':
-        return { label: 'Router: Ready · Model: Error ⚠️', dotClass: 'bg-rose-500' };
+        return { label: 'Model Error ⚠️', dotClass: 'bg-rose-500' };
       case 'SERVER_ERROR':
-        return { label: 'Router: Error ⚠️', dotClass: 'bg-rose-500' };
+        return { label: 'Router Error ⚠️', dotClass: 'bg-rose-500' };
       default:
-        return { label: 'Online (Standby)', dotClass: 'bg-emerald-500 animate-pulse' };
+        return { label: 'Router Ready', dotClass: 'bg-sky-500' };
     }
   };
 
@@ -350,26 +346,33 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
       <CurrentModelHero
         model={liveActiveModel}
         isModelLoading={isModelLoading}
-        onLoad={() => handleActivateModel(activeModelId)}
+        onLoad={() => handleActivateModel(currentSelectedModel.id)}
         onUnload={handleUnloadModel}
         onOpenDetails={handleOpenDetails}
-        idleCountdownSeconds={modelStatus?.seconds_until_unload}
+        idleCountdownSeconds={modelStatus?.seconds_until_idle}
         runtimeState={modelStatus?.runtime_state}
+        modelStatus={modelStatus}
+        activeModelId={backendActiveModelId}
       />
 
       {/* 3. Performance Profiles & VRAM Target (Tactile Grid) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Performance Profiles (Eco, Balanced, Maximum) */}
         <PerformanceProfileSelector
-          currentProfile={activeProfile}
+          requestedProfile={modelStatus?.requested_profile || activeProfile}
+          appliedProfile={modelStatus?.applied_profile ?? null}
+          appliedContextSize={modelStatus?.applied_context_size ?? null}
+          appliedGpuLayers={modelStatus?.applied_gpu_layers ?? null}
+          requestedMmprojOffload={modelStatus?.requested_mmproj_offload ?? (activeProfile !== 'eco')}
+          appliedMmprojOffload={modelStatus?.applied_mmproj_offload ?? null}
           onSelectProfile={handleProfileChange}
         />
 
-        {/* AI VRAM Target Slider (e.g. 2.5 GB / 8 GB UI-only) */}
+        {/* AI VRAM Target Slider (Informational Headroom Guide) */}
         <VramTargetSlider
           vramTargetGb={vramTargetGb}
           totalVramGb={8.0}
-          currentModelVramGb={currentModel.isCloud ? 0.0 : currentModel.vramUsageGb || 4.9}
+          currentModelVramGb={currentSelectedModel.isCloud ? 0.0 : currentSelectedModel.vramUsageGb || 4.5}
           onChangeVramTarget={setVramTargetGb}
         />
       </div>
@@ -396,8 +399,11 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
       {/* 6. Model Library Grid (Activate, Unload, Details) */}
       <ModelLibraryGrid
         models={liveModels}
-        currentModelId={activeModelId}
+        selectedModelId={selectedModelId}
+        activeModelId={backendActiveModelId}
+        modelStatus={modelStatus}
         providerFilter={providerFilter}
+        onSelectModel={handleSelectModel}
         onActivateModel={handleActivateModel}
         onUnloadModel={handleUnloadModel}
         onOpenDetails={handleOpenDetails}
@@ -411,7 +417,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
         model={selectedDetailsModel}
         isOpen={isDetailsOpen}
         onClose={() => setIsDetailsOpen(false)}
-        isActive={selectedDetailsModel?.id === activeModelId}
+        isActive={selectedDetailsModel?.id === backendActiveModelId}
         onActivate={handleActivateModel}
       />
     </div>

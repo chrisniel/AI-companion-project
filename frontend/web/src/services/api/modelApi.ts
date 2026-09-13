@@ -17,19 +17,42 @@ export type LLMRuntimeState =
 
 export interface ModelStatusResponse {
   provider: string;
-  is_loaded: boolean;
+  engine_version?: string | null;
+
+  // Router process state
+  router_running: boolean;
+  managed_by_core: boolean;
+  runtime_state: LLMRuntimeState;
+
+  // Model status & residency
   active_model: string | null;
-  active_profile: 'eco' | 'balanced' | 'maximum';
-  available_models: string[];
+  model_resident: boolean; // Physical VRAM compute residency (True ONLY when MODEL_READY)
+  model_loaded: boolean;   // Logical residency: worker exists, model registered (READY or SLEEPING)
+  model_awake: boolean;    // GPU/RAM compute readiness (True for READY, False for SLEEPING)
+
+  // Hardware profile & configurations: requested vs verified applied
+  requested_profile: string;
+  applied_profile: string | null;
+  applied_context_size: number | null;
+  applied_gpu_layers: number | null;
+  requested_mmproj_offload: boolean;
+  applied_mmproj_offload: boolean | null;
+
+  // Activity & diagnostics
+  generation_active: boolean;
+  last_runtime_error: string | null;
+
+  // Backward-compatibility fields (preserved for existing clients until Phase 4 reconciliation)
+  mmproj_offload: boolean;
+  is_loaded: boolean;
+  active_profile: string;
   context_size: number;
   gpu_layers: number;
   idle_timeout_seconds: number;
+  seconds_until_idle: number | null;
   seconds_until_unload: number | null;
-  seconds_until_idle?: number | null;
-  runtime_state?: LLMRuntimeState;
-  generation_active?: boolean;
-  managed_by_core?: boolean;
-  engine_version?: string | null;
+  available_models: string[];
+  available_registry?: string[] | null;
 }
 
 export async function getModelStatus(): Promise<ModelStatusResponse> {

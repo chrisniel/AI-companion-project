@@ -1,15 +1,16 @@
 <#
 .SYNOPSIS
-    Starts the local llama.cpp model server with Vulkan GPU offload for AMD RX 580.
+    Starts a standalone diagnostic llama.cpp model server for testing (Isolated from Core port 8085).
 .DESCRIPTION
-    Launches llama-server.exe targeting the downloaded GGUF model in models/
-    using Vulkan acceleration on the AMD Radeon RX 580 (Section 11-13).
+    Diagnostic probe utility. Launches llama-server.exe targeting models in models/vision
+    using Vulkan acceleration on the AMD Radeon RX 580.
+    Default port is 8086 to prevent collision with FastAPI Core's production router on port 8085.
 #>
 
 [CmdletBinding()]
 param (
-    [string]$ModelFile = "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
-    [int]$Port = 8080,
+    [string]$ModelDir = "models\vision",
+    [int]$Port = 8086,
     [int]$GpuLayers = 28,
     [int]$ContextSize = 4096,
     [int]$Threads = 6
@@ -19,34 +20,37 @@ $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent $ScriptDir
-$ServerExe = Join-Path $ProjectRoot "bin\llama-server.exe"
-$ModelPath = Join-Path $ProjectRoot "models\$ModelFile"
+$ServerExe = Join-Path $ProjectRoot "runtime\llama.cpp\llama-server.exe"
+$FullModelDir = Join-Path $ProjectRoot $ModelDir
 
 if (-not (Test-Path $ServerExe)) {
-    Write-Error "llama-server.exe not found at $ServerExe. Please ensure bin/ contains llama-server."
+    Write-Error "llama-server.exe not found at $ServerExe. Please ensure runtime/llama.cpp/ contains llama.cpp binaries."
     exit 1
 }
 
-if (-not (Test-Path $ModelPath)) {
-    # Check if any .gguf exists in models/
-    $Fallback = Get-ChildItem -Path (Join-Path $ProjectRoot "models") -Filter "*.gguf" | Where-Object { $_.Name -ne "lfs-test.gguf" -and $_.Length -gt 100MB } | Select-Object -First 1
-    if ($Fallback) {
-        $ModelPath = $Fallback.FullName
-        Write-Host "Default model not found; using detected model: $($Fallback.Name)" -ForegroundColor Yellow
-    } else {
-        Write-Error "No model found at $ModelPath. Please place your .gguf file into models/."
+if (-not (Test-Path $FullModelDir)) {
+    Write-Error "Model directory not found at $FullModelDir."
+    exit 1
+}
+
+# Production collision guard: Do not hijack port 8085
+if ($Port -eq 8085) {
+    $occupied = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -eq 8085 }
+    if ($occupied) {
+        Write-Error "Port 8085 is currently occupied by FastAPI Core production router. Standalone diagnostic probes must use port 8086 (or another unassigned port) to prevent dual-process collision."
         exit 1
     }
 }
 
 Write-Host "=================================================" -ForegroundColor Cyan
-Write-Host " Starting Local AI Model Server (Track B4)       " -ForegroundColor Cyan
+Write-Host " Diagnostic Standalone Router Probe (AMD RX 580) " -ForegroundColor Cyan
 Write-Host "=================================================" -ForegroundColor Cyan
-Write-Host " Model:       $ModelPath" -ForegroundColor White
-Write-Host " GPU Offload: $GpuLayers layers to Vulkan0 (AMD RX 580)" -ForegroundColor Green
+Write-Host " Models Dir:  $FullModelDir" -ForegroundColor White
+Write-Host " Port:        $Port (Isolated diagnostic port)" -ForegroundColor Green
+Write-Host " GPU Offload: $GpuLayers layers to Vulkan (AMD RX 580)" -ForegroundColor Green
 Write-Host " Context:     $ContextSize tokens" -ForegroundColor White
 Write-Host " Endpoint:    http://127.0.0.1:$Port/v1" -ForegroundColor Green
 Write-Host "=================================================" -ForegroundColor Cyan
-Write-Host "Press Ctrl+C to stop the model server.`n" -ForegroundColor DarkGray
+Write-Host "Press Ctrl+C to stop the diagnostic server.`n" -ForegroundColor DarkGray
 
-& $ServerExe -m $ModelPath --port $Port -ngl $GpuLayers -c $ContextSize -t $Threads --host 127.0.0.1
+& $ServerExe --models-dir $FullModelDir --port $Port -ngl $GpuLayers -c $ContextSize -t $Threads --host 127.0.0.1 --models-max 1 --no-webui

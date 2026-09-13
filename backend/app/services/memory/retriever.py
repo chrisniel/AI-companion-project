@@ -38,7 +38,7 @@ async def search_relevant_memories(
         return []
 
     sql = text("""
-        SELECT m.id, m.created_at, m.updated_at, m.deleted_at, m.owner_id,
+        SELECT m.id, m.created_at, m.updated_at, m.deleted_at, m.is_deleted, m.owner_id,
                m.category, m.content, m.importance, m.source_type,
                m.source_message_id, m.user_verified
         FROM memories m

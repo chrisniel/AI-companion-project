@@ -44,7 +44,7 @@ export interface StreamMessageOptions {
   signal?: AbortSignal;
   onToken: (token: string) => void;
   onDone: () => void;
-  onError: (error: Error) => void;
+  onError: (error: Error, partialText?: string) => void;
 }
 
 export async function createConversation(title?: string, characterId?: string): Promise<ConversationOut> {
@@ -106,6 +106,9 @@ export async function streamSendMessage({
     headers['Authorization'] = `Bearer ${apiKey}`;
   }
 
+  let accumulatedText = '';
+  let receivedTerminalEvent = false;
+
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -159,21 +162,56 @@ export async function streamSendMessage({
         if (trimmed.startsWith('data:')) {
           const payload = trimmed.slice(5).trim();
           if (payload === '[DONE]') {
+            receivedTerminalEvent = true;
             onDone();
             return;
           }
 
           try {
             const parsed = JSON.parse(payload);
-            const delta = parsed.choices?.[0]?.delta?.content;
-            if (delta) {
-              onToken(delta);
+            if (parsed.type === 'done') {
+              receivedTerminalEvent = true;
+              onDone();
+              return;
             }
-          } catch {
-            // Partial JSON chunk or heartbeat
+            if (parsed.type === 'error') {
+              receivedTerminalEvent = true;
+              const err = new ApiError({
+                code: parsed.code || 'MODEL_GENERATION_FAILED',
+                message: parsed.message || 'Model generation failed.',
+                status: 500,
+              });
+              onError(err, accumulatedText);
+              return;
+            }
+            if (parsed.type === 'heartbeat') {
+              continue;
+            }
+
+            const token = parsed.content ?? parsed.choices?.[0]?.delta?.content;
+            if (token) {
+              accumulatedText += token;
+              onToken(token);
+            }
+          } catch (parseErr) {
+            console.warn('Unable to parse SSE chunk payload:', payload, parseErr);
           }
         }
       }
+    }
+
+    if (!receivedTerminalEvent) {
+      if (signal?.aborted) {
+        onDone();
+        return;
+      }
+      const eofErr = new ApiError({
+        code: 'STREAM_TERMINATED',
+        message: 'STREAM_TERMINATED: Stream ended abruptly before explicit completion.',
+        status: 500,
+      });
+      onError(eofErr, accumulatedText);
+      return;
     }
 
     onDone();
@@ -183,6 +221,6 @@ export async function streamSendMessage({
       return;
     }
     const errorObj = err instanceof Error ? err : new Error(String(err));
-    onError(errorObj);
+    onError(errorObj, accumulatedText);
   }
 }

@@ -158,3 +158,39 @@ async def test_conversation_concurrency_lock_busy(client: AsyncClient, auth_head
         assert "CONVERSATION_BUSY" in resp.text
     finally:
         lock.release()
+
+
+@pytest.mark.anyio
+async def test_soft_delete_and_is_deleted_schema_integrity(client: AsyncClient, auth_headers: dict, test_session):
+    """
+    Regression Test:
+    Verify that conversations, messages, and memories have is_deleted column
+    and SoftDeleteMixin operates without OperationalError: no such column: conversations.is_deleted.
+    """
+    from sqlalchemy import select
+    from app.models.conversation import Conversation
+    from app.models.message import Message
+
+    # 1. Create conversation
+    create_resp = await client.post("/api/v1/conversations", json={"title": "Schema Integrity Test"}, headers=auth_headers)
+    assert create_resp.status_code == 201
+    conv_id = create_resp.json()["id"]
+
+    # 2. Query ORM directly to verify is_deleted column selection
+    conv_stmt = select(Conversation).where(Conversation.id == conv_id)
+    conv_res = await test_session.execute(conv_stmt)
+    conv = conv_res.scalar_one()
+    assert conv.is_deleted is False
+    assert conv.deleted_at is None
+
+    # 3. Soft delete conversation and verify is_deleted flag
+    del_resp = await client.delete(f"/api/v1/conversations/{conv_id}", headers=auth_headers)
+    assert del_resp.status_code == 204
+
+    # Refresh session to check soft delete state
+    test_session.expire_all()
+    conv_after_res = await test_session.execute(conv_stmt)
+    conv_after = conv_after_res.scalar_one()
+    assert conv_after.is_deleted is True
+    assert conv_after.deleted_at is not None
+

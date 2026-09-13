@@ -37,20 +37,20 @@ export const VramTargetSlider: React.FC<VramTargetSliderProps> = ({
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-sm sm:text-base font-semibold text-[var(--color-text-primary)]">
-              AI VRAM Target
+              VRAM Headroom Planning Guide
             </h2>
-            <Badge variant="accent" size="sm">
-              GPU Memory Budget
+            <Badge variant="default" size="sm">
+              Informational Guide
             </Badge>
           </div>
           <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
-            Controls maximum dedicated VRAM reserved for local model weights and KV tensor cache.
+            Non-authoritative headroom estimate. Real VRAM allocation is governed by the active Performance Profile and model weights, not a hard VRAM ceiling.
           </p>
         </div>
 
         {/* Big tactile readout */}
         <div className="flex items-baseline gap-1.5 px-3 py-1.5 rounded-xl surface-recessed border border-[var(--color-border-subtle)] self-start sm:self-auto font-mono">
-          <span className="text-xs text-[var(--color-text-muted)]">Target:</span>
+          <span className="text-xs text-[var(--color-text-muted)]">Estimated Target:</span>
           <span className="text-base font-bold text-[var(--color-accent)]">
             {vramTargetGb.toFixed(1)} GB
           </span>
@@ -182,7 +182,7 @@ export const VramTargetSlider: React.FC<VramTargetSliderProps> = ({
         </div>
 
         <span className="text-[11px] text-[var(--color-text-muted)] italic">
-          UI-only hardware simulation • No driver changes applied
+          Non-authoritative resource guide • Real VRAM managed by Profile & Engine
         </span>
       </div>
     </Card>

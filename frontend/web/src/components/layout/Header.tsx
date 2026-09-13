@@ -35,7 +35,6 @@ import {
   DesktopSimulationPreset,
 } from './DesktopSizeSelector';
 import {
-  mockLocalModels,
   mockAssistantPersonas,
   mockNotifications,
 } from '../../mock/localAiData';
@@ -66,7 +65,7 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleSidebarCollapse,
   assistantPanelMode,
   onCycleAssistantPanelMode,
-  currentModelId = 'm-1',
+  currentModelId = 'qwen3-vl-2b-instruct',
   onSelectModel,
   activeCharacterId = 'p-1',
   onSelectCharacter,
@@ -78,15 +77,35 @@ export const Header: React.FC<HeaderProps> = ({
   actualWidth = 1440,
 }) => {
   const { mode, toggleTheme, accent, setAccent, currentAccentPreset } = useTheme();
-  const { isOnline, modelStatus } = useBackend();
+  const { isOnline, modelStatus, isModelLoading, loadModel, changeProfile, registry } = useBackend();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState(mockNotifications);
+  const [switchingModelId, setSwitchingModelId] = useState<string | null>(null);
 
-  const activeModel =
-    mockLocalModels.find((m) => m.id === currentModelId) || mockLocalModels[0];
-  const activeModelLabel = modelStatus?.active_model
-    ? modelStatus.active_model.replace('.gguf', '')
-    : (modelStatus?.available_models?.[0]?.replace('.gguf', '') || activeModel.name);
+  const isLoaded = Boolean(isOnline && modelStatus?.model_loaded && modelStatus?.active_model);
+  const isSleeping = isLoaded && modelStatus?.runtime_state === 'MODEL_SLEEPING';
+  const backendActiveModelId = isLoaded ? (modelStatus?.active_model ?? null) : null;
+
+  const activeRegistryEntry = backendActiveModelId
+    ? registry.find((e) => e.id === backendActiveModelId)
+    : null;
+  const activeDisplayName = activeRegistryEntry?.display_name || backendActiveModelId;
+
+  let activeModelLabel = 'Router Offline';
+  if (!isOnline) {
+    activeModelLabel = 'Core Offline';
+  } else if (modelStatus?.runtime_state === 'SERVER_STOPPED') {
+    activeModelLabel = 'Router Offline';
+  } else if (modelStatus?.runtime_state === 'MODEL_LOADING' || isModelLoading) {
+    activeModelLabel = switchingModelId ? `Loading ${switchingModelId}...` : 'Loading...';
+  } else if (modelStatus?.runtime_state === 'MODEL_UNLOADED' || !backendActiveModelId) {
+    activeModelLabel = 'No Model Loaded';
+  } else if (isLoaded) {
+    activeModelLabel = isSleeping
+      ? `${activeDisplayName} (Sleeping)`
+      : `${activeDisplayName}`;
+  }
+
   const activePersona =
     mockAssistantPersonas.find((p) => p.id === activeCharacterId) ||
     mockAssistantPersonas[0];
@@ -97,14 +116,45 @@ export const Header: React.FC<HeaderProps> = ({
     setNotifications(notifications.map((n) => ({ ...n, read: true })));
   };
 
-  // Model options for dropdown
-  const modelOptions = mockLocalModels.map((m) => ({
-    id: m.id,
-    label: m.name,
-    badge: m.status === 'loaded' ? 'VRAM' : 'Disk',
-    icon: <Cpu className="w-3.5 h-3.5 text-[var(--color-accent)]" />,
-    onClick: () => onSelectModel?.(m.id),
-  }));
+  // Model options for dropdown — strictly populated from verified installed registry
+  const modelOptions = registry.map((entry) => {
+    let badge = 'Disk';
+    if (!isOnline) {
+      badge = 'Disk';
+    } else if (isModelLoading && switchingModelId === entry.id) {
+      badge = 'Loading';
+    } else if (backendActiveModelId === entry.id) {
+      if (isSleeping) {
+        badge = 'Sleeping';
+      } else if (modelStatus?.runtime_state === 'MODEL_ERROR') {
+        badge = 'Error';
+      } else {
+        badge = 'Loaded';
+      }
+    }
+
+    return {
+      id: entry.id,
+      label: entry.display_name || entry.id,
+      badge,
+      icon: <Cpu className="w-3.5 h-3.5 text-[var(--color-accent)]" />,
+      onClick: async () => {
+        onSelectModel?.(entry.id);
+        if (!isOnline) return;
+        if (backendActiveModelId === entry.id && modelStatus?.runtime_state === 'MODEL_READY') {
+          return;
+        }
+        try {
+          setSwitchingModelId(entry.id);
+          await loadModel(entry.id);
+        } catch {
+          // Handled in backend context
+        } finally {
+          setSwitchingModelId(null);
+        }
+      },
+    };
+  });
 
   // Character options for dropdown
   const characterOptions = mockAssistantPersonas.map((p) => ({
@@ -115,28 +165,58 @@ export const Header: React.FC<HeaderProps> = ({
     onClick: () => onSelectCharacter?.(p.id),
   }));
 
-  // Performance profile options
+  // Performance Profile options & truthfulness
+  const requestedProfile = (modelStatus?.requested_profile as PerformanceProfile | undefined) || performanceProfile || 'balanced';
+  const appliedProfile = (isOnline && modelStatus?.router_running) ? (modelStatus?.applied_profile as PerformanceProfile | null) : null;
+
   const profileOptions = [
     {
       id: 'maximum',
       label: 'Maximum (Max AI)',
-      badge: 'High Power',
+      badge: appliedProfile === 'maximum' ? 'Applied' : requestedProfile === 'maximum' ? 'Requested' : undefined,
       icon: <Zap className="w-3.5 h-3.5 text-amber-500" />,
-      onClick: () => onChangePerformanceProfile?.('maximum'),
+      onClick: async () => {
+        onChangePerformanceProfile?.('maximum');
+        if (isOnline) {
+          try {
+            await changeProfile('maximum');
+          } catch {
+            // Handled in backend context
+          }
+        }
+      },
     },
     {
       id: 'balanced',
       label: 'Balanced Profile',
-      badge: 'Optimal',
+      badge: appliedProfile === 'balanced' ? 'Applied' : requestedProfile === 'balanced' ? 'Requested' : undefined,
       icon: <Gauge className="w-3.5 h-3.5 text-[var(--color-accent)]" />,
-      onClick: () => onChangePerformanceProfile?.('balanced'),
+      onClick: async () => {
+        onChangePerformanceProfile?.('balanced');
+        if (isOnline) {
+          try {
+            await changeProfile('balanced');
+          } catch {
+            // Handled in backend context
+          }
+        }
+      },
     },
     {
       id: 'eco',
       label: 'Eco Profile',
-      badge: 'Cool & Quiet',
+      badge: appliedProfile === 'eco' ? 'Applied' : requestedProfile === 'eco' ? 'Requested' : undefined,
       icon: <Leaf className="w-3.5 h-3.5 text-emerald-500" />,
-      onClick: () => onChangePerformanceProfile?.('eco'),
+      onClick: async () => {
+        onChangePerformanceProfile?.('eco');
+        if (isOnline) {
+          try {
+            await changeProfile('eco');
+          } catch {
+            // Handled in backend context
+          }
+        }
+      },
     },
   ];
 
@@ -225,15 +305,31 @@ export const Header: React.FC<HeaderProps> = ({
             trigger={
               <button
                 type="button"
-                className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-xl surface-raised border border-[var(--color-border-subtle)] hover:border-[var(--color-accent)]/40 transition-all text-xs text-[var(--color-text-primary)] capitalize"
-                title="Performance Profile"
+                className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-xl surface-raised border border-[var(--color-border-subtle)] hover:border-[var(--color-accent)]/40 transition-all text-xs text-[var(--color-text-primary)]"
+                title={
+                  !isOnline
+                    ? `Profile: ${requestedProfile} (Core Offline — Requested only)`
+                    : appliedProfile
+                    ? `Profile: ${appliedProfile} [Applied]`
+                    : `Profile: ${requestedProfile} (Pending application)`
+                }
               >
-                {performanceProfile === 'turbo' && <Zap className="w-3.5 h-3.5 text-amber-500" />}
-                {performanceProfile === 'balanced' && (
+                {requestedProfile === 'turbo' && <Zap className="w-3.5 h-3.5 text-amber-500" />}
+                {requestedProfile === 'maximum' && <Zap className="w-3.5 h-3.5 text-amber-500" />}
+                {requestedProfile === 'balanced' && (
                   <Gauge className="w-3.5 h-3.5 text-[var(--color-accent)]" />
                 )}
-                {performanceProfile === 'eco' && <Leaf className="w-3.5 h-3.5 text-emerald-500" />}
-                <span className="font-medium">{performanceProfile}</span>
+                {requestedProfile === 'eco' && <Leaf className="w-3.5 h-3.5 text-emerald-500" />}
+                <span className="font-medium capitalize">{requestedProfile}</span>
+                <span className={`text-[10px] font-mono px-1 py-0.5 rounded ${
+                  !isOnline
+                    ? 'text-[var(--color-text-muted)] bg-[var(--color-surface-secondary)]'
+                    : appliedProfile
+                    ? 'text-emerald-400 bg-emerald-500/10'
+                    : 'text-amber-400 bg-amber-500/10'
+                }`}>
+                  {!isOnline ? 'Requested' : appliedProfile ? 'Applied' : 'Pending'}
+                </span>
                 <ChevronDown className="w-3 h-3 text-[var(--color-text-muted)]" />
               </button>
             }
@@ -256,8 +352,8 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-xl surface-recessed border border-[var(--color-border-subtle)] text-[11px] font-mono">
             <Cpu className="w-3.5 h-3.5 text-[var(--color-accent)]" />
             <span className="text-[var(--color-text-secondary)]">VRAM:</span>
-            <span className={`font-semibold ${modelStatus?.is_loaded ? 'text-emerald-400' : 'text-[var(--color-text-muted)]'}`}>
-              {modelStatus?.is_loaded ? 'Loaded' : 'Free (0 MB)'}
+            <span className={`font-semibold ${modelStatus?.model_resident ? 'text-emerald-400' : isSleeping ? 'text-purple-400' : 'text-[var(--color-text-muted)]'}`}>
+              {modelStatus?.model_resident ? 'Active (Loaded)' : isSleeping ? 'Sleeping (Released)' : 'Free (0 MB)'}
             </span>
           </div>
 

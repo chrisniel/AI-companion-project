@@ -68,46 +68,54 @@ export const AdvancedRuntimeSettings: React.FC = () => {
       {/* Expandable Body */}
       {isOpen && (
         <div className="p-4 sm:p-6 border-t border-[var(--color-border-subtle)] space-y-5 bg-[var(--color-surface-recessed)]/30">
+          <div className="p-3.5 rounded-xl surface-base border border-amber-500/30 bg-amber-500/5 text-xs text-[var(--color-text-secondary)] flex items-start gap-2.5">
+            <Info className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <span className="font-semibold text-[var(--color-text-primary)] block">
+                Profile-Managed Runtime Parameters
+              </span>
+              <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 leading-relaxed">
+                The parameters below are governed automatically by the active backend Performance Profile (Eco / Balanced / Maximum) upon router launch. Interactive controls are disabled to prevent state drift and preserve runtime stability.
+              </p>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* 1. GPU Layers Offload */}
-            <div className="p-4 rounded-2xl surface-base border border-[var(--color-border-subtle)] space-y-2.5">
+            <div className="p-4 rounded-2xl surface-base border border-[var(--color-border-subtle)] opacity-85 space-y-2.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-semibold text-[var(--color-text-primary)] flex items-center gap-1.5">
                   <Cpu className="w-3.5 h-3.5 text-[var(--color-accent)]" />
                   GPU Layer Offloading
                 </span>
-                <span className="font-mono text-[var(--color-accent)] font-bold">
-                  {gpuLayers} / 33 layers
-                </span>
+                <Badge variant="default" size="sm">Profile-Managed</Badge>
               </div>
               <p className="text-[11px] text-[var(--color-text-muted)]">
-                Number of transformer weight layers loaded onto CUDA cores rather than CPU RAM.
+                Number of transformer weight layers loaded onto GPU compute units (Vulkan) rather than CPU RAM.
               </p>
               <input
                 type="range"
                 min={0}
                 max={33}
                 value={gpuLayers}
-                onChange={(e) => setGpuLayers(Number(e.target.value))}
-                className="w-full accent-[var(--color-accent)] cursor-pointer"
+                disabled
+                className="w-full accent-[var(--color-accent)] opacity-60 cursor-not-allowed"
               />
               <div className="flex items-center justify-between text-[10px] text-[var(--color-text-muted)] font-mono">
-                <span>0 (CPU Only)</span>
-                <span>16 (Hybrid)</span>
-                <span>33 (Full VRAM)</span>
+                <span>0 (Eco: CPU)</span>
+                <span>28 (Balanced: GPU)</span>
+                <span>33 (Maximum)</span>
               </div>
             </div>
 
             {/* 2. CPU Thread Allocation */}
-            <div className="p-4 rounded-2xl surface-base border border-[var(--color-border-subtle)] space-y-2.5">
+            <div className="p-4 rounded-2xl surface-base border border-[var(--color-border-subtle)] opacity-85 space-y-2.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-semibold text-[var(--color-text-primary)] flex items-center gap-1.5">
                   <Zap className="w-3.5 h-3.5 text-amber-500" />
                   CPU Ingestion Threads
                 </span>
-                <span className="font-mono text-[var(--color-accent)] font-bold">
-                  {cpuThreads} Threads
-                </span>
+                <Badge variant="default" size="sm">Profile-Managed</Badge>
               </div>
               <p className="text-[11px] text-[var(--color-text-muted)]">
                 Dedicated worker threads for initial prompt evaluation and tokenizer token ingestion.
@@ -118,35 +126,38 @@ export const AdvancedRuntimeSettings: React.FC = () => {
                 max={16}
                 step={2}
                 value={cpuThreads}
-                onChange={(e) => setCpuThreads(Number(e.target.value))}
-                className="w-full accent-[var(--color-accent)] cursor-pointer"
+                disabled
+                className="w-full accent-[var(--color-accent)] opacity-60 cursor-not-allowed"
               />
               <div className="flex items-center justify-between text-[10px] text-[var(--color-text-muted)] font-mono">
-                <span>2 Threads (Eco)</span>
-                <span>8 Threads (Optimal)</span>
-                <span>16 Threads (Max)</span>
+                <span>4 Threads (Eco)</span>
+                <span>6 Threads (Balanced)</span>
+                <span>8 Threads (Maximum)</span>
               </div>
             </div>
 
             {/* 3. KV Cache Quantization */}
-            <div className="p-4 rounded-2xl surface-base border border-[var(--color-border-subtle)] space-y-2.5">
-              <span className="font-semibold text-xs text-[var(--color-text-primary)] flex items-center gap-1.5">
-                <Layers className="w-3.5 h-3.5 text-indigo-400" />
-                KV Cache Precision
-              </span>
+            <div className="p-4 rounded-2xl surface-base border border-[var(--color-border-subtle)] opacity-85 space-y-2.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-xs text-[var(--color-text-primary)] flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-indigo-400" />
+                  KV Cache Precision
+                </span>
+                <Badge variant="default" size="sm">Profile-Managed</Badge>
+              </div>
               <p className="text-[11px] text-[var(--color-text-muted)]">
-                Compresses conversational context memory buffer to dramatically reduce VRAM spikes.
+                Context memory buffer allocation managed dynamically by the runtime engine.
               </p>
               <div className="grid grid-cols-3 gap-2 pt-1 font-mono text-xs">
                 {(['fp16', 'q8_0', 'q4_0'] as const).map((q) => (
                   <button
                     key={q}
                     type="button"
-                    onClick={() => setKvCacheQuant(q)}
-                    className={`py-1.5 px-2 rounded-xl text-center transition-all ${
+                    disabled
+                    className={`py-1.5 px-2 rounded-xl text-center cursor-not-allowed opacity-70 ${
                       kvCacheQuant === q
                         ? 'surface-raised font-bold text-[var(--color-accent)] border border-[var(--color-accent)]/50 shadow-sm'
-                        : 'surface-recessed text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
+                        : 'surface-recessed text-[var(--color-text-secondary)]'
                     }`}
                   >
                     {q.toUpperCase()}
@@ -156,24 +167,27 @@ export const AdvancedRuntimeSettings: React.FC = () => {
             </div>
 
             {/* 4. Batch Size */}
-            <div className="p-4 rounded-2xl surface-base border border-[var(--color-border-subtle)] space-y-2.5">
-              <span className="font-semibold text-xs text-[var(--color-text-primary)] flex items-center gap-1.5">
-                <HardDrive className="w-3.5 h-3.5 text-teal-400" />
-                Prompt Evaluation Batch Size
-              </span>
+            <div className="p-4 rounded-2xl surface-base border border-[var(--color-border-subtle)] opacity-85 space-y-2.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-xs text-[var(--color-text-primary)] flex items-center gap-1.5">
+                  <HardDrive className="w-3.5 h-3.5 text-teal-400" />
+                  Prompt Evaluation Batch Size
+                </span>
+                <Badge variant="default" size="sm">Profile-Managed</Badge>
+              </div>
               <p className="text-[11px] text-[var(--color-text-muted)]">
-                Parallel token chunking size for processing long document inputs and system prompt preambles.
+                Parallel token chunking size configured by llama.cpp runtime presets.
               </p>
               <div className="grid grid-cols-3 gap-2 pt-1 font-mono text-xs">
                 {(['512', '1024', '2048'] as const).map((b) => (
                   <button
                     key={b}
                     type="button"
-                    onClick={() => setBatchSize(b)}
-                    className={`py-1.5 px-2 rounded-xl text-center transition-all ${
+                    disabled
+                    className={`py-1.5 px-2 rounded-xl text-center cursor-not-allowed opacity-70 ${
                       batchSize === b
                         ? 'surface-raised font-bold text-[var(--color-accent)] border border-[var(--color-accent)]/50 shadow-sm'
-                        : 'surface-recessed text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
+                        : 'surface-recessed text-[var(--color-text-secondary)]'
                     }`}
                   >
                     {b} Tokens
@@ -185,45 +199,35 @@ export const AdvancedRuntimeSettings: React.FC = () => {
 
           {/* Additional Toggles */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2 border-t border-[var(--color-border-subtle)]">
-            <div className="p-3 rounded-xl surface-base border border-[var(--color-border-subtle)] flex items-center justify-between">
+            <div className="p-3 rounded-xl surface-base border border-[var(--color-border-subtle)] opacity-85 flex items-center justify-between">
               <div>
                 <span className="text-xs font-semibold text-[var(--color-text-primary)] block">
-                  Flash Attention 2 Kernel
+                  Flash Attention Kernel
                 </span>
                 <span className="text-[11px] text-[var(--color-text-muted)]">
-                  Accelerate attention calculation via fused GPU operations.
+                  Accelerated attention via Vulkan compute shaders (Engine default).
                 </span>
               </div>
-              <Toggle
-                id="toggle-flash-attention"
-                checked={flashAttention}
-                onChange={setFlashAttention}
-                size="sm"
-              />
+              <Badge variant="default" size="sm">Auto</Badge>
             </div>
 
-            <div className="p-3 rounded-xl surface-base border border-[var(--color-border-subtle)] flex items-center justify-between">
+            <div className="p-3 rounded-xl surface-base border border-[var(--color-border-subtle)] opacity-85 flex items-center justify-between">
               <div>
                 <span className="text-xs font-semibold text-[var(--color-text-primary)] block">
                   Context Shift & Sliding Window
                 </span>
                 <span className="text-[11px] text-[var(--color-text-muted)]">
-                  Discard oldest message tokens smoothly when hitting window cap.
+                  Smooth context eviction when approaching window boundary.
                 </span>
               </div>
-              <Toggle
-                id="toggle-context-shift"
-                checked={contextShift}
-                onChange={setContextShift}
-                size="sm"
-              />
+              <Badge variant="default" size="sm">Auto</Badge>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-[11px] text-[var(--color-text-muted)] pt-1 italic">
+          <div className="flex items-center gap-2 text-[11px] text-[var(--color-text-muted)] pt-1">
             <Info className="w-3.5 h-3.5 text-[var(--color-accent)] flex-shrink-0" />
             <span>
-              Changes will be staged into ~/.config/local-ai-core/engine.json and applied upon the next model reload cycle.
+              Hardware flags are configured truthfully by Core and logged upon every router process invocation.
             </span>
           </div>
         </div>

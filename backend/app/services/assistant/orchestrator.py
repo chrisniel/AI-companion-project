@@ -238,12 +238,14 @@ async def orchestrate_chat_stream(
         async for token in provider.generate_stream(prompt_messages):
             full_response_text += token
             chunk_data = json.dumps({
+                "type": "token",
+                "content": token,
                 "choices": [
                     {
                         "delta": {"content": token},
                         "index": 0,
                     }
-                ]
+                ],
             })
             yield f"data: {chunk_data}\n\n"
 
@@ -256,19 +258,43 @@ async def orchestrate_chat_stream(
         asst_msg.model_name = status.active_model
         await db.commit()
 
+        done_data = json.dumps({
+            "type": "done",
+            "finish_reason": "stop",
+        })
+        yield f"data: {done_data}\n\n"
         yield "data: [DONE]\n\n"
 
     except asyncio.CancelledError:
+        logger.info(f"Generation cancelled for conversation {conversation_id}")
         if asst_msg:
             asst_msg.status = "cancelled"
-            await db.commit()
+            if full_response_text:
+                asst_msg.content = full_response_text
+            try:
+                await db.commit()
+            except Exception as db_err:
+                logger.warning(f"Failed to commit cancellation status: {db_err}")
+                await db.rollback()
         raise
     except Exception as exc:
         logger.error(f"Error during assistant orchestration stream: {exc}")
         if asst_msg:
             asst_msg.status = "failed"
-            await db.commit()
-        raise
+            if full_response_text:
+                asst_msg.content = full_response_text
+            try:
+                await db.commit()
+            except Exception as db_err:
+                logger.warning(f"Failed to commit failure status: {db_err}")
+                await db.rollback()
+        error_payload = json.dumps({
+            "type": "error",
+            "code": "MODEL_GENERATION_FAILED",
+            "message": "Model generation encountered an unexpected failure.",
+        })
+        yield f"data: {error_payload}\n\n"
+        return
     finally:
         provider._generation_active = False
         if lock.locked():

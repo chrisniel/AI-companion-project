@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ThemeProvider } from './context/ThemeContext';
-import { BackendProvider } from './context/BackendContext';
+import { BackendProvider, useBackend } from './context/BackendContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { AssistantPanel } from './components/layout/AssistantPanel';
@@ -21,17 +21,34 @@ import { LogsView } from './components/workspace/LogsView';
 import { SettingsView } from './components/workspace/SettingsView';
 import { ApplicationStatesShowcase } from './components/workspace/states/ApplicationStatesShowcase';
 import { DesktopSimulationPreset } from './components/layout/DesktopSizeSelector';
+import { WorkspaceErrorBoundary } from './components/workspace/WorkspaceErrorBoundary';
 
 // Types & Mock Data
 import { AssistantPanelMode, AssistantState, PerformanceProfile } from './types';
-import { mockAssistantPersonas, mockLocalModels } from './mock/localAiData';
+import { mockAssistantPersonas } from './mock/localAiData';
 
 function MainApp() {
+  const { modelStatus } = useBackend();
   const [activeSection, setActiveSection] = useState('home');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [assistantPanelMode, setAssistantPanelMode] = useState<AssistantPanelMode>('expanded');
   const [searchQuery, setSearchQuery] = useState('');
-  const [currentModelId, setCurrentModelId] = useState('m-1');
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [hasHydratedInitialModel, setHasHydratedInitialModel] = useState(false);
+
+  // Authoritative backend active model
+  const backendActiveModelId = (modelStatus?.model_loaded && modelStatus?.active_model)
+    ? modelStatus.active_model
+    : null;
+
+  // On initial startup only: hydrate selectedModelId from backend activeModelId
+  useEffect(() => {
+    if (!hasHydratedInitialModel && backendActiveModelId) {
+      setSelectedModelId(backendActiveModelId);
+      setHasHydratedInitialModel(true);
+    }
+  }, [backendActiveModelId, hasHydratedInitialModel]);
+
   const [activeCharacterId, setActiveCharacterId] = useState('p-1');
   const [performanceProfile, setPerformanceProfile] = useState<PerformanceProfile>('balanced');
   const [assistantState, setAssistantState] = useState<AssistantState>('idle');
@@ -114,7 +131,7 @@ function MainApp() {
             assistantState={assistantState}
             onSetAssistantState={setAssistantState}
             currentModelName={
-              mockLocalModels.find((m) => m.id === currentModelId)?.name || 'Llama-3.1-8B-Instruct'
+              backendActiveModelId || selectedModelId || 'qwen3-vl-2b-instruct'
             }
           />
         );
@@ -129,8 +146,8 @@ function MainApp() {
       case 'models':
         return (
           <ModelsView
-            currentModelId={currentModelId}
-            onSelectModel={setCurrentModelId}
+            selectedModelId={selectedModelId}
+            onSelectModel={setSelectedModelId}
             performanceProfile={performanceProfile}
             onChangePerformanceProfile={setPerformanceProfile}
           />
@@ -211,8 +228,8 @@ function MainApp() {
           onToggleSidebarCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
           assistantPanelMode={assistantPanelMode}
           onCycleAssistantPanelMode={handleToggleAssistantPanel}
-          currentModelId={currentModelId}
-          onSelectModel={setCurrentModelId}
+          currentModelId={selectedModelId ?? undefined}
+          onSelectModel={setSelectedModelId}
           activeCharacterId={activeCharacterId}
           onSelectCharacter={setActiveCharacterId}
           performanceProfile={performanceProfile}
@@ -235,7 +252,9 @@ function MainApp() {
           {/* Scrollable Main Workspace Canvas */}
           <main className="flex-1 overflow-y-auto flex flex-col justify-between px-4 sm:px-8 py-6 sm:py-8 space-y-8 min-w-0">
             <div className="max-w-7xl w-full mx-auto space-y-8 flex-1">
-              {renderSection()}
+              <WorkspaceErrorBoundary onReset={() => setActiveSection('home')}>
+                {renderSection()}
+              </WorkspaceErrorBoundary>
             </div>
 
             {/* Persistent Global Assistant Composer (Overlayed only on Main menu views, with auto-hide on hover/focus) */}

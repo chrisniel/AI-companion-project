@@ -10,12 +10,16 @@ import {
   setApiBaseUrl as saveApiBaseUrl,
   getApiKey,
   setApiKey as saveApiKey,
+  fetchModelRegistry,
+  RegistryEntry,
+  DEFAULT_INSTALLED_REGISTRY,
 } from '../services/api';
 
 export interface BackendContextType {
   isOnline: boolean;
   modelStatus: ModelStatusResponse | null;
   isModelLoading: boolean;
+  registry: RegistryEntry[];
   apiUrl: string;
   setApiUrl: (url: string) => void;
   apiKey: string;
@@ -26,6 +30,7 @@ export interface BackendContextType {
   unloadModel: () => Promise<void>;
   changeProfile: (profile: 'eco' | 'balanced' | 'maximum') => Promise<void>;
   refreshStatus: () => Promise<void>;
+  refreshRegistry: () => Promise<void>;
 }
 
 const BackendContext = createContext<BackendContextType | undefined>(undefined);
@@ -34,6 +39,7 @@ export const BackendProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [isOnline, setIsOnline] = useState<boolean>(false);
   const [modelStatus, setModelStatus] = useState<ModelStatusResponse | null>(null);
   const [isModelLoading, setIsModelLoading] = useState<boolean>(false);
+  const [registry, setRegistry] = useState<RegistryEntry[]>(DEFAULT_INSTALLED_REGISTRY);
   const [apiUrlState, setApiUrlState] = useState<string>(getApiBaseUrl());
   const [apiKeyState, setApiKeyState] = useState<string>(getApiKey());
   const [lastError, setLastError] = useState<string | null>(null);
@@ -49,6 +55,17 @@ export const BackendProvider: React.FC<{ children: ReactNode }> = ({ children })
     saveApiKey(key);
     setApiKeyState(key);
   }, []);
+
+  const refreshRegistry = useCallback(async () => {
+    try {
+      const entries = await fetchModelRegistry(apiKeyState);
+      if (entries && entries.length > 0) {
+        setRegistry(entries);
+      }
+    } catch {
+      // Keep baseline installed registry
+    }
+  }, [apiKeyState]);
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -67,11 +84,21 @@ export const BackendProvider: React.FC<{ children: ReactNode }> = ({ children })
           setLastError('Authentication required. Configure pairing key in Settings.');
         }
       }
+
+      // 3. Model registry probe
+      try {
+        const entries = await fetchModelRegistry(apiKeyState);
+        if (entries && entries.length > 0) {
+          setRegistry(entries);
+        }
+      } catch {
+        // Keep baseline installed registry
+      }
     } catch {
       setIsOnline(false);
       setModelStatus(null);
     }
-  }, []);
+  }, [apiKeyState]);
 
   // Periodic heartbeat polling (every 5 seconds)
   useEffect(() => {
@@ -134,6 +161,7 @@ export const BackendProvider: React.FC<{ children: ReactNode }> = ({ children })
         isOnline,
         modelStatus,
         isModelLoading,
+        registry,
         apiUrl: apiUrlState,
         setApiUrl,
         apiKey: apiKeyState,
@@ -144,6 +172,7 @@ export const BackendProvider: React.FC<{ children: ReactNode }> = ({ children })
         unloadModel,
         changeProfile,
         refreshStatus,
+        refreshRegistry,
       }}
     >
       {children}
