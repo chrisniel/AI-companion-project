@@ -6,6 +6,63 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Verified & Benchmarked (2026-09-14 - Phase 7: Full PC Integration Verification & Benchmarking)
+
+- Cold-Boot & Database Integrity: Verified cold-boot baseline (0 llama processes, ports 8000/8085/3000 free, branch `feature/assistant-orchestration-and-memory`, migration head `005_scope_message_constraints`). Confirmed composite unique constraints `uq_messages_conversation_sequence` and `uq_messages_conversation_client_message_id`, verified removal of global uniqueness on `client_message_id`, soft-delete columns intact, and demonstrated expected downgrade limitation.
+- Topology & Process Management: Verified exact 1 root router :8085 + 1 model worker process topology under FastAPI/Python. Launch configurations verified: Balanced (`--ctx-size 4096 --n-gpu-layers 28 --threads 6`, GPU mmproj, port 8085) and Eco (`--ctx-size 2048 --n-gpu-layers 0 --threads 4 --no-mmproj-offload`).
+- Measured Resource Benchmarks: 
+  - 2B Balanced: Load 5.72s, baseline VRAM 1128.80 MB, loaded VRAM 3829.71 MB (+2700.91 MB delta), router RAM 41.90 MB, worker RAM 1447.76 MB, TTFT 0.962s, gen speed 32.22 tok/s.
+  - 2B Eco: Load 4.68s, baseline VRAM 1136.85 MB, loaded VRAM 1228.29 MB (+91.43 MB delta), router RAM 41.86 MB, worker RAM 2189.92 MB, TTFT 1.107s, gen speed 23.80 tok/s, verified CPU vision projector.
+  - 4B Balanced Smoke: Load 15.47s, baseline VRAM 1176.80 MB, loaded VRAM 4734.11 MB (+3557.31 MB delta), router RAM 41.86 MB, worker RAM 2968.51 MB, TTFT 1.115s, gen speed 16.26 tok/s, clean unload freed 3551.41 MB in 1.59s.
+- Assistant Lifecycle, Streaming & Recovery: Verified SSE chunk streaming with explicit terminal done, SQLite deterministic sequence numbering [1, 2, 3, 4], conversation rehydration, mid-stream cancellation with partial text preservation and immediate lock release (`generation_active=False`), and error recovery.
+- Native Sleep & Wake: Model transitioned to `MODEL_SLEEPING` on idle threshold releasing 2661.21 MB VRAM (down to 1160.20 MB) while worker RAM dropped from 1447.45 MB to 301.64 MB; request woke model in 4.11s (3.601s wake latency) restoring `MODEL_READY` without process duplication.
+- State Persistence & Clean Shutdown: Confirmed conversation history and model rehydration across Web UI and Core restarts. Clean shutdown verified 0 lingering processes, 0 open port listeners, and intact database tables (42 messages, 9 conversations). Automated test suites: 88 backend pytest tests, 38 frontend vitest tests, 0 tsc errors, and Vite production build passed.
+
+### Fixed & Enhanced (2026-09-13 - Pass 10: llama.cpp Router Model Discovery, Port 8085 Migration & Status Synchronization)
+
+- Router Discovery & Directory Depth: Pointed `llama-server` `--models-dir` directly to `models/vision` (`LLAMA_MODELS_DIR` in `backend/app/core/config.py`), enabling b10936 to automatically discover all 5 Qwen3-VL models and pair them with their `mmproj` companion projector artifacts.
+- Non-Conflicting Port Migration: Migrated `LLAMA_ROUTER_PORT` from `8080` to `8085` (`LLAMA_SERVER_URL = "http://127.0.0.1:8085/v1"`), permanently resolving port collisions with external web development projects.
+- Router Model ID Resolution: Added `runtime_model_id` to `ModelRegistryEntry` and `resolve_runtime_model_id()` helper, routing requests via model identifiers (`qwen3-vl-4b-instruct`) rather than raw filesystem paths. Included `"model"` parameter in `/v1/chat/completions` request payloads.
+- Provider Auto-Detection & Cold Boot Truthfulness: Replaced top-level `glob("*.gguf")` with recursive `rglob("*.gguf")` in `manager.py` (excluding `mmproj*` and `lfs-test*`) to properly engage `LlamaCppProvider` when weights reside in subfolders. Initialized `MockLLMProvider` with `_is_loaded = False` and `_active_model = None` on cold boot.
+- Live Router Residency & UI Synchronization: Refactored `LlamaCppProvider.get_status()` to parse router `/models` data array for verified `status.value == "loaded"` residency rather than guessing from disk. Replaced fuzzy `includes('Qwen')` matching in `ModelsView.tsx` with exact model ID matching and connected `liveModels` with per-model residency state to `ModelLibraryGrid`.
+- Verification: 56/56 pytest automated tests passing (3 new tests added in `test_model_registry.py`); frontend verified clean via `npm run build` (0 TypeScript/Vite errors); live smoke test executed on AMD RX 580 Vulkan offload on port 8085 with 100% success across discovery, load, chat generation, and clean unload.
+
+### Added & Enhanced (2026-09-13 - Pass 9: Dynamic Model Registry, Runtime Folder Separation & Per-Model Subdirectories - Track R2-lite)
+
+- Runtime Folder Separation: Renamed root-level engine binary folder `provider/` → `runtime/` (`runtime/llama.cpp/` and `runtime/whisper.cpp/`), clarifying the architectural distinction between external native inference daemons and backend Python provider adapters. Updated `backend/app/core/config.py` (`RUNTIME_DIR`, `LLAMA_CPP_BIN_DIR`) and `.gitignore`.
+- Per-Model Subdirectory Layout: Reorganized `models/vision/` into 5 clean per-model subdirectories (`qwen3-vl-2b-instruct`, `qwen3-vl-2b-thinking`, `qwen3-vl-4b-instruct`, `qwen3-vl-4b-thinking`, `qwen3-vl-8b-instruct`), collocating primary GGUF weights with their multimodal projector (`mmproj`) companion artifacts.
+- Dynamic Model Registry Service & Schema: Created `ModelRegistryEntry` schema (`app/schemas/model_registry.py`) and read-only `model_registry` service (`app/services/model_registry.py`) supporting hybrid discovery (registry enrichment + disk scanning). Committed `models/registry.template.json` and gitignored local `models/registry.json`. Added `GET /api/v1/models/registry` endpoint and `available_registry` field to `ModelStatusResponse`.
+- Safe Path Traversal & Model Loading: Refined path traversal verification in `LlamaCppProvider` to safely allow nested subfolder models within `MODELS_DIR` while strictly blocking directory-escape attempts (`..`, absolute paths).
+- Web Models View Dynamic Wiring: Connected `ModelsView.tsx` to `fetchModelRegistry()`, dynamically rendering discovered models in `ModelLibraryGrid` with `Instruct`, `Thinking 🧠`, and `⚠ mmproj missing` variant badges, capability icons, and eradicated hardcoded model name fallbacks.
+- Verification: 53/53 pytest tests passing (49 baseline + 4 registry unit/integration tests); frontend verified with `npm run build` (0 TypeScript/Vite errors).
+
+### Added & Enhanced (2026-09-13 - Pass 8: Assistant Orchestration, Persistent Conversations & FTS5 Memory - Track B5)
+
+- Persistent Conversations & Messages: Added `conversations` and `messages` tables with Alembic migration `003`. Implemented full CRUD, message history retrieval, and streaming SSE responses on `/api/v1/conversations`.
+- SQLite FTS5 Memory Engine: Created `memories` table with matching `memories_fts` FTS5 virtual table and synchronization triggers. Built `MemoryRetriever` service with query sanitization, FTS5 reserved keyword protection, and multi-language token support.
+- Assistant Orchestrator Service: Implemented `AssistantOrchestrator` managing token budgeting, persona configuration, per-conversation async locking (`_get_lock`), and strict trust framing wrapping retrieved memories in `<retrieved_memories>` as untrusted context.
+- Runtime Process Safety & 9-State Model: Upgraded `LlamaCppProvider` to native router API (`/models/load`, `/models/unload`), implemented PID-scoped termination, eradicated all blind `taskkill /IM llama-server.exe` calls, and added 9-state runtime lifecycle enum.
+- Web UI Persistence & 9-State Badges: Integrated `conversationApi` into `AssistantView.tsx` with auto-session loading, drawer history, and SSE message streaming. Updated `ModelsView.tsx` and `CurrentModelHero.tsx` with live 9-state runtime telemetry badges.
+- Verification: 49/49 pytest unit/integration tests passing (16 new tests, 0 regressions); frontend verified with `npm run build` (0 TypeScript/Vite errors).
+
+### Added & Enhanced (2026-09-13 - Pass 7: React Web Dashboard & Local AI Admin Controls - Track C2)
+
+- Web Admin VRAM Controls: Added `POST /api/v1/models/load`, `POST /api/v1/models/unload`, and `PATCH /api/v1/models/profile` endpoints. Integrated tactile single-click **[ Load to VRAM ]** and **[ Unload VRAM ]** buttons into `ModelsView` and `CurrentModelHero`, allowing instant release of ~5 GB GPU memory without terminal commands.
+- Windows Subprocess Reliability & Log Isolation: Switched `llama-server.exe` process spawning to `subprocess.Popen` to resolve Windows `NotImplementedError`, and relocated runtime logs outside `backend/` to root `data/llama_server.log` to prevent WatchFiles development auto-reload loops.
+- Live SSE Streaming Chat: Connected `AssistantView.tsx` to `POST /api/v1/chat/completions` with real-time token streaming (`text/event-stream`), auto-scrolling message view, unloaded model warning notice with quick-load action, and user-interruptible generation via `AbortController`.
+- Frontend API & Context Architecture: Created typed service layer in `frontend/web/src/services/api/` (`client.ts`, `healthApi.ts`, `modelApi.ts`, `chatApi.ts`) and `BackendContext.tsx` with 5-second health heartbeat polling and model telemetry.
+- Telemetry & Model Selection Parity: Decoupled model selection in `ModelsView.tsx` so selected library cards preserve true identity, and fixed `CurrentModelHero.tsx` to display accurate `0.0 GB VRAM`, `0 tokens in use`, and `Vulkan Offload (AMD RX 580)` when unloaded.
+- Verification: 33/33 backend pytest tests passing; frontend typecheck (`tsc --noEmit`) and Vite production bundle verified.
+
+### Added & Enhanced (2026-09-12 - Pass 6: Local LLM Runtime Integration - Track B4)
+
+- Abstract LLM Provider Architecture: Implemented `BaseLLMProvider` contract with `MockLLMProvider` (deterministic, instant testing engine) and `LlamaCppProvider` (dual-mode standalone `llama-server.exe` and in-process execution with AMD RX 580 VRAM offload).
+- Hardware Profiles (Section 13): Configured `Eco` (2048 ctx, low threads), `Balanced` (4096 ctx, 28 GPU layers on RX 580), and `Maximum` (8192 ctx, 33 layers) performance tiers.
+- Auto-Unload VRAM Lifecycle (Section 12): Added background activity monitor that automatically unloads model weights after 15 minutes (`LLM_IDLE_TIMEOUT_SECONDS = 900`) of inactivity, freeing VRAM for system and gaming.
+- OpenAI-Compatible Chat Completions: Added `POST /api/v1/chat/completions` supporting streaming Server-Sent Events (`text/event-stream`) and synchronous JSON fallback, plus `GET /api/v1/models` for status inspection.
+- Auto-Detection & Fallback: Added `LLMManager` singleton auto-detecting real GGUF weights in `models/` (>100 MB) and falling back gracefully to mock provider when weights are downloading.
+- Verification: Added 5 comprehensive tests in `backend/tests/test_llm.py` (31/31 backend tests passing, 124/124 Android tests passing, live SSE streaming verified).
+
 ### Added & Enhanced (2026-09-12 - Pass 5: Task Reminders, Categories, and Soft Deletion)
 
 - Task Categories & Reminders (Track B6): Added `category` (`general`, `work`, `personal`, `dev`, `shopping`, `health`) and reminder fields (`reminder_minutes_before`, `reminder_at`) to the SQLite `Task` model, Pydantic schemas, and API endpoints. Automatically calculates `reminder_at` timestamp from `due_date` and `reminder_minutes_before` during task creation and updates.

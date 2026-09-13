@@ -5,7 +5,13 @@ import { Badge } from '../../ui/Badge';
 import { PerformanceProfile } from '../../../types';
 
 interface PerformanceProfileSelectorProps {
-  currentProfile: PerformanceProfile;
+  currentProfile?: PerformanceProfile | string;
+  requestedProfile?: PerformanceProfile | string;
+  appliedProfile?: string | null;
+  appliedContextSize?: number | null;
+  appliedGpuLayers?: number | null;
+  requestedMmprojOffload?: boolean;
+  appliedMmprojOffload?: boolean | null;
   onSelectProfile: (profile: PerformanceProfile) => void;
 }
 
@@ -21,10 +27,19 @@ interface ProfileItem {
 
 export const PerformanceProfileSelector: React.FC<PerformanceProfileSelectorProps> = ({
   currentProfile,
+  requestedProfile: explicitRequestedProfile,
+  appliedProfile,
+  appliedContextSize,
+  appliedGpuLayers,
+  requestedMmprojOffload,
+  appliedMmprojOffload,
   onSelectProfile,
 }) => {
+  const reqProfile = (explicitRequestedProfile || currentProfile || 'balanced').toLowerCase();
   // Normalize 'turbo' to 'maximum' if passed
-  const activeId = currentProfile === 'turbo' ? 'maximum' : currentProfile;
+  const activeId = reqProfile === 'turbo' ? 'maximum' : reqProfile;
+
+  const isTransitionPending = appliedProfile === null || (appliedProfile !== undefined && appliedProfile !== null && appliedProfile.toLowerCase() !== reqProfile);
 
   const profiles: ProfileItem[] = [
     {
@@ -32,7 +47,7 @@ export const PerformanceProfileSelector: React.FC<PerformanceProfileSelectorProp
       name: 'Eco',
       tagline: 'Cool & Quiet',
       description: 'Prioritize resources for gaming/development.',
-      details: ['4 CPU threads', '2.0 GB VRAM target', 'Context capped to 4k'],
+      details: ['4 CPU threads', '0 GPU layers (CPU only)', 'Context capped to 2048', '--no-mmproj-offload'],
       icon: <Leaf className="w-5 h-5 text-emerald-500" />,
       accentColor: 'border-emerald-500/40 text-emerald-500',
     },
@@ -41,7 +56,7 @@ export const PerformanceProfileSelector: React.FC<PerformanceProfileSelectorProp
       name: 'Balanced',
       tagline: 'Standard Daily Operations',
       description: 'Normal assistant performance.',
-      details: ['8 CPU threads', '4.0 GB VRAM target', 'Standard context allocation'],
+      details: ['6 CPU threads', '28 GPU layers (AMD RX 580)', '4096 context tokens', 'GPU mmproj offload'],
       icon: <Gauge className="w-5 h-5 text-[var(--color-accent)]" />,
       accentColor: 'border-[var(--color-accent)]/40 text-[var(--color-accent)]',
     },
@@ -50,7 +65,7 @@ export const PerformanceProfileSelector: React.FC<PerformanceProfileSelectorProp
       name: 'Maximum',
       tagline: 'Full Neural Throughput',
       description: 'Prioritize AI performance.',
-      details: ['All GPU layers offloaded', '12 CPU threads', 'Unconstrained KV cache'],
+      details: ['33 GPU layers (Max offload)', '8 CPU threads', '8192 context tokens', 'GPU mmproj offload'],
       icon: <Zap className="w-5 h-5 text-amber-500" />,
       accentColor: 'border-amber-500/40 text-amber-500',
     },
@@ -74,8 +89,51 @@ export const PerformanceProfileSelector: React.FC<PerformanceProfileSelectorProp
           </p>
         </div>
 
-        <div className="text-xs font-mono text-[var(--color-text-muted)] self-start sm:self-auto">
-          Active: <span className="font-semibold text-[var(--color-accent)] capitalize">{activeId}</span>
+        <div className="flex items-center gap-2 text-xs font-mono">
+          <span className="text-[var(--color-text-muted)]">Requested:</span>
+          <span className="font-semibold text-[var(--color-accent)] capitalize">{activeId}</span>
+          <span className="text-[var(--color-text-muted)] ml-2">Applied:</span>
+          {appliedProfile ? (
+            <span className="font-semibold text-emerald-500 capitalize">{appliedProfile}</span>
+          ) : (
+            <Badge variant="warning" size="sm">Pending</Badge>
+          )}
+        </div>
+      </div>
+
+      {/* Applied Truthful Telemetry Bar */}
+      <div className="p-3 rounded-xl surface-recessed border border-[var(--color-border-subtle)] grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono">
+        <div>
+          <span className="text-[var(--color-text-muted)] block text-[10px]">Context Window</span>
+          <span className="font-semibold text-[var(--color-text-primary)]">
+            {appliedContextSize !== null && appliedContextSize !== undefined
+              ? `${appliedContextSize} [Applied]`
+              : 'Pending / Not running'}
+          </span>
+        </div>
+        <div>
+          <span className="text-[var(--color-text-muted)] block text-[10px]">GPU Offload</span>
+          <span className="font-semibold text-[var(--color-text-primary)]">
+            {appliedGpuLayers !== null && appliedGpuLayers !== undefined
+              ? `${appliedGpuLayers} layers [Applied]`
+              : 'Pending / Not running'}
+          </span>
+        </div>
+        <div>
+          <span className="text-[var(--color-text-muted)] block text-[10px]">Vision Projector (Req)</span>
+          <span className="font-semibold text-[var(--color-text-secondary)]">
+            {requestedMmprojOffload !== undefined
+              ? (requestedMmprojOffload ? 'GPU [Configured]' : 'CPU [Configured]')
+              : (activeId === 'eco' ? 'CPU [Configured]' : 'GPU [Configured]')}
+          </span>
+        </div>
+        <div>
+          <span className="text-[var(--color-text-muted)] block text-[10px]">Vision Projector (Applied)</span>
+          <span className="font-semibold text-[var(--color-text-primary)]">
+            {appliedMmprojOffload !== null && appliedMmprojOffload !== undefined
+              ? (appliedMmprojOffload ? 'GPU [Applied]' : 'CPU [Applied]')
+              : 'Pending / Not running'}
+          </span>
         </div>
       </div>
 

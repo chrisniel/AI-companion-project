@@ -21,6 +21,7 @@ export interface ConversationHistoryDrawerProps {
   activeConversationId: string;
   onSelectConversation: (id: string) => void;
   onNewConversation: () => void;
+  conversations?: ConversationHistoryItem[];
 }
 
 export const mockConversations: ConversationHistoryItem[] = [
@@ -72,12 +73,15 @@ export const ConversationHistoryDrawer: React.FC<ConversationHistoryDrawerProps>
   activeConversationId,
   onSelectConversation,
   onNewConversation,
+  conversations = mockConversations,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
   if (!isOpen) return null;
 
-  const filteredConversations = mockConversations.filter(
+  const conversationList = conversations && conversations.length > 0 ? conversations : mockConversations;
+
+  const filteredConversations = conversationList.filter(
     (c) =>
       c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.snippet.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -105,7 +109,7 @@ export const ConversationHistoryDrawer: React.FC<ConversationHistoryDrawerProps>
                 Conversation History
               </h2>
               <p className="text-[11px] text-[var(--color-text-muted)] font-mono">
-                {mockConversations.length} Local Sessions
+                {conversationList.length} Local Sessions
               </p>
             </div>
           </div>

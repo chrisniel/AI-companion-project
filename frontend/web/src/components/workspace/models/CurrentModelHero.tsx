@@ -13,6 +13,7 @@ import {
   Info,
   Maximize2,
   Power,
+  RefreshCw,
 } from 'lucide-react';
 import { Badge } from '../../ui/Badge';
 import { Card } from '../../ui/Card';
@@ -20,24 +21,85 @@ import { LocalModel } from '../../../types';
 
 interface CurrentModelHeroProps {
   model: LocalModel;
+  isModelLoading?: boolean;
+  onLoad?: (modelId: string) => void;
   onUnload?: (modelId: string) => void;
   onOpenDetails?: (model: LocalModel) => void;
+  idleCountdownSeconds?: number | null;
+  runtimeState?: string;
+  modelStatus?: import('../../../services/api').ModelStatusResponse | null;
+  activeModelId?: string | null;
 }
 
 export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
   model,
+  isModelLoading = false,
+  onLoad,
   onUnload,
   onOpenDetails,
+  idleCountdownSeconds,
+  runtimeState,
+  modelStatus,
+  activeModelId,
 }) => {
   const isCloud = model.isCloud || model.engine === 'gemini';
-  const isLoaded = model.status === 'loaded';
+  const isThisModelActive = Boolean(activeModelId && model.id === activeModelId);
+  const isLoaded = Boolean(isThisModelActive && modelStatus?.model_loaded);
+  const isAwake = Boolean(isThisModelActive && modelStatus?.model_awake);
+  const isSleeping = Boolean(isThisModelActive && modelStatus?.runtime_state === 'MODEL_SLEEPING');
 
-  // Context calculations (mock active tokens vs context window)
-  const activeTokens = Math.min(3840, model.contextWindow);
-  const contextPercentage = Math.min(
-    Math.round((activeTokens / model.contextWindow) * 100),
-    100
-  );
+  const getRuntimeBadge = () => {
+    if (isCloud) {
+      return {
+        label: isLoaded ? 'Active & Ready' : 'Standby Cloud API',
+        variant: isLoaded ? ('success' as const) : ('warning' as const),
+        dotClass: isLoaded ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500',
+      };
+    }
+    if (isThisModelActive && isLoaded) {
+      if (isSleeping) {
+        return { label: 'Loaded / Sleeping 💤', variant: 'accent' as const, dotClass: 'bg-purple-500' };
+      }
+      return { label: 'Loaded / Awake', variant: 'success' as const, dotClass: 'bg-emerald-500 animate-pulse' };
+    }
+    switch (runtimeState) {
+      case 'SERVER_STOPPED':
+        return { label: 'Router Offline', variant: 'default' as const, dotClass: 'bg-zinc-500' };
+      case 'SERVER_STARTING':
+        return { label: 'Router Starting…', variant: 'warning' as const, dotClass: 'bg-amber-500 animate-pulse' };
+      case 'MODEL_UNLOADED':
+        return { label: 'Router Ready / No Model Loaded', variant: 'default' as const, dotClass: 'bg-sky-500' };
+      case 'MODEL_LOADING':
+        return { label: 'Loading…', variant: 'warning' as const, dotClass: 'bg-amber-500 animate-pulse' };
+      case 'MODEL_READY':
+        return { label: 'Loaded / Awake', variant: 'success' as const, dotClass: 'bg-emerald-500 animate-pulse' };
+      case 'MODEL_SLEEPING':
+        return { label: 'Loaded / Sleeping 💤', variant: 'accent' as const, dotClass: 'bg-purple-500' };
+      case 'MODEL_UNLOADING':
+        return { label: 'Unloading…', variant: 'warning' as const, dotClass: 'bg-amber-500 animate-pulse' };
+      case 'MODEL_ERROR':
+        return { label: 'Model Error ⚠️', variant: 'danger' as const, dotClass: 'bg-rose-500' };
+      case 'SERVER_ERROR':
+        return { label: 'Router Error ⚠️', variant: 'danger' as const, dotClass: 'bg-rose-500' };
+      default:
+        return {
+          label: 'Standby on Disk',
+          variant: 'default' as const,
+          dotClass: 'bg-zinc-500',
+        };
+    }
+  };
+
+  const runtimeBadge = getRuntimeBadge();
+
+  // Context calculations
+  const effectiveMaxContext = isLoaded && modelStatus?.applied_context_size
+    ? modelStatus.applied_context_size
+    : model.contextWindow;
+  const activeTokens = isLoaded && isAwake ? Math.min(3840, effectiveMaxContext) : 0;
+  const contextPercentage = isLoaded && isAwake && effectiveMaxContext > 0
+    ? Math.min(Math.round((activeTokens / effectiveMaxContext) * 100), 100)
+    : 0;
 
   return (
     <Card
@@ -72,14 +134,27 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
               <Badge variant={isCloud ? 'accent' : 'default'} size="sm">
                 {isCloud ? 'Cloud API' : 'Local (On-Device)'}
               </Badge>
-              <Badge variant={isLoaded ? 'success' : 'warning'} size="sm">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse mr-1" />
-                {isLoaded
-                  ? isCloud
-                    ? 'Active & Ready'
-                    : 'Pinned in VRAM'
-                  : 'Standby on Disk'}
+              <Badge variant={runtimeBadge.variant} size="sm">
+                <span className={`w-1.5 h-1.5 rounded-full mr-1 ${runtimeBadge.dotClass}`} />
+                {runtimeBadge.label}
               </Badge>
+              {isLoaded && isSleeping && (
+                <Badge variant="accent" size="sm">
+                  <Clock className="w-3 h-3 mr-1 text-purple-300" />
+                  Native Sleep (VRAM Released)
+                </Badge>
+              )}
+              {isLoaded && !isSleeping && idleCountdownSeconds !== undefined && idleCountdownSeconds !== null && idleCountdownSeconds > 0 && (
+                <Badge variant="default" size="sm">
+                  <Clock className="w-3 h-3 mr-1 text-[var(--color-text-muted)]" />
+                  Native sleep in ~{Math.floor(idleCountdownSeconds / 60)}m {idleCountdownSeconds % 60}s [Estimated]
+                </Badge>
+              )}
+              {!isThisModelActive && activeModelId && (
+                <Badge variant="default" size="sm">
+                  Viewing Selected Model
+                </Badge>
+              )}
             </div>
             <p className="text-xs text-[var(--color-text-secondary)] mt-1">
               {model.family} • {model.parameters} parameters • {model.description || 'General instruction model'}
@@ -101,12 +176,34 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
           {!isCloud && isLoaded && (
             <button
               type="button"
+              disabled={isModelLoading}
               onClick={() => onUnload?.(model.id)}
-              className="px-3 py-1.5 rounded-xl surface-recessed border border-[var(--color-border-subtle)] hover:border-rose-500/50 text-xs font-medium text-rose-500 hover:bg-rose-500/10 flex items-center gap-1.5 transition-all"
-              title="Release VRAM allocation"
+              className="px-3.5 py-1.5 rounded-xl surface-recessed border border-rose-500/30 hover:border-rose-500/60 text-xs font-semibold text-rose-500 hover:bg-rose-500/10 flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
+              title="Release VRAM allocation back to GPU"
             >
-              <Power className="w-3.5 h-3.5" />
-              <span>Unload</span>
+              {isModelLoading ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Power className="w-3.5 h-3.5" />
+              )}
+              <span>{isModelLoading ? 'Unloading...' : 'Unload VRAM'}</span>
+            </button>
+          )}
+
+          {!isCloud && !isLoaded && (
+            <button
+              type="button"
+              disabled={isModelLoading}
+              onClick={() => onLoad?.(model.id)}
+              className="px-3.5 py-1.5 rounded-xl bg-accent-gradient text-white hover:opacity-90 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
+              title="Load model weights into VRAM for fast inference"
+            >
+              {isModelLoading ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Zap className="w-3.5 h-3.5" />
+              )}
+              <span>{isModelLoading ? 'Loading VRAM...' : 'Load to VRAM'}</span>
             </button>
           )}
         </div>
@@ -124,7 +221,7 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
             {isCloud ? 'Hosted' : `${model.sizeGb.toFixed(2)} GB`}
           </div>
           <div className="text-[10px] text-[var(--color-text-muted)] font-mono">
-            {model.parameters}
+            {model.parameters} [Configured]
           </div>
         </div>
 
@@ -138,7 +235,7 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
             {model.quantization}
           </div>
           <div className="text-[10px] text-[var(--color-text-muted)] font-mono truncate">
-            {model.tensorType || 'GGUF v3'}
+            {model.tensorType || 'GGUF v3'} [Configured]
           </div>
         </div>
 
@@ -149,10 +246,10 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
             <span>Runtime</span>
           </div>
           <div className="text-base sm:text-lg font-bold font-mono text-[var(--color-text-primary)] truncate">
-            {model.engine}
+            {modelStatus?.router_running ? 'llama.cpp' : (isCloud ? 'Cloud API' : 'Router Offline')}
           </div>
           <div className="text-[10px] text-[var(--color-text-muted)] font-mono">
-            {isCloud ? 'Cloud GenAI' : 'CUDA Offload'}
+            {modelStatus?.router_running ? 'Vulkan Offload (Core) [Applied]' : 'Standby / Offline'}
           </div>
         </div>
 
@@ -163,10 +260,10 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
             <span>Latency (TTFT)</span>
           </div>
           <div className="text-base sm:text-lg font-bold font-mono text-[var(--color-text-primary)]">
-            {model.estimatedLatencyMs || 18} ms
+            Unavailable
           </div>
-          <div className="text-[10px] text-emerald-500 font-mono">
-            {model.tokensPerSec ? `${model.tokensPerSec} t/s` : '42.8 t/s'}
+          <div className="text-[10px] text-[var(--color-text-muted)] font-mono">
+            Live metric not reported
           </div>
         </div>
 
@@ -177,10 +274,22 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
             <span>VRAM Usage</span>
           </div>
           <div className="text-base sm:text-lg font-bold font-mono text-[var(--color-text-primary)]">
-            {isCloud ? '0.0 GB' : `${model.vramUsageGb || 4.9} GB`}
+            {isCloud
+              ? '0.0 GB'
+              : isSleeping
+              ? '0.0 GB'
+              : isLoaded
+              ? `~${(model.vramUsageGb || 4.5).toFixed(1)} GB`
+              : '0.0 GB'}
           </div>
           <div className="text-[10px] text-[var(--color-text-muted)] font-mono">
-            {isCloud ? 'Remote Server' : `${model.layersOffloaded || 33}/${model.layersTotal || 33} layers GPU`}
+            {isCloud
+              ? 'Cloud Managed'
+              : isSleeping
+              ? 'VRAM Released (Sleeping) [Applied]'
+              : isLoaded
+              ? `${modelStatus?.applied_gpu_layers ?? 28} layers GPU [Applied]`
+              : '0 layers (VRAM Free)'}
           </div>
         </div>
 
@@ -191,10 +300,10 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
             <span>System RAM</span>
           </div>
           <div className="text-base sm:text-lg font-bold font-mono text-[var(--color-text-primary)]">
-            {model.ramUsageGb ? `${model.ramUsageGb} GB` : '1.4 GB'}
+            ~{model.ramUsageGb ? `${model.ramUsageGb.toFixed(1)} GB` : '1.2 GB'}
           </div>
           <div className="text-[10px] text-[var(--color-text-muted)] font-mono">
-            Host Overhead
+            Host Overhead [Estimated]
           </div>
         </div>
 
@@ -206,7 +315,9 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
               Context Allocation
             </span>
             <span className="font-mono text-xs text-[var(--color-text-secondary)]">
-              {activeTokens.toLocaleString()} / {model.contextWindow.toLocaleString()} tokens
+              {isLoaded
+                ? `${effectiveMaxContext.toLocaleString()} tokens [Applied]`
+                : `${model.contextWindow.toLocaleString()} tokens [Configured]`}
             </span>
           </div>
 
@@ -218,8 +329,8 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
           </div>
 
           <div className="flex items-center justify-between text-[10px] text-[var(--color-text-muted)] font-mono pt-0.5">
-            <span>KV Cache: {isCloud ? 'Cloud Managed' : '1.2 GB'}</span>
-            <span>{contextPercentage}% in use</span>
+            <span>KV Cache: Unavailable (Live telemetry not polled)</span>
+            <span>{isLoaded && isAwake ? `${contextPercentage}% active` : 'Standby'}</span>
           </div>
         </div>
       </div>

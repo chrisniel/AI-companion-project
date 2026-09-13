@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Bot,
   User,
@@ -21,20 +21,151 @@ import {
   Layers,
   ChevronDown,
   Info,
+  RefreshCw,
+  AlertCircle,
 } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { NeumorphicButton } from '../ui/NeumorphicButton';
 import { StatusIndicator } from '../ui/StatusIndicator';
+import { useBackend } from '../../context/BackendContext';
+import {
+  listConversations,
+  createConversation,
+  getConversation,
+  getMessages,
+  streamSendMessage,
+  ConversationOut,
+  MessageOut,
+  ModelStatusResponse,
+} from '../../services/api';
 import {
   AssistantMessage,
   AssistantState,
   ConversationHistoryItem,
+  MessageType,
 } from '../../types';
 import {
   ConversationHistoryDrawer,
   mockConversations,
 } from './ConversationHistoryDrawer';
 import { ConversationMessageItem } from './ConversationMessageItem';
+
+export type AssistantErrorCode =
+  | 'CORE_OFFLINE'
+  | 'MODEL_NOT_LOADED'
+  | 'MODEL_SLEEPING'
+  | 'WAKE_FAILED'
+  | 'STREAM_CONNECTION_FAILED'
+  | 'STREAM_TERMINATED'
+  | 'MODEL_GENERATION_FAILED'
+  | 'USER_CANCELLED';
+
+export interface ClassifiedStreamError {
+  code: AssistantErrorCode;
+  visibleMessage: string;
+}
+
+export function classifyStreamError(
+  err: Error | unknown,
+  isOnline: boolean,
+  modelStatus: ModelStatusResponse | null | undefined
+): ClassifiedStreamError {
+  const errObj = err instanceof Error ? err : new Error(String(err));
+  const errMessage = errObj.message || 'Stream terminated unexpectedly';
+  const apiCode = (errObj as { code?: string }).code;
+
+  // 1. User cancellation
+  if (
+    errObj.name === 'AbortError' ||
+    errMessage.toLowerCase().includes('abort') ||
+    errMessage.toLowerCase().includes('cancel')
+  ) {
+    return {
+      code: 'USER_CANCELLED',
+      visibleMessage: `Generation stopped by user. [USER_CANCELLED]`,
+    };
+  }
+
+  // 2. Core Offline
+  if (!isOnline) {
+    return {
+      code: 'CORE_OFFLINE',
+      visibleMessage: `Local AI Core is offline. Ensure Local AI Core is running on :8000. [CORE_OFFLINE: ${errMessage}]`,
+    };
+  }
+
+  // 3. Stream Terminated unexpectedly (premature EOF)
+  if (apiCode === 'STREAM_TERMINATED' || errMessage.includes('STREAM_TERMINATED')) {
+    return {
+      code: 'STREAM_TERMINATED',
+      visibleMessage: `Stream ended abruptly before explicit completion. [STREAM_TERMINATED: ${errMessage}]`,
+    };
+  }
+
+  // 4. Model sleeping or wake failure
+  const isWakeFailed =
+    errMessage.toLowerCase().includes('wake') || (apiCode && apiCode.includes('WAKE'));
+  if (isWakeFailed) {
+    return {
+      code: 'WAKE_FAILED',
+      visibleMessage: `Model wake failed. Wake the model manually in Models view. [WAKE_FAILED: ${errMessage}]`,
+    };
+  }
+  if (modelStatus?.runtime_state === 'MODEL_SLEEPING') {
+    return {
+      code: 'MODEL_SLEEPING',
+      visibleMessage: `Model is currently sleeping. Wake the model in Models view or retry to wake. [MODEL_SLEEPING: ${errMessage}]`,
+    };
+  }
+
+  // 5. Model Not Loaded
+  const isUnloaded =
+    !modelStatus?.model_loaded ||
+    modelStatus?.runtime_state === 'MODEL_UNLOADED' ||
+    apiCode === 'LLM_UNAVAILABLE' ||
+    errMessage.includes('LLM_UNAVAILABLE');
+  if (isUnloaded) {
+    return {
+      code: 'MODEL_NOT_LOADED',
+      visibleMessage: `No active model loaded. Ensure an LLM model is loaded in Models view. [MODEL_NOT_LOADED: ${errMessage}]`,
+    };
+  }
+
+  // 6. Explicit model generation failure (SSE error event, GPU OOM, context overflow)
+  if (
+    apiCode === 'MODEL_GENERATION_FAILED' ||
+    errMessage.toLowerCase().includes('gpu out of memory') ||
+    errMessage.toLowerCase().includes('out of memory') ||
+    errMessage.toLowerCase().includes('context') ||
+    errMessage.toLowerCase().includes('generation failed')
+  ) {
+    return {
+      code: 'MODEL_GENERATION_FAILED',
+      visibleMessage: `Model generation failed: ${errMessage}. [MODEL_GENERATION_FAILED]`,
+    };
+  }
+
+  // 7. Transport / Stream Connection failure while Core and Model are ready
+  const isTransportError =
+    errMessage.toLowerCase().includes('failed to fetch') ||
+    errMessage.toLowerCase().includes('networkerror') ||
+    errMessage.toLowerCase().includes('load failed') ||
+    errMessage.toLowerCase().includes('stream failed with status 500') ||
+    errMessage.toLowerCase().includes('internal server error');
+
+  if (modelStatus?.model_loaded && isTransportError) {
+    return {
+      code: 'STREAM_CONNECTION_FAILED',
+      visibleMessage: `Connection to the Assistant stream failed. Core and model status remain available. [STREAM_CONNECTION_FAILED: ${errMessage}]`,
+    };
+  }
+
+  // 8. General / Fallback Model Generation Failure
+  return {
+    code: 'MODEL_GENERATION_FAILED',
+    visibleMessage: `Model generation failed: ${errMessage}. [MODEL_GENERATION_FAILED]`,
+  };
+}
 
 export interface AssistantViewProps {
   activeCharacterName?: string;
@@ -49,10 +180,11 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
   userName = 'Chris',
   assistantState: propAssistantState,
   onSetAssistantState,
-  currentModelName = 'Llama-3.1-8B-Instruct',
+  currentModelName,
 }) => {
   const [internalAssistantState, setInternalAssistantState] = useState<AssistantState>('idle');
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [conversations, setConversations] = useState<ConversationOut[]>([]);
   const [activeConversationId, setActiveConversationId] = useState('conv-1');
   const [conversationTitle, setConversationTitle] = useState(
     'Daily Briefing & Local System Orchestration'
@@ -60,6 +192,35 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
   const [webSearchMode, setWebSearchMode] = useState<'airgapped' | 'web'>('airgapped');
   const [inputPrompt, setInputPrompt] = useState('');
   const [attachments, setAttachments] = useState<string[]>([]);
+
+  const { isOnline, modelStatus, loadModel, isModelLoading, registry } = useBackend();
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const hasInitializedRef = useRef(false);
+  const activeConversationIdRef = useRef(activeConversationId);
+  activeConversationIdRef.current = activeConversationId;
+
+  // Authoritative runtime model identity
+  const activeModelId = modelStatus?.active_model || null;
+  const activeModelEntry = registry.find(
+    (m) => m.id === activeModelId || m.display_name === activeModelId
+  );
+  const effectiveModelName = isOnline
+    ? (activeModelEntry ? activeModelEntry.display_name : (activeModelId || 'No Model Loaded'))
+    : (currentModelName || 'Offline Demo');
+
+  const isModelSleeping = isOnline && modelStatus?.runtime_state === 'MODEL_SLEEPING';
+  const isModelAwake = isOnline && modelStatus?.runtime_state === 'MODEL_READY';
+  const isModelUnloaded = isOnline && (!modelStatus?.model_loaded || modelStatus?.runtime_state === 'MODEL_UNLOADED');
+  const isRouterOffline = isOnline && !modelStatus?.router_running;
+  const isTransitioning = isOnline && (modelStatus?.runtime_state === 'SERVER_STARTING' || modelStatus?.runtime_state === 'MODEL_LOADING');
+
+  // Truthful runtime badge label (no fake CUDA)
+  const providerLabel = isOnline
+    ? (modelStatus?.applied_profile
+        ? `llama.cpp (${modelStatus.applied_profile.toUpperCase()})`
+        : (modelStatus?.provider || 'llama.cpp'))
+    : 'Offline Mode';
 
   const assistantState = propAssistantState !== undefined ? propAssistantState : internalAssistantState;
   const setAssistantState = (st: AssistantState) => {
@@ -70,188 +231,311 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     }
   };
 
-  // Mock conversation stream containing all required message types & tool cards
+  // Initial messages for offline / demo mode without fake CUDA or 42.8 t/s claims
   const [messages, setMessages] = useState<AssistantMessage[]>([
     {
       id: 'msg-1',
       type: 'system',
-      timestamp: '10:15 AM',
+      timestamp: '10:00 AM',
       content:
-        'Local neural core initialized (Port 8000). Model: Llama-3.1-8B-Instruct (Q4_K_M). 33 GPU layers offloaded. Airgap security enforcement verified.',
+        'Local AI Core session initialized. Airgap security enforcement verified.',
     },
     {
       id: 'msg-2',
-      type: 'user',
-      timestamp: '10:16 AM',
-      content:
-        'Morning Aura! Can you pull my upcoming schedule, check if my sleep and health stats synced, and log a task for verifying our local GGUF quantizations?',
-    },
-    {
-      id: 'msg-3',
-      type: 'memory_retrieval',
-      timestamp: '10:16 AM',
-      content:
-        'User prefers morning focus blocks between 02:00 PM and 04:00 PM with non-essential audio muted. Quantization priority: FP16 -> Q4_K_M matrix accuracy.',
-      memoryMetadata: {
-        query: 'schedule preferences and quantization tasks',
-        similarity: '0.94',
-        source: 'bge-large-en-v1.5 (local HNSW)',
-      },
-    },
-    {
-      id: 'msg-4',
-      type: 'tool_execution',
-      timestamp: '10:16 AM',
-      content: 'Retrieved 3 events from local workstation schedule.',
-      toolCard: {
-        toolName: 'Schedule',
-        action: 'Completed',
-        summary: 'Retrieved 3 events for today',
-        status: 'completed',
-        details: {
-          '02:30 PM': 'Deep Work: Core Neural Pipeline Optimization (60m)',
-          '04:00 PM': 'Vector Memory Backup & Export',
-          '06:00 PM': 'Evening Audio Briefing Checkpoint',
-        },
-      },
-    },
-    {
-      id: 'msg-5',
-      type: 'tool_execution',
-      timestamp: '10:16 AM',
-      content: 'Retrieved biometric wellness summary from Bluetooth BLE sync.',
-      toolCard: {
-        toolName: 'Health',
-        action: 'Completed',
-        summary: 'Retrieved wellness summary',
-        status: 'completed',
-        details: {
-          Sleep: '7h 48m (88% sleep score, Deep 1h 45m)',
-          'Resting HR': '64 bpm (Daily range: 58 - 114 bpm)',
-          Activity: '8,420 steps (84% of 10k target)',
-        },
-      },
-    },
-    {
-      id: 'msg-6',
-      type: 'tool_execution',
-      timestamp: '10:17 AM',
-      content: 'Created operational workspace reminder task.',
-      toolCard: {
-        toolName: 'Task',
-        action: 'Created',
-        summary: 'Project reminder: Verify GGUF quantizations',
-        status: 'completed',
-        details: {
-          'Queue Position': 'Priority 1 (Workspace Queue)',
-          'Assigned Model': 'Llama-3.1-8B-Instruct',
-          Deadline: 'Today before 04:00 PM',
-        },
-      },
-    },
-    {
-      id: 'msg-7',
-      type: 'web_search',
-      timestamp: '10:17 AM',
-      content:
-        'Queried local documentation index for "CUDA kernel tuning & GGUF benchmarks". Retrieved 3 reference documents from local repository.',
-      searchMetadata: {
-        query: 'CUDA kernel tuning benchmarks',
-        resultsCount: 3,
-        source: 'Local Docs & Wiki',
-      },
-    },
-    {
-      id: 'msg-8',
       type: 'assistant',
-      timestamp: '10:17 AM',
+      timestamp: '10:00 AM',
       content:
-        'Good morning, Chris! Everything is set for your day:\n\n1. **Schedule**: Your main scheduled session is *Deep Work: Core Neural Pipeline Optimization* at 02:30 PM (60 minutes). I have queued reminders for vector exports at 04:00 PM.\n2. **Health**: Your telemetry synced cleanly 10 minutes ago — 7h 48m sleep with 88% readiness, resting HR steady at 64 bpm, and 8,420 steps logged.\n3. **Task Queued**: Created your project task *"Verify GGUF quantizations"* in the operational queue for this afternoon.\n\nAll background engines are nominal and running 100% on-device.',
-    },
-    {
-      id: 'msg-9',
-      type: 'warning',
-      timestamp: '10:18 AM',
-      content:
-        'Context window buffer utilization is currently at 4,820 / 16,384 tokens (29%). Local KV cache is performing smoothly at 42.8 tokens/second.',
+        `Good morning, ${userName}! Ready for your local workspace session. Connect to Local AI Core on port 8000 for live model streaming and tools.`,
     },
   ]);
 
-  // Handle Send Message
-  const handleSendMessage = () => {
+  const loadConversationMessages = useCallback(async (convId: string) => {
+    try {
+      const res = await getMessages(convId);
+      if (res.items && res.items.length > 0) {
+        const mapped: AssistantMessage[] = res.items.map((m) => ({
+          id: m.id,
+          type: (m.sender === 'user' ? 'user' : (m.sender === 'system' ? 'system' : 'assistant')) as MessageType,
+          sender: m.sender === 'user' ? userName : (m.sender === 'system' ? 'System' : activeCharacterName),
+          timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          content: m.content,
+        }));
+        setMessages(mapped);
+      } else {
+        setMessages([
+          {
+            id: `ast-${Date.now()}`,
+            type: 'assistant',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            content: `Ready for this session, ${userName}. What would you like to examine or execute?`,
+          },
+        ]);
+      }
+    } catch (err) {
+      console.warn('Unable to load conversation messages:', err);
+    }
+  }, [activeCharacterName, userName]);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function initConversations() {
+      if (!isOnline) return;
+
+      try {
+        const res = await listConversations();
+        if (!isMounted) return;
+
+        if (res.items && res.items.length > 0) {
+          setConversations(res.items);
+
+          // Preserve active conversation selection across reconnects
+          const currentId = activeConversationIdRef.current;
+          const matching = res.items.find((c) => c.id === currentId);
+
+          if (matching) {
+            setConversationTitle(matching.title);
+            if (!hasInitializedRef.current) {
+              loadConversationMessages(matching.id);
+            }
+          } else {
+            const active = res.items[0];
+            setActiveConversationId(active.id);
+            setConversationTitle(active.title);
+            loadConversationMessages(active.id);
+          }
+          hasInitializedRef.current = true;
+        } else if (!hasInitializedRef.current) {
+          const created = await createConversation('Daily Briefing & Local System Orchestration');
+          if (!isMounted) return;
+          setConversations([created]);
+          setActiveConversationId(created.id);
+          setConversationTitle(created.title);
+          loadConversationMessages(created.id);
+          hasInitializedRef.current = true;
+        }
+      } catch (err) {
+        console.warn('Unable to initialize conversations from backend:', err);
+      }
+    }
+
+    initConversations();
+    return () => {
+      isMounted = false;
+    };
+  }, [isOnline, loadConversationMessages]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView?.({ behavior: 'smooth' });
+  }, [messages]);
+
+  const formatStreamErrorMessage = (err: Error): string => {
+    const isBusyErr = err.message?.includes('409') || err.message?.includes('BUSY');
+    if (isBusyErr) {
+      return '[Notice]: Model or conversation is currently busy. Please wait for previous generation to finish.';
+    }
+
+    return classifyStreamError(err, isOnline, modelStatus).visibleMessage;
+  };
+
+  // Handle Send Message with persistent SSE streaming
+  const handleSendMessage = async () => {
     if (!inputPrompt.trim() && attachments.length === 0) return;
+    if (isBusy) return;
+
+    const userText = inputPrompt.trim() || 'Shared attachment for processing.';
+    const clientMessageId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `cl-${Date.now()}`;
 
     const userMsg: AssistantMessage = {
-      id: `msg-${Date.now()}`,
+      id: clientMessageId,
       type: 'user',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      content: inputPrompt.trim() || 'Shared attachment for processing.',
+      content: userText,
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    const assistantMsgId = `ast-${Date.now() + 1}`;
+    const assistantMsg: AssistantMessage = {
+      id: assistantMsgId,
+      type: 'assistant',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      content: '',
+    };
+
+    setMessages((prev) => [...prev, userMsg, assistantMsg]);
     setInputPrompt('');
     setAttachments([]);
 
-    // Simulate Assistant Workflow
     setAssistantState('thinking');
 
-    setTimeout(() => {
-      setAssistantState('executing_tool');
-    }, 1000);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
-    setTimeout(() => {
-      setAssistantState('speaking');
-      const responseMsg: AssistantMessage = {
-        id: `msg-${Date.now() + 1}`,
-        type: 'assistant',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        content: `I processed your request using local weights. All inference occurred on-device via your GPU with 0ms cloud latency. Ready for your next command.`,
-      };
-      setMessages((prev) => [...prev, responseMsg]);
-    }, 2400);
+    let hasReceivedToken = false;
 
-    setTimeout(() => {
+    try {
+      await streamSendMessage({
+        conversationId: activeConversationId,
+        userText,
+        clientMessageId,
+        signal: controller.signal,
+        onToken: (token) => {
+          if (!hasReceivedToken) {
+            hasReceivedToken = true;
+            setAssistantState('speaking');
+          }
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMsgId ? { ...msg, content: msg.content + token } : msg
+            )
+          );
+        },
+        onDone: () => {
+          setAssistantState('idle');
+          abortControllerRef.current = null;
+        },
+        onError: (err, partialText) => {
+          setAssistantState('idle');
+          abortControllerRef.current = null;
+
+          setMessages((prev) =>
+            prev.map((msg) => {
+              if (msg.id !== assistantMsgId) return msg;
+              const text = msg.content || partialText || '';
+              if (!text) {
+                return {
+                  ...msg,
+                  content: formatStreamErrorMessage(err),
+                };
+              } else {
+                const classified = classifyStreamError(err, isOnline, modelStatus);
+                return {
+                  ...msg,
+                  content: `${text}\n\n[Incomplete - ${classified.code}: ${err.message || 'Stream terminated'}]`,
+                };
+              }
+            })
+          );
+        },
+      });
+    } catch (err: unknown) {
       setAssistantState('idle');
-    }, 3800);
+      abortControllerRef.current = null;
+      const errorObj = err instanceof Error ? err : new Error(String(err));
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (msg.id !== assistantMsgId) return msg;
+          if (!msg.content) {
+            return { ...msg, content: formatStreamErrorMessage(errorObj) };
+          } else {
+            const classified = classifyStreamError(errorObj, isOnline, modelStatus);
+            return { ...msg, content: `${msg.content}\n\n[Incomplete - ${classified.code}: ${errorObj.message}]` };
+          }
+        })
+      );
+    }
   };
 
   const handleStopGeneration = () => {
-    setAssistantState('interrupted');
-    setTimeout(() => {
-      setAssistantState('idle');
-    }, 1500);
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setAssistantState('idle');
+
+    // Ensure the in-flight assistant bubble is never left blank
+    setMessages((prev) => {
+      const lastMsg = prev[prev.length - 1];
+      if (lastMsg && lastMsg.type === 'assistant') {
+        const stopNotice = '*[Generation stopped by user]* [USER_CANCELLED]';
+        if (!lastMsg.content) {
+          return [
+            ...prev.slice(0, -1),
+            { ...lastMsg, content: stopNotice },
+          ];
+        } else if (!lastMsg.content.includes('*[Generation stopped by user]*')) {
+          return [
+            ...prev.slice(0, -1),
+            { ...lastMsg, content: `${lastMsg.content}\n\n${stopNotice}` },
+          ];
+        }
+      }
+      return prev;
+    });
   };
 
-  const handleNewConversation = () => {
-    setActiveConversationId(`conv-${Date.now()}`);
-    setConversationTitle('New Local Workspace Session');
-    setAssistantState('idle');
-    setMessages([
-      {
-        id: `sys-${Date.now()}`,
-        type: 'system',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        content: `New session initialized. Context buffer cleared. Pinned model: ${currentModelName}.`,
-      },
-      {
-        id: `ast-${Date.now()}`,
-        type: 'assistant',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        content: `Ready for a new session, ${userName}. What would you like to examine or execute?`,
-      },
-    ]);
+  const handleNewConversation = async () => {
+    try {
+      const created = await createConversation('New Conversation');
+      setConversations((prev) => [created, ...prev]);
+      setActiveConversationId(created.id);
+      setConversationTitle(created.title);
+      setAssistantState('idle');
+      setMessages([
+        {
+          id: `sys-${Date.now()}`,
+          type: 'system',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          content: `New session initialized. Context buffer cleared. Pinned model: ${effectiveModelName}.`,
+        },
+        {
+          id: `ast-${Date.now()}`,
+          type: 'assistant',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          content: `Ready for a new session, ${userName}. What would you like to examine or execute?`,
+        },
+      ]);
+    } catch (err) {
+      console.warn('Failed to create remote conversation:', err);
+      const fallbackId = `conv-${Date.now()}`;
+      setActiveConversationId(fallbackId);
+      setConversationTitle('Local Session (Offline)');
+      setAssistantState('idle');
+      setMessages([
+        {
+          id: `sys-${Date.now()}`,
+          type: 'system',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          content: `Local session created offline. Pinned model: ${effectiveModelName}.`,
+        },
+        {
+          id: `ast-${Date.now()}`,
+          type: 'assistant',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          content: `Ready for a new session, ${userName}. Note: Server is offline, so messages will not persist to SQLite until reconnected.`,
+        },
+      ]);
+    }
   };
 
   const handleSelectConversation = (id: string) => {
     setActiveConversationId(id);
-    const found = mockConversations.find((c) => c.id === id);
+    const found = conversations.find((c) => c.id === id);
     if (found) {
       setConversationTitle(found.title);
+    } else {
+      const mockFound = mockConversations.find((c) => c.id === id);
+      if (mockFound) setConversationTitle(mockFound.title);
     }
+    loadConversationMessages(id);
   };
 
-  // Assistant State Status Label
+  // Assistant State Status Label (authoritative runtime truth)
   const getAssistantStateDisplay = () => {
+    if (!isOnline) {
+      return { label: 'Offline', color: 'text-[var(--color-text-muted)]', desc: 'Core server offline — demo mode' };
+    }
+    if (isRouterOffline) {
+      return { label: 'Router Stopped', color: 'text-amber-500', desc: 'Core online, llama.cpp router not running' };
+    }
+    if (isTransitioning) {
+      return { label: 'Restarting / Loading', color: 'text-amber-500 animate-pulse', desc: 'Applying runtime changes' };
+    }
+    if (isModelSleeping) {
+      return { label: 'Sleeping', color: 'text-purple-400', desc: 'Model sleeping in RAM (VRAM released)' };
+    }
+    if (isModelUnloaded) {
+      return { label: 'No Model Loaded', color: 'text-amber-500', desc: 'Model weights unloaded from memory' };
+    }
+
     switch (assistantState) {
       case 'idle':
         return { label: 'Idle / Standby', color: 'text-emerald-500', desc: 'Standing by for user query' };
@@ -262,7 +546,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
       case 'executing_tool':
         return { label: 'Executing Tool', color: 'text-purple-400 animate-pulse', desc: 'Calling local workspace runtime' };
       case 'speaking':
-        return { label: 'Speaking / Streaming', color: 'text-[var(--color-accent)] animate-pulse', desc: 'Synthesizing output @ 42.8 t/s' };
+        return { label: 'Speaking / Streaming', color: 'text-[var(--color-accent)] animate-pulse', desc: 'Synthesizing output tokens' };
       case 'interrupted':
         return { label: 'Interrupted', color: 'text-orange-400', desc: 'Generation halted by user' };
       case 'offline':
@@ -276,6 +560,18 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
 
   const stateDisplay = getAssistantStateDisplay();
   const isBusy = assistantState === 'thinking' || assistantState === 'speaking' || assistantState === 'executing_tool';
+
+  const drawerConversations: ConversationHistoryItem[] =
+    conversations.length > 0
+      ? conversations.map((c) => ({
+          id: c.id,
+          title: c.title,
+          date: new Date(c.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }),
+          snippet: 'Local conversation session stored in SQLite.',
+          model: effectiveModelName,
+          messagesCount: c.id === activeConversationId ? messages.length : 1,
+        }))
+      : mockConversations;
 
   return (
     <div className="space-y-6">
@@ -294,7 +590,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
             >
               <History className="w-5 h-5 text-[var(--color-accent)] group-hover:scale-105 transition-transform" />
               <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[var(--color-accent)] text-white text-[9px] font-bold flex items-center justify-center shadow-sm">
-                5
+                {drawerConversations.length}
               </span>
             </button>
 
@@ -315,19 +611,45 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
             {/* Model Badge */}
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl surface-raised border border-[var(--color-border-subtle)] text-xs font-mono text-[var(--color-text-primary)]">
               <Cpu className="w-3.5 h-3.5 text-[var(--color-accent)]" />
-              <span className="font-semibold truncate max-w-[130px]">{currentModelName}</span>
+              <span className="font-semibold truncate max-w-[150px]" title={effectiveModelName}>
+                {effectiveModelName}
+              </span>
+              {isOnline && isModelSleeping && (
+                <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 text-[10px] font-bold">
+                  Sleeping
+                </span>
+              )}
+              {isOnline && isModelAwake && (
+                <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">
+                  Awake
+                </span>
+              )}
+              {isOnline && isModelUnloaded && (
+                <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[10px] font-bold">
+                  Unloaded
+                </span>
+              )}
             </div>
 
             {/* Runtime / Provider */}
             <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl surface-recessed border border-[var(--color-border-subtle)] text-xs font-mono text-[var(--color-text-secondary)]">
-              <span>llama.cpp (CUDA)</span>
+              <span>{providerLabel}</span>
             </div>
 
             {/* Local / Cloud Indicator */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl surface-recessed border border-[var(--color-border-subtle)] text-xs font-mono text-emerald-500 font-semibold">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">100% Local Airgapped</span>
-              <span className="md:hidden">Local</span>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl surface-recessed border border-[var(--color-border-subtle)] text-xs font-mono font-semibold">
+              {isOnline ? (
+                <>
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                  <span className="text-emerald-500 hidden md:inline">100% Local Airgapped</span>
+                  <span className="text-emerald-500 md:hidden">Local</span>
+                </>
+              ) : (
+                <>
+                  <AlertCircle className="w-3.5 h-3.5 text-[var(--color-text-muted)]" />
+                  <span className="text-[var(--color-text-muted)]">Core Offline (Demo)</span>
+                </>
+              )}
             </div>
 
             {/* Search / Web Mode Indicator */}
@@ -438,17 +760,50 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
               <span>
                 {assistantState === 'thinking' && 'Reasoning & processing context...'}
                 {assistantState === 'executing_tool' && 'Executing tool function on local runtime...'}
-                {assistantState === 'speaking' && 'Streaming response tokens @ 42.8 t/s...'}
+                {assistantState === 'speaking' && 'Streaming response tokens in real time...'}
               </span>
             </div>
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* ========================================================= */}
       {/* 4. INPUT COMPOSER: Polished Soft Glass Docked Composer    */}
       {/* ========================================================= */}
       <div className="sticky bottom-4 z-20 max-w-4xl mx-auto">
+        {/* Sleeping Model Notice */}
+        {isModelSleeping && (
+          <div className="p-3 mb-2 rounded-2xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-between text-xs text-purple-300">
+            <div className="flex items-center gap-2">
+              <Zap className="w-4 h-4 text-purple-400 flex-shrink-0" />
+              <span>Model is sleeping in RAM (VRAM released). Sending a message will wake the model.</span>
+            </div>
+            <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-purple-500/20 text-purple-300">
+              Native Sleep
+            </span>
+          </div>
+        )}
+
+        {/* Unloaded Model Alert Notice */}
+        {isModelUnloaded && !isRouterOffline && (
+          <div className="p-3 mb-2 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs text-amber-400">
+            <div className="flex items-center gap-2">
+              <Zap className="w-4 h-4 flex-shrink-0" />
+              <span>No model is currently loaded. Click Load Model or choose a model from the Models tab.</span>
+            </div>
+            <button
+              type="button"
+              disabled={isModelLoading}
+              onClick={() => loadModel()}
+              className="px-3 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 font-semibold flex items-center gap-1.5 transition-all disabled:opacity-50"
+            >
+              {isModelLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+              <span>Load Model</span>
+            </button>
+          </div>
+        )}
+
         <div className="p-3 rounded-3xl glass-panel-elevated border border-[var(--color-surface-glass-border)] shadow-2xl space-y-2.5">
           {/* Attachment Tags (if added) */}
           {attachments.length > 0 && (
@@ -546,7 +901,11 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
             <span className="flex items-center gap-1">
               <span>Press <strong>Enter</strong> to send • <strong>Shift + Enter</strong> for newline</span>
             </span>
-            <span>Local token cache: 16k buffer</span>
+            <span>
+              {modelStatus?.applied_context_size
+                ? `Context buffer: ${modelStatus.applied_context_size} tokens`
+                : 'Local context buffer: active'}
+            </span>
           </div>
         </div>
       </div>
@@ -560,6 +919,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
         activeConversationId={activeConversationId}
         onSelectConversation={handleSelectConversation}
         onNewConversation={handleNewConversation}
+        conversations={drawerConversations}
       />
     </div>
   );

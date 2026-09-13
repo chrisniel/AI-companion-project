@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Cpu, Layers, HardDrive, Zap, RefreshCw, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Cpu, Layers, HardDrive, Zap, RefreshCw, CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { Badge } from '../ui/Badge';
+import { useBackend } from '../../context/BackendContext';
 import {
   mockLocalModels,
   mockModelProviders,
@@ -11,6 +12,7 @@ import {
   PerformanceProfile,
   ProviderRoutingPolicy,
 } from '../../types';
+import { fetchModelRegistry, RegistryEntry } from '../../services/api';
 import { ModelProvidersCard } from './models/ModelProvidersCard';
 import { CurrentModelHero } from './models/CurrentModelHero';
 import { PerformanceProfileSelector } from './models/PerformanceProfileSelector';
@@ -21,30 +23,90 @@ import { ModelDetailsModal } from './models/ModelDetailsModal';
 import { AdvancedRuntimeSettings } from './models/AdvancedRuntimeSettings';
 
 export interface ModelsViewProps {
-  currentModelId?: string;
+  selectedModelId?: string | null;
   onSelectModel?: (modelId: string) => void;
+  currentModelId?: string; // Backwards-compatible alias
   performanceProfile?: PerformanceProfile;
   onChangePerformanceProfile?: (profile: PerformanceProfile) => void;
 }
 
 export const ModelsView: React.FC<ModelsViewProps> = ({
-  currentModelId: controlledModelId,
+  selectedModelId: controlledSelectedId,
+  currentModelId: legacyControlledId,
   onSelectModel,
-  performanceProfile: controlledProfile = 'balanced',
+  performanceProfile: controlledProfile,
   onChangePerformanceProfile,
 }) => {
-  // Local state for models and active selections
+  const {
+    isOnline,
+    modelStatus,
+    isModelLoading,
+    loadModel,
+    unloadModel,
+    changeProfile,
+    lastError,
+    clearError,
+    apiKey,
+    setApiKey,
+    refreshStatus,
+    registry,
+  } = useBackend();
+
+  const [keyInput, setKeyInput] = useState(apiKey || '');
+
+  useEffect(() => {
+    if (apiKey) {
+      setKeyInput(apiKey);
+    }
+  }, [apiKey]);
+
+  // Local state for models registry
   const [models, setModels] = useState<LocalModel[]>(mockLocalModels);
-  const [internalModelId, setInternalModelId] = useState<string>('m-1');
-  const activeModelId = controlledModelId || internalModelId;
 
-  // Performance Profile state
-  const [internalProfile, setInternalProfile] = useState<PerformanceProfile>(controlledProfile);
-  const activeProfile = controlledProfile || internalProfile;
+  // Authoritative Backend Active Model:
+  // Derived directly from backend truth (model_loaded = True and active_model populated).
+  const backendActiveModelId = (modelStatus?.model_loaded && modelStatus?.active_model)
+    ? modelStatus.active_model
+    : null;
 
-  const handleProfileChange = (newProfile: PerformanceProfile) => {
+  // Selected Model (model the user is currently viewing/intends to act on)
+  const initialControlled = controlledSelectedId ?? legacyControlledId ?? null;
+  const [internalSelectedId, setInternalSelectedId] = useState<string | null>(initialControlled);
+  const [hasHydratedSelection, setHasHydratedSelection] = useState(Boolean(initialControlled));
+
+  // On initial startup only: if no explicit selection exists, hydrate selectedModelId from activeModelId
+  useEffect(() => {
+    if (!hasHydratedSelection) {
+      if (initialControlled) {
+        setInternalSelectedId(initialControlled);
+        setHasHydratedSelection(true);
+      } else if (backendActiveModelId) {
+        setInternalSelectedId(backendActiveModelId);
+        setHasHydratedSelection(true);
+      }
+    }
+  }, [initialControlled, backendActiveModelId, hasHydratedSelection]);
+
+  const selectedModelId = controlledSelectedId ?? legacyControlledId ?? internalSelectedId;
+
+  // Performance Profile state (requested profile)
+  const backendRequestedProfile = modelStatus?.requested_profile as PerformanceProfile | undefined;
+  const [internalProfile, setInternalProfile] = useState<PerformanceProfile>(
+    backendRequestedProfile || controlledProfile || 'balanced'
+  );
+  const activeProfile = backendRequestedProfile || controlledProfile || internalProfile;
+
+  const handleProfileChange = async (newProfile: PerformanceProfile) => {
     setInternalProfile(newProfile);
     onChangePerformanceProfile?.(newProfile);
+
+    if (newProfile === 'eco' || newProfile === 'balanced' || newProfile === 'maximum') {
+      try {
+        await changeProfile(newProfile);
+      } catch {
+        // Handled in context
+      }
+    }
 
     // Contextually adjust VRAM target based on selected profile
     if (newProfile === 'eco') {
@@ -56,7 +118,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
     }
   };
 
-  // VRAM Target Slider state
+  // VRAM Target Slider state (informational headroom guide)
   const [vramTargetGb, setVramTargetGb] = useState<number>(2.5);
 
   // Provider filter for library
@@ -72,33 +134,106 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
   const [selectedDetailsModel, setSelectedDetailsModel] = useState<LocalModel | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
-  // Find active model object
-  const currentModel =
-    models.find((m) => m.id === activeModelId) || models[0];
+  // Sync live model list from backend registry
+  useEffect(() => {
+    if (registry && registry.length > 0) {
+      const live: LocalModel[] = registry.map((e: RegistryEntry) => ({
+        id: e.id,
+        name: e.display_name,
+        family: e.family,
+        parameters: e.parameters,
+        quantization: e.quantization,
+        sizeGb: e.size_gb ?? 0,
+        contextWindow: e.context_limit,
+        status: (backendActiveModelId === e.id ? 'loaded' : 'unloaded') as 'loaded' | 'unloaded',
+        engine: 'llama.cpp',
+        isCloud: false,
+        vramUsageGb: e.estimated_vram_gb,
+        ramUsageGb: e.estimated_ram_gb,
+        filePath: e.primary_file,
+        description: `${e.variant} · ${e.capabilities.join(', ')} · ${e.license}`,
+        variant: e.variant,
+        capabilities: e.capabilities,
+        validationStatus: e.validation_status,
+        hasCompanion: e.companion_files.length > 0,
+        companionFilesValid: e.companion_files_valid,
+      }));
+      setModels(live);
+    }
+  }, [registry, backendActiveModelId]);
+
+  // Compute live per-model loaded status based on authoritative backend active_model
+  const liveModels = useMemo(() => {
+    return models.map((m) => {
+      const isThisLoaded = Boolean(
+        backendActiveModelId &&
+        (
+          m.id === backendActiveModelId ||
+          (m.filePath && m.filePath === backendActiveModelId)
+        )
+      );
+      return {
+        ...m,
+        status: isThisLoaded ? ('loaded' as const) : ('unloaded' as const),
+      };
+    });
+  }, [models, backendActiveModelId]);
+
+  // Find currently selected model object (the one user is viewing in Hero)
+  const currentSelectedModel =
+    liveModels.find((m) => m.id === selectedModelId) ||
+    (backendActiveModelId ? liveModels.find((m) => m.id === backendActiveModelId) : null) ||
+    liveModels[0] ||
+    models[0];
+
+  const isSelectedLoaded = Boolean(backendActiveModelId && currentSelectedModel.id === backendActiveModelId);
+
+  // Dynamic active model reflecting real backend status
+  const liveActiveModel: LocalModel = {
+    ...currentSelectedModel,
+    status: isSelectedLoaded ? 'loaded' : 'unloaded',
+    engine: currentSelectedModel.isCloud
+      ? currentSelectedModel.engine
+      : (modelStatus?.router_running ? 'llama.cpp (Vulkan)' : currentSelectedModel.engine),
+    contextWindow: isSelectedLoaded && modelStatus?.applied_context_size
+      ? modelStatus.applied_context_size
+      : currentSelectedModel.contextWindow,
+    layersOffloaded: isSelectedLoaded && modelStatus?.applied_gpu_layers !== undefined && modelStatus.applied_gpu_layers !== null
+      ? modelStatus.applied_gpu_layers
+      : (isSelectedLoaded ? 28 : 0),
+    vramUsageGb: isSelectedLoaded ? (currentSelectedModel.vramUsageGb || 4.5) : 0.0,
+  };
 
   // Actions
-  const handleActivateModel = (modelId: string) => {
-    setModels((prev) =>
-      prev.map((m) => {
-        if (m.id === modelId) {
-          return { ...m, status: 'loaded' };
-        }
-        return m;
-      })
-    );
-    setInternalModelId(modelId);
+  const handleSelectModel = (modelId: string) => {
+    setInternalSelectedId(modelId);
+    setHasHydratedSelection(true);
     onSelectModel?.(modelId);
   };
 
-  const handleUnloadModel = (modelId: string) => {
-    setModels((prev) =>
-      prev.map((m) => {
-        if (m.id === modelId) {
-          return { ...m, status: 'unloaded' };
-        }
-        return m;
-      })
-    );
+  const handleActivateModel = async (modelId: string) => {
+    handleSelectModel(modelId);
+    const selected = models.find((m) => m.id === modelId) || currentSelectedModel;
+
+    // Local VRAM loading
+    if (!selected.isCloud) {
+      try {
+        await loadModel(
+          selected.id || selected.filePath || selected.name,
+          (activeProfile === 'turbo' ? 'maximum' : activeProfile) as 'eco' | 'balanced' | 'maximum'
+        );
+      } catch {
+        // Handled in context error state
+      }
+    }
+  };
+
+  const handleUnloadModel = async () => {
+    try {
+      await unloadModel();
+    } catch {
+      // Handled in context error state
+    }
   };
 
   const handleOpenDetails = (model: LocalModel) => {
@@ -106,8 +241,75 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
     setIsDetailsOpen(true);
   };
 
+  const getRuntimeStateHeader = (state?: string, online?: boolean): { label: string; dotClass: string } => {
+    if (!online) return { label: 'Offline (:8000)', dotClass: 'bg-rose-500' };
+    switch (state) {
+      case 'SERVER_STOPPED':
+        return { label: 'Router Offline', dotClass: 'bg-zinc-500' };
+      case 'SERVER_STARTING':
+        return { label: 'Router Starting…', dotClass: 'bg-amber-500 animate-pulse' };
+      case 'MODEL_UNLOADED':
+        return { label: 'Router Ready / No Model Loaded', dotClass: 'bg-sky-500' };
+      case 'MODEL_LOADING':
+        return { label: 'Loading…', dotClass: 'bg-amber-500 animate-pulse' };
+      case 'MODEL_READY':
+        return { label: 'Loaded / Awake', dotClass: 'bg-emerald-500 animate-pulse' };
+      case 'MODEL_SLEEPING':
+        return { label: 'Loaded / Sleeping 💤', dotClass: 'bg-purple-500' };
+      case 'MODEL_UNLOADING':
+        return { label: 'Unloading…', dotClass: 'bg-amber-500 animate-pulse' };
+      case 'MODEL_ERROR':
+        return { label: 'Model Error ⚠️', dotClass: 'bg-rose-500' };
+      case 'SERVER_ERROR':
+        return { label: 'Router Error ⚠️', dotClass: 'bg-rose-500' };
+      default:
+        return { label: 'Router Ready', dotClass: 'bg-sky-500' };
+    }
+  };
+
+  const headerRuntime = getRuntimeStateHeader(modelStatus?.runtime_state, isOnline);
+
   return (
     <div id="models-and-runtime-view" className="space-y-6 max-w-7xl mx-auto pb-12">
+      {/* Error Banner / Pairing Input */}
+      {lastError && (
+        <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-500 text-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span className="font-semibold">{lastError}</span>
+            </div>
+            <button type="button" onClick={clearError} className="p-1 hover:bg-rose-500/20 rounded-lg">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          {(lastError.toLowerCase().includes('auth') || lastError.toLowerCase().includes('credential')) && (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-2 border-t border-rose-500/20">
+              <div className="relative flex-1">
+                <input
+                  type="password"
+                  value={keyInput}
+                  onChange={(e) => setKeyInput(e.target.value)}
+                  placeholder="Paste COMPANION_API_KEY here..."
+                  className="w-full px-3 py-1.5 rounded-xl bg-[var(--color-surface-elevated)] border border-rose-500/40 text-xs text-[var(--color-text-primary)] font-mono focus:outline-none focus:border-[var(--color-accent)] transition-all shadow-xs"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  setApiKey(keyInput.trim());
+                  clearError();
+                  await refreshStatus();
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold tracking-wide transition-all shadow-xs flex-shrink-0"
+              >
+                Save & Connect
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 1. View Header */}
       <div className="p-5 sm:p-6 rounded-3xl surface-raised border border-[var(--color-border-subtle)] flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-start sm:items-center gap-3.5">
@@ -131,35 +333,46 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
 
         <div className="flex items-center gap-2 self-start md:self-center">
           <div className="px-3 py-1.5 rounded-xl surface-recessed border border-[var(--color-border-subtle)] flex items-center gap-2 text-xs font-mono text-[var(--color-text-secondary)]">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Local Engine:</span>
+            <span className={`w-2 h-2 rounded-full ${headerRuntime.dotClass}`} />
+            <span>Local AI Core:</span>
             <span className="font-semibold text-[var(--color-text-primary)]">
-              {currentModel.engine}
+              {headerRuntime.label}
             </span>
           </div>
         </div>
       </div>
 
-      {/* 2. Current Model Hero (Rich Telemetry without Terminal Clutter) */}
+      {/* 2. Current Model Hero (Rich Telemetry with Load/Unload Admin Actions) */}
       <CurrentModelHero
-        model={currentModel}
+        model={liveActiveModel}
+        isModelLoading={isModelLoading}
+        onLoad={() => handleActivateModel(currentSelectedModel.id)}
         onUnload={handleUnloadModel}
         onOpenDetails={handleOpenDetails}
+        idleCountdownSeconds={modelStatus?.seconds_until_idle}
+        runtimeState={modelStatus?.runtime_state}
+        modelStatus={modelStatus}
+        activeModelId={backendActiveModelId}
       />
 
       {/* 3. Performance Profiles & VRAM Target (Tactile Grid) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Performance Profiles (Eco, Balanced, Maximum) */}
         <PerformanceProfileSelector
-          currentProfile={activeProfile}
+          requestedProfile={modelStatus?.requested_profile || activeProfile}
+          appliedProfile={modelStatus?.applied_profile ?? null}
+          appliedContextSize={modelStatus?.applied_context_size ?? null}
+          appliedGpuLayers={modelStatus?.applied_gpu_layers ?? null}
+          requestedMmprojOffload={modelStatus?.requested_mmproj_offload ?? (activeProfile !== 'eco')}
+          appliedMmprojOffload={modelStatus?.applied_mmproj_offload ?? null}
           onSelectProfile={handleProfileChange}
         />
 
-        {/* AI VRAM Target Slider (e.g. 2.5 GB / 8 GB UI-only) */}
+        {/* AI VRAM Target Slider (Informational Headroom Guide) */}
         <VramTargetSlider
           vramTargetGb={vramTargetGb}
           totalVramGb={8.0}
-          currentModelVramGb={currentModel.isCloud ? 0.0 : currentModel.vramUsageGb || 4.9}
+          currentModelVramGb={currentSelectedModel.isCloud ? 0.0 : currentSelectedModel.vramUsageGb || 4.5}
           onChangeVramTarget={setVramTargetGb}
         />
       </div>
@@ -185,9 +398,12 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
 
       {/* 6. Model Library Grid (Activate, Unload, Details) */}
       <ModelLibraryGrid
-        models={models}
-        currentModelId={activeModelId}
+        models={liveModels}
+        selectedModelId={selectedModelId}
+        activeModelId={backendActiveModelId}
+        modelStatus={modelStatus}
         providerFilter={providerFilter}
+        onSelectModel={handleSelectModel}
         onActivateModel={handleActivateModel}
         onUnloadModel={handleUnloadModel}
         onOpenDetails={handleOpenDetails}
@@ -201,7 +417,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
         model={selectedDetailsModel}
         isOpen={isDetailsOpen}
         onClose={() => setIsDetailsOpen(false)}
-        isActive={selectedDetailsModel?.id === activeModelId}
+        isActive={selectedDetailsModel?.id === backendActiveModelId}
         onActivate={handleActivateModel}
       />
     </div>

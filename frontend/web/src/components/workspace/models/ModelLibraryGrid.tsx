@@ -19,8 +19,12 @@ import { LocalModel, ModelProviderType } from '../../../types';
 
 interface ModelLibraryGridProps {
   models: LocalModel[];
-  currentModelId: string;
+  selectedModelId?: string | null;
+  activeModelId?: string | null;
+  currentModelId?: string | null; // Backwards-compatible prop
+  modelStatus?: import('../../../services/api').ModelStatusResponse | null;
   providerFilter: ModelProviderType | 'all';
+  onSelectModel?: (modelId: string) => void;
   onActivateModel: (modelId: string) => void;
   onUnloadModel: (modelId: string) => void;
   onOpenDetails: (model: LocalModel) => void;
@@ -28,12 +32,17 @@ interface ModelLibraryGridProps {
 
 export const ModelLibraryGrid: React.FC<ModelLibraryGridProps> = ({
   models,
+  selectedModelId: explicitSelectedModelId,
+  activeModelId,
   currentModelId,
+  modelStatus,
   providerFilter,
+  onSelectModel,
   onActivateModel,
   onUnloadModel,
   onOpenDetails,
 }) => {
+  const selectedId = explicitSelectedModelId ?? currentModelId ?? null;
   const [searchQuery, setSearchQuery] = useState('');
 
   // Filter models based on search query and provider filter
@@ -82,48 +91,76 @@ export const ModelLibraryGrid: React.FC<ModelLibraryGridProps> = ({
       {/* 2. Models Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredModels.map((model) => {
-          const isCurrent = model.id === currentModelId;
-          const isLoaded = model.status === 'loaded';
+          const isSelected = selectedId === model.id;
+          const isLoaded = Boolean(activeModelId && activeModelId === model.id);
+          const isSleeping = isLoaded && modelStatus?.runtime_state === 'MODEL_SLEEPING';
           const isCloud = model.isCloud || model.engine === 'gemini';
 
           return (
             <div
               key={model.id}
               id={`model-card-${model.id}`}
-              className={`p-4 rounded-2xl border transition-all duration-150 flex flex-col justify-between relative group ${
-                isCurrent
-                  ? 'surface-raised border-[var(--color-accent)] ring-2 ring-[var(--color-accent)]/20 shadow-md'
-                  : 'surface-base border-[var(--color-border-subtle)] hover:border-[var(--color-accent)]/40 hover:shadow-sm'
+              onClick={() => onSelectModel?.(model.id)}
+              className={`p-4 rounded-2xl border transition-all duration-150 flex flex-col justify-between relative group cursor-pointer ${
+                isSelected && isLoaded
+                  ? 'surface-raised border-2 border-[var(--color-accent)] ring-2 ring-[var(--color-accent)]/20 shadow-md'
+                  : isSelected
+                  ? 'surface-raised border-2 border-[var(--color-accent)] ring-2 ring-[var(--color-accent)]/20 shadow-md'
+                  : isLoaded
+                  ? 'surface-raised border-2 border-emerald-500/50 shadow-sm'
+                  : 'surface-base border border-[var(--color-border-subtle)] hover:border-[var(--color-accent)]/40 hover:shadow-sm'
               }`}
             >
               <div>
                 {/* Header: Title & Badges */}
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <h3 className="text-sm font-bold text-[var(--color-text-primary)] group-hover:text-[var(--color-accent)] transition-colors">
                         {model.name}
                       </h3>
+                      {/* Variant badge */}
+                      {model.variant === 'thinking' && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-medium">
+                          Thinking 🧠
+                        </span>
+                      )}
+                      {model.variant === 'instruct' && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 font-medium">
+                          Instruct
+                        </span>
+                      )}
+                      {/* Companion warning */}
+                      {model.hasCompanion && !model.companionFilesValid && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-medium">
+                          ⚠ mmproj missing
+                        </span>
+                      )}
                     </div>
                     <span className="text-[11px] text-[var(--color-text-muted)] font-mono block mt-0.5">
                       {model.family} • {model.parameters}
                     </span>
                   </div>
 
-                  <Badge
-                    variant={isCurrent ? 'accent' : isLoaded ? 'success' : 'default'}
-                    size="sm"
-                  >
-                    {isCurrent ? (
-                      <span className="flex items-center gap-1 font-semibold">
-                        <CheckCircle2 className="w-3 h-3" /> Active
-                      </span>
-                    ) : isLoaded ? (
-                      isCloud ? 'Ready' : 'In VRAM'
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    {isLoaded ? (
+                      <Badge variant={isSleeping ? 'accent' : 'success'} size="sm">
+                        <span className={`w-1.5 h-1.5 rounded-full mr-1 ${isSleeping ? 'bg-purple-500' : 'bg-emerald-500 animate-pulse'}`} />
+                        {isSleeping ? 'Loaded (Sleeping)' : 'Loaded'}
+                      </Badge>
                     ) : (
-                      'On Disk'
+                      <Badge variant="default" size="sm">
+                        {isCloud ? 'Cloud API' : 'On Disk'}
+                      </Badge>
                     )}
-                  </Badge>
+                    {isSelected && (
+                      <Badge variant="accent" size="sm">
+                        <span className="flex items-center gap-1 font-semibold">
+                          <CheckCircle2 className="w-3 h-3" /> Selected
+                        </span>
+                      </Badge>
+                    )}
+                  </div>
                 </div>
 
                 {/* Technical Specifications Grid */}
@@ -156,7 +193,10 @@ export const ModelLibraryGrid: React.FC<ModelLibraryGridProps> = ({
               </div>
 
               {/* Action Buttons: Activate, Unload, Details */}
-              <div className="flex items-center justify-between gap-1.5 pt-3 mt-3 border-t border-[var(--color-border-subtle)]">
+              <div
+                className="flex items-center justify-between gap-1.5 pt-3 mt-3 border-t border-[var(--color-border-subtle)]"
+                onClick={(e) => e.stopPropagation()}
+              >
                 {/* Details Button */}
                 <button
                   type="button"
@@ -176,7 +216,7 @@ export const ModelLibraryGrid: React.FC<ModelLibraryGridProps> = ({
                       type="button"
                       id={`model-unload-btn-${model.id}`}
                       onClick={() => onUnloadModel(model.id)}
-                      className="px-2 py-1.5 rounded-xl surface-recessed border border-[var(--color-border-subtle)] hover:border-rose-500/40 text-[11px] text-rose-500 hover:bg-rose-500/10 flex items-center gap-1 transition-all"
+                      className="px-2.5 py-1.5 rounded-xl surface-recessed border border-rose-500/40 text-[11px] font-semibold text-rose-500 hover:bg-rose-500/10 flex items-center gap-1 transition-all"
                       title="Unload from VRAM"
                     >
                       <Power className="w-3 h-3" />
@@ -184,11 +224,11 @@ export const ModelLibraryGrid: React.FC<ModelLibraryGridProps> = ({
                     </button>
                   )}
 
-                  {/* Activate Button */}
-                  {isCurrent ? (
-                    <div className="px-3 py-1.5 rounded-xl surface-raised border border-[var(--color-accent)]/40 text-[11px] font-bold text-[var(--color-accent)] flex items-center gap-1 shadow-sm font-mono">
+                  {/* Activate / Load / Selected Button */}
+                  {isLoaded ? (
+                    <div className="px-3 py-1.5 rounded-xl surface-raised border border-emerald-500/40 text-[11px] font-bold text-emerald-500 flex items-center gap-1 shadow-sm font-mono">
                       <Check className="w-3 h-3" />
-                      <span>Active</span>
+                      <span>Loaded</span>
                     </div>
                   ) : (
                     <button
@@ -198,7 +238,7 @@ export const ModelLibraryGrid: React.FC<ModelLibraryGridProps> = ({
                       className="px-3 py-1.5 rounded-xl bg-accent-gradient text-white hover:opacity-90 text-[11px] font-semibold flex items-center gap-1 transition-all shadow-sm"
                     >
                       <Play className="w-3 h-3 fill-current" />
-                      <span>Activate</span>
+                      <span>{isSelected ? 'Load' : 'Activate'}</span>
                     </button>
                   )}
                 </div>
