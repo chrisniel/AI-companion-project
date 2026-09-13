@@ -13,6 +13,7 @@ import uuid
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -140,9 +141,10 @@ async def orchestrate_chat_stream(
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    # 2. Idempotency check
+    # 2. Idempotency check (scoped to conversation)
     if client_message_id:
         dup_query = select(Message).where(
+            Message.conversation_id == conversation_id,
             Message.client_message_id == client_message_id,
             Message.owner_id == owner_id,
         )
@@ -160,38 +162,54 @@ async def orchestrate_chat_stream(
     asst_msg: Optional[Message] = None
 
     try:
-        # 4. Sequence number allocation
-        seq_query = select(func.max(Message.sequence_no)).where(
-            Message.conversation_id == conversation_id
-        )
-        seq_result = await db.execute(seq_query)
-        max_seq = seq_result.scalar() or 0
-        user_seq = max_seq + 1
-        asst_seq = max_seq + 2
+        # 4. Sequence number allocation & message persistence with bounded retry for sequence collisions
+        max_seq_retries = 3
+        user_msg: Optional[Message] = None
 
-        # 5. Persist user message and assistant streaming placeholder
-        user_msg = Message(
-            id=str(uuid.uuid4()),
-            conversation_id=conversation_id,
-            owner_id=owner_id,
-            sender="user",
-            content=user_text,
-            status="completed",
-            sequence_no=user_seq,
-            client_message_id=client_message_id,
-        )
-        asst_msg = Message(
-            id=str(uuid.uuid4()),
-            conversation_id=conversation_id,
-            owner_id=owner_id,
-            sender="assistant",
-            content="",
-            status="streaming",
-            sequence_no=asst_seq,
-        )
-        db.add(user_msg)
-        db.add(asst_msg)
-        await db.commit()
+        for attempt in range(max_seq_retries):
+            try:
+                seq_query = select(func.max(Message.sequence_no)).where(
+                    Message.conversation_id == conversation_id
+                )
+                seq_result = await db.execute(seq_query)
+                max_seq = seq_result.scalar() or 0
+                user_seq = max_seq + 1
+                asst_seq = max_seq + 2
+
+                user_msg = Message(
+                    id=str(uuid.uuid4()),
+                    conversation_id=conversation_id,
+                    owner_id=owner_id,
+                    sender="user",
+                    content=user_text,
+                    status="completed",
+                    sequence_no=user_seq,
+                    client_message_id=client_message_id,
+                )
+                asst_msg = Message(
+                    id=str(uuid.uuid4()),
+                    conversation_id=conversation_id,
+                    owner_id=owner_id,
+                    sender="assistant",
+                    content="",
+                    status="streaming",
+                    sequence_no=asst_seq,
+                )
+                db.add(user_msg)
+                db.add(asst_msg)
+                await db.commit()
+                break
+            except IntegrityError as exc:
+                await db.rollback()
+                err_str = str(exc).lower()
+                if "client_message_id" in err_str:
+                    raise HTTPException(status_code=409, detail="DUPLICATE_MESSAGE")
+                if "sequence" in err_str and attempt < max_seq_retries - 1:
+                    logger.warning(
+                        f"Sequence collision in conversation {conversation_id} on attempt {attempt + 1}, retrying..."
+                    )
+                    continue
+                raise
 
         # 6. Retrieve relevant memories via FTS5
         memories = await search_relevant_memories(

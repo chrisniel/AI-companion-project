@@ -19,8 +19,10 @@ from app.db.base import Base
 # Alembic Config object
 config = context.config
 
-# Overwrite sqlalchemy.url with runtime settings
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Overwrite sqlalchemy.url with runtime settings if not explicitly customized
+custom_url = config.get_main_option("sqlalchemy.url")
+if not custom_url or custom_url == "sqlite+aiosqlite:///./data/companion.db":
+    config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 # Interpret config file for logging
 if config.config_file_name is not None:
@@ -58,7 +60,7 @@ def do_run_migrations(connection: Connection) -> None:
 async def run_async_migrations() -> None:
     """In this scenario we need to create an Engine and associate a connection with the context."""
     configuration = config.get_section(config.config_ini_section, {})
-    configuration["sqlalchemy.url"] = settings.DATABASE_URL
+    configuration["sqlalchemy.url"] = config.get_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
     connectable = async_engine_from_config(
         configuration,

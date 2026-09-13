@@ -128,5 +128,6 @@ async def delete_memory(
     if not memory:
         raise HTTPException(status_code=404, detail="Memory not found")
 
+    memory.is_deleted = True
     memory.deleted_at = datetime.now(timezone.utc)
     await db.commit()

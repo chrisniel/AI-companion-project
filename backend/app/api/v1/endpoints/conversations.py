@@ -226,9 +226,10 @@ async def send_message_stream(
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    # Pre-flight 2: Idempotency check
+    # Pre-flight 2: Idempotency check (scoped to conversation)
     if payload.client_message_id:
         dup_query = select(Message).where(
+            Message.conversation_id == conversation_id,
             Message.client_message_id == payload.client_message_id,
             Message.owner_id == owner_id,
         )

@@ -141,6 +141,72 @@ async def test_idempotency_duplicate_message_rejected(client: AsyncClient, auth_
 
 
 @pytest.mark.anyio
+async def test_same_client_message_id_in_different_conversations_allowed(client: AsyncClient, auth_headers: dict):
+    """Ensure the same client_message_id in two DIFFERENT conversations is allowed (Phase 6 scoped uniqueness)."""
+    c1_resp = await client.post("/api/v1/conversations", json={"title": "Conv 1"}, headers=auth_headers)
+    conv1_id = c1_resp.json()["id"]
+
+    c2_resp = await client.post("/api/v1/conversations", json={"title": "Conv 2"}, headers=auth_headers)
+    conv2_id = c2_resp.json()["id"]
+
+    shared_client_id = "shared-client-msg-uuid"
+
+    # Send in conversation 1 -> 200 OK
+    r1 = await client.post(
+        f"/api/v1/conversations/{conv1_id}/messages",
+        json={"user_text": "Message in conv 1", "client_message_id": shared_client_id},
+        headers=auth_headers,
+    )
+    assert r1.status_code == 200
+
+    # Send SAME client_message_id in conversation 2 -> 200 OK
+    r2 = await client.post(
+        f"/api/v1/conversations/{conv2_id}/messages",
+        json={"user_text": "Message in conv 2", "client_message_id": shared_client_id},
+        headers=auth_headers,
+    )
+    assert r2.status_code == 200
+
+    # Sending AGAIN in conversation 1 must still be rejected with 409
+    r3 = await client.post(
+        f"/api/v1/conversations/{conv1_id}/messages",
+        json={"user_text": "Retry in conv 1", "client_message_id": shared_client_id},
+        headers=auth_headers,
+    )
+    assert r3.status_code == 409
+    assert "DUPLICATE_MESSAGE" in r3.text
+
+
+@pytest.mark.anyio
+async def test_deterministic_sequence_ordering(client: AsyncClient, auth_headers: dict):
+    """Ensure messages maintain deterministic chronological sequence numbering."""
+    c_resp = await client.post("/api/v1/conversations", json={"title": "Seq Test"}, headers=auth_headers)
+    conv_id = c_resp.json()["id"]
+
+    # Send 2 consecutive messages
+    await client.post(
+        f"/api/v1/conversations/{conv_id}/messages",
+        json={"user_text": "Turn 1", "client_message_id": "turn-1"},
+        headers=auth_headers,
+    )
+    await client.post(
+        f"/api/v1/conversations/{conv_id}/messages",
+        json={"user_text": "Turn 2", "client_message_id": "turn-2"},
+        headers=auth_headers,
+    )
+
+    # Fetch messages and verify sequence numbers
+    list_resp = await client.get(f"/api/v1/conversations/{conv_id}/messages", headers=auth_headers)
+    assert list_resp.status_code == 200
+    msgs = list_resp.json()["items"]
+    assert len(msgs) == 4
+
+    seqs = [m["sequence_no"] for m in msgs]
+    assert seqs == [1, 2, 3, 4]
+    assert [m["sender"] for m in msgs] == ["user", "assistant", "user", "assistant"]
+
+
+@pytest.mark.anyio
 async def test_conversation_concurrency_lock_busy(client: AsyncClient, auth_headers: dict):
     """Ensure sending message when conversation lock is held returns 409 CONVERSATION_BUSY."""
     c_resp = await client.post("/api/v1/conversations", json={"title": "Lock Test"}, headers=auth_headers)

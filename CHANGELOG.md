@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Verified & Benchmarked (2026-09-14 - Phase 7: Full PC Integration Verification & Benchmarking)
+
+- Cold-Boot & Database Integrity: Verified cold-boot baseline (0 llama processes, ports 8000/8085/3000 free, branch `feature/assistant-orchestration-and-memory`, migration head `005_scope_message_constraints`). Confirmed composite unique constraints `uq_messages_conversation_sequence` and `uq_messages_conversation_client_message_id`, verified removal of global uniqueness on `client_message_id`, soft-delete columns intact, and demonstrated expected downgrade limitation.
+- Topology & Process Management: Verified exact 1 root router :8085 + 1 model worker process topology under FastAPI/Python. Launch configurations verified: Balanced (`--ctx-size 4096 --n-gpu-layers 28 --threads 6`, GPU mmproj, port 8085) and Eco (`--ctx-size 2048 --n-gpu-layers 0 --threads 4 --no-mmproj-offload`).
+- Measured Resource Benchmarks: 
+  - 2B Balanced: Load 5.72s, baseline VRAM 1128.80 MB, loaded VRAM 3829.71 MB (+2700.91 MB delta), router RAM 41.90 MB, worker RAM 1447.76 MB, TTFT 0.962s, gen speed 32.22 tok/s.
+  - 2B Eco: Load 4.68s, baseline VRAM 1136.85 MB, loaded VRAM 1228.29 MB (+91.43 MB delta), router RAM 41.86 MB, worker RAM 2189.92 MB, TTFT 1.107s, gen speed 23.80 tok/s, verified CPU vision projector.
+  - 4B Balanced Smoke: Load 15.47s, baseline VRAM 1176.80 MB, loaded VRAM 4734.11 MB (+3557.31 MB delta), router RAM 41.86 MB, worker RAM 2968.51 MB, TTFT 1.115s, gen speed 16.26 tok/s, clean unload freed 3551.41 MB in 1.59s.
+- Assistant Lifecycle, Streaming & Recovery: Verified SSE chunk streaming with explicit terminal done, SQLite deterministic sequence numbering [1, 2, 3, 4], conversation rehydration, mid-stream cancellation with partial text preservation and immediate lock release (`generation_active=False`), and error recovery.
+- Native Sleep & Wake: Model transitioned to `MODEL_SLEEPING` on idle threshold releasing 2661.21 MB VRAM (down to 1160.20 MB) while worker RAM dropped from 1447.45 MB to 301.64 MB; request woke model in 4.11s (3.601s wake latency) restoring `MODEL_READY` without process duplication.
+- State Persistence & Clean Shutdown: Confirmed conversation history and model rehydration across Web UI and Core restarts. Clean shutdown verified 0 lingering processes, 0 open port listeners, and intact database tables (42 messages, 9 conversations). Automated test suites: 88 backend pytest tests, 38 frontend vitest tests, 0 tsc errors, and Vite production build passed.
+
 ### Fixed & Enhanced (2026-09-13 - Pass 10: llama.cpp Router Model Discovery, Port 8085 Migration & Status Synchronization)
 
 - Router Discovery & Directory Depth: Pointed `llama-server` `--models-dir` directly to `models/vision` (`LLAMA_MODELS_DIR` in `backend/app/core/config.py`), enabling b10936 to automatically discover all 5 Qwen3-VL models and pair them with their `mmproj` companion projector artifacts.
