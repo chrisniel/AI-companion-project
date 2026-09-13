@@ -4,3 +4,4 @@ export * from './modelApi';
 export * from './chatApi';
 export * from './conversationApi';
 export * from './memoryApi';
+export * from './registryApi';

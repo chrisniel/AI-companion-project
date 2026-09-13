@@ -1,0 +1,101 @@
+{
+  "_schema_version": "1",
+  "_note": "Copy to models/registry.json (gitignored). All paths relative to models/.",
+  "models": [
+    {
+      "id": "qwen3-vl-2b-instruct",
+      "display_name": "Qwen3-VL 2B Instruct",
+      "family": "Qwen3-VL",
+      "variant": "instruct",
+      "primary_file": "vision/qwen3-vl-2b-instruct/Qwen_Qwen3-VL-2B-Instruct-Q4_K_M.gguf",
+      "companion_files": [
+        { "role": "mmproj", "path": "vision/qwen3-vl-2b-instruct/mmproj-Qwen_Qwen3-VL-2B-Instruct-f16.gguf" }
+      ],
+      "quantization": "Q4_K_M",
+      "parameters": "2.0B",
+      "context_limit": 32768,
+      "capabilities": ["chat", "vision", "multilingual"],
+      "recommended_profiles": ["eco", "balanced"],
+      "estimated_vram_gb": 2.4,
+      "estimated_ram_gb": 0.6,
+      "license": "Apache-2.0",
+      "source": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF"
+    },
+    {
+      "id": "qwen3-vl-2b-thinking",
+      "display_name": "Qwen3-VL 2B Thinking",
+      "family": "Qwen3-VL",
+      "variant": "thinking",
+      "primary_file": "vision/qwen3-vl-2b-thinking/Qwen_Qwen3-VL-2B-Thinking-Q4_K_M.gguf",
+      "companion_files": [
+        { "role": "mmproj", "path": "vision/qwen3-vl-2b-thinking/mmproj-Qwen_Qwen3-VL-2B-Thinking-f16.gguf" }
+      ],
+      "quantization": "Q4_K_M",
+      "parameters": "2.0B",
+      "context_limit": 32768,
+      "capabilities": ["chat", "vision", "reasoning", "multilingual"],
+      "recommended_profiles": ["balanced", "maximum"],
+      "estimated_vram_gb": 2.4,
+      "estimated_ram_gb": 0.6,
+      "license": "Apache-2.0",
+      "source": "https://huggingface.co/Qwen/Qwen3-VL-2B-Thinking-GGUF"
+    },
+    {
+      "id": "qwen3-vl-4b-instruct",
+      "display_name": "Qwen3-VL 4B Instruct",
+      "family": "Qwen3-VL",
+      "variant": "instruct",
+      "primary_file": "vision/qwen3-vl-4b-instruct/Qwen_Qwen3-VL-4B-Instruct-Q4_K_M.gguf",
+      "companion_files": [
+        { "role": "mmproj", "path": "vision/qwen3-vl-4b-instruct/mmproj-Qwen_Qwen3-VL-4B-Instruct-f16.gguf" }
+      ],
+      "quantization": "Q4_K_M",
+      "parameters": "4.0B",
+      "context_limit": 32768,
+      "capabilities": ["chat", "vision", "multilingual"],
+      "recommended_profiles": ["balanced", "maximum"],
+      "estimated_vram_gb": 3.8,
+      "estimated_ram_gb": 0.8,
+      "license": "Apache-2.0",
+      "source": "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF"
+    },
+    {
+      "id": "qwen3-vl-4b-thinking",
+      "display_name": "Qwen3-VL 4B Thinking",
+      "family": "Qwen3-VL",
+      "variant": "thinking",
+      "primary_file": "vision/qwen3-vl-4b-thinking/Qwen_Qwen3-VL-4B-Thinking-Q4_K_M.gguf",
+      "companion_files": [
+        { "role": "mmproj", "path": "vision/qwen3-vl-4b-thinking/mmproj-Qwen_Qwen3-VL-4B-Thinking-f16.gguf" }
+      ],
+      "quantization": "Q4_K_M",
+      "parameters": "4.0B",
+      "context_limit": 32768,
+      "capabilities": ["chat", "vision", "reasoning", "multilingual"],
+      "recommended_profiles": ["balanced", "maximum"],
+      "estimated_vram_gb": 3.8,
+      "estimated_ram_gb": 0.8,
+      "license": "Apache-2.0",
+      "source": "https://huggingface.co/Qwen/Qwen3-VL-4B-Thinking-GGUF"
+    },
+    {
+      "id": "qwen3-vl-8b-instruct",
+      "display_name": "Qwen3-VL 8B Instruct",
+      "family": "Qwen3-VL",
+      "variant": "instruct",
+      "primary_file": "vision/qwen3-vl-8b-instruct/Qwen_Qwen3-VL-8B-Instruct-Q4_K_M.gguf",
+      "companion_files": [
+        { "role": "mmproj", "path": "vision/qwen3-vl-8b-instruct/mmproj-Qwen_Qwen3-VL-8B-Instruct-f16.gguf" }
+      ],
+      "quantization": "Q4_K_M",
+      "parameters": "8.0B",
+      "context_limit": 32768,
+      "capabilities": ["chat", "vision", "multilingual"],
+      "recommended_profiles": ["maximum"],
+      "estimated_vram_gb": 5.8,
+      "estimated_ram_gb": 1.2,
+      "license": "Apache-2.0",
+      "source": "https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct-GGUF"
+    }
+  ]
+}

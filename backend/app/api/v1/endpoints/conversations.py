@@ -242,7 +242,7 @@ async def send_message_stream(
     # Pre-flight 4: Check LLM provider availability
     provider = get_llm_provider()
     status_resp = await provider.get_status()
-    if not status_resp.is_loaded and status_resp.runtime_state not in (
+    if status_resp.runtime_state not in (
         LLMRuntimeState.MODEL_READY,
         LLMRuntimeState.MODEL_SLEEPING,
     ):

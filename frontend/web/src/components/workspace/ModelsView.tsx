@@ -12,6 +12,7 @@ import {
   PerformanceProfile,
   ProviderRoutingPolicy,
 } from '../../types';
+import { fetchModelRegistry, RegistryEntry } from '../../services/api';
 import { ModelProvidersCard } from './models/ModelProvidersCard';
 import { CurrentModelHero } from './models/CurrentModelHero';
 import { PerformanceProfileSelector } from './models/PerformanceProfileSelector';
@@ -104,6 +105,37 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
   const [selectedDetailsModel, setSelectedDetailsModel] = useState<LocalModel | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
+  // Load live model list from backend registry on mount
+  useEffect(() => {
+    fetchModelRegistry(apiKey)
+      .then((entries) => {
+        if (!entries || entries.length === 0) return; // keep mock fallback if empty or offline
+        const live: LocalModel[] = entries.map((e: RegistryEntry) => ({
+          id: e.id,
+          name: e.display_name,
+          family: e.family,
+          parameters: e.parameters,
+          quantization: e.quantization,
+          sizeGb: e.size_gb ?? 0,
+          contextWindow: e.context_limit,
+          status: 'unloaded' as const,
+          engine: 'llama.cpp',
+          isCloud: false,
+          vramUsageGb: e.estimated_vram_gb,
+          ramUsageGb: e.estimated_ram_gb,
+          filePath: e.primary_file,
+          description: `${e.variant} · ${e.capabilities.join(', ')} · ${e.license}`,
+          variant: e.variant,
+          capabilities: e.capabilities,
+          validationStatus: e.validation_status,
+          hasCompanion: e.companion_files.length > 0,
+          companionFilesValid: e.companion_files_valid,
+        }));
+        setModels(live);
+      })
+      .catch(() => { /* silent fallback to mockLocalModels */ });
+  }, [apiKey]);
+
   // Find active model object
   const currentModel =
     models.find((m) => m.id === activeModelId) || models[0];
@@ -136,7 +168,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
 
     // Only attempt local VRAM loading if model is local and on disk
     if (!selected.isCloud) {
-      const isTargetOnDisk = selected.id === 'm-1' || Boolean(
+      const isTargetOnDisk = Boolean(selected.filePath) || selected.id === 'm-1' || Boolean(
         modelStatus?.available_models?.some((avail) =>
           avail.toLowerCase().includes(selected.name.toLowerCase()) ||
           selected.name.toLowerCase().includes(avail.toLowerCase())
@@ -146,7 +178,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
       if (isTargetOnDisk) {
         try {
           await loadModel(
-            selected.id === 'm-1' ? (modelStatus?.available_models?.[0] || 'Qwen2.5-7B-Instruct-Q4_K_M.gguf') : selected.name,
+            selected.filePath || modelStatus?.available_models?.[0] || selected.name,
             (activeProfile === 'turbo' ? 'maximum' : activeProfile) as 'eco' | 'balanced' | 'maximum'
           );
         } catch {

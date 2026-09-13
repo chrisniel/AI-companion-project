@@ -30,7 +30,7 @@ Use these labels consistently throughout project documentation:
 | Android on-device failover UI | Repository-verified UI/config only | Model selection and failover toggles in `ModelsScreen.kt`; on-device LLM/TTS runtime inference is planned / unverified |
 | Local AI Core / FastAPI | Repository-verified implementation | `backend/app/`; FastAPI application, CORS, request body limits, secret sanitization, fail-closed auth, 33 passing pytest tests |
 | Database & persistence | Repository-verified implementation | `backend/app/db/`; SQLite (`companion.db`), Alembic migrations 001 & 002, Task models, soft-delete, automated retention purge |
-| Local LLM runtime | Repository-verified implementation | `provider/llama.cpp/` (b10936 Vulkan x64); RX 580 GPU offload, subprocess execution, isolated log file (`data/llama_server.log`) |
+| Local LLM runtime | Repository-verified implementation | `runtime/llama.cpp/` (b10936 Vulkan x64); RX 580 GPU offload, subprocess execution, isolated log file (`data/llama_server.log`) |
 | API and contracts | Repository-verified implementation | `contracts/openapi/openapi.json`; typed client in `frontend/web/src/services/api/` |
 | Assistant orchestration & memory | Planned / Active planning | Track B5; SQLite FTS5 virtual table, context budgeting, trust framing, persistent conversation threads |
 | Voice & speech pipeline | Planned (Tracks V0–V6) | Canonical spec in `docs/04_Architecture/VOICE_AND_AUDIO_ARCHITECTURE.md`; CPU-first speech execution |
@@ -144,9 +144,9 @@ AI-companion-project/
 ├── .gitignore
 ├── .gitattributes
 ├── .lfsconfig
-├── provider/
-│   ├── llama.cpp/            # Pinned b10936 Vulkan x64 binaries
-│   └── whisper.cpp/          # Local speech transcription binaries
+├── runtime/
+│   ├── llama.cpp/            # Pinned b10936 Vulkan x64 binaries — gitignored
+│   └── whisper.cpp/          # whisper.cpp Windows release — gitignored
 ├── docs/
 │   ├── 00_Drafts/            # Context-ignored scratchpads
 │   ├── 01_Tracking/          # task.md and per-task archive
@@ -172,7 +172,7 @@ Current repository facts:
 - `frontend/web/` contains the verified React PC control center with live SSE chat streaming and tactile VRAM management.
 - `android/` contains the verified native Android companion app (17 screens, SoftGlass neumorphic theme engine, AMOLED OLED Battery Saver, SharedPreferences persistence, and Host configuration).
 - `backend/` contains the verified FastAPI Local AI Core (Pydantic v2 settings, SQLite database with Alembic migrations, security middleware, and 33 passing pytest tests).
-- `provider/llama.cpp/` contains the pinned Vulkan b10936 runtime binaries.
+- `runtime/llama.cpp/` contains the pinned Vulkan b10936 runtime binaries.
 - `contracts/openapi/openapi.json` contains the verified API contract.
 - `docs/ProjectWorkflowStarterKit/` remains a user-owned starter reference in its current location.
 - The latest master plan under `docs/04_Architecture/` is canonical. Specialized specifications exist for `LLAMA_CPP_RUNTIME_ARCHITECTURE.md` and `VOICE_AND_AUDIO_ARCHITECTURE.md`. Older drafts remain under `docs/00_Drafts/` as non-canonical reference material.

@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.schemas.llm import ChatMessage, ModelStatusResponse
 from app.services.llm.base import BaseLLMProvider
 from app.services.llm.runtime_state import LLMRuntimeState
+from app.services.model_registry import build_model_list
 
 
 class MockLLMProvider(BaseLLMProvider):
@@ -50,7 +51,13 @@ class MockLLMProvider(BaseLLMProvider):
         # Check for any .gguf files in models directory
         available = []
         if settings.MODELS_DIR.exists():
-            available = [f.name for f in settings.MODELS_DIR.glob("*.gguf")]
+            available = [
+                f.relative_to(settings.MODELS_DIR).as_posix()
+                for f in settings.MODELS_DIR.rglob("*.gguf")
+                if f.is_file() and f.name != "lfs-test.gguf" and not f.name.startswith("mmproj") and f.stat().st_size > 100 * 1024 * 1024
+            ]
+
+        registry_entries = [m.primary_file for m in build_model_list() if m.primary_file_exists]
 
         is_loaded = self._is_loaded
         return ModelStatusResponse(
@@ -59,6 +66,7 @@ class MockLLMProvider(BaseLLMProvider):
             active_model=self._active_model if is_loaded else None,
             active_profile=self._active_profile,
             available_models=available,
+            available_registry=registry_entries,
             context_size=context_sizes.get(self._active_profile, 4096),
             gpu_layers=gpu_layers.get(self._active_profile, settings.LLM_GPU_LAYERS),
             idle_timeout_seconds=settings.LLM_IDLE_TIMEOUT_SECONDS,

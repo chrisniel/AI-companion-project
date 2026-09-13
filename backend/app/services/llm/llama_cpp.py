@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.schemas.llm import ChatMessage, ModelStatusResponse
 from app.services.llm.base import BaseLLMProvider
 from app.services.llm.runtime_state import LLMRuntimeState
+from app.services.model_registry import build_model_list
 
 logger = logging.getLogger("app.services.llm.llama_cpp")
 
@@ -95,8 +96,8 @@ class LlamaCppProvider(BaseLLMProvider):
 
         # Fallback to any real .gguf in directory (>100MB)
         all_ggufs = [
-            f for f in models_dir.glob("*.gguf")
-            if f.is_file() and f.name != "lfs-test.gguf" and f.stat().st_size > 100 * 1024 * 1024
+            f for f in models_dir.rglob("*.gguf")
+            if f.is_file() and f.name != "lfs-test.gguf" and not f.name.startswith("mmproj") and f.stat().st_size > 100 * 1024 * 1024
         ]
         if all_ggufs:
             return all_ggufs[0]
@@ -138,14 +139,22 @@ class LlamaCppProvider(BaseLLMProvider):
                 self._active_profile = profile
 
             if model_name:
-                if any(c in model_name for c in ("/", "\\", "..")):
+                if ".." in model_name or model_name.startswith("/") or model_name.startswith("\\"):
                     self._last_error = "MODEL_PATH_TRAVERSAL"
                     return False
                 if not model_name.endswith(".gguf"):
                     model_name = f"{model_name}.gguf"
+                try:
+                    resolved = (settings.MODELS_DIR / model_name).resolve()
+                    resolved.relative_to(settings.MODELS_DIR.resolve())
+                except ValueError:
+                    self._last_error = "MODEL_PATH_TRAVERSAL"
+                    return False
 
             model_path = self._resolve_model_path(model_name)
-            target_model_name = model_name or (model_path.name if model_path.exists() else settings.DEFAULT_MODEL_NAME)
+            target_model_name = model_name or (
+                model_path.relative_to(settings.MODELS_DIR).as_posix() if model_path.exists() else settings.DEFAULT_MODEL_NAME
+            )
 
             # Mode 1: Check if standalone llama-server router is already running
             if await self._check_external_server():
@@ -365,16 +374,16 @@ class LlamaCppProvider(BaseLLMProvider):
         params = self._get_profile_params(self._active_profile)
         available = []
         if settings.MODELS_DIR.exists():
-            available = [
-                f.name for f in settings.MODELS_DIR.glob("*.gguf")
-                if f.is_file() and f.name != "lfs-test.gguf" and f.stat().st_size > 100 * 1024 * 1024
-            ]
-            for sub in settings.MODELS_DIR.iterdir():
-                if sub.is_dir():
-                    available.extend([
-                        f"{sub.name}/{f.name}" for f in sub.glob("*.gguf")
-                        if f.is_file() and f.name != "lfs-test.gguf" and not f.name.startswith("mmproj") and f.stat().st_size > 100 * 1024 * 1024
-                    ])
+            for f in settings.MODELS_DIR.rglob("*.gguf"):
+                if (
+                    f.is_file()
+                    and f.name != "lfs-test.gguf"
+                    and not f.name.startswith("mmproj")
+                    and f.stat().st_size > 100 * 1024 * 1024
+                ):
+                    available.append(f.relative_to(settings.MODELS_DIR).as_posix())
+
+        registry_entries = [m.primary_file for m in build_model_list() if m.primary_file_exists]
 
         seconds_left = None
         if self.is_loaded() and self._last_active_at:
@@ -389,6 +398,7 @@ class LlamaCppProvider(BaseLLMProvider):
             active_model=self._active_model_name if is_loaded else None,
             active_profile=self._active_profile,
             available_models=available,
+            available_registry=registry_entries,
             context_size=params["n_ctx"],
             gpu_layers=params["n_gpu_layers"],
             idle_timeout_seconds=settings.LLM_IDLE_TIMEOUT_SECONDS,

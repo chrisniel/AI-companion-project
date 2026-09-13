@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added & Enhanced (2026-09-13 - Pass 9: Dynamic Model Registry, Runtime Folder Separation & Per-Model Subdirectories - Track R2-lite)
+
+- Runtime Folder Separation: Renamed root-level engine binary folder `provider/` → `runtime/` (`runtime/llama.cpp/` and `runtime/whisper.cpp/`), clarifying the architectural distinction between external native inference daemons and backend Python provider adapters. Updated `backend/app/core/config.py` (`RUNTIME_DIR`, `LLAMA_CPP_BIN_DIR`) and `.gitignore`.
+- Per-Model Subdirectory Layout: Reorganized `models/vision/` into 5 clean per-model subdirectories (`qwen3-vl-2b-instruct`, `qwen3-vl-2b-thinking`, `qwen3-vl-4b-instruct`, `qwen3-vl-4b-thinking`, `qwen3-vl-8b-instruct`), collocating primary GGUF weights with their multimodal projector (`mmproj`) companion artifacts.
+- Dynamic Model Registry Service & Schema: Created `ModelRegistryEntry` schema (`app/schemas/model_registry.py`) and read-only `model_registry` service (`app/services/model_registry.py`) supporting hybrid discovery (registry enrichment + disk scanning). Committed `models/registry.template.json` and gitignored local `models/registry.json`. Added `GET /api/v1/models/registry` endpoint and `available_registry` field to `ModelStatusResponse`.
+- Safe Path Traversal & Model Loading: Refined path traversal verification in `LlamaCppProvider` to safely allow nested subfolder models within `MODELS_DIR` while strictly blocking directory-escape attempts (`..`, absolute paths).
+- Web Models View Dynamic Wiring: Connected `ModelsView.tsx` to `fetchModelRegistry()`, dynamically rendering discovered models in `ModelLibraryGrid` with `Instruct`, `Thinking 🧠`, and `⚠ mmproj missing` variant badges, capability icons, and eradicated hardcoded model name fallbacks.
+- Verification: 53/53 pytest tests passing (49 baseline + 4 registry unit/integration tests); frontend verified with `npm run build` (0 TypeScript/Vite errors).
+
 ### Added & Enhanced (2026-09-13 - Pass 8: Assistant Orchestration, Persistent Conversations & FTS5 Memory - Track B5)
 
 - Persistent Conversations & Messages: Added `conversations` and `messages` tables with Alembic migration `003`. Implemented full CRUD, message history retrieval, and streaming SSE responses on `/api/v1/conversations`.

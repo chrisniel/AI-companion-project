@@ -43,7 +43,10 @@ async def test_path_traversal_model_rejected():
     assert await provider.load_model("..\\windows\\system32\\calc.exe") is False
     assert provider._last_error == "MODEL_PATH_TRAVERSAL"
 
-    assert await provider.load_model("folder/submodel.gguf") is False
+    assert await provider.load_model("/etc/shadow") is False
+    assert provider._last_error == "MODEL_PATH_TRAVERSAL"
+
+    assert await provider.load_model("../outside.gguf") is False
     assert provider._last_error == "MODEL_PATH_TRAVERSAL"
 
 

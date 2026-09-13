@@ -100,10 +100,27 @@ export const ModelLibraryGrid: React.FC<ModelLibraryGridProps> = ({
                 {/* Header: Title & Badges */}
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <h3 className="text-sm font-bold text-[var(--color-text-primary)] group-hover:text-[var(--color-accent)] transition-colors">
                         {model.name}
                       </h3>
+                      {/* Variant badge */}
+                      {model.variant === 'thinking' && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-medium">
+                          Thinking 🧠
+                        </span>
+                      )}
+                      {model.variant === 'instruct' && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 font-medium">
+                          Instruct
+                        </span>
+                      )}
+                      {/* Companion warning */}
+                      {model.hasCompanion && !model.companionFilesValid && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-medium">
+                          ⚠ mmproj missing
+                        </span>
+                      )}
                     </div>
                     <span className="text-[11px] text-[var(--color-text-muted)] font-mono block mt-0.5">
                       {model.family} • {model.parameters}

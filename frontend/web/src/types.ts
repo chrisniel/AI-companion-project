@@ -147,6 +147,20 @@ export interface SystemMetrics {
   maxContextTokens: number;
 }
 
+export type ModelVariant = 'instruct' | 'thinking' | 'base' | string;
+export type ModelCapability =
+  | 'chat'
+  | 'vision'
+  | 'reasoning'
+  | 'structured_output'
+  | 'tool_calling'
+  | 'multilingual';
+export type ValidationStatus =
+  | 'verified'
+  | 'missing_primary'
+  | 'missing_companion'
+  | 'unregistered';
+
 export type ModelProviderType = 'llama.cpp' | 'ollama' | 'gemini';
 
 export type ProviderRoutingPolicy =
@@ -189,6 +203,12 @@ export interface LocalModel {
   description?: string;
   license?: string;
   tensorType?: string;
+  // Registry-enriched fields — populated when backend is online
+  variant?: ModelVariant;
+  capabilities?: ModelCapability[];
+  validationStatus?: ValidationStatus;
+  hasCompanion?: boolean;
+  companionFilesValid?: boolean;
 }
 
 export interface AssistantPersona {

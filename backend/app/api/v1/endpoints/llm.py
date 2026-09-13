@@ -3,7 +3,7 @@
 import json
 import time
 import uuid
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -22,8 +22,10 @@ from app.schemas.llm import (
     ModelProfileUpdateRequest,
     ModelStatusResponse,
 )
+from app.schemas.model_registry import ModelRegistryEntry
 from app.services.llm.base import BaseLLMProvider
 from app.services.llm.manager import get_llm_provider
+from app.services.model_registry import build_model_list
 
 router = APIRouter()
 
@@ -39,6 +41,21 @@ async def get_model_status(
 ) -> ModelStatusResponse:
     """Return active model, loaded state, VRAM profile, and available GGUF files."""
     return await provider.get_status()
+
+
+@router.get(
+    "/models/registry",
+    response_model=List[ModelRegistryEntry],
+    summary="Get Model Registry",
+    dependencies=[Depends(verify_token)],
+)
+async def get_model_registry() -> List[ModelRegistryEntry]:
+    """
+    Return all known and discovered models with validation status,
+    capabilities, VRAM estimates, and companion file status.
+    Master Plan §16.2.
+    """
+    return build_model_list()
 
 
 @router.post(

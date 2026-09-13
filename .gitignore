@@ -95,7 +95,6 @@ runtime/
 generated/
 outputs/
 bin/
-provider/
 providers/
 
 # ---------------------------------------------------------
@@ -121,6 +120,9 @@ providers/
 models/*
 !models/lfs-test.gguf
 !models/.gitkeep
+!models/registry.template.json
+# Model registry — local instance; never commit
+models/registry.json
 *.gguf
 *.onnx
 *.safetensors

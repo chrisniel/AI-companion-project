@@ -49,11 +49,11 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///./data/companion.db"
     DATA_RETENTION_DAYS: int = 30
 
-    # Local LLM Runtime (Track B4 & Sections 11-14)
+    # Native Runtime Engines & Local LLM (Track B4 & Sections 11-14)
     BASE_DIR: Path = BASE_DIR
-    PROVIDER_DIR: Path = BASE_DIR.parent / "provider"
-    LLAMA_CPP_BIN_DIR: Path = PROVIDER_DIR / "llama.cpp"
-    BIN_DIR: Path = PROVIDER_DIR  # backward-compatibility alias
+    RUNTIME_DIR: Path = BASE_DIR.parent / "runtime"
+    LLAMA_CPP_BIN_DIR: Path = RUNTIME_DIR / "llama.cpp"
+    BIN_DIR: Path = RUNTIME_DIR  # backward-compatibility alias
     MODELS_DIR: Path = BASE_DIR.parent / "models"
     DEFAULT_MODEL_NAME: str = "Qwen2.5-7B-Instruct-Q4_K_M.gguf"
     LLM_PROVIDER: str = "auto"  # "auto" | "llama_cpp" | "mock"

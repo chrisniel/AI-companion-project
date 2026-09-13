@@ -23,7 +23,7 @@
 |------|-------|
 | Feature branch | `feature/assistant-orchestration-and-memory` |
 | llama.cpp runtime | b10936, Windows x86_64 Vulkan x64 |
-| llama-server binary | `provider/llama.cpp/llama-server.exe` |
+| llama-server binary | `runtime/llama.cpp/llama-server.exe` |
 | Models directory | `models/` (project root — absolute path) |
 | Data directory | `data/` (project root — NOT inside `backend/`) |
 | Backend venv | `backend/.venv/` |
@@ -39,7 +39,7 @@
 
 | File | What it contains |
 |------|----------------|
-| `backend/app/core/config.py` | All settings — `BIN_DIR`, `MODELS_DIR`, `LLM_*` (update to `PROVIDER_DIR` / `LLAMA_CPP_BIN_DIR` in Phase 1) |
+| `backend/app/core/config.py` | All settings — `BIN_DIR`, `MODELS_DIR`, `LLM_*` (update to `RUNTIME_DIR` / `LLAMA_CPP_BIN_DIR` in Phase 1) |
 | `backend/app/services/llm/llama_cpp.py` | `LlamaCppProvider` — Mode 1/2/3 launch, idle monitor |
 | `backend/app/services/llm/base.py` | `BaseLLMProvider` abstract interface |
 | `backend/app/schemas/llm.py` | `ModelStatusResponse`, `ChatMessage` — do not remove existing fields |
@@ -56,7 +56,7 @@
 1. **No conversation persistence** — browser refresh wipes all messages.
 2. **No multi-turn context** — every `/chat/completions` call is stateless.
 3. **No memory layer** — assistant recalls nothing between sessions.
-4. **Engine directory rename** — runtime binaries moved to `provider/` (e.g. `provider/llama.cpp/`). Config and service paths need updating.
+4. **Engine directory rename** — runtime binaries moved to `runtime/` (e.g. `runtime/llama.cpp/`). Config and service paths need updating.
 5. **Blind process kill** — `unload_model()` uses `taskkill /IM llama-server.exe /F`, killing ANY llama-server on the machine. (Runtime arch §5 invariant 4 forbids this.)
 6. **Conflated state model** — `server_running == model_loaded` assumed; sleeping state invisible.
 
@@ -127,12 +127,12 @@ Find the `# Local LLM Runtime` section.
 BIN_DIR: Path = BASE_DIR.parent / "bin"
 
 # AFTER:
-PROVIDER_DIR: Path = BASE_DIR.parent / "provider"                # external runtime provider binaries
-LLAMA_CPP_BIN_DIR: Path = PROVIDER_DIR / "llama.cpp"             # b10936 Vulkan x64 — LLAMA_CPP_RUNTIME_ARCHITECTURE.md §3
-BIN_DIR: Path = PROVIDER_DIR                                     # backward-compatibility alias
+RUNTIME_DIR: Path = BASE_DIR.parent / "runtime"                  # external native engine binaries
+LLAMA_CPP_BIN_DIR: Path = RUNTIME_DIR / "llama.cpp"               # b10936 Vulkan x64 — LLAMA_CPP_RUNTIME_ARCHITECTURE.md §3
+BIN_DIR: Path = RUNTIME_DIR                                       # backward-compatibility alias
 ```
 
-`provider/whisper.cpp/` is reserved for STT (Track V1, `VOICE_AND_AUDIO_ARCHITECTURE.md`).
+`runtime/whisper.cpp/` is reserved for STT (Track V1, `VOICE_AND_AUDIO_ARCHITECTURE.md`).
 
 **Add after LLAMA_SERVER_URL:**
 ```python
@@ -159,7 +159,7 @@ MEMORY_BUDGET_TOKENS: int = 256
 bin_dir = settings.BIN_DIR
 
 # AFTER:
-bin_dir = settings.LLAMA_CPP_BIN_DIR  # provider/llama.cpp/ — LLAMA_CPP_RUNTIME_ARCHITECTURE.md §3
+bin_dir = settings.LLAMA_CPP_BIN_DIR  # runtime/llama.cpp/ — LLAMA_CPP_RUNTIME_ARCHITECTURE.md §3
 ```
 
 ### 1.3 Verify
@@ -981,7 +981,7 @@ llama-server IPC auth key (Track R2) · Gaming Mode / ResourcePolicy (Track R3)
 ```
 feat(b5): assistant orchestration, persistent conversations, and FTS5 memory
 
-- config: LLAMA_CPP_BIN_DIR (provider/llama.cpp/), DATA_DIR (project root), LLAMA_ROUTER_* settings, B5 constants
+- config: LLAMA_CPP_BIN_DIR (runtime/llama.cpp/), DATA_DIR (project root), LLAMA_ROUTER_* settings, B5 constants
 - llama_cpp: binary path fix; LLMRuntimeState (9-state, LLAMA_CPP_RUNTIME_ARCHITECTURE.md §4);
   router load/unload API; process ownership tracking; remove blind taskkill; graceful shutdown
 - migration 003: conversations + messages + memories + FTS5 virtual table + sync triggers

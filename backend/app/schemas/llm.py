@@ -76,6 +76,7 @@ class ModelStatusResponse(BaseSchema):
     active_model: Optional[str] = None
     active_profile: str
     available_models: List[str]
+    available_registry: Optional[List[str]] = None
     context_size: int
     gpu_layers: int
     idle_timeout_seconds: int
