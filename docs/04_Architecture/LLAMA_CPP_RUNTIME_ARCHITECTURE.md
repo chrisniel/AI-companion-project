@@ -5,7 +5,9 @@
 **Document Role:** Canonical runtime architecture and execution specification  
 **Document Status:** Approved Architecture / Active Baseline  
 **Pinned Baseline:** `llama.cpp` b10936 (Windows x86_64, Vulkan build in `runtime/llama.cpp/`)
-**Primary Host:** Windows 11 Local AI Core  
+**Primary Host:** Windows 11 Local AI Runtime
+
+> **Scope note:** This document owns llama.cpp-specific lifecycle, router architecture, port/profile/sleep/PID behavior, and hardware offload details. General configuration domains, persistent storage layout, `COMPANION_DATA_ROOT`, model-manifest contract, and asset-library rules are defined canonically in `docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`.
 **Primary GPU Target:** AMD Aisurix RX 580 2048SP (8 GB VRAM)  
 **Primary RAM Target:** 16 GB System DDR4 RAM  
 
@@ -21,7 +23,7 @@ The AI Companion project uses a local build of `llama.cpp` as its primary infere
 4. **Distinct Lifecycle Semantics (Sleep vs. Unload vs. Terminate):**
    - **Automatic Sleep:** Native idle timeout (`--sleep-idle-seconds 900`) releases GPU memory when inactive. The router remains running, and subsequent inference requests automatically wake the model.
    - **Explicit Unload:** User clicks **[ Unload VRAM ]** in Web or Android. The model is cleanly evicted, releasing ~5 GB VRAM. The router stays alive.
-   - **Scoped PID Termination:** Used solely as an emergency fallback if the router crashes or hangs. Process termination targets only the specific PID spawned by Local AI Core; blind `taskkill /IM llama-server.exe /F` is strictly forbidden.
+   - **Scoped PID Termination:** Used solely as an emergency fallback if the router crashes or hangs. Process termination targets only the specific PID spawned by Local AI Runtime; blind `taskkill /IM llama-server.exe /F` is strictly forbidden.
 5. **Decoupled Model Choice and Runtime Profile:** Model selection (e.g. `Qwen3-VL-4B-Instruct`), Runtime Profile (`Eco`, `Balanced`, `Maximum`), and Convenience Presets are independent dimensions.
 6. **No Fabricated Telemetry:** All VRAM readings, token generation speeds, and memory metrics must derive from verified OS/driver probes (`psutil`, AMD ADL / GPU-Z) or upstream engine metrics, never synthetic approximations.
 
@@ -36,7 +38,7 @@ The AI Companion project uses a local build of `llama.cpp` as its primary infere
                                       │ Authenticated HTTP / SSE (Bearer Token)
                                       ▼
                ┌──────────────────────────────────────────────┐
-               │            FastAPI Local AI Core             │
+               │            FastAPI Local AI Runtime             │
                │               127.0.0.1:8000                 │
                │                                              │
                │  ┌────────────────────────────────────────┐  │

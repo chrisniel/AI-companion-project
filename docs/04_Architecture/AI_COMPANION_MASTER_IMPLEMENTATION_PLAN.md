@@ -4,11 +4,11 @@
 >
 > **Document role:** Canonical product architecture and implementation-sequencing source of truth.
 >
-> **Last updated:** 2026-09-13
+> **Last updated:** 2026-09-14
 >
 > **Purpose:** Self-contained architecture and implementation handoff for repository work, backend integration, model runtime management, and hybrid on-device AI.
 >
-> **Current state:** The ecosystem architecture is anchored by a persistent **Local AI Core** in `backend/` (FastAPI, SQLite, SQLAlchemy 2, Alembic, 33 passing pytest tests), the PC React control center in `frontend/web/` (TypeScript 5.8, Vite 6, live SSE chat completions, tactile VRAM controls), and the native Android companion app in `android/` (17 screens, Jetpack Compose, SoftGlass neumorphic theme engine, AMOLED OLED Battery Saver theme, 110 passing unit tests). Local LLM inference is repository-verified using `llama.cpp` Vulkan build b10936 targeting the AMD RX 580 8 GB VRAM. Voice pipeline, long-term memory orchestration, tool execution policies, and remote synchronization form the active delivery roadmap.
+> **Current state:** The ecosystem architecture is anchored by a persistent **Local AI Runtime** in `backend/` (FastAPI, SQLite, SQLAlchemy 2, Alembic, 88 passing pytest tests), the PC React control center in `frontend/web/` (TypeScript 5.8, Vite 6, live SSE chat completions, tactile VRAM controls, 38 passing vitest, migration head `005_scope_message_constraints`), and the native Android companion app in `android/` (17 screens, Jetpack Compose, SoftGlass neumorphic theme engine, AMOLED OLED Battery Saver theme, 110 passing unit tests). Local LLM inference is repository-verified using `llama.cpp` Vulkan build b10936 targeting the AMD RX 580 8 GB VRAM. Phase 8 (frontend architecture, runtime config, multimodal image attachments, polish) is the active delivery sequence. Configuration, persistent storage, model library, and asset-root architecture are defined canonically in `docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`.
 
 ## Status Vocabulary
 
@@ -28,14 +28,16 @@ Use these labels consistently throughout project documentation:
 | PC multilingual UI/UX patch | Repository-verified prototype | Language types, mock data, Japanese renderer, settings, character editor, assistant panel, and composer in source |
 | Android companion UI/UX | Repository-verified implementation | `android/`; 17 screens, Jetpack Compose, SoftGlass neumorphic engine, OLED Battery Saver theme, SharedPreferences persistence, Host IP config |
 | Android on-device failover UI | Repository-verified UI/config only | Model selection and failover toggles in `ModelsScreen.kt`; on-device LLM/TTS runtime inference is planned / unverified |
-| Local AI Core / FastAPI | Repository-verified implementation | `backend/app/`; FastAPI application, CORS, request body limits, secret sanitization, fail-closed auth, 33 passing pytest tests |
-| Database & persistence | Repository-verified implementation | `backend/app/db/`; SQLite (`companion.db`), Alembic migrations 001 & 002, Task models, soft-delete, automated retention purge |
-| Local LLM runtime | Repository-verified implementation | `runtime/llama.cpp/` (b10936 Vulkan x64); RX 580 GPU offload, subprocess execution, isolated log file (`data/llama_server.log`) |
+| Local AI Runtime / FastAPI | Repository-verified implementation | `backend/app/`; FastAPI application, CORS, request body limits, secret sanitization, fail-closed auth, **88 passing pytest tests**, migration head `005_scope_message_constraints` |
+| Database & persistence | Repository-verified implementation | `backend/app/db/`; SQLite (`companion.db`), Alembic migrations 001–005, Task models, soft-delete, automated retention purge; canonical path defined in `AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md §6` |
+| Local LLM runtime | Repository-verified implementation | `runtime/llama.cpp/` (b10936 Vulkan x64); RX 580 GPU offload, subprocess execution, isolated log file (`data/llama_server.log`); see `LLAMA_CPP_RUNTIME_ARCHITECTURE.md` |
+| Assistant orchestration & SSE streaming | Repository-verified implementation | Live SSE streaming chat completions; persistent conversation threads; Phase 7 verified baseline |
 | API and contracts | Repository-verified implementation | `contracts/openapi/openapi.json`; typed client in `frontend/web/src/services/api/` |
-| Assistant orchestration & memory | Planned / Active planning | Track B5; SQLite FTS5 virtual table, context budgeting, trust framing, persistent conversation threads |
-| Voice & speech pipeline | Planned (Tracks V0–V6) | Canonical spec in `docs/04_Architecture/VOICE_AND_AUDIO_ARCHITECTURE.md`; CPU-first speech execution |
+| Model registry | Repository-verified implementation | `backend/app/services/model_registry.py`; scan + registry-based model discovery; Qwen3-VL verified defaults (not a whitelist) |
+| Voice & speech pipeline | Planned (Tracks V0–V6) | Canonical spec in `docs/04_Architecture/VOICE_AND_AUDIO_ARCHITECTURE.md`; CPU-first speech execution; persistent voice assets under `COMPANION_DATA_ROOT/library/voices/` |
 | Remote access & authentication | Repository-verified local auth; remote planned | Local token/API key authentication verified; Tailscale remote networking and mutual TLS planned |
-| Automated test suite | Repository-verified | 33 passing backend tests (`pytest backend/tests`), 110 passing Android unit tests (`gradlew.bat testDebugUnitTest`), frontend `npm run lint` clean |
+| Phase 8 (active) | Active planning — pending APPROVED | 8A Frontend UX → 8P Runtime Config → 8B Multimodal Attachments → 8C Polish; plan in `docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md` |
+| Automated test suite | Repository-verified | **88 passing backend tests** (`pytest backend/tests`), **38 passing vitest** (`npm run test`), 110 passing Android unit tests, 0 tsc errors |
 
 This document supersedes conflicting status claims in drafts. Drafts remain reference material until their unique content is deliberately reconciled or archived.
 
@@ -43,7 +45,7 @@ This document supersedes conflicting status claims in drafts. Drafts remain refe
 
 # 1. Vision
 
-Build a local-first personal AI companion centered around a Windows PC running a persistent **Local AI Core**, with React and Android clients.
+Build a local-first personal AI companion centered around a Windows PC running a persistent **Local AI Runtime**, with React and Android clients.
 
 Core capabilities:
 
@@ -116,7 +118,7 @@ Provider interfaces define subsystem boundaries (e.g. `LLMProvider`, `TTSProvide
 
 ## Character Independence
 
-The backend is always the **Local AI Core**.
+The backend is always the **Local AI Runtime**.
 
 Characters are profiles/configuration, never backend identity.
 
@@ -171,7 +173,7 @@ Current repository facts:
 
 - `frontend/web/` contains the verified React PC control center with live SSE chat streaming and tactile VRAM management.
 - `android/` contains the verified native Android companion app (17 screens, SoftGlass neumorphic theme engine, AMOLED OLED Battery Saver, SharedPreferences persistence, and Host configuration).
-- `backend/` contains the verified FastAPI Local AI Core (Pydantic v2 settings, SQLite database with Alembic migrations, security middleware, and 33 passing pytest tests).
+- `backend/` contains the verified FastAPI **Local AI Runtime** (Pydantic v2 settings, SQLite database with Alembic migrations 001–005, security middleware, and 88 passing pytest tests, migration head `005_scope_message_constraints`).
 - `runtime/llama.cpp/` contains the pinned Vulkan b10936 runtime binaries.
 - `contracts/openapi/openapi.json` contains the verified API contract.
 - `docs/ProjectWorkflowStarterKit/` remains a user-owned starter reference in its current location.
@@ -208,7 +210,7 @@ backend/
 React Web UI
      │
      ▼
-FastAPI Local AI Core
+FastAPI Local AI Runtime
      │
      ├── LLM
      ├── Memory
@@ -237,7 +239,7 @@ FastAPI is the orchestrator and canonical source of truth.
 
 **Status: Repository-verified implementation in `frontend/web/`; Track C2 integrated.**
 
-The React/TypeScript desktop control center connects directly to the FastAPI Local AI Core via typed API services in `frontend/web/src/services/api/` (`healthApi.ts`, `modelApi.ts`, `chatApi.ts`) and `BackendContext.tsx`:
+The React/TypeScript desktop control center connects directly to the FastAPI Local AI Runtime via typed API services in `frontend/web/src/services/api/` (`healthApi.ts`, `modelApi.ts`, `chatApi.ts`) and `BackendContext.tsx`:
 - **Tactile VRAM Controls:** Single-click **[ Load to VRAM ]** and **[ Unload VRAM ]** buttons in `ModelsView.tsx` and `CurrentModelHero.tsx` allow instant release of ~5 GB GPU memory.
 - **Live SSE Streaming Chat:** `AssistantView.tsx` streams completions via Server-Sent Events (`text/event-stream`) with auto-scroll and user cancellation via `AbortController`.
 - **Decoupled Telemetry:** Model library selection is decoupled from active resident telemetry (accurate 0.0 GB VRAM display when unloaded).
@@ -263,7 +265,7 @@ Key Android subsystem milestones in repository:
 - **OLED Battery Saver Theme:** True pitch-black (`#000000`) background, zero drop-shadow elevation (no gray halos), and luminous high-contrast borders for maximum battery conservation on AMOLED displays.
 - **Persistent Storage:** `SharedPreferencesAppearanceRepository` backing all theme, preset, effects level, and appearance choices across process kills and reboots.
 - **Fluid Overscroll Physics:** Two-phase momentum spring bounce (`SoftBounceOverscroll.kt`) with progressive quadratic resistance and natural rubber-band recoil.
-- **Real Host Configuration:** Editable Local AI Core Host IP, Port, and API Token inputs with reachability validation in `ConnectionScreen.kt`.
+- **Real Host Configuration:** Editable Local AI Runtime Host IP, Port, and API Token inputs with reachability validation in `ConnectionScreen.kt`.
 - **On-Device Hybrid Failover UI (Provisional / UI State):** Integrated controls in `ModelsScreen.kt` for auto-failover, edge LLM selection (Gemma-2-2B / Qwen-2.5-1.5B), Kokoro-82M neural TTS toggle, SAF model file import, and RAM allocation monitoring. *Note: These represent repository-verified UI and configuration controls; on-device ARM64 model inference is planned and requires hardware benchmarking.*
 
 Current Android Architecture:
@@ -280,7 +282,7 @@ Implementations:
  └── In-Memory / Fake Repositories (Tasks, Alarms, Health, Devices)
 ```
 
-Next Backend Integration: Connect Android repositories directly to the FastAPI Local AI Core via typed REST (`/api/v1/...`) and WebSocket event streams.
+Next Backend Integration: Connect Android repositories directly to the FastAPI Local AI Runtime via typed REST (`/api/v1/...`) and WebSocket event streams.
 
 ---
 
@@ -341,11 +343,11 @@ The system designs a **Hierarchical Model Routing Architecture** spanning the Wi
 ### Key Subsystems (Planned / Candidate Architecture):
 
 1. **Hierarchical Model Routing:**
-   - The Windows PC Local AI Core is the **Primary Orchestrator**, providing high-throughput inference (Qwen3-VL-4B / 8B) with full tool execution and memory retrieval.
+   - The Windows PC Local AI Runtime is the **Primary Orchestrator**, providing high-throughput inference (Qwen3-VL-4B / 8B) with full tool execution and memory retrieval.
    - The smartphone serves as a planned **Edge Node Failover**, running lightweight quantized models (e.g. Gemma-2-2B Q4_K_M or Qwen-2.5-1.5B Q4_K_M) on the device's ARM64 CPU when the PC is powered off.
 
 2. **Dynamic Network Heartbeats & Failover:**
-   - The Android client polls the Local AI Core health endpoint (`/health`).
+   - The Android client polls the Local AI Runtime health endpoint (`/health`).
    - If the request times out or the PC is powered down, the client can divert inference to the local Edge Node.
    - A contextual status badge informs the user of active compute: `PC Online (Full Power)` vs `Local Mobile Mode (Edge Failover)`.
 
@@ -440,7 +442,7 @@ About
 18   Host Network & Hybrid AI Edge UI      Repository-verified complete
 ```
 
-Android UI/UX is fully integrated and repository-verified in `android/`. Automated Robolectric and unit test coverage validates navigation, theming, settings persistence, and semantic connection state cycling. Next phase focuses on real Local AI Core backend integrations.
+Android UI/UX is fully integrated and repository-verified in `android/`. Automated Robolectric and unit test coverage validates navigation, theming, settings persistence, and semantic connection state cycling. Next phase focuses on real Local AI Runtime backend integrations.
 
 ---
 
@@ -546,7 +548,7 @@ A VL model handles standard text chat directly; there is no need to run a separa
 
 ### 11.5 Semantic Runtime State Model
 
-The Local AI Core tracks normalized runtime states reflecting the daemon and model status:
+The Local AI Runtime tracks normalized runtime states reflecting the daemon and model status:
 - `SERVER_STOPPED`: Subprocess is not running.
 - `SERVER_STARTING`: Process launched, awaiting port 8080 health check.
 - `MODEL_UNLOADED`: Router active on port 8080, but 0 model weights resident in VRAM.
@@ -591,7 +593,7 @@ MODEL_UNLOADED (GPU VRAM instantly released to 0.0 GB; router stays alive)
 
 ### Scoped Process Termination (Fallback Recovery Only)
 Process termination is strictly a fallback for hung or crashed daemons:
-- Terminate **only** the specific PID tracked by Local AI Core.
+- Terminate **only** the specific PID tracked by Local AI Runtime.
 - Never execute blind system-wide termination (`taskkill /IM llama-server.exe /F`).
 
 ---
@@ -723,7 +725,7 @@ To prevent accidental data loss and maintain user trust across client deletions 
 
 ### 16.2 ModelRegistry / ModelArtifactRegistry
 
-The Local AI Core maintains a structured artifact registry rather than treating `models/` as an arbitrary directory of loose filenames:
+The Local AI Runtime maintains a structured artifact registry rather than treating `models/` as an arbitrary directory of loose filenames:
 
 ```text
 id:                            unique model string identifier (e.g. "qwen3-vl-4b-instruct")
@@ -1004,7 +1006,7 @@ Health Connect
  ↓
 Android Companion
  ↓
-Local AI Core (SQLite)
+Local AI Runtime (SQLite)
 ```
 
 Avoid BLE reverse engineering in V1. Never fabricate health metrics; missing readings are recorded as `None`/unavailable, never zero.
@@ -1292,7 +1294,7 @@ Consequences and guardrails:
 
 V1 is operational when:
 
-1. Local AI Core starts reliably.
+1. Local AI Runtime starts reliably.
 2. React connects to FastAPI.
 3. Local LLM loads, answers, and unloads.
 4. Performance profiles work.
@@ -1420,7 +1422,7 @@ When unsure where a feature belongs:
 
 ```text
 AI/data/scheduling/tools/canonical state?
-→ Local AI Core
+→ Local AI Runtime
 
 PC runtime/configuration?
 → React Web

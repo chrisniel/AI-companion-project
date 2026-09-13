@@ -1,6 +1,6 @@
 # AI Companion Project
 
-A local-first personal AI companion ecosystem centered around a Windows PC running a persistent **Local AI Core**, with a React desktop control center and a native Android companion app.
+A local-first personal AI companion ecosystem centered around a Windows PC running a persistent **Local AI Runtime**, with a React desktop control center and a native Android companion app.
 
 > **Development status:** Both the PC React web UI prototype (`frontend/web/`) and the native Android companion app (`android/`) are repository-verified in this workspace. The Android app features 17 screens in Jetpack Compose, the SoftGlass design system, AMOLED pitch-black theme, persistent SharedPreferences storage, fluid overscroll bounce physics, real Local AI Core Host IP/port configuration, and 110 passing unit tests. The FastAPI backend, local model runtime integration, database, voice pipeline, health synchronization, and real device integrations are planned and form the next implementation phase.
 
