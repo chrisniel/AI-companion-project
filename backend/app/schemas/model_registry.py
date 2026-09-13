@@ -29,6 +29,7 @@ class CompanionFile(BaseSchema):
 class ModelRegistryEntry(BaseSchema):
     """One logical model with physical artifacts and validated metadata."""
     id: str
+    runtime_model_id: str = ""
     display_name: str
     family: str = ""
     variant: str = "instruct"

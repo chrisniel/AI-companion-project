@@ -16,7 +16,7 @@ from app.core.config import settings
 from app.schemas.llm import ChatMessage, ModelStatusResponse
 from app.services.llm.base import BaseLLMProvider
 from app.services.llm.runtime_state import LLMRuntimeState
-from app.services.model_registry import build_model_list
+from app.services.model_registry import build_model_list, resolve_runtime_model_id
 
 logger = logging.getLogger("app.services.llm.llama_cpp")
 
@@ -56,25 +56,59 @@ class LlamaCppProvider(BaseLLMProvider):
 
     async def _router_load_model(self, model_name: str) -> bool:
         """Load model into VRAM via router API — LLAMA_CPP_RUNTIME_ARCHITECTURE.md §5."""
+        runtime_id = resolve_runtime_model_id(model_name)
         url = f"http://{settings.LLAMA_ROUTER_HOST}:{settings.LLAMA_ROUTER_PORT}/models/load"
         try:
             async with httpx.AsyncClient(timeout=45.0) as c:
-                r = await c.post(url, json={"model": model_name})
-                if r.status_code in (200, 201):
-                    return True
-                logger.error(f"Router load rejected {r.status_code}: {r.text[:200]}")
-                return False
+                r = await c.post(url, json={"model": runtime_id})
+                if r.status_code not in (200, 201):
+                    logger.error(f"Router load rejected {r.status_code}: {r.text[:200]}")
+                    return False
+                
+                # Poll router /models to verify status.value == 'loaded'
+                models_url = f"http://{settings.LLAMA_ROUTER_HOST}:{settings.LLAMA_ROUTER_PORT}/models"
+                for _ in range(60):
+                    await asyncio.sleep(0.5)
+                    try:
+                        m_resp = await c.get(models_url)
+                        if m_resp.status_code == 200:
+                            data = m_resp.json()
+                            models = data.get("data") or data.get("models") or []
+                            for m in models:
+                                if m.get("id") == runtime_id and m.get("status", {}).get("value") == "loaded":
+                                    return True
+                    except Exception:
+                        pass
+                return True
         except Exception as exc:
             logger.error(f"Router load failed: {exc}")
             return False
 
     async def _router_unload_model(self, model_name: str) -> bool:
         """Unload model from VRAM — router stays alive (runtime arch §5 Explicit Unload)."""
+        runtime_id = resolve_runtime_model_id(model_name)
         url = f"http://{settings.LLAMA_ROUTER_HOST}:{settings.LLAMA_ROUTER_PORT}/models/unload"
         try:
             async with httpx.AsyncClient(timeout=15.0) as c:
-                r = await c.post(url, json={"model": model_name})
-                return r.status_code in (200, 204)
+                r = await c.post(url, json={"model": runtime_id})
+                if r.status_code not in (200, 204):
+                    return False
+                
+                # Poll router /models to verify status.value == 'unloaded'
+                models_url = f"http://{settings.LLAMA_ROUTER_HOST}:{settings.LLAMA_ROUTER_PORT}/models"
+                for _ in range(20):
+                    await asyncio.sleep(0.25)
+                    try:
+                        m_resp = await c.get(models_url)
+                        if m_resp.status_code == 200:
+                            data = m_resp.json()
+                            models = data.get("data") or data.get("models") or []
+                            for m in models:
+                                if m.get("id") == runtime_id and m.get("status", {}).get("value") == "unloaded":
+                                    return True
+                    except Exception:
+                        pass
+                return True
         except Exception as exc:
             logger.error(f"Router unload failed: {exc}")
             return False
@@ -142,19 +176,12 @@ class LlamaCppProvider(BaseLLMProvider):
                 if ".." in model_name or model_name.startswith("/") or model_name.startswith("\\"):
                     self._last_error = "MODEL_PATH_TRAVERSAL"
                     return False
-                if not model_name.endswith(".gguf"):
-                    model_name = f"{model_name}.gguf"
-                try:
-                    resolved = (settings.MODELS_DIR / model_name).resolve()
-                    resolved.relative_to(settings.MODELS_DIR.resolve())
-                except ValueError:
-                    self._last_error = "MODEL_PATH_TRAVERSAL"
-                    return False
 
-            model_path = self._resolve_model_path(model_name)
-            target_model_name = model_name or (
-                model_path.relative_to(settings.MODELS_DIR).as_posix() if model_path.exists() else settings.DEFAULT_MODEL_NAME
-            )
+            runtime_id = resolve_runtime_model_id(model_name)
+            if not runtime_id:
+                runtime_id = resolve_runtime_model_id(settings.DEFAULT_MODEL_NAME) or "qwen3-vl-4b-instruct"
+
+            target_model_name = runtime_id
 
             # Mode 1: Check if standalone llama-server router is already running
             if await self._check_external_server():
@@ -162,12 +189,14 @@ class LlamaCppProvider(BaseLLMProvider):
                 self._runtime_state = LLMRuntimeState.MODEL_LOADING
                 if await self._router_load_model(target_model_name):
                     self._runtime_state = LLMRuntimeState.MODEL_READY
+                    self._active_model_name = target_model_name
+                    self._last_active_at = datetime.now(timezone.utc)
+                    self._start_idle_monitor()
+                    return True
                 else:
-                    self._runtime_state = LLMRuntimeState.MODEL_READY
-                self._active_model_name = target_model_name
-                self._last_active_at = datetime.now(timezone.utc)
-                self._start_idle_monitor()
-                return True
+                    self._last_error = f"MODEL_LOAD_FAILED: {target_model_name}"
+                    self._runtime_state = LLMRuntimeState.MODEL_ERROR
+                    return False
 
             # Mode 2: Launch standalone llama-server.exe router
             server_exe = settings.LLAMA_CPP_BIN_DIR / "llama-server.exe"
@@ -177,8 +206,8 @@ class LlamaCppProvider(BaseLLMProvider):
                 self._runtime_state = LLMRuntimeState.SERVER_ERROR
                 return False
 
-            if not model_path.exists():
-                self._last_error = f"MODEL_NOT_FOUND: {model_path}"
+            if not settings.LLAMA_MODELS_DIR.exists():
+                self._last_error = f"MODELS_DIR_NOT_FOUND: {settings.LLAMA_MODELS_DIR}"
                 logger.error(self._last_error)
                 self._runtime_state = LLMRuntimeState.MODEL_ERROR
                 return False
@@ -198,7 +227,7 @@ class LlamaCppProvider(BaseLLMProvider):
 
             launch_args = [
                 str(server_exe.resolve()),
-                "--models-dir", str(settings.MODELS_DIR.resolve()),
+                "--models-dir", str(settings.LLAMA_MODELS_DIR.resolve()),
                 "--host", settings.LLAMA_ROUTER_HOST,
                 "--port", str(settings.LLAMA_ROUTER_PORT),
                 "--sleep-idle-seconds", str(settings.LLAMA_ROUTER_IDLE_TIMEOUT),
@@ -251,7 +280,7 @@ class LlamaCppProvider(BaseLLMProvider):
                 if await self._check_external_server():
                     healthy = True
                     self._runtime_state = LLMRuntimeState.MODEL_UNLOADED
-                    logger.info("Router healthy on port 8080")
+                    logger.info(f"Router healthy on port {settings.LLAMA_ROUTER_PORT}")
                     break
 
             if not healthy:
@@ -292,7 +321,8 @@ class LlamaCppProvider(BaseLLMProvider):
             # 2. Preferred: router API — router stays alive (runtime arch §5 Explicit Unload)
             if self._active_model_name and self._server_is_active:
                 self._runtime_state = LLMRuntimeState.MODEL_UNLOADING
-                if await self._router_unload_model(self._active_model_name):
+                runtime_id = resolve_runtime_model_id(self._active_model_name)
+                if await self._router_unload_model(runtime_id):
                     self._runtime_state = LLMRuntimeState.MODEL_UNLOADED
                     self._active_model_name = None
                     logger.info("Model unloaded via router API; router alive")
@@ -334,7 +364,11 @@ class LlamaCppProvider(BaseLLMProvider):
             return True
 
     def is_loaded(self) -> bool:
-        return self._llm is not None or self._server_is_active
+        return self._llm is not None or (
+            self._server_is_active
+            and self._runtime_state in (LLMRuntimeState.MODEL_READY, LLMRuntimeState.MODEL_SLEEPING)
+            and bool(self._active_model_name)
+        )
 
     def _start_idle_monitor(self) -> None:
         if self._idle_check_task and not self._idle_check_task.done():
@@ -359,15 +393,32 @@ class LlamaCppProvider(BaseLLMProvider):
         # Live probe external llama-server process if not in-process
         if self._llm is None:
             if await self._check_external_server():
-                if self._runtime_state in (LLMRuntimeState.SERVER_STOPPED, LLMRuntimeState.SERVER_STARTING):
-                    self._runtime_state = LLMRuntimeState.MODEL_READY if self._active_model_name else LLMRuntimeState.MODEL_UNLOADED
-                if not self._active_model_name:
-                    model_path = self._resolve_model_path()
-                    self._active_model_name = model_path.name if model_path.exists() else settings.DEFAULT_MODEL_NAME
-                if not self._last_active_at:
-                    self._last_active_at = datetime.now(timezone.utc)
+                router_models_url = f"http://{settings.LLAMA_ROUTER_HOST}:{settings.LLAMA_ROUTER_PORT}/models"
+                loaded_model_id = None
+                try:
+                    async with httpx.AsyncClient(timeout=1.0) as client:
+                        resp = await client.get(router_models_url)
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            models = data.get("data") or data.get("models") or []
+                            for m in models:
+                                if m.get("status", {}).get("value") == "loaded":
+                                    loaded_model_id = m.get("id")
+                                    break
+                except Exception:
+                    pass
+
+                if loaded_model_id:
+                    self._active_model_name = loaded_model_id
+                    self._runtime_state = LLMRuntimeState.MODEL_READY
+                    if not self._last_active_at:
+                        self._last_active_at = datetime.now(timezone.utc)
+                else:
+                    self._active_model_name = None
+                    self._runtime_state = LLMRuntimeState.MODEL_UNLOADED
             else:
                 self._server_is_active = False
+                self._active_model_name = None
                 if self._runtime_state not in (LLMRuntimeState.MODEL_ERROR, LLMRuntimeState.SERVER_ERROR):
                     self._runtime_state = LLMRuntimeState.SERVER_STOPPED
 
@@ -390,7 +441,7 @@ class LlamaCppProvider(BaseLLMProvider):
             elapsed = (datetime.now(timezone.utc) - self._last_active_at).total_seconds()
             seconds_left = max(0, int(settings.LLM_IDLE_TIMEOUT_SECONDS - elapsed))
 
-        is_loaded = self._runtime_state in (LLMRuntimeState.MODEL_READY, LLMRuntimeState.MODEL_SLEEPING) or self.is_loaded()
+        is_loaded = self.is_loaded()
 
         return ModelStatusResponse(
             provider=self.provider_name,
@@ -437,6 +488,7 @@ class LlamaCppProvider(BaseLLMProvider):
             if self._server_is_active:
                 async with httpx.AsyncClient(timeout=120.0) as client:
                     payload = {
+                        "model": self._active_model_name or "default",
                         "messages": formatted_messages,
                         "temperature": temperature,
                         "max_tokens": max_tokens,
@@ -477,6 +529,7 @@ class LlamaCppProvider(BaseLLMProvider):
             # Route A: Standalone llama-server streaming
             if self._server_is_active:
                 payload = {
+                    "model": self._active_model_name or "default",
                     "messages": formatted_messages,
                     "temperature": temperature,
                     "max_tokens": max_tokens,

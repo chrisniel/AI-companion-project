@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Fixed & Enhanced (2026-09-13 - Pass 10: llama.cpp Router Model Discovery, Port 8085 Migration & Status Synchronization)
+
+- Router Discovery & Directory Depth: Pointed `llama-server` `--models-dir` directly to `models/vision` (`LLAMA_MODELS_DIR` in `backend/app/core/config.py`), enabling b10936 to automatically discover all 5 Qwen3-VL models and pair them with their `mmproj` companion projector artifacts.
+- Non-Conflicting Port Migration: Migrated `LLAMA_ROUTER_PORT` from `8080` to `8085` (`LLAMA_SERVER_URL = "http://127.0.0.1:8085/v1"`), permanently resolving port collisions with external web development projects.
+- Router Model ID Resolution: Added `runtime_model_id` to `ModelRegistryEntry` and `resolve_runtime_model_id()` helper, routing requests via model identifiers (`qwen3-vl-4b-instruct`) rather than raw filesystem paths. Included `"model"` parameter in `/v1/chat/completions` request payloads.
+- Provider Auto-Detection & Cold Boot Truthfulness: Replaced top-level `glob("*.gguf")` with recursive `rglob("*.gguf")` in `manager.py` (excluding `mmproj*` and `lfs-test*`) to properly engage `LlamaCppProvider` when weights reside in subfolders. Initialized `MockLLMProvider` with `_is_loaded = False` and `_active_model = None` on cold boot.
+- Live Router Residency & UI Synchronization: Refactored `LlamaCppProvider.get_status()` to parse router `/models` data array for verified `status.value == "loaded"` residency rather than guessing from disk. Replaced fuzzy `includes('Qwen')` matching in `ModelsView.tsx` with exact model ID matching and connected `liveModels` with per-model residency state to `ModelLibraryGrid`.
+- Verification: 56/56 pytest automated tests passing (3 new tests added in `test_model_registry.py`); frontend verified clean via `npm run build` (0 TypeScript/Vite errors); live smoke test executed on AMD RX 580 Vulkan offload on port 8085 with 100% success across discovery, load, chat generation, and clean unload.
+
 ### Added & Enhanced (2026-09-13 - Pass 9: Dynamic Model Registry, Runtime Folder Separation & Per-Model Subdirectories - Track R2-lite)
 
 - Runtime Folder Separation: Renamed root-level engine binary folder `provider/` → `runtime/` (`runtime/llama.cpp/` and `runtime/whisper.cpp/`), clarifying the architectural distinction between external native inference daemons and backend Python provider adapters. Updated `backend/app/core/config.py` (`RUNTIME_DIR`, `LLAMA_CPP_BIN_DIR`) and `.gitignore`.

@@ -11,6 +11,9 @@ from app.core.config import settings
 from app.db.base import Base
 from app.main import app
 
+from app.services.llm.manager import llm_manager
+from app.services.llm.mock import MockLLMProvider
+
 TEST_TOKEN = "companion_sec_test_token_abcdef1234567890"
 
 # Use in-memory SQLite for high-speed isolated tests
@@ -20,6 +23,15 @@ TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 @pytest.fixture(scope="session")
 def anyio_backend():
     return "asyncio"
+
+
+@pytest.fixture(autouse=True)
+def default_mock_llm_provider():
+    """Ensure all tests run deterministically against MockLLMProvider unless explicitly overridden."""
+    mock = MockLLMProvider()
+    llm_manager.set_provider(mock)
+    yield mock
+    llm_manager.reset()
 
 
 @pytest.fixture(scope="session")

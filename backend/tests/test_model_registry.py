@@ -80,3 +80,34 @@ async def test_registry_endpoint_requires_auth(client):
     res = await client.get("/api/v1/models/registry")
     assert res.status_code in (401, 403)
 
+
+def test_resolve_runtime_model_id():
+    """Verify resolve_runtime_model_id correctly resolves IDs, paths, and filenames."""
+    from app.services.model_registry import resolve_runtime_model_id
+    # Empty / None
+    assert resolve_runtime_model_id(None) == ""
+    assert resolve_runtime_model_id("") == ""
+    # Direct folder ID
+    assert resolve_runtime_model_id("qwen3-vl-4b-instruct") == "qwen3-vl-4b-instruct"
+    # Relative path
+    assert resolve_runtime_model_id("vision/qwen3-vl-4b-instruct/Qwen_Qwen3-VL-4B-Instruct-Q4_K_M.gguf") == "qwen3-vl-4b-instruct"
+    # Bare filename
+    assert resolve_runtime_model_id("Qwen_Qwen3-VL-4B-Instruct-Q4_K_M.gguf") == "qwen3-vl-4b-instruct"
+
+
+def test_mock_provider_cold_boot_truthfulness():
+    """Verify MockLLMProvider starts in unloaded state without fabricating active model."""
+    from app.services.llm.mock import MockLLMProvider
+    mock = MockLLMProvider()
+    assert mock.is_loaded() is False
+    assert mock._active_model is None
+
+
+def test_router_config_port_and_models_dir():
+    """Verify LLAMA_ROUTER_PORT is 8085 (preventing 8080 conflict) and LLAMA_MODELS_DIR is models/vision."""
+    from app.core.config import settings
+    assert settings.LLAMA_ROUTER_PORT == 8085
+    assert "8085" in settings.LLAMA_SERVER_URL
+    assert settings.LLAMA_MODELS_DIR.name == "vision"
+    assert settings.LLAMA_MODELS_DIR.parent == settings.MODELS_DIR
+

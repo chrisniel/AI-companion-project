@@ -15,8 +15,8 @@ class MockLLMProvider(BaseLLMProvider):
     """High-speed deterministic mock provider that simulates LLM generation and streaming."""
 
     def __init__(self):
-        self._is_loaded = True
-        self._active_model = settings.DEFAULT_MODEL_NAME
+        self._is_loaded = False
+        self._active_model = None
         self._active_profile = settings.LLM_PROFILE
         self._last_active_at = datetime.now(timezone.utc)
 
@@ -27,6 +27,8 @@ class MockLLMProvider(BaseLLMProvider):
     async def load_model(self, model_name: Optional[str] = None, profile: Optional[str] = None) -> bool:
         if model_name:
             self._active_model = model_name
+        elif not self._active_model:
+            self._active_model = settings.DEFAULT_MODEL_NAME
         if profile:
             self._active_profile = profile
         self._is_loaded = True
@@ -35,6 +37,7 @@ class MockLLMProvider(BaseLLMProvider):
 
     async def unload_model(self) -> bool:
         self._is_loaded = False
+        self._active_model = None
         return True
 
     async def set_profile(self, profile: str) -> bool:

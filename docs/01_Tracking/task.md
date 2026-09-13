@@ -3,40 +3,38 @@
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - Status: In Progress
-- Current Sprint: Track R2-lite — Runtime Rename & Model Registry
+- Current Sprint: Router & Model Registry Integration Fix
 - Branch: `feature/assistant-orchestration-and-memory`
-- Target: Dynamic model registry, provider/ → runtime/ rename, per-model subdirs; 53/53 automated tests passing.
-- Scope Guard: No new DB migrations. No voice/audio tracks. No LFS/git policy changes. No provider/ rename inside backend/app/services/.
-- Plan: `docs/02_Planning/plan-runtime-rename-and-model-registry.md`
+- Target: Fix llama-server router discovery, port 8085 migration, model ID routing, provider detection, and live status synchronization; all tests passing + live RX 580 smoke test.
+- Scope Guard: No new DB migrations. No voice/audio tracks. No LFS/git policy changes.
+- Plan: `docs/02_Planning/plan-llama-router-and-model-registry-fix.md`
 
-## [CURRENT EXECUTION STATE - R2-lite VERIFIED & READY TO COMMIT]
+## [CURRENT EXECUTION STATE - VERIFIED & READY FOR COMMIT]
 
 - Active Files:
   - `backend/app/core/config.py`
-  - `backend/app/services/model_registry.py`
-  - `backend/app/schemas/model_registry.py`
-  - `backend/app/api/v1/endpoints/llm.py`
-  - `backend/app/services/llm/llama_cpp.py`
+  - `backend/app/services/llm/manager.py`
   - `backend/app/services/llm/mock.py`
-  - `frontend/web/src/services/api/registryApi.ts`
+  - `backend/app/schemas/model_registry.py`
+  - `backend/app/services/model_registry.py`
+  - `backend/app/services/llm/llama_cpp.py`
   - `frontend/web/src/components/workspace/ModelsView.tsx`
-  - `models/registry.template.json`
-- Current Status: All 53 tests passing (49 baseline + 4 registry). Frontend build passed cleanly.
-- Next Action: Present commit proposal to user; await user review and commit.
+  - `backend/tests/conftest.py`
+  - `backend/tests/test_llm.py`
+  - `backend/tests/test_model_registry.py`
+  - `CHANGELOG.md`
+- Current Status: All 56 automated tests passing. Frontend build passed cleanly. Live smoke test on port 8085 with Vulkan GPU offload passed 100%.
+- Next Action: Present commit proposal to user; await user review and manual commit.
 
-## Active Checklist — Track R2-lite
+## Active Checklist — Router & Model Registry Fix
 
-- [x] Task R2-lite.0: Pre-flight — confirm 49 tests passing
-- [x] Task R2-lite.1: Rename provider/ → runtime/ filesystem + config.py + .gitignore
-- [x] Task R2-lite.2: Reorganize models/vision/ into per-model subdirectories
-- [x] Task R2-lite.3: Create models/registry.template.json (committed template)
-- [x] Task R2-lite.4: Backend ModelRegistryEntry schema + model_registry service
-- [x] Task R2-lite.5: Backend GET /api/v1/models/registry endpoint in llm.py
-- [x] Task R2-lite.6: Frontend registryApi.ts + LocalModel type extensions
-- [x] Task R2-lite.7: ModelsView.tsx — live registry load + hardcoded name fix + variant badges
-- [x] Task R2-lite.8: test_model_registry.py — 4 new tests; verify 53 total passing
-- [x] Task R2-lite.9: Update all arch docs provider/ → runtime/
-- [ ] Task R2-lite.10: Manual verification (user-owned — see plan Phase 14 checklist)
+- [x] Task 1: Update `backend/app/core/config.py` (port 8085, LLAMA_MODELS_DIR, URL)
+- [x] Task 2: Fix `manager.py` (rglob for GGUF discovery) & `mock.py` (cold boot truthfulness)
+- [x] Task 3: Schema & Registry (`runtime_model_id` field and resolver helper)
+- [x] Task 4: LlamaCppProvider core (launch args, runtime ID routing, status polling, completion payload)
+- [x] Task 5: Frontend `ModelsView.tsx` (exact ID matching and activation)
+- [x] Task 6: Automated test suite verification (`pytest tests/ -v` [56/56] and `npm run build`)
+- [x] Task 7: Live smoke test with `llama-server.exe` on port 8085 (Vulkan RX 580)
 
 ## Completed — Track B5 (archived after manual verification)
 

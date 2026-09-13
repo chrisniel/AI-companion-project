@@ -3,18 +3,6 @@
 import pytest
 from httpx import AsyncClient
 
-from app.services.llm.manager import llm_manager
-from app.services.llm.mock import MockLLMProvider
-
-
-@pytest.fixture(autouse=True)
-def ensure_mock_provider():
-    """Ensure tests run against fast, deterministic MockLLMProvider."""
-    mock = MockLLMProvider()
-    llm_manager.set_provider(mock)
-    yield
-    llm_manager.reset()
-
 
 @pytest.mark.asyncio
 async def test_llm_endpoints_require_auth(client: AsyncClient):

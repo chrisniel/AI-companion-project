@@ -6,7 +6,7 @@ Never writes to models/.
 import json
 import logging
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from app.core.config import settings
 from app.schemas.model_registry import (
@@ -21,13 +21,17 @@ _MIN_SIZE_BYTES = 100 * 1024 * 1024
 def _load_registry_json() -> list:
     registry_path = settings.MODELS_DIR / "registry.json"
     if not registry_path.exists():
-        logger.info("models/registry.json not found — using scan-only discovery")
-        return []
+        template_path = settings.MODELS_DIR / "registry.template.json"
+        if template_path.exists():
+            registry_path = template_path
+        else:
+            logger.info("models/registry.json and template not found — using scan-only discovery")
+            return []
     try:
         with open(registry_path, "r", encoding="utf-8") as f:
             return json.load(f).get("models", [])
     except Exception as exc:
-        logger.warning(f"Failed to parse models/registry.json: {exc}")
+        logger.warning(f"Failed to parse registry file: {exc}")
         return []
 
 
@@ -64,7 +68,7 @@ def _validate_entry(entry: ModelRegistryEntry) -> ModelRegistryEntry:
 
 def build_model_list() -> List[ModelRegistryEntry]:
     """
-    1. Parse registry.json and validate each entry against disk.
+    1. Parse registry.json (or registry.template.json) and validate each entry against disk.
     2. Scan models/ for any .gguf not in registry.
     3. Return: registered (instruct < thinking < base) then unregistered.
     """
@@ -87,6 +91,7 @@ def build_model_list() -> List[ModelRegistryEntry]:
                     pass
             entry = ModelRegistryEntry(
                 id=raw["id"],
+                runtime_model_id=raw.get("runtime_model_id") or raw["id"],
                 display_name=raw.get("display_name", raw["id"]),
                 family=raw.get("family", ""),
                 variant=raw.get("variant", "instruct"),
@@ -116,8 +121,10 @@ def build_model_list() -> List[ModelRegistryEntry]:
         if relative in registered_primary_files:
             continue
         size_gb = round(path.stat().st_size / (1024 ** 3), 2)
+        folder_name = path.parent.name if path.parent not in (settings.MODELS_DIR, settings.LLAMA_MODELS_DIR) else path.stem
         unregistered.append(ModelRegistryEntry(
             id=path.stem.lower().replace("_", "-").replace(".", "-"),
+            runtime_model_id=folder_name,
             display_name=path.stem,
             family="",
             variant="instruct",
@@ -131,3 +138,26 @@ def build_model_list() -> List[ModelRegistryEntry]:
     result = registered + unregistered
     logger.info(f"Model registry: {len(registered)} registered, {len(unregistered)} unregistered")
     return result
+
+
+def resolve_runtime_model_id(identifier: Optional[str]) -> str:
+    """Resolve an incoming identifier (id, primary_file, or filename) to the router runtime_model_id."""
+    if not identifier:
+        return ""
+    clean_id = identifier.replace("\\", "/").strip()
+    entries = build_model_list()
+    for entry in entries:
+        candidate_matches = {
+            entry.id,
+            entry.runtime_model_id,
+            entry.primary_file,
+            Path(entry.primary_file).name,
+            Path(entry.primary_file).stem,
+        }
+        if clean_id in candidate_matches:
+            return entry.runtime_model_id or entry.id
+
+    p = Path(clean_id)
+    if p.parent and p.parent.name and p.parent.name not in (".", "vision", "models"):
+        return p.parent.name
+    return p.stem or clean_id

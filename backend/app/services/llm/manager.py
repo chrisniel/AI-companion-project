@@ -39,8 +39,11 @@ class LLMManager:
             real_models = []
             if settings.MODELS_DIR.exists():
                 real_models = [
-                    f for f in settings.MODELS_DIR.glob("*.gguf")
-                    if f.is_file() and f.name != "lfs-test.gguf" and f.stat().st_size > 100 * 1024 * 1024
+                    f for f in settings.MODELS_DIR.rglob("*.gguf")
+                    if f.is_file()
+                    and f.name != "lfs-test.gguf"
+                    and not f.name.startswith("mmproj")
+                    and f.stat().st_size > 100 * 1024 * 1024
                 ]
             if real_models:
                 logger.info(f"Real GGUF model detected ({real_models[0].name}). Engaging LlamaCppProvider.")

@@ -55,16 +55,17 @@ class Settings(BaseSettings):
     LLAMA_CPP_BIN_DIR: Path = RUNTIME_DIR / "llama.cpp"
     BIN_DIR: Path = RUNTIME_DIR  # backward-compatibility alias
     MODELS_DIR: Path = BASE_DIR.parent / "models"
+    LLAMA_MODELS_DIR: Path = BASE_DIR.parent / "models" / "vision"
     DEFAULT_MODEL_NAME: str = "Qwen2.5-7B-Instruct-Q4_K_M.gguf"
     LLM_PROVIDER: str = "auto"  # "auto" | "llama_cpp" | "mock"
     LLM_PROFILE: str = "balanced"  # "eco" | "balanced" | "maximum"
     LLM_IDLE_TIMEOUT_SECONDS: int = 900  # 15 minutes auto-unload
     LLM_GPU_LAYERS: int = 28  # default GPU layers offload for RX 580
-    LLAMA_SERVER_URL: str = "http://127.0.0.1:8080/v1"
+    LLAMA_SERVER_URL: str = "http://127.0.0.1:8085/v1"
 
     # LLM Router launch (LLAMA_CPP_RUNTIME_ARCHITECTURE.md §3)
     LLAMA_ROUTER_HOST: str = "127.0.0.1"  # localhost only — never 0.0.0.0
-    LLAMA_ROUTER_PORT: int = 8080
+    LLAMA_ROUTER_PORT: int = 8085
     LLAMA_ROUTER_IDLE_TIMEOUT: int = 900  # --sleep-idle-seconds; MODEL_SLEEPING trigger
     LLAMA_ROUTER_MODELS_MAX: int = 1  # --models-max; one-primary-model residency rule
 

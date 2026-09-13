@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Cpu, Layers, HardDrive, Zap, RefreshCw, CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { useBackend } from '../../context/BackendContext';
@@ -32,7 +32,7 @@ export interface ModelsViewProps {
 export const ModelsView: React.FC<ModelsViewProps> = ({
   currentModelId: controlledModelId,
   onSelectModel,
-  performanceProfile: controlledProfile = 'balanced',
+  performanceProfile: controlledProfile,
   onChangePerformanceProfile,
 }) => {
   const {
@@ -62,9 +62,24 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
   const [internalModelId, setInternalModelId] = useState<string>('m-1');
   const activeModelId = controlledModelId || internalModelId;
 
+  // Sync active model ID when backend reports a verified loaded active_model
+  useEffect(() => {
+    if (modelStatus?.is_loaded && modelStatus?.active_model) {
+      const match = models.find(
+        (m) =>
+          m.id === modelStatus.active_model ||
+          m.filePath === modelStatus.active_model ||
+          (m.filePath && m.filePath.endsWith(modelStatus.active_model))
+      );
+      if (match) {
+        setInternalModelId(match.id);
+      }
+    }
+  }, [modelStatus?.active_model, modelStatus?.is_loaded, models]);
+
   // Performance Profile state (prefer backend profile if available)
   const backendProfile = modelStatus?.active_profile as PerformanceProfile | undefined;
-  const [internalProfile, setInternalProfile] = useState<PerformanceProfile>(backendProfile || controlledProfile);
+  const [internalProfile, setInternalProfile] = useState<PerformanceProfile>(backendProfile || controlledProfile || 'balanced');
   const activeProfile = backendProfile || controlledProfile || internalProfile;
 
   const handleProfileChange = async (newProfile: PerformanceProfile) => {
@@ -136,15 +151,36 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
       .catch(() => { /* silent fallback to mockLocalModels */ });
   }, [apiKey]);
 
+  // Compute live per-model loaded status based on real backend residency
+  const liveModels = useMemo(() => {
+    return models.map((m) => {
+      const isThisLoaded = Boolean(
+        modelStatus?.is_loaded &&
+        modelStatus?.active_model &&
+        (
+          m.id === modelStatus.active_model ||
+          m.filePath === modelStatus.active_model ||
+          (m.filePath && m.filePath.endsWith(modelStatus.active_model))
+        )
+      );
+      return {
+        ...m,
+        status: isThisLoaded ? ('loaded' as const) : ('unloaded' as const),
+      };
+    });
+  }, [models, modelStatus?.is_loaded, modelStatus?.active_model]);
+
   // Find active model object
   const currentModel =
-    models.find((m) => m.id === activeModelId) || models[0];
+    liveModels.find((m) => m.id === activeModelId) || liveModels[0] || models[0];
 
-  const isQwenModel = currentModel.id === 'm-1' || currentModel.name.toLowerCase().includes('qwen');
   const isSelectedModelLoaded = Boolean(
-    modelStatus?.is_loaded && (
-      (isQwenModel && (modelStatus.active_model?.includes('Qwen') || !modelStatus.active_model)) ||
-      (modelStatus.active_model && currentModel.name.includes(modelStatus.active_model))
+    modelStatus?.is_loaded &&
+    modelStatus?.active_model &&
+    (
+      currentModel.id === modelStatus.active_model ||
+      currentModel.filePath === modelStatus.active_model ||
+      (currentModel.filePath && modelStatus.active_model && currentModel.filePath.endsWith(modelStatus.active_model))
     )
   );
 
@@ -157,7 +193,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
       : (modelStatus?.provider === 'llama_cpp' ? 'llama.cpp (Vulkan)' : currentModel.engine),
     contextWindow: isSelectedModelLoaded && modelStatus?.context_size ? modelStatus.context_size : currentModel.contextWindow,
     layersOffloaded: isSelectedModelLoaded && modelStatus?.gpu_layers !== undefined ? modelStatus.gpu_layers : (isSelectedModelLoaded ? 28 : 0),
-    vramUsageGb: isSelectedModelLoaded ? 4.5 : 0.0,
+    vramUsageGb: isSelectedModelLoaded ? (currentModel.vramUsageGb || 4.5) : 0.0,
   };
 
   // Actions
@@ -168,7 +204,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
 
     // Only attempt local VRAM loading if model is local and on disk
     if (!selected.isCloud) {
-      const isTargetOnDisk = Boolean(selected.filePath) || selected.id === 'm-1' || Boolean(
+      const isTargetOnDisk = Boolean(selected.filePath) || selected.validationStatus === 'verified' || selected.id === 'm-1' || Boolean(
         modelStatus?.available_models?.some((avail) =>
           avail.toLowerCase().includes(selected.name.toLowerCase()) ||
           selected.name.toLowerCase().includes(avail.toLowerCase())
@@ -178,7 +214,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
       if (isTargetOnDisk) {
         try {
           await loadModel(
-            selected.filePath || modelStatus?.available_models?.[0] || selected.name,
+            selected.id || selected.filePath || selected.name,
             (activeProfile === 'turbo' ? 'maximum' : activeProfile) as 'eco' | 'balanced' | 'maximum'
           );
         } catch {
@@ -359,7 +395,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
 
       {/* 6. Model Library Grid (Activate, Unload, Details) */}
       <ModelLibraryGrid
-        models={models}
+        models={liveModels}
         currentModelId={activeModelId}
         providerFilter={providerFilter}
         onActivateModel={handleActivateModel}
