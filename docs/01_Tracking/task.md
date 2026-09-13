@@ -2,22 +2,29 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: Planning (Pending User Plan Approval)
-- Current Sprint: Track B5 — Assistant Orchestration, Persistent Conversations & SQLite FTS5 Memory
+- Status: Architecture Reconciled / Awaiting Claude B5 Plan Revision
+- Current Sprint: Pre-B5 Architecture Reconciliation & Track B5 Preparation
 - Branch: `feature/assistant-orchestration-and-memory`
-- Target: Deliver persistent conversations, message history, FTS5 keyword memory retrieval, prompt context packaging, and Web client integration.
-- Scope Guard: Only Track B5 bounded items; no audio/STT/TTS in this slice.
+- Target: Canonical architecture reconciliation complete; handoff to Claude for Track B5 plan revision before implementation.
+- Scope Guard: Documentation & architectural contracts only in this phase; no application code changes.
 
-## [CURRENT EXECUTION STATE - PLANNING]
+## [CURRENT EXECUTION STATE - RECONCILIATION COMPLETE]
 
 - Active Files:
-  - `docs/02_Planning/plan-assistant-orchestration-and-memory.md`
-  - Implementation Plan Artifact (`implementation_plan.md`)
-- Current Status: Implementation plan authored and presented for user review.
-- Next Action: Await user approval of implementation plan before writing code.
+  - `docs/04_Architecture/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md`
+  - `docs/04_Architecture/LLAMA_CPP_RUNTIME_ARCHITECTURE.md`
+  - `docs/04_Architecture/VOICE_AND_AUDIO_ARCHITECTURE.md`
+  - `docs/02_Planning/plan-assistant-orchestration-and-memory.md` (to be revised by Claude)
+- Current Status: Pre-B5 Master Architecture Reconciliation completed.
+- Next Action: Claude revises Track B5 plan (`docs/02_Planning/plan-assistant-orchestration-and-memory.md`) to align with reconciled architecture; Gemini then executes B5 coding.
 
 ## Active Checklist
 
+- [x] Task Pre-B5.1: Reconcile `AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md` with active repository facts (B1, B2, B4, C2).
+- [x] Task Pre-B5.2: Create canonical `docs/04_Architecture/LLAMA_CPP_RUNTIME_ARCHITECTURE.md` (router mode, sleep vs unload, PID-scoped kill).
+- [x] Task Pre-B5.3: Create canonical `docs/04_Architecture/VOICE_AND_AUDIO_ARCHITECTURE.md` (V0–V6 roadmap, CPU-first speech, barge-in).
+- [x] Task Pre-B5.4: Document Qwen3-VL portfolio (2B/4B/8B, Instruct/Thinking), ModelRegistry, and decoupled runtime profiles.
+- [ ] Task B5.0: Claude revises `docs/02_Planning/plan-assistant-orchestration-and-memory.md` for Track B5 execution.
 - [ ] Task B5.1: Create ORM models (`Conversation`, `Message`, `Memory`) & Alembic migration 003 with SQLite FTS5 virtual table.
 - [ ] Task B5.2: Implement `MemoryRetriever` service with FTS5 keyword matching and soft-delete filtering.
 - [ ] Task B5.3: Implement `AssistantOrchestrator` service (persona injection, FTS5 memories, context window, LLM streaming).

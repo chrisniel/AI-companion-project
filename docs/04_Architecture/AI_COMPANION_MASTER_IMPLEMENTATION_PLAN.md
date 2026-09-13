@@ -4,11 +4,11 @@
 >
 > **Document role:** Canonical product architecture and implementation-sequencing source of truth.
 >
-> **Last updated:** 2026-09-12
+> **Last updated:** 2026-09-13
 >
-> **Purpose:** Self-contained architecture and implementation handoff for repository work, backend integration, and hybrid on-device AI runtime.
+> **Purpose:** Self-contained architecture and implementation handoff for repository work, backend integration, model runtime management, and hybrid on-device AI.
 >
-> **Current state:** Both the PC React UI/UX prototype and the native Android companion app (`android/`) are repository-verified in this workspace. The Android app features 17 screens in Jetpack Compose, the SoftGlass design system with calibrated contrast, an AMOLED-optimized pure pitch-black (`#000000`) "OLED Battery Saver" theme, persistent SharedPreferences storage, fluid overscroll bounce physics, real Local AI Core Host IP/port configuration, and On-Device Hybrid Failover controls (Gemma/Qwen LLM + Kokoro-82M ONNX TTS). The FastAPI backend, local model runtime, database, voice pipeline, authentication, health synchronization, and real device integrations are planned and are next in the implementation roadmap.
+> **Current state:** The ecosystem architecture is anchored by a persistent **Local AI Core** in `backend/` (FastAPI, SQLite, SQLAlchemy 2, Alembic, 33 passing pytest tests), the PC React control center in `frontend/web/` (TypeScript 5.8, Vite 6, live SSE chat completions, tactile VRAM controls), and the native Android companion app in `android/` (17 screens, Jetpack Compose, SoftGlass neumorphic theme engine, AMOLED OLED Battery Saver theme, 110 passing unit tests). Local LLM inference is repository-verified using `llama.cpp` Vulkan build b10936 targeting the AMD RX 580 8 GB VRAM. Voice pipeline, long-term memory orchestration, tool execution policies, and remote synchronization form the active delivery roadmap.
 
 ## Status Vocabulary
 
@@ -24,15 +24,18 @@ Use these labels consistently throughout project documentation:
 
 | Area | Status | Evidence / Boundary |
 | --- | --- | --- |
-| PC React control-center UI/UX | Repository-verified prototype | `frontend/web/`; TypeScript check passed on 2026-09-10 |
-| PC multilingual UI/UX patch | Repository-verified prototype | Language types, mock data, Japanese renderer, settings, character editor, assistant panel, composer, and home greeting exist in source |
-| Android companion UI/UX | Repository-verified implementation | `android/`; 17 screens, Jetpack Compose, SoftGlass neumorphic theme engine, OLED Battery Saver theme, SharedPreferences persistence, Host IP config, and Hybrid Failover UI |
-| Local AI Core / FastAPI | Planned | `backend/` is an empty local placeholder |
-| Database / persistence | Planned | No schema, models, migrations, or database implementation exists |
-| Local LLM, STT, TTS, and VAD | Planned | No runtime integration exists |
-| API and realtime contracts | Planned | `contracts/` is an empty local placeholder |
-| Authentication and remote access | Planned | No application authentication implementation exists |
-| Automated tests, CI, and deployment | Repository-verified (Android unit tests) | Android Gradle unit tests passing via `gradlew.bat testDebugUnitTest`; full CI and deployment planned |
+| PC React control-center UI/UX | Repository-verified implementation | `frontend/web/`; tactile VRAM controls, live SSE streaming chat, TypeScript check passing (`npm run lint`) |
+| PC multilingual UI/UX patch | Repository-verified prototype | Language types, mock data, Japanese renderer, settings, character editor, assistant panel, and composer in source |
+| Android companion UI/UX | Repository-verified implementation | `android/`; 17 screens, Jetpack Compose, SoftGlass neumorphic engine, OLED Battery Saver theme, SharedPreferences persistence, Host IP config |
+| Android on-device failover UI | Repository-verified UI/config only | Model selection and failover toggles in `ModelsScreen.kt`; on-device LLM/TTS runtime inference is planned / unverified |
+| Local AI Core / FastAPI | Repository-verified implementation | `backend/app/`; FastAPI application, CORS, request body limits, secret sanitization, fail-closed auth, 33 passing pytest tests |
+| Database & persistence | Repository-verified implementation | `backend/app/db/`; SQLite (`companion.db`), Alembic migrations 001 & 002, Task models, soft-delete, automated retention purge |
+| Local LLM runtime | Repository-verified implementation | `bin/llama.cpp/` (b10936 Vulkan x64); RX 580 GPU offload, subprocess execution, isolated log file (`data/llama_server.log`) |
+| API and contracts | Repository-verified implementation | `contracts/openapi/openapi.json`; typed client in `frontend/web/src/services/api/` |
+| Assistant orchestration & memory | Planned / Active planning | Track B5; SQLite FTS5 virtual table, context budgeting, trust framing, persistent conversation threads |
+| Voice & speech pipeline | Planned (Tracks V0–V6) | Canonical spec in `docs/04_Architecture/VOICE_AND_AUDIO_ARCHITECTURE.md`; CPU-first speech execution |
+| Remote access & authentication | Repository-verified local auth; remote planned | Local token/API key authentication verified; Tailscale remote networking and mutual TLS planned |
+| Automated test suite | Repository-verified | 33 passing backend tests (`pytest backend/tests`), 110 passing Android unit tests (`gradlew.bat testDebugUnitTest`), frontend `npm run lint` clean |
 
 This document supersedes conflicting status claims in drafts. Drafts remain reference material until their unique content is deliberately reconciled or archived.
 
@@ -91,16 +94,25 @@ Local model, local tools, and local data are the default.
 
 ## Provider Interfaces
 
+The architecture maintains clean, swappable provider abstractions across all external integrations:
+
 ```text
 LLMProvider
 STTProvider
 TTSProvider
+VADProvider
+WakeWordProvider
+EmbeddingProvider
+RerankerProvider
 SearchProvider
 HealthProvider
 MemoryRetriever
 NetworkGateway
 AudioDeviceManager
 ```
+
+### Provider Interface vs. Model Capability
+Provider interfaces define subsystem boundaries (e.g. `LLMProvider`, `TTSProvider`), whereas model capabilities (e.g. `chat`, `vision`, `reasoning`, `structured_output`, `tool_calling`, `multilingual`) describe what an individual model can do within a provider. A Vision-Language model (e.g. `Qwen3-VL-4B-Instruct`) implements `LLMProvider` with both `chat` and `vision` capabilities, eliminating the need for separate disconnected vision subsystems.
 
 ## Character Independence
 
@@ -114,9 +126,9 @@ Do not hardcode a phone, watch, headset, GPU, IP address, model path, or voice.
 
 ## Security
 
-Network access does not replace authentication.
+Network access does not replace authentication. All non-public endpoints are fail-closed on `protected_router`.
 
-Secrets stay backend-side.
+Secrets stay backend-side; never expose them to clients or log messages.
 
 ---
 
@@ -131,32 +143,39 @@ AI-companion-project/
 ├── .cursorignore
 ├── .gitignore
 ├── .gitattributes
+├── .lfsconfig
+├── bin/
+│   ├── llama.cpp/            # Pinned b10936 Vulkan x64 binaries
+│   └── whisper.cpp/          # Local speech transcription binaries
 ├── docs/
-│   ├── 00_Drafts/
-│   ├── 01_Tracking/
-│   ├── 02_Planning/
-│   ├── 03_Walkthroughs/
-│   ├── 04_Architecture/
-│   ├── 05_Design/
-│   ├── 06_Guides/
-│   ├── 07_Archive/
+│   ├── 00_Drafts/            # Context-ignored scratchpads
+│   ├── 01_Tracking/          # task.md and per-task archive
+│   ├── 02_Planning/          # Feature-named implementation plans
+│   ├── 03_Walkthroughs/      # Educational walkthrough handovers
+│   ├── 04_Architecture/      # Canonical system contracts & specs
+│   ├── 05_Design/            # UI/UX design tokens & wireframes
+│   ├── 06_Guides/            # Onboarding and setup guides
+│   ├── 07_Archive/           # Superseded documentation
 │   └── ProjectWorkflowStarterKit/
-├── frontend/web/
-├── android/
-├── backend/
+├── frontend/web/             # React 19 + TypeScript 5.8 + Vite 6
+├── android/                  # Native Kotlin + Jetpack Compose app
+├── backend/                  # FastAPI + SQLite + SQLAlchemy 2 Core
 ├── contracts/
-├── config/
-├── scripts/
-└── tests/
+│   └── openapi/              # Exported OpenAPI schemas
+├── models/                   # Local GGUF models & LFS pointers
+├── scripts/                  # Automation & launcher scripts
+└── data/                     # Local SQLite DB and runtime logs
 ```
 
 Current repository facts:
 
-- `frontend/web/` contains the tracked React PC control-center implementation.
-- `android/` contains the tracked native Android companion app (Kotlin, Jetpack Compose, SoftGlass neumorphic theme engine with OLED Battery Saver, SharedPreferences persistence, Host configuration, and Hybrid AI On-Device Failover UI).
-- `backend/`, `contracts/`, `config/`, `scripts/`, and `tests/` are currently empty local placeholders for subsequent backend/runtime phases.
+- `frontend/web/` contains the verified React PC control center with live SSE chat streaming and tactile VRAM management.
+- `android/` contains the verified native Android companion app (17 screens, SoftGlass neumorphic theme engine, AMOLED OLED Battery Saver, SharedPreferences persistence, and Host configuration).
+- `backend/` contains the verified FastAPI Local AI Core (Pydantic v2 settings, SQLite database with Alembic migrations, security middleware, and 33 passing pytest tests).
+- `bin/llama.cpp/` contains the pinned Vulkan b10936 runtime binaries.
+- `contracts/openapi/openapi.json` contains the verified API contract.
 - `docs/ProjectWorkflowStarterKit/` remains a user-owned starter reference in its current location.
-- The latest master plan under `docs/04_Architecture/` is canonical. Older roadmap, runtime, and static-review files remain under `docs/00_Drafts/` as non-canonical reference material.
+- The latest master plan under `docs/04_Architecture/` is canonical. Specialized specifications exist for `LLAMA_CPP_RUNTIME_ARCHITECTURE.md` and `VOICE_AND_AUDIO_ARCHITECTURE.md`. Older drafts remain under `docs/00_Drafts/` as non-canonical reference material.
 
 Recommended backend:
 
@@ -216,42 +235,24 @@ FastAPI is the orchestrator and canonical source of truth.
 
 ## PC Web
 
-**Status: Repository-verified UI/UX prototype; production cleanup pending.**
+**Status: Repository-verified implementation in `frontend/web/`; Track C2 integrated.**
 
-The current application is a React/TypeScript prototype driven by component state, `localStorage`, and mock data. It has no real API client, WebSocket integration, backend persistence, authentication, scheduler, device control, health ingestion, or AI runtime.
+The React/TypeScript desktop control center connects directly to the FastAPI Local AI Core via typed API services in `frontend/web/src/services/api/` (`healthApi.ts`, `modelApi.ts`, `chatApi.ts`) and `BackendContext.tsx`:
+- **Tactile VRAM Controls:** Single-click **[ Load to VRAM ]** and **[ Unload VRAM ]** buttons in `ModelsView.tsx` and `CurrentModelHero.tsx` allow instant release of ~5 GB GPU memory.
+- **Live SSE Streaming Chat:** `AssistantView.tsx` streams completions via Server-Sent Events (`text/event-stream`) with auto-scroll and user cancellation via `AbortController`.
+- **Decoupled Telemetry:** Model library selection is decoupled from active resident telemetry (accurate 0.0 GB VRAM display when unloaded).
 
-The multilingual UI patch is present in repository source and includes:
-
+Multilingual UI controls are verified in source:
 - English, Filipino/Tagalog, Japanese, and mixed-language preference types
-- separation between user/system language preferences and character language style
+- Separation between user/system language preferences and character language style
 - Japanese kanji, furigana, and romaji presentation modes
-- multilingual settings and preview data
-- character language-style controls
-- assistant-panel language status
-- global-composer language mode controls
-- language-aware home greeting behavior
+- Character language-style and assistant-panel language status controls
 
-These are prototype UI/configuration behaviors. They do not prove real multilingual STT, TTS, LLM, or persistence support.
-
-Before API integration:
-
-- fix missing CSS tokens
-- remove root `select-none`
-- fix wallpaper persistence
-- review and remove unused AI Studio/server dependencies
-- remove frontend Gemini secret setup
-- centralize mock values
-- add repository/service boundary
-- normalize enums
-- replace the Unix-only `clean` script before relying on it on Windows
-- separate responsive defaults from user overrides
-- add automated frontend tests and a production error boundary
-
-Keep the PC UI feature-frozen while completing the focused productionization plan. Do not add real integrations directly to individual components; introduce repository/service boundaries first.
+Next Web focus: Track B5 persistent conversation list and FTS5 memory inspection panel.
 
 ## Android
 
-**Status: Repository-verified implementation in `android/`.**
+**Status: Repository-verified implementation in `android/`; 110 unit tests passing.**
 
 The Android companion client is implemented as a native Kotlin and Jetpack Compose application under `android/`. It delivers a complete 17-screen user experience with the custom SoftGlass design system, authentic dual-shadow clay neumorphism, calibrated contrast across Light and Dark modes, and a specialized AMOLED "OLED Battery Saver" pure black theme.
 
@@ -263,7 +264,7 @@ Key Android subsystem milestones in repository:
 - **Persistent Storage:** `SharedPreferencesAppearanceRepository` backing all theme, preset, effects level, and appearance choices across process kills and reboots.
 - **Fluid Overscroll Physics:** Two-phase momentum spring bounce (`SoftBounceOverscroll.kt`) with progressive quadratic resistance and natural rubber-band recoil.
 - **Real Host Configuration:** Editable Local AI Core Host IP, Port, and API Token inputs with reachability validation in `ConnectionScreen.kt`.
-- **On-Device Hybrid Failover UI:** Integrated controls in `ModelsScreen.kt` for auto-failover, edge LLM (Gemma-2-2B / Qwen-2.5-1.5B), Kokoro-82M neural TTS, SAF model file import, and on-device RAM allocation monitoring.
+- **On-Device Hybrid Failover UI (Provisional / UI State):** Integrated controls in `ModelsScreen.kt` for auto-failover, edge LLM selection (Gemma-2-2B / Qwen-2.5-1.5B), Kokoro-82M neural TTS toggle, SAF model file import, and RAM allocation monitoring. *Note: These represent repository-verified UI and configuration controls; on-device ARM64 model inference is planned and requires hardware benchmarking.*
 
 Current Android Architecture:
 
@@ -312,7 +313,7 @@ llama.cpp Android NDK / ONNX Runtime Mobile
 
 # 7.1 Hybrid AI Architecture: Dual-Engine & Edge Node Failover
 
-The system implements a **Hierarchical Model Routing Architecture** spanning the Windows PC and Android smartphone:
+The system designs a **Hierarchical Model Routing Architecture** spanning the Windows PC and Android smartphone:
 
 ```text
                ┌──────────────────────────────────────────────┐
@@ -330,43 +331,42 @@ The system implements a **Hierarchical Model Routing Architecture** spanning the
                          PC Online? ──┴── PC Offline / Away?
                         /                                  \
                        ▼                                    ▼
-       [Primary Orchestration]                    [Edge Node Failover]
-       - Remote LLM Inference (8B)                - On-Device Gemma-2-2B / Qwen-1.5B
+       [Primary Orchestration]                    [Edge Node Failover (Planned)]
+       - Remote LLM Inference (4B/8B)             - On-Device Gemma-2-2B / Qwen-1.5B
        - High-speed GPU generation                - CPU ARM64 llama.cpp NDK
-       - Full Memory & Tool RAG                   - Kokoro-82M ONNX TTS (<0.3x RTF)
+       - Full Memory & Tool RAG                   - Kokoro-82M ONNX TTS
        - Phone LLM evicted from RAM               - Room DB Local Context Cache
 ```
 
-### Key Subsystems:
+### Key Subsystems (Planned / Candidate Architecture):
 
 1. **Hierarchical Model Routing:**
-   - The Windows PC Local AI Core is the **Primary Orchestrator**, providing high-throughput inference (Gemma-2-9B / Llama-3.1-8B) with full tool execution and memory retrieval.
-   - The smartphone serves as an **Edge Node Failover**, running lightweight quantized models (Gemma-2-2B Q4_K_M or Qwen-2.5-1.5B Q4_K_M) directly on the device's ARM64 CPU.
+   - The Windows PC Local AI Core is the **Primary Orchestrator**, providing high-throughput inference (Qwen3-VL-4B / 8B) with full tool execution and memory retrieval.
+   - The smartphone serves as a planned **Edge Node Failover**, running lightweight quantized models (e.g. Gemma-2-2B Q4_K_M or Qwen-2.5-1.5B Q4_K_M) on the device's ARM64 CPU when the PC is powered off.
 
-2. **Dynamic Network Heartbeats & Seamless Failover:**
-   - The Android client pings the Local AI Core health endpoint (`/health`).
-   - If the request times out or the PC is powered down, the router immediately and silently diverts inference to the local Edge Node without interrupting the user.
+2. **Dynamic Network Heartbeats & Failover:**
+   - The Android client polls the Local AI Core health endpoint (`/health`).
+   - If the request times out or the PC is powered down, the client can divert inference to the local Edge Node.
    - A contextual status badge informs the user of active compute: `PC Online (Full Power)` vs `Local Mobile Mode (Edge Failover)`.
 
-3. **Universal Context & Memory Synchronization:**
+3. **Context & Memory Synchronization:**
    - Active chat history and memory fragments are stored in a model-agnostic schema within Android's local Room database.
    - When switching between PC and phone inference, the context window is reformatted dynamically into the active engine's prompt template.
-   - When the PC comes back online, a bidirectional synchronization reconciles offline messages and task modifications using deterministic timestamp sorting.
+   - When the PC returns online, bidirectional synchronization reconciles offline messages and task modifications using deterministic timestamp sorting.
 
 4. **Zero-Dependency Private Model Storage (No APK Bloat):**
-   - Model weights are **never bundled inside the APK assets** (which would bloat APK to >2 GB, causing installation failures).
-   - Weights are acquired via two zero-dependency methods:
-     - **In-App Downloader:** On-demand HTTPS chunked streaming download of verified quantized models directly into app-private storage (`context.filesDir/models/`).
+   - Model weights are **never bundled inside APK assets**.
+   - Weights are acquired via two methods:
+     - **In-App Downloader:** On-demand HTTPS chunked streaming download into app-private storage (`context.filesDir/models/`).
      - **SAF File Import:** User-directed Storage Access Framework picker allowing users to import pre-downloaded `.gguf` and `.onnx` models from device storage or SD card.
 
-5. **On-Device Neural TTS Parity (Kokoro-82M ONNX):**
-   - Voice synthesis parity with the PC is achieved via Kokoro-82M packaged in ONNX format.
-   - Operating on ARM64 CPU cores via ONNX Runtime Mobile, Kokoro synthesizes 24kHz natural speech at <0.3x Real-Time Factor (RTF), requiring only ~85 MB storage and ~120 MB RAM.
-   - No external third-party apps or internet connectivity required.
+5. **On-Device Neural TTS Target (Kokoro-82M ONNX — Planned):**
+   - Voice synthesis parity with the PC is planned via Kokoro-82M packaged in ONNX format on ARM64 CPU cores via ONNX Runtime Mobile.
+   - Performance targets (<0.3x RTF, ~85 MB storage, ~120 MB RAM) are estimated engineering targets and must be verified by on-device benchmarks before release.
 
 6. **RAM, Battery & Thermal Safeguards:**
-   - **Dynamic RAM Eviction:** When the PC is online, the on-device LLM is completely unloaded from RAM to preserve memory for other mobile applications. It is loaded into memory only when failover occurs.
-   - **Foreground Service Loop:** Active inference runs under an Android Foreground Service notification to prevent OS low-memory termination.
+   - **Dynamic RAM Eviction:** When the PC is online, the on-device mobile LLM is completely unloaded from RAM to preserve memory for other mobile applications.
+   - **Foreground Service Loop:** Active mobile inference runs under an Android Foreground Service notification to prevent OS low-memory termination.
    - **WakeLock Management:** CPU high-performance WakeLocks are held strictly while actively generating tokens, and released immediately upon stream completion.
 
 ---
@@ -475,76 +475,152 @@ Current implementation boundary:
 
 # 11. Local AI Runtime
 
-Primary recommended local runtime:
+Primary local runtime:
 
 ```text
-llama.cpp
+llama.cpp b10936 (Windows x86_64, Vulkan build)
 ```
 
-Target:
+Target Host & GPU:
 
 ```text
-GGUF
-Vulkan where practical
-partial GPU offload
-Windows
-AMD RX 580
+AMD Ryzen 5 3600 (6C/12T)
+16 GB System RAM
+Aisurix AMD RX 580 2048SP (8 GB VRAM)
+Windows 11
 ```
 
-Ollama may remain an optional provider.
+The runtime operates in **Persistent Router Mode** on `127.0.0.1:8080` managed by FastAPI Core (`127.0.0.1:8000`). Detailed specifications, flag matrices, and process management rules are documented in the canonical spec:
+`docs/04_Architecture/LLAMA_CPP_RUNTIME_ARCHITECTURE.md`.
 
-Gemini may remain an optional cloud provider.
+Ollama and cloud Gemini remain optional secondary/fallback providers.
+
+### 11.1 Candidate Generative Model Portfolio (Provisional / Benchmark-Gated)
+
+The project targets a coherent portfolio of local Vision-Language models. All portfolio entries are provisional candidates subject to local hardware validation on the Aisurix RX 580:
+
+1. **Eco Candidate: `Qwen3-VL-2B-Instruct`**
+   - *Role:* Low-resource text chat, lightweight companion interaction, screenshot understanding.
+   - *Target Footprint:* ~1.8–2.4 GB VRAM; optimal when system RAM/VRAM is severely constrained.
+2. **Reasoning Candidate 1: `Qwen3-VL-2B-Thinking`**
+   - *Role:* Complex multi-step reasoning, math, and code planning in a low-resource footprint.
+   - *Architecture:* Dedicated reasoning-trained checkpoint (not a temperature or prompt tweak).
+3. **Balanced / Default Candidate: `Qwen3-VL-4B-Instruct`**
+   - *Role:* Primary daily assistant for chat, coding help, document OCR, and UI/screenshot analysis.
+   - *Target Footprint:* ~3.8–4.8 GB VRAM at Q4_K_M; fits comfortably within the 8 GB RX 580 budget.
+4. **Reasoning Candidate 2: `Qwen3-VL-4B-Thinking`**
+   - *Role:* Deep analytical reasoning, complex debugging, visual reasoning, and multi-step planning.
+5. **High-Resource / Experimental Candidate: `Qwen3-VL-8B-Instruct`**
+   - *Role:* Maximum capability multimodal synthesis and advanced reasoning.
+   - *Guardrail:* **Do not hardcode as default Maximum preset.** Promotion requires local benchmark evidence proving stable generation without paging out of 8 GB VRAM.
+
+### 11.2 Instruct vs. Thinking Architecture
+
+The system treats `Instruct` and `Thinking` models as distinct model variants/checkpoints, not mere hyperparameter adjustments:
+- **Instruct:** Direct, conversational answers, daily interaction, lower time-to-first-token, lower latency.
+- **Thinking:** Extended internal reasoning tokens, multi-step problem decomposition, higher compute and token count.
+- *UI Invariant:* The UI exposes reasoning as a model capability/variant dimension, never conflating `Thinking` with the `Maximum` resource profile.
+
+### 11.3 One-Primary-Model Residency Rule (`--models-max 1`)
+
+To prevent GPU driver crashes and out-of-memory errors on the 8 GB RX 580:
+- **Installed Models ≠ Resident Models:** Multiple GGUF models may reside on disk (`models/`).
+- **Residency Invariant:** Exactly **one** primary generative model (plus its required `mmproj` vision companion) may occupy GPU VRAM at any given time.
+- Enforced via router configuration: `--models-max 1`.
+
+### 11.4 Multimodal Request Routing
+
+All candidate models are Vision-Language capable. The router handles input dynamically:
+```text
+Text-only request
+    ↓
+Active model generates response
+
+Image + text request
+    ↓
+Is active model vision-capable?
+    ├── Yes → Pass image tensors + mmproj to active model
+    └── No  → Prompt user or dynamically load vision-capable candidate
+```
+A VL model handles standard text chat directly; there is no need to run a separate text-only model.
+
+### 11.5 Semantic Runtime State Model
+
+The Local AI Core tracks normalized runtime states reflecting the daemon and model status:
+- `SERVER_STOPPED`: Subprocess is not running.
+- `SERVER_STARTING`: Process launched, awaiting port 8080 health check.
+- `MODEL_UNLOADED`: Router active on port 8080, but 0 model weights resident in VRAM.
+- `MODEL_LOADING`: Reading GGUF weights from NVMe into Vulkan VRAM.
+- `MODEL_READY`: Fully resident, warm, and ready for streaming inference.
+- `MODEL_SLEEPING`: Native idle timeout (900s) reached; GPU allocations released until next prompt.
+- `MODEL_UNLOADING`: Transitioning from resident to unloaded.
+- `MODEL_ERROR` / `SERVER_ERROR`: Diagnostic failure states.
+
+### 11.6 CPU/GPU Workload Placement Policy
+
+To protect the 8 GB VRAM budget on the RX 580:
+- **GPU / VRAM Allocation:** Reserved strictly for the active generative model (LLM/VLM) and its multimodal projector (`mmproj`).
+- **CPU / System RAM Allocation:** Speech processing (VAD, STT, TTS, Wake Word), embedding extraction, and initial reranking run CPU-first using AMD Ryzen 5 3600 cores.
+- The speech stack must never compete with the primary generative model for VRAM.
 
 ---
 
 # 12. Model Lifecycle
 
-Recommended:
+The runtime enforces clear distinctions between automatic sleep, user unload, and process termination:
 
+### Automatic Idle Sleep (`--sleep-idle-seconds 900`)
 ```text
-Windows starts
- ↓
-Local AI Core starts
- ↓
-Database / Scheduler / API ready
- ↓
-Model remains unloaded
- ↓
-First AI request
- ↓
-llama.cpp/model loads
- ↓
-assistant responds
- ↓
-idle timeout
- ↓
-model unloads
+MODEL_READY
+    ↓ (15 minutes without inference)
+MODEL_SLEEPING (VRAM released; router stays alive)
+    ↓ (New user message arrives)
+Automatic Wake & Stream (Reloads to MODEL_READY)
 ```
 
-This preserves PC resources.
+### Explicit User Unload
+```text
+User clicks [ Unload VRAM ] in Web/Android
+    ↓
+FastAPI verifies no active streaming generation
+    ↓
+POST /models/unload to router
+    ↓
+MODEL_UNLOADED (GPU VRAM instantly released to 0.0 GB; router stays alive)
+```
+
+### Scoped Process Termination (Fallback Recovery Only)
+Process termination is strictly a fallback for hung or crashed daemons:
+- Terminate **only** the specific PID tracked by Local AI Core.
+- Never execute blind system-wide termination (`taskkill /IM llama-server.exe /F`).
 
 ---
 
-# 13. Performance Profiles
+# 13. Model Selection vs. Runtime Profile Decoupling
 
-Expose:
-
-```text
-Eco
-Balanced
-Maximum
-```
-
-Backend maps profiles to technical values:
+Model selection and runtime execution profiles are independent dimensions:
 
 ```text
-model selection
-context size
-GPU offload
-threads
-idle timeout
-memory strategy
+Selected Model (e.g. Qwen3-VL-4B-Instruct)
+       +
+Runtime Profile (Eco / Balanced / Maximum)
+       +
+Optional Convenience Preset (e.g. "Default Daily Companion")
 ```
+
+### Runtime Profile Technical Mappings (RX 580 8 GB):
+
+| Technical Parameter | Eco Profile | Balanced Profile (Default) | Maximum Profile |
+|---|---|---|---|
+| **Context Window** | 2048 tokens | 4096 tokens | 8192 tokens |
+| **GPU Offload Layers** | 20 layers | 28 layers | 33 layers (Full offload) |
+| **KV Cache Type** | `q8_0` | `q8_0` | `f16` |
+| **Batch / UBatch** | 256 / 128 | 512 / 256 | 512 / 512 |
+| **Flash Attention** | Enabled | Enabled | Enabled |
+| **CPU Threads** | 4 threads | 4 threads | 6 threads |
+| **Target VRAM Range** | ~2.5–3.2 GB | ~3.8–4.8 GB | ~6.0–7.2 GB |
+
+A convenience preset may suggest a model + profile combination, but the architecture permits running any installed model with any valid profile.
 
 ---
 
@@ -645,6 +721,51 @@ To prevent accidental data loss and maintain user trust across client deletions 
      `DELETE FROM [table] WHERE deleted_at <= :purge_cutoff AND owner_id = :owner_id`.
    - Permanent manual purge requires explicit double-confirmation with authenticated ownership check.
 
+### 16.2 ModelRegistry / ModelArtifactRegistry
+
+The Local AI Core maintains a structured artifact registry rather than treating `models/` as an arbitrary directory of loose filenames:
+
+```text
+id:                            unique model string identifier (e.g. "qwen3-vl-4b-instruct")
+display_name:                  human-readable UI title ("Qwen3-VL 4B Instruct")
+artifact_type:                 generative | stt | tts | vad | wakeword | embedding | reranker
+provider:                      llama_cpp | whisper_cpp | onnx | openwakeword | etc.
+model_family:                  qwen3-vl | whisper | kokoro | etc.
+variant:                       instruct | thinking | base | small | etc.
+version:                       checkpoint/quant release tag
+primary_file:                  relative path to primary GGUF/ONNX binary
+companion_files:               list of companion paths (e.g. mmproj GGUF)
+capabilities:                  list of ModelCapability flags
+languages:                     dictionary of language code to capability status
+context_limit:                 maximum tested context tokens
+recommended_runtime_profiles:  list of valid profiles (eco, balanced, maximum)
+estimated_ram:                 estimated host RAM footprint in bytes
+estimated_vram:                estimated GPU VRAM footprint in bytes
+license:                       SPDX license identifier (e.g. "Apache-2.0")
+source:                        upstream Hugging Face / model repo URI
+checksum:                      SHA256 hash of primary binary
+enabled:                       boolean flag for UI visibility
+validation_status:             verified | missing_primary | missing_companion | incompatible
+```
+
+### 16.3 Model Capabilities
+
+Generative models in the registry advertise fine-grained capabilities:
+- `chat`: Multi-turn conversational instruction following.
+- `vision`: Image, screenshot, and visual document analysis.
+- `reasoning`: Extended internal chain-of-thought tokens (`Thinking` variant).
+- `structured_output`: Strict adherence to JSON schema / GBNF grammars.
+- `tool_calling`: Autonomous tool invocation and parameter formatting.
+- `multilingual`: Cross-lingual reasoning across EN, FIL, JA, and code-switching.
+
+### 16.4 Composite Multimodal Artifacts
+
+Vision-Language models typically require two files to function in `llama.cpp`:
+1. The base model GGUF (e.g. `Qwen3-VL-4B-Instruct-Q4_K_M.gguf`)
+2. The multimodal projector GGUF (e.g. `mmproj-Qwen3-VL-4B-Instruct-f16.gguf`)
+
+The `ModelRegistry` models this as **one logical model entry** with companion files. The user selects a single model card in the UI; the backend automatically validates that both files exist before initiating load.
+
 ---
 
 # 17. Contracts
@@ -700,13 +821,23 @@ context package
 LLM
 ```
 
-Later optional:
+Retrieved memory is context, not system authority. Always frame retrieved memories inside untrusted `<retrieved_memories>` tags.
 
-```text
-embeddings + hybrid reranking
-```
+### 18.1 Embedding and Reranking Roadmap
 
-Retrieved memory is context, not system authority.
+To keep current Track B5 focused and deliverable:
+- **Active V1 Baseline:** Full-text keyword search via SQLite FTS5 with sanitized tokens and soft-delete filtering.
+- **Future Optional Pipeline (Deferred beyond B5):**
+  ```text
+  FTS5 candidates (Top 50)
+         ↓
+  EmbeddingProvider (Dense vector semantic similarity)
+         ↓
+  RerankerProvider (Cross-encoder re-scoring)
+         ↓
+  Top 5 Memory Context Package → LLM
+  ```
+- *Scope Invariant:* Vector databases, embeddings, and neural rerankers are strictly excluded from Track B5.
 
 ---
 
@@ -758,111 +889,125 @@ Android alarm remains armed locally
 
 ---
 
-# 21. Voice
+# 21. Voice Pipeline & Audio Architecture
 
-Pipeline:
-
-```text
-Microphone
- ↓
-Audio Device Manager
- ↓
-VAD
- ↓
-STT
- ↓
-Local AI Core
- ↓
-LLM / Tools
- ↓
-TTS
- ↓
-Audio Device Manager
- ↓
-Speaker / Bluetooth Headset
-```
-
-Possible providers:
+Canonical Speech Pipeline:
 
 ```text
-STT: Whisper-family / whisper.cpp-style
-TTS: Piper / Kokoro
+Microphone (PC / BT Headset / Android)
+ ↓
+AudioDeviceManager (Device routing & buffer management)
+ ↓
+WakeWordProvider (openWakeWord - when enabled)
+ ↓
+VADProvider (Silero VAD - CPU)
+ ↓
+STTProvider (whisper.cpp - CPU)
+ ↓
+AssistantOrchestrator (Context & FTS5 memory)
+ ↓
+LLMProvider (llama.cpp Router - GPU)
+ ↓
+TTSProvider (Kokoro-82M / Piper - CPU)
+ ↓
+AudioDeviceManager (Barge-in cancellation & playback)
+ ↓
+Speaker / Headphone Output
 ```
 
-Provider choice should be benchmarked.
+Detailed provider interfaces, device selection rules, and CPU-first execution constraints are specified in:
+`docs/04_Architecture/VOICE_AND_AUDIO_ARCHITECTURE.md`.
+
+### 21.1 Voice Implementation Roadmap (Tracks V0–V6)
+
+- **Track V0 — Audio Foundation:** `AudioDeviceManager`, device enumeration, WASAPI/PortAudio capture/playback, PCM ring buffers.
+- **Track V1 — Listening:** `VADProvider` (Silero VAD), `STTProvider` (`whisper.cpp`), multilingual transcription benchmark.
+- **Track V2 — Speaking:** `TTSProvider` (Kokoro / Piper), voice profiles, clause chunking, language capability reporting.
+- **Track V3 — Conversational Voice:** Semantic voice state machine, live token-to-speech streaming, barge-in playback cancellation.
+- **Track V4 — Wake Word:** `WakeWordProvider` (openWakeWord), low-power background detection.
+- **Track V5 — Android Remote Audio:** Opus audio transport over Tailscale, Android mic/speaker bridging.
+- **Track V6 — Advanced Voice:** Speaker identification, noise cancellation, prosody/style controls.
 
 ---
 
 # 22. Voice State Machine
 
+The voice subsystem operates an unambiguous event-driven state machine:
+
 ```text
 IDLE
+ ↓ (Wake word / Push-to-talk)
 LISTENING
+ ↓ (VAD speech end)
 TRANSCRIBING
+ ↓ (STT complete)
 THINKING
-EXECUTING_TOOL
-SPEAKING
-INTERRUPTED
-RECONNECTING
-OFFLINE
-ERROR
+ ├─ EXECUTING_TOOL (When tool call is proposed)
+ └─ SPEAKING (Token streaming to TTS)
+     ↓ (User speech detected during playback)
+INTERRUPTED (Barge-in: audio output flushed, TTS cancelled, return to LISTENING)
 ```
 
-Support barge-in by stopping TTS when user speech is detected.
+Additional operational states: `RECONNECTING`, `OFFLINE`, `ERROR`.
 
 ---
 
 # 23. Characters and Avatars
 
-Characters may configure:
+Characters configure:
 
 ```text
 persona
 response style
 language style
-voice
-avatar
-behavior
+voice profile
+avatar assets
+behavior rules
 ```
 
-Future visual formats may include:
+Visual representations map from backend semantic states (`THINKING`, `SPEAKING`, `LISTENING`) to frontend assets (WebP / Live2D / VRM).
 
-```text
-GIF
-WebP
-Live2D
-VRM
-```
+### 23.1 Language Capability Reporting
 
-Backend emits semantic state.
+Providers explicitly declare capabilities across project languages rather than assuming uniform support:
 
-Frontend maps semantic state to assets.
+| Language Target | STT Capability | TTS Capability | LLM Reasoning |
+|---|---|---|---|
+| **English (EN)** | Supported | Supported | Supported |
+| **Filipino / Tagalog (FIL)** | Supported | Limited (Phonetic fallback) | Supported |
+| **Japanese (JA)** | Supported | Supported | Supported |
+| **Code-Switching (Taglish / EN-JA)** | Supported | Limited | Supported |
+
+Status codes are strictly typed: `Supported`, `Limited`, `Unsupported`, `Unknown`.
 
 ---
 
-# 24. Health
+# 24. Health & Model Metadata
 
-V1 path:
+### 24.1 Model Acquisition & Artifact Metadata
+
+All models in the registry track provenance, licensing, and integrity:
+- `source`: Upstream repository URI (e.g. Hugging Face repo ID).
+- `upstream_model_id`: Canonical upstream model identifier.
+- `license`: SPDX license identifier confirming personal and local execution rights.
+- `checksum`: SHA256 checksum verifying binary integrity.
+- `companion_files`: Required companion artifacts (e.g. `mmproj` for VLMs).
+
+### 24.2 Health Integration (V1 Path)
 
 ```text
-itel ISW-O11
+itel ISW-O11 Watch
  ↓
 FitCloudPro
  ↓
 Health Connect
  ↓
-Android
+Android Companion
  ↓
-Local AI Core
- ↓
-SQLite
+Local AI Core (SQLite)
 ```
 
-Avoid BLE reverse engineering in V1.
-
-Health provider remains replaceable.
-
-Never present unavailable health data as zero.
+Avoid BLE reverse engineering in V1. Never fabricate health metrics; missing readings are recorded as `None`/unavailable, never zero.
 
 ---
 
@@ -1011,6 +1156,33 @@ scripts/check-health.ps1
 - The user manually reviews, commits, and pushes.
 - Do not mark work committed or published until Git confirms the user performed those actions.
 
+### 29.1 Multi-AI Development Workflow
+
+The user employs a collaborative multi-agent pairing workflow:
+
+```text
+1. ChatGPT
+   → Initial architectural discussions, ideation, and first-pass planning
+2. Claude (Planning Chat)
+   → Inspects local repository, worktree, and existing docs
+   → Reconciles architecture, authoring/refining implementation plans
+   → Acts as post-implementation code & architecture verifier
+3. Gemini (Implementation Chat - Pair Programming Coder)
+   → MVP Coder executing approved, bounded implementation plans
+   → Surgical code changes, migration scripts, unit tests, and walkthrough handovers
+4. Claude
+   → Verification against implementation plan and repository diffs
+5. ChatGPT
+   → High-level architecture and quality retrospective
+```
+
+**Non-Negotiable Guardrails:**
+- The **local repository** is the sole authoritative ground truth; no agent treats external drafts or conversation memory as superior to tracked repository evidence.
+- Gemini implements only bounded, user-approved plans.
+- Claude reviews against actual repository evidence and automated test passes.
+- No agent may claim Git commits or pushes occurred unless verified by `git status` / `git log`.
+- The user retains manual ownership of all Git commits, staging, and remote pushes.
+
 ---
 
 # 30. Production
@@ -1077,7 +1249,7 @@ Current repository configuration implements this decision:
 
 - `.gitattributes` actively assigns common model formats to Git LFS.
 - `.lfsconfig` directs LFS objects to a private Hugging Face dataset repository.
-- `models/lfs-test.gguf` is a tracked LFS verification object.
+- `models/` stores local GGUF models.
 
 Consequences and guardrails:
 
@@ -1086,52 +1258,33 @@ Consequences and guardrails:
 - Contributors without that authorization may receive pointer files or LFS download failures for private objects.
 - Add model artifacts only deliberately and only after confirming redistribution rights, privacy, storage cost, and repository need.
 - Do not commit API tokens or Hugging Face credentials; authentication remains local/user-managed.
-- `models/lfs-test.gguf` remains configuration evidence, not a production model.
 
 ---
 
 # 32. Testing
 
-Current verified testing state:
+### Verified Repository Testing State:
 
-- `npm run lint` currently performs `tsc --noEmit` and passed on 2026-09-10.
-- No tracked unit, component, integration, end-to-end, Android, backend, migration, or contract test suite exists yet.
-- No tracked CI/CD workflow exists.
-- The web production build and browser/device behavior have not been verified as part of this documentation update.
+1. **Backend Test Suite (`pytest backend/tests`):**
+   - **33 / 33 passing tests (0.89s)** covering:
+     - Authentication & security middleware (Bearer / X-API-Key, fail-closed router architecture)
+     - Request body limits (413 Payload Too Large) & CORS whitelist validation
+     - Secret sanitization in log messages
+     - LLM router mock provider, sync & streaming SSE chat completions
+     - Task CRUD, category filtering, auto-reminder calculation
+     - Soft deletion, recycle bin restoration, permanent purge, and automated 30-day retention cleanup
+2. **Android Test Suite (`gradlew.bat testDebugUnitTest`):**
+   - **110 / 110 passing unit tests** covering:
+     - 17 Compose screens and navigation destinations
+     - `SharedPreferencesAppearanceRepository` theme and physics persistence
+     - Host connection reachability state cycling
+3. **Frontend Web (`npm run lint`):**
+   - TypeScript 5.8 `tsc --noEmit` passing cleanly with 0 errors.
 
-Planned test coverage:
-
-Unit:
-
-```text
-backend services
-repositories
-scheduler
-memory
-routing
-Android ViewModels
-React repository adapters
-```
-
-Integration:
-
-```text
-FastAPI + SQLite
-FastAPI + mocked llama.cpp
-task/reminder flow
-memory retrieval
-Android sync
-web API contracts
-```
-
-Contract tests:
-
-```text
-React
-Android
-FastAPI
-WebSocket events
-```
+### Planned Test Coverage for Upcoming Sprints:
+- **Assistant & Conversations (Track B5):** `test_conversations.py`, `test_memory_fts.py`, `test_assistant_orchestrator.py`.
+- **Router Lifecycle (Track R1):** `test_llm_router_lifecycle.py` (process tracking, sleep/wake, scoped PID kill).
+- **Model Registry:** Model metadata validation, companion file validation (`mmproj`).
 
 ---
 
@@ -1162,36 +1315,52 @@ V1 is operational when:
 
 ---
 
-# 34. Recommended Implementation Order
+# 34. Implementation Order & Tracks
+
+The project executes across specialized parallel tracks:
 
 ```text
-Phase 0   Documentation/workflow baseline and canonical master plan
-Track A0  Complete Android UI/UX Batches 12-15 in Google AI Studio
-Track B1  Plan and implement the FastAPI foundation in the repository
-Track B2  Add SQLite + SQLAlchemy + Alembic migrations
-Track B3  Define OpenAPI and typed realtime event contracts
-Track C1  Perform web productionization cleanup and add repository/service boundaries
-Track C2  Connect React to FastAPI after contracts stabilize
-Track B4  Add the llama.cpp provider proof of concept and real hardware benchmarks
-Track B5  Build assistant orchestration, conversations, and memory/FTS5
-Track B6  Add tasks, schedules, reminders, alarms, and tool execution
-Track B7  Add local audio device management, VAD, STT, TTS, and barge-in
-Track A1  Export/import the Android project and perform repository onboarding
-Track A2  Add Android connectivity, persistence, synchronization, and alarm redundancy
-Track A3  Add Health Connect integration
-Track D1  Add remote networking and application authentication
-Track D2  Add observability, end-to-end testing, Windows packaging, and handoff docs
+Phase 0   Documentation/workflow baseline and canonical master plan   ✅ Done
+Track A0  Android UI/UX Batches 0–18 (17 screens, SoftGlass)         ✅ Done
+Track B1  FastAPI foundation (middleware, CORS, auth, limits)        ✅ Done
+Track B2  SQLite + SQLAlchemy 2 + Alembic (tasks, soft-delete)       ✅ Done
+Track B3  OpenAPI & contracts (contracts/openapi/openapi.json)        ⚠️ Maintained
+Track C1  Web productionization & typed API client                    ✅ Done
+Track C2  Connect React Web to FastAPI (VRAM controls, SSE chat)      ✅ Done
+Track B4  llama.cpp Vulkan provider PoC & RX 580 offload              ✅ Done
+Track B5  Assistant orchestration, conversations & SQLite FTS5 memory 🔄 Planning (Claude / Gemini)
+Track R1  llama.cpp persistent router lifecycle (--models-max 1)      🔄 Aligned with B5
+Track R2  Runtime security hardening & API key isolation             🔲 Planned
+Track R3  Resource policies (Gaming Mode / Dev Mode)                 🔲 Planned
+Track B6  Tasks, schedules, reminders & tool execution engine        🔲 Planned
+Track V0  Audio foundation & AudioDeviceManager                      🔲 Planned
+Track V1  VAD (Silero) + Multilingual STT (whisper.cpp)               🔲 Planned
+Track V2  TTS provider (Kokoro-82M / Piper) + voice profiles         🔲 Planned
+Track V3  Conversational voice (streaming audio & barge-in)          🔲 Planned
+Track V4  Wake word (openWakeWord)                                   🔲 Planned
+Track A1  Android export, repository onboarding & clean build        🔲 Planned
+Track A2  Android backend connectivity & task/conversation sync      🔲 Planned
+Track A3  Health Connect integration                                 🔲 Planned
+Track V5  Android remote audio over Tailscale (Opus stream)          🔲 Planned
+Track D1  Remote networking & mutual authentication                  🔲 Planned
+Track D2  Observability, automated E2E tests, packaging & handoff    🔲 Planned
 ```
 
-Tracks A and B may progress in parallel while Android remains an external UI/UX prototype. Integration work waits for exported source and stable API contracts.
+### 34.1 Candidate Model Hardware Benchmark Protocol
 
-Immediate active phase:
+Every candidate model must complete this benchmark on the Aisurix RX 580 before approval:
 
-```text
-Android UI/UX Batch 12 — external in progress in Google AI Studio
-Documentation baseline — reconciled and organized
-Backend foundation — next user-owned implementation track; assistant remains read-only unless explicitly authorized
-```
+| Metric | Target / Measurement Boundary |
+|---|---|
+| **VRAM Baseline (Idle Router)** | < 150 MB VRAM |
+| **Model Load Time** | Recorded in milliseconds from NVMe to VRAM |
+| **VRAM Ready State** | Eco: < 3.2 GB; Balanced: < 4.8 GB; Maximum: < 7.2 GB |
+| **Inference Generation Speed** | Tokens per second (target: > 14 tok/s on 4B Q4_K_M) |
+| **Vision Inference Latency** | Time-to-First-Token on 1080p screenshot |
+| **Idle Sleep VRAM Release** | VRAM drops to < 150 MB after 900s inactivity |
+| **Wake-from-Sleep Latency** | Duration in ms to resume generation |
+| **Explicit Unload VRAM** | VRAM instantly drops to 0.0 GB |
+| **Multilingual Quality** | Qualitative scoring on EN, FIL, JA, and code-switching prompts |
 
 ---
 
