@@ -1641,64 +1641,29 @@ registered assets
 
 ---
 
-# 33. Open Decisions Requiring User Confirmation Before 8P Implementation
+# 33. Resolved Decisions
 
-These do not block documenting the architecture, but should be resolved before implementation.
+The following decisions were open during Phase 8P planning and have been resolved by the user.
 
-## 33.1 Default Windows data-root location
+## 33.1 Default Windows data-root location — Resolved
 
-Recommended choices:
+**Decision:** `%LOCALAPPDATA%\AI Companion\Data`
 
-```text
-A. %LOCALAPPDATA%\AI Companion\Data
-B. %USERPROFILE%\Documents\AI Companion
-C. ask user during first-run setup
-```
+The root is configurable via the `COMPANION_DATA_ROOT` environment variable. No hardcoded default path may be assumed in code that does not first check the env var.
 
-The root remains configurable regardless of default.
+## 33.2 Advanced external library overrides — Deferred
 
-## 33.2 Advanced external library overrides
+Default policy: single data root. Per-library overrides (e.g. model library on a separate drive) are a **future/deferred feature**. Backups must clearly state whether external assets are included if overrides are later enabled.
 
-Recommended initial policy:
+## 33.3 Bootstrap locator implementation — Resolved
 
-```text
-one root by default
-```
+**Decision:** `%LOCALAPPDATA%\AI Companion\bootstrap.json`
 
-Future optional override:
+The locator file contains only `data_root` and `schema_version`. No user content or secrets belong in the locator.
 
-```text
-models library on another drive
-```
+## 33.4 Development models vs installed-library migration — Resolved
 
-If enabled later, backups must clearly state whether external assets are included.
-
-## 33.3 Bootstrap locator implementation
-
-Choose later between:
-
-```text
-small %LOCALAPPDATA% bootstrap.json
-Windows registry
-installer-managed locator
-```
-
-No user content or secrets belong in the locator.
-
-## 33.4 Development models vs installed-library migration
-
-The existing repository model/LFS policy is protected.
-
-Before relocating existing development models into the installed persistent library, decide whether:
-
-```text
-development keeps repo-managed model assets
-and installed builds use persistent library
-```
-
-or a separate explicit migration is desired.
-
-The implementation must not assume permission to change LFS policy.
+**Decision:** Development and bootstrap models remain under the existing repository Git/LFS policy. Installed/user-imported models use `COMPANION_DATA_ROOT/library/models/`. The implementation must not change LFS policy, `.gitattributes`, or `.lfsconfig` without explicit user authorization.
 
 ---
 

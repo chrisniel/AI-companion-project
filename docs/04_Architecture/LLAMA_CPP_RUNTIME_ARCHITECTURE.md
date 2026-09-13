@@ -18,7 +18,7 @@
 The AI Companion project uses a local build of `llama.cpp` as its primary inference engine. To ensure stable coexistence with desktop workloads, development, and gaming on an 8 GB VRAM GPU, the runtime architecture follows six core invariants:
 
 1. **Persistent Router Mode (`--models-max 1`):** A single persistent `llama-server.exe` router process runs in the background. It manages model weights dynamically via HTTP lifecycle endpoints (`/models/load`, `/models/unload`) without needing complete process restarts for every model switch.
-2. **FastAPI Is the Sole Authenticated Boundary:** `llama-server.exe` binds strictly to `127.0.0.1:8080`. External clients (React Web, Android Companion) never communicate directly with `llama-server`. All requests pass through FastAPI on `127.0.0.1:8000` with strict Bearer/X-API-Key token validation and input sanitization.
+2. **FastAPI Is the Sole Authenticated Boundary:** `llama-server.exe` binds strictly to `127.0.0.1:8085`. External clients (React Web, Android Companion) never communicate directly with `llama-server`. All requests pass through FastAPI on `127.0.0.1:8000` with strict Bearer/X-API-Key token validation and input sanitization.
 3. **One Primary Model Resident:** While multiple GGUF models reside on disk, exactly one generative model (plus its optional `mmproj` multimodal projector) is loaded into VRAM at any given time.
 4. **Distinct Lifecycle Semantics (Sleep vs. Unload vs. Terminate):**
    - **Automatic Sleep:** Native idle timeout (`--sleep-idle-seconds 900`) releases GPU memory when inactive. The router remains running, and subsequent inference requests automatically wake the model.
@@ -54,7 +54,7 @@ The AI Companion project uses a local build of `llama.cpp` as its primary infere
                │  │  - Process ownership tracking (PID)    │  │
                │  └───────────────────┬────────────────────┘  │
                └──────────────────────┼───────────────────────┘
-                                      │ Localhost only (127.0.0.1:8080)
+                                      │ Localhost only (127.0.0.1:8085)
                                       ▼
                ┌──────────────────────────────────────────────┐
                │           llama-server Router                │
@@ -83,7 +83,7 @@ When the backend initializes the local LLM runtime, it executes `llama-server.ex
 ```powershell
 runtime\llama.cpp\llama-server.exe `
   --host 127.0.0.1 `
-  --port 8080 `
+  --port 8085 `
   --models-dir D:\OtherProjects\AI-companion-project\models `
   --models-max 1 `
   --sleep-idle-seconds 900 `
@@ -115,7 +115,7 @@ The runtime reports normalized semantic states reflecting the true status of bot
     ┌────────────────┐
     │SERVER_STARTING │
     └───────┬────────┘
-            │ port 8080 healthy
+            │ port 8085 healthy
             ▼
     ┌────────────────┐
     │ MODEL_UNLOADED │◄───────────────────────────┐
@@ -137,7 +137,7 @@ The runtime reports normalized semantic states reflecting the true status of bot
 
 ### State Definitions:
 - `SERVER_STOPPED`: `llama-server.exe` process is not running.
-- `SERVER_STARTING`: Process spawned, waiting for HTTP readiness on `http://127.0.0.1:8080/health`.
+- `SERVER_STARTING`: Process spawned, waiting for HTTP readiness on `http://127.0.0.1:8085/health`.
 - `MODEL_UNLOADED`: Router process is active and listening, but 0 model weights are resident in VRAM.
 - `MODEL_LOADING`: Engine is reading GGUF weights from NVMe and transferring layers to Vulkan VRAM.
 - `MODEL_READY`: Model fully loaded and warm, ready for instant inference.
@@ -157,7 +157,7 @@ The runtime reports normalized semantic states reflecting the true status of bot
    - File has valid `.gguf` extension.
    - Name contains no path traversal sequences (`..`, `/`, `\`).
 3. State transitions to `MODEL_LOADING`.
-4. FastAPI issues `POST http://127.0.0.1:8080/models/load`.
+4. FastAPI issues `POST http://127.0.0.1:8085/models/load`.
 5. When the engine responds 200 OK, telemetry probes measure resident VRAM and state transitions to `MODEL_READY`.
 
 ### Explicit Unload Flow
@@ -165,8 +165,8 @@ The runtime reports normalized semantic states reflecting the true status of bot
 2. Check `generation_active`:
    - If active inference is streaming, reject with `409 Conflict (MODEL_BUSY)` or trigger client abort.
 3. State transitions to `MODEL_UNLOADED`.
-4. FastAPI issues `POST http://127.0.0.1:8080/models/unload`.
-5. Engine releases GPU allocations. VRAM drops to ~0.0 GB (base display usage). Router remains alive on `127.0.0.1:8080`.
+4. FastAPI issues `POST http://127.0.0.1:8085/models/unload`.
+5. Engine releases GPU allocations. VRAM drops to ~0.0 GB (base display usage). Router remains alive on `127.0.0.1:8085`.
 
 ### Scoped Process Termination (Fallback Only)
 If the router becomes totally unresponsive (e.g. driver hang during Vulkan kernel compilation):
@@ -196,25 +196,25 @@ The runtime separates model identity from execution parameters:
                                       ▼
                ┌──────────────────────────────────────────────┐
                │           Concrete Technical Flags           │
-               │  - GPU Offload Layers: 20 vs 28 vs 33        │
+               │  - GPU Offload Layers: 0 vs 28 vs 33        │
                │  - Context Window: 2048 vs 4096 vs 8192      │
-               │  - Flash Attention: Enabled / Disabled       │
-               │  - KV Cache Quantization: FP16 vs Q8_0       │
-               │  - CPU Threads: 4 vs 6                       │
+               │  - mmproj Offload: false vs true vs true      │
+               │  - CPU Threads: 4 vs 6 vs 8                   │
                └──────────────────────────────────────────────┘
 ```
 
-### Profile Parameter Mapping for RX 580 (8 GB):
+### Profile Parameter Mapping for RX 580 8 GB — Repository-Verified
+
+Values below are verified against `_get_profile_params()` in `backend/app/services/llm/llama_cpp.py`.
+Flash attention, KV cache quantization, and batch/ubatch are not currently applied by this function and are therefore not listed as active parameters.
 
 | Parameter | Eco Profile | Balanced Profile (Default) | Maximum Profile |
 |---|---|---|---|
-| **Context Window (`-c`)** | 2048 tokens | 4096 tokens | 8192 tokens |
-| **GPU Offload Layers (`-ngl`)** | 20 layers | 28 layers | 33 layers (Full offload) |
-| **KV Cache Type (`--cache-type-k/v`)** | `q8_0` | `q8_0` | `f16` |
-| **Batch / UBatch (`-b`, `-ub`)** | 256 / 128 | 512 / 256 | 512 / 512 |
-| **Flash Attention (`-fa`)** | Enabled | Enabled | Enabled |
-| **CPU Threads (`-t`)** | 4 threads | 4 threads | 6 threads |
-| **Target VRAM Footprint** | ~2.5–3.2 GB | ~3.8–4.8 GB | ~6.0–7.2 GB |
+| **Context Window (`n_ctx`)** | 2048 tokens | 4096 tokens | 8192 tokens |
+| **GPU Offload Layers (`n_gpu_layers`)** | **0 layers (CPU-only)** | 28 layers | 33 layers (full offload) |
+| **CPU Threads (`n_threads`)** | 4 threads | 6 threads | 8 threads |
+| **mmproj Offload** | False | True | True |
+| **Target VRAM Footprint (estimated)** | ~0.0 GB GPU | ~3.8–4.8 GB | ~6.0–7.2 GB |
 
 ---
 

@@ -69,9 +69,12 @@ Branch: `feature/phase8-runtime-config` (based on merged 8A)
 - [ ] 8P.5i: registryApi.ts — ModelManifest, ModelLibraryState, ModelRuntimeHints TypeScript interfaces; RegistryEntry updated; context_limit → model_max_context migration in all consumers
 
 **8P.6 — Canonical Documentation Updates**
-- [ ] 8P.6a: AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md — "Local AI Core" → "Local AI Runtime" (canonical sections); test counts 88/38; Phase 8 sequence; arch doc cross-reference; model library invariants; ✅ DONE (Phase 8P planning step)
-- [ ] 8P.6b: LLAMA_CPP_RUNTIME_ARCHITECTURE.md — "Local AI Core" → "Local AI Runtime"; scope note added; ✅ DONE (Phase 8P planning step)
-- [ ] 8P.6c: VOICE_AND_AUDIO_ARCHITECTURE.md — "Local AI Core" → "Local AI Runtime" L7, L336; ✅ DONE (Phase 8P planning step)
+- [x] 8P.6a: AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md — terminology, test baseline 88/38, Phase 8 sequence, arch doc cross-reference, model invariants
+- [x] 8P.6b: LLAMA_CPP_RUNTIME_ARCHITECTURE.md — terminology, port corrected to 8085, Eco GPU layers corrected to 0, unverified flash-attention/KV-cache/batch rows removed, scope note added
+- [x] 8P.6c: VOICE_AND_AUDIO_ARCHITECTURE.md — terminology, storage cross-reference note
+- [x] 8P.6d: AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md — Section 33 rewritten from Open to Resolved Decisions (OD1/OD2/OD3)
+- [x] 8P.6e: README.md — terminology; backend/database/runtime marked implemented; Phase 7 baseline (88 pytest/38 vitest) and Phase 8 active delivery
+- [x] plan-phase8-pc-frontend-architecture-ux.md — complete rewrite, single authoritative version, no stale pass/supplement content
 
 **8P.7 — First-Run Data Migration**
 - [ ] 8P.7: startup.py — first-run conditional migration: detect legacy data/companion.db → safe copy to COMPANION_DATA_ROOT/database/companion.db → verify → backup original → restart-safe
