@@ -56,11 +56,35 @@ async def test_session() -> AsyncGenerator[AsyncSession, None]:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        from sqlalchemy import text
+        await conn.execute(text("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+                id UNINDEXED, content, category, content='memories', content_rowid='rowid'
+            );
+        """))
+        await conn.execute(text("""
+            CREATE TRIGGER IF NOT EXISTS memories_fts_insert AFTER INSERT ON memories
+            WHEN NEW.deleted_at IS NULL
+            BEGIN INSERT INTO memories_fts(rowid, id, content, category) VALUES(NEW.rowid, NEW.id, NEW.content, NEW.category); END;
+        """))
+        await conn.execute(text("""
+            CREATE TRIGGER IF NOT EXISTS memories_fts_update AFTER UPDATE ON memories
+            BEGIN
+                INSERT INTO memories_fts(memories_fts, rowid, id, content, category) VALUES('delete', OLD.rowid, OLD.id, OLD.content, OLD.category);
+                INSERT INTO memories_fts(rowid, id, content, category) SELECT NEW.rowid, NEW.id, NEW.content, NEW.category WHERE NEW.deleted_at IS NULL;
+            END;
+        """))
+        await conn.execute(text("""
+            CREATE TRIGGER IF NOT EXISTS memories_fts_delete AFTER DELETE ON memories
+            BEGIN INSERT INTO memories_fts(memories_fts, rowid, id, content, category) VALUES('delete', OLD.rowid, OLD.id, OLD.content, OLD.category); END;
+        """))
 
     async with async_session() as session:
         yield session
 
     async with engine.begin() as conn:
+        from sqlalchemy import text
+        await conn.execute(text("DROP TABLE IF EXISTS memories_fts;"))
         await conn.run_sync(Base.metadata.drop_all)
 
     await engine.dispose()

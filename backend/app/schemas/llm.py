@@ -3,6 +3,7 @@
 from typing import Any, Dict, List, Literal, Optional
 from pydantic import Field
 from app.schemas.common import BaseSchema
+from app.services.llm.runtime_state import LLMRuntimeState
 
 
 class ChatMessage(BaseSchema):
@@ -79,6 +80,11 @@ class ModelStatusResponse(BaseSchema):
     gpu_layers: int
     idle_timeout_seconds: int
     seconds_until_unload: Optional[int] = None
+    seconds_until_idle: Optional[int] = None
+    runtime_state: LLMRuntimeState = LLMRuntimeState.SERVER_STOPPED
+    generation_active: bool = False
+    managed_by_core: bool = False
+    engine_version: Optional[str] = "b10936"
 
 
 class ModelLoadRequest(BaseSchema):

@@ -137,7 +137,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     yield
 
-    logger.info("Shutting down Local AI Runtime, disposing database connections...")
+    logger.info("Shutting down Local AI Runtime, draining LLM and disposing database...")
+    try:
+        from app.services.llm.manager import llm_manager
+        await llm_manager.get_provider().shutdown()
+    except Exception as exc:
+        logger.warning(f"Error during LLM provider shutdown: {exc}")
     await engine.dispose()
 
 

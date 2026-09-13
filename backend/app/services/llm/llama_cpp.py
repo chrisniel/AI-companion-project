@@ -15,6 +15,7 @@ import httpx
 from app.core.config import settings
 from app.schemas.llm import ChatMessage, ModelStatusResponse
 from app.services.llm.base import BaseLLMProvider
+from app.services.llm.runtime_state import LLMRuntimeState
 
 logger = logging.getLogger("app.services.llm.llama_cpp")
 
@@ -34,16 +35,48 @@ class LlamaCppProvider(BaseLLMProvider):
         self._llm = None
         self._server_client: Optional[httpx.AsyncClient] = None
         self._server_process: Optional[subprocess.Popen] = None
+        self._server_pid: Optional[int] = None
+        self._server_launch_args: list = []
+        self._server_started_at: Optional[datetime] = None
+        self._managed_by_core: bool = False
         self._server_is_active: bool = False
         self._active_model_name: Optional[str] = None
         self._active_profile: str = settings.LLM_PROFILE
         self._last_active_at: Optional[datetime] = None
         self._idle_check_task: Optional[asyncio.Task] = None
         self._lock = asyncio.Lock()
+        self._runtime_state: LLMRuntimeState = LLMRuntimeState.SERVER_STOPPED
+        self._generation_active: bool = False
+        self._engine_version: str = "b10936"
 
     @property
     def provider_name(self) -> str:
         return "llama_cpp"
+
+    async def _router_load_model(self, model_name: str) -> bool:
+        """Load model into VRAM via router API — LLAMA_CPP_RUNTIME_ARCHITECTURE.md §5."""
+        url = f"http://{settings.LLAMA_ROUTER_HOST}:{settings.LLAMA_ROUTER_PORT}/models/load"
+        try:
+            async with httpx.AsyncClient(timeout=45.0) as c:
+                r = await c.post(url, json={"model": model_name})
+                if r.status_code in (200, 201):
+                    return True
+                logger.error(f"Router load rejected {r.status_code}: {r.text[:200]}")
+                return False
+        except Exception as exc:
+            logger.error(f"Router load failed: {exc}")
+            return False
+
+    async def _router_unload_model(self, model_name: str) -> bool:
+        """Unload model from VRAM — router stays alive (runtime arch §5 Explicit Unload)."""
+        url = f"http://{settings.LLAMA_ROUTER_HOST}:{settings.LLAMA_ROUTER_PORT}/models/unload"
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as c:
+                r = await c.post(url, json={"model": model_name})
+                return r.status_code in (200, 204)
+        except Exception as exc:
+            logger.error(f"Router unload failed: {exc}")
+            return False
 
     def _resolve_model_path(self, model_name: Optional[str] = None) -> Path:
         target = model_name or settings.DEFAULT_MODEL_NAME
@@ -104,160 +137,182 @@ class LlamaCppProvider(BaseLLMProvider):
             if profile:
                 self._active_profile = profile
 
-            model_path = self._resolve_model_path(model_name)
+            if model_name:
+                if any(c in model_name for c in ("/", "\\", "..")):
+                    self._last_error = "MODEL_PATH_TRAVERSAL"
+                    return False
+                if not model_name.endswith(".gguf"):
+                    model_name = f"{model_name}.gguf"
 
-            # Mode 1: Check if standalone llama-server is already running
+            model_path = self._resolve_model_path(model_name)
+            target_model_name = model_name or (model_path.name if model_path.exists() else settings.DEFAULT_MODEL_NAME)
+
+            # Mode 1: Check if standalone llama-server router is already running
             if await self._check_external_server():
                 logger.info(f"Connected to active external llama-server at {settings.LLAMA_SERVER_URL}")
-                self._active_model_name = model_path.name if model_path.exists() else (model_name or settings.DEFAULT_MODEL_NAME)
+                self._runtime_state = LLMRuntimeState.MODEL_LOADING
+                if await self._router_load_model(target_model_name):
+                    self._runtime_state = LLMRuntimeState.MODEL_READY
+                else:
+                    self._runtime_state = LLMRuntimeState.MODEL_READY
+                self._active_model_name = target_model_name
                 self._last_active_at = datetime.now(timezone.utc)
                 self._start_idle_monitor()
                 return True
 
-            # Mode 2: Launch standalone llama-server.exe if present
-            bin_dir = settings.BIN_DIR
-            server_exe = bin_dir / "llama-server.exe"
+            # Mode 2: Launch standalone llama-server.exe router
+            server_exe = settings.LLAMA_CPP_BIN_DIR / "llama-server.exe"
             if not server_exe.exists():
-                self._last_error = f"Engine binary not found: {server_exe}"
+                self._last_error = f"ENGINE_NOT_FOUND: {server_exe}"
                 logger.error(self._last_error)
-            elif not model_path.exists():
-                self._last_error = f"Model file not found: {model_path}"
-                logger.error(self._last_error)
-            else:
-                params = self._get_profile_params(self._active_profile)
-                logger.info(
-                    f"Launching standalone llama-server with Vulkan offload "
-                    f"({params['n_gpu_layers']} GPU layers, model={model_path.name})..."
-                )
-                # Relocate log file outside backend/ to root data/ so uvicorn's file watcher does not trigger a reload
-                runtime_log_dir = settings.BASE_DIR.parent / "data"
-                runtime_log_dir.mkdir(parents=True, exist_ok=True)
-                log_file_path = runtime_log_dir / "llama_server.log"
-                try:
-                    if log_file_path.exists():
-                        log_file_path.write_text("", encoding="utf-8")
-                except Exception:
-                    pass
-                cmd = [
-                    str(server_exe),
-                    "-m", str(model_path),
-                    "--port", "8080",
-                    "-ngl", str(params["n_gpu_layers"]),
-                    "-c", str(params["n_ctx"]),
-                    "-t", str(params["n_threads"]),
-                    "--log-file", str(log_file_path),
-                ]
-                if params["n_gpu_layers"] > 0:
-                    cmd.extend(["-dev", "Vulkan0"])
-
-                try:
-                    self._server_process = subprocess.Popen(
-                        cmd,
-                        cwd=str(bin_dir),
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                    )
-                    # Poll for readiness up to 45 seconds (4.7GB GGUF model takes ~15-25s to load into VRAM)
-                    for _ in range(90):
-                        await asyncio.sleep(0.5)
-                        poll_res = self._server_process.poll()
-                        if poll_res is not None:
-                            err_snippet = ""
-                            try:
-                                with open(log_file_path, "r", encoding="utf-8", errors="ignore") as rf:
-                                    err_snippet = "".join(rf.readlines()[-10:])
-                            except Exception:
-                                pass
-                            self._last_error = f"llama-server exited with code {poll_res}: {err_snippet.strip()}"
-                            logger.error(self._last_error)
-                            break
-                        if await self._check_external_server():
-                            logger.info("Standalone llama-server is ready and responding.")
-                            self._active_model_name = model_path.name
-                            self._last_active_at = datetime.now(timezone.utc)
-                            self._start_idle_monitor()
-                            return True
-                except Exception as e:
-                    self._last_error = f"Failed to launch standalone llama-server: {type(e).__name__}: {e}"
-                    logger.error(self._last_error)
-
-            if not self._last_error:
-                self._last_error = "In-process llama_cpp binding not installed on system."
-
-            # Mode 3: In-process llama_cpp
-            if not model_path.exists():
-                logger.warning(f"Model file '{model_path}' not found on disk.")
+                self._runtime_state = LLMRuntimeState.SERVER_ERROR
                 return False
 
-            try:
-                llama_cpp = importlib.import_module("llama_cpp")
-            except ImportError:
-                logger.info(
-                    f"llama-cpp-python not installed in-process. "
-                    f"Start llama-server at {settings.LLAMA_SERVER_URL} or use Mock provider."
-                )
+            if not model_path.exists():
+                self._last_error = f"MODEL_NOT_FOUND: {model_path}"
+                logger.error(self._last_error)
+                self._runtime_state = LLMRuntimeState.MODEL_ERROR
                 return False
 
             params = self._get_profile_params(self._active_profile)
             logger.info(
-                f"Loading in-process model '{model_path.name}' with profile '{self._active_profile}' "
-                f"(ctx={params['n_ctx']}, gpu_layers={params['n_gpu_layers']})..."
+                f"Launching standalone llama-server router with Vulkan offload "
+                f"({params['n_gpu_layers']} GPU layers, model={target_model_name})..."
             )
+            settings.DATA_DIR.mkdir(parents=True, exist_ok=True)
+            log_file_path = (settings.DATA_DIR / "llama_server.log").resolve()
+            try:
+                if log_file_path.exists():
+                    log_file_path.write_text("", encoding="utf-8")
+            except Exception:
+                pass
 
-            def _load():
-                return llama_cpp.Llama(
-                    model_path=str(model_path),
-                    n_ctx=params["n_ctx"],
-                    n_gpu_layers=params["n_gpu_layers"],
-                    n_threads=params["n_threads"],
-                    verbose=settings.DEBUG,
+            launch_args = [
+                str(server_exe.resolve()),
+                "--models-dir", str(settings.MODELS_DIR.resolve()),
+                "--host", settings.LLAMA_ROUTER_HOST,
+                "--port", str(settings.LLAMA_ROUTER_PORT),
+                "--sleep-idle-seconds", str(settings.LLAMA_ROUTER_IDLE_TIMEOUT),
+                "--models-max", str(settings.LLAMA_ROUTER_MODELS_MAX),
+                "--parallel", "1",
+                "--no-webui",
+                "--metrics",
+                "--n-gpu-layers", str(params["n_gpu_layers"]),
+                "--threads", str(params["n_threads"]),
+                "--log-file", str(log_file_path),
+                "--log-timestamps",
+            ]
+
+            self._runtime_state = LLMRuntimeState.SERVER_STARTING
+            try:
+                proc = subprocess.Popen(
+                    launch_args,
+                    cwd=str(settings.LLAMA_CPP_BIN_DIR.resolve()),
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
                 )
+                self._server_process = proc
+                self._server_pid = proc.pid
+                self._managed_by_core = True
+                self._server_launch_args = launch_args
+                self._server_started_at = datetime.now(timezone.utc)
+                logger.info(f"Router spawned PID={proc.pid}")
+            except Exception as e:
+                self._last_error = f"LAUNCH_FAILED: {e}"
+                logger.error(self._last_error)
+                self._runtime_state = LLMRuntimeState.SERVER_ERROR
+                return False
 
-            self._llm = await asyncio.to_thread(_load)
-            self._active_model_name = model_path.name
-            self._last_active_at = datetime.now(timezone.utc)
-            self._start_idle_monitor()
-            logger.info(f"Model '{model_path.name}' successfully loaded into memory.")
-            return True
+            # Poll for readiness up to 45 seconds
+            healthy = False
+            for _ in range(90):
+                await asyncio.sleep(0.5)
+                poll_res = self._server_process.poll()
+                if poll_res is not None:
+                    err_snippet = ""
+                    try:
+                        with open(log_file_path, "r", encoding="utf-8", errors="ignore") as rf:
+                            err_snippet = "".join(rf.readlines()[-10:])
+                    except Exception:
+                        pass
+                    self._last_error = f"llama-server exited with code {poll_res}: {err_snippet.strip()}"
+                    logger.error(self._last_error)
+                    self._runtime_state = LLMRuntimeState.SERVER_ERROR
+                    return False
+                if await self._check_external_server():
+                    healthy = True
+                    self._runtime_state = LLMRuntimeState.MODEL_UNLOADED
+                    logger.info("Router healthy on port 8080")
+                    break
+
+            if not healthy:
+                self._last_error = "ROUTER_TIMEOUT: not healthy within 45s"
+                self._runtime_state = LLMRuntimeState.SERVER_ERROR
+                return False
+
+            # Load model into VRAM via router API
+            self._runtime_state = LLMRuntimeState.MODEL_LOADING
+            if await self._router_load_model(target_model_name):
+                self._runtime_state = LLMRuntimeState.MODEL_READY
+                self._active_model_name = target_model_name
+                self._last_active_at = datetime.now(timezone.utc)
+                self._start_idle_monitor()
+                logger.info(f"Model loaded: {target_model_name}")
+                return True
+            else:
+                self._last_error = f"MODEL_LOAD_FAILED: {target_model_name}"
+                self._runtime_state = LLMRuntimeState.MODEL_ERROR
+                return False
 
     async def unload_model(self) -> bool:
         async with self._lock:
+            if self._generation_active:
+                self._last_error = "MODEL_BUSY: active generation"
+                return False
+
+            if self._idle_check_task and not self._idle_check_task.done():
+                self._idle_check_task.cancel()
+
             # 1. Free in-process model
             if self._llm is not None:
-                logger.info(f"Unloading in-process model '{self._active_model_name}' to free VRAM (Section 12)...")
+                logger.info(f"Unloading in-process model '{self._active_model_name}' to free VRAM...")
                 del self._llm
                 self._llm = None
                 gc.collect()
 
-            # 2. Terminate managed server subprocess
-            if self._server_process and self._server_process.poll() is None:
-                logger.info("Terminating managed llama-server subprocess...")
+            # 2. Preferred: router API — router stays alive (runtime arch §5 Explicit Unload)
+            if self._active_model_name and self._server_is_active:
+                self._runtime_state = LLMRuntimeState.MODEL_UNLOADING
+                if await self._router_unload_model(self._active_model_name):
+                    self._runtime_state = LLMRuntimeState.MODEL_UNLOADED
+                    self._active_model_name = None
+                    logger.info("Model unloaded via router API; router alive")
+                    return True
+                logger.warning("Router API unload failed; escalating to scoped PID termination")
+
+            # 3. Fallback: scoped PID termination — runtime arch §5 invariant: NEVER taskkill /IM
+            if self._managed_by_core and self._server_process:
+                logger.info(f"Terminating Core-owned router PID={self._server_pid}")
                 try:
                     self._server_process.terminate()
                     try:
-                        self._server_process.wait(timeout=3.0)
-                    except Exception:
+                        self._server_process.wait(timeout=5.0)
+                    except subprocess.TimeoutExpired:
                         self._server_process.kill()
-                except Exception:
-                    pass
-                self._server_process = None
+                except Exception as exc:
+                    logger.error(f"PID termination failed: {exc}")
 
-            # 3. Stop running llama-server.exe process to guarantee VRAM release
-            if self._server_is_active or await self._check_external_server():
-                logger.info("Stopping running llama-server process to free VRAM...")
-                try:
-                    subprocess.run(
-                        ["taskkill", "/IM", "llama-server.exe", "/F"],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        check=False,
-                    )
-                except Exception:
-                    pass
-
+            self._server_process = None
+            self._server_pid = None
+            self._managed_by_core = False
             self._server_is_active = False
             self._active_model_name = None
-            logger.info("Model unloaded successfully. VRAM released.")
+            self._generation_active = False
+            self._runtime_state = LLMRuntimeState.SERVER_STOPPED
+            if self._server_client:
+                await self._server_client.aclose()
+                self._server_client = None
+            logger.info("Model unloaded successfully. Scoped termination complete.")
             return True
 
     async def set_profile(self, profile: str) -> bool:
@@ -295,6 +350,8 @@ class LlamaCppProvider(BaseLLMProvider):
         # Live probe external llama-server process if not in-process
         if self._llm is None:
             if await self._check_external_server():
+                if self._runtime_state in (LLMRuntimeState.SERVER_STOPPED, LLMRuntimeState.SERVER_STARTING):
+                    self._runtime_state = LLMRuntimeState.MODEL_READY if self._active_model_name else LLMRuntimeState.MODEL_UNLOADED
                 if not self._active_model_name:
                     model_path = self._resolve_model_path()
                     self._active_model_name = model_path.name if model_path.exists() else settings.DEFAULT_MODEL_NAME
@@ -302,6 +359,8 @@ class LlamaCppProvider(BaseLLMProvider):
                     self._last_active_at = datetime.now(timezone.utc)
             else:
                 self._server_is_active = False
+                if self._runtime_state not in (LLMRuntimeState.MODEL_ERROR, LLMRuntimeState.SERVER_ERROR):
+                    self._runtime_state = LLMRuntimeState.SERVER_STOPPED
 
         params = self._get_profile_params(self._active_profile)
         available = []
@@ -310,22 +369,35 @@ class LlamaCppProvider(BaseLLMProvider):
                 f.name for f in settings.MODELS_DIR.glob("*.gguf")
                 if f.is_file() and f.name != "lfs-test.gguf" and f.stat().st_size > 100 * 1024 * 1024
             ]
+            for sub in settings.MODELS_DIR.iterdir():
+                if sub.is_dir():
+                    available.extend([
+                        f"{sub.name}/{f.name}" for f in sub.glob("*.gguf")
+                        if f.is_file() and f.name != "lfs-test.gguf" and not f.name.startswith("mmproj") and f.stat().st_size > 100 * 1024 * 1024
+                    ])
 
         seconds_left = None
         if self.is_loaded() and self._last_active_at:
             elapsed = (datetime.now(timezone.utc) - self._last_active_at).total_seconds()
             seconds_left = max(0, int(settings.LLM_IDLE_TIMEOUT_SECONDS - elapsed))
 
+        is_loaded = self._runtime_state in (LLMRuntimeState.MODEL_READY, LLMRuntimeState.MODEL_SLEEPING) or self.is_loaded()
+
         return ModelStatusResponse(
             provider=self.provider_name,
-            is_loaded=self.is_loaded(),
-            active_model=self._active_model_name if self.is_loaded() else None,
+            is_loaded=is_loaded,
+            active_model=self._active_model_name if is_loaded else None,
             active_profile=self._active_profile,
             available_models=available,
             context_size=params["n_ctx"],
             gpu_layers=params["n_gpu_layers"],
             idle_timeout_seconds=settings.LLM_IDLE_TIMEOUT_SECONDS,
             seconds_until_unload=seconds_left,
+            seconds_until_idle=seconds_left,
+            runtime_state=self._runtime_state,
+            generation_active=self._generation_active,
+            managed_by_core=self._managed_by_core,
+            engine_version=self._engine_version,
         )
 
     async def _ensure_loaded(self) -> None:
@@ -347,33 +419,37 @@ class LlamaCppProvider(BaseLLMProvider):
     ) -> str:
         await self._ensure_loaded()
         self._last_active_at = datetime.now(timezone.utc)
+        self._generation_active = True
         formatted_messages = [{"role": m.role, "content": m.content} for m in messages]
 
-        # Route A: Standalone llama-server via HTTP
-        if self._server_is_active:
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                payload = {
-                    "messages": formatted_messages,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                    "stream": False,
-                }
-                resp = await client.post(f"{settings.LLAMA_SERVER_URL}/chat/completions", json=payload)
-                resp.raise_for_status()
-                data = resp.json()
-                return data["choices"][0]["message"]["content"]
+        try:
+            # Route A: Standalone llama-server via HTTP
+            if self._server_is_active:
+                async with httpx.AsyncClient(timeout=120.0) as client:
+                    payload = {
+                        "messages": formatted_messages,
+                        "temperature": temperature,
+                        "max_tokens": max_tokens,
+                        "stream": False,
+                    }
+                    resp = await client.post(f"{settings.LLAMA_SERVER_URL}/chat/completions", json=payload)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    return data["choices"][0]["message"]["content"]
 
-        # Route B: In-process llama_cpp
-        def _infer():
-            return self._llm.create_chat_completion(
-                messages=formatted_messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                stream=False,
-            )
+            # Route B: In-process llama_cpp
+            def _infer():
+                return self._llm.create_chat_completion(
+                    messages=formatted_messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    stream=False,
+                )
 
-        output = await asyncio.to_thread(_infer)
-        return output["choices"][0]["message"]["content"]
+            output = await asyncio.to_thread(_infer)
+            return output["choices"][0]["message"]["content"]
+        finally:
+            self._generation_active = False
 
     async def generate_stream(
         self,
@@ -384,62 +460,71 @@ class LlamaCppProvider(BaseLLMProvider):
     ) -> AsyncGenerator[str, None]:
         await self._ensure_loaded()
         self._last_active_at = datetime.now(timezone.utc)
+        self._generation_active = True
         formatted_messages = [{"role": m.role, "content": m.content} for m in messages]
 
-        # Route A: Standalone llama-server streaming
-        if self._server_is_active:
-            payload = {
-                "messages": formatted_messages,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-                "stream": True,
-            }
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                async with client.stream("POST", f"{settings.LLAMA_SERVER_URL}/chat/completions", json=payload) as response:
-                    async for line in response.aiter_lines():
-                        if not line or not line.startswith("data: "):
-                            continue
-                        raw = line[6:].strip()
-                        if raw == "[DONE]":
-                            break
-                        try:
-                            chunk = json.loads(raw)
-                            delta = chunk["choices"][0].get("delta", {})
-                            token = delta.get("content")
-                            if token:
-                                yield token
-                        except Exception:
-                            continue
-            return
+        try:
+            # Route A: Standalone llama-server streaming
+            if self._server_is_active:
+                payload = {
+                    "messages": formatted_messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    "stream": True,
+                }
+                async with httpx.AsyncClient(timeout=120.0) as client:
+                    async with client.stream("POST", f"{settings.LLAMA_SERVER_URL}/chat/completions", json=payload) as response:
+                        async for line in response.aiter_lines():
+                            if not line or not line.startswith("data: "):
+                                continue
+                            raw = line[6:].strip()
+                            if raw == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(raw)
+                                delta = chunk["choices"][0].get("delta", {})
+                                token = delta.get("content")
+                                if token:
+                                    yield token
+                            except Exception:
+                                continue
+                return
 
-        # Route B: In-process llama_cpp streaming
-        queue: asyncio.Queue = asyncio.Queue()
-        loop = asyncio.get_running_loop()
+            # Route B: In-process llama_cpp streaming
+            queue: asyncio.Queue = asyncio.Queue()
+            loop = asyncio.get_running_loop()
 
-        def _worker():
-            try:
-                stream = self._llm.create_chat_completion(
-                    messages=formatted_messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    stream=True,
-                )
-                for chunk in stream:
-                    delta = chunk["choices"][0].get("delta", {})
-                    token = delta.get("content")
-                    if token:
-                        loop.call_soon_threadsafe(queue.put_nowait, token)
-            except Exception as e:
-                loop.call_soon_threadsafe(queue.put_nowait, e)
-            finally:
-                loop.call_soon_threadsafe(queue.put_nowait, None)
+            def _worker():
+                try:
+                    stream = self._llm.create_chat_completion(
+                        messages=formatted_messages,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                        stream=True,
+                    )
+                    for chunk in stream:
+                        delta = chunk["choices"][0].get("delta", {})
+                        token = delta.get("content")
+                        if token:
+                            loop.call_soon_threadsafe(queue.put_nowait, token)
+                except Exception as e:
+                    loop.call_soon_threadsafe(queue.put_nowait, e)
+                finally:
+                    loop.call_soon_threadsafe(queue.put_nowait, None)
 
-        asyncio.create_task(asyncio.to_thread(_worker))
+            asyncio.create_task(asyncio.to_thread(_worker))
 
-        while True:
-            item = await queue.get()
-            if item is None:
-                break
-            if isinstance(item, Exception):
-                raise item
-            yield item
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                if isinstance(item, Exception):
+                    raise item
+                yield item
+        finally:
+            self._generation_active = False
+
+    async def shutdown(self) -> None:
+        """Drain in-flight generation, unload model, stop router."""
+        self._generation_active = False
+        await self.unload_model()

@@ -28,11 +28,20 @@ import { Badge } from '../ui/Badge';
 import { NeumorphicButton } from '../ui/NeumorphicButton';
 import { StatusIndicator } from '../ui/StatusIndicator';
 import { useBackend } from '../../context/BackendContext';
-import { streamChatCompletion, ChatMessage } from '../../services/api';
+import {
+  listConversations,
+  createConversation,
+  getConversation,
+  getMessages,
+  streamSendMessage,
+  ConversationOut,
+  MessageOut,
+} from '../../services/api';
 import {
   AssistantMessage,
   AssistantState,
   ConversationHistoryItem,
+  MessageType,
 } from '../../types';
 import {
   ConversationHistoryDrawer,
@@ -57,6 +66,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
 }) => {
   const [internalAssistantState, setInternalAssistantState] = useState<AssistantState>('idle');
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [conversations, setConversations] = useState<ConversationOut[]>([]);
   const [activeConversationId, setActiveConversationId] = useState('conv-1');
   const [conversationTitle, setConversationTitle] = useState(
     'Daily Briefing & Local System Orchestration'
@@ -99,27 +109,27 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
       type: 'memory_retrieval',
       timestamp: '10:16 AM',
       content:
-        'User prefers morning focus blocks between 02:00 PM and 04:00 PM with non-essential audio muted. Quantization priority: FP16 -> Q4_K_M matrix accuracy.',
+        'Queried local SQLite memory database (FTS5 search). Located 2 memory matches for user query context.',
       memoryMetadata: {
-        query: 'schedule preferences and quantization tasks',
-        similarity: '0.94',
-        source: 'bge-large-en-v1.5 (local HNSW)',
+        query: 'sleep and health stats sync schedule',
+        similarity: '0.94 FTS5 BM25',
+        source: 'Encrypted Local SQLite DB',
       },
     },
     {
       id: 'msg-4',
       type: 'tool_execution',
       timestamp: '10:16 AM',
-      content: 'Retrieved 3 events from local workstation schedule.',
+      content: 'Tool execution dispatched: query_calendar_events',
       toolCard: {
-        toolName: 'Schedule',
-        action: 'Completed',
-        summary: 'Retrieved 3 events for today',
+        toolName: 'Scheduler & Calendar Service',
+        action: 'Queried',
+        summary: 'Events for today (Monday, Sep 13)',
         status: 'completed',
         details: {
-          '02:30 PM': 'Deep Work: Core Neural Pipeline Optimization (60m)',
-          '04:00 PM': 'Vector Memory Backup & Export',
-          '06:00 PM': 'Evening Audio Briefing Checkpoint',
+          'Target Date': 'Today (Sep 13)',
+          'Found Events': '1 Event: Deep Work: Core Neural Pipeline Optimization (02:30 PM)',
+          'Local Sync Status': 'Up to date with loopback DB',
         },
       },
     },
@@ -127,16 +137,17 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
       id: 'msg-5',
       type: 'tool_execution',
       timestamp: '10:16 AM',
-      content: 'Retrieved biometric wellness summary from Bluetooth BLE sync.',
+      content: 'Tool execution dispatched: read_biometric_telemetry',
       toolCard: {
-        toolName: 'Health',
-        action: 'Completed',
-        summary: 'Retrieved wellness summary',
+        toolName: 'Health Telemetry Ingestion',
+        action: 'Ingested',
+        summary: 'Sleep score 88%, Resting HR 64 bpm',
         status: 'completed',
         details: {
-          Sleep: '7h 48m (88% sleep score, Deep 1h 45m)',
-          'Resting HR': '64 bpm (Daily range: 58 - 114 bpm)',
-          Activity: '8,420 steps (84% of 10k target)',
+          'Sleep Duration': '7h 48m (92% target)',
+          'Deep Sleep': '1h 32m',
+          'Resting HR': '64 bpm (Baseline steady)',
+          'Steps Synced': '8,420 steps (Goal: 10,000)',
         },
       },
     },
@@ -144,9 +155,9 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
       id: 'msg-6',
       type: 'tool_execution',
       timestamp: '10:17 AM',
-      content: 'Created operational workspace reminder task.',
+      content: 'Tool execution dispatched: create_task',
       toolCard: {
-        toolName: 'Task',
+        toolName: 'Task Management Engine',
         action: 'Created',
         summary: 'Project reminder: Verify GGUF quantizations',
         status: 'completed',
@@ -185,18 +196,77 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     },
   ]);
 
+  const loadConversationMessages = useCallback(async (convId: string) => {
+    try {
+      const res = await getMessages(convId);
+      if (res.items && res.items.length > 0) {
+        const mapped: AssistantMessage[] = res.items.map((m) => ({
+          id: m.id,
+          type: (m.sender === 'user' ? 'user' : (m.sender === 'system' ? 'system' : 'assistant')) as MessageType,
+          sender: m.sender === 'user' ? userName : (m.sender === 'system' ? 'System' : activeCharacterName),
+          timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          content: m.content,
+        }));
+        setMessages(mapped);
+      } else {
+        setMessages([
+          {
+            id: `ast-${Date.now()}`,
+            type: 'assistant',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            content: `Ready for this session, ${userName}. What would you like to examine or execute?`,
+          },
+        ]);
+      }
+    } catch {
+      // Keep existing messages or graceful degradation
+    }
+  }, [activeCharacterName, userName]);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function initConversations() {
+      try {
+        const res = await listConversations();
+        if (!isMounted) return;
+        if (res.items && res.items.length > 0) {
+          setConversations(res.items);
+          const active = res.items[0];
+          setActiveConversationId(active.id);
+          setConversationTitle(active.title);
+          loadConversationMessages(active.id);
+        } else if (isOnline) {
+          const created = await createConversation('Daily Briefing & Local System Orchestration');
+          if (!isMounted) return;
+          setConversations([created]);
+          setActiveConversationId(created.id);
+          setConversationTitle(created.title);
+          loadConversationMessages(created.id);
+        }
+      } catch {
+        // Fallback to local default state if backend not reachable yet
+      }
+    }
+    initConversations();
+    return () => {
+      isMounted = false;
+    };
+  }, [isOnline, loadConversationMessages]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Handle Send Message with real-time SSE streaming
+  // Handle Send Message with persistent SSE streaming
   const handleSendMessage = async () => {
     if (!inputPrompt.trim() && attachments.length === 0) return;
     if (isBusy) return;
 
     const userText = inputPrompt.trim() || 'Shared attachment for processing.';
+    const clientMessageId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `cl-${Date.now()}`;
+
     const userMsg: AssistantMessage = {
-      id: `msg-${Date.now()}`,
+      id: clientMessageId,
       type: 'user',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       content: userText,
@@ -216,30 +286,16 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
 
     setAssistantState('thinking');
 
-    // Build context history for backend completion
-    const apiMessages: ChatMessage[] = [
-      {
-        role: 'system',
-        content: `You are ${activeCharacterName}, an AI companion assistant running locally on Windows. Help ${userName} clearly, concisely, and supportively.`,
-      },
-      ...messages
-        .filter((m) => (m.type === 'user' || m.type === 'assistant') && m.content.trim())
-        .map((m) => ({
-          role: (m.type === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
-          content: m.content,
-        })),
-      { role: 'user', content: userText },
-    ];
-
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
     let hasReceivedToken = false;
 
     try {
-      await streamChatCompletion({
-        messages: apiMessages,
-        profile: modelStatus?.active_profile,
+      await streamSendMessage({
+        conversationId: activeConversationId,
+        userText,
+        clientMessageId,
         signal: controller.signal,
         onToken: (token) => {
           if (!hasReceivedToken) {
@@ -259,6 +315,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
         onError: (err) => {
           setAssistantState('idle');
           abortControllerRef.current = null;
+          const isBusyErr = err.message?.includes('409') || err.message?.includes('BUSY');
           setMessages((prev) =>
             prev.map((msg) =>
               msg.id === assistantMsgId
@@ -266,7 +323,9 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
                     ...msg,
                     content:
                       msg.content ||
-                      `[Notice]: ${err.message}. Check that Local AI Core is running on :8000 and model is loaded.`,
+                      (isBusyErr
+                        ? '[Notice]: Model or conversation is currently busy. Please wait for previous generation to finish.'
+                        : `[Notice]: ${err.message}. Check that Local AI Core is running on :8000 and model is loaded.`),
                   }
                 : msg
             )
@@ -298,32 +357,59 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     }, 800);
   };
 
-  const handleNewConversation = () => {
-    setActiveConversationId(`conv-${Date.now()}`);
-    setConversationTitle('New Local Workspace Session');
-    setAssistantState('idle');
-    setMessages([
-      {
-        id: `sys-${Date.now()}`,
-        type: 'system',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        content: `New session initialized. Context buffer cleared. Pinned model: ${currentModelName}.`,
-      },
-      {
-        id: `ast-${Date.now()}`,
-        type: 'assistant',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        content: `Ready for a new session, ${userName}. What would you like to examine or execute?`,
-      },
-    ]);
+  const handleNewConversation = async () => {
+    try {
+      const created = await createConversation('New Conversation');
+      setConversations((prev) => [created, ...prev]);
+      setActiveConversationId(created.id);
+      setConversationTitle(created.title);
+      setAssistantState('idle');
+      setMessages([
+        {
+          id: `sys-${Date.now()}`,
+          type: 'system',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          content: `New session initialized. Context buffer cleared. Pinned model: ${currentModelName}.`,
+        },
+        {
+          id: `ast-${Date.now()}`,
+          type: 'assistant',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          content: `Ready for a new session, ${userName}. What would you like to examine or execute?`,
+        },
+      ]);
+    } catch {
+      const fallbackId = `conv-${Date.now()}`;
+      setActiveConversationId(fallbackId);
+      setConversationTitle('New Local Workspace Session');
+      setAssistantState('idle');
+      setMessages([
+        {
+          id: `sys-${Date.now()}`,
+          type: 'system',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          content: `New session initialized. Context buffer cleared. Pinned model: ${currentModelName}.`,
+        },
+        {
+          id: `ast-${Date.now()}`,
+          type: 'assistant',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          content: `Ready for a new session, ${userName}. What would you like to examine or execute?`,
+        },
+      ]);
+    }
   };
 
   const handleSelectConversation = (id: string) => {
     setActiveConversationId(id);
-    const found = mockConversations.find((c) => c.id === id);
+    const found = conversations.find((c) => c.id === id);
     if (found) {
       setConversationTitle(found.title);
+    } else {
+      const mockFound = mockConversations.find((c) => c.id === id);
+      if (mockFound) setConversationTitle(mockFound.title);
     }
+    loadConversationMessages(id);
   };
 
   // Assistant State Status Label
@@ -353,6 +439,18 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
   const stateDisplay = getAssistantStateDisplay();
   const isBusy = assistantState === 'thinking' || assistantState === 'speaking' || assistantState === 'executing_tool';
 
+  const drawerConversations: ConversationHistoryItem[] =
+    conversations.length > 0
+      ? conversations.map((c) => ({
+          id: c.id,
+          title: c.title,
+          date: new Date(c.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }),
+          snippet: 'Local conversation session stored in SQLite.',
+          model: currentModelName,
+          messagesCount: c.id === activeConversationId ? messages.length : 1,
+        }))
+      : mockConversations;
+
   return (
     <div className="space-y-6">
       {/* ========================================================= */}
@@ -370,7 +468,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
             >
               <History className="w-5 h-5 text-[var(--color-accent)] group-hover:scale-105 transition-transform" />
               <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[var(--color-accent)] text-white text-[9px] font-bold flex items-center justify-center shadow-sm">
-                5
+                {drawerConversations.length}
               </span>
             </button>
 
@@ -656,6 +754,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
         activeConversationId={activeConversationId}
         onSelectConversation={handleSelectConversation}
         onNewConversation={handleNewConversation}
+        conversations={drawerConversations}
       />
     </div>
   );

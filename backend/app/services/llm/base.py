@@ -1,8 +1,12 @@
 """Abstract base class for LLM providers."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import AsyncGenerator, Dict, List, Optional
-from app.schemas.llm import ChatMessage, ModelStatusResponse
+from typing import TYPE_CHECKING, AsyncGenerator, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from app.schemas.llm import ChatMessage, ModelStatusResponse
 
 
 class BaseLLMProvider(ABC):
@@ -60,3 +64,7 @@ class BaseLLMProvider(ABC):
     ) -> AsyncGenerator[str, None]:
         """Generate a streaming sequence of tokens for Server-Sent Events."""
         pass
+
+    async def shutdown(self) -> None:
+        """Gracefully shutdown provider and free resources."""
+        await self.unload_model()

@@ -95,6 +95,8 @@ runtime/
 generated/
 outputs/
 bin/
+provider/
+providers/
 
 # ---------------------------------------------------------
 # Local databases / personal runtime data

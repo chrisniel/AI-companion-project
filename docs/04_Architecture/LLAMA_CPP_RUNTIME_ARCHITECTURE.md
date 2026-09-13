@@ -4,7 +4,7 @@
 **Architecture Area:** Local LLM Runtime, Persistent Router & Hardware Offload  
 **Document Role:** Canonical runtime architecture and execution specification  
 **Document Status:** Approved Architecture / Active Baseline  
-**Pinned Baseline:** `llama.cpp` b10936 (Windows x86_64, Vulkan build in `bin/llama.cpp/`)  
+**Pinned Baseline:** `llama.cpp` b10936 (Windows x86_64, Vulkan build in `provider/llama.cpp/`)
 **Primary Host:** Windows 11 Local AI Core  
 **Primary GPU Target:** AMD Aisurix RX 580 2048SP (8 GB VRAM)  
 **Primary RAM Target:** 16 GB System DDR4 RAM  
@@ -79,7 +79,7 @@ The AI Companion project uses a local build of `llama.cpp` as its primary infere
 When the backend initializes the local LLM runtime, it executes `llama-server.exe` with absolute paths:
 
 ```powershell
-bin\llama.cpp\llama-server.exe `
+provider\llama.cpp\llama-server.exe `
   --host 127.0.0.1 `
   --port 8080 `
   --models-dir D:\OtherProjects\AI-companion-project\models `

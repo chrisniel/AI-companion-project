@@ -177,6 +177,34 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
     setIsDetailsOpen(true);
   };
 
+  const getRuntimeStateHeader = (state?: string, online?: boolean): { label: string; dotClass: string } => {
+    if (!online) return { label: 'Offline (:8000)', dotClass: 'bg-rose-500' };
+    switch (state) {
+      case 'SERVER_STOPPED':
+        return { label: 'Router: Offline', dotClass: 'bg-zinc-500' };
+      case 'SERVER_STARTING':
+        return { label: 'Router: Starting…', dotClass: 'bg-amber-500 animate-pulse' };
+      case 'MODEL_UNLOADED':
+        return { label: 'Router: Ready · Model: Unloaded', dotClass: 'bg-sky-500' };
+      case 'MODEL_LOADING':
+        return { label: 'Router: Ready · Model: Loading…', dotClass: 'bg-amber-500 animate-pulse' };
+      case 'MODEL_READY':
+        return { label: 'Router: Ready · Model: Loaded ✓', dotClass: 'bg-emerald-500 animate-pulse' };
+      case 'MODEL_SLEEPING':
+        return { label: 'Router: Ready · Model: Sleeping 💤', dotClass: 'bg-purple-500' };
+      case 'MODEL_UNLOADING':
+        return { label: 'Router: Ready · Model: Unloading…', dotClass: 'bg-amber-500 animate-pulse' };
+      case 'MODEL_ERROR':
+        return { label: 'Router: Ready · Model: Error ⚠️', dotClass: 'bg-rose-500' };
+      case 'SERVER_ERROR':
+        return { label: 'Router: Error ⚠️', dotClass: 'bg-rose-500' };
+      default:
+        return { label: 'Online (Standby)', dotClass: 'bg-emerald-500 animate-pulse' };
+    }
+  };
+
+  const headerRuntime = getRuntimeStateHeader(modelStatus?.runtime_state, isOnline);
+
   return (
     <div id="models-and-runtime-view" className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Error Banner / Pairing Input */}
@@ -241,10 +269,10 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
 
         <div className="flex items-center gap-2 self-start md:self-center">
           <div className="px-3 py-1.5 rounded-xl surface-recessed border border-[var(--color-border-subtle)] flex items-center gap-2 text-xs font-mono text-[var(--color-text-secondary)]">
-            <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+            <span className={`w-2 h-2 rounded-full ${headerRuntime.dotClass}`} />
             <span>Local AI Core:</span>
             <span className="font-semibold text-[var(--color-text-primary)]">
-              {isOnline ? (modelStatus?.is_loaded ? 'VRAM Active' : 'Online (Standby)') : 'Offline (:8000)'}
+              {headerRuntime.label}
             </span>
           </div>
         </div>
@@ -258,6 +286,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
         onUnload={handleUnloadModel}
         onOpenDetails={handleOpenDetails}
         idleCountdownSeconds={modelStatus?.seconds_until_unload}
+        runtimeState={modelStatus?.runtime_state}
       />
 
       {/* 3. Performance Profiles & VRAM Target (Tactile Grid) */}

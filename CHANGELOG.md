@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added & Enhanced (2026-09-13 - Pass 8: Assistant Orchestration, Persistent Conversations & FTS5 Memory - Track B5)
+
+- Persistent Conversations & Messages: Added `conversations` and `messages` tables with Alembic migration `003`. Implemented full CRUD, message history retrieval, and streaming SSE responses on `/api/v1/conversations`.
+- SQLite FTS5 Memory Engine: Created `memories` table with matching `memories_fts` FTS5 virtual table and synchronization triggers. Built `MemoryRetriever` service with query sanitization, FTS5 reserved keyword protection, and multi-language token support.
+- Assistant Orchestrator Service: Implemented `AssistantOrchestrator` managing token budgeting, persona configuration, per-conversation async locking (`_get_lock`), and strict trust framing wrapping retrieved memories in `<retrieved_memories>` as untrusted context.
+- Runtime Process Safety & 9-State Model: Upgraded `LlamaCppProvider` to native router API (`/models/load`, `/models/unload`), implemented PID-scoped termination, eradicated all blind `taskkill /IM llama-server.exe` calls, and added 9-state runtime lifecycle enum.
+- Web UI Persistence & 9-State Badges: Integrated `conversationApi` into `AssistantView.tsx` with auto-session loading, drawer history, and SSE message streaming. Updated `ModelsView.tsx` and `CurrentModelHero.tsx` with live 9-state runtime telemetry badges.
+- Verification: 49/49 pytest unit/integration tests passing (16 new tests, 0 regressions); frontend verified with `npm run build` (0 TypeScript/Vite errors).
+
 ### Added & Enhanced (2026-09-13 - Pass 7: React Web Dashboard & Local AI Admin Controls - Track C2)
 
 - Web Admin VRAM Controls: Added `POST /api/v1/models/load`, `POST /api/v1/models/unload`, and `PATCH /api/v1/models/profile` endpoints. Integrated tactile single-click **[ Load to VRAM ]** and **[ Unload VRAM ]** buttons into `ModelsView` and `CurrentModelHero`, allowing instant release of ~5 GB GPU memory without terminal commands.

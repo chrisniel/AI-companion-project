@@ -26,6 +26,7 @@ interface CurrentModelHeroProps {
   onUnload?: (modelId: string) => void;
   onOpenDetails?: (model: LocalModel) => void;
   idleCountdownSeconds?: number | null;
+  runtimeState?: string;
 }
 
 export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
@@ -35,9 +36,48 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
   onUnload,
   onOpenDetails,
   idleCountdownSeconds,
+  runtimeState,
 }) => {
   const isCloud = model.isCloud || model.engine === 'gemini';
   const isLoaded = model.status === 'loaded';
+
+  const getRuntimeBadge = () => {
+    if (isCloud) {
+      return {
+        label: isLoaded ? 'Active & Ready' : 'Standby Cloud API',
+        variant: isLoaded ? ('success' as const) : ('warning' as const),
+        dotClass: isLoaded ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500',
+      };
+    }
+    switch (runtimeState) {
+      case 'SERVER_STOPPED':
+        return { label: 'Router: Offline', variant: 'default' as const, dotClass: 'bg-zinc-500' };
+      case 'SERVER_STARTING':
+        return { label: 'Router: Starting…', variant: 'warning' as const, dotClass: 'bg-amber-500 animate-pulse' };
+      case 'MODEL_UNLOADED':
+        return { label: 'Router: Ready · Model: Unloaded', variant: 'default' as const, dotClass: 'bg-sky-500' };
+      case 'MODEL_LOADING':
+        return { label: 'Router: Ready · Model: Loading…', variant: 'warning' as const, dotClass: 'bg-amber-500 animate-pulse' };
+      case 'MODEL_READY':
+        return { label: 'Router: Ready · Model: Loaded ✓', variant: 'success' as const, dotClass: 'bg-emerald-500 animate-pulse' };
+      case 'MODEL_SLEEPING':
+        return { label: 'Router: Ready · Model: Sleeping 💤', variant: 'accent' as const, dotClass: 'bg-purple-500' };
+      case 'MODEL_UNLOADING':
+        return { label: 'Router: Ready · Model: Unloading…', variant: 'warning' as const, dotClass: 'bg-amber-500 animate-pulse' };
+      case 'MODEL_ERROR':
+        return { label: 'Router: Ready · Model: Error ⚠️', variant: 'danger' as const, dotClass: 'bg-rose-500' };
+      case 'SERVER_ERROR':
+        return { label: 'Router: Error ⚠️', variant: 'danger' as const, dotClass: 'bg-rose-500' };
+      default:
+        return {
+          label: isLoaded ? 'Pinned in VRAM' : 'Standby on Disk (VRAM Free)',
+          variant: isLoaded ? ('success' as const) : ('warning' as const),
+          dotClass: isLoaded ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500',
+        };
+    }
+  };
+
+  const runtimeBadge = getRuntimeBadge();
 
   // Context calculations (active tokens only allocated when model is pinned in VRAM)
   const activeTokens = isLoaded ? Math.min(3840, model.contextWindow) : 0;
@@ -78,13 +118,9 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
               <Badge variant={isCloud ? 'accent' : 'default'} size="sm">
                 {isCloud ? 'Cloud API' : 'Local (On-Device)'}
               </Badge>
-              <Badge variant={isLoaded ? 'success' : 'warning'} size="sm">
-                <span className={`w-1.5 h-1.5 rounded-full mr-1 ${isLoaded ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-                {isLoaded
-                  ? isCloud
-                    ? 'Active & Ready'
-                    : 'Pinned in VRAM'
-                  : 'Standby on Disk (VRAM Free)'}
+              <Badge variant={runtimeBadge.variant} size="sm">
+                <span className={`w-1.5 h-1.5 rounded-full mr-1 ${runtimeBadge.dotClass}`} />
+                {runtimeBadge.label}
               </Badge>
               {isLoaded && idleCountdownSeconds !== undefined && idleCountdownSeconds !== null && (
                 <Badge variant="default" size="sm">

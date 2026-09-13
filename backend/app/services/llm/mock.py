@@ -7,6 +7,7 @@ from typing import AsyncGenerator, List, Optional
 from app.core.config import settings
 from app.schemas.llm import ChatMessage, ModelStatusResponse
 from app.services.llm.base import BaseLLMProvider
+from app.services.llm.runtime_state import LLMRuntimeState
 
 
 class MockLLMProvider(BaseLLMProvider):
@@ -51,16 +52,22 @@ class MockLLMProvider(BaseLLMProvider):
         if settings.MODELS_DIR.exists():
             available = [f.name for f in settings.MODELS_DIR.glob("*.gguf")]
 
+        is_loaded = self._is_loaded
         return ModelStatusResponse(
             provider=self.provider_name,
-            is_loaded=self._is_loaded,
-            active_model=self._active_model if self._is_loaded else None,
+            is_loaded=is_loaded,
+            active_model=self._active_model if is_loaded else None,
             active_profile=self._active_profile,
             available_models=available,
             context_size=context_sizes.get(self._active_profile, 4096),
             gpu_layers=gpu_layers.get(self._active_profile, settings.LLM_GPU_LAYERS),
             idle_timeout_seconds=settings.LLM_IDLE_TIMEOUT_SECONDS,
-            seconds_until_unload=settings.LLM_IDLE_TIMEOUT_SECONDS if self._is_loaded else None,
+            seconds_until_unload=settings.LLM_IDLE_TIMEOUT_SECONDS if is_loaded else None,
+            seconds_until_idle=settings.LLM_IDLE_TIMEOUT_SECONDS if is_loaded else None,
+            runtime_state=LLMRuntimeState.MODEL_READY if is_loaded else LLMRuntimeState.MODEL_UNLOADED,
+            generation_active=False,
+            managed_by_core=True,
+            engine_version="mock-v1",
         )
 
     async def generate(

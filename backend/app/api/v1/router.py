@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import verify_token
 from app.api.v1.endpoints.auth import router as auth_router
+from app.api.v1.endpoints.conversations import router as conversations_router
 from app.api.v1.endpoints.health import public_health_router, system_router
 from app.api.v1.endpoints.llm import router as llm_router
+from app.api.v1.endpoints.memories import router as memories_router
 from app.api.v1.endpoints.tasks import router as tasks_router
 
 api_v1_router = APIRouter()
@@ -20,6 +22,8 @@ protected_router.include_router(system_router)
 protected_router.include_router(auth_router)
 protected_router.include_router(tasks_router)
 protected_router.include_router(llm_router)
+protected_router.include_router(conversations_router, prefix="/conversations", tags=["Conversations"])
+protected_router.include_router(memories_router, prefix="/memories", tags=["Memories"])
 
 # Mount both routers under V1 prefix
 api_v1_router.include_router(public_router)
