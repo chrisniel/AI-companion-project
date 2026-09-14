@@ -22,7 +22,7 @@ import { HealthPipelineCard } from './health/HealthPipelineCard';
 import { DataAvailabilityBanner } from './health/DataAvailabilityBanner';
 import { useBackend } from '../../context/BackendContext';
 import {
-  SUPPORTED_HEALTH_PROVIDERS,
+  PLANNED_HEALTH_PROVIDERS,
   getPipelineStages,
 } from './health/healthConfig';
 import {
@@ -34,19 +34,18 @@ export const HealthView: React.FC = () => {
   const { isOnline, modelStatus, refreshStatus } = useBackend();
   const [timeRange, setTimeRange] = useState<HealthTimeRange>('today');
   const [selectedProvider, setSelectedProvider] = useState<HealthSourceProvider>(
-    SUPPORTED_HEALTH_PROVIDERS[0]
+    PLANNED_HEALTH_PROVIDERS[0]
   );
-  const [simulateMissingSpO2, setSimulateMissingSpO2] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const pipelineStages = getPipelineStages(selectedProvider.name);
 
-  const handleRefreshSync = async () => {
-    setIsSyncing(true);
+  const handleRefreshRuntime = async () => {
+    setIsRefreshing(true);
     try {
       await refreshStatus();
     } finally {
-      setIsSyncing(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -158,14 +157,14 @@ export const HealthView: React.FC = () => {
         </div>
       ) : null}
 
-      {/* HEALTH SOURCE PIPELINE: FitCloudPro → Health Connect → Mobile App → Local AI Runtime */}
+      {/* HEALTH SOURCE PIPELINE: Planned Multi-Tier Architecture */}
       <HealthPipelineCard
         selectedProvider={selectedProvider}
-        providers={SUPPORTED_HEALTH_PROVIDERS}
+        providers={PLANNED_HEALTH_PROVIDERS}
         pipelineStages={pipelineStages}
         onSelectProvider={setSelectedProvider}
-        isSyncing={isSyncing}
-        onRefreshSync={handleRefreshSync}
+        isSyncing={isRefreshing}
+        onRefreshSync={handleRefreshRuntime}
       />
 
       {/* SUMMARY METRICS: Truthful Unconnected Telemetry Metrics */}
@@ -175,7 +174,7 @@ export const HealthView: React.FC = () => {
             {timeRange === 'today' ? 'Today’s Summary' : timeRange === 'week' ? 'Weekly Aggregate' : 'Monthly Aggregate'}
           </span>
           <span className="text-[11px] text-[var(--color-text-muted)] font-mono">
-            Provider: {selectedProvider.name} (Awaiting Sync)
+            Provider: {selectedProvider.name} (Planned / Unavailable)
           </span>
         </div>
 
@@ -303,24 +302,21 @@ export const HealthView: React.FC = () => {
         </div>
         <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
           <Badge variant="neutral" size="sm" className="font-mono text-[11px]">
-            Android Health Connect: Ready
+            Wearable Sync: Planned (Not Implemented)
           </Badge>
           <Badge variant="neutral" size="sm" className="font-mono text-[11px]">
-            BLE GATT Bridge: Standby
-          </Badge>
-          <Badge variant="neutral" size="sm" className="font-mono text-[11px]">
-            SQLite Telemetry: 0 Records
+            Health Telemetry: Unavailable
           </Badge>
         </div>
         <div className="pt-2">
           <NeumorphicButton
             size="sm"
             variant="secondary"
-            onClick={handleRefreshSync}
-            disabled={isSyncing}
-            icon={<RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />}
+            onClick={handleRefreshRuntime}
+            disabled={isRefreshing}
+            icon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />}
           >
-            {isSyncing ? 'Checking Sync Bridge...' : 'Check Sync Status'}
+            {isRefreshing ? 'Checking Runtime...' : 'Refresh Runtime Status'}
           </NeumorphicButton>
         </div>
       </div>
@@ -354,8 +350,6 @@ export const HealthView: React.FC = () => {
       {/* DATA AVAILABILITY & CAPABILITIES */}
       <DataAvailabilityBanner
         provider={selectedProvider}
-        simulateMissingSpO2={simulateMissingSpO2}
-        onToggleSimulateMissingSpO2={() => setSimulateMissingSpO2(!simulateMissingSpO2)}
       />
     </div>
   );

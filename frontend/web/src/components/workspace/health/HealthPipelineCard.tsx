@@ -50,15 +50,14 @@ export const HealthPipelineCard: React.FC<HealthPipelineCardProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
-                Telemetry Pipeline & Ingestion Source
+                Planned Pipeline Specification
               </span>
-              <Badge variant="success" size="sm" className="gap-1 font-mono">
-                <CheckCircle2 className="w-3 h-3" />
-                Live Sync
+              <Badge variant="neutral" size="sm" className="gap-1 font-mono">
+                Planned Architecture
               </Badge>
             </div>
             <h2 className="text-sm font-bold text-[var(--color-text-primary)]">
-              Multi-Tier Local Health Architecture
+              Planned Multi-Tier Health Architecture
             </h2>
           </div>
         </div>
@@ -71,10 +70,10 @@ export const HealthPipelineCard: React.FC<HealthPipelineCardProps> = ({
               type="button"
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
               className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl surface-recessed border border-[var(--color-border-subtle)] text-xs font-semibold text-[var(--color-text-primary)] hover:border-[var(--color-accent)]/40 transition-colors cursor-pointer"
-              title="Change active wearable source provider"
+              title="Inspect planned wearable source specifications"
             >
               <Watch className="w-3.5 h-3.5 text-[var(--color-accent)]" />
-              <span>Source: <strong className="text-[var(--color-accent)]">{selectedProvider.name}</strong></span>
+              <span>Planned Source: <strong className="text-[var(--color-accent)]">{selectedProvider.name}</strong></span>
               <ChevronDown className={`w-3.5 h-3.5 text-[var(--color-text-muted)] transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
 
@@ -85,7 +84,7 @@ export const HealthPipelineCard: React.FC<HealthPipelineCardProps> = ({
                 className="absolute right-0 top-full mt-1.5 w-72 rounded-2xl surface-raised border border-[var(--color-border-highlight)] shadow-xl p-1.5 z-30 space-y-1"
               >
                 <div className="px-2.5 py-1 text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
-                  Configured Wearable Sources
+                  Planned Wearable Sources (Future Phase)
                 </div>
                 {providers.map((p) => {
                   const isSelected = p.id === selectedProvider.id;
@@ -107,7 +106,7 @@ export const HealthPipelineCard: React.FC<HealthPipelineCardProps> = ({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
                           <span className="font-medium text-[var(--color-text-primary)]">{p.name}</span>
-                          {isSelected && <span className="text-[10px] font-mono text-[var(--color-accent)] font-bold">Active</span>}
+                          {isSelected && <span className="text-[10px] font-mono text-[var(--color-accent)] font-bold">Selected</span>}
                         </div>
                         <p className="text-[11px] text-[var(--color-text-muted)] truncate">{p.deviceModel}</p>
                       </div>
@@ -116,7 +115,7 @@ export const HealthPipelineCard: React.FC<HealthPipelineCardProps> = ({
                 })}
                 <div className="px-2.5 py-1.5 pt-2 border-t border-[var(--color-border-subtle)] text-[10px] text-[var(--color-text-muted)] flex items-center gap-1.5">
                   <Shield className="w-3 h-3 text-[var(--color-accent)]" />
-                  <span>Configurable for any Health Connect compliant provider</span>
+                  <span>Planned for Android Companion & Health Connect integration</span>
                 </div>
               </div>
             )}
@@ -128,7 +127,7 @@ export const HealthPipelineCard: React.FC<HealthPipelineCardProps> = ({
             onClick={onRefreshSync}
             disabled={isSyncing}
             className="p-1.5 rounded-xl surface-recessed border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-accent)]/40 transition-colors cursor-pointer disabled:opacity-50"
-            title="Poll for new telemetry batches"
+            title="Refresh Local AI Runtime connection"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-[var(--color-accent)]' : ''}`} />
           </button>
@@ -195,35 +194,23 @@ export const HealthPipelineCard: React.FC<HealthPipelineCardProps> = ({
           <span className="text-[var(--color-text-muted)]">Device:</span>
           <span className="font-semibold text-[var(--color-text-primary)]">{selectedProvider.deviceModel}</span>
           <span className="text-[var(--color-text-muted)]">•</span>
-          <span className="text-[var(--color-text-muted)]">Last Sync:</span>
-          <span className="font-mono text-[var(--color-text-secondary)]">{selectedProvider.lastSyncTime}</span>
+          <span className="text-[var(--color-text-muted)]">Status:</span>
+          <span className="font-mono text-amber-500/80">Unavailable (Planned)</span>
           <span className="text-[var(--color-text-muted)]">•</span>
-          <span className="text-[var(--color-text-muted)]">Samples:</span>
-          <span className="font-mono text-[var(--color-accent)]">{selectedProvider.sampleCount.toLocaleString()}</span>
+          <span className="text-[var(--color-text-muted)]">Telemetry:</span>
+          <span className="font-mono text-[var(--color-text-muted)]">0 Records</span>
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[11px] text-[var(--color-text-muted)] mr-1">Capabilities:</span>
-          <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-            Continuous HR
+          <span className="text-[11px] text-[var(--color-text-muted)] mr-1">Planned Capabilities:</span>
+          <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-black/5 dark:bg-white/5 text-[var(--color-text-muted)] border border-[var(--color-border-subtle)]">
+            Continuous HR (Planned)
           </span>
-          <span
-            className={`px-2 py-0.5 rounded-md text-[10px] font-medium border ${
-              selectedProvider.supportsSpO2
-                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
-            }`}
-          >
-            {selectedProvider.supportsSpO2 ? 'SpO2 Spot' : 'No SpO2'}
+          <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-black/5 dark:bg-white/5 text-[var(--color-text-muted)] border border-[var(--color-border-subtle)]">
+            SpO2 (Planned)
           </span>
-          <span
-            className={`px-2 py-0.5 rounded-md text-[10px] font-medium border ${
-              selectedProvider.supportsSleepStages
-                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                : 'bg-black/5 dark:bg-white/5 text-[var(--color-text-muted)] border-[var(--color-border-subtle)]'
-            }`}
-          >
-            {selectedProvider.supportsSleepStages ? 'Sleep Stages (REM)' : 'Duration Only'}
+          <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-black/5 dark:bg-white/5 text-[var(--color-text-muted)] border border-[var(--color-border-subtle)]">
+            Sleep Stages (Planned)
           </span>
         </div>
       </div>

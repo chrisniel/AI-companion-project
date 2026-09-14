@@ -1,16 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Brain,
-  X,
   Check,
-  Tag,
-  Sparkles,
   User,
   HeartHandshake,
   BookOpen,
-  FolderGit2,
-  Calendar,
-  Clock,
+  Sliders,
 } from 'lucide-react';
 import { MemoryEntry, MemoryCategory } from '../../../types';
 import { Modal } from '../../ui/Modal';
@@ -24,12 +18,9 @@ export interface MemoryEditorModalProps {
 }
 
 const CATEGORIES: { id: MemoryCategory; label: string; icon: React.ReactNode }[] = [
-  { id: 'Profile', label: 'Profile', icon: <User className="w-3.5 h-3.5" /> },
-  { id: 'Preference', label: 'Preference', icon: <HeartHandshake className="w-3.5 h-3.5" /> },
   { id: 'Fact', label: 'Fact', icon: <BookOpen className="w-3.5 h-3.5" /> },
-  { id: 'Project', label: 'Project', icon: <FolderGit2 className="w-3.5 h-3.5" /> },
-  { id: 'Event', label: 'Event', icon: <Calendar className="w-3.5 h-3.5" /> },
-  { id: 'Temporary', label: 'Temporary', icon: <Clock className="w-3.5 h-3.5" /> },
+  { id: 'Preference', label: 'Preference', icon: <HeartHandshake className="w-3.5 h-3.5" /> },
+  { id: 'Profile', label: 'Profile / Context', icon: <User className="w-3.5 h-3.5" /> },
 ];
 
 export const MemoryEditorModal: React.FC<MemoryEditorModalProps> = ({
@@ -39,24 +30,21 @@ export const MemoryEditorModal: React.FC<MemoryEditorModalProps> = ({
   memoryToEdit,
 }) => {
   const [content, setContent] = useState('');
-  const [category, setCategory] = useState<MemoryCategory>('Preference');
-  const [source, setSource] = useState('');
-  const [confidence, setConfidence] = useState(0.95);
-  const [tagsString, setTagsString] = useState('');
+  const [category, setCategory] = useState<MemoryCategory>('Fact');
+  const [importance, setImportance] = useState(1.0);
 
   useEffect(() => {
     if (memoryToEdit) {
       setContent(memoryToEdit.content);
-      setCategory(memoryToEdit.category);
-      setSource(memoryToEdit.source);
-      setConfidence(memoryToEdit.confidence);
-      setTagsString(memoryToEdit.tags?.join(', ') || '');
+      const cat = (memoryToEdit.category === 'Preference' || memoryToEdit.category === 'Profile')
+        ? memoryToEdit.category
+        : 'Fact';
+      setCategory(cat);
+      setImportance(typeof memoryToEdit.importance === 'number' ? memoryToEdit.importance : 1.0);
     } else {
       setContent('');
-      setCategory('Preference');
-      setSource('Direct User Input');
-      setConfidence(0.95);
-      setTagsString('');
+      setCategory('Fact');
+      setImportance(1.0);
     }
   }, [memoryToEdit, isOpen]);
 
@@ -64,18 +52,11 @@ export const MemoryEditorModal: React.FC<MemoryEditorModalProps> = ({
     e.preventDefault();
     if (!content.trim()) return;
 
-    const tags = tagsString
-      .split(',')
-      .map((t) => t.trim().toLowerCase())
-      .filter((t) => t.length > 0);
-
     onSave({
       id: memoryToEdit?.id,
       content: content.trim(),
       category,
-      source: source.trim() || 'Manual Input',
-      confidence,
-      tags,
+      importance,
       lastUpdated: 'Just now',
     });
     onClose();
@@ -85,7 +66,7 @@ export const MemoryEditorModal: React.FC<MemoryEditorModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={memoryToEdit ? 'Edit Semantic Memory' : 'Create New Memory Entry'}
+      title={memoryToEdit ? 'Edit Memory Record' : 'Create New Memory Record'}
       size="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-5">
@@ -94,7 +75,7 @@ export const MemoryEditorModal: React.FC<MemoryEditorModalProps> = ({
           <label className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
             Memory Category
           </label>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {CATEGORIES.map((cat) => {
               const isSelected = category === cat.id;
               return (
@@ -130,65 +111,36 @@ export const MemoryEditorModal: React.FC<MemoryEditorModalProps> = ({
             value={content}
             onChange={(e) => setContent(e.target.value)}
             rows={4}
-            placeholder="Describe the profile detail, preference, factual statement, or project context..."
+            placeholder="Describe the factual statement, preference, or profile context..."
             className="w-full px-3.5 py-2.5 rounded-2xl surface-base border border-[var(--color-border-subtle)] text-sm text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] transition-all leading-relaxed"
             required
           />
         </div>
 
-        {/* Source & Tags */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
-              Origin / Source
-            </label>
-            <input
-              type="text"
-              value={source}
-              onChange={(e) => setSource(e.target.value)}
-              placeholder="e.g. Conversation with User, Health Connect"
-              className="w-full px-3.5 py-2.5 rounded-2xl surface-base border border-[var(--color-border-subtle)] text-xs text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] transition-all"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
-              Tags (comma separated)
-            </label>
-            <input
-              type="text"
-              value={tagsString}
-              onChange={(e) => setTagsString(e.target.value)}
-              placeholder="e.g. architecture, style, concise"
-              className="w-full px-3.5 py-2.5 rounded-2xl surface-base border border-[var(--color-border-subtle)] text-xs text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] transition-all"
-            />
-          </div>
-        </div>
-
-        {/* Confidence Slider */}
+        {/* Importance Slider (Backend float 0.0 to 2.0) */}
         <div className="space-y-2 p-3.5 rounded-2xl surface-recessed border border-[var(--color-border-subtle)]">
           <div className="flex items-center justify-between text-xs font-semibold text-[var(--color-text-secondary)]">
             <span className="flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-[var(--color-accent)]" />
-              <span>Vector Ingestion Confidence</span>
+              <Sliders className="w-3.5 h-3.5 text-[var(--color-accent)]" />
+              <span>Memory Importance Weight</span>
             </span>
             <span className="font-mono text-sm text-[var(--color-text-primary)]">
-              {Math.round(confidence * 100)}%
+              {importance.toFixed(1)}
             </span>
           </div>
           <input
             type="range"
-            min="0.5"
-            max="1.0"
-            step="0.01"
-            value={confidence}
-            onChange={(e) => setConfidence(parseFloat(e.target.value))}
+            min="0.0"
+            max="2.0"
+            step="0.1"
+            value={importance}
+            onChange={(e) => setImportance(parseFloat(e.target.value))}
             className="w-full accent-[var(--color-accent)] cursor-pointer"
           />
           <div className="flex justify-between text-[10px] text-[var(--color-text-muted)] font-mono">
-            <span>50% (Tentative)</span>
-            <span>85% (Strong)</span>
-            <span>100% (Absolute Axiom)</span>
+            <span>0.0 (Low)</span>
+            <span>1.0 (Standard)</span>
+            <span>2.0 (High Priority)</span>
           </div>
         </div>
 
@@ -208,7 +160,7 @@ export const MemoryEditorModal: React.FC<MemoryEditorModalProps> = ({
             disabled={!content.trim()}
             icon={<Check className="w-4 h-4" />}
           >
-            {memoryToEdit ? 'Save Changes' : 'Index Memory'}
+            {memoryToEdit ? 'Save Changes' : 'Save Memory'}
           </NeumorphicButton>
         </div>
       </form>

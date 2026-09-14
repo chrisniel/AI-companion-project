@@ -1,48 +1,49 @@
 /**
- * Static presentation metadata and provider capability definitions for Health & Wellness.
- * Pure configuration; does not contain fabricated user vitals or runtime telemetry.
+ * Static presentation metadata and planned provider specifications for Health & Wellness.
+ * Note: Wearable health telemetry synchronization is planned for a future Android Companion phase.
+ * No real wearable health sync or database telemetry is currently implemented on the host runtime.
  */
 
 import { HealthPipelineStage, HealthSourceProvider } from '../../../types';
 
-export const SUPPORTED_HEALTH_PROVIDERS: HealthSourceProvider[] = [
+export const PLANNED_HEALTH_PROVIDERS: HealthSourceProvider[] = [
+  {
+    id: 'health_connect_wearos',
+    name: 'Android Health Connect (Planned)',
+    deviceModel: 'Android Companion Bridge (Future Phase)',
+    iconType: 'watch',
+    description: 'Planned background batch synchronization via Android Health Connect',
+    supportsSpO2: true,
+    supportsSleepStages: true,
+    supportsContinuousHR: true,
+    status: 'disconnected',
+    lastSyncTime: 'Unavailable (Planned)',
+    sampleCount: 0,
+  },
   {
     id: 'fitcloudpro',
-    name: 'FitCloudPro',
-    deviceModel: 'Smart Wellness Band K22 (BLE)',
+    name: 'FitCloudPro / BLE (Planned)',
+    deviceModel: 'Direct BLE GATT Bridge (Future Phase)',
     iconType: 'band',
-    description: 'Optical photoplethysmography sensor sync via Bluetooth LE daemon',
+    description: 'Planned optical photoplethysmography sensor sync via Bluetooth LE daemon',
     supportsSpO2: true,
     supportsSleepStages: false,
     supportsContinuousHR: true,
     status: 'disconnected',
-    lastSyncTime: 'Never',
-    sampleCount: 0,
-  },
-  {
-    id: 'health_connect_wearos',
-    name: 'Wear OS / Pixel Watch',
-    deviceModel: 'Pixel Watch 2',
-    iconType: 'watch',
-    description: 'Native Android Health Connect provider with background batching',
-    supportsSpO2: true,
-    supportsSleepStages: true,
-    supportsContinuousHR: true,
-    status: 'disconnected',
-    lastSyncTime: 'Never',
+    lastSyncTime: 'Unavailable (Planned)',
     sampleCount: 0,
   },
   {
     id: 'garmin',
-    name: 'Garmin Connect',
-    deviceModel: 'Forerunner 265',
+    name: 'Garmin Connect (Planned)',
+    deviceModel: 'Partner Health Sync (Future Phase)',
     iconType: 'watch',
-    description: 'Garmin Health API sync via Android Health Connect bridge',
+    description: 'Planned Garmin Health sync via Android Health Connect integration',
     supportsSpO2: true,
     supportsSleepStages: true,
     supportsContinuousHR: true,
     status: 'disconnected',
-    lastSyncTime: 'Never',
+    lastSyncTime: 'Unavailable (Planned)',
     sampleCount: 0,
   },
 ];
@@ -52,29 +53,29 @@ export function getPipelineStages(providerName: string): HealthPipelineStage[] {
     {
       step: 1,
       label: 'Wearable Sensor',
-      detail: `${providerName} PPG/Accelerometer`,
-      subtext: 'Continuous on-wrist telemetry capture',
+      detail: `${providerName}`,
+      subtext: 'Hardware sensor capture (Planned)',
       status: 'pending',
     },
     {
       step: 2,
       label: 'Companion Bridge',
       detail: 'Android Health Connect / BLE',
-      subtext: 'Encrypted device synchronization',
+      subtext: 'Local transport layer (Planned)',
       status: 'pending',
     },
     {
       step: 3,
       label: 'Local AI Runtime',
-      detail: 'Local SQLite Health Store',
-      subtext: 'Zero-cloud persistent circadian index',
+      detail: 'Host SQLite Health Store',
+      subtext: 'Zero-cloud persistent storage (Planned)',
       status: 'pending',
     },
     {
       step: 4,
       label: 'Intelligence Engine',
-      detail: 'Circadian Context Synthesis',
-      subtext: 'Contextual prompt augmentation for assistant',
+      detail: 'Circadian Prompt Synthesis',
+      subtext: 'Contextual prompt augmentation (Planned)',
       status: 'pending',
     },
   ];
