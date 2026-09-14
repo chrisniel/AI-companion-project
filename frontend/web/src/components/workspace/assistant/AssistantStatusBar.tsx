@@ -12,7 +12,7 @@ import { NeumorphicButton } from '../../ui/NeumorphicButton';
 import { ModelStatusResponse, RegistryEntry } from '../../../services/api';
 import { AssistantState } from '../../../types';
 
-export type TelemetryProvenance = 'Measured' | 'Configured' | 'Estimated' | 'Unavailable';
+export type TelemetryProvenance = 'Configured' | 'Estimated' | 'Unavailable';
 
 export interface AssistantStatusBarProps {
   conversationTitle: string;
@@ -27,7 +27,6 @@ export interface AssistantStatusBarProps {
   onToggleWebSearch: () => void;
   onNewConversation: () => void;
   assistantState: AssistantState;
-  onSetAssistantState: (state: AssistantState) => void;
 }
 
 export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
@@ -43,7 +42,6 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
   onToggleWebSearch,
   onNewConversation,
   assistantState,
-  onSetAssistantState,
 }) => {
   // Authoritative runtime model identity from backend
   const activeModelId = modelStatus?.active_model || null;
@@ -84,7 +82,7 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
         : (modelStatus?.provider || 'llama.cpp'))
     : 'Offline Mode';
 
-  // Assistant State Status Label (authoritative runtime truth)
+  // Assistant State Status Label (authoritative runtime truth from client/SSE state)
   const getAssistantStateDisplay = () => {
     if (!isOnline) {
       return { label: 'Offline', color: 'text-[var(--color-text-muted)]', desc: 'Core server offline — demo mode' };
@@ -106,7 +104,11 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
       case 'idle':
         return { label: 'Idle / Standby', color: 'text-emerald-500', desc: 'Standing by for user query' };
       case 'listening':
-        return { label: 'Listening (VAD Active)', color: 'text-sky-400 animate-pulse', desc: 'Streaming audio from microphone' };
+        return {
+          label: 'Listening (Preview / Stub)',
+          color: 'text-sky-400 animate-pulse',
+          desc: 'Voice input not connected — STT planned',
+        };
       case 'thinking':
         return { label: 'Thinking / Reasoning', color: 'text-amber-500 animate-pulse', desc: 'Evaluating prompt tokens' };
       case 'executing_tool':
@@ -206,13 +208,12 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
             <span>{providerLabel}</span>
           </div>
 
-          {/* Local / Cloud Indicator */}
+          {/* Truthful Local Runtime Indicator (no false 100% air-gap claims) */}
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl surface-recessed border border-[var(--color-border-subtle)] text-xs font-mono font-semibold">
             {isOnline ? (
               <>
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                <span className="text-emerald-500 hidden md:inline">100% Local Airgapped</span>
-                <span className="text-emerald-500 md:hidden">Local</span>
+                <span className="text-emerald-500">Local Runtime</span>
               </>
             ) : (
               <>
@@ -255,101 +256,101 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
       </div>
 
       {/* ========================================================= */}
-      {/* 2. ASSISTANT VISUAL STATES BAR & PROVENANCE TELEMETRY      */}
+      {/* 2. REAL ASSISTANT STATUS & TRUTHFUL TELEMETRY STRIP       */}
       {/* ========================================================= */}
       <div className="pt-3 border-t border-[var(--color-border-subtle)] space-y-2">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-[var(--color-text-primary)] uppercase tracking-wider font-mono">
-              Status:
+        {/* Real Status presentation (no manual mock state switcher in production) */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-[var(--color-text-primary)] uppercase tracking-wider font-mono">
+            Status:
+          </span>
+          <div className="flex items-center gap-2 px-2.5 py-0.5 rounded-lg surface-recessed border border-[var(--color-border-subtle)]">
+            <span className={`text-xs font-bold font-mono ${stateDisplay.color}`}>
+              ● {stateDisplay.label}
             </span>
-            <div className="flex items-center gap-2 px-2.5 py-0.5 rounded-lg surface-recessed border border-[var(--color-border-subtle)]">
-              <span className={`text-xs font-bold font-mono ${stateDisplay.color}`}>
-                ● {stateDisplay.label}
-              </span>
-              <span className="text-[11px] text-[var(--color-text-muted)] hidden sm:inline">
-                — {stateDisplay.desc}
-              </span>
-            </div>
-          </div>
-
-          {/* Interactive Visual State Switcher Chips */}
-          <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0">
-            <span className="text-[10px] font-mono text-[var(--color-text-muted)] mr-1 flex-shrink-0">
-              Mock State:
+            <span className="text-[11px] text-[var(--color-text-muted)] hidden sm:inline">
+              — {stateDisplay.desc}
             </span>
-            {(
-              [
-                { id: 'idle', label: 'Idle' },
-                { id: 'listening', label: 'Listening' },
-                { id: 'thinking', label: 'Thinking' },
-                { id: 'executing_tool', label: 'Tool' },
-                { id: 'speaking', label: 'Speaking' },
-                { id: 'interrupted', label: 'Interrupted' },
-                { id: 'offline', label: 'Offline' },
-                { id: 'error', label: 'Error' },
-              ] as const
-            ).map((st) => (
-              <button
-                key={st.id}
-                type="button"
-                onClick={() => onSetAssistantState(st.id)}
-                className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-medium transition-all flex-shrink-0 ${
-                  assistantState === st.id
-                    ? 'bg-accent-gradient text-white shadow-sm font-semibold'
-                    : 'surface-recessed text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
-                }`}
-              >
-                {st.label}
-              </button>
-            ))}
           </div>
         </div>
 
-        {/* Truthful Telemetry Strip with Provenance */}
-        {isOnline && modelStatus?.model_loaded && (
-          <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] font-mono text-[var(--color-text-secondary)]">
-            <span className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-bold">
-              Telemetry:
+        {/* Truthful Telemetry Strip with Provenance (Explicit unavailable state, no silent omission) */}
+        <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] font-mono text-[var(--color-text-secondary)]">
+          <span className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-bold">
+            Telemetry:
+          </span>
+          {isOnline ? (
+            <>
+              {/* 1. Context */}
+              <span
+                className="px-2 py-0.5 rounded-lg surface-recessed border border-[var(--color-border-subtle)]"
+                title={modelStatus?.applied_context_size != null ? 'Configured session context window' : 'Context window unavailable'}
+              >
+                Context:{' '}
+                {modelStatus?.applied_context_size != null ? (
+                  <>
+                    <strong className="text-[var(--color-text-primary)]">{modelStatus.applied_context_size} tok</strong>{' '}
+                    <span className="text-[9px] text-[var(--color-text-muted)] font-sans">(Configured)</span>
+                  </>
+                ) : (
+                  <span className="text-[var(--color-text-muted)]">Unavailable</span>
+                )}
+              </span>
+
+              {/* 2. GPU Layers */}
+              <span
+                className="px-2 py-0.5 rounded-lg surface-recessed border border-[var(--color-border-subtle)]"
+                title={modelStatus?.applied_gpu_layers != null ? 'Configured GPU offload layers' : 'GPU layers unavailable'}
+              >
+                Layers:{' '}
+                {modelStatus?.applied_gpu_layers != null ? (
+                  <>
+                    <strong className="text-[var(--color-text-primary)]">{modelStatus.applied_gpu_layers}</strong>{' '}
+                    <span className="text-[9px] text-[var(--color-text-muted)] font-sans">(Configured)</span>
+                  </>
+                ) : (
+                  <span className="text-[var(--color-text-muted)]">Unavailable</span>
+                )}
+              </span>
+
+              {/* 3. Disk Size (Conservatively labeled Configured in Phase 8A) */}
+              <span
+                className="px-2 py-0.5 rounded-lg surface-recessed border border-[var(--color-border-subtle)]"
+                title={activeModelEntry?.size_gb != null ? 'Model weight size declared in registry configuration' : 'Model disk size unavailable'}
+              >
+                Disk Size:{' '}
+                {activeModelEntry?.size_gb != null ? (
+                  <>
+                    <strong className="text-[var(--color-text-primary)]">{activeModelEntry.size_gb} GB</strong>{' '}
+                    <span className="text-[9px] text-[var(--color-text-muted)] font-sans">(Configured)</span>
+                  </>
+                ) : (
+                  <span className="text-[var(--color-text-muted)]">Unavailable</span>
+                )}
+              </span>
+
+              {/* 4. Estimated VRAM */}
+              <span
+                className="px-2 py-0.5 rounded-lg surface-recessed border border-[var(--color-border-subtle)]"
+                title={activeModelEntry?.estimated_vram_gb != null ? 'Estimated VRAM allocation from model registry hints' : 'VRAM estimate unavailable'}
+              >
+                Est. VRAM:{' '}
+                {activeModelEntry?.estimated_vram_gb != null ? (
+                  <>
+                    <strong className="text-[var(--color-text-primary)]">~{activeModelEntry.estimated_vram_gb} GB</strong>{' '}
+                    <span className="text-[9px] text-[var(--color-text-muted)] font-sans">(Estimated)</span>
+                  </>
+                ) : (
+                  <span className="text-[var(--color-text-muted)]">Unavailable</span>
+                )}
+              </span>
+            </>
+          ) : (
+            <span className="px-2 py-0.5 rounded-lg surface-recessed border border-[var(--color-border-subtle)] text-[var(--color-text-muted)]">
+              Unavailable (Core Offline)
             </span>
-            {modelStatus.applied_context_size != null ? (
-              <span
-                className="px-2 py-0.5 rounded-lg surface-recessed border border-[var(--color-border-subtle)]"
-                title="Configured session context window"
-              >
-                Context: <strong className="text-[var(--color-text-primary)]">{modelStatus.applied_context_size} tok</strong>{' '}
-                <span className="text-[9px] text-[var(--color-text-muted)] font-sans">(Configured)</span>
-              </span>
-            ) : null}
-            {modelStatus.applied_gpu_layers != null ? (
-              <span
-                className="px-2 py-0.5 rounded-lg surface-recessed border border-[var(--color-border-subtle)]"
-                title="Configured GPU offload layers"
-              >
-                Layers: <strong className="text-[var(--color-text-primary)]">{modelStatus.applied_gpu_layers}</strong>{' '}
-                <span className="text-[9px] text-[var(--color-text-muted)] font-sans">(Configured)</span>
-              </span>
-            ) : null}
-            {activeModelEntry?.size_gb != null ? (
-              <span
-                className="px-2 py-0.5 rounded-lg surface-recessed border border-[var(--color-border-subtle)]"
-                title="Measured primary model file size on disk"
-              >
-                Disk Size: <strong className="text-[var(--color-text-primary)]">{activeModelEntry.size_gb} GB</strong>{' '}
-                <span className="text-[9px] text-[var(--color-text-muted)] font-sans">(Measured)</span>
-              </span>
-            ) : null}
-            {activeModelEntry?.estimated_vram_gb != null ? (
-              <span
-                className="px-2 py-0.5 rounded-lg surface-recessed border border-[var(--color-border-subtle)]"
-                title="Estimated VRAM allocation from model registry hints"
-              >
-                Est. VRAM: <strong className="text-[var(--color-text-primary)]">~{activeModelEntry.estimated_vram_gb} GB</strong>{' '}
-                <span className="text-[9px] text-[var(--color-text-muted)] font-sans">(Estimated)</span>
-              </span>
-            ) : null}
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

@@ -388,7 +388,6 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
         onToggleWebSearch={() => setWebSearchMode(webSearchMode === 'airgapped' ? 'web' : 'airgapped')}
         onNewConversation={handleNewConversation}
         assistantState={assistantState}
-        onSetAssistantState={setAssistantState}
       />
 
       {/* 2. CONVERSATION MESSAGE LIST */}
