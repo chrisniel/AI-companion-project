@@ -198,7 +198,7 @@ export const HealthPipelineCard: React.FC<HealthPipelineCardProps> = ({
           <span className="font-mono text-amber-500/80">Unavailable (Planned)</span>
           <span className="text-[var(--color-text-muted)]">•</span>
           <span className="text-[var(--color-text-muted)]">Telemetry:</span>
-          <span className="font-mono text-[var(--color-text-muted)]">0 Records</span>
+          <span className="font-mono text-[var(--color-text-muted)]">Unavailable</span>
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap">

@@ -63,7 +63,7 @@ export const HealthView: React.FC = () => {
                 Health & Wellness
               </h1>
               <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
-                Personal lifestyle telemetry, circadian tracking, and wearable activity data synced to your Local AI Runtime.
+                Planned personal lifestyle telemetry, circadian tracking, and wearable activity architecture for Local AI Runtime.
               </p>
             </div>
           </div>
@@ -132,7 +132,7 @@ export const HealthView: React.FC = () => {
             <ShieldAlert className="w-4 h-4 text-amber-400 flex-shrink-0" />
             <p className="text-xs leading-relaxed">
               <strong className="font-semibold text-amber-300">Local AI Runtime Offline: </strong>
-              Host runtime is disconnected. Wearable synchronization and automated circadian context synthesis are currently offline.
+              Host runtime is disconnected. Runtime status inspection and future companion synchronization bridges are unavailable.
             </p>
           </div>
           <Badge variant="warning" size="sm" className="font-mono text-[10px] flex-shrink-0">
@@ -238,8 +238,8 @@ export const HealthView: React.FC = () => {
               </span>
             </div>
             <div className="text-[10px] text-[var(--color-text-muted)] pt-1 border-t border-[var(--color-border-subtle)] flex items-center justify-between">
-              <span>Goal: 10,000</span>
-              <span className="font-mono text-amber-500/80">0%</span>
+              <span>Goal: <strong>—</strong></span>
+              <span className="font-mono text-amber-500/80">Not configured</span>
             </div>
           </div>
 
@@ -261,7 +261,7 @@ export const HealthView: React.FC = () => {
             </div>
             <div className="text-[10px] text-[var(--color-text-muted)] pt-1 border-t border-[var(--color-border-subtle)] flex items-center justify-between">
               <span>Burn: <strong>—</strong></span>
-              <span className="font-mono text-amber-500/80">0.0 km</span>
+              <span className="font-mono text-amber-500/80">Distance: —</span>
             </div>
           </div>
 
@@ -281,7 +281,7 @@ export const HealthView: React.FC = () => {
               </span>
             </div>
             <div className="text-[10px] text-[var(--color-text-muted)] pt-1 border-t border-[var(--color-border-subtle)] flex items-center justify-between">
-              <span className="text-amber-500/80 font-mono">Awaiting SpO2 sync</span>
+              <span className="text-amber-500/80 font-mono">Not implemented</span>
             </div>
           </div>
         </div>

@@ -654,7 +654,9 @@ export interface MemoryEntry {
   source: string;
   confidence: number; // 0 to 1 (e.g. 0.96 = 96%)
   importance?: number; // Backend 0.0 to 2.0 weighting
-  lastUpdated: string;
+  createdAt?: string;
+  createdAtRaw?: string;
+  lastUpdated?: string;
   isArchived?: boolean;
   tags?: string[];
 }

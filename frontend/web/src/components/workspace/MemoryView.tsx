@@ -43,12 +43,13 @@ function mapMemoryOutToEntry(out: MemoryOut): MemoryEntry {
     source: out.source_type ? `${out.source_type.charAt(0).toUpperCase()}${out.source_type.slice(1)}` : 'Manual',
     confidence: 1.0,
     importance: typeof out.importance === 'number' ? out.importance : 1.0,
-    lastUpdated: new Date(out.created_at).toLocaleDateString([], {
+    createdAt: new Date(out.created_at).toLocaleDateString([], {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
     }),
+    createdAtRaw: out.created_at,
   };
 }
 
@@ -146,8 +147,11 @@ export const MemoryView: React.FC = () => {
         if (sortBy === 'category') {
           return a.category.localeCompare(b.category);
         }
-        // Default: most recent first (ID/created comparison)
-        return b.id.localeCompare(a.id);
+        // Default: Newest Created first using created_at timestamp
+        if (b.createdAtRaw && a.createdAtRaw) {
+          return new Date(b.createdAtRaw).getTime() - new Date(a.createdAtRaw).getTime();
+        }
+        return 0; // Preserve backend ordering (list_memories returns created_at descending)
       });
   }, [memories, selectedCategory, searchQuery, sortBy]);
 
@@ -309,7 +313,7 @@ export const MemoryView: React.FC = () => {
                 className="bg-transparent text-[var(--color-text-primary)] font-medium focus:outline-none cursor-pointer"
               >
                 <option value="recent" className={mode === 'dark' ? 'bg-[#121824] text-slate-100' : 'bg-white text-slate-900'}>
-                  Recently Updated
+                  Newest Created
                 </option>
                 <option value="importance" className={mode === 'dark' ? 'bg-[#121824] text-slate-100' : 'bg-white text-slate-900'}>
                   Highest Importance

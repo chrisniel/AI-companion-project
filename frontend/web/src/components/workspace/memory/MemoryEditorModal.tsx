@@ -57,7 +57,8 @@ export const MemoryEditorModal: React.FC<MemoryEditorModalProps> = ({
       content: content.trim(),
       category,
       importance,
-      lastUpdated: 'Just now',
+      createdAt: memoryToEdit?.createdAt || 'Just now',
+      createdAtRaw: memoryToEdit?.createdAtRaw || new Date().toISOString(),
     });
     onClose();
   };

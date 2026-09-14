@@ -98,7 +98,7 @@ export const MemoryItemCard: React.FC<MemoryItemCardProps> = ({
       <div className="pt-3 mt-3 border-t border-[var(--color-border-subtle)] flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--color-text-muted)] font-mono">
         <div className="flex items-center gap-1.5">
           <Clock className="w-3.5 h-3.5 text-[var(--color-text-muted)]" />
-          <span>Updated {memory.lastUpdated}</span>
+          <span>Created {memory.createdAt || memory.lastUpdated}</span>
         </div>
 
         {/* Action Controls: Edit, Delete */}
