@@ -3,6 +3,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ModelsView } from '../components/workspace/ModelsView';
 import { Header } from '../components/layout/Header';
+import { CurrentModelHero } from '../components/workspace/models/CurrentModelHero';
+import { ModelDetailsModal } from '../components/workspace/models/ModelDetailsModal';
+import { LocalModel } from '../types';
 import { BackendProvider } from '../context/BackendContext';
 import { ThemeProvider } from '../context/ThemeContext';
 import * as api from '../services/api';
@@ -818,6 +821,118 @@ describe('Phase 4: Models Web UI State Reconciliation & Truthfulness', () => {
     expect(screen.queryByText('Repeat Penalty')).toBeNull();
     expect(screen.queryByText('Open Source')).toBeNull();
   });
+
+  it('21. registry VRAM estimate is never labeled live or allocated usage and VramTargetSlider has no default 4.9 GB', async () => {
+    vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus({
+      active_model: 'qwen3-vl-4b-instruct',
+    }));
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      // Must say VRAM Planning Breakdown, not Allocated VRAM Breakdown
+      expect(screen.getByText('VRAM Planning Breakdown')).toBeInTheDocument();
+    });
+
+    // Ensure "Allocated VRAM Breakdown" is NOT in the document
+    expect(screen.queryByText('Allocated VRAM Breakdown')).toBeNull();
+    // Ensure "Free for Windows / Display" is NOT in the document
+    expect(screen.queryByText(/Free for Windows \/ Display/i)).toBeNull();
+    // Ensure default 4.9 GB is NOT present
+    expect(screen.queryByText(/4\.9 GB/i)).toBeNull();
+  });
+
+  it('22. absent applied_context_size never causes configured context to display [Applied]', async () => {
+    // Model is loaded, but backend reports applied_context_size as null/undefined
+    const statusNoAppliedContext = createMockStatus({
+      active_model: 'qwen3-vl-4b-instruct',
+      model_loaded: true,
+      model_awake: true,
+      applied_context_size: null,
+    });
+    vi.mocked(api.getModelStatus).mockResolvedValue(statusNoAppliedContext);
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      // Must display [Configured], NOT [Applied]
+      expect(screen.getByText('4,096 tokens [Configured]')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText(/4,096 tokens \[Applied\]/i)).toBeNull();
+  });
+
+  it('23. router_running alone never produces Vulkan Offload [Applied]', async () => {
+    // router_running is true, but applied_gpu_layers is null
+    const statusNoGpuLayers = createMockStatus({
+      active_model: 'qwen3-vl-4b-instruct',
+      router_running: true,
+      applied_gpu_layers: null,
+    });
+    vi.mocked(api.getModelStatus).mockResolvedValue(statusNoGpuLayers);
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      // Must say GPU Offload: Unavailable
+      expect(screen.getByText('GPU Offload: Unavailable')).toBeInTheDocument();
+    });
+
+    // Must NOT claim Vulkan Offload (Core) [Applied]
+    expect(screen.queryByText(/Vulkan Offload.*\[Applied\]/i)).toBeNull();
+  });
+
+  it('24. no instruction-model fallback description is fabricated when description is absent', async () => {
+    const dummyModel: LocalModel = {
+      id: 'model-no-desc',
+      name: 'No Desc Model',
+      family: 'Mystery',
+      parameters: '1B',
+      quantization: 'Q4_0',
+      contextWindow: 2048,
+      status: 'unloaded',
+      engine: 'llama.cpp',
+      description: '',
+    };
+
+    const { rerender } = render(
+      <CurrentModelHero
+        model={dummyModel}
+        activeModelId={null}
+      />
+    );
+
+    // CurrentModelHero must render 'Description unavailable' and NOT 'General instruction model'
+    expect(screen.getByText(/Description unavailable/i)).toBeInTheDocument();
+    expect(screen.queryByText(/General instruction model/i)).toBeNull();
+
+    rerender(
+      <ModelDetailsModal
+        model={dummyModel}
+        isOpen={true}
+        onClose={vi.fn()}
+        isActive={false}
+        onActivate={vi.fn()}
+      />
+    );
+
+    // ModelDetailsModal must render 'Description unavailable' and NOT 'Instruction-tuned transformer model'
+    expect(screen.getAllByText(/Description unavailable/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Instruction-tuned transformer model/i)).toBeNull();
+  });
 });
+
 
 

@@ -89,7 +89,7 @@ export const ModelDetailsModal: React.FC<ModelDetailsModalProps> = ({
           <div className="space-y-1">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-bold text-[var(--color-text-primary)]">
-                {model.description || 'Instruction-tuned transformer model'}
+                {model.description || 'Description unavailable'}
               </span>
               {/* Variant badge */}
               {model.variant === 'thinking' && (

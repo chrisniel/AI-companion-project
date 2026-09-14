@@ -373,7 +373,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
         <VramTargetSlider
           vramTargetGb={vramTargetGb}
           totalVramGb={8.0}
-          currentModelVramGb={currentSelectedModel.isCloud ? 0.0 : (currentSelectedModel.vramUsageGb ?? 0.0)}
+          estimatedModelVramGb={currentSelectedModel.isCloud ? null : (currentSelectedModel.vramUsageGb ?? null)}
           onChangeVramTarget={setVramTargetGb}
         />
       </div>

@@ -104,11 +104,6 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
 
   const runtimeBadge = getRuntimeBadge();
 
-  // Context capacity: applied if loaded, else configured limit (usage metric not reported)
-  const effectiveMaxContext = isLoaded && modelStatus?.applied_context_size
-    ? modelStatus.applied_context_size
-    : model.contextWindow;
-
   return (
     <Card
       id="current-model-hero-card"
@@ -195,7 +190,7 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
               )}
             </div>
             <p className="text-xs text-[var(--color-text-secondary)] mt-1">
-              {model.family} • {model.parameters} parameters • {model.description || 'General instruction model'}
+              {model.family} • {model.parameters} parameters • {model.description || 'Description unavailable'}
             </p>
           </div>
         </div>
@@ -284,10 +279,18 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
             <span>Runtime</span>
           </div>
           <div className="text-base sm:text-lg font-bold font-mono text-[var(--color-text-primary)] truncate">
-            {modelStatus?.router_running ? 'llama.cpp' : (isCloud ? 'Cloud API' : 'Router Offline')}
+            {modelStatus?.router_running ? (model.engine || 'llama.cpp') : (isCloud ? 'Cloud API' : 'Router Offline')}
           </div>
           <div className="text-[10px] text-[var(--color-text-muted)] font-mono">
-            {modelStatus?.router_running ? 'Vulkan Offload (Core) [Applied]' : 'Standby / Offline'}
+            {isCloud
+              ? 'Cloud Managed'
+              : !isThisModelActive
+              ? 'Offload: Standby'
+              : (modelStatus?.applied_gpu_layers !== undefined && modelStatus.applied_gpu_layers !== null
+                  ? (modelStatus.applied_gpu_layers > 0
+                      ? `GPU Offload: ${modelStatus.applied_gpu_layers} layers [Applied]`
+                      : 'GPU Offload: CPU only / 0 layers [Applied]')
+                  : 'GPU Offload: Unavailable')}
           </div>
         </div>
 
@@ -329,8 +332,10 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
               ? 'VRAM Released (Sleeping) [Applied]'
               : isLoaded
               ? (modelStatus?.applied_gpu_layers !== null && modelStatus?.applied_gpu_layers !== undefined
-                  ? `${modelStatus.applied_gpu_layers} layers GPU [Applied]`
-                  : 'GPU Offload: Unavailable')
+                  ? (modelStatus.applied_gpu_layers > 0
+                      ? `${modelStatus.applied_gpu_layers} layers GPU [Applied]`
+                      : 'CPU only / 0 layers [Applied]')
+                  : 'VRAM allocation not reported')
               : 'Unloaded from VRAM'}
           </div>
         </div>
@@ -359,9 +364,11 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
               Context Allocation
             </span>
             <span className="font-mono text-xs text-[var(--color-text-secondary)]">
-              {isLoaded
-                ? `${effectiveMaxContext.toLocaleString()} tokens [Applied]`
-                : `${model.contextWindow.toLocaleString()} tokens [Configured]`}
+              {isThisModelActive && modelStatus?.applied_context_size != null && modelStatus.applied_context_size > 0
+                ? `${modelStatus.applied_context_size.toLocaleString()} tokens [Applied]`
+                : (model.contextWindow != null && model.contextWindow > 0
+                    ? `${model.contextWindow.toLocaleString()} tokens [Configured]`
+                    : 'Unavailable')}
             </span>
           </div>
 

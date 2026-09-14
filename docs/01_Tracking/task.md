@@ -18,10 +18,10 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — BATCH 8A.3 CORRECTIONS: MODELSVIEW TRUTHFULNESS]
+## [CURRENT EXECUTION STATE — BATCH 8A.3 CORRECTIONS COMPLETED: AWAITING REVIEW]
 
-- Correcting: Batch 8A.3 — CurrentModelHero selected!=active badge fix, removal of fabricated context usage/RAM fallbacks, remove requested mmproj offload inference, ModelDetailsModal cleanup (no fake GGUF v3, Open Source license, or sampling presets).
-- Next Action: Complete 8A.3 corrections, run tests and verifications, await ChatGPT/user review.
+- Completed: Batch 8A.3 truthfulness corrections — VramTargetSlider planning-vs-allocated semantics, no 4.9 GB default, truthful context [Applied] vs [Configured] labeling, runtime offload derived strictly from applied_gpu_layers (no Vulkan offload inference from router_running), removed fabricated description fallbacks in CurrentModelHero and ModelDetailsModal.
+- Next Action: Await ChatGPT/user review. Do NOT begin 8A.4.
 - Active Plan: `docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md`
 
 ---
