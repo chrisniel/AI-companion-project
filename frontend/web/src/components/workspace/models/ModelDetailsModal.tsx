@@ -123,11 +123,11 @@ export const ModelDetailsModal: React.FC<ModelDetailsModalProps> = ({
               )}
             </div>
             <div className="flex flex-wrap gap-2 text-[10px] text-[var(--color-text-muted)] font-mono">
-              <span>License: {model.license || 'Open Source'}</span>
+              <span>License: {model.license || 'Unavailable'}</span>
               <span>•</span>
-              <span>Engine: {model.engine}</span>
+              <span>Engine: {model.engine || 'Unavailable'}</span>
               <span>•</span>
-              <span>Format: {model.tensorType || 'GGUF v3'}</span>
+              <span>Format: {model.tensorType || 'Unavailable'}</span>
             </div>
           </div>
         </div>
@@ -161,7 +161,7 @@ export const ModelDetailsModal: React.FC<ModelDetailsModalProps> = ({
           <div className="p-3 rounded-xl surface-base border border-[var(--color-border-subtle)] space-y-0.5">
             <span className="text-[10px] text-[var(--color-text-muted)] block">VRAM Footprint</span>
             <span className="font-bold text-[var(--color-text-primary)]">
-              {isCloud ? '0.0 GB' : (model.vramUsageGb != null ? `~${model.vramUsageGb} GB [Estimated]` : 'Unavailable')}
+              {isCloud ? 'N/A' : (model.vramUsageGb != null && model.vramUsageGb > 0 ? `~${model.vramUsageGb} GB [Estimated]` : 'Unavailable')}
             </span>
           </div>
 
@@ -179,7 +179,7 @@ export const ModelDetailsModal: React.FC<ModelDetailsModalProps> = ({
             Local Weight Source / Endpoint
           </span>
           <div className="font-mono text-[11px] text-[var(--color-text-primary)] break-all bg-[var(--color-surface-elevated)] p-2 rounded-lg border border-[var(--color-border-subtle)]">
-            {model.filePath || `~/.local/share/models/gguf/${model.name}.gguf`}
+            {model.filePath || 'Unavailable'}
           </div>
         </div>
 
@@ -190,22 +190,11 @@ export const ModelDetailsModal: React.FC<ModelDetailsModalProps> = ({
               <Sliders className="w-3.5 h-3.5 text-[var(--color-accent)]" />
               Recommended Sampling Presets
             </span>
-            <span className="text-[10px] text-[var(--color-text-muted)] font-mono">Modelfile Defaults</span>
+            <span className="text-[10px] text-[var(--color-text-muted)] font-mono">Registry Specifications</span>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 text-center text-xs font-mono">
-            <div className="p-2 rounded-lg surface-recessed">
-              <span className="text-[10px] text-[var(--color-text-muted)] block">Temperature</span>
-              <span className="font-bold text-[var(--color-text-primary)]">0.7</span>
-            </div>
-            <div className="p-2 rounded-lg surface-recessed">
-              <span className="text-[10px] text-[var(--color-text-muted)] block">Top-P</span>
-              <span className="font-bold text-[var(--color-text-primary)]">0.9</span>
-            </div>
-            <div className="p-2 rounded-lg surface-recessed">
-              <span className="text-[10px] text-[var(--color-text-muted)] block">Repeat Penalty</span>
-              <span className="font-bold text-[var(--color-text-primary)]">1.1</span>
-            </div>
+          <div className="p-2.5 rounded-lg surface-recessed text-xs font-mono text-[var(--color-text-muted)] text-center">
+            Sampling parameters: Not reported by registry
           </div>
         </div>
       </div>

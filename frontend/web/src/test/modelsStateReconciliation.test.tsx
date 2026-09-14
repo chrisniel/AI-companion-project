@@ -658,6 +658,166 @@ describe('Phase 4: Models Web UI State Reconciliation & Truthfulness', () => {
     // Verify 0.00 GB is NOT displayed
     expect(screen.queryByText(/0\.00 GB/i)).toBeNull();
   });
+
+  it('16. selected model B never inherits active model A MODEL_READY or MODEL_SLEEPING badge in hero', async () => {
+    // Model A is active and MODEL_READY
+    const status = createMockStatus({
+      active_model: 'qwen3-vl-4b-instruct',
+      runtime_state: 'MODEL_READY',
+      model_loaded: true,
+      model_awake: true,
+    });
+    vi.mocked(api.getModelStatus).mockResolvedValue(status);
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    // Initial state: Hero shows active Model A
+    await waitFor(() => {
+      expect(screen.getAllByText('Qwen3-VL-4B-Instruct').length).toBeGreaterThanOrEqual(1);
+    });
+
+    // User selects Model B (2B Instruct)
+    const card2b = document.getElementById('model-card-qwen3-vl-2b-instruct');
+    expect(card2b).not.toBeNull();
+    fireEvent.click(card2b!);
+
+    // Hero now displays Model B
+    await waitFor(() => {
+      const hero = document.getElementById('current-model-hero-card');
+      expect(hero).not.toBeNull();
+      expect(hero?.textContent).toContain('Qwen3-VL-2B-Instruct');
+      // Hero for Model B MUST render Selected / Not Active, NOT Loaded / Awake!
+      expect(hero?.textContent).toContain('Selected / Not Active');
+      expect(hero?.textContent).not.toContain('Loaded / Awake');
+    });
+  });
+
+  it('17. context utilization is not fabricated and does not invent fake active token percentages', async () => {
+    const status = createMockStatus({
+      active_model: 'qwen3-vl-4b-instruct',
+      model_loaded: true,
+      model_awake: true,
+      applied_context_size: 4096,
+    });
+    vi.mocked(api.getModelStatus).mockResolvedValue(status);
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      // Must state that live KV token usage is Unavailable
+      expect(screen.getByText(/KV Cache: Unavailable/i)).toBeInTheDocument();
+    });
+
+    // Ensure fake active token count (3840) or fake percentage is NOT present
+    expect(screen.queryByText(/3840/i)).toBeNull();
+    expect(screen.queryByText(/% active/i)).toBeNull();
+  });
+
+  it('18. missing RAM estimate does not become 1.2 GB fallback', async () => {
+    vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus({
+      active_model: 'model-zero-ram',
+      applied_profile: 'balanced',
+    }));
+    vi.mocked(api.fetchModelRegistry).mockResolvedValueOnce([
+      {
+        id: 'model-zero-ram',
+        display_name: 'Zero RAM Model',
+        family: 'Test',
+        variant: 'instruct',
+        primary_file: 'models/zero-ram.gguf',
+        companion_files: [],
+        capabilities: ['chat'],
+        recommended_profiles: ['balanced'],
+        estimated_vram_gb: 2.0,
+        estimated_ram_gb: 0,
+        quantization: 'Q4_K_M',
+        parameters: '3B',
+        context_limit: 2048,
+        license: 'MIT',
+        source: 'local',
+        validation_status: 'verified',
+        primary_file_exists: true,
+        companion_files_valid: true,
+        size_gb: 2.0,
+      },
+    ]);
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      const hero = document.getElementById('current-model-hero-card');
+      expect(hero).not.toBeNull();
+      // Estimated RAM must be Unavailable, not 1.2 GB
+      expect(hero?.textContent).toContain('Unavailable');
+      expect(hero?.textContent).not.toContain('1.2 GB');
+    });
+  });
+
+  it('19. missing requested_mmproj_offload renders Unavailable without inferring from profile', async () => {
+    const statusWithoutReqMmproj = createMockStatus({
+      requested_mmproj_offload: undefined,
+      applied_mmproj_offload: true,
+      requested_profile: 'balanced',
+      applied_profile: 'balanced',
+    });
+    vi.mocked(api.getModelStatus).mockResolvedValue(statusWithoutReqMmproj);
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      // Vision Projector (Req) must render Unavailable, NOT GPU [Configured] or CPU [Configured]
+      expect(screen.getAllByText('Unavailable').length).toBeGreaterThan(0);
+      expect(screen.queryByText('GPU [Configured]')).toBeNull();
+      expect(screen.queryByText('CPU [Configured]')).toBeNull();
+    });
+  });
+
+  it('20. ModelDetailsModal has no fabricated sampling presets, Open Source license, or GGUF v3 format', async () => {
+    vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus());
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Qwen3-VL-4B-Instruct').length).toBeGreaterThanOrEqual(1);
+    });
+
+    // Click Details button on Model 4B
+    const detailsBtn = document.getElementById('model-details-btn-qwen3-vl-4b-instruct');
+    expect(detailsBtn).not.toBeNull();
+    fireEvent.click(detailsBtn!);
+
+    // Modal opens
+    await waitFor(() => {
+      expect(screen.getByText('Sampling parameters: Not reported by registry')).toBeInTheDocument();
+    });
+
+    // Ensure fake defaults are NOT present
+    expect(screen.queryByText('0.7')).toBeNull();
+    expect(screen.queryByText('0.9')).toBeNull();
+    expect(screen.queryByText('1.1')).toBeNull();
+    expect(screen.queryByText('Repeat Penalty')).toBeNull();
+    expect(screen.queryByText('Open Source')).toBeNull();
+  });
 });
 
 

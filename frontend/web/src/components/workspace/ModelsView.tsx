@@ -152,6 +152,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
         ramUsageGb: e.estimated_ram_gb,
         filePath: e.primary_file,
         description: `${e.variant} · ${e.capabilities.join(', ')} · ${e.license}`,
+        license: e.license,
         variant: e.variant,
         capabilities: e.capabilities,
         validationStatus: e.validation_status,
@@ -363,7 +364,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
           appliedProfile={modelStatus?.applied_profile ?? null}
           appliedContextSize={modelStatus?.applied_context_size ?? null}
           appliedGpuLayers={modelStatus?.applied_gpu_layers ?? null}
-          requestedMmprojOffload={modelStatus?.requested_mmproj_offload ?? (activeProfile !== 'eco')}
+          requestedMmprojOffload={modelStatus?.requested_mmproj_offload ?? null}
           appliedMmprojOffload={modelStatus?.applied_mmproj_offload ?? null}
           onSelectProfile={handleProfileChange}
         />

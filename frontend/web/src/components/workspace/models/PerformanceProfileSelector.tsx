@@ -10,7 +10,7 @@ interface PerformanceProfileSelectorProps {
   appliedProfile?: string | null;
   appliedContextSize?: number | null;
   appliedGpuLayers?: number | null;
-  requestedMmprojOffload?: boolean;
+  requestedMmprojOffload?: boolean | null;
   appliedMmprojOffload?: boolean | null;
   onSelectProfile: (profile: PerformanceProfile) => void;
 }
@@ -130,9 +130,9 @@ export const PerformanceProfileSelector: React.FC<PerformanceProfileSelectorProp
         <div>
           <span className="text-[var(--color-text-muted)] block text-[10px]">Vision Projector (Req)</span>
           <span className="font-semibold text-[var(--color-text-secondary)]">
-            {requestedMmprojOffload !== undefined
-              ? (requestedMmprojOffload ? 'GPU [Configured]' : 'CPU [Configured]')
-              : (activeId === 'eco' ? 'CPU [Configured]' : 'GPU [Configured]')}
+            {requestedMmprojOffload !== null && requestedMmprojOffload !== undefined
+              ? (requestedMmprojOffload ? 'GPU [Requested]' : 'CPU [Requested]')
+              : 'Unavailable'}
           </span>
         </div>
         <div>
