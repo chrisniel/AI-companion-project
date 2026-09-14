@@ -61,10 +61,10 @@ Branch: `feature/phase8-runtime-config` (based on merged 8A)
 - [ ] 8P.5a: schemas/model_registry.py — new enums (ModelAssetType, ModelVariant, InputModality, ModelDiscoveryState, ReasoningMode, CapabilityProvenance) + sub-schemas (CompanionArtifactStatus, CapabilityEntry, GenerationDefaults, CompanionFile extended)
 - [ ] 8P.5b: schemas/model_registry.py — ModelManifest (identity + artifact metadata, immutable), ModelLibraryState (computed validation state), ModelRuntimeHints (recommendations only), ModelRegistryEntry (composes all three + runtime_model_id)
 - [ ] 8P.5c: schemas/model_registry.py — API response shape: use model_serializer or computed_field for flat backward-compat fields (NOT Python @property); update contracts/openapi/openapi.json + registryApi.ts
-- [ ] 8P.5d: model_registry.py — _load_registry_json() checks INSTALLED_REGISTRY_PATH first; falls back to template
-- [ ] 8P.5e: model_registry.py — _validate_entry() populates ModelLibraryState; partial companion handling (missing mmproj removes vision from available_capabilities, text chat preserved); discovery_state set correctly
-- [ ] 8P.5f: model_registry.py — unregistered scanner: discovery_state=discovered, validation_status=unregistered, capabilities=[] (empty — no auto-assignment), variant=unknown
-- [ ] 8P.5g: model_registry.py — GGUF metadata extraction (best-effort, non-blocking): architecture, model_max_context, parameters, chat_template, quantization from GGUF headers
+- [ ] 8P.5d: model_registry.py — _load_registry_json(): INSTALLED_REGISTRY_PATH first; template fallback; path resolution per source root (FACTORY_MODEL_ROOT vs MODEL_LIBRARY_DIR)
+- [ ] 8P.5e: model_registry.py — _validate_entry(): missing mmproj -> vision removed from available_capabilities; text usable; model NOT prohibited from loading; missing primary -> unavailable
+- [ ] 8P.5f: model_registry.py — unregistered scanner: capabilities=[], input_modalities=[], model_max_context=None, runtime_compatibility=[], variant=unknown (NO fabricated defaults)
+- [ ] 8P.5g: model_registry.py — GGUF metadata extraction (best-effort, non-blocking): populate only reliably detected fields; no invented defaults
 - [ ] 8P.5h: models/registry.template.json — schema v3; asset_type, architecture, input_modalities, model_max_context on all entries; clarifying _note
 - [ ] 8P.5i: registryApi.ts — ModelManifest, ModelLibraryState, ModelRuntimeHints TypeScript interfaces; RegistryEntry updated; context_limit → model_max_context migration in all consumers
 
@@ -76,9 +76,13 @@ Branch: `feature/phase8-runtime-config` (based on merged 8A)
 - [x] 8P.6e: README.md — terminology; backend/database/runtime marked implemented; Phase 7 baseline (88 pytest/38 vitest) and Phase 8 active delivery
 - [x] plan-phase8-pc-frontend-architecture-ux.md — complete rewrite, single authoritative version, no stale pass/supplement content
 
-**8P.7 — First-Run Data Migration**
-- [ ] 8P.7: startup.py — first-run conditional migration: detect legacy data/companion.db → safe copy to COMPANION_DATA_ROOT/database/companion.db → verify → backup original → restart-safe
-- [ ] 8P.7b: migration test — legacy DB present → migrated → schema verified → backup preserved
+**8P.2b — Bootstrap Locator**
+- [ ] 8P.2b: startup.py / config_loader.py — bootstrap resolution order: COMPANION_DATA_ROOT env var > bootstrap.json data_root > default %LOCALAPPDATA%\AI Companion\Data
+- [ ] 8P.2c: bootstrap tests — missing locator -> default; valid locator -> locator path; invalid JSON -> warning + default; unavailable path -> warning + default; env var overrides all
+
+**8P.7 — First-Run Data Migration (multi-candidate aware)**
+- [ ] 8P.7: startup.py — check both known legacy candidates (backend/data/companion.db + repo-root/data/companion.db); exactly one -> copy/verify/backup; multiple -> RuntimeError with paths; none -> fresh
+- [ ] 8P.7b: _verify_migrated_db() — Alembic head check against settings.DATABASE_PATH (not env DATABASE_URL); migration test: no legacy, one legacy, two candidates
 
 ---
 
@@ -92,14 +96,16 @@ Branch: `feature/multimodal-image-attachments` (based on merged 8P)
 - [ ] 8B.6: schemas/message.py — MessageSend.attachment_ids[], MessageOut.attachments[]
 - [ ] 8B.7: services/attachment_validator.py — Pillow, byte-header MIME, dimensions, megapixel, decompression bomb; PNG + JPEG only (WebP deferred)
 - [ ] 8B.8: endpoints/attachments.py — POST upload, GET preview (Bearer auth, Blob response), DELETE soft-delete; path traversal guard; storage_path never in API response
-- [ ] 8B.9: orchestrator.py — vision gate via available_capabilities (partial companion aware); provider-independent content_blocks
-- [ ] 8B.10: llama_cpp.py — _translate_messages(); file IO via run_in_executor
-- [ ] 8B.11: attachmentApi.ts — upload, delete, fetchAttachmentBlobUrl (URL.createObjectURL lifecycle, revokeObjectURL on cleanup)
-- [ ] 8B.12: conversationApi.ts — attachment_ids[] in streamSendMessage
-- [ ] 8B.13: AssistantComposer.tsx — vision gate (available_capabilities), file input, authenticated Blob previews, remove→DELETE, count limit
-- [ ] 8B.14: ConversationMessageItem.tsx — authenticated Blob previews for committed history; revokeObjectURL on unmount
-- [ ] 8B.15: test_attachments.py — migration, ORM parity, upload, BOLA, MIME, dimensions, size limits, lifecycle, history
-- [ ] 8B.16: attachmentComposer.test.tsx — vision gate, mmproj-absent, upload, preview, remove, limit
+- [ ] 8B.8b: services/attachment_service.py — bind_attachments_to_message(): atomic transactional bind; validates ownership + conversation + non-deleted + staged (message_id NULL) + count; reuse of committed attachment fails; rollback on any failure
+- [ ] 8B.9: services/assistant/media_resolver.py — resolve_image_content(); orchestrator calls this before LLMProvider; LlamaCppProvider must NOT access attachment paths or DB directly
+- [ ] 8B.10: orchestrator.py — vision gate via available_capabilities; calls media_resolver; provider-independent ContentBlock[]; cancellation after commit preserves user message + attachments
+- [ ] 8B.11: llama_cpp.py — _translate_messages(): receives pre-resolved bytes from media_resolver; no direct attachment path/DB access; file IO via run_in_executor
+- [ ] 8B.12: attachmentApi.ts — upload, delete, fetchAttachmentBlobUrl (URL.createObjectURL lifecycle, revokeObjectURL on cleanup)
+- [ ] 8B.13: conversationApi.ts — attachment_ids[] in streamSendMessage
+- [ ] 8B.14: AssistantComposer.tsx — vision gate (available_capabilities), file input, authenticated Blob previews, remove→DELETE, count limit
+- [ ] 8B.15: ConversationMessageItem.tsx — authenticated Blob previews for committed history; revokeObjectURL on unmount
+- [ ] 8B.16: test_attachments.py — migration, ORM parity, upload, BOLA, MIME, dimensions, limits, lifecycle, history, cross-conversation bind, reuse-committed, multi-candidate DB error, bootstrap locator
+- [ ] 8B.17: attachmentComposer.test.tsx — vision gate, mmproj-absent (degraded not prohibited), upload, preview, remove, limit
 
 ---
 

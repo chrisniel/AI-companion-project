@@ -84,21 +84,40 @@ Non-conflation rules (enforce in code and UI):
 
 ---
 
-## Persistent Asset Root -- Canonical Layout (OD1 resolved)
+## Persistent Asset Root -- Canonical Layout (OD1/OD3 resolved)
 
 Default: %LOCALAPPDATA%\AI Companion\Data
+
+### Two Distinct Model Roots (OD3)
+
+  FACTORY_MODEL_ROOT = <repo-root>/models/
+    - Repository-versioned development/bootstrap models (LFS-tracked)
+    - Used at runtime ONLY for factory template entry resolution
+    - Do NOT copy/move LFS models without separate user authorization
+
+  MODEL_LIBRARY_DIR  = COMPANION_DATA_ROOT/library/models/llm/
+    - Persistent installed/user-imported models
+    - All user-initiated installs and imports go here
+
+Path resolution per registry source:
+  Factory template entries (models/registry.template.json): paths relative to FACTORY_MODEL_ROOT
+  Installed registry entries (COMPANION_DATA_ROOT/library/registry/models.json): paths relative to MODEL_LIBRARY_DIR
+
+Current development mode: factory template resolves against FACTORY_MODEL_ROOT.
+Verified Qwen3-VL models remain in the repository under Git/LFS policy and are NOT moved.
+Installed registry starts empty; grows only when the user explicitly imports or installs a model.
 
   COMPANION_DATA_ROOT/
   +-- database/companion.db
   +-- attachments/{owner-id}/{conversation-id}/{attachment-uuid}.{ext}
   +-- library/
   |   +-- models/
-  |   |   +-- llm/          <- generative LLM/VLM GGUFs; family-organized; NOT vulkan/ or cuda/
+  |   |   +-- llm/          <- persistent installed GGUFs; family-organized; NOT vulkan/ or cuda/
   |   |   +-- embeddings/
   |   |   +-- rerankers/
   |   |   +-- stt/ tts/ vad/ wake-word/
   |   +-- voices/
-  |   +-- registry/models.json   <- installed runtime registry
+  |   +-- registry/models.json   <- installed runtime registry (may be empty at first run)
   +-- characters/{character-id}/
   +-- memory/indexes/ derived/
   +-- imports/inbox/ staging/ rejected/
@@ -110,13 +129,18 @@ Invariants:
 - Runtime binaries never inside this root
 - library/registry/models.json: all writes go here (never to factory template)
 - models/registry.template.json: factory bootstrap, read-only at runtime
-- Registry paths are relative to COMPANION_DATA_ROOT (enables relocation)
+- Registry paths are relative to their respective root (FACTORY_MODEL_ROOT or MODEL_LIBRARY_DIR)
 - Per-library overrides (models on separate drive) are a future/deferred feature
 
 Data migration (conditional -- NOT assumed absent):
   COMPANION_DATA_ROOT/database/companion.db exists? -> use it
-  Legacy backend/data/companion.db exists?           -> safe copy -> verify -> backup original
+  Exactly one valid legacy candidate found?          -> safe copy -> verify -> backup original
+  Multiple differing candidates found?               -> STOP; report ambiguity; do not choose silently
   Neither exists?                                    -> create fresh at canonical path
+
+Known legacy candidate locations (checked in order):
+  backend/data/companion.db
+  <repo-root>/data/companion.db
 
 Safety: never overwrite newer DB; keep backup until verified; restart-safe; no LFS/git changes.
 
@@ -150,14 +174,22 @@ Fields:
 
   # Capabilities -- declared explicitly; NEVER inferred from filename
   capabilities: List[ModelCapability] = []
-  input_modalities: List[InputModality] = [text]
+  input_modalities: List[InputModality] = []
   # vision capability requires InputModality.image
   # ModelCapability.reasoning must be explicitly declared
+  # IMPORTANT: For discovered/unregistered models input_modalities stays [] until declared or detected.
+  # Do NOT default to [text] for unknown GGUFs.
 
   # Context -- model architectural maximum; NOT runtime session context_size
-  model_max_context: int = 4096
+  # IMPORTANT: For discovered/unregistered models this stays None until detected or declared.
+  # Do NOT default to 4096 for unknown GGUFs.
+  model_max_context: Optional[int] = None
 
-  # Artifact paths (relative to MODEL_LIBRARY_DIR)
+  # Runtime compatibility -- do NOT default to [llama_cpp] for unknown GGUFs.
+  # Stays [] until declared or verified.
+  runtime_compatibility: List[str] = Field(default_factory=list)
+
+  # Artifact paths (relative to the registry source root: FACTORY_MODEL_ROOT or MODEL_LIBRARY_DIR)
   primary_file: str
   companion_files: List[CompanionFile] = []
 
@@ -226,32 +258,43 @@ Fields:
 
 Unknown GGUF discovery rule (critical):
   - capabilities = []  -- EMPTY. Do NOT auto-assign chat or any capability.
+  - input_modalities = []  -- EMPTY. Do NOT default to [text].
+  - model_max_context = None  -- UNKNOWN. Do NOT default to 4096.
+  - runtime_compatibility = []  -- EMPTY. Do NOT default to [llama_cpp].
   - variant = ModelVariant.unknown
   - discovery_state = discovered, validation_status = unregistered
   - Model must be explicitly registered with declared capabilities before use.
+  GGUF metadata extraction (best-effort, non-blocking) may populate some fields after scan,
+  but only with reliably detected values -- never fabricated defaults.
 
 Partial companion availability:
   - Missing mmproj -> vision removed from available_capabilities
-  - Text chat remains available; model NOT marked incompatible
+  - Text capability remains usable; model continues to be loadable for text inference
+  - Model is NOT globally prohibited from loading; it is NOT marked incompatible
   - Frontend gates on available_capabilities, not manifest.capabilities
 
 Feature gating:
   - ModelCapability.reasoning in available_capabilities is authoritative
   - Never gate on variant == "thinking" alone
 
-### Registry Locations
+### Registry Locations and Path Resolution
 
   Factory template: models/registry.template.json (repo, versioned) -- read-only at runtime
+    Artifact paths in this file resolve relative to FACTORY_MODEL_ROOT (<repo-root>/models/)
+
   Installed runtime: COMPANION_DATA_ROOT/library/registry/models.json -- all writes go here
+    Artifact paths in this file resolve relative to MODEL_LIBRARY_DIR (COMPANION_DATA_ROOT/library/models/llm/)
 
 _load_registry_json(): check installed first; fall back to template if absent.
+Path resolution MUST use the correct root for the source registry -- never mix roots.
 
 ### registry.template.json -- Schema v3
 
   _schema_version: "3"
   _note: "Qwen3-VL entries are verified factory defaults, not a whitelist. Any compatible GGUF
           may be registered. variant and capabilities must be declared explicitly -- never
-          inferred from filename. llm/ contains generative LLM/VLM models organized by family,
+          inferred from filename. Paths are relative to FACTORY_MODEL_ROOT (repo models/).
+          llm/ in COMPANION_DATA_ROOT contains persistent installed models organized by family,
           not by acceleration backend."
   models: [ ...entries with asset_type, architecture, input_modalities, model_max_context,
              reasoning_mode added to all existing entries... ]
@@ -444,10 +487,19 @@ Deprecate: DATA_DIR, MODELS_DIR, LLAMA_MODELS_DIR, hardcoded DATABASE_URL string
 
 [MODIFY] backend/app/services/model_registry.py
   _load_registry_json(): INSTALLED_REGISTRY_PATH first; template fallback
-  _validate_entry(): populate ModelLibraryState; missing mmproj removes vision from available_capabilities; text chat preserved
-  Unregistered scanner: discovery_state=discovered, validation_status=unregistered,
-                        capabilities=[] (NO auto-assignment), variant=ModelVariant.unknown
-  GGUF metadata extraction (best-effort, non-blocking): architecture, model_max_context, quantization, chat_template
+    Path resolution: installed entries -> MODEL_LIBRARY_DIR; factory template entries -> FACTORY_MODEL_ROOT
+    Add FACTORY_MODEL_ROOT: Path = settings.BASE_DIR.parent / "models" (or env-overridable)
+  _validate_entry(): populate ModelLibraryState
+    - missing mmproj: vision removed from available_capabilities; text usable; model NOT prohibited
+    - missing primary file: validation_status=missing_primary; model unavailable
+  Unregistered scanner: discovery_state=discovered, validation_status=unregistered
+    capabilities=[]  (NO auto-assignment)
+    input_modalities=[]  (NO default [text])
+    model_max_context=None  (NO default 4096)
+    runtime_compatibility=[]  (NO default [llama_cpp])
+    variant=ModelVariant.unknown
+  GGUF metadata extraction (best-effort, non-blocking): populate only fields that are reliably detected
+    (architecture, model_max_context, quantization, chat_template) -- never fabricate defaults
 
 [MODIFY] models/registry.template.json -> schema v3; add asset_type, architecture, input_modalities,
   model_max_context, reasoning_mode on all entries; update _note
@@ -488,25 +540,89 @@ Deprecate: DATA_DIR, MODELS_DIR, LLAMA_MODELS_DIR, hardcoded DATABASE_URL string
   - Backend/database/local runtime: implemented (Phase 7 verified baseline); not "planned"
   - Reflect 88 pytest / 38 vitest; Phase 8 = active delivery
 
+### 8P.2b -- Bootstrap Locator
+
+[CREATE/MODIFY] backend/app/core/startup.py (or config_loader.py):
+
+Bootstrap resolution order (highest priority first):
+  1. Explicit env var: COMPANION_DATA_ROOT (if set, use directly -- skip locator)
+  2. Bootstrap file: %LOCALAPPDATA%\AI Companion\bootstrap.json
+     { "schema_version": 1, "data_root": "D:\\CustomPath\\AI Companion\\Data" }
+  3. Default: %LOCALAPPDATA%\AI Companion\Data
+
+Bootstrap file invariants:
+  - Contains only schema_version (int) and data_root (str).
+  - No user content, secrets, or preferences.
+  - If data_root in bootstrap.json is unavailable/invalid: log warning; fall back to default.
+  - The bootstrap.json itself is always at the fixed OS path (%LOCALAPPDATA%\AI Companion\bootstrap.json).
+
+  async def resolve_data_root() -> Path:
+      if os.environ.get("COMPANION_DATA_ROOT"):              # 1. explicit env override
+          return Path(os.environ["COMPANION_DATA_ROOT"])
+      bootstrap_path = Path(os.environ.get("LOCALAPPDATA", ...)) / "AI Companion" / "bootstrap.json"
+      if bootstrap_path.exists():
+          try:
+              data = json.loads(bootstrap_path.read_text())
+              candidate = Path(data["data_root"])
+              if candidate.is_absolute():
+                  return candidate                            # 2. bootstrap locator
+          except Exception:
+              logger.warning("Invalid bootstrap.json; using default data root")
+      return default_data_root()                             # 3. default
+
+Tests:
+  - Missing locator -> default path used
+  - Valid locator with valid absolute path -> locator path used
+  - Invalid/corrupt bootstrap.json -> warning logged; default used
+  - Unavailable path in bootstrap.json (drive not mounted) -> warning; default used
+  - Explicit COMPANION_DATA_ROOT env var -> env var takes precedence over locator and default
+
 ### 8P.7 -- First-Run Data Migration
 
 [MODIFY] backend/app/core/startup.py (or equivalent startup hook):
 
+Known legacy candidate locations (check both):
+  backend/data/companion.db          (most common: dev server working directory)
+  <repo-root>/data/companion.db      (alternative: repo root data/ dir)
+
   async def ensure_data_root() -> None:
       canonical = settings.DATABASE_PATH
-      legacy = Path(__file__).resolve().parents[3] / "data" / "companion.db"
       if canonical.exists():
           return
-      if legacy.exists():
+
+      repo_root = Path(__file__).resolve().parents[3]       # adjust depth to actual layout
+      candidates = [
+          repo_root / "backend" / "data" / "companion.db",
+          repo_root / "data" / "companion.db",
+      ]
+      found = [c for c in candidates if c.exists()]
+
+      if len(found) == 0:
+          canonical.parent.mkdir(parents=True, exist_ok=True)   # fresh install
+      elif len(found) == 1:
+          legacy = found[0]
           canonical.parent.mkdir(parents=True, exist_ok=True)
           backup = legacy.with_suffix(".pre-migration-backup.db")
           shutil.copy2(legacy, backup)
           shutil.copy2(legacy, canonical)
-          _verify_migrated_db(canonical)
+          _verify_migrated_db(canonical)                        # verify Alembic head matches
+          logger.info(f"Migrated legacy DB from {legacy} -> {canonical}")
       else:
-          canonical.parent.mkdir(parents=True, exist_ok=True)
+          # Multiple candidates: STOP and report ambiguity; do not choose silently
+          raise RuntimeError(
+              f"Multiple legacy database candidates found: {found}. "
+              "Resolve manually before starting the server."
+          )
 
-Test: legacy DB present -> copy to canonical -> schema verified -> backup preserved -> restart-safe.
+  _verify_migrated_db(): connect to canonical; run Alembic check to confirm migration head is correct
+    (current head: 005_scope_message_constraints; after 8B: 006_add_attachments).
+    Alembic DATABASE_URL must derive from settings.DATABASE_PATH -- not from env DATABASE_URL.
+
+Tests:
+  - No legacy -> canonical created fresh
+  - Exactly one legacy -> copied, verified, backup preserved, restart-safe
+  - Multiple differing candidates -> RuntimeError raised with paths listed
+  - After migration: Alembic uses settings.DATABASE_PATH (canonical); not the legacy path
 
 ### 8P Verification Gate
 
@@ -680,24 +796,99 @@ Storage security invariants:
   3. storage_path never in any API response
   4. Preview validates ownership before serving bytes
 
-### 8B.7 -- Orchestrator & Provider Translation
+### 8B.6b -- Transactional Attachment Binding
+
+[CREATE/MODIFY] backend/app/services/attachment_service.py (or message_service.py):
+
+When a user message is sent with attachment_ids[], binding must be atomic:
+
+  async def bind_attachments_to_message(
+      session, message_id, attachment_ids, owner_id, conversation_id
+  ) -> None:
+      """Atomically validate and bind staged attachment_ids to a persisted user message.
+      Runs inside the same transaction as user message creation.
+      """
+      if len(attachment_ids) > MAX_ATTACHMENTS_PER_MESSAGE:
+          raise ValidationError(f"Exceeds {MAX_ATTACHMENTS_PER_MESSAGE} attachment limit")
+
+      for att_id in attachment_ids:
+          att = await session.get(Attachment, att_id)
+          # Validation order (all inside the transaction):
+          # 1. Exists
+          if att is None:
+              raise ValidationError(f"Attachment {att_id} not found")
+          # 2. Ownership
+          if att.owner_id != owner_id:
+              raise PermissionError(f"Attachment {att_id} not owned by caller")
+          # 3. Same conversation
+          if att.conversation_id != conversation_id:
+              raise ValidationError(f"Attachment {att_id} belongs to a different conversation")
+          # 4. Not deleted
+          if att.is_deleted:
+              raise ValidationError(f"Attachment {att_id} has been deleted")
+          # 5. Staged (unbound): message_id must be NULL
+          if att.message_id is not None:
+              raise ValidationError(f"Attachment {att_id} is already committed to another message")
+          # Bind
+          att.message_id = message_id
+
+Rollback invariant: if any validation fails, the transaction rolls back.
+Neither partial message creation nor partial attachment bindings survive a failed transaction.
+
+Cancellation invariant: if the assistant-stream generation is cancelled AFTER the user message
+and attachments are committed, the user message and all bound attachments remain committed and
+visible in history. Only the partial/empty assistant response follows cancellation semantics.
+
+### 8B.7 -- Attachment/Media Resolver & Provider Translation
+
+Canonical boundary:
+
+  Orchestrator
+    -> Attachment/Media Resolver (service layer)
+       resolves attachment_ids to validated, provider-neutral image resources
+    -> LLMProvider interface (ContentBlock[])
+       -> LlamaCppProvider._translate_messages() (llama.cpp-specific wire format)
+
+LlamaCppProvider MUST NOT:
+  - Construct application attachment paths from attachment IDs directly
+  - Query attachment persistence (DB) directly
+  - Know about COMPANION_DATA_ROOT or settings.ATTACHMENT_DIR directly
+  - Make any assumption about where bytes come from
+
+LlamaCppProvider MUST ONLY:
+  - Receive pre-resolved image bytes (or a coroutine that provides them)
+  - Translate ContentBlock[] -> llama.cpp chat completions wire format
+  - Run file IO via asyncio.run_in_executor (never blocking the event loop)
+
+[CREATE] backend/app/services/assistant/media_resolver.py:
+  async def resolve_image_content(block: ImageAttachmentContent) -> bytes:
+      """Load and validate image bytes for a single attachment.
+      Raises on missing file, path traversal, or oversized read.
+      Called by orchestrator before passing ContentBlocks to LLMProvider."""
 
 [MODIFY] backend/app/services/assistant/orchestrator.py:
-
   # Gate on library state (available_capabilities) -- not manifest.capabilities
-  has_vision = active_entry is not None and ModelCapability.vision in active_entry.library_state.available_capabilities
+  has_vision = (
+      active_entry is not None
+      and ModelCapability.vision in active_entry.library_state.available_capabilities
+  )
 
-  if has_vision and message.attachments:
-      content_blocks = [ImageAttachmentContent(att.id, att.mime_type) for att in message.attachments if not att.is_deleted]
+  if has_vision and committed_attachments:
+      # Resolve image bytes via media_resolver (before calling provider)
+      content_blocks: List[ContentBlock] = []
+      for att in committed_attachments:
+          if not att.is_deleted:
+              content_blocks.append(ImageAttachmentContent(att.id, att.mime_type))
       content_blocks.append(TextContent(text=user_text))
       chat_message = ChatMessage(role="user", content=content_blocks)
   else:
       chat_message = ChatMessage(role="user", content=user_text)
 
 [MODIFY] backend/app/services/llm/llama_cpp.py -- add _translate_messages():
-  Translates provider-independent ChatMessage -> llama.cpp wire format.
-  Image: read bytes from settings.ATTACHMENT_DIR / ... via run_in_executor (non-blocking).
-  Encode as data:{mime_type};base64,{b64} in image_url format.
+  Receives ContentBlock[] from orchestrator (bytes already resolved by media_resolver).
+  Does NOT access filesystem paths or attachment IDs directly.
+  Encodes image bytes as data:{mime_type};base64,{b64} in image_url wire format.
+  All IO (if any) via run_in_executor (non-blocking).
 
 ### 8B.8 -- Frontend Attachment API
 
@@ -758,9 +949,16 @@ backend/tests/test_attachments.py:
   - Send with valid attachment_ids -> 200, MessageOut.attachments populated
   - Send with deleted attachment_id -> 422
   - Send with other-owner attachment_id -> 422
+  - Send with attachment from different conversation -> 422
+  - Send with already-committed attachment_id -> 422 (reuse blocked)
   - Send with > 4 attachment_ids -> 422
+  - Send + concurrent duplicate send with same attachment_id -> one succeeds, other blocked
+  - Stream cancelled after commit -> user message + attachments remain in history
   - GET messages -> AttachmentRef[] present
   - F5 reload: send + GET messages -> preview loads (authenticated Blob fetch)
+  - Bootstrap locator: missing -> default path; valid -> locator path; invalid -> default with warning
+  - COMPANION_DATA_ROOT env var -> overrides locator and default
+  - Legacy DB migration: no legacy -> fresh; one legacy -> copied + verified; two candidates -> error
 
 frontend/web/src/test/attachmentComposer.test.tsx:
   - Paperclip disabled: no vision in available_capabilities

@@ -220,15 +220,31 @@ Flash attention, KV cache quantization, and batch/ubatch are not currently appli
 
 ## 7. Composite Multimodal Artifacts
 
-Multimodal Vision-Language models (Qwen3-VL) consist of two binary files:
+Multimodal Vision-Language models (e.g. Qwen3-VL) consist of two binary files:
 1. **Primary Weights:** `Qwen3-VL-4B-Instruct-Q4_K_M.gguf`
 2. **Vision Projector:** `mmproj-Qwen3-VL-4B-Instruct-f16.gguf`
 
-### Architectural Handling:
+### Architectural Handling
+
 - The `ModelRegistry` treats these two files as **one logical model entry**.
 - The UI exposes a single selection card: `"Qwen3-VL-4B-Instruct"`.
-- When loaded, FastAPI passes both the main model path and `--mmproj <PATH_TO_MMPROJ>` to the engine.
-- If the projector file is missing from disk, the registry marks `validation_status = "missing_companion"` and prohibits loading.
+- When loaded with both files, FastAPI passes the main model path and `--mmproj <PATH_TO_MMPROJ>` to the engine.
+
+### Missing mmproj — Degraded Vision, Not Global Prohibition
+
+If the vision projector file is absent from disk:
+
+| Aspect | Behaviour |
+|--------|-----------|
+| `ModelLibraryState.validation_status` | `missing_companion` |
+| `ModelLibraryState.available_capabilities` | vision removed; **text capability remains** |
+| Model loadable? | **Yes** — text inference continues to work |
+| Vision inference | **Unavailable** — UI gates on `available_capabilities` |
+| UI badge | Amber "Vision unavailable — mmproj missing" (degraded, not incompatible) |
+
+The model is **not** globally prohibited from loading when mmproj is absent. Text chat is fully functional.
+Blocking UI or API access to the entire model on missing mmproj would be incorrect.
+`available_capabilities` (not `manifest.capabilities`) is the authoritative gate for vision features.
 
 ---
 
