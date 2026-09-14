@@ -105,6 +105,50 @@ export async function updateTask(
 }
 
 /**
+ * Retrieve all active tasks across all pages by repeatedly fetching with limit=100.
+ * Defensive against infinite loops and terminates on empty or short pages.
+ */
+export type TaskListAllFilters = Omit<TaskListFilters, 'skip' | 'limit'>;
+
+export async function listAllTasks(
+  filters?: TaskListAllFilters
+): Promise<TaskListResponse> {
+  const pageSize = 100;
+  let skip = 0;
+  const allItems: TaskResponse[] = [];
+  let reportedTotal = 0;
+  const maxIterations = 50; // Safety guard: up to 5,000 tasks
+  let iteration = 0;
+
+  while (iteration < maxIterations) {
+    iteration++;
+    const res = await taskApi.listTasks({
+      ...filters,
+      skip,
+      limit: pageSize,
+    });
+
+    reportedTotal = res.total;
+    if (!res.items || res.items.length === 0) {
+      break;
+    }
+
+    allItems.push(...res.items);
+
+    if (allItems.length >= reportedTotal || res.items.length < pageSize) {
+      break;
+    }
+
+    skip += res.items.length;
+  }
+
+  return {
+    items: allItems,
+    total: reportedTotal || allItems.length,
+  };
+}
+
+/**
  * Soft delete an active task into the Recycle Bin.
  */
 export async function deleteTask(taskId: string): Promise<void> {
@@ -115,8 +159,10 @@ export async function deleteTask(taskId: string): Promise<void> {
 
 export const taskApi = {
   listTasks,
+  listAllTasks,
   createTask,
   updateTask,
   deleteTask,
 };
+
 

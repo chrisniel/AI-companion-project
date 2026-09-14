@@ -11,6 +11,7 @@ import {
   TaskCreatePayload,
   TaskUpdatePayload,
 } from '../services/api/taskApi';
+import { getReminderLabel } from '../utils/dateUtils';
 
 // Sample mock tasks for testing
 const sampleTasks: TaskResponse[] = [
@@ -224,6 +225,53 @@ describe('Phase 8A.3b.2 — Tasks + Schedule Truthfulness & Backend Integration'
       const [url, options] = fetchSpy.mock.calls[0];
       expect(String(url)).toContain('/api/v1/tasks/task-to-del');
       expect(options?.method).toBe('DELETE');
+    });
+
+    it('listAllTasks retrieves all pages with limit=100 and terminates on complete collection', async () => {
+      const page1Tasks: TaskResponse[] = Array.from({ length: 100 }, (_, i) => ({
+        id: `page1-task-${i}`,
+        owner_id: 'user-default',
+        title: `Task ${i}`,
+        notes: null,
+        category: 'general',
+        status: 'pending',
+        priority: 'medium',
+        due_date: null,
+        reminder_minutes_before: null,
+        reminder_at: null,
+        is_deleted: false,
+        created_at: '2026-09-14T08:00:00.000Z',
+        updated_at: '2026-09-14T08:00:00.000Z',
+      }));
+
+      const page2Tasks: TaskResponse[] = Array.from({ length: 50 }, (_, i) => ({
+        id: `page2-task-${i}`,
+        owner_id: 'user-default',
+        title: `Task ${100 + i}`,
+        notes: null,
+        category: 'general',
+        status: 'pending',
+        priority: 'medium',
+        due_date: null,
+        reminder_minutes_before: null,
+        reminder_at: null,
+        is_deleted: false,
+        created_at: '2026-09-14T08:00:00.000Z',
+        updated_at: '2026-09-14T08:00:00.000Z',
+      }));
+
+      const listSpy = vi
+        .spyOn(taskApiModule.taskApi, 'listTasks')
+        .mockResolvedValueOnce({ items: page1Tasks, total: 150 })
+        .mockResolvedValueOnce({ items: page2Tasks, total: 150 });
+
+      const result = await taskApiModule.listAllTasks();
+
+      expect(listSpy).toHaveBeenCalledTimes(2);
+      expect(listSpy.mock.calls[0][0]).toEqual({ skip: 0, limit: 100 });
+      expect(listSpy.mock.calls[1][0]).toEqual({ skip: 100, limit: 100 });
+      expect(result.items).toHaveLength(150);
+      expect(result.total).toBe(150);
     });
   });
 
@@ -485,6 +533,112 @@ describe('Phase 8A.3b.2 — Tasks + Schedule Truthfulness & Backend Integration'
         expect(screen.queryByText('Review System Specs')).toBeNull();
       });
     });
+
+    it('proves a task beyond the first page (page 2) appears in TasksView', async () => {
+      const page1Tasks: TaskResponse[] = Array.from({ length: 100 }, (_, i) => ({
+        id: `p1-${i}`,
+        owner_id: 'user-default',
+        title: `P1 Task ${i}`,
+        notes: null,
+        category: 'general',
+        status: 'pending',
+        priority: 'low',
+        due_date: null,
+        reminder_minutes_before: null,
+        reminder_at: null,
+        is_deleted: false,
+        created_at: '2026-09-14T08:00:00.000Z',
+        updated_at: '2026-09-14T08:00:00.000Z',
+      }));
+
+      const page2Task: TaskResponse = {
+        id: 'p2-task-101',
+        owner_id: 'user-default',
+        title: 'Task 101 On Second Page',
+        notes: null,
+        category: 'dev',
+        status: 'pending',
+        priority: 'high',
+        due_date: '2026-09-14T15:00:00.000Z',
+        reminder_minutes_before: null,
+        reminder_at: null,
+        is_deleted: false,
+        created_at: '2026-09-14T08:00:00.000Z',
+        updated_at: '2026-09-14T08:00:00.000Z',
+      };
+
+      vi.spyOn(taskApiModule.taskApi, 'listTasks')
+        .mockResolvedValueOnce({ items: page1Tasks, total: 101 })
+        .mockResolvedValueOnce({ items: [page2Task], total: 101 });
+
+      render(<TasksView />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Task 101 On Second Page')).toBeDefined();
+      });
+    });
+
+    it('allows notes to be cleared on edit by sending notes: null', async () => {
+      const taskWithNotes: TaskResponse = {
+        ...sampleTasks[0],
+        id: 'task-with-notes',
+        title: 'Task With Detailed Notes',
+        notes: 'Initial contextual notes to be cleared',
+      };
+
+      vi.spyOn(taskApiModule.taskApi, 'listTasks').mockResolvedValueOnce({
+        items: [taskWithNotes],
+        total: 1,
+      });
+
+      const updateSpy = vi
+        .spyOn(taskApiModule.taskApi, 'updateTask')
+        .mockResolvedValueOnce({
+          ...taskWithNotes,
+          notes: null,
+        });
+
+      render(<TasksView />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Task With Detailed Notes')).toBeDefined();
+      });
+
+      expect(
+        screen.getByText('Initial contextual notes to be cleared')
+      ).toBeDefined();
+
+      // Open Edit modal
+      const editBtn = screen.getByTitle(/Edit task/i);
+      fireEvent.click(editBtn);
+
+      // Verify textarea has initial notes
+      const notesInput = screen.getByPlaceholderText(/Add relevant notes or steps/i);
+      expect((notesInput as HTMLTextAreaElement).value).toBe(
+        'Initial contextual notes to be cleared'
+      );
+
+      // Clear the notes
+      fireEvent.change(notesInput, { target: { value: '   ' } });
+
+      // Click Save Changes
+      const saveBtn = screen.getByRole('button', { name: /Save Changes/i });
+      fireEvent.click(saveBtn);
+
+      await waitFor(() => {
+        expect(updateSpy).toHaveBeenCalledTimes(1);
+      });
+
+      // Verify payload sent notes: null
+      expect(updateSpy.mock.calls[0][1].notes).toBeNull();
+
+      // Row in view no longer shows old notes
+      await waitFor(() => {
+        expect(
+          screen.queryByText('Initial contextual notes to be cleared')
+        ).toBeNull();
+      });
+    });
   });
 
   // =========================================================================
@@ -597,6 +751,119 @@ describe('Phase 8A.3b.2 — Tasks + Schedule Truthfulness & Backend Integration'
 
       // Verify agenda groups appear
       expect(screen.getByText(/Future Feature Planning/i)).toBeDefined();
+    });
+
+    it('proves a due-dated task beyond the first page appears in ScheduleView', async () => {
+      const page1Tasks: TaskResponse[] = Array.from({ length: 100 }, (_, i) => ({
+        id: `sched-p1-${i}`,
+        owner_id: 'user-default',
+        title: `Sched P1 Task ${i}`,
+        notes: null,
+        category: 'general',
+        status: 'pending',
+        priority: 'low',
+        due_date: null,
+        reminder_minutes_before: null,
+        reminder_at: null,
+        is_deleted: false,
+        created_at: '2026-09-14T08:00:00.000Z',
+        updated_at: '2026-09-14T08:00:00.000Z',
+      }));
+
+      const page2Task: TaskResponse = {
+        id: 'sched-p2-task-101',
+        owner_id: 'user-default',
+        title: 'Page 2 Scheduled Task',
+        notes: null,
+        category: 'work',
+        status: 'pending',
+        priority: 'high',
+        due_date: '2026-09-14T14:00:00.000Z',
+        reminder_minutes_before: null,
+        reminder_at: null,
+        is_deleted: false,
+        created_at: '2026-09-14T08:00:00.000Z',
+        updated_at: '2026-09-14T08:00:00.000Z',
+      };
+
+      vi.spyOn(taskApiModule.taskApi, 'listTasks')
+        .mockResolvedValueOnce({ items: page1Tasks, total: 101 })
+        .mockResolvedValueOnce({ items: [page2Task], total: 101 });
+
+      render(<ScheduleView />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Page 2 Scheduled Task')).toBeDefined();
+      });
+    });
+
+    it('agenda view hides date navigation controls while day and week views expose them', async () => {
+      vi.spyOn(taskApiModule.taskApi, 'listTasks').mockResolvedValueOnce({
+        items: sampleTasks,
+        total: sampleTasks.length,
+      });
+
+      render(<ScheduleView />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Review System Specs')).toBeDefined();
+      });
+
+      // Day view (default): date navigation is visible
+      expect(document.getElementById('schedule-date-nav')).not.toBeNull();
+      expect(document.getElementById('schedule-prev-btn')).not.toBeNull();
+      expect(document.getElementById('schedule-today-btn')).not.toBeNull();
+      expect(document.getElementById('schedule-next-btn')).not.toBeNull();
+
+      // Switch to Week view: date navigation remains visible
+      const weekBtn = screen.getByRole('button', { name: /week/i });
+      fireEvent.click(weekBtn);
+      expect(document.getElementById('schedule-date-nav')).not.toBeNull();
+
+      // Switch to Agenda view: date navigation is hidden
+      const agendaBtn = screen.getByRole('button', { name: /agenda/i });
+      fireEvent.click(agendaBtn);
+      expect(document.getElementById('schedule-date-nav')).toBeNull();
+      expect(document.getElementById('schedule-prev-btn')).toBeNull();
+      expect(document.getElementById('schedule-today-btn')).toBeNull();
+      expect(document.getElementById('schedule-next-btn')).toBeNull();
+
+      // Switch back to Day view: date navigation reappears
+      const dayBtn = screen.getByRole('button', { name: /day/i });
+      fireEvent.click(dayBtn);
+      expect(document.getElementById('schedule-date-nav')).not.toBeNull();
+    });
+  });
+
+  // =========================================================================
+  // 4. REMINDER EXACTNESS TESTS
+  // =========================================================================
+  describe('Reminder Exactness', () => {
+    it('getReminderLabel returns exact human-readable reminder strings without rounding', () => {
+      // Standard predefined targets
+      expect(getReminderLabel(0)).toBe('At due time');
+      expect(getReminderLabel(15)).toBe('15 min before');
+      expect(getReminderLabel(30)).toBe('30 min before');
+      expect(getReminderLabel(60)).toBe('1 hour before');
+      expect(getReminderLabel(1440)).toBe('1 day before');
+
+      // Arbitrary minutes (must NOT round to nearest hour)
+      expect(getReminderLabel(75)).toBe('75 min before');
+      expect(getReminderLabel(90)).toBe('90 min before');
+      expect(getReminderLabel(105)).toBe('105 min before');
+
+      // Exact hours
+      expect(getReminderLabel(120)).toBe('2 hours before');
+      expect(getReminderLabel(180)).toBe('3 hours before');
+
+      // Exact days
+      expect(getReminderLabel(2880)).toBe('2 days before');
+      expect(getReminderLabel(4320)).toBe('3 days before');
+
+      // Null / undefined / invalid
+      expect(getReminderLabel(null)).toBeNull();
+      expect(getReminderLabel(undefined)).toBeNull();
+      expect(getReminderLabel(-5)).toBeNull();
     });
   });
 

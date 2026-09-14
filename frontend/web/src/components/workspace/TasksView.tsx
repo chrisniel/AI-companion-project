@@ -107,7 +107,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ initialTasks }) => {
     setIsLoading(true);
     setLoadError(null);
     try {
-      const res = await taskApi.listTasks();
+      const res = await taskApi.listAllTasks();
       setTasks(res.items);
     } catch (err: any) {
       setLoadError(err.message || 'Failed to load tasks from backend');
@@ -286,7 +286,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ initialTasks }) => {
         // Update existing task
         const updated = await taskApi.updateTask(editingTask.id, {
           title: formTitle.trim(),
-          notes: formNotes.trim() || undefined,
+          notes: formNotes.trim() ? formNotes.trim() : null,
           category: formCategory,
           priority: formPriority,
           status: formStatus,

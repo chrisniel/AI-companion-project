@@ -18,10 +18,10 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — BATCH 8A.3b.2 COMPLETED: AWAITING REVIEW]
+## [CURRENT EXECUTION STATE — BATCH 8A.3b.2 ACCEPTANCE CORRECTIONS COMPLETED: AWAITING REVIEW]
 
-- Completed: Phase 8A.3b.2 Tasks + Schedule (real backend Tasks API adapter, server-authoritative TasksView, task-derived ScheduleView projection, local datetime conversion, zero fake alarms/calendar events).
-- Verification: 105 vitest passed (0 failed), 88 pytest passed (0 failed), 0 tsc errors, production build clean.
+- Completed: Phase 8A.3b.2 Tasks + Schedule Acceptance Corrections (listAllTasks multi-page pagination helper, notes clearing as null on edit, Agenda date-nav hidden, exact unrounded reminder labels).
+- Verification: 111 vitest passed (0 failed), 88 pytest passed (0 failed), 0 tsc errors, production build clean.
 - Awaiting ChatGPT / User Review before marking [x] 8A.3b.2. Do NOT begin 8A.3b.3 or 8A.4.
 - Active Plan: `docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md`
 

@@ -67,7 +67,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ initialTasks }) => {
     setIsLoading(true);
     setLoadError(null);
     try {
-      const res = await taskApi.listTasks();
+      const res = await taskApi.listAllTasks();
       setTasks(res.items);
     } catch (err: any) {
       setLoadError(err.message || 'Failed to load scheduled tasks from backend');
@@ -280,39 +280,44 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ initialTasks }) => {
           })}
         </div>
 
-        {/* Date Selector / Navigation */}
-        <div className="flex items-center justify-between sm:justify-end gap-2 text-xs font-medium">
-          <button
-            id="schedule-prev-btn"
-            type="button"
-            onClick={handlePrev}
-            className="p-1.5 rounded-xl surface-recessed border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors"
-            title={viewMode === 'week' ? 'Previous Week' : 'Previous Day'}
+        {/* Date Selector / Navigation (Hidden in Agenda mode since Agenda shows complete chronological projection) */}
+        {viewMode !== 'agenda' && (
+          <div
+            id="schedule-date-nav"
+            className="flex items-center justify-between sm:justify-end gap-2 text-xs font-medium"
           >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
+            <button
+              id="schedule-prev-btn"
+              type="button"
+              onClick={handlePrev}
+              className="p-1.5 rounded-xl surface-recessed border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors"
+              title={viewMode === 'week' ? 'Previous Week' : 'Previous Day'}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
 
-          <button
-            id="schedule-today-btn"
-            type="button"
-            onClick={handleToday}
-            className="px-3 py-1.5 rounded-xl surface-raised border border-[var(--color-border-subtle)] text-xs font-semibold text-[var(--color-text-primary)] cursor-pointer hover:border-[var(--color-accent)]/40 transition-colors"
-          >
-            {selectedDate === todayDateStr
-              ? 'Today'
-              : selectedDate}
-          </button>
+            <button
+              id="schedule-today-btn"
+              type="button"
+              onClick={handleToday}
+              className="px-3 py-1.5 rounded-xl surface-raised border border-[var(--color-border-subtle)] text-xs font-semibold text-[var(--color-text-primary)] cursor-pointer hover:border-[var(--color-accent)]/40 transition-colors"
+            >
+              {selectedDate === todayDateStr
+                ? 'Today'
+                : selectedDate}
+            </button>
 
-          <button
-            id="schedule-next-btn"
-            type="button"
-            onClick={handleNext}
-            className="p-1.5 rounded-xl surface-recessed border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors"
-            title={viewMode === 'week' ? 'Next Week' : 'Next Day'}
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
+            <button
+              id="schedule-next-btn"
+              type="button"
+              onClick={handleNext}
+              className="p-1.5 rounded-xl surface-recessed border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors"
+              title={viewMode === 'week' ? 'Next Week' : 'Next Day'}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 3. Truthful Summary Bar */}

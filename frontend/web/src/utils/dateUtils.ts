@@ -88,20 +88,24 @@ export const isOverdue = (
 
 /**
  * Human-readable label for reminder_minutes_before.
+ * Exact representation without rounding.
  */
 export const getReminderLabel = (
   minutesBefore: number | null | undefined
 ): string | null => {
-  if (minutesBefore === null || minutesBefore === undefined) return null;
+  if (minutesBefore === null || minutesBefore === undefined || minutesBefore < 0) return null;
   if (minutesBefore === 0) return 'At due time';
-  if (minutesBefore === 15) return '15 min before';
-  if (minutesBefore === 30) return '30 min before';
-  if (minutesBefore === 60) return '1 hour before';
-  if (minutesBefore === 1440) return '1 day before';
-  if (minutesBefore < 60) return `${minutesBefore} min before`;
-  const hours = Math.round(minutesBefore / 60);
-  return `${hours} hour${hours > 1 ? 's' : ''} before`;
+  if (minutesBefore % 1440 === 0) {
+    const days = minutesBefore / 1440;
+    return `${days} day${days > 1 ? 's' : ''} before`;
+  }
+  if (minutesBefore % 60 === 0) {
+    const hours = minutesBefore / 60;
+    return `${hours} hour${hours > 1 ? 's' : ''} before`;
+  }
+  return `${minutesBefore} min before`;
 };
+
 
 export interface WeekDayInfo {
   day: string; // e.g. 'Mon'
