@@ -18,9 +18,9 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — BATCH 8A.1 CORRECTIONS COMPLETED, AWAITING USER REVIEW]
+## [CURRENT EXECUTION STATE — BATCH 8A.2 COMPLETED: AWAITING REVIEW BEFORE 8A.3]
 
-- Next Action: User reviews Batch 8A.1 semantic truthfulness corrections; once approved, 8A.1 is marked complete before proceeding to 8A.2
+- Next Action: Awaiting user/ChatGPT review of Batch 8A.2 before beginning Batch 8A.3 (ModelsView progressive disclosure)
 - Active Plan: `docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md` (complete rewrite, self-contained)
 
 ---
@@ -29,8 +29,8 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 ### 8A — Frontend Architecture & UX Harmonization
 Branch: `feature/phase8-ui-foundation`
-- [ ] 8A.1: Mock removal — HomeView (time-derived greeting), AssistantView (stale mockConversations), HealthView (truthful unavailable state & planned providers), MemoryView (truthful SQLite FTS5 store & contract)
-- [ ] 8A.2: AssistantView decomposition — AssistantComposer (stub attach), AssistantMessageList, AssistantStatusBar (provenance), AssistantErrorDisplay
+- [x] 8A.1: Mock removal — HomeView (time-derived greeting), AssistantView (stale mockConversations), HealthView (truthful unavailable state & planned providers), MemoryView (truthful SQLite FTS5 store & contract)
+- [x] 8A.2: AssistantView decomposition — AssistantComposer (stub attach), AssistantMessageList, AssistantStatusBar (provenance), AssistantErrorDisplay
 - [ ] 8A.3: ModelsView — variant badges, mmproj warning badge (degraded not incompatible), applied-vs-requested profile labels
 - [ ] 8A.4: mock/*.ts — @deprecated annotations on all file headers (do not delete yet)
 
