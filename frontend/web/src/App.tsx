@@ -31,7 +31,6 @@ function MainApp() {
   const [activeSection, setActiveSection] = useState('home');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [assistantPanelMode, setAssistantPanelMode] = useState<AssistantPanelMode>('expanded');
-  const [searchQuery, setSearchQuery] = useState('');
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [hasHydratedInitialModel, setHasHydratedInitialModel] = useState(false);
 
@@ -219,8 +218,6 @@ function MainApp() {
       >
         {/* 1. Compact Top Header */}
         <Header
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebarCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
           assistantPanelMode={assistantPanelMode}

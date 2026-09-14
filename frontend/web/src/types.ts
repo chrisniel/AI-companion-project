@@ -349,7 +349,7 @@ export interface ConversationHistoryItem {
   date: string;
   snippet: string;
   model: string;
-  messagesCount: number;
+  messagesCount?: number;
 }
 
 export interface NotificationItem {

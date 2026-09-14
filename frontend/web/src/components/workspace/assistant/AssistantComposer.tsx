@@ -151,9 +151,9 @@ export const AssistantComposer: React.FC<AssistantComposerProps> = ({
           <span>Press <strong>Enter</strong> to send • <strong>Shift + Enter</strong> for newline</span>
         </span>
         <span>
-          {appliedContextSize
+          {appliedContextSize != null
             ? `Context buffer: ${appliedContextSize} tokens`
-            : 'Local context buffer: active'}
+            : 'Context buffer: Unavailable'}
         </span>
       </div>
     </div>

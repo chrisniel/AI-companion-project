@@ -9,6 +9,8 @@ import { AssistantPanel } from '../components/layout/AssistantPanel';
 import { GlobalComposer } from '../components/workspace/GlobalComposer';
 import { AssistantStatusBar } from '../components/workspace/assistant/AssistantStatusBar';
 import { AssistantView } from '../components/workspace/AssistantView';
+import { ConversationHistoryDrawer } from '../components/workspace/ConversationHistoryDrawer';
+import { AssistantComposer } from '../components/workspace/assistant/AssistantComposer';
 import { BackendProvider } from '../context/BackendContext';
 import { ThemeProvider } from '../context/ThemeContext';
 import * as api from '../services/api';
@@ -608,7 +610,159 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
     expect(onOpenAssistant).toHaveBeenCalledTimes(2);
   });
 
-  // 16. Source grep across all 7 batch files: no prohibited strings
+  // 16. Empty ConversationHistoryDrawer renders no mock conversations and no fake titles
+  it('empty ConversationHistoryDrawer renders no mock conversations, truthful empty state, and no 100% private claim', () => {
+    render(
+      <ConversationHistoryDrawer
+        isOpen={true}
+        onClose={() => {}}
+        activeConversationId=""
+        onSelectConversation={() => {}}
+        onNewConversation={() => {}}
+        conversations={[]}
+      />
+    );
+
+    // Truthful empty state
+    expect(screen.getByText('No conversations yet')).toBeInTheDocument();
+
+    // Fake mock conversation titles must NEVER appear
+    expect(screen.queryByText(/CUDA Kernel Tuning for Quantized Weights/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Biometric Telemetry & Sleep Cycle Correlation/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Zero-Telemetry Packet Filter Inspection/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Audio VAD Threshold Calibration/i)).not.toBeInTheDocument();
+
+    // Truthful footer without absolute privacy claim
+    expect(screen.getByText('Local conversation storage')).toBeInTheDocument();
+    expect(screen.queryByText(/100% Private on-device/i)).not.toBeInTheDocument();
+  });
+
+  // 17. AssistantView has no default "conv-1" conversation identity and neutral initial/offline title
+  it('AssistantView has no default "conv-1" conversation identity and neutral initial title', async () => {
+    vi.mocked(api.checkHealth).mockRejectedValue(new Error('Offline'));
+    vi.mocked(api.getModelStatus).mockRejectedValue(new Error('Offline'));
+
+    renderWithProviders(<AssistantView />);
+
+    // Initial / offline title is neutral
+    expect(screen.getByText('No Conversation')).toBeInTheDocument();
+    expect(screen.queryByText('conv-1')).not.toBeInTheDocument();
+    expect(screen.queryByText('Daily Briefing & Local System Orchestration')).not.toBeInTheDocument();
+  });
+
+  // 18. Non-active conversation message counts are not fabricated as 1
+  it('non-active conversation message counts are not fabricated as 1', async () => {
+    vi.mocked(api.checkHealth).mockResolvedValue({ status: 'healthy' });
+    vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus());
+    vi.mocked(api.listConversations).mockResolvedValue({
+      items: [
+        {
+          id: 'conv-active',
+          title: 'Active Session',
+          character_id: 'aura',
+          owner_id: 'chris',
+          created_at: '2026-09-14T00:00:00Z',
+          updated_at: '2026-09-14T00:00:00Z',
+        },
+        {
+          id: 'conv-other',
+          title: 'Other Session',
+          character_id: 'aura',
+          owner_id: 'chris',
+          created_at: '2026-09-14T01:00:00Z',
+          updated_at: '2026-09-14T01:00:00Z',
+        },
+      ],
+      total: 2,
+    });
+    vi.mocked(api.getMessages).mockResolvedValue({
+      items: [
+        {
+          id: 'm1',
+          conversation_id: 'conv-active',
+          sender: 'user',
+          content: 'Hello',
+          created_at: '2026-09-14T00:01:00Z',
+        },
+        {
+          id: 'm2',
+          conversation_id: 'conv-active',
+          sender: 'assistant',
+          content: 'Hi there',
+          created_at: '2026-09-14T00:02:00Z',
+        },
+      ],
+      total: 2,
+    });
+
+    renderWithProviders(<AssistantView />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Active Session')).toBeInTheDocument();
+    });
+
+    // Open drawer
+    const historyBtn = screen.getByTitle('Open Conversation History');
+    fireEvent.click(historyBtn);
+
+    // Active session has real count
+    expect(screen.getByText('2 msgs')).toBeInTheDocument();
+
+    // Other session MUST NOT have a fabricated "1 msgs" badge
+    expect(screen.queryByText('1 msgs')).not.toBeInTheDocument();
+  });
+
+  // 19. AssistantPanel client session state has truthful preview stub description
+  it('AssistantPanel client session state has truthful preview stub description and no false claim of "no simulated overrides"', async () => {
+    vi.mocked(api.checkHealth).mockResolvedValue({ status: 'healthy' });
+    vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus());
+
+    renderWithProviders(<AssistantPanel mode="expanded" onSetMode={() => {}} />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Client-side Assistant UI state\. Voice listening state may be a preview stub\./i)
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/No simulated overrides/i)).not.toBeInTheDocument();
+  });
+
+  // 20. Absent appliedContextSize renders "Context buffer: Unavailable" in AssistantComposer
+  it('absent appliedContextSize renders "Context buffer: Unavailable" in AssistantComposer', () => {
+    render(
+      <AssistantComposer
+        inputPrompt=""
+        onChangePrompt={() => {}}
+        onSendMessage={() => {}}
+        onStopGeneration={() => {}}
+        isBusy={false}
+        assistantState="idle"
+        onSetAssistantState={() => {}}
+        attachments={[]}
+        onRemoveAttachment={() => {}}
+        appliedContextSize={null}
+      />
+    );
+
+    expect(screen.getByText('Context buffer: Unavailable')).toBeInTheDocument();
+    expect(screen.queryByText(/Local context buffer: active/i)).not.toBeInTheDocument();
+  });
+
+  // 21. Top-level search is removed from Header
+  it('top-level search is removed from Header', () => {
+    renderWithProviders(
+      <Header
+        sidebarCollapsed={false}
+        onToggleSidebarCollapse={() => {}}
+        assistantPanelMode="expanded"
+        onCycleAssistantPanelMode={() => {}}
+      />
+    );
+
+    expect(screen.queryByPlaceholderText(/Search commands, models, tasks/i)).not.toBeInTheDocument();
+  });
+
+  // 22. Source grep across all batch files: zero prohibited simulation strings or mock fallback
   it('ensures zero occurrences of prohibited simulation strings across batch files', () => {
     const batchFiles = [
       '../App.tsx',
@@ -618,6 +772,8 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
       '../components/workspace/HomeView.tsx',
       '../components/workspace/AssistantView.tsx',
       '../components/workspace/assistant/AssistantStatusBar.tsx',
+      '../components/workspace/ConversationHistoryDrawer.tsx',
+      '../components/workspace/assistant/AssistantComposer.tsx',
     ];
 
     const prohibitedPatterns = [
@@ -628,6 +784,11 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
       /Low-Latency Loopback/,
       /null GPU layers/,
       /Local Session \(Offline\)/,
+      /mockConversations/,
+      /100% Private on-device/,
+      /No simulated overrides/,
+      /Local context buffer: active/,
+      /Search commands, models, tasks/,
     ];
 
     for (const relPath of batchFiles) {

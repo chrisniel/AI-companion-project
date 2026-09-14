@@ -45,10 +45,8 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
   const [internalAssistantState, setInternalAssistantState] = useState<AssistantState>('idle');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [conversations, setConversations] = useState<ConversationOut[]>([]);
-  const [activeConversationId, setActiveConversationId] = useState('conv-1');
-  const [conversationTitle, setConversationTitle] = useState(
-    'Daily Briefing & Local System Orchestration'
-  );
+  const [activeConversationId, setActiveConversationId] = useState('');
+  const [conversationTitle, setConversationTitle] = useState('No Conversation');
   const [inputPrompt, setInputPrompt] = useState('');
   const [attachments, setAttachments] = useState<string[]>([]);
 
@@ -119,7 +117,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
 
           // Preserve active conversation selection across reconnects
           const currentId = activeConversationIdRef.current;
-          const matching = res.items.find((c) => c.id === currentId);
+          const matching = currentId ? res.items.find((c) => c.id === currentId) : undefined;
 
           if (matching) {
             setConversationTitle(matching.title);
@@ -134,16 +132,33 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
           }
           hasInitializedRef.current = true;
         } else if (!hasInitializedRef.current) {
-          const created = await createConversation('Daily Briefing & Local System Orchestration');
-          if (!isMounted) return;
-          setConversations([created]);
-          setActiveConversationId(created.id);
-          setConversationTitle(created.title);
-          loadConversationMessages(created.id);
-          hasInitializedRef.current = true;
+          try {
+            const created = await createConversation('New Conversation');
+            if (!isMounted) return;
+            setConversations([created]);
+            setActiveConversationId(created.id);
+            setConversationTitle(created.title);
+            loadConversationMessages(created.id);
+            hasInitializedRef.current = true;
+          } catch (createErr) {
+            console.warn('Unable to create initial conversation on backend:', createErr);
+            if (!isMounted) return;
+            setActiveConversationId('');
+            setConversationTitle('No Conversation');
+            setMessages([]);
+            hasInitializedRef.current = true;
+          }
         }
       } catch (err) {
         console.warn('Unable to initialize conversations from backend:', err);
+        if (!isMounted) return;
+        const currentId = activeConversationIdRef.current;
+        const hasValid = conversations.some((c) => c.id === currentId);
+        if (!hasValid) {
+          setActiveConversationId('');
+          setConversationTitle('No Conversation');
+          setMessages([]);
+        }
       }
     }
 
@@ -324,7 +339,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     date: new Date(c.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }),
     snippet: 'Local conversation session stored in SQLite.',
     model: effectiveModelName,
-    messagesCount: c.id === activeConversationId ? messages.length : 1,
+    messagesCount: c.id === activeConversationId ? messages.length : undefined,
   }));
 
   return (

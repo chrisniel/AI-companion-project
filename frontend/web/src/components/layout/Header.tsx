@@ -16,7 +16,6 @@ import {
   Leaf,
   ChevronDown,
   Check,
-  Search,
 } from 'lucide-react';
 import { useTheme, ACCENT_PRESETS } from '../../context/ThemeContext';
 import { useBackend } from '../../context/BackendContext';
@@ -25,7 +24,6 @@ import {
   AssistantPanelMode,
   PerformanceProfile,
 } from '../../types';
-import { SearchInput } from '../ui/SearchInput';
 import { StatusIndicator } from '../ui/StatusIndicator';
 import { Dropdown } from '../ui/Dropdown';
 import { IconButton } from '../ui/IconButton';
@@ -36,8 +34,8 @@ import {
 } from './DesktopSizeSelector';
 
 export interface HeaderProps {
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
   sidebarCollapsed: boolean;
   onToggleSidebarCollapse: () => void;
   assistantPanelMode: AssistantPanelMode;
@@ -236,18 +234,8 @@ export const Header: React.FC<HeaderProps> = ({
         )}
       </div>
 
-      {/* 2. Middle: Search, Status, & Active Config Controls */}
+      {/* 2. Middle: Status & Active Config Controls */}
       <div className="flex-1 flex items-center justify-between px-3 sm:px-4 gap-2 sm:gap-3 min-w-0">
-        {/* Quick Search */}
-        <div className="flex items-center w-48 sm:w-60 lg:w-72 flex-shrink-0">
-          <SearchInput
-            value={searchQuery}
-            onChangeValue={onSearchChange}
-            placeholder="Search commands, models, tasks..."
-            sizeVariant="sm"
-          />
-        </div>
-
         {/* Center Indicators / Switchers */}
         <div className="flex items-center gap-2 flex-shrink-0">
           {/* Current Model Selector Dropdown */}

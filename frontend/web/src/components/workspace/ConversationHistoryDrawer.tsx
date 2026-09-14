@@ -24,62 +24,19 @@ export interface ConversationHistoryDrawerProps {
   conversations?: ConversationHistoryItem[];
 }
 
-export const mockConversations: ConversationHistoryItem[] = [
-  {
-    id: 'conv-1',
-    title: 'Daily Briefing & Local System Orchestration',
-    date: 'Today, 10:30 AM',
-    snippet: 'Inspected local task queue, verified vector memory consolidation cron at 04:00 AM...',
-    model: 'Llama-3.1-8B-Instruct',
-    messagesCount: 8,
-  },
-  {
-    id: 'conv-2',
-    title: 'CUDA Kernel Tuning for Quantized Weights',
-    date: 'Today, 08:15 AM',
-    snippet: 'Benchmarked FP16 vs Q4_K_M matrix multiplication throughput on RTX 4090...',
-    model: 'Qwen-2.5-Coder-7B',
-    messagesCount: 14,
-  },
-  {
-    id: 'conv-3',
-    title: 'Biometric Telemetry & Sleep Cycle Correlation',
-    date: 'Yesterday, 09:40 PM',
-    snippet: 'Evaluated resting heart rate and REM sleep trends with ambient room temperature logs...',
-    model: 'Llama-3.1-8B-Instruct',
-    messagesCount: 6,
-  },
-  {
-    id: 'conv-4',
-    title: 'Zero-Telemetry Packet Filter Inspection',
-    date: 'Yesterday, 03:20 PM',
-    snippet: 'Confirmed loopback binding rules on port 8000; blocked all outgoing DNS requests...',
-    model: 'Llama-3.1-8B-Instruct',
-    messagesCount: 5,
-  },
-  {
-    id: 'conv-5',
-    title: 'Audio VAD Threshold Calibration & Echo Cancellation',
-    date: 'Sep 7, 11:15 AM',
-    snippet: 'Configured studio microphone array noise gate at -34dB for hands-free voice synthesis...',
-    model: 'Gemma-2-9B-IT',
-    messagesCount: 11,
-  },
-];
-
 export const ConversationHistoryDrawer: React.FC<ConversationHistoryDrawerProps> = ({
   isOpen,
   onClose,
   activeConversationId,
   onSelectConversation,
   onNewConversation,
-  conversations = mockConversations,
+  conversations = [],
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
   if (!isOpen) return null;
 
-  const conversationList = conversations && conversations.length > 0 ? conversations : mockConversations;
+  const conversationList = conversations;
 
   const filteredConversations = conversationList.filter(
     (c) =>
@@ -150,7 +107,9 @@ export const ConversationHistoryDrawer: React.FC<ConversationHistoryDrawerProps>
         <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
           {filteredConversations.length === 0 ? (
             <div className="text-center py-10 text-xs text-[var(--color-text-muted)] font-mono">
-              No conversations found matching &quot;{searchQuery}&quot;
+              {searchQuery.trim()
+                ? `No conversations found matching "${searchQuery}"`
+                : 'No conversations yet'}
             </div>
           ) : (
             filteredConversations.map((conv) => {
@@ -181,9 +140,11 @@ export const ConversationHistoryDrawer: React.FC<ConversationHistoryDrawerProps>
                     <h3 className="text-xs font-bold text-[var(--color-text-primary)] line-clamp-1">
                       {conv.title}
                     </h3>
-                    <Badge variant={isActive ? 'accent' : 'glass'} size="sm">
-                      {conv.messagesCount} msgs
-                    </Badge>
+                    {conv.messagesCount != null && (
+                      <Badge variant={isActive ? 'accent' : 'glass'} size="sm">
+                        {conv.messagesCount} msgs
+                      </Badge>
+                    )}
                   </div>
 
                   <p className="text-[11px] text-[var(--color-text-secondary)] line-clamp-2 leading-relaxed">
@@ -207,7 +168,7 @@ export const ConversationHistoryDrawer: React.FC<ConversationHistoryDrawerProps>
 
         {/* Drawer Footer */}
         <div className="p-3.5 border-t border-[var(--color-border-subtle)] text-center text-[10px] text-[var(--color-text-muted)] font-mono">
-          Local SQLite storage • 100% Private on-device
+          Local conversation storage
         </div>
       </div>
     </div>

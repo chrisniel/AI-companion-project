@@ -186,7 +186,7 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({
               </span>
             </div>
             <p className="text-[11px] text-[var(--color-text-muted)] leading-relaxed">
-              Derived from active chat stream session. No simulated overrides.
+              Client-side Assistant UI state. Voice listening state may be a preview stub.
             </p>
           </div>
 
