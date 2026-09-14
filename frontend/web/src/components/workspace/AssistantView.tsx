@@ -55,6 +55,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
   const hasInitializedRef = useRef(false);
   const activeConversationIdRef = useRef(activeConversationId);
   activeConversationIdRef.current = activeConversationId;
+  const messageLoadTokenRef = useRef(0);
 
   const isModelSleeping = isOnline && modelStatus?.runtime_state === 'MODEL_SLEEPING';
   const isModelUnloaded = isOnline && (!modelStatus?.model_loaded || modelStatus?.runtime_state === 'MODEL_UNLOADED');
@@ -75,8 +76,17 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
 
   const loadConversationMessages = useCallback(async (convId: string) => {
+    const currentToken = ++messageLoadTokenRef.current;
+    // Clear displayed messages immediately so old conversation messages cannot remain under the new conversation
+    setMessages([]);
+
     try {
       const res = await getMessages(convId);
+      // Discard stale response if a newer conversation load was initiated
+      if (messageLoadTokenRef.current !== currentToken) {
+        return;
+      }
+
       if (res.items && res.items.length > 0) {
         const mapped: AssistantMessage[] = res.items.map((m) => ({
           id: m.id,
@@ -91,6 +101,10 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
       }
     } catch (err) {
       console.warn('Unable to load conversation messages:', err);
+      // On failure, leave messages empty for the selected conversation; do not retain prior messages
+      if (messageLoadTokenRef.current === currentToken) {
+        setMessages([]);
+      }
     }
   }, [activeCharacterName, userName]);
 
@@ -294,6 +308,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
   };
 
   const handleNewConversation = async () => {
+    messageLoadTokenRef.current++;
     try {
       const created = await createConversation('New Conversation');
       setConversations((prev) => [created, ...prev]);

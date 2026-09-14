@@ -748,5 +748,170 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
       // Crucial requirement: Current selection 'Deep Work Session' (conv-2) MUST NOT be wiped out back to items[0]
       expect(screen.getByText('Deep Work Session')).toBeInTheDocument();
     });
+
+    describe('Conversation message-load race safety and failure isolation', () => {
+      it('switching A -> B where B getMessages fails must not show A messages', async () => {
+        vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus());
+        vi.mocked(api.getMessages).mockImplementation(async (id) => {
+          if (id === 'conv-1') {
+            return {
+              items: [
+                {
+                  id: 'msg-a1',
+                  conversation_id: 'conv-1',
+                  sender: 'user',
+                  content: 'Message from Session Alpha',
+                  status: 'completed',
+                  sequence_no: 1,
+                  created_at: '2026-09-14T00:01:00Z',
+                },
+              ],
+              total: 1,
+            };
+          }
+          if (id === 'conv-2') {
+            throw new Error('Network error loading messages for conv-2');
+          }
+          return { items: [], total: 0 };
+        });
+
+        render(
+          <BackendProvider>
+            <AssistantView />
+          </BackendProvider>
+        );
+
+        // Session Alpha messages are initially rendered
+        await waitFor(() => {
+          expect(screen.getByText('Message from Session Alpha')).toBeInTheDocument();
+        });
+
+        // Switch to conv-2 (Deep Work Session)
+        const historyBtn = screen.getByTitle('Open Conversation History');
+        fireEvent.click(historyBtn);
+
+        const conv2Item = await screen.findByText('Deep Work Session');
+        fireEvent.click(conv2Item);
+
+        // Title updates to Deep Work Session
+        await waitFor(() => {
+          expect(screen.getByText('Deep Work Session')).toBeInTheDocument();
+        });
+
+        // Crucial requirement: Session Alpha messages must be wiped out and NOT retained
+        expect(screen.queryByText('Message from Session Alpha')).not.toBeInTheDocument();
+      });
+
+      it('rapid A -> B loads where A resolves last must still show B messages', async () => {
+        vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus());
+
+        let resolveA!: (val: any) => void;
+        let resolveB!: (val: any) => void;
+        const promiseA = new Promise((resolve) => { resolveA = resolve; });
+        const promiseB = new Promise((resolve) => { resolveB = resolve; });
+
+        vi.mocked(api.getMessages).mockImplementation(async (id) => {
+          if (id === 'conv-1') return promiseA as any;
+          if (id === 'conv-2') return promiseB as any;
+          return { items: [], total: 0 };
+        });
+
+        render(
+          <BackendProvider>
+            <AssistantView />
+          </BackendProvider>
+        );
+
+        // conv-1 load is in-flight. Immediately switch to conv-2.
+        await waitFor(() => {
+          expect(
+            screen.getByText('Daily Briefing & Local System Orchestration')
+          ).toBeInTheDocument();
+        });
+
+        const historyBtn = screen.getByTitle('Open Conversation History');
+        fireEvent.click(historyBtn);
+
+        const conv2Item = await screen.findByText('Deep Work Session');
+        fireEvent.click(conv2Item);
+
+        // Now resolve B first
+        await act(async () => {
+          resolveB({
+            items: [
+              {
+                id: 'msg-b1',
+                conversation_id: 'conv-2',
+                sender: 'assistant',
+                content: 'Message from Session B',
+                status: 'completed',
+                sequence_no: 1,
+                created_at: '2026-09-14T01:05:00Z',
+              },
+            ],
+            total: 1,
+          });
+        });
+
+        await waitFor(() => {
+          expect(screen.getByText('Message from Session B')).toBeInTheDocument();
+        });
+
+        // Now resolve A last (stale out-of-order response)
+        await act(async () => {
+          resolveA({
+            items: [
+              {
+                id: 'msg-a1',
+                conversation_id: 'conv-1',
+                sender: 'assistant',
+                content: 'Message from Session A (STALE)',
+                status: 'completed',
+                sequence_no: 1,
+                created_at: '2026-09-14T00:05:00Z',
+              },
+            ],
+            total: 1,
+          });
+        });
+
+        // B's messages must still be displayed; stale A response must be discarded
+        expect(screen.getByText('Message from Session B')).toBeInTheDocument();
+        expect(screen.queryByText('Message from Session A (STALE)')).not.toBeInTheDocument();
+      });
+
+      it('empty or failed loads inject no synthetic placeholder messages', async () => {
+        vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus());
+        vi.mocked(api.getMessages).mockResolvedValue({ items: [], total: 0 });
+
+        render(
+          <BackendProvider>
+            <AssistantView />
+          </BackendProvider>
+        );
+
+        await waitFor(() => {
+          expect(
+            screen.getByText('Daily Briefing & Local System Orchestration')
+          ).toBeInTheDocument();
+        });
+
+        // Switch to conv-2 where getMessages returns empty items
+        const historyBtn = screen.getByTitle('Open Conversation History');
+        fireEvent.click(historyBtn);
+
+        const conv2Item = await screen.findByText('Deep Work Session');
+        fireEvent.click(conv2Item);
+
+        await waitFor(() => {
+          expect(screen.getByText('Deep Work Session')).toBeInTheDocument();
+        });
+
+        // No synthetic placeholder messages injected
+        expect(screen.queryByText(/Local conversation session/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Hello Aura/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/No messages/i)).not.toBeInTheDocument();
+      });
+    });
   });
 });
