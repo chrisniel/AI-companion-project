@@ -18,11 +18,11 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — BATCH 8A.3b.1 MESSAGE-LOAD RELIABILITY CORRECTION COMPLETED: AWAITING REVIEW]
+## [CURRENT EXECUTION STATE — BATCH 8A.3b.1 NEW-CHAT RACE CORRECTION COMPLETED: AWAITING REVIEW]
 
-- Completed: Phase 8A.3b.1 conversation message-load reliability correction in AssistantView (messages immediately cleared on load start; request generation token prevents race condition from out-of-order responses; failure leaves messages strictly empty without previous-conversation leakage or placeholders; stale responses discarded).
-- Verification: 82 vitest passed (0 failed), 88 pytest passed (0 failed), 0 tsc errors, clean vite production build, zero regression across all test suites.
-- Next Action: Await user / ChatGPT review on Batch 8A.3b.1 message-load reliability correction. Do NOT begin 8A.3b.2.
+- Completed: Phase 8A.3b.1 New Chat vs conversation selection race correction in AssistantView (handleNewConversation captures requestToken; completion and rejection are guarded against newer conversation loads; latest user navigation is strictly preserved without state clobbering or title mismatch).
+- Verification: 85 vitest passed (0 failed), 88 pytest passed (0 failed), 0 tsc errors, clean vite production build, zero regression across all test suites.
+- Next Action: Await user / ChatGPT review on Batch 8A.3b.1 New Chat race correction. Do NOT begin 8A.3b.2.
 - Active Plan: `docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md`
 
 ---

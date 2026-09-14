@@ -308,10 +308,17 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
   };
 
   const handleNewConversation = async () => {
-    messageLoadTokenRef.current++;
+    const requestToken = ++messageLoadTokenRef.current;
     try {
       const created = await createConversation('New Conversation');
       setConversations((prev) => [created, ...prev]);
+
+      if (messageLoadTokenRef.current !== requestToken) {
+        // A newer conversation-selection/load action occurred while creation was pending.
+        // Do not override the user's newer selection.
+        return;
+      }
+
       setActiveConversationId(created.id);
       setConversationTitle(created.title);
       setAssistantState('idle');
@@ -319,9 +326,17 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     } catch (err) {
       console.warn('Failed to create remote conversation:', err);
       setAssistantState('idle');
+
+      if (messageLoadTokenRef.current !== requestToken) {
+        // A newer conversation-selection/load action occurred while creation was pending.
+        // Do not override the user's newer selection.
+        return;
+      }
+
       // Preserve existing valid conversation state if one exists;
       // otherwise show an appropriate empty/offline state outside message history.
-      const hasValidConversation = conversations.some((c) => c.id === activeConversationId);
+      const currentId = activeConversationIdRef.current;
+      const hasValidConversation = conversations.some((c) => c.id === currentId);
       if (!hasValidConversation) {
         setActiveConversationId('');
         setConversationTitle('No Conversation');

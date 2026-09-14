@@ -18,6 +18,7 @@ vi.mock('../services/api', async () => {
     loadModel: vi.fn(),
     unloadModel: vi.fn(),
     updateModelProfile: vi.fn(),
+    createConversation: vi.fn(),
     listConversations: vi.fn().mockResolvedValue({
       items: [
         {
@@ -911,6 +912,228 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
         expect(screen.queryByText(/Local conversation session/i)).not.toBeInTheDocument();
         expect(screen.queryByText(/Hello Aura/i)).not.toBeInTheDocument();
         expect(screen.queryByText(/No messages/i)).not.toBeInTheDocument();
+      });
+
+      it('New Chat pending -> user selects B -> B messages resolve -> New Chat resolves (B remains active with messages)', async () => {
+        vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus());
+
+        let resolveNewChat!: (val: any) => void;
+        const newChatPromise = new Promise((resolve) => { resolveNewChat = resolve; });
+        vi.mocked(api.createConversation).mockImplementation(() => newChatPromise as any);
+
+        vi.mocked(api.getMessages).mockImplementation(async (id) => {
+          if (id === 'conv-2') {
+            return {
+              items: [
+                {
+                  id: 'msg-b1',
+                  conversation_id: 'conv-2',
+                  sender: 'assistant',
+                  content: 'Message from Session B',
+                  status: 'completed',
+                  sequence_no: 1,
+                  created_at: '2026-09-14T01:05:00Z',
+                },
+              ],
+              total: 1,
+            };
+          }
+          return { items: [], total: 0 };
+        });
+
+        render(
+          <BackendProvider>
+            <AssistantView />
+          </BackendProvider>
+        );
+
+        await waitFor(() => {
+          expect(
+            screen.getByText('Daily Briefing & Local System Orchestration')
+          ).toBeInTheDocument();
+        });
+
+        // 1. User clicks New Chat (createConversation is pending)
+        const newChatBtn = screen.getByRole('button', { name: /New Chat/i });
+        fireEvent.click(newChatBtn);
+
+        // 2. While New Chat is pending, user opens history and selects Conversation B (Deep Work Session)
+        const historyBtn = screen.getByTitle('Open Conversation History');
+        fireEvent.click(historyBtn);
+        const conv2Item = await screen.findByText('Deep Work Session');
+        fireEvent.click(conv2Item);
+
+        // 3. B messages resolve
+        await waitFor(() => {
+          expect(screen.getByText('Deep Work Session')).toBeInTheDocument();
+          expect(screen.getByText('Message from Session B')).toBeInTheDocument();
+        });
+
+        // 4. Now New Chat resolves later
+        await act(async () => {
+          resolveNewChat({
+            id: 'conv-new-created',
+            title: 'New Conversation Created Late',
+            character_id: 'aura',
+            owner_id: 'chris',
+            created_at: '2026-09-14T02:00:00Z',
+            updated_at: '2026-09-14T02:00:00Z',
+          });
+        });
+
+        // Expected:
+        // - B remains active
+        // - B title remains visible
+        // - B messages remain visible
+        // - newly created conversation must NOT override B as active
+        expect(screen.getByText('Deep Work Session')).toBeInTheDocument();
+        expect(screen.getByText('Message from Session B')).toBeInTheDocument();
+        expect(screen.queryByText('New Conversation Created Late')).not.toBeInTheDocument();
+      });
+
+      it('New Chat pending -> user selects B -> New Chat resolves -> B messages resolve (B remains active with messages)', async () => {
+        vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus());
+
+        let resolveNewChat!: (val: any) => void;
+        const newChatPromise = new Promise((resolve) => { resolveNewChat = resolve; });
+        vi.mocked(api.createConversation).mockImplementation(() => newChatPromise as any);
+
+        let resolveB!: (val: any) => void;
+        const promiseB = new Promise((resolve) => { resolveB = resolve; });
+        vi.mocked(api.getMessages).mockImplementation(async (id) => {
+          if (id === 'conv-2') return promiseB as any;
+          return { items: [], total: 0 };
+        });
+
+        render(
+          <BackendProvider>
+            <AssistantView />
+          </BackendProvider>
+        );
+
+        await waitFor(() => {
+          expect(
+            screen.getByText('Daily Briefing & Local System Orchestration')
+          ).toBeInTheDocument();
+        });
+
+        // 1. User clicks New Chat
+        const newChatBtn = screen.getByRole('button', { name: /New Chat/i });
+        fireEvent.click(newChatBtn);
+
+        // 2. While New Chat is pending, user selects B (Deep Work Session)
+        const historyBtn = screen.getByTitle('Open Conversation History');
+        fireEvent.click(historyBtn);
+        const conv2Item = await screen.findByText('Deep Work Session');
+        fireEvent.click(conv2Item);
+
+        // Title immediately switches to Deep Work Session
+        expect(screen.getByText('Deep Work Session')).toBeInTheDocument();
+
+        // 3. New Chat resolves before B's messages resolve
+        await act(async () => {
+          resolveNewChat({
+            id: 'conv-new-created',
+            title: 'New Conversation Created Late',
+            character_id: 'aura',
+            owner_id: 'chris',
+            created_at: '2026-09-14T02:00:00Z',
+            updated_at: '2026-09-14T02:00:00Z',
+          });
+        });
+
+        // B must still remain the active title (not overridden by new chat)
+        expect(screen.getByText('Deep Work Session')).toBeInTheDocument();
+        expect(screen.queryByText('New Conversation Created Late')).not.toBeInTheDocument();
+
+        // 4. Now B messages resolve
+        await act(async () => {
+          resolveB({
+            items: [
+              {
+                id: 'msg-b1',
+                conversation_id: 'conv-2',
+                sender: 'assistant',
+                content: 'Message from Session B',
+                status: 'completed',
+                sequence_no: 1,
+                created_at: '2026-09-14T01:05:00Z',
+              },
+            ],
+            total: 1,
+          });
+        });
+
+        // B messages appear under B; no cross-conversation leakage
+        expect(screen.getByText('Deep Work Session')).toBeInTheDocument();
+        expect(screen.getByText('Message from Session B')).toBeInTheDocument();
+      });
+
+      it('New Chat pending -> user selects B -> New Chat fails (B remains active without clearing title or messages)', async () => {
+        vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus());
+
+        let rejectNewChat!: (err: any) => void;
+        const newChatPromise = new Promise((_, reject) => { rejectNewChat = reject; });
+        vi.mocked(api.createConversation).mockImplementation(() => newChatPromise as any);
+
+        vi.mocked(api.getMessages).mockImplementation(async (id) => {
+          if (id === 'conv-2') {
+            return {
+              items: [
+                {
+                  id: 'msg-b1',
+                  conversation_id: 'conv-2',
+                  sender: 'assistant',
+                  content: 'Message from Session B',
+                  status: 'completed',
+                  sequence_no: 1,
+                  created_at: '2026-09-14T01:05:00Z',
+                },
+              ],
+              total: 1,
+            };
+          }
+          return { items: [], total: 0 };
+        });
+
+        render(
+          <BackendProvider>
+            <AssistantView />
+          </BackendProvider>
+        );
+
+        await waitFor(() => {
+          expect(
+            screen.getByText('Daily Briefing & Local System Orchestration')
+          ).toBeInTheDocument();
+        });
+
+        // 1. User clicks New Chat
+        const newChatBtn = screen.getByRole('button', { name: /New Chat/i });
+        fireEvent.click(newChatBtn);
+
+        // 2. User selects B (Deep Work Session)
+        const historyBtn = screen.getByTitle('Open Conversation History');
+        fireEvent.click(historyBtn);
+        const conv2Item = await screen.findByText('Deep Work Session');
+        fireEvent.click(conv2Item);
+
+        await waitFor(() => {
+          expect(screen.getByText('Deep Work Session')).toBeInTheDocument();
+          expect(screen.getByText('Message from Session B')).toBeInTheDocument();
+        });
+
+        // 3. New Chat fails
+        await act(async () => {
+          rejectNewChat(new Error('Failed to create remote conversation on network'));
+        });
+
+        // Expected:
+        // - B remains active
+        // - B messages/title are not cleared or replaced with "No Conversation"
+        expect(screen.getByText('Deep Work Session')).toBeInTheDocument();
+        expect(screen.getByText('Message from Session B')).toBeInTheDocument();
+        expect(screen.queryByText('No Conversation')).not.toBeInTheDocument();
       });
     });
   });
