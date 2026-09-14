@@ -60,26 +60,26 @@
 ## 2. Key Code Artifacts Changed
 
 - **Ignore Policy**:
-  - [`.gitignore`](file:///d:/OtherProjects/AI-companion-project/.gitignore) (surgical `data/` -> `/data/`)
+  - [`.gitignore`](../../.gitignore) (surgical `data/` -> `/data/`)
 - **Domain Models & Repositories**:
-  - [`AppearanceModels.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/domain/model/AppearanceModels.kt)
-  - [`AppearanceRepository.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/domain/repository/AppearanceRepository.kt)
-  - [`FakeAppearanceRepository.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/data/fake/FakeAppearanceRepository.kt)
-  - [`SettingsModels.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/domain/model/SettingsModels.kt)
-  - [`ConnectionStatus.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/domain/model/ConnectionStatus.kt)
+  - [`AppearanceModels.kt`](../../android/app/src/main/java/com/example/domain/model/AppearanceModels.kt)
+  - [`AppearanceRepository.kt`](../../android/app/src/main/java/com/example/domain/repository/AppearanceRepository.kt)
+  - [`FakeAppearanceRepository.kt`](../../android/app/src/main/java/com/example/data/fake/FakeAppearanceRepository.kt)
+  - [`SettingsModels.kt`](../../android/app/src/main/java/com/example/domain/model/SettingsModels.kt)
+  - [`ConnectionStatus.kt`](../../android/app/src/main/java/com/example/domain/model/ConnectionStatus.kt)
 - **UI Shell & Themes**:
-  - [`Theme.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/ui/theme/Theme.kt)
-  - [`AppShell.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/ui/shell/AppShell.kt)
-  - [`AppTopBar.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/navigation/AppTopBar.kt)
-  - [`AppViewModel.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/ui/shell/AppViewModel.kt)
+  - [`Theme.kt`](../../android/app/src/main/java/com/example/ui/theme/Theme.kt)
+  - [`AppShell.kt`](../../android/app/src/main/java/com/example/ui/shell/AppShell.kt)
+  - [`AppTopBar.kt`](../../android/app/src/main/java/com/example/navigation/AppTopBar.kt)
+  - [`AppViewModel.kt`](../../android/app/src/main/java/com/example/ui/shell/AppViewModel.kt)
 - **Screens**:
-  - [`AssistantScreen.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/ui/screens/AssistantScreen.kt)
-  - [`AssistantHeader.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/ui/screens/assistant/AssistantHeader.kt)
-  - [`SettingsViewModel.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/ui/screens/settings/SettingsViewModel.kt)
-  - [`SettingsScreen.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/ui/screens/settings/SettingsScreen.kt)
-  - [`DesignSystemPreviewScreen.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/ui/preview/DesignSystemPreviewScreen.kt)
+  - [`AssistantScreen.kt`](../../android/app/src/main/java/com/example/ui/screens/AssistantScreen.kt)
+  - [`AssistantHeader.kt`](../../android/app/src/main/java/com/example/ui/screens/assistant/AssistantHeader.kt)
+  - [`SettingsViewModel.kt`](../../android/app/src/main/java/com/example/ui/screens/settings/SettingsViewModel.kt)
+  - [`SettingsScreen.kt`](../../android/app/src/main/java/com/example/ui/screens/settings/SettingsScreen.kt)
+  - [`DesignSystemPreviewScreen.kt`](../../android/app/src/main/java/com/example/ui/preview/DesignSystemPreviewScreen.kt)
 - **Tests**:
-  - [`SettingsUnitTest.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/test/java/com/example/SettingsUnitTest.kt)
+  - [`SettingsUnitTest.kt`](../../android/app/src/test/java/com/example/SettingsUnitTest.kt)
 
 ---
 

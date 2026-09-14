@@ -20,7 +20,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 ## [CURRENT EXECUTION STATE — POST-8A DOCUMENTATION HYGIENE PASS COMPLETED: AWAITING REVIEW]
 
-- Completed: Post-8A documentation hygiene reorganization pass (organized docs/02_Planning into phase-08, android, backend, templates; created navigation hubs at docs/README.md, docs/02_Planning/README.md, and docs/02_Planning/phase-08/README.md; repaired all docs links).
+- Completed: Post-8A documentation hygiene reorganization pass (organized docs/02_Planning into phase-08, android, backend, templates; created navigation hubs at docs/02_Planning/README.md and docs/02_Planning/phase-08/README.md; repaired all docs links).
 - Scope Guard: Documentation-only under docs/**. Zero code changes. Zero deletions. ProjectWorkflowStarterKit untouched.
 - Active Plan: `docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md`
 
