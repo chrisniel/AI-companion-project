@@ -18,12 +18,12 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — BATCH 8A.3b.3 FINAL TRUTHFULNESS CORRECTION COMPLETED: AWAITING REVIEW]
+## [CURRENT EXECUTION STATE — BATCH 8A.4 MOCK DEPRECATION ANNOTATIONS COMPLETED: AWAITING REVIEW]
 
-- Completed: Phase 8A.3b.3 Final Truthfulness Copy Corrections (removed fake connection state/filename in LogsView, removed overstated host claims in DevicesView, added negative and positive regression assertions).
-- Verification: 132 vitest passed (0 failed), 88 pytest passed (0 failed), 0 tsc errors, production build clean.
-- Scope Guard: Zero backend changes, zero Android changes, zero migrations, zero new APIs. No dead code purge.
-- Awaiting ChatGPT / User Review before marking [x] 8A.3b.3. Do NOT begin 8A.4.
+- Completed: Phase 8A.4 added exact `@deprecated -- mock data for test fixtures only` JSDoc header annotation across all 6 mock/*.ts files.
+- Verification: 132 vitest passed (0 failed), 0 tsc errors, production build clean.
+- Scope Guard: Zero backend changes, zero Android changes, zero migrations, zero new APIs. No deletion of mock files. No changes to mock data contents, imports, or exports.
+- Awaiting ChatGPT / User Review before marking [x] 8A.4. Do NOT begin Phase 8P.
 - Active Plan: `docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md`
 
 ---
@@ -38,7 +38,7 @@ Branch: `feature/phase8-ui-foundation`
 - [ ] 8A.3b: Production Truthfulness Sweep
   - [x] 8A.3b.1: Shell + Home
   - [x] 8A.3b.2: Tasks + Schedule
-  - [ ] 8A.3b.3: Characters + Devices + Logs + Settings
+  - [x] 8A.3b.3: Characters + Devices + Logs + Settings
 - [ ] 8A.4: mock/*.ts — @deprecated annotations on all file headers (do not delete yet)
 
 ---
