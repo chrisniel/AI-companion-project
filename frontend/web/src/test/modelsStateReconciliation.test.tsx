@@ -932,6 +932,36 @@ describe('Phase 4: Models Web UI State Reconciliation & Truthfulness', () => {
     expect(screen.getAllByText(/Description unavailable/i).length).toBeGreaterThan(0);
     expect(screen.queryByText(/Instruction-tuned transformer model/i)).toBeNull();
   });
+
+  it('25. ModelsView does not render fake providers, cloud routing, or mock models', async () => {
+    vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus({
+      active_model: 'qwen3-vl-4b-instruct',
+    }));
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Model Library')).toBeInTheDocument();
+    });
+
+    // Ensure ModelProvidersCard / mockModelProviders are NOT rendered
+    expect(screen.queryByText(/Ollama/i)).toBeNull();
+    expect(screen.queryByText(/Gemini API/i)).toBeNull();
+    expect(screen.queryByText(/DeepSeek-R1-Distill-Qwen-8B/i)).toBeNull();
+
+    // Ensure fake ProviderRoutingCard controls are NOT rendered
+    expect(screen.queryByText(/Local First/i)).toBeNull();
+    expect(screen.queryByText(/Cloud Fallback/i)).toBeNull();
+    expect(screen.queryByText(/Ask before cloud use/i)).toBeNull();
+
+    // Ensure fake AdvancedRuntimeSettings are NOT rendered
+    expect(screen.queryByText(/Technical Runtime Architecture/i)).toBeNull();
+    expect(screen.queryByText(/KV Cache Quantization/i)).toBeNull();
+  });
 });
 
 
