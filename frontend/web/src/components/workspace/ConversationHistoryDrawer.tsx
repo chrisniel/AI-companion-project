@@ -42,7 +42,7 @@ export const ConversationHistoryDrawer: React.FC<ConversationHistoryDrawerProps>
     (c) =>
       c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.snippet.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.model.toLowerCase().includes(searchQuery.toLowerCase())
+      (c.model ? c.model.toLowerCase().includes(searchQuery.toLowerCase()) : false)
   );
 
   return (
@@ -156,9 +156,11 @@ export const ConversationHistoryDrawer: React.FC<ConversationHistoryDrawerProps>
                       <Clock className="w-3 h-3 text-[var(--color-text-muted)]" />
                       {conv.date}
                     </span>
-                    <span className="text-[var(--color-accent)] font-semibold truncate max-w-[120px]">
-                      {conv.model.replace('-Instruct', '')}
-                    </span>
+                    {conv.model && (
+                      <span className="text-[var(--color-accent)] font-semibold truncate max-w-[120px]">
+                        {conv.model.replace('-Instruct', '')}
+                      </span>
+                    )}
                   </div>
                 </div>
               );

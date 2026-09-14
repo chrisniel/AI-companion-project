@@ -45,7 +45,7 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
   );
   const effectiveModelName = isOnline
     ? (activeModelEntry ? activeModelEntry.display_name : (activeModelId || 'No Model Loaded'))
-    : (currentModelName || 'Runtime Offline');
+    : 'Runtime Offline';
 
   const isModelSleeping = isOnline && modelStatus?.runtime_state === 'MODEL_SLEEPING';
   const isModelAwake = isOnline && modelStatus?.runtime_state === 'MODEL_READY';

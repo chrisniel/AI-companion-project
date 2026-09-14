@@ -56,15 +56,6 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
   const activeConversationIdRef = useRef(activeConversationId);
   activeConversationIdRef.current = activeConversationId;
 
-  // Authoritative runtime model identity
-  const activeModelId = modelStatus?.active_model || null;
-  const activeModelEntry = registry.find(
-    (m) => m.id === activeModelId || m.display_name === activeModelId
-  );
-  const effectiveModelName = isOnline
-    ? (activeModelEntry ? activeModelEntry.display_name : (activeModelId || 'No Model Loaded'))
-    : (currentModelName || 'Runtime Offline');
-
   const isModelSleeping = isOnline && modelStatus?.runtime_state === 'MODEL_SLEEPING';
   const isModelUnloaded = isOnline && (!modelStatus?.model_loaded || modelStatus?.runtime_state === 'MODEL_UNLOADED');
   const isRouterOffline = isOnline && !modelStatus?.router_running;
@@ -318,7 +309,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
       const hasValidConversation = conversations.some((c) => c.id === activeConversationId);
       if (!hasValidConversation) {
         setActiveConversationId('');
-        setConversationTitle('No Conversation (Offline)');
+        setConversationTitle('No Conversation');
         setMessages([]);
       }
     }
@@ -338,7 +329,6 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     title: c.title,
     date: new Date(c.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }),
     snippet: 'Local conversation session stored in SQLite.',
-    model: effectiveModelName,
     messagesCount: c.id === activeConversationId ? messages.length : undefined,
   }));
 

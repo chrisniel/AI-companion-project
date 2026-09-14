@@ -348,7 +348,7 @@ export interface ConversationHistoryItem {
   title: string;
   date: string;
   snippet: string;
-  model: string;
+  model?: string;
   messagesCount?: number;
 }
 

@@ -683,6 +683,8 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
           sender: 'user',
           content: 'Hello',
           created_at: '2026-09-14T00:01:00Z',
+          status: 'completed',
+          sequence_no: 1,
         },
         {
           id: 'm2',
@@ -690,6 +692,8 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
           sender: 'assistant',
           content: 'Hi there',
           created_at: '2026-09-14T00:02:00Z',
+          status: 'completed',
+          sequence_no: 2,
         },
       ],
       total: 2,
@@ -789,6 +793,7 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
       /No simulated overrides/,
       /Local context buffer: active/,
       /Search commands, models, tasks/,
+      /No Conversation \(Offline\)/,
     ];
 
     for (const relPath of batchFiles) {
@@ -799,5 +804,134 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
         expect(content).not.toMatch(pattern);
       }
     }
+  });
+
+  // 23. ConversationHistoryItem.model is optional and drawer omits the model label when absent
+  it('ConversationHistoryItem.model is optional and drawer omits the model label when absent', () => {
+    render(
+      <ConversationHistoryDrawer
+        isOpen={true}
+        onClose={() => {}}
+        activeConversationId="c1"
+        onSelectConversation={() => {}}
+        onNewConversation={() => {}}
+        conversations={[
+          {
+            id: 'c1',
+            title: 'No Model Session',
+            date: 'Sep 14',
+            snippet: 'Session without model metadata',
+            // model is deliberately absent
+          },
+          {
+            id: 'c2',
+            title: 'Session With Model',
+            date: 'Sep 14',
+            snippet: 'Session with explicit model metadata',
+            model: 'Mistral-7B-Instruct',
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByText('No Model Session')).toBeInTheDocument();
+    expect(screen.getByText('Session With Model')).toBeInTheDocument();
+    // c2 renders Mistral-7B (with -Instruct stripped)
+    expect(screen.getByText('Mistral-7B')).toBeInTheDocument();
+    // c1 has no model badge rendered
+    expect(screen.queryByText('Runtime Offline')).not.toBeInTheDocument();
+    expect(screen.queryByText('No Model Loaded')).not.toBeInTheDocument();
+  });
+
+  // 24. Historical conversation cards do not fabricate the currently active model from runtime state
+  it('historical conversation cards do not fabricate the currently active model from runtime state', async () => {
+    vi.mocked(api.checkHealth).mockResolvedValue({ status: 'healthy' });
+    vi.mocked(api.getModelStatus).mockResolvedValue(
+      createMockStatus({ active_model: 'qwen3-vl-2b-instruct' })
+    );
+    vi.mocked(api.listConversations).mockResolvedValue({
+      items: [
+        {
+          id: 'conv-hist-1',
+          title: 'Historical Conversation Alpha',
+          character_id: 'aura',
+          owner_id: 'chris',
+          created_at: '2026-09-14T00:00:00Z',
+          updated_at: '2026-09-14T00:00:00Z',
+        },
+      ],
+      total: 1,
+    });
+    vi.mocked(api.getMessages).mockResolvedValue({ items: [], total: 0 });
+
+    renderWithProviders(<AssistantView />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Historical Conversation Alpha')).toBeInTheDocument();
+    });
+
+    // Open drawer
+    fireEvent.click(screen.getByTitle('Open Conversation History'));
+
+    // The drawer is visible
+    expect(screen.getByText('Conversation History')).toBeInTheDocument();
+
+    // The active model appears in the main status bar
+    expect(screen.getByTitle('Qwen3-VL-2B-Instruct')).toBeInTheDocument();
+
+    // But inside the drawer card, neither Qwen3-VL nor Qwen3-VL-2B-Instruct is rendered as a badge
+    const drawerContainer = screen.getByText('Local conversation storage').closest('.relative');
+    expect(drawerContainer).toBeInTheDocument();
+    expect(drawerContainer?.textContent).not.toContain('Qwen3-VL');
+  });
+
+  // 25. Failed New Chat without an existing valid conversation sets title to "No Conversation", not "No Conversation (Offline)"
+  it('failed New Chat without an existing valid conversation sets title to "No Conversation", not "No Conversation (Offline)"', async () => {
+    vi.mocked(api.checkHealth).mockRejectedValue(new Error('Offline'));
+    vi.mocked(api.getModelStatus).mockRejectedValue(new Error('Offline'));
+    vi.mocked(api.listConversations).mockRejectedValue(new Error('Offline'));
+    vi.mocked(api.createConversation).mockRejectedValue(new Error('Backend unreachable'));
+
+    renderWithProviders(<AssistantView />);
+
+    await waitFor(() => {
+      expect(screen.getByText('No Conversation')).toBeInTheDocument();
+    });
+
+    const newChatBtn = screen.getByRole('button', { name: /New Chat/i });
+    fireEvent.click(newChatBtn);
+
+    // Title must remain strictly "No Conversation", NOT "No Conversation (Offline)"
+    await waitFor(() => {
+      expect(screen.getByText('No Conversation')).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/No Conversation \(Offline\)/i)).not.toBeInTheDocument();
+  });
+
+  // 26. Offline AssistantStatusBar displays "Runtime Offline" even when currentModelName contains a selected model ID
+  it('offline AssistantStatusBar displays "Runtime Offline" even when currentModelName contains a selected model ID', () => {
+    render(
+      <AssistantStatusBar
+        conversationTitle="Test Chat"
+        drawerConversationsCount={0}
+        onOpenHistory={() => {}}
+        activeCharacterName="Aura"
+        currentModelName="qwen2.5-7b-instruct-q4_k_m"
+        isOnline={false}
+        modelStatus={null}
+        registry={[]}
+        onNewConversation={() => {}}
+        assistantState="offline"
+      />
+    );
+
+    // Main model badge must display "Runtime Offline"
+    const modelBadge = screen.getByTitle('Runtime Offline');
+    expect(modelBadge).toBeInTheDocument();
+    expect(modelBadge.textContent).toBe('Runtime Offline');
+
+    // Must NOT display selected model name as though it were active runtime
+    expect(screen.queryByText('qwen2.5-7b-instruct-q4_k_m')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Selected: qwen2.5-7b-instruct/i)).not.toBeInTheDocument();
   });
 });
