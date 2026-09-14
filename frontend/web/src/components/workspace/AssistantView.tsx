@@ -328,7 +328,6 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     id: c.id,
     title: c.title,
     date: new Date(c.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }),
-    snippet: 'Local conversation session stored in SQLite.',
     messagesCount: c.id === activeConversationId ? messages.length : undefined,
   }));
 

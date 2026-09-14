@@ -18,11 +18,11 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — BATCH 8A.3b.1 MICRO-CORRECTION COMPLETED: AWAITING REVIEW]
+## [CURRENT EXECUTION STATE — BATCH 8A.3b.1 SNIPPET CORRECTION COMPLETED: AWAITING REVIEW]
 
-- Completed: Phase 8A.3b.1 final micro-corrections for Assistant conversation flow truthfulness (ConversationHistoryItem.model made optional and omitted from historical cards; failed New Chat without a valid conversation uses neutral "No Conversation"; offline AssistantStatusBar strictly displays "Runtime Offline" with no fabricated active model).
-- Verification: 78 vitest passed (0 failed), 88 pytest passed (0 failed), 0 tsc errors, clean vite production build, zero prohibited simulation strings across batch files.
-- Next Action: Await user / ChatGPT review on Batch 8A.3b.1 micro-corrections. Do NOT begin 8A.3b.2.
+- Completed: Phase 8A.3b.1 final snippet truthfulness correction (ConversationHistoryItem.snippet made optional and omitted from drawerConversations mapping; ConversationHistoryDrawer safely searches and conditionally renders snippet; zero production occurrences of fabricated SQLite snippet).
+- Verification: 79 vitest passed (0 failed), 88 pytest passed (0 failed), 0 tsc errors, clean vite production build, zero prohibited simulation strings or fabricated placeholders.
+- Next Action: Await user / ChatGPT review on Batch 8A.3b.1 snippet correction. Do NOT begin 8A.3b.2.
 - Active Plan: `docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md`
 
 ---

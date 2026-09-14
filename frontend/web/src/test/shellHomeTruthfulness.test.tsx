@@ -794,6 +794,7 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
       /Local context buffer: active/,
       /Search commands, models, tasks/,
       /No Conversation \(Offline\)/,
+      /Local conversation session stored in SQLite/,
     ];
 
     for (const relPath of batchFiles) {
@@ -883,6 +884,10 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
     const drawerContainer = screen.getByText('Local conversation storage').closest('.relative');
     expect(drawerContainer).toBeInTheDocument();
     expect(drawerContainer?.textContent).not.toContain('Qwen3-VL');
+
+    // Nor does it display the fabricated SQLite session snippet
+    expect(drawerContainer?.textContent).not.toContain('Local conversation session stored in SQLite.');
+    expect(screen.queryByText(/Local conversation session stored in SQLite/i)).not.toBeInTheDocument();
   });
 
   // 25. Failed New Chat without an existing valid conversation sets title to "No Conversation", not "No Conversation (Offline)"
@@ -933,5 +938,51 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
     // Must NOT display selected model name as though it were active runtime
     expect(screen.queryByText('qwen2.5-7b-instruct-q4_k_m')).not.toBeInTheDocument();
     expect(screen.queryByText(/Selected: qwen2.5-7b-instruct/i)).not.toBeInTheDocument();
+  });
+
+  // 27. ConversationHistoryItem.snippet is optional; drawer renders and searches correctly with or without snippet
+  it('ConversationHistoryItem.snippet is optional; drawer renders and searches correctly with or without snippet', () => {
+    render(
+      <ConversationHistoryDrawer
+        isOpen={true}
+        onClose={() => {}}
+        activeConversationId="c1"
+        onSelectConversation={() => {}}
+        onNewConversation={() => {}}
+        conversations={[
+          {
+            id: 'c1',
+            title: 'Session Alpha',
+            date: 'Sep 14',
+            // snippet is deliberately omitted
+          },
+          {
+            id: 'c2',
+            title: 'Session Beta',
+            date: 'Sep 14',
+            snippet: 'Real explicit preview snippet for beta session',
+          },
+        ]}
+      />
+    );
+
+    // c1 renders title and date without fabricated snippet
+    expect(screen.getByText('Session Alpha')).toBeInTheDocument();
+    // c2 renders its genuine snippet
+    expect(screen.getByText('Real explicit preview snippet for beta session')).toBeInTheDocument();
+    // Fabricated placeholder must never appear
+    expect(screen.queryByText(/Local conversation session stored in SQLite/i)).not.toBeInTheDocument();
+
+    // Search by snippet finds c2 safely even when c1 has no snippet
+    const searchInput = screen.getByPlaceholderText(/Search past conversations/i);
+    fireEvent.change(searchInput, { target: { value: 'beta session' } });
+
+    expect(screen.getByText('Session Beta')).toBeInTheDocument();
+    expect(screen.queryByText('Session Alpha')).not.toBeInTheDocument();
+
+    // Search query matching c1 title finds c1 without error
+    fireEvent.change(searchInput, { target: { value: 'Alpha' } });
+    expect(screen.getByText('Session Alpha')).toBeInTheDocument();
+    expect(screen.queryByText('Session Beta')).not.toBeInTheDocument();
   });
 });

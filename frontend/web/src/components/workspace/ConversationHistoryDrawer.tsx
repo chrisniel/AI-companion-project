@@ -41,7 +41,7 @@ export const ConversationHistoryDrawer: React.FC<ConversationHistoryDrawerProps>
   const filteredConversations = conversationList.filter(
     (c) =>
       c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.snippet.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (c.snippet ? c.snippet.toLowerCase().includes(searchQuery.toLowerCase()) : false) ||
       (c.model ? c.model.toLowerCase().includes(searchQuery.toLowerCase()) : false)
   );
 
@@ -147,9 +147,11 @@ export const ConversationHistoryDrawer: React.FC<ConversationHistoryDrawerProps>
                     )}
                   </div>
 
-                  <p className="text-[11px] text-[var(--color-text-secondary)] line-clamp-2 leading-relaxed">
-                    {conv.snippet}
-                  </p>
+                  {conv.snippet && (
+                    <p className="text-[11px] text-[var(--color-text-secondary)] line-clamp-2 leading-relaxed">
+                      {conv.snippet}
+                    </p>
+                  )}
 
                   <div className="flex items-center justify-between pt-1 border-t border-[var(--color-border-subtle)] text-[10px] font-mono text-[var(--color-text-muted)]">
                     <span className="flex items-center gap-1">
