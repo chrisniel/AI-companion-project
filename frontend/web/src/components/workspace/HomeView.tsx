@@ -61,7 +61,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const activeDisplayName = activeModelEntry?.display_name || backendActiveModelId;
 
   const runtimeState = isOnline ? (modelStatus?.runtime_state || 'Unknown') : 'Offline';
-  const appliedLayers = isOnline && modelStatus?.applied_gpu_layers !== undefined
+  const appliedLayers = isOnline && modelStatus?.applied_gpu_layers != null
     ? `${modelStatus.applied_gpu_layers} GPU layers [Applied]`
     : 'GPU layers: Unavailable';
 
@@ -235,7 +235,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   Runtime / Provider
                 </span>
                 <span className="font-bold text-[var(--color-text-primary)] mt-0.5 block truncate">
-                  {isOnline ? (modelStatus?.provider || 'llama.cpp') : 'Unavailable'}
+                  {isOnline && modelStatus?.provider?.trim() ? modelStatus.provider : 'Unavailable'}
                 </span>
                 <span className="text-[10px] text-[var(--color-text-secondary)] truncate block">
                   {appliedLayers}
@@ -247,7 +247,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   Execution Mode
                 </span>
                 <span className="font-bold text-[var(--color-text-primary)] mt-0.5 block flex items-center gap-1 text-emerald-500">
-                  <ShieldCheck className="w-3.5 h-3.5" /> Local Inference
+                  {isOnline ? (
+                    <>
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Core Runtime (:8000)</span>
+                    </>
+                  ) : (
+                    <span className="text-[var(--color-text-muted)]">Offline</span>
+                  )}
                 </span>
                 <span className="text-[10px] text-[var(--color-text-secondary)]">
                   {isOnline ? 'Operating on port 8000' : 'Core offline'}

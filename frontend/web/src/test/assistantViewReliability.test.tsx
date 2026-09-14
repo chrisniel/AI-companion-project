@@ -228,8 +228,8 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
         expect(screen.getByText('Qwen3-VL-2B-Instruct')).toBeInTheDocument();
       });
 
-      // Truthful runtime badge
-      expect(screen.getByText('llama.cpp (BALANCED)')).toBeInTheDocument();
+      // Truthful runtime badge (provider from backend truth)
+      expect(screen.getByText('llama.cpp')).toBeInTheDocument();
 
       // No fake CUDA claim
       expect(screen.queryByText('llama.cpp (CUDA)')).not.toBeInTheDocument();

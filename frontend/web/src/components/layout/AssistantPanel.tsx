@@ -15,8 +15,6 @@ export interface AssistantPanelProps {
   mode: AssistantPanelMode;
   onSetMode: (mode: AssistantPanelMode) => void;
   onOpenAssistant?: () => void;
-  selectedPersonaId?: string;
-  onSelectPersona?: (id: string) => void;
   assistantState?: AssistantState;
   onSetAssistantState?: (state: AssistantState) => void;
 }
@@ -39,7 +37,7 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({
   const activeModelDisplay = activeRegistryEntry?.display_name || activeModelId || (isOnline ? 'No Model Loaded' : 'Unavailable');
 
   const runtimeState = isOnline ? (modelStatus?.runtime_state || 'Unknown') : 'Offline';
-  const appliedLayers = isOnline && modelStatus?.applied_gpu_layers !== undefined
+  const appliedLayers = isOnline && modelStatus?.applied_gpu_layers != null
     ? `${modelStatus.applied_gpu_layers} [Applied]`
     : 'Unavailable';
 

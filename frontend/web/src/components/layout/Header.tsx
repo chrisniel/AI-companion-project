@@ -44,8 +44,6 @@ export interface HeaderProps {
   onCycleAssistantPanelMode: () => void;
   currentModelId?: string;
   onSelectModel?: (modelId: string) => void;
-  activeCharacterId?: string;
-  onSelectCharacter?: (charId: string) => void;
   performanceProfile?: PerformanceProfile;
   onChangePerformanceProfile?: (profile: PerformanceProfile) => void;
   userName?: string;
@@ -61,10 +59,8 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleSidebarCollapse,
   assistantPanelMode,
   onCycleAssistantPanelMode,
-  currentModelId = 'qwen3-vl-2b-instruct',
+  currentModelId,
   onSelectModel,
-  activeCharacterId = 'p-1',
-  onSelectCharacter,
   performanceProfile = 'balanced',
   onChangePerformanceProfile,
   userName = 'Local User',

@@ -4,7 +4,6 @@ import {
   Cpu,
   ShieldCheck,
   AlertCircle,
-  Globe,
   Plus,
   AlertTriangle,
 } from 'lucide-react';
@@ -23,8 +22,6 @@ export interface AssistantStatusBarProps {
   isOnline: boolean;
   modelStatus: ModelStatusResponse | null | undefined;
   registry: RegistryEntry[];
-  webSearchMode: 'airgapped' | 'web';
-  onToggleWebSearch: () => void;
   onNewConversation: () => void;
   assistantState: AssistantState;
 }
@@ -38,8 +35,6 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
   isOnline,
   modelStatus,
   registry,
-  webSearchMode,
-  onToggleWebSearch,
   onNewConversation,
   assistantState,
 }) => {
@@ -75,12 +70,10 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
     currentModelName !== activeModelEntry?.display_name
   );
 
-  // Truthful runtime badge label (no fake CUDA)
-  const providerLabel = isOnline
-    ? (modelStatus?.applied_profile
-        ? `llama.cpp (${modelStatus.applied_profile.toUpperCase()})`
-        : (modelStatus?.provider || 'llama.cpp'))
-    : 'Runtime Offline';
+  // Truthful runtime badge label (backend truth only, no hardcoded llama.cpp)
+  const providerLabel = isOnline && modelStatus?.provider?.trim()
+    ? modelStatus.provider
+    : 'Unavailable';
 
   // Assistant State Status Label (authoritative runtime truth from client/SSE state)
   const getAssistantStateDisplay = () => {
@@ -120,7 +113,7 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
       case 'offline':
         return { label: 'Offline', color: 'text-[var(--color-text-muted)]', desc: 'Local engine disconnected' };
       case 'error':
-        return { label: 'Error / OOM Notice', color: 'text-rose-500', desc: 'Context or VRAM overflow notice' };
+        return { label: 'Error', color: 'text-rose-500', desc: 'Runtime error encountered' };
       default:
         return { label: 'Idle', color: 'text-emerald-500', desc: 'Ready' };
     }
@@ -152,7 +145,7 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
               </h1>
             </div>
             <p className="text-xs text-[var(--color-text-secondary)] font-mono truncate">
-              Active Persona: <strong className="text-[var(--color-text-primary)]">{activeCharacterName}</strong> • Low-Latency Loopback
+              Active Persona: <strong className="text-[var(--color-text-primary)]">{activeCharacterName}</strong>
             </p>
           </div>
         </div>
@@ -218,30 +211,10 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
             ) : (
               <>
                 <AlertCircle className="w-3.5 h-3.5 text-[var(--color-text-muted)]" />
-                <span className="text-[var(--color-text-muted)]">Core Offline (Demo)</span>
+                <span className="text-[var(--color-text-muted)]">Core Offline</span>
               </>
             )}
           </div>
-
-          {/* Search / Web Mode Indicator */}
-          <button
-            type="button"
-            onClick={onToggleWebSearch}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-mono transition-all ${
-              webSearchMode === 'airgapped'
-                ? 'surface-raised border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
-                : 'bg-accent-gradient text-white border-[var(--color-accent)] shadow-sm'
-            }`}
-            title="Click to toggle between airgapped local docs and simulated web search"
-          >
-            <Globe className="w-3.5 h-3.5" />
-            <span className="hidden lg:inline">
-              {webSearchMode === 'airgapped' ? 'Search: Airgapped Docs' : 'Search: Web Simulated'}
-            </span>
-            <span className="lg:hidden">
-              {webSearchMode === 'airgapped' ? 'Airgap Docs' : 'Web Mode'}
-            </span>
-          </button>
 
           {/* New Conversation Action */}
           <NeumorphicButton

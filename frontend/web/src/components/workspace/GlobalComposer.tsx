@@ -1,29 +1,24 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Paperclip,
   Mic,
   Sparkles,
-  CornerDownLeft,
   ChevronUp,
 } from 'lucide-react';
 
 export interface GlobalComposerProps {
   activeCharacterName?: string;
   onOpenAssistant?: () => void;
-  onSendMessage?: (content: string) => void;
 }
 
 export const GlobalComposer: React.FC<GlobalComposerProps> = ({
   activeCharacterName = 'Assistant',
   onOpenAssistant,
 }) => {
-  const [inputVal, setInputVal] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Global shortcut: press "/" to focus launcher when not typing in another input
+  // Global shortcut: press "/" to open Assistant directly when not typing in another input
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
@@ -31,18 +26,16 @@ export const GlobalComposer: React.FC<GlobalComposerProps> = ({
         !['INPUT', 'TEXTAREA'].includes((document.activeElement as HTMLElement)?.tagName)
       ) {
         e.preventDefault();
-        setIsFocused(true);
-        inputRef.current?.focus();
+        onOpenAssistant?.();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [onOpenAssistant]);
 
-  const isExpanded = isFocused || isHovered || inputVal.trim().length > 0;
+  const isExpanded = isFocused || isHovered;
 
   const handleLaunch = () => {
-    setInputVal('');
     setIsFocused(false);
     onOpenAssistant?.();
   };
@@ -71,7 +64,7 @@ export const GlobalComposer: React.FC<GlobalComposerProps> = ({
         </div>
       ) : (
         /* Floating Soft Glass Launcher Card */
-        <div className="p-2 sm:p-2.5 rounded-2xl glass-panel-elevated border border-[var(--color-surface-glass-border)] shadow-2xl pointer-events-auto transition-all duration-200 focus-within:border-[var(--color-accent)]/50">
+        <div className="p-2 sm:p-2.5 rounded-2xl glass-panel-elevated border border-[var(--color-surface-glass-border)] shadow-2xl pointer-events-auto transition-all duration-200">
           <div className="flex items-center gap-2">
             {/* 1. Attachment Button (Disabled - Planned Phase 8B) */}
             <button
@@ -83,28 +76,15 @@ export const GlobalComposer: React.FC<GlobalComposerProps> = ({
               <Paperclip className="w-4 h-4" />
             </button>
 
-            {/* 2. Text Input Area */}
-            <div className="relative flex-1 flex items-center min-w-0">
-              <input
-                ref={inputRef}
-                type="text"
-                value={inputVal}
-                onFocus={() => setIsFocused(true)}
-                onBlur={() => setIsFocused(false)}
-                onChange={(e) => setInputVal(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleLaunch();
-                  } else if (e.key === 'Escape') {
-                    inputRef.current?.blur();
-                    setIsFocused(false);
-                  }
-                }}
-                placeholder={`Ask ${activeCharacterName} (Press Enter to open Assistant)...`}
-                className="w-full bg-transparent px-2.5 py-1.5 text-sm text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none"
-              />
-            </div>
+            {/* 2. Launcher Action Area (Non-editable trigger button) */}
+            <button
+              type="button"
+              onClick={handleLaunch}
+              className="flex-1 text-left px-3 py-2 rounded-xl surface-recessed border border-[var(--color-border-subtle)] text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-accent)]/40 transition-all cursor-pointer truncate"
+              title="Click to open Assistant workspace"
+            >
+              Ask {activeCharacterName} (Opens Assistant Workspace)...
+            </button>
 
             {/* 3. Microphone Button (Disabled - Voice input not connected) */}
             <button
@@ -135,7 +115,7 @@ export const GlobalComposer: React.FC<GlobalComposerProps> = ({
             </span>
 
             <span className="hidden sm:inline font-mono">
-              Press Enter <CornerDownLeft className="inline w-2.5 h-2.5 -mt-0.5" /> to open conversation workspace
+              Press / to open conversation workspace
             </span>
           </div>
         </div>

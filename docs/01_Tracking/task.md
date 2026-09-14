@@ -18,11 +18,11 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — BATCH 8A.3b.1 COMPLETED: AWAITING REVIEW]
+## [CURRENT EXECUTION STATE — BATCH 8A.3b.1 CORRECTIONS COMPLETED: AWAITING REVIEW]
 
-- Completed: Phase 8A.3b.1 — Shell + Home truthfulness sweep across App.tsx, Header.tsx, AssistantPanel.tsx, GlobalComposer.tsx, HomeView.tsx, and AssistantView.tsx.
-- Verification: 60 vitest passed (0 failed), 88 pytest passed (0 failed), 0 tsc errors, clean vite production build, zero mock imports in batch files, zero prohibited fabricated strings.
-- Next Action: Await user / ChatGPT review on Batch 8A.3b.1. Do NOT begin 8A.3b.2.
+- Completed: Corrected four truthfulness review items for Phase 8A.3b.1 across AssistantStatusBar.tsx, AssistantView.tsx, GlobalComposer.tsx, HomeView.tsx, AssistantPanel.tsx, Header.tsx, and App.tsx.
+- Verification: 68 vitest passed (0 failed), 88 pytest passed (0 failed), 0 tsc errors, clean vite production build, zero prohibited simulation strings across batch files.
+- Next Action: Await user / ChatGPT review on Batch 8A.3b.1 corrections. Do NOT begin 8A.3b.2.
 - Active Plan: `docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md`
 
 ---

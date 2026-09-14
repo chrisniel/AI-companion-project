@@ -227,8 +227,6 @@ function MainApp() {
           onCycleAssistantPanelMode={handleToggleAssistantPanel}
           currentModelId={selectedModelId ?? undefined}
           onSelectModel={setSelectedModelId}
-          activeCharacterId={activeCharacterId}
-          onSelectCharacter={setActiveCharacterId}
           performanceProfile={performanceProfile}
           onChangePerformanceProfile={setPerformanceProfile}
           userName="Local User"
@@ -275,8 +273,6 @@ function MainApp() {
             mode={assistantPanelMode}
             onSetMode={setAssistantPanelMode}
             onOpenAssistant={() => setActiveSection('assistant')}
-            selectedPersonaId={activeCharacterId}
-            onSelectPersona={setActiveCharacterId}
             assistantState={assistantState}
             onSetAssistantState={setAssistantState}
           />

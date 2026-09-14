@@ -49,7 +49,6 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
   const [conversationTitle, setConversationTitle] = useState(
     'Daily Briefing & Local System Orchestration'
   );
-  const [webSearchMode, setWebSearchMode] = useState<'airgapped' | 'web'>('airgapped');
   const [inputPrompt, setInputPrompt] = useState('');
   const [attachments, setAttachments] = useState<string[]>([]);
 
@@ -99,14 +98,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
         }));
         setMessages(mapped);
       } else {
-        setMessages([
-          {
-            id: `ast-${Date.now()}`,
-            type: 'assistant',
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            content: `Ready for this session, ${userName}. What would you like to examine or execute?`,
-          },
-        ]);
+        setMessages([]);
       }
     } catch (err) {
       console.warn('Unable to load conversation messages:', err);
@@ -302,40 +294,18 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
       setActiveConversationId(created.id);
       setConversationTitle(created.title);
       setAssistantState('idle');
-      setMessages([
-        {
-          id: `sys-${Date.now()}`,
-          type: 'system',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          content: `New session initialized. Context buffer cleared. Model: ${effectiveModelName}.`,
-        },
-        {
-          id: `ast-${Date.now()}`,
-          type: 'assistant',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          content: `Ready for a new session, ${userName}. What would you like to examine or execute?`,
-        },
-      ]);
+      setMessages([]);
     } catch (err) {
       console.warn('Failed to create remote conversation:', err);
-      const fallbackId = `conv-${Date.now()}`;
-      setActiveConversationId(fallbackId);
-      setConversationTitle('Local Session (Offline)');
       setAssistantState('idle');
-      setMessages([
-        {
-          id: `sys-${Date.now()}`,
-          type: 'system',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          content: `Local session created offline. Model: ${effectiveModelName}.`,
-        },
-        {
-          id: `ast-${Date.now()}`,
-          type: 'assistant',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          content: `Ready for a new session, ${userName}. Note: Server is offline, so messages will not persist to SQLite until reconnected.`,
-        },
-      ]);
+      // Preserve existing valid conversation state if one exists;
+      // otherwise show an appropriate empty/offline state outside message history.
+      const hasValidConversation = conversations.some((c) => c.id === activeConversationId);
+      if (!hasValidConversation) {
+        setActiveConversationId('');
+        setConversationTitle('No Conversation (Offline)');
+        setMessages([]);
+      }
     }
   };
 
@@ -369,8 +339,6 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
         isOnline={isOnline}
         modelStatus={modelStatus}
         registry={registry}
-        webSearchMode={webSearchMode}
-        onToggleWebSearch={() => setWebSearchMode(webSearchMode === 'airgapped' ? 'web' : 'airgapped')}
         onNewConversation={handleNewConversation}
         assistantState={assistantState}
       />
