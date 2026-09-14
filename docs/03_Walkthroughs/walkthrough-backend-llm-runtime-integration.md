@@ -45,7 +45,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 - `backend/tests/test_llm.py` — [NEW] Test suite for status, completion, SSE streaming, and auth.
 - `CHANGELOG.md` — Documented Pass 6 under `## Unreleased`.
 - `docs/01_Tracking/task.md` — Updated active tracking state.
-- `docs/02_Planning/plan-backend-llm-runtime-integration.md` — Feature implementation plan.
+- `docs/02_Planning/backend/plan-backend-llm-runtime-integration.md` — Feature implementation plan.
 
 ---
 

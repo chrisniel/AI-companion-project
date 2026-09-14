@@ -5,7 +5,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - Status: Completed (Verified on Physical Device & Robolectric Suite)
 - Target: Full-screen horizontal swiping across 5 primary tabs, directional sliding navigation, liquid glass transition depth, and soft glass depth parity (eliminating harsh selected nav border glow).
-- Scope Guard: Approved plan in docs/02_Planning/plan-android-v1.2-fluid-transitions-and-pure-neumorphism.md.
+- Scope Guard: Approved plan in docs/02_Planning/android/plan-android-v1.2-fluid-transitions-and-pure-neumorphism.md.
 
 ## Completed Checklist
 

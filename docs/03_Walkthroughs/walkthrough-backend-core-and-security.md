@@ -20,45 +20,45 @@ Key deliverables include:
 ## 2. Files Changed
 
 ### Backend Core & Configuration
-- [`backend/pyproject.toml`](file:///d:/OtherProjects/AI-companion-project/backend/pyproject.toml): Project metadata, packaging, and dependency definitions.
-- [`backend/requirements.txt`](file:///d:/OtherProjects/AI-companion-project/backend/requirements.txt): Pinned backend runtime and development dependencies.
-- [`backend/.gitignore`](file:///d:/OtherProjects/AI-companion-project/backend/.gitignore): Security rules protecting `.env`, `.venv`, and `data/*.db`.
-- [`backend/.env.example`](file:///d:/OtherProjects/AI-companion-project/backend/.env.example): Sanitized environment template for local configuration.
-- [`backend/README.md`](file:///d:/OtherProjects/AI-companion-project/backend/README.md): Quickstart setup, startup, and testing guide.
-- [`backend/app/main.py`](file:///d:/OtherProjects/AI-companion-project/backend/app/main.py): FastAPI app factory, lifespan startup, CORS whitelist, tracing middleware, and error handlers.
-- [`backend/app/core/config.py`](file:///d:/OtherProjects/AI-companion-project/backend/app/core/config.py): Pydantic Settings, auto-pairing key generation, and CORS parser.
-- [`backend/app/core/security.py`](file:///d:/OtherProjects/AI-companion-project/backend/app/core/security.py): Constant-time comparison and `verify_token` dependency.
-- [`backend/app/core/errors.py`](file:///d:/OtherProjects/AI-companion-project/backend/app/core/errors.py): Custom exception hierarchy and standardized JSON error envelope.
-- [`backend/app/core/logging.py`](file:///d:/OtherProjects/AI-companion-project/backend/app/core/logging.py): Structured console logger with automatic token redaction.
+- [`backend/pyproject.toml`](../../backend/pyproject.toml): Project metadata, packaging, and dependency definitions.
+- [`backend/requirements.txt`](../../backend/requirements.txt): Pinned backend runtime and development dependencies.
+- [`backend/.gitignore`](../../backend/.gitignore): Security rules protecting `.env`, `.venv`, and `data/*.db`.
+- [`backend/.env.example`](../../backend/.env.example): Sanitized environment template for local configuration.
+- [`backend/README.md`](../../backend/README.md): Quickstart setup, startup, and testing guide.
+- [`backend/app/main.py`](../../backend/app/main.py): FastAPI app factory, lifespan startup, CORS whitelist, tracing middleware, and error handlers.
+- [`backend/app/core/config.py`](../../backend/app/core/config.py): Pydantic Settings, auto-pairing key generation, and CORS parser.
+- [`backend/app/core/security.py`](../../backend/app/core/security.py): Constant-time comparison and `verify_token` dependency.
+- [`backend/app/core/errors.py`](../../backend/app/core/errors.py): Custom exception hierarchy and standardized JSON error envelope.
+- [`backend/app/core/logging.py`](../../backend/app/core/logging.py): Structured console logger with automatic token redaction.
 
 ### Database & Models
-- [`backend/app/db/session.py`](file:///d:/OtherProjects/AI-companion-project/backend/app/db/session.py): Async SQLAlchemy engine, WAL mode listener, and `get_db` generator.
-- [`backend/app/db/base.py`](file:///d:/OtherProjects/AI-companion-project/backend/app/db/base.py): Model aggregator for Alembic schema discovery.
-- [`backend/app/models/base.py`](file:///d:/OtherProjects/AI-companion-project/backend/app/models/base.py): Mixins for UUID primary keys, UTC timestamps, and owner isolation.
-- [`backend/app/models/task.py`](file:///d:/OtherProjects/AI-companion-project/backend/app/models/task.py): Task SQLAlchemy 2.0 ORM entity.
+- [`backend/app/db/session.py`](../../backend/app/db/session.py): Async SQLAlchemy engine, WAL mode listener, and `get_db` generator.
+- [`backend/app/db/base.py`](../../backend/app/db/base.py): Model aggregator for Alembic schema discovery.
+- [`backend/app/models/base.py`](../../backend/app/models/base.py): Mixins for UUID primary keys, UTC timestamps, and owner isolation.
+- [`backend/app/models/task.py`](../../backend/app/models/task.py): Task SQLAlchemy 2.0 ORM entity.
 
 ### Schemas & Endpoints
-- [`backend/app/schemas/common.py`](file:///d:/OtherProjects/AI-companion-project/backend/app/schemas/common.py): Strict `BaseSchema` (`extra="forbid"`), error detail models, and envelopes.
-- [`backend/app/schemas/health.py`](file:///d:/OtherProjects/AI-companion-project/backend/app/schemas/health.py): Public health response and system telemetry schemas.
-- [`backend/app/schemas/auth.py`](file:///d:/OtherProjects/AI-companion-project/backend/app/schemas/auth.py): Pairing token verification schema.
-- [`backend/app/schemas/task.py`](file:///d:/OtherProjects/AI-companion-project/backend/app/schemas/task.py): Task request/response models aligned with Android and Web.
-- [`backend/app/api/deps.py`](file:///d:/OtherProjects/AI-companion-project/backend/app/api/deps.py): Re-exported dependencies and `get_current_owner`.
-- [`backend/app/api/v1/endpoints/health.py`](file:///d:/OtherProjects/AI-companion-project/backend/app/api/v1/endpoints/health.py): Liveness probe and host telemetry endpoints.
-- [`backend/app/api/v1/endpoints/auth.py`](file:///d:/OtherProjects/AI-companion-project/backend/app/api/v1/endpoints/auth.py): Token verification endpoint.
-- [`backend/app/api/v1/endpoints/tasks.py`](file:///d:/OtherProjects/AI-companion-project/backend/app/api/v1/endpoints/tasks.py): Full CRUD task endpoints with status/priority filtering.
-- [`backend/app/api/v1/router.py`](file:///d:/OtherProjects/AI-companion-project/backend/app/api/v1/router.py): V1 router aggregator.
+- [`backend/app/schemas/common.py`](../../backend/app/schemas/common.py): Strict `BaseSchema` (`extra="forbid"`), error detail models, and envelopes.
+- [`backend/app/schemas/health.py`](../../backend/app/schemas/health.py): Public health response and system telemetry schemas.
+- [`backend/app/schemas/auth.py`](../../backend/app/schemas/auth.py): Pairing token verification schema.
+- [`backend/app/schemas/task.py`](../../backend/app/schemas/task.py): Task request/response models aligned with Android and Web.
+- [`backend/app/api/deps.py`](../../backend/app/api/deps.py): Re-exported dependencies and `get_current_owner`.
+- [`backend/app/api/v1/endpoints/health.py`](../../backend/app/api/v1/endpoints/health.py): Liveness probe and host telemetry endpoints.
+- [`backend/app/api/v1/endpoints/auth.py`](../../backend/app/api/v1/endpoints/auth.py): Token verification endpoint.
+- [`backend/app/api/v1/endpoints/tasks.py`](../../backend/app/api/v1/endpoints/tasks.py): Full CRUD task endpoints with status/priority filtering.
+- [`backend/app/api/v1/router.py`](../../backend/app/api/v1/router.py): V1 router aggregator.
 
 ### Migrations & Contracts
-- [`backend/alembic.ini`](file:///d:/OtherProjects/AI-companion-project/backend/alembic.ini): Alembic migration configuration.
-- [`backend/migrations/env.py`](file:///d:/OtherProjects/AI-companion-project/backend/migrations/env.py): Async SQLite migration runner.
-- [`backend/migrations/versions/001_initial_tasks_schema.py`](file:///d:/OtherProjects/AI-companion-project/backend/migrations/versions/001_initial_tasks_schema.py): Initial DDL migration script.
-- [`contracts/openapi/openapi.json`](file:///d:/OtherProjects/AI-companion-project/contracts/openapi/openapi.json): Exported OpenAPI 3.1 specification.
+- [`backend/alembic.ini`](../../backend/alembic.ini): Alembic migration configuration.
+- [`backend/migrations/env.py`](../../backend/migrations/env.py): Async SQLite migration runner.
+- [`backend/migrations/versions/001_initial_tasks_schema.py`](../../backend/migrations/versions/001_initial_tasks_schema.py): Initial DDL migration script.
+- [`contracts/openapi/openapi.json`](../../contracts/openapi/openapi.json): Exported OpenAPI 3.1 specification.
 
 ### Automated Tests
-- [`backend/tests/conftest.py`](file:///d:/OtherProjects/AI-companion-project/backend/tests/conftest.py): In-memory SQLite async fixtures and test client setup.
-- [`backend/tests/test_health.py`](file:///d:/OtherProjects/AI-companion-project/backend/tests/test_health.py): Health check and telemetry tests.
-- [`backend/tests/test_auth.py`](file:///d:/OtherProjects/AI-companion-project/backend/tests/test_auth.py): Security, header handling, and 401 rejection tests.
-- [`backend/tests/test_tasks.py`](file:///d:/OtherProjects/AI-companion-project/backend/tests/test_tasks.py): Tasks CRUD, filtering, and mass-assignment protection tests.
+- [`backend/tests/conftest.py`](../../backend/tests/conftest.py): In-memory SQLite async fixtures and test client setup.
+- [`backend/tests/test_health.py`](../../backend/tests/test_health.py): Health check and telemetry tests.
+- [`backend/tests/test_auth.py`](../../backend/tests/test_auth.py): Security, header handling, and 401 rejection tests.
+- [`backend/tests/test_tasks.py`](../../backend/tests/test_tasks.py): Tasks CRUD, filtering, and mass-assignment protection tests.
 
 ---
 

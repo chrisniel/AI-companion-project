@@ -1,8 +1,8 @@
 # Walkthrough: Android V1.1B UX & Visual Refinement
 
 **Status**: Complete & Verified on Physical Device (Infinix X6820 / Android 13)
-**Approved Plan**: [plan-android-v1.1b-ux-and-visual-refinement.md](file:///d:/OtherProjects/AI-companion-project/docs/02_Planning/plan-android-v1.1b-ux-and-visual-refinement.md)
-**Tracking**: [task.md](file:///d:/OtherProjects/AI-companion-project/docs/01_Tracking/task.md)
+**Approved Plan**: [plan-android-v1.1b-ux-and-visual-refinement.md](../02_Planning/android/plan-android-v1.1b-ux-and-visual-refinement.md)
+**Tracking**: [task.md](../01_Tracking/task.md)
 
 ---
 
@@ -41,17 +41,17 @@ This delivery resolves the visual depth gap and transition latency identified be
 ### Home Screen & Center Floating Action
 Tactile dual-shadow depth, elevated center Assistant button, and clean top bar without theme toggle clutter:
 
-![Home Screen - Center Floating Action](file:///C:/Users/Admin/.gemini/antigravity-ide/brain/0ab4b7a6-2716-409d-a2b0-894be8dd17d1/screen_home.png)
+*(Local verification screenshot was not committed to the repository.)*
 
 ### Assistant Workspace & Compact Events
 Active center action indicator, clean top bar, and compact expandable system warning pill:
 
-![Assistant Workspace - Compact Events](file:///C:/Users/Admin/.gemini/antigravity-ide/brain/0ab4b7a6-2716-409d-a2b0-894be8dd17d1/screen_assistant.png)
+*(Local verification screenshot was not committed to the repository.)*
 
 ### Settings - Sticky Tabs & Appearance Parity
 Sticky section tabs pinned at top, Light/Dark presets, and user-adjustable contrast scrim & brightness sliders:
 
-![Settings Screen - Sticky Tabs and Sliders](file:///C:/Users/Admin/.gemini/antigravity-ide/brain/0ab4b7a6-2716-409d-a2b0-894be8dd17d1/screen_appearance.png)
+*(Local verification screenshot was not committed to the repository.)*
 
 ---
 
@@ -88,17 +88,17 @@ git diff --check
 
 ## 4. Key Files Modified
 
-- [SoftNeumorphic.kt](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/ui/components/SoftNeumorphic.kt): Zero-allocation dual-shadow and recessed well modifiers.
-- [SoftGlassCard.kt](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/ui/components/SoftGlassCard.kt): Soft glass card and well neumorphic integration.
-- [SoftButtons.kt](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/ui/components/SoftButtons.kt): Tactile button depth.
-- [SoftInputs.kt](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/ui/components/SoftInputs.kt): Recessed well inputs.
-- [AppBottomBar.kt](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/navigation/AppBottomBar.kt): Floating center Assistant action and 120ms indicator feedback.
-- [NavRoutes.kt](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/navigation/NavRoutes.kt): Tab reordering to `Home, Tasks, Assistant, Health, More`.
-- [AppShell.kt](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/ui/shell/AppShell.kt): 120ms crossfades in NavHost, scrim opacity and brightness pass-through.
-- [AppTopBar.kt](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/navigation/AppTopBar.kt): Theme toggle hidden by default.
-- [AssistantHeader.kt](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/ui/screens/assistant/AssistantHeader.kt): Theme toggle hidden by default.
-- [AssistantScreen.kt](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/ui/screens/AssistantScreen.kt): Clean-state prompt starter cards.
-- [AssistantMessageComponents.kt](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/ui/screens/assistant/AssistantMessageComponents.kt): Compact expandable pills for tools, memory, warnings.
-- [AppearanceModels.kt](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/domain/model/AppearanceModels.kt): Web parity light/dark presets, scrim and brightness fields.
-- [SettingsScreen.kt](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/ui/screens/settings/SettingsScreen.kt): Sticky tabs, scroll-to-top, appearance presets, scrim and brightness sliders.
-- [SettingsViewModel.kt](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/ui/screens/settings/SettingsViewModel.kt): Scrim and brightness state handling.
+- [SoftNeumorphic.kt](../../android/app/src/main/java/com/example/ui/components/SoftNeumorphic.kt): Zero-allocation dual-shadow and recessed well modifiers.
+- [SoftGlassCard.kt](../../android/app/src/main/java/com/example/ui/components/SoftGlassCard.kt): Soft glass card and well neumorphic integration.
+- [SoftButtons.kt](../../android/app/src/main/java/com/example/ui/components/SoftButtons.kt): Tactile button depth.
+- [SoftInputs.kt](../../android/app/src/main/java/com/example/ui/components/SoftInputs.kt): Recessed well inputs.
+- [AppBottomBar.kt](../../android/app/src/main/java/com/example/navigation/AppBottomBar.kt): Floating center Assistant action and 120ms indicator feedback.
+- [NavRoutes.kt](../../android/app/src/main/java/com/example/navigation/NavRoutes.kt): Tab reordering to `Home, Tasks, Assistant, Health, More`.
+- [AppShell.kt](../../android/app/src/main/java/com/example/ui/shell/AppShell.kt): 120ms crossfades in NavHost, scrim opacity and brightness pass-through.
+- [AppTopBar.kt](../../android/app/src/main/java/com/example/navigation/AppTopBar.kt): Theme toggle hidden by default.
+- [AssistantHeader.kt](../../android/app/src/main/java/com/example/ui/screens/assistant/AssistantHeader.kt): Theme toggle hidden by default.
+- [AssistantScreen.kt](../../android/app/src/main/java/com/example/ui/screens/AssistantScreen.kt): Clean-state prompt starter cards.
+- [AssistantMessageComponents.kt](../../android/app/src/main/java/com/example/ui/screens/assistant/AssistantMessageComponents.kt): Compact expandable pills for tools, memory, warnings.
+- [AppearanceModels.kt](../../android/app/src/main/java/com/example/domain/model/AppearanceModels.kt): Web parity light/dark presets, scrim and brightness fields.
+- [SettingsScreen.kt](../../android/app/src/main/java/com/example/ui/screens/settings/SettingsScreen.kt): Sticky tabs, scroll-to-top, appearance presets, scrim and brightness sliders.
+- [SettingsViewModel.kt](../../android/app/src/main/java/com/example/ui/screens/settings/SettingsViewModel.kt): Scrim and brightness state handling.

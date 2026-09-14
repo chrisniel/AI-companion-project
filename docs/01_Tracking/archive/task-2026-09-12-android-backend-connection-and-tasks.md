@@ -12,7 +12,7 @@
 ### 1. Architecture & Plan Approval
 - [x] Map end-to-end user flow: host IP discovery, token pairing verification, reachability probe, live tasks fetch & mutation
 - [x] Review API contract alignment against `contracts/openapi/openapi.json` (`/api/v1/health`, `/api/v1/auth/verify`, `/api/v1/tasks`)
-- [x] Create implementation plan `docs/02_Planning/plan-android-backend-connection-and-tasks.md` (Approved by user)
+- [x] Create implementation plan `docs/02_Planning/android/plan-android-backend-connection-and-tasks.md` (Approved by user)
 
 ### 2. Android Network Infrastructure & Security
 - [x] Add `android.permission.INTERNET` and `ACCESS_NETWORK_STATE` to `AndroidManifest.xml`
@@ -34,7 +34,7 @@
 ---
 
 ## Deliverables & Key Artifacts
-- Plan: `docs/02_Planning/plan-android-backend-connection-and-tasks.md`
+- Plan: `docs/02_Planning/android/plan-android-backend-connection-and-tasks.md`
 - Walkthrough: `docs/03_Walkthroughs/walkthrough-android-backend-connection-and-tasks.md`
 - Tests: `android/app/src/test/java/com/example/NetworkIntegrationUnitTest.kt` (5 tests passing)
 - Build Output: `android/app/build/outputs/apk/debug/app-debug.apk`

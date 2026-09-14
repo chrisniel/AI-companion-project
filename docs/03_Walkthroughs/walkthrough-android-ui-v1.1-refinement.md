@@ -44,19 +44,19 @@
 ## 2. Key Code Artifacts
 
 - **Application & DI Container**:
-  - [`CompanionApplication.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/CompanionApplication.kt)
-  - [`AppContainer.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/di/AppContainer.kt)
+  - [`CompanionApplication.kt`](../../android/app/src/main/java/com/example/CompanionApplication.kt)
+  - [`AppContainer.kt`](../../android/app/src/main/java/com/example/di/AppContainer.kt)
 - **ViewModel Factory**:
-  - [`AppViewModelProvider.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/ui/AppViewModelProvider.kt)
+  - [`AppViewModelProvider.kt`](../../android/app/src/main/java/com/example/ui/AppViewModelProvider.kt)
 - **Shared Domain Repositories**:
-  - [`TasksRepository.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/domain/repository/TasksRepository.kt) / [`FakeTasksRepository.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/data/fake/FakeTasksRepository.kt)
-  - [`ScheduleRepository.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/domain/repository/ScheduleRepository.kt) / [`FakeScheduleRepository.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/data/fake/FakeScheduleRepository.kt)
-  - [`AlarmsRepository.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/domain/repository/AlarmsRepository.kt) / [`FakeAlarmsRepository.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/data/fake/FakeAlarmsRepository.kt)
-  - [`AppearanceRepository.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/domain/repository/AppearanceRepository.kt) / [`FakeAppearanceRepository.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/data/fake/FakeAppearanceRepository.kt)
+  - [`TasksRepository.kt`](../../android/app/src/main/java/com/example/domain/repository/TasksRepository.kt) / [`FakeTasksRepository.kt`](../../android/app/src/main/java/com/example/data/fake/FakeTasksRepository.kt)
+  - [`ScheduleRepository.kt`](../../android/app/src/main/java/com/example/domain/repository/ScheduleRepository.kt) / [`FakeScheduleRepository.kt`](../../android/app/src/main/java/com/example/data/fake/FakeScheduleRepository.kt)
+  - [`AlarmsRepository.kt`](../../android/app/src/main/java/com/example/domain/repository/AlarmsRepository.kt) / [`FakeAlarmsRepository.kt`](../../android/app/src/main/java/com/example/data/fake/FakeAlarmsRepository.kt)
+  - [`AppearanceRepository.kt`](../../android/app/src/main/java/com/example/domain/repository/AppearanceRepository.kt) / [`FakeAppearanceRepository.kt`](../../android/app/src/main/java/com/example/data/fake/FakeAppearanceRepository.kt)
 - **Theme & Shell**:
-  - [`Color.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/ui/theme/Color.kt)
-  - [`Theme.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/ui/theme/Theme.kt)
-  - [`AppShell.kt`](file:///d:/OtherProjects/AI-companion-project/android/app/src/main/java/com/example/ui/shell/AppShell.kt)
+  - [`Color.kt`](../../android/app/src/main/java/com/example/ui/theme/Color.kt)
+  - [`Theme.kt`](../../android/app/src/main/java/com/example/ui/theme/Theme.kt)
+  - [`AppShell.kt`](../../android/app/src/main/java/com/example/ui/shell/AppShell.kt)
 
 ---
 

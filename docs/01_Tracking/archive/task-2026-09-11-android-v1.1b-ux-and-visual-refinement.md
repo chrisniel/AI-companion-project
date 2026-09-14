@@ -5,7 +5,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - Status: Completed (Verified on Physical Device & Robolectric Suite)
 - Target: Tactical depth parity, transition latency elimination, bottom nav & assistant UX.
-- Scope Guard: Approved plan in docs/02_Planning/plan-android-v1.1b-ux-and-visual-refinement.md.
+- Scope Guard: Approved plan in docs/02_Planning/android/plan-android-v1.1b-ux-and-visual-refinement.md.
 
 ## Completed Checklist
 
