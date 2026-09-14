@@ -188,7 +188,7 @@ export interface LocalModel {
   family: string;
   parameters: string;
   quantization: string;
-  sizeGb: number;
+  sizeGb?: number | null;
   contextWindow: number;
   status: 'loaded' | 'unloaded' | 'downloading';
   engine: 'llama.cpp' | 'vllm' | 'ollama' | 'exllama2' | 'gemini';

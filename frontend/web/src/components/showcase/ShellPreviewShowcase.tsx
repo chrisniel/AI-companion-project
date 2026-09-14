@@ -139,7 +139,7 @@ export const ShellPreviewShowcase: React.FC = () => {
                           </span>
                         </div>
                         <span className="text-xs text-[var(--color-text-secondary)]">
-                          {model.family} • {model.sizeGb} GB • {model.contextWindow / 1024}k context
+                          {model.family} • {model.sizeGb != null && model.sizeGb > 0 ? `${model.sizeGb} GB` : 'Unavailable'} • {model.contextWindow / 1024}k context
                         </span>
                       </div>
                     </div>

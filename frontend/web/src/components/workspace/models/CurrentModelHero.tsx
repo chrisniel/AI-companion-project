@@ -134,6 +134,36 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
               <Badge variant={isCloud ? 'accent' : 'default'} size="sm">
                 {isCloud ? 'Cloud API' : 'Local (On-Device)'}
               </Badge>
+              {/* Variant badge */}
+              {model.variant === 'thinking' && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-medium">
+                  Thinking 🧠
+                </span>
+              )}
+              {model.variant === 'instruct' && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 font-medium">
+                  Instruct
+                </span>
+              )}
+              {model.variant === 'base' && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-500/20 text-zinc-300 font-medium">
+                  Base
+                </span>
+              )}
+              {model.variant && model.variant !== 'thinking' && model.variant !== 'instruct' && model.variant !== 'base' && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-500/20 text-zinc-300 font-medium">
+                  {model.variant.charAt(0).toUpperCase() + model.variant.slice(1)}
+                </span>
+              )}
+              {/* Companion / Vision degradation warning */}
+              {(model.capabilities?.includes('vision') || model.hasCompanion) && !model.companionFilesValid && (
+                <span
+                  className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-medium font-mono"
+                  title="Vision companion missing: Text inference remains available, but vision features are unavailable."
+                >
+                  ⚠ Vision companion missing (Degraded)
+                </span>
+              )}
               <Badge variant={runtimeBadge.variant} size="sm">
                 <span className={`w-1.5 h-1.5 rounded-full mr-1 ${runtimeBadge.dotClass}`} />
                 {runtimeBadge.label}
@@ -218,7 +248,7 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
             <span>Model Size</span>
           </div>
           <div className="text-base sm:text-lg font-bold font-mono text-[var(--color-text-primary)]">
-            {isCloud ? 'Hosted' : `${model.sizeGb.toFixed(2)} GB`}
+            {isCloud ? 'Hosted' : (model.sizeGb != null && model.sizeGb > 0 ? `${model.sizeGb.toFixed(2)} GB` : 'Unavailable')}
           </div>
           <div className="text-[10px] text-[var(--color-text-muted)] font-mono">
             {model.parameters} [Configured]
@@ -279,7 +309,7 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
               : isSleeping
               ? '0.0 GB'
               : isLoaded
-              ? `~${(model.vramUsageGb || 4.5).toFixed(1)} GB`
+              ? (model.vramUsageGb != null ? `~${model.vramUsageGb.toFixed(1)} GB` : 'Unavailable')
               : '0.0 GB'}
           </div>
           <div className="text-[10px] text-[var(--color-text-muted)] font-mono">
@@ -288,7 +318,9 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
               : isSleeping
               ? 'VRAM Released (Sleeping) [Applied]'
               : isLoaded
-              ? `${modelStatus?.applied_gpu_layers ?? 28} layers GPU [Applied]`
+              ? (modelStatus?.applied_gpu_layers !== null && modelStatus?.applied_gpu_layers !== undefined
+                  ? `${modelStatus.applied_gpu_layers} layers GPU [Applied]`
+                  : (model.vramUsageGb != null ? 'Registry Target [Estimated]' : 'GPU Offload: Unavailable'))
               : '0 layers (VRAM Free)'}
           </div>
         </div>

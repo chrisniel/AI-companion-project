@@ -130,11 +130,33 @@ export const ModelLibraryGrid: React.FC<ModelLibraryGridProps> = ({
                           Instruct
                         </span>
                       )}
-                      {/* Companion warning */}
-                      {model.hasCompanion && !model.companionFilesValid && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-medium">
-                          ⚠ mmproj missing
+                      {model.variant === 'base' && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-500/20 text-zinc-300 font-medium">
+                          Base
                         </span>
+                      )}
+                      {model.variant && model.variant !== 'thinking' && model.variant !== 'instruct' && model.variant !== 'base' && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-500/20 text-zinc-300 font-medium">
+                          {model.variant.charAt(0).toUpperCase() + model.variant.slice(1)}
+                        </span>
+                      )}
+                      {/* Companion / Vision degradation warning (Text remains loadable) */}
+                      {(model.capabilities?.includes('vision') || model.hasCompanion) && (
+                        !model.companionFilesValid ? (
+                          <span
+                            className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-medium font-mono"
+                            title="Vision companion missing: Text inference remains available, but vision features are unavailable."
+                          >
+                            ⚠ Vision companion missing (Degraded)
+                          </span>
+                        ) : (
+                          <span
+                            className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-medium font-mono"
+                            title="Vision projector validated"
+                          >
+                            Vision
+                          </span>
+                        )
                       )}
                     </div>
                     <span className="text-[11px] text-[var(--color-text-muted)] font-mono block mt-0.5">
@@ -173,7 +195,7 @@ export const ModelLibraryGrid: React.FC<ModelLibraryGridProps> = ({
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-[var(--color-text-muted)]">Size:</span>
-                    <span>{isCloud ? 'Cloud' : `${model.sizeGb.toFixed(2)} GB`}</span>
+                    <span>{isCloud ? 'Cloud' : (model.sizeGb != null && model.sizeGb > 0 ? `${model.sizeGb.toFixed(2)} GB` : 'Unavailable')}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-[var(--color-text-muted)]">Runtime:</span>

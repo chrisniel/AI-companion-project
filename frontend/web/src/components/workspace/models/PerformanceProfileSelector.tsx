@@ -89,7 +89,15 @@ export const PerformanceProfileSelector: React.FC<PerformanceProfileSelectorProp
           </p>
         </div>
 
-        <div className="flex items-center gap-2 text-xs font-mono">
+        <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+          {appliedProfile && appliedProfile.toLowerCase() !== activeId && (
+            <span
+              className="px-2 py-0.5 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-mono font-bold"
+              title={`Requested profile "${activeId}" differs from applied runtime profile "${appliedProfile}". Restart runtime to apply.`}
+            >
+              Profile change pending restart
+            </span>
+          )}
           <span className="text-[var(--color-text-muted)]">Requested:</span>
           <span className="font-semibold text-[var(--color-accent)] capitalize">{activeId}</span>
           <span className="text-[var(--color-text-muted)] ml-2">Applied:</span>

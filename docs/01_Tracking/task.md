@@ -18,10 +18,11 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — BATCH 8A.2 CORRECTIONS COMPLETED: AWAITING REVIEW BEFORE 8A.3]
+## [CURRENT EXECUTION STATE — BATCH 8A.3 COMPLETE: AWAITING USER/CHATGPT REVIEW]
 
-- Next Action: Awaiting user/ChatGPT review of Batch 8A.2 corrections before marking [x] 8A.2 or beginning Batch 8A.3
-- Active Plan: `docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md` (complete rewrite, self-contained)
+- Completed: Batch 8A.3 — ModelsView progressive disclosure, variant badges (truthful Thinking/Instruct/Base/custom), mmproj degradation warnings, applied-vs-requested profile distinction ("Profile change pending restart"), removal of fabricated 28-layer and 4.5 GB fallbacks, Unavailable for missing sizes, and 15 passing state reconciliation tests.
+- Next Action: Await user review. Do NOT begin Batch 8A.4 without approval.
+- Active Plan: `docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md`
 
 ---
 
@@ -30,8 +31,8 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 ### 8A — Frontend Architecture & UX Harmonization
 Branch: `feature/phase8-ui-foundation`
 - [x] 8A.1: Mock removal — HomeView (time-derived greeting), AssistantView (stale mockConversations), HealthView (truthful unavailable state & planned providers), MemoryView (truthful SQLite FTS5 store & contract)
-- [ ] 8A.2: AssistantView decomposition — AssistantComposer (stub attach), AssistantMessageList, AssistantStatusBar (provenance), AssistantErrorDisplay
-- [ ] 8A.3: ModelsView — variant badges, mmproj warning badge (degraded not incompatible), applied-vs-requested profile labels
+- [x] 8A.2: AssistantView decomposition — AssistantComposer (stub attach), AssistantMessageList, AssistantStatusBar (provenance), AssistantErrorDisplay
+- [x] 8A.3: ModelsView — variant badges, mmproj warning badge (degraded not incompatible), applied-vs-requested profile labels
 - [ ] 8A.4: mock/*.ts — @deprecated annotations on all file headers (do not delete yet)
 
 ---

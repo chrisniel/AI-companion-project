@@ -13,7 +13,7 @@ vi.mock('../services/api', async () => {
   const actual = await vi.importActual<typeof import('../services/api')>('../services/api');
   return {
     ...actual,
-    checkHealth: vi.fn().mockResolvedValue({ status: 'healthy', version: '0.1.0' }),
+    checkHealth: vi.fn().mockResolvedValue({ status: 'healthy' }),
     getModelStatus: vi.fn(),
     loadModel: vi.fn(),
     unloadModel: vi.fn(),
@@ -121,6 +121,7 @@ function createMockStatus(overrides: Partial<ModelStatusResponse> = {}): ModelSt
 describe('Phase 4: Models Web UI State Reconciliation & Truthfulness', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(api.checkHealth).mockResolvedValue({ status: 'healthy' });
   });
 
   it('1. backend active model hydrates UI without relying on m-1 default', async () => {
@@ -487,5 +488,176 @@ describe('Phase 4: Models Web UI State Reconciliation & Truthfulness', () => {
     // Ensure it does not falsely claim to be [Applied]
     expect(screen.queryByText(/Applied/i)).toBeNull();
   });
+
+  it('12. variant badges render truthfully for base, thinking, instruct, and custom variants without defaulting to instruct', async () => {
+    vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus());
+    vi.mocked(api.fetchModelRegistry).mockResolvedValueOnce([
+      {
+        id: 'model-base',
+        display_name: 'Llama-3-8B-Base',
+        family: 'Llama',
+        variant: 'base',
+        primary_file: 'models/llama3-base.gguf',
+        companion_files: [],
+        capabilities: ['chat'],
+        recommended_profiles: ['balanced'],
+        estimated_vram_gb: 4.0,
+        estimated_ram_gb: 2.0,
+        quantization: 'Q4_K_M',
+        parameters: '8B',
+        context_limit: 4096,
+        license: 'Meta',
+        source: 'local',
+        validation_status: 'verified',
+        primary_file_exists: true,
+        companion_files_valid: true,
+        size_gb: 4.2,
+      },
+      {
+        id: 'model-code',
+        display_name: 'DeepSeek-Coder-6.7B',
+        family: 'DeepSeek',
+        variant: 'code',
+        primary_file: 'models/deepseek-code.gguf',
+        companion_files: [],
+        capabilities: ['chat'],
+        recommended_profiles: ['balanced'],
+        estimated_vram_gb: 3.8,
+        estimated_ram_gb: 2.0,
+        quantization: 'Q4_K_M',
+        parameters: '6.7B',
+        context_limit: 4096,
+        license: 'DeepSeek',
+        source: 'local',
+        validation_status: 'verified',
+        primary_file_exists: true,
+        companion_files_valid: true,
+        size_gb: 3.8,
+      },
+    ]);
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    // Verify Base and Code badges are rendered truthfully
+    await waitFor(() => {
+      expect(screen.getAllByText('Base').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Code').length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  it('13. missing mmproj companion shows degraded warning while model remains loadable for text', async () => {
+    vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus({ active_model: null, model_loaded: false }));
+    vi.mocked(api.fetchModelRegistry).mockResolvedValueOnce([
+      {
+        id: 'qwen3-vl-degraded',
+        display_name: 'Qwen3-VL-2B-Degraded',
+        family: 'Qwen',
+        variant: 'instruct',
+        primary_file: 'models/qwen3-vl-2b-instruct.gguf',
+        companion_files: [{ role: 'mmproj', path: 'models/mmproj-missing.gguf' }],
+        capabilities: ['chat', 'vision'],
+        recommended_profiles: ['balanced'],
+        estimated_vram_gb: 2.1,
+        estimated_ram_gb: 1.1,
+        quantization: 'Q4_K_M',
+        parameters: '2.4B',
+        context_limit: 2048,
+        license: 'Apache-2.0',
+        source: 'local',
+        validation_status: 'missing_companion',
+        primary_file_exists: true,
+        companion_files_valid: false,
+        size_gb: 1.6,
+      },
+    ]);
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    // Degraded warning appears
+    await waitFor(() => {
+      expect(screen.getAllByText(/Vision companion missing \(Degraded\)/i).length).toBeGreaterThan(0);
+    });
+
+    // Model must NOT be marked incompatible; load button remains available
+    const card = document.getElementById('model-card-qwen3-vl-degraded');
+    expect(card).not.toBeNull();
+    expect(card?.textContent).not.toContain('Incompatible');
+    const loadBtn = document.getElementById('model-activate-btn-qwen3-vl-degraded');
+    expect(loadBtn).not.toBeNull();
+    expect(loadBtn).not.toBeDisabled();
+  });
+
+  it('14. requested profile != applied profile displays explicit Profile change pending restart warning', async () => {
+    const restartPendingStatus = createMockStatus({
+      requested_profile: 'maximum',
+      applied_profile: 'balanced',
+      applied_context_size: 4096,
+      applied_gpu_layers: 28,
+    });
+    vi.mocked(api.getModelStatus).mockResolvedValue(restartPendingStatus);
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Profile change pending restart').length).toBeGreaterThan(0);
+    });
+  });
+
+  it('15. missing size_gb renders Unavailable instead of 0.00 GB and does not fabricate 28-layer or 4.5 GB fallbacks', async () => {
+    vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus({
+      active_model: 'model-no-size',
+      applied_gpu_layers: null,
+      applied_profile: 'balanced',
+    }));
+    vi.mocked(api.fetchModelRegistry).mockResolvedValueOnce([
+      {
+        id: 'model-no-size',
+        display_name: 'No Size Model',
+        family: 'Custom',
+        variant: 'instruct',
+        primary_file: 'models/custom.gguf',
+        companion_files: [],
+        capabilities: ['chat'],
+        recommended_profiles: ['balanced'],
+        estimated_vram_gb: 0,
+        estimated_ram_gb: 0,
+        quantization: 'Q4_0',
+        parameters: '7B',
+        context_limit: 2048,
+        license: 'Custom',
+        source: 'local',
+        validation_status: 'verified',
+        primary_file_exists: true,
+        companion_files_valid: true,
+        size_gb: undefined as unknown as number,
+      },
+    ]);
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Unavailable').length).toBeGreaterThan(0);
+    });
+
+    // Verify 0.00 GB is NOT displayed
+    expect(screen.queryByText(/0\.00 GB/i)).toBeNull();
+  });
 });
+
 

@@ -143,7 +143,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
         family: e.family,
         parameters: e.parameters,
         quantization: e.quantization,
-        sizeGb: e.size_gb ?? 0,
+        sizeGb: e.size_gb ?? null,
         contextWindow: e.context_limit,
         status: (backendActiveModelId === e.id ? 'loaded' : 'unloaded') as 'loaded' | 'unloaded',
         engine: 'llama.cpp',
@@ -200,8 +200,8 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
       : currentSelectedModel.contextWindow,
     layersOffloaded: isSelectedLoaded && modelStatus?.applied_gpu_layers !== undefined && modelStatus.applied_gpu_layers !== null
       ? modelStatus.applied_gpu_layers
-      : (isSelectedLoaded ? 28 : 0),
-    vramUsageGb: isSelectedLoaded ? (currentSelectedModel.vramUsageGb || 4.5) : 0.0,
+      : undefined,
+    vramUsageGb: isSelectedLoaded ? currentSelectedModel.vramUsageGb : undefined,
   };
 
   // Actions
@@ -372,7 +372,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
         <VramTargetSlider
           vramTargetGb={vramTargetGb}
           totalVramGb={8.0}
-          currentModelVramGb={currentSelectedModel.isCloud ? 0.0 : currentSelectedModel.vramUsageGb || 4.5}
+          currentModelVramGb={currentSelectedModel.isCloud ? 0.0 : (currentSelectedModel.vramUsageGb ?? 0.0)}
           onChangeVramTarget={setVramTargetGb}
         />
       </div>
