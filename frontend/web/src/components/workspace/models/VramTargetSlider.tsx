@@ -6,16 +6,22 @@ import { Badge } from '../../ui/Badge';
 interface VramTargetSliderProps {
   vramTargetGb: number;
   totalVramGb?: number;
-  currentModelVramGb?: number;
+  estimatedModelVramGb?: number | null;
+  /** @deprecated use estimatedModelVramGb */
+  currentModelVramGb?: number | null;
   onChangeVramTarget: (value: number) => void;
 }
 
 export const VramTargetSlider: React.FC<VramTargetSliderProps> = ({
   vramTargetGb,
   totalVramGb = 8.0,
-  currentModelVramGb = 4.9,
+  estimatedModelVramGb,
+  currentModelVramGb,
   onChangeVramTarget,
 }) => {
+  const modelEstimate = estimatedModelVramGb !== undefined ? estimatedModelVramGb : currentModelVramGb ?? null;
+  const hasModelEstimate = modelEstimate != null && modelEstimate > 0;
+
   const percentage = Math.min(
     Math.max((vramTargetGb / totalVramGb) * 100, 0),
     100
@@ -50,7 +56,7 @@ export const VramTargetSlider: React.FC<VramTargetSliderProps> = ({
 
         {/* Big tactile readout */}
         <div className="flex items-baseline gap-1.5 px-3 py-1.5 rounded-xl surface-recessed border border-[var(--color-border-subtle)] self-start sm:self-auto font-mono">
-          <span className="text-xs text-[var(--color-text-muted)]">Estimated Target:</span>
+          <span className="text-xs text-[var(--color-text-muted)]">Target Budget:</span>
           <span className="text-base font-bold text-[var(--color-accent)]">
             {vramTargetGb.toFixed(1)} GB
           </span>
@@ -116,48 +122,51 @@ export const VramTargetSlider: React.FC<VramTargetSliderProps> = ({
       {/* Visual Memory Budget Bar */}
       <div className="p-3 rounded-2xl surface-base border border-[var(--color-border-subtle)] space-y-2">
         <div className="flex items-center justify-between text-[11px] text-[var(--color-text-muted)]">
-          <span>Allocated VRAM Breakdown</span>
+          <span>VRAM Planning Breakdown</span>
           <span className="font-mono">
-            {systemHeadroom.toFixed(1)} GB Free for Windows / Display
+            Remaining Target Headroom: {systemHeadroom.toFixed(1)} GB
           </span>
         </div>
 
         <div className="w-full h-2.5 rounded-full surface-recessed overflow-hidden flex">
-          {/* Active Model Weights */}
-          <div
-            className="h-full bg-sky-500 transition-all duration-200"
-            style={{
-              width: `${Math.min((currentModelVramGb / totalVramGb) * 100, percentage)}%`,
-            }}
-            title={`Active Model: ${currentModelVramGb} GB`}
-          />
-          {/* Reserved KV Cache Buffer */}
+          {/* Estimated Model Requirement */}
+          {hasModelEstimate && (
+            <div
+              className="h-full bg-sky-500 transition-all duration-200"
+              style={{
+                width: `${Math.min((modelEstimate! / totalVramGb) * 100, percentage)}%`,
+              }}
+              title={`Estimated Model Requirement: ${modelEstimate!.toFixed(1)} GB`}
+            />
+          )}
+          {/* Target Planning Buffer */}
           <div
             className="h-full bg-violet-500/60 transition-all duration-200"
             style={{
-              width: `${Math.max(
-                0,
-                percentage - (currentModelVramGb / totalVramGb) * 100
-              )}%`,
+              width: `${hasModelEstimate
+                ? Math.max(0, percentage - (modelEstimate! / totalVramGb) * 100)
+                : percentage}%`,
             }}
-            title="KV Cache & Working Memory Buffer"
+            title={`Target Budget Buffer: ${vramTargetGb.toFixed(1)} GB`}
           />
-          {/* Free Headroom */}
+          {/* Remaining Headroom */}
           <div className="h-full flex-1 bg-transparent" />
         </div>
 
         <div className="flex flex-wrap items-center gap-4 text-[10px] font-mono text-[var(--color-text-secondary)] pt-0.5">
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-sky-500" />
-            <span>Active Model ({currentModelVramGb.toFixed(1)} GB)</span>
+            <span>
+              Estimated Model Requirement: {hasModelEstimate ? `${modelEstimate!.toFixed(1)} GB [Estimated]` : 'Unavailable'}
+            </span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-violet-500" />
-            <span>KV Cache Target</span>
+            <span>Target Budget ({vramTargetGb.toFixed(1)} GB)</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-[var(--color-text-muted)]/40" />
-            <span>System Headroom ({systemHeadroom.toFixed(1)} GB)</span>
+            <span>Remaining Target Headroom ({systemHeadroom.toFixed(1)} GB)</span>
           </div>
         </div>
       </div>

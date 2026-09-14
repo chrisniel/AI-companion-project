@@ -188,7 +188,7 @@ export interface LocalModel {
   family: string;
   parameters: string;
   quantization: string;
-  sizeGb: number;
+  sizeGb?: number | null;
   contextWindow: number;
   status: 'loaded' | 'unloaded' | 'downloading';
   engine: 'llama.cpp' | 'vllm' | 'ollama' | 'exllama2' | 'gemini';
@@ -347,9 +347,9 @@ export interface ConversationHistoryItem {
   id: string;
   title: string;
   date: string;
-  snippet: string;
-  model: string;
-  messagesCount: number;
+  snippet?: string;
+  model?: string;
+  messagesCount?: number;
 }
 
 export interface NotificationItem {
@@ -653,7 +653,10 @@ export interface MemoryEntry {
   category: MemoryCategory;
   source: string;
   confidence: number; // 0 to 1 (e.g. 0.96 = 96%)
-  lastUpdated: string;
+  importance?: number; // Backend 0.0 to 2.0 weighting
+  createdAt?: string;
+  createdAtRaw?: string;
+  lastUpdated?: string;
   isArchived?: boolean;
   tags?: string[];
 }

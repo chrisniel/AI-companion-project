@@ -1,8 +1,8 @@
 # AI Companion Project
 
-A local-first personal AI companion ecosystem centered around a Windows PC running a persistent **Local AI Core**, with a React desktop control center and a native Android companion app.
+A local-first personal AI companion ecosystem centered around a Windows PC running a persistent **Local AI Runtime**, with a React desktop control center and a native Android companion app.
 
-> **Development status:** Both the PC React web UI prototype (`frontend/web/`) and the native Android companion app (`android/`) are repository-verified in this workspace. The Android app features 17 screens in Jetpack Compose, the SoftGlass design system, AMOLED pitch-black theme, persistent SharedPreferences storage, fluid overscroll bounce physics, real Local AI Core Host IP/port configuration, and 110 passing unit tests. The FastAPI backend, local model runtime integration, database, voice pipeline, health synchronization, and real device integrations are planned and form the next implementation phase.
+> **Development status:** The PC React web UI (`frontend/web/`), the native Android companion app (`android/`), and the FastAPI **Local AI Runtime** backend are repository-verified. The Android app features 17 screens in Jetpack Compose, the SoftGlass design system, AMOLED pitch-black theme, persistent SharedPreferences storage, fluid overscroll physics, real Local AI Runtime Host IP/port configuration, and 110 passing unit tests. The FastAPI backend, SQLite database, Alembic migrations (head: `005_scope_message_constraints`), and local llama.cpp model runtime integration are **implemented and verified** (Phase 7 baseline: 88 pytest, 38 vitest, 0 tsc errors). Voice pipeline, health synchronization, and native device integrations are planned. **Phase 8** (frontend architecture, runtime configuration, multimodal attachments) is the active delivery.
 
 ---
 
@@ -29,7 +29,7 @@ The central rule is simple:
 
 ```text
 AI / data / scheduling / tools / canonical state
-→ Local AI Core
+→ Local AI Runtime
 
 PC configuration / detailed runtime management
 → React Web
@@ -51,7 +51,7 @@ Replaceable infrastructure
                             │ HTTP / WebSocket
                             ▼
 ┌─────────────────────────────────────────────────────┐
-│                  Local AI Core                      │
+│                  Local AI Runtime                      │
 │                     FastAPI                         │
 │                                                     │
 │  Assistant • Memory • Tasks • Scheduling • Tools   │
@@ -68,14 +68,14 @@ Replaceable infrastructure
                 Android Companion App
 ```
 
-The **Local AI Core** is intended to become the source of truth for assistant logic, memory, tools, tasks, scheduling, provider orchestration, and synchronization.
+The **Local AI Runtime** is intended to become the source of truth for assistant logic, memory, tools, tasks, scheduling, provider orchestration, and synchronization.
 
 The clients remain clients:
 
 - **React Web:** PC dashboard, configuration, detailed runtime management, logs, devices, models, memory administration
 - **Android:** mobile assistant, voice, alarms, health, notifications, tasks, quick actions, offline-capable companion features
 
-Closing the browser should eventually **not** stop the Local AI Core.
+Closing the browser should eventually **not** stop the Local AI Runtime.
 
 ---
 
@@ -221,7 +221,7 @@ On-device hybrid failover controls    ✅ Repository-verified
 
 Real integrations such as FastAPI, Room, DataStore, Health Connect, AlarmManager, WorkManager, microphone capture, STT, TTS, Bluetooth APIs, remote connectivity, and authentication come later.
 
-### Backend / Local AI Core
+### Backend / Local AI Runtime
 
 Planned stack:
 
@@ -284,7 +284,7 @@ A character may define:
 - Tagalog frequency
 - Speaking behavior
 
-The Local AI Core must remain generic regardless of which character is active.
+The Local AI Runtime must remain generic regardless of which character is active.
 
 Future avatar presentation may support formats such as:
 
@@ -323,7 +323,7 @@ VAD
     ↓
 STT Provider
     ↓
-Local AI Core
+Local AI Runtime
     ↓
 LLM / Tools
     ↓
@@ -373,7 +373,7 @@ Android Health Connect
     ↓
 Android Companion
     ↓
-Local AI Core
+Local AI Runtime
     ↓
 SQLite
 ```
@@ -508,7 +508,7 @@ Recommended model lifecycle:
 ```text
 Windows starts
     ↓
-Local AI Core starts
+Local AI Runtime starts
     ↓
 API / Scheduler / Database ready
     ↓
@@ -653,7 +653,7 @@ scripts/
 
 V1 is considered operational when:
 
-- Local AI Core starts reliably on Windows
+- Local AI Runtime starts reliably on Windows
 - React connects to FastAPI
 - Local LLM can load, answer, and unload
 - Eco / Balanced / Maximum profiles work

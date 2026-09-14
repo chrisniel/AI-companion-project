@@ -1,42 +1,68 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Brain,
-  Search,
   Plus,
-  Filter,
   Layers,
-  Sparkles,
-  Archive,
   CheckCircle2,
-  Trash2,
   User,
   HeartHandshake,
   BookOpen,
-  FolderGit2,
-  Calendar,
-  Clock,
   ArrowUpDown,
-  RefreshCw,
+  Loader2,
+  AlertCircle,
+  WifiOff,
 } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { SearchInput } from '../ui/SearchInput';
 import { NeumorphicButton } from '../ui/NeumorphicButton';
 import { MemoryEntry, MemoryCategory } from '../../types';
-import { initialMemoryEntries } from '../../mock/deviceAndMemoryData';
 import { MemoryItemCard } from './memory/MemoryItemCard';
 import { MemoryEditorModal } from './memory/MemoryEditorModal';
 import { MemoryDeleteConfirmModal } from './memory/MemoryDeleteConfirmModal';
 import { useTheme } from '../../context/ThemeContext';
+import { useBackend } from '../../context/BackendContext';
+import {
+  listMemories,
+  createMemory,
+  updateMemory,
+  deleteMemory,
+  MemoryOut,
+} from '../../services/api/memoryApi';
 
-type StatusFilter = 'active' | 'archived' | 'all';
-type SortOption = 'recent' | 'confidence' | 'category';
+function mapMemoryOutToEntry(out: MemoryOut): MemoryEntry {
+  let cat: MemoryCategory = 'Fact';
+  const lowerCat = out.category?.toLowerCase() || '';
+  if (lowerCat === 'preference') cat = 'Preference';
+  else if (lowerCat === 'profile' || lowerCat === 'context') cat = 'Profile';
+  else cat = 'Fact';
+
+  return {
+    id: out.id,
+    content: out.content,
+    category: cat,
+    source: out.source_type ? `${out.source_type.charAt(0).toUpperCase()}${out.source_type.slice(1)}` : 'Manual',
+    confidence: 1.0,
+    importance: typeof out.importance === 'number' ? out.importance : 1.0,
+    createdAt: new Date(out.created_at).toLocaleDateString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+    createdAtRaw: out.created_at,
+  };
+}
+
+type SortOption = 'recent' | 'importance' | 'category';
 
 export const MemoryView: React.FC = () => {
   const { mode } = useTheme();
-  const [memories, setMemories] = useState<MemoryEntry[]>(initialMemoryEntries);
+  const { isOnline } = useBackend();
+  const [memories, setMemories] = useState<MemoryEntry[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<'All' | MemoryCategory>('All');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
+  const [selectedCategory, setSelectedCategory] = useState<'All' | 'Fact' | 'Preference' | 'Profile'>('All');
   const [sortBy, setSortBy] = useState<SortOption>('recent');
 
   // Modal states
@@ -52,16 +78,33 @@ export const MemoryView: React.FC = () => {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  const loadLiveMemories = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const res = await listMemories();
+      const mapped = (res.items || []).map(mapMemoryOutToEntry);
+      setMemories(mapped);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to connect to memory service';
+      setLoadError(msg);
+      setMemories([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLiveMemories();
+  }, [loadLiveMemories]);
+
   // Category counts calculation
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {
       All: memories.length,
-      Profile: 0,
-      Preference: 0,
       Fact: 0,
-      Project: 0,
-      Event: 0,
-      Temporary: 0,
+      Preference: 0,
+      Profile: 0,
     };
     memories.forEach((m) => {
       if (counts[m.category] !== undefined) {
@@ -72,24 +115,17 @@ export const MemoryView: React.FC = () => {
   }, [memories]);
 
   // Categories list with icons
-  const categoriesList: { id: 'All' | MemoryCategory; label: string; icon: React.ReactNode }[] = [
-    { id: 'All', label: 'All Categories', icon: <Layers className="w-3.5 h-3.5" /> },
-    { id: 'Profile', label: 'Profile', icon: <User className="w-3.5 h-3.5" /> },
-    { id: 'Preference', label: 'Preference', icon: <HeartHandshake className="w-3.5 h-3.5" /> },
+  const categoriesList: { id: 'All' | 'Fact' | 'Preference' | 'Profile'; label: string; icon: React.ReactNode }[] = [
+    { id: 'All', label: 'All Records', icon: <Layers className="w-3.5 h-3.5" /> },
     { id: 'Fact', label: 'Fact', icon: <BookOpen className="w-3.5 h-3.5" /> },
-    { id: 'Project', label: 'Project', icon: <FolderGit2 className="w-3.5 h-3.5" /> },
-    { id: 'Event', label: 'Event', icon: <Calendar className="w-3.5 h-3.5" /> },
-    { id: 'Temporary', label: 'Temporary', icon: <Clock className="w-3.5 h-3.5" /> },
+    { id: 'Preference', label: 'Preference', icon: <HeartHandshake className="w-3.5 h-3.5" /> },
+    { id: 'Profile', label: 'Profile / Context', icon: <User className="w-3.5 h-3.5" /> },
   ];
 
   // Filtering and sorting
   const filteredMemories = useMemo(() => {
     return memories
       .filter((mem) => {
-        // Status filter
-        if (statusFilter === 'active' && mem.isArchived) return false;
-        if (statusFilter === 'archived' && !mem.isArchived) return false;
-
         // Category filter
         if (selectedCategory !== 'All' && mem.category !== selectedCategory) return false;
 
@@ -99,25 +135,27 @@ export const MemoryView: React.FC = () => {
           const matchContent = mem.content.toLowerCase().includes(q);
           const matchSource = mem.source.toLowerCase().includes(q);
           const matchCat = mem.category.toLowerCase().includes(q);
-          const matchTags = mem.tags?.some((t) => t.toLowerCase().includes(q));
-          return matchContent || matchSource || matchCat || matchTags;
+          return matchContent || matchSource || matchCat;
         }
 
         return true;
       })
       .sort((a, b) => {
-        if (sortBy === 'confidence') {
-          return b.confidence - a.confidence;
+        if (sortBy === 'importance') {
+          return (b.importance ?? 1.0) - (a.importance ?? 1.0);
         }
         if (sortBy === 'category') {
           return a.category.localeCompare(b.category);
         }
-        // Default: most recent first (mock order preserved / string comparison)
-        return b.id.localeCompare(a.id);
+        // Default: Newest Created first using created_at timestamp
+        if (b.createdAtRaw && a.createdAtRaw) {
+          return new Date(b.createdAtRaw).getTime() - new Date(a.createdAtRaw).getTime();
+        }
+        return 0; // Preserve backend ordering (list_memories returns created_at descending)
       });
-  }, [memories, statusFilter, selectedCategory, searchQuery, sortBy]);
+  }, [memories, selectedCategory, searchQuery, sortBy]);
 
-  // Handlers for mock controls
+  // Handlers for live memory controls
   const handleEdit = (memory: MemoryEntry) => {
     setMemoryToEdit(memory);
     setIsEditorOpen(true);
@@ -128,41 +166,31 @@ export const MemoryView: React.FC = () => {
     setIsEditorOpen(true);
   };
 
-  const handleSaveMemory = (data: Partial<MemoryEntry>) => {
-    if (data.id) {
-      // Edit existing
-      setMemories((prev) =>
-        prev.map((m) => (m.id === data.id ? ({ ...m, ...data } as MemoryEntry) : m))
-      );
-      showToast('Memory record updated.');
-    } else {
-      // Create new
-      const newEntry: MemoryEntry = {
-        id: `mem-${Date.now()}`,
-        content: data.content || '',
-        category: data.category || 'Preference',
-        source: data.source || 'Manual Input',
-        confidence: data.confidence || 0.95,
-        lastUpdated: 'Just now',
-        isArchived: false,
-        tags: data.tags || [],
-      };
-      setMemories((prev) => [newEntry, ...prev]);
-      showToast('New semantic memory indexed successfully.');
-    }
-  };
+  const handleSaveMemory = async (data: Partial<MemoryEntry>) => {
+    try {
+      let apiCat: 'fact' | 'preference' | 'context' = 'fact';
+      if (data.category === 'Preference') apiCat = 'preference';
+      else if (data.category === 'Profile') apiCat = 'context';
+      const importance = typeof data.importance === 'number' ? data.importance : 1.0;
 
-  const handleToggleArchive = (id: string) => {
-    setMemories((prev) =>
-      prev.map((m) => {
-        if (m.id === id) {
-          const nextState = !m.isArchived;
-          showToast(nextState ? 'Memory archived.' : 'Memory restored to active context.');
-          return { ...m, isArchived: nextState };
-        }
-        return m;
-      })
-    );
+      if (data.id) {
+        await updateMemory(data.id, {
+          content: data.content,
+          category: apiCat,
+          importance,
+        });
+        showToast('Memory record updated in SQLite store.');
+      } else {
+        await createMemory(data.content || '', apiCat, importance);
+        showToast('New memory record saved to SQLite store.');
+      }
+      setIsEditorOpen(false);
+      setMemoryToEdit(null);
+      await loadLiveMemories();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to save memory record.';
+      showToast(`Error: ${msg}`);
+    }
   };
 
   const handleDeletePrompt = (id: string) => {
@@ -172,11 +200,17 @@ export const MemoryView: React.FC = () => {
     }
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (memoryToDelete) {
-      setMemories((prev) => prev.filter((m) => m.id !== memoryToDelete.id));
-      showToast('Memory permanently deleted from vector store.');
-      setMemoryToDelete(null);
+      try {
+        await deleteMemory(memoryToDelete.id);
+        showToast('Memory deleted from SQLite store.');
+        setMemoryToDelete(null);
+        await loadLiveMemories();
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Failed to delete memory.';
+        showToast(`Error: ${msg}`);
+      }
     }
   };
 
@@ -191,14 +225,14 @@ export const MemoryView: React.FC = () => {
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl font-bold text-[var(--color-text-primary)]">
-                Long-Term Semantic Memory & Vector Store
+                Long-Term Memory & SQLite FTS5 Index
               </h1>
               <Badge variant="accent" size="sm">
-                bge-large-en-v1.5
+                SQLite FTS5
               </Badge>
             </div>
             <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
-              Searchable memory categories across profile facts, preferences, project context, and scheduled events.
+              Searchable memory records across facts, preferences, and profile context stored in local SQLite database.
             </p>
           </div>
         </div>
@@ -220,7 +254,7 @@ export const MemoryView: React.FC = () => {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="p-3.5 rounded-2xl surface-base border border-[var(--color-border-subtle)]">
           <span className="text-[10px] font-mono uppercase tracking-wider text-[var(--color-text-muted)] block">
-            Indexed Records
+            Total Records
           </span>
           <span className="text-lg font-bold text-[var(--color-text-primary)] mt-0.5 block">
             {memories.length}
@@ -229,19 +263,10 @@ export const MemoryView: React.FC = () => {
 
         <div className="p-3.5 rounded-2xl surface-base border border-[var(--color-border-subtle)]">
           <span className="text-[10px] font-mono uppercase tracking-wider text-[var(--color-text-muted)] block">
-            Active in Context
-          </span>
-          <span className="text-lg font-bold text-emerald-400 mt-0.5 block">
-            {memories.filter((m) => !m.isArchived).length}
-          </span>
-        </div>
-
-        <div className="p-3.5 rounded-2xl surface-base border border-[var(--color-border-subtle)]">
-          <span className="text-[10px] font-mono uppercase tracking-wider text-[var(--color-text-muted)] block">
-            Vector Dimension
+            Search Engine
           </span>
           <span className="text-lg font-bold text-[var(--color-accent)] mt-0.5 block">
-            1024-dim
+            SQLite FTS5
           </span>
         </div>
 
@@ -250,59 +275,34 @@ export const MemoryView: React.FC = () => {
             Storage Engine
           </span>
           <span className="text-lg font-bold text-[var(--color-text-primary)] mt-0.5 block truncate">
-            sqlite-vec (HNSW)
+            aiosqlite (Local DB)
+          </span>
+        </div>
+
+        <div className="p-3.5 rounded-2xl surface-base border border-[var(--color-border-subtle)]">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-[var(--color-text-muted)] block">
+            Active Schema
+          </span>
+          <span className="text-lg font-bold text-emerald-400 mt-0.5 block truncate">
+            Fact • Pref • Context
           </span>
         </div>
       </div>
 
       {/* Search and Filter Controls */}
       <div className="p-4 sm:p-5 rounded-3xl surface-base border border-[var(--color-border-subtle)] space-y-4">
-        {/* Row 1: Search Bar + Status Toggle + Sort Option */}
+        {/* Row 1: Search Bar + Sort Option */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="flex-1 max-w-lg">
             <SearchInput
               value={searchQuery}
               onChangeValue={setSearchQuery}
-              placeholder="Search across memory content, source, category, tags..."
+              placeholder="Search across memory content, source, category..."
               sizeVariant="md"
             />
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Status Filter Toggle */}
-            <div className="p-1 rounded-2xl surface-recessed border border-[var(--color-border-subtle)] flex items-center gap-1 text-xs">
-              <button
-                onClick={() => setStatusFilter('active')}
-                className={`px-3 py-1.5 rounded-xl font-semibold transition-all cursor-pointer ${
-                  statusFilter === 'active'
-                    ? 'surface-raised text-[var(--color-text-primary)] shadow-xs'
-                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
-                }`}
-              >
-                Active ({memories.filter((m) => !m.isArchived).length})
-              </button>
-              <button
-                onClick={() => setStatusFilter('archived')}
-                className={`px-3 py-1.5 rounded-xl font-semibold transition-all cursor-pointer ${
-                  statusFilter === 'archived'
-                    ? 'surface-raised text-[var(--color-text-primary)] shadow-xs'
-                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
-                }`}
-              >
-                Archived ({memories.filter((m) => m.isArchived).length})
-              </button>
-              <button
-                onClick={() => setStatusFilter('all')}
-                className={`px-3 py-1.5 rounded-xl font-semibold transition-all cursor-pointer ${
-                  statusFilter === 'all'
-                    ? 'surface-raised text-[var(--color-text-primary)] shadow-xs'
-                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
-                }`}
-              >
-                All
-              </button>
-            </div>
-
+          <div className="flex items-center gap-2">
             {/* Sort Selector */}
             <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-2xl surface-recessed border border-[var(--color-border-subtle)] text-xs text-[var(--color-text-muted)]">
               <ArrowUpDown className="w-3.5 h-3.5" />
@@ -313,10 +313,10 @@ export const MemoryView: React.FC = () => {
                 className="bg-transparent text-[var(--color-text-primary)] font-medium focus:outline-none cursor-pointer"
               >
                 <option value="recent" className={mode === 'dark' ? 'bg-[#121824] text-slate-100' : 'bg-white text-slate-900'}>
-                  Recently Updated
+                  Newest Created
                 </option>
-                <option value="confidence" className={mode === 'dark' ? 'bg-[#121824] text-slate-100' : 'bg-white text-slate-900'}>
-                  Highest Confidence
+                <option value="importance" className={mode === 'dark' ? 'bg-[#121824] text-slate-100' : 'bg-white text-slate-900'}>
+                  Highest Importance
                 </option>
                 <option value="category" className={mode === 'dark' ? 'bg-[#121824] text-slate-100' : 'bg-white text-slate-900'}>
                   Category
@@ -372,13 +372,48 @@ export const MemoryView: React.FC = () => {
 
       {/* Memory Entries List (Highly readable interface without heavy neumorphism) */}
       <div className="space-y-3.5">
-        {filteredMemories.length > 0 ? (
+        {!isOnline && (
+          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3 text-xs text-amber-300">
+            <div className="flex items-center gap-2">
+              <WifiOff className="w-4 h-4 text-amber-400 flex-shrink-0" />
+              <span>
+                <strong>Runtime Offline: </strong> Memory query and SQLite FTS5 updates are paused until Local AI Runtime reconnects.
+              </span>
+            </div>
+            <Badge variant="warning" size="sm" className="font-mono text-[10px]">
+              Offline
+            </Badge>
+          </div>
+        )}
+
+        {loadError && (
+          <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-between gap-3 text-xs text-rose-300">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+              <span>{loadError}</span>
+            </div>
+            <NeumorphicButton size="xs" variant="secondary" onClick={loadLiveMemories}>
+              Retry
+            </NeumorphicButton>
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="p-12 rounded-3xl surface-base border border-[var(--color-border-subtle)] text-center space-y-3">
+            <Loader2 className="w-8 h-8 animate-spin text-[var(--color-accent)] mx-auto opacity-75" />
+            <h3 className="text-sm font-bold text-[var(--color-text-primary)]">
+              Querying Local AI Runtime...
+            </h3>
+            <p className="text-xs text-[var(--color-text-secondary)]">
+              Fetching memory records from SQLite FTS5 store.
+            </p>
+          </div>
+        ) : filteredMemories.length > 0 ? (
           filteredMemories.map((mem) => (
             <MemoryItemCard
               key={mem.id}
               memory={mem}
               onEdit={handleEdit}
-              onToggleArchive={handleToggleArchive}
               onDelete={handleDeletePrompt}
             />
           ))
@@ -386,22 +421,25 @@ export const MemoryView: React.FC = () => {
           <div className="p-10 rounded-3xl surface-base border border-[var(--color-border-subtle)] text-center space-y-3">
             <Brain className="w-8 h-8 text-[var(--color-text-muted)] mx-auto opacity-50" />
             <h3 className="text-sm font-bold text-[var(--color-text-primary)]">
-              No matching memories found
+              {memories.length === 0 ? 'No memory records yet' : 'No matching memories found'}
             </h3>
             <p className="text-xs text-[var(--color-text-secondary)] max-w-sm mx-auto">
-              No memory records matched category "{selectedCategory}" with query "{searchQuery}".
+              {memories.length === 0
+                ? "No memories have been stored in the SQLite FTS5 database yet. Click 'Add Memory' above to record a user fact or preference."
+                : `No memory records matched category "${selectedCategory}" with query "${searchQuery}".`}
             </p>
-            <NeumorphicButton
-              size="sm"
-              variant="secondary"
-              onClick={() => {
-                setSearchQuery('');
-                setSelectedCategory('All');
-                setStatusFilter('active');
-              }}
-            >
-              Reset Filters
-            </NeumorphicButton>
+            {memories.length > 0 && (
+              <NeumorphicButton
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedCategory('All');
+                }}
+              >
+                Reset Filters
+              </NeumorphicButton>
+            )}
           </div>
         )}
       </div>

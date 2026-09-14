@@ -1,26 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Cpu, Layers, HardDrive, Zap, RefreshCw, CheckCircle2, AlertCircle, X } from 'lucide-react';
+import { Cpu, RefreshCw, CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { useBackend } from '../../context/BackendContext';
 import {
-  mockLocalModels,
-  mockModelProviders,
-} from '../../mock/localAiData';
-import {
   LocalModel,
-  ModelProviderType,
   PerformanceProfile,
-  ProviderRoutingPolicy,
 } from '../../types';
-import { fetchModelRegistry, RegistryEntry } from '../../services/api';
-import { ModelProvidersCard } from './models/ModelProvidersCard';
+import { RegistryEntry } from '../../services/api';
 import { CurrentModelHero } from './models/CurrentModelHero';
 import { PerformanceProfileSelector } from './models/PerformanceProfileSelector';
 import { VramTargetSlider } from './models/VramTargetSlider';
-import { ProviderRoutingCard } from './models/ProviderRoutingCard';
 import { ModelLibraryGrid } from './models/ModelLibraryGrid';
 import { ModelDetailsModal } from './models/ModelDetailsModal';
-import { AdvancedRuntimeSettings } from './models/AdvancedRuntimeSettings';
 
 export interface ModelsViewProps {
   selectedModelId?: string | null;
@@ -59,9 +50,6 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
       setKeyInput(apiKey);
     }
   }, [apiKey]);
-
-  // Local state for models registry
-  const [models, setModels] = useState<LocalModel[]>(mockLocalModels);
 
   // Authoritative Backend Active Model:
   // Derived directly from backend truth (model_loaded = True and active_model populated).
@@ -121,88 +109,76 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
   // VRAM Target Slider state (informational headroom guide)
   const [vramTargetGb, setVramTargetGb] = useState<number>(2.5);
 
-  // Provider filter for library
-  const [providerFilter, setProviderFilter] = useState<ModelProviderType | 'all'>('all');
-
-  // Provider Routing and Cloud Fallback state
-  const [routingPolicy, setRoutingPolicy] = useState<ProviderRoutingPolicy>('local_first');
-  const [allowCloudFallback, setAllowCloudFallback] = useState<boolean>(true);
-  const [askBeforeCloudUse, setAskBeforeCloudUse] = useState<boolean>(false);
-  const [useCloudForComplexOnly, setUseCloudForComplexOnly] = useState<boolean>(true);
-
   // Model Details Modal state
   const [selectedDetailsModel, setSelectedDetailsModel] = useState<LocalModel | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
-  // Sync live model list from backend registry
-  useEffect(() => {
-    if (registry && registry.length > 0) {
-      const live: LocalModel[] = registry.map((e: RegistryEntry) => ({
+  // Derive live model list directly from backend registry
+  const liveModels = useMemo<LocalModel[]>(() => {
+    if (!registry || registry.length === 0) {
+      return [];
+    }
+    return registry.map((e: RegistryEntry) => {
+      const isThisLoaded = Boolean(
+        backendActiveModelId &&
+        (
+          e.id === backendActiveModelId ||
+          (e.primary_file && e.primary_file === backendActiveModelId)
+        )
+      );
+      return {
         id: e.id,
         name: e.display_name,
         family: e.family,
         parameters: e.parameters,
         quantization: e.quantization,
-        sizeGb: e.size_gb ?? 0,
+        sizeGb: e.size_gb ?? null,
         contextWindow: e.context_limit,
-        status: (backendActiveModelId === e.id ? 'loaded' : 'unloaded') as 'loaded' | 'unloaded',
+        status: isThisLoaded ? ('loaded' as const) : ('unloaded' as const),
         engine: 'llama.cpp',
         isCloud: false,
         vramUsageGb: e.estimated_vram_gb,
         ramUsageGb: e.estimated_ram_gb,
         filePath: e.primary_file,
         description: `${e.variant} · ${e.capabilities.join(', ')} · ${e.license}`,
+        license: e.license,
         variant: e.variant,
         capabilities: e.capabilities,
         validationStatus: e.validation_status,
         hasCompanion: e.companion_files.length > 0,
         companionFilesValid: e.companion_files_valid,
-      }));
-      setModels(live);
-    }
-  }, [registry, backendActiveModelId]);
-
-  // Compute live per-model loaded status based on authoritative backend active_model
-  const liveModels = useMemo(() => {
-    return models.map((m) => {
-      const isThisLoaded = Boolean(
-        backendActiveModelId &&
-        (
-          m.id === backendActiveModelId ||
-          (m.filePath && m.filePath === backendActiveModelId)
-        )
-      );
-      return {
-        ...m,
-        status: isThisLoaded ? ('loaded' as const) : ('unloaded' as const),
       };
     });
-  }, [models, backendActiveModelId]);
+  }, [registry, backendActiveModelId]);
 
   // Find currently selected model object (the one user is viewing in Hero)
   const currentSelectedModel =
     liveModels.find((m) => m.id === selectedModelId) ||
     (backendActiveModelId ? liveModels.find((m) => m.id === backendActiveModelId) : null) ||
     liveModels[0] ||
-    models[0];
+    null;
 
-  const isSelectedLoaded = Boolean(backendActiveModelId && currentSelectedModel.id === backendActiveModelId);
+  const isSelectedLoaded = Boolean(
+    backendActiveModelId &&
+    currentSelectedModel &&
+    currentSelectedModel.id === backendActiveModelId
+  );
 
   // Dynamic active model reflecting real backend status
-  const liveActiveModel: LocalModel = {
-    ...currentSelectedModel,
-    status: isSelectedLoaded ? 'loaded' : 'unloaded',
-    engine: currentSelectedModel.isCloud
-      ? currentSelectedModel.engine
-      : (modelStatus?.router_running ? 'llama.cpp (Vulkan)' : currentSelectedModel.engine),
-    contextWindow: isSelectedLoaded && modelStatus?.applied_context_size
-      ? modelStatus.applied_context_size
-      : currentSelectedModel.contextWindow,
-    layersOffloaded: isSelectedLoaded && modelStatus?.applied_gpu_layers !== undefined && modelStatus.applied_gpu_layers !== null
-      ? modelStatus.applied_gpu_layers
-      : (isSelectedLoaded ? 28 : 0),
-    vramUsageGb: isSelectedLoaded ? (currentSelectedModel.vramUsageGb || 4.5) : 0.0,
-  };
+  const liveActiveModel: LocalModel | null = currentSelectedModel
+    ? {
+        ...currentSelectedModel,
+        status: isSelectedLoaded ? 'loaded' : 'unloaded',
+        engine: currentSelectedModel.engine,
+        contextWindow: isSelectedLoaded && modelStatus?.applied_context_size
+          ? modelStatus.applied_context_size
+          : currentSelectedModel.contextWindow,
+        layersOffloaded: isSelectedLoaded && modelStatus?.applied_gpu_layers !== undefined && modelStatus.applied_gpu_layers !== null
+          ? modelStatus.applied_gpu_layers
+          : undefined,
+        vramUsageGb: isSelectedLoaded ? currentSelectedModel.vramUsageGb : undefined,
+      }
+    : null;
 
   // Actions
   const handleSelectModel = (modelId: string) => {
@@ -213,7 +189,8 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
 
   const handleActivateModel = async (modelId: string) => {
     handleSelectModel(modelId);
-    const selected = models.find((m) => m.id === modelId) || currentSelectedModel;
+    const selected = liveModels.find((m) => m.id === modelId) || currentSelectedModel;
+    if (!selected) return;
 
     // Local VRAM loading
     if (!selected.isCloud) {
@@ -343,76 +320,73 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
       </div>
 
       {/* 2. Current Model Hero (Rich Telemetry with Load/Unload Admin Actions) */}
-      <CurrentModelHero
-        model={liveActiveModel}
-        isModelLoading={isModelLoading}
-        onLoad={() => handleActivateModel(currentSelectedModel.id)}
-        onUnload={handleUnloadModel}
-        onOpenDetails={handleOpenDetails}
-        idleCountdownSeconds={modelStatus?.seconds_until_idle}
-        runtimeState={modelStatus?.runtime_state}
-        modelStatus={modelStatus}
-        activeModelId={backendActiveModelId}
-      />
+      {currentSelectedModel && liveActiveModel ? (
+        <>
+          <CurrentModelHero
+            model={liveActiveModel}
+            isModelLoading={isModelLoading}
+            onLoad={() => handleActivateModel(currentSelectedModel.id)}
+            onUnload={handleUnloadModel}
+            onOpenDetails={handleOpenDetails}
+            idleCountdownSeconds={modelStatus?.seconds_until_idle}
+            runtimeState={modelStatus?.runtime_state}
+            modelStatus={modelStatus}
+            activeModelId={backendActiveModelId}
+          />
 
-      {/* 3. Performance Profiles & VRAM Target (Tactile Grid) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Performance Profiles (Eco, Balanced, Maximum) */}
-        <PerformanceProfileSelector
-          requestedProfile={modelStatus?.requested_profile || activeProfile}
-          appliedProfile={modelStatus?.applied_profile ?? null}
-          appliedContextSize={modelStatus?.applied_context_size ?? null}
-          appliedGpuLayers={modelStatus?.applied_gpu_layers ?? null}
-          requestedMmprojOffload={modelStatus?.requested_mmproj_offload ?? (activeProfile !== 'eco')}
-          appliedMmprojOffload={modelStatus?.applied_mmproj_offload ?? null}
-          onSelectProfile={handleProfileChange}
-        />
+          {/* 3. Performance Profiles & VRAM Target (Tactile Grid) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Performance Profiles (Eco, Balanced, Maximum) */}
+            <PerformanceProfileSelector
+              requestedProfile={modelStatus?.requested_profile || activeProfile}
+              appliedProfile={modelStatus?.applied_profile ?? null}
+              appliedContextSize={modelStatus?.applied_context_size ?? null}
+              appliedGpuLayers={modelStatus?.applied_gpu_layers ?? null}
+              requestedMmprojOffload={modelStatus?.requested_mmproj_offload ?? null}
+              appliedMmprojOffload={modelStatus?.applied_mmproj_offload ?? null}
+              onSelectProfile={handleProfileChange}
+            />
 
-        {/* AI VRAM Target Slider (Informational Headroom Guide) */}
-        <VramTargetSlider
-          vramTargetGb={vramTargetGb}
-          totalVramGb={8.0}
-          currentModelVramGb={currentSelectedModel.isCloud ? 0.0 : currentSelectedModel.vramUsageGb || 4.5}
-          onChangeVramTarget={setVramTargetGb}
-        />
-      </div>
+            {/* AI VRAM Target Slider (Informational Headroom Guide) */}
+            <VramTargetSlider
+              vramTargetGb={vramTargetGb}
+              totalVramGb={8.0}
+              estimatedModelVramGb={currentSelectedModel.isCloud ? null : (currentSelectedModel.vramUsageGb ?? null)}
+              onChangeVramTarget={setVramTargetGb}
+            />
+          </div>
+        </>
+      ) : (
+        <div
+          id="no-models-available-card"
+          className="p-8 text-center surface-raised border border-[var(--color-border-subtle)] rounded-3xl space-y-3"
+        >
+          <Cpu className="w-8 h-8 text-[var(--color-text-muted)] mx-auto animate-pulse" />
+          <h3 className="text-base font-semibold text-[var(--color-text-primary)]">
+            No Models Discovered
+          </h3>
+          <p className="text-xs text-[var(--color-text-secondary)] max-w-md mx-auto">
+            {isOnline
+              ? 'Model registry is empty or no installed models were detected in the runtime library.'
+              : 'Local AI Runtime is offline. Waiting for model registry connection…'}
+          </p>
+        </div>
+      )}
 
-      {/* 4. Replaceable Model Providers (llama.cpp, Ollama, Gemini) */}
-      <ModelProvidersCard
-        providers={mockModelProviders}
-        activeProviderFilter={providerFilter}
-        onSelectProviderFilter={setProviderFilter}
-      />
-
-      {/* 5. Provider Routing Policy & Cloud Fallback Controls */}
-      <ProviderRoutingCard
-        routingPolicy={routingPolicy}
-        onChangeRoutingPolicy={setRoutingPolicy}
-        allowCloudFallback={allowCloudFallback}
-        onToggleAllowCloudFallback={setAllowCloudFallback}
-        askBeforeCloudUse={askBeforeCloudUse}
-        onToggleAskBeforeCloudUse={setAskBeforeCloudUse}
-        useCloudForComplexOnly={useCloudForComplexOnly}
-        onToggleUseCloudForComplexOnly={setUseCloudForComplexOnly}
-      />
-
-      {/* 6. Model Library Grid (Activate, Unload, Details) */}
+      {/* 4. Model Library Grid (Activate, Unload, Details) */}
       <ModelLibraryGrid
         models={liveModels}
         selectedModelId={selectedModelId}
         activeModelId={backendActiveModelId}
         modelStatus={modelStatus}
-        providerFilter={providerFilter}
+        providerFilter="all"
         onSelectModel={handleSelectModel}
         onActivateModel={handleActivateModel}
         onUnloadModel={handleUnloadModel}
         onOpenDetails={handleOpenDetails}
       />
 
-      {/* 7. Advanced Technical Settings (Collapsed Accordion) */}
-      <AdvancedRuntimeSettings />
-
-      {/* 8. Model Details Modal */}
+      {/* 5. Model Details Modal */}
       <ModelDetailsModal
         model={selectedDetailsModel}
         isOpen={isDetailsOpen}

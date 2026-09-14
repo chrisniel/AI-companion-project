@@ -1,3 +1,4 @@
+/** @deprecated -- mock data for test fixtures only */
 import { StructuredLogEntry } from '../types';
 
 export const initialMockLogs: StructuredLogEntry[] = [

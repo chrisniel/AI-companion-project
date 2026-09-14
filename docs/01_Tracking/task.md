@@ -2,26 +2,126 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: In Review / Awaiting User Approval
-- Current Sprint: PC Runtime, Models UI, and Assistant Stabilization
-- Branch: `feature/assistant-orchestration-and-memory`
-- Target: Enforce singleton llama.cpp router ownership, truthful context & profile application, fix AssistantView React crash, stabilize SSE stream error handling, reconcile Web UI state from backend truth, and fix database message constraints.
-- Scope Guard: PC-first stabilization only. No Android/mobile runtime changes. No STT/TTS voice audio tracks. No Git LFS policy changes.
-- Plan: `docs/02_Planning/plan-pc-runtime-web-assistant-stabilization.md`
+- Status: Final planning baseline — awaiting user APPROVED signal before implementation begins
+- Current Sprint: Phase 8 — PC Frontend Architecture, Runtime Config, Multimodal & Polish
+- Branches: `feature/phase8-ui-foundation` → `feature/phase8-runtime-config` → `feature/multimodal-image-attachments` → `feature/phase8-ui-integration-polish`
+- Target: Mock removal, view decomposition, COMPANION_DATA_ROOT, terminology reconciliation, model schema split, image attachments, 100+ pytest / 50+ vitest
+- Scope Guard: PC-first. No Android. No STT/TTS. No arbitrary file types. No video/PDF. No CUDA. No new state library. No LFS/gitattributes changes.
+- Plan: `docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md`
+- Baseline: 88 pytest, 38 vitest, 0 tsc errors, migration head 005_scope_message_constraints
 
-## [CURRENT EXECUTION STATE - PHASE 7 COMPLETE & VERIFIED]
+## Open Decisions — Resolved
 
-- Active Plan: `docs/02_Planning/plan-pc-runtime-web-assistant-stabilization.md`
-- Current Status: Phase 7 Full PC Integration Verification & Benchmarking completed and verified across all 21 checkpoints. Verified clean cold-boot baseline (0 llama processes, ports 8000/8085/3000 free, branch, migration head 005). Verified database integrity, composite message constraints, soft-delete columns, and documented downgrade limitation. Validated cold Core boot and Web UI reconciliation without legacy models or false telemetry. Verified Qwen3-VL-2B-Instruct on Balanced profile: launch configuration exact (--ctx-size 4096, --n-gpu-layers 28, --threads 6, GPU mmproj enabled, port 8085) with strict 1 root router + 1 worker PID topology. Measured Balanced resource benchmark: load time 5.72s, baseline VRAM 1128.80 MB, loaded VRAM 3829.71 MB (+2700.91 MB delta), router RAM 41.90 MB, worker RAM 1447.76 MB, TTFT 0.962s, gen speed 32.22 tok/s. Validated Models UI persistence journey, Header quick model selector, and Assistant normal streaming with deterministic sequence numbers. Verified Assistant cancellation (mid-stream abort preserves text, releases locks, generation_active clears) and failure recovery. Validated native sleep and wake cycle: MODEL_SLEEPING entered after idle threshold with 2661.21 MB VRAM released and worker preserved; wake request succeeded in 4.11s (3.601s wake latency) restoring MODEL_READY without router duplication. Verified explicit unload (worker exits, router remains, VRAM freed). Verified profile switching Balanced -> Eco (old router terminates, requested_profile eco, applied_profile null while stopped, fresh router spawned with Eco flags: ctx 2048, ngl 0, threads 4, --no-mmproj-offload) and Eco benchmark (VRAM delta 91.43 MB, load 4.68s, TTFT 1.107s, speed 23.80 tok/s). Performed 4B Balanced smoke benchmark: load 15.47s, VRAM delta 3557.31 MB, TTFT 1.115s, speed 16.26 tok/s, followed by clean unload (3551.41 MB freed). Verified state and conversation persistence across Core and Web UI restarts. Completed clean shutdown: 0 llama-server processes, 0 port listeners, database intact at revision 005. All 88 backend pytest tests, 38 frontend vitest tests, 0 tsc errors, and clean build pass.
-- Next Action: STOP and report Phase 7 verification results. Await user review before any future phase.
+| Decision | Resolution |
+|----------|-----------|
+| OD1: Default Windows data-root | **A** — `%LOCALAPPDATA%\AI Companion\Data` |
+| OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
+| OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## Active Checklist — PC Stabilization
+## [CURRENT EXECUTION STATE — PHASE 8A FINAL VERIFICATION COMPLETED: AWAITING CHATGPT/USER MERGE APPROVAL]
 
-- [x] Phase 0: Reproduce and Instrument (add failing test matrix for router ownership, profile args, and SSE stream errors)
-- [x] Phase 1: Single Runtime Ownership & Router Correctness (PID liveness guard, 2s health check, fix polling return on timeout)
-- [x] Phase 2: Resource Profile Correctness & VRAM Management (pass `--ctx-size`, handle router restart on profile change, disable conflicting Python idle loop)
-- [x] Phase 3: Backend Runtime Truth & Telemetry Schema (`router_running`, `model_resident`, `applied_context_size`, `applied_gpu_layers`)
-- [x] Phase 4: Models Web UI State Reconciliation (hydrate `currentModelId` from backend truth, fix `liveModels` precedence, truthful VRAM & settings labels)
-- [x] Phase 5: Assistant Web UI Crash Fix, Error Boundary, & SSE Reliability (import `useCallback`, add `ErrorBoundary.tsx`, emit SSE error frame, stabilize conversation init)
-- [x] Phase 6: Database Invariants (migration 005 for `UNIQUE(conversation_id, sequence_no)` and scoped `client_message_id`)
-- [x] Phase 7: Full PC Integration Verification & Benchmarking (clean cold boot, single PID, VRAM check, 56+ pytest pass, clean build)
+- Completed: Phase 8A full branch verification passed (0 tsc errors, 132 vitest passed, clean build, 88 backend pytest passed, 9/9 views smoke tested in browser, zero mock authority violations).
+- Checklist: 8A.1 [x], 8A.2 [x], 8A.3 [x], 8A.3b [x] (8A.3b.1 [x], 8A.3b.2 [x], 8A.3b.3 [x]), 8A.4 [x].
+- Scope Guard: Zero backend code changes, zero Android changes, zero migrations, zero new APIs. Phase 8P is NOT started.
+- Awaiting ChatGPT / User Review and merge approval of feature/phase8-ui-foundation.
+- Active Plan: `docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md`
+
+---
+
+## Active Checklist — Phase 8
+
+### 8A — Frontend Architecture & UX Harmonization
+Branch: `feature/phase8-ui-foundation`
+- [x] 8A.1: Mock removal — HomeView (time-derived greeting), AssistantView (stale mockConversations), HealthView (truthful unavailable state & planned providers), MemoryView (truthful SQLite FTS5 store & contract)
+- [x] 8A.2: AssistantView decomposition — AssistantComposer (stub attach), AssistantMessageList, AssistantStatusBar (provenance), AssistantErrorDisplay
+- [x] 8A.3: ModelsView — variant badges, mmproj warning badge (degraded not incompatible), applied-vs-requested profile labels
+- [x] 8A.3b: Production Truthfulness Sweep
+  - [x] 8A.3b.1: Shell + Home
+  - [x] 8A.3b.2: Tasks + Schedule
+  - [x] 8A.3b.3: Characters + Devices + Logs + Settings
+- [x] 8A.4: mock/*.ts — @deprecated annotations on all file headers (do not delete yet)
+
+---
+
+### 8P — Runtime Configuration & Persistent Asset Foundation
+Branch: `feature/phase8-runtime-config` (based on merged 8A)
+
+**8P.1 — Terminology Reconciliation**
+- [ ] 8P.1a: Backend — grep/fix remaining "Local AI Core" in .py; reconciliation comment in config.py
+- [ ] 8P.1b: Frontend — rename "Local AI Core" → "Local AI Runtime" in all 19 confirmed locations
+- [ ] 8P.1c: Frontend tests — update assistantViewReliability.test.tsx error string assertions (mandatory — tests will fail without this)
+- [ ] 8P.1d: ModelsView — fix GGUF/Vulkan label conflation; separate GGUF / Engine / Acceleration fields
+
+**8P.2 — COMPANION_DATA_ROOT Bootstrap & Configuration Initialization**
+- [ ] 8P.2: config.py — resolve_data_root() called before Settings instantiation: env COMPANION_DATA_ROOT > bootstrap.json data_root > default; DATABASE_PATH/DATABASE_URL derived from resolved root; SQLAlchemy engine constructed after
+- [ ] 8P.2b: config.py — all derived path properties (DATABASE_DIR, DATABASE_PATH, LIBRARY_DIR, MODEL_LIBRARY_DIR, INSTALLED_REGISTRY_PATH, VOICE_LIBRARY_DIR, ATTACHMENT_DIR, IMPORT_INBOX_DIR, IMPORT_STAGING_DIR, CHARACTER_DIR, MEMORY_DIR); remove hardcoded DATABASE_URL; deprecate DATA_DIR, MODELS_DIR, LLAMA_MODELS_DIR
+
+**8P.3 — Runtime Engine Fields**
+- [ ] 8P.3: config.py — LLM_ENGINE, LLM_ACCELERATION, LLAMA_ENGINE_VERSION declarative fields
+- [ ] 8P.3b: llama_cpp.py — _engine_version reads settings.LLAMA_ENGINE_VERSION
+
+**8P.4 — Profile Portability**
+- [ ] 8P.4: config.py — PROFILE_*_* env-overridable constants (RX 580 defaults preserved as current values)
+- [ ] 8P.4b: llama_cpp.py — _get_profile_params() reads settings.PROFILE_*; remove inline RX 580 constants
+
+**8P.5 — Model Registry Schema (Final)**
+- [ ] 8P.5a: schemas/model_registry.py — new enums (ModelAssetType, ModelVariant, InputModality, ModelDiscoveryState, ReasoningMode, CapabilityProvenance) + sub-schemas (CompanionArtifactStatus, CapabilityEntry, GenerationDefaults, CompanionFile extended)
+- [ ] 8P.5b: schemas/model_registry.py — ModelManifest (identity + artifact metadata, immutable; runtime_compatibility: List[str] = [] default), ModelLibraryState (computed validation state), ModelRuntimeHints (recommendations only), ModelRegistryEntry (composes all three + runtime_model_id + registry_source: Literal["factory","installed"])
+- [ ] 8P.5c: schemas/model_registry.py — API response shape: use model_serializer or computed_field for flat backward-compat fields (NOT Python @property); update contracts/openapi/openapi.json + registryApi.ts
+- [ ] 8P.5d: model_registry.py — _build_effective_registry(): load factory always; load installed if present; installed entry shadows factory on same stable id; empty installed does not hide factory; registry_source tag per entry; path resolution per source root (FACTORY_MODEL_ROOT vs MODEL_LIBRARY_DIR)
+- [ ] 8P.5e: model_registry.py — _validate_entry(): missing mmproj -> vision removed from available_capabilities; text usable; model NOT prohibited from loading; missing primary -> unavailable
+- [ ] 8P.5f: model_registry.py — unregistered scanner: capabilities=[], input_modalities=[], model_max_context=None, runtime_compatibility=[], variant=unknown (NO fabricated defaults)
+- [ ] 8P.5g: model_registry.py — GGUF metadata extraction (best-effort, non-blocking): populate only reliably detected fields; no invented defaults
+- [ ] 8P.5h: models/registry.template.json — schema v3; asset_type, architecture, input_modalities, model_max_context on all entries; clarifying _note
+- [ ] 8P.5i: registryApi.ts — ModelManifest, ModelLibraryState, ModelRuntimeHints TypeScript interfaces; RegistryEntry updated; context_limit → model_max_context migration in all consumers
+
+**8P.6 — Canonical Documentation Updates**
+- [x] 8P.6a: AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md — terminology, test baseline 88/38, Phase 8 sequence, arch doc cross-reference, model invariants
+- [x] 8P.6b: LLAMA_CPP_RUNTIME_ARCHITECTURE.md — terminology, port corrected to 8085, Eco GPU layers corrected to 0, unverified flash-attention/KV-cache/batch rows removed, scope note added
+- [x] 8P.6c: VOICE_AND_AUDIO_ARCHITECTURE.md — terminology, storage cross-reference note
+- [x] 8P.6d: AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md — Section 33 rewritten from Open to Resolved Decisions (OD1/OD2/OD3)
+- [x] 8P.6e: README.md — terminology; backend/database/runtime marked implemented; Phase 7 baseline (88 pytest/38 vitest) and Phase 8 active delivery
+- [x] plan-phase8-pc-frontend-architecture-ux.md — complete rewrite, single authoritative version, no stale pass/supplement content
+
+**8P.2c — Bootstrap Locator Tests**
+- [ ] 8P.2c: bootstrap tests — missing locator -> default; valid locator -> locator path; invalid JSON -> warning + default; unavailable path -> warning + default; env var overrides all; DATABASE_URL uses canonical path; engine constructed after resolution
+
+**8P.7 — First-Run Data Migration (multi-candidate aware)**
+- [ ] 8P.7: startup.py — check both known legacy candidates (backend/data/companion.db + repo-root/data/companion.db); exactly one -> copy/verify/backup; multiple -> RuntimeError with paths; none -> fresh
+- [ ] 8P.7b: _verify_migrated_db() — Alembic head check against settings.DATABASE_PATH (not env DATABASE_URL); migration test: no legacy, one legacy, two candidates
+
+---
+
+### 8B — Multimodal Image Attachment Foundation
+Branch: `feature/multimodal-image-attachments` (based on merged 8P)
+- [ ] 8B.1: migrations/versions/006_add_attachments.py (revision=006_add_attachments, down_revision=005_scope_message_constraints)
+- [ ] 8B.2: models/attachment.py — Attachment ORM (UUIDPrimaryKeyMixin + TimestampMixin + OwnerMixin + SoftDeleteMixin); add relationships to Conversation + Message
+- [ ] 8B.3: schemas/attachment.py — AttachmentOut (no storage_path), AttachmentRef, validation constants
+- [ ] 8B.4: schemas/multimodal.py — TextContent, ImageAttachmentRef (attachment_id+mime_type), ResolvedImageContent (mime_type+bytes), ContentBlock
+- [ ] 8B.5: schemas/llm.py — ChatMessage.content: Union[str, List[ContentBlock]]
+- [ ] 8B.6: schemas/message.py — MessageSend.attachment_ids[], MessageOut.attachments[]
+- [ ] 8B.7: services/attachment_validator.py — Pillow, byte-header MIME, dimensions, megapixel, decompression bomb; PNG + JPEG only (WebP deferred)
+- [ ] 8B.8: endpoints/attachments.py — POST upload, GET preview (Bearer auth, Blob response), DELETE soft-delete; path traversal guard; storage_path never in API response
+- [ ] 8B.8b: services/attachment_service.py — claim_attachments_for_message(): atomic conditional UPDATE (WHERE message_id IS NULL + owner + conversation + not deleted); exactly 1 row required; 0 rows = 422 with diagnostics; TOCTOU-safe; rollback on any failure
+- [ ] 8B.9: services/assistant/media_resolver.py — resolve_image_content(ref: ImageAttachmentRef) -> ResolvedImageContent; resolves path from settings.ATTACHMENT_DIR; traversal guard; async file IO here (not in provider)
+- [ ] 8B.10: orchestrator.py — vision gate via available_capabilities; calls media_resolver; wraps ResolvedImageContent in ContentBlock[]; cancellation after commit preserves user message + attachments
+- [ ] 8B.11: llama_cpp.py — _translate_messages(): receives ContentBlock[] with ResolvedImageContent (bytes pre-loaded); NO filesystem IO; NO attachment IDs; NO run_in_executor for file reads; encodes bytes as data-URL
+- [ ] 8B.12: attachmentApi.ts — upload, delete, fetchAttachmentBlobUrl (URL.createObjectURL lifecycle, revokeObjectURL on cleanup)
+- [ ] 8B.13: conversationApi.ts — attachment_ids[] in streamSendMessage
+- [ ] 8B.14: AssistantComposer.tsx — vision gate (available_capabilities), file input, authenticated Blob previews, remove→DELETE, count limit
+- [ ] 8B.15: ConversationMessageItem.tsx — authenticated Blob previews for committed history; revokeObjectURL on unmount
+- [ ] 8B.16: test_attachments.py — migration, ORM parity, upload, BOLA, MIME, dimensions, limits, lifecycle, history, cross-conversation bind, reuse-committed, multi-candidate DB error, bootstrap locator
+- [ ] 8B.17: attachmentComposer.test.tsx — vision gate, mmproj-absent (degraded not prohibited), upload, preview, remove, limit
+
+---
+
+### 8C — Integration, Accessibility & Polish
+Branch: `feature/phase8-ui-integration-polish` (based on merged 8B)
+- [ ] 8C.1: Delete mock/*.ts files (verify zero production imports first; grep check mandatory)
+- [ ] 8C.2: Bundle analysis — vite-bundle-visualizer; lazy-load ScheduleView if > 500KB chunk
+- [ ] 8C.3: Accessibility — aria-labels on all icon-only buttons; role="article" on message bubbles; focus management; keyboard nav
+- [ ] 8C.4: test: phase8Integration.test.tsx — reload + preview, cancellation semantics, vision gate, mmproj-absent, limits, WebP rejection, model switch
+- [ ] 8C.5: pytest backend regression — target 100+ passed
+- [ ] 8C.6: CREATE docs/03_Walkthroughs/walkthrough-phase8-multimodal-attachments.md (7-section template)
+- [ ] 8C.7: AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md — update test counts (100+/50+); mark Phase 8 complete
+- [ ] 8C.8: Archive sprint → docs/01_Tracking/archive/task-YYYY-MM-DD-phase8-ui-multimodal.md

@@ -87,17 +87,47 @@ export const ModelDetailsModal: React.FC<ModelDetailsModalProps> = ({
             {isCloud ? <Cloud className="w-5 h-5" /> : <Cpu className="w-5 h-5" />}
           </div>
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-bold text-[var(--color-text-primary)]">
-                {model.description || 'Instruction-tuned transformer model'}
+                {model.description || 'Description unavailable'}
               </span>
+              {/* Variant badge */}
+              {model.variant === 'thinking' && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-medium">
+                  Thinking 🧠
+                </span>
+              )}
+              {model.variant === 'instruct' && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 font-medium">
+                  Instruct
+                </span>
+              )}
+              {model.variant === 'base' && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-500/20 text-zinc-300 font-medium">
+                  Base
+                </span>
+              )}
+              {model.variant && model.variant !== 'thinking' && model.variant !== 'instruct' && model.variant !== 'base' && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-500/20 text-zinc-300 font-medium">
+                  {model.variant.charAt(0).toUpperCase() + model.variant.slice(1)}
+                </span>
+              )}
+              {/* Vision companion warning */}
+              {(model.capabilities?.includes('vision') || model.hasCompanion) && !model.companionFilesValid && (
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-medium font-mono"
+                  title="Vision companion missing: Text inference remains available, but vision features are unavailable."
+                >
+                  ⚠ Vision companion missing (Degraded)
+                </span>
+              )}
             </div>
             <div className="flex flex-wrap gap-2 text-[10px] text-[var(--color-text-muted)] font-mono">
-              <span>License: {model.license || 'Open Source'}</span>
+              <span>License: {model.license || 'Unavailable'}</span>
               <span>•</span>
-              <span>Engine: {model.engine}</span>
+              <span>Engine: {model.engine || 'Unavailable'}</span>
               <span>•</span>
-              <span>Format: {model.tensorType || 'GGUF v3'}</span>
+              <span>Format: {model.tensorType || 'Unavailable'}</span>
             </div>
           </div>
         </div>
@@ -124,21 +154,21 @@ export const ModelDetailsModal: React.FC<ModelDetailsModalProps> = ({
           <div className="p-3 rounded-xl surface-base border border-[var(--color-border-subtle)] space-y-0.5">
             <span className="text-[10px] text-[var(--color-text-muted)] block">File Size</span>
             <span className="font-bold text-[var(--color-text-primary)]">
-              {isCloud ? 'Remote' : `${model.sizeGb.toFixed(2)} GB`}
+              {isCloud ? 'Remote' : (model.sizeGb != null && model.sizeGb > 0 ? `${model.sizeGb.toFixed(2)} GB [Configured]` : 'Unavailable')}
             </span>
           </div>
 
           <div className="p-3 rounded-xl surface-base border border-[var(--color-border-subtle)] space-y-0.5">
             <span className="text-[10px] text-[var(--color-text-muted)] block">VRAM Footprint</span>
             <span className="font-bold text-[var(--color-text-primary)]">
-              {isCloud ? '0.0 GB' : `${model.vramUsageGb || 4.9} GB`}
+              {isCloud ? 'N/A' : (model.vramUsageGb != null && model.vramUsageGb > 0 ? `~${model.vramUsageGb} GB [Estimated]` : 'Unavailable')}
             </span>
           </div>
 
           <div className="p-3 rounded-xl surface-base border border-[var(--color-border-subtle)] space-y-0.5">
             <span className="text-[10px] text-[var(--color-text-muted)] block">GPU Offload</span>
             <span className="font-bold text-[var(--color-text-primary)]">
-              {isCloud ? 'N/A' : `${model.layersOffloaded || 33} / ${model.layersTotal || 33} layers`}
+              {isCloud ? 'N/A' : (model.layersOffloaded != null ? `${model.layersOffloaded} layers [Applied]` : (model.layersTotal != null ? `${model.layersTotal} layers [Configured]` : 'Unavailable'))}
             </span>
           </div>
         </div>
@@ -149,7 +179,7 @@ export const ModelDetailsModal: React.FC<ModelDetailsModalProps> = ({
             Local Weight Source / Endpoint
           </span>
           <div className="font-mono text-[11px] text-[var(--color-text-primary)] break-all bg-[var(--color-surface-elevated)] p-2 rounded-lg border border-[var(--color-border-subtle)]">
-            {model.filePath || `~/.local/share/models/gguf/${model.name}.gguf`}
+            {model.filePath || 'Unavailable'}
           </div>
         </div>
 
@@ -160,22 +190,11 @@ export const ModelDetailsModal: React.FC<ModelDetailsModalProps> = ({
               <Sliders className="w-3.5 h-3.5 text-[var(--color-accent)]" />
               Recommended Sampling Presets
             </span>
-            <span className="text-[10px] text-[var(--color-text-muted)] font-mono">Modelfile Defaults</span>
+            <span className="text-[10px] text-[var(--color-text-muted)] font-mono">Registry Specifications</span>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 text-center text-xs font-mono">
-            <div className="p-2 rounded-lg surface-recessed">
-              <span className="text-[10px] text-[var(--color-text-muted)] block">Temperature</span>
-              <span className="font-bold text-[var(--color-text-primary)]">0.7</span>
-            </div>
-            <div className="p-2 rounded-lg surface-recessed">
-              <span className="text-[10px] text-[var(--color-text-muted)] block">Top-P</span>
-              <span className="font-bold text-[var(--color-text-primary)]">0.9</span>
-            </div>
-            <div className="p-2 rounded-lg surface-recessed">
-              <span className="text-[10px] text-[var(--color-text-muted)] block">Repeat Penalty</span>
-              <span className="font-bold text-[var(--color-text-primary)]">1.1</span>
-            </div>
+          <div className="p-2.5 rounded-lg surface-recessed text-xs font-mono text-[var(--color-text-muted)] text-center">
+            Sampling parameters: Not reported by registry
           </div>
         </div>
       </div>

@@ -56,34 +56,46 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
         dotClass: isLoaded ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500',
       };
     }
-    if (isThisModelActive && isLoaded) {
+    // Only attribute active/loaded/sleeping runtime state if THIS model is actually the active model
+    if (isThisModelActive) {
       if (isSleeping) {
         return { label: 'Loaded / Sleeping 💤', variant: 'accent' as const, dotClass: 'bg-purple-500' };
       }
-      return { label: 'Loaded / Awake', variant: 'success' as const, dotClass: 'bg-emerald-500 animate-pulse' };
+      if (isLoaded) {
+        return { label: 'Loaded / Awake', variant: 'success' as const, dotClass: 'bg-emerald-500 animate-pulse' };
+      }
+      if (runtimeState === 'MODEL_LOADING') {
+        return { label: 'Loading…', variant: 'warning' as const, dotClass: 'bg-amber-500 animate-pulse' };
+      }
+      if (runtimeState === 'MODEL_UNLOADING') {
+        return { label: 'Unloading…', variant: 'warning' as const, dotClass: 'bg-amber-500 animate-pulse' };
+      }
+      if (runtimeState === 'MODEL_ERROR') {
+        return { label: 'Model Error ⚠️', variant: 'danger' as const, dotClass: 'bg-rose-500' };
+      }
+      return { label: 'Standby on Disk', variant: 'default' as const, dotClass: 'bg-zinc-500' };
     }
+
+    // Selected model != active model: MUST never show Loaded / Awake / Sleeping
+    if (activeModelId) {
+      return {
+        label: 'Selected / Not Active',
+        variant: 'default' as const,
+        dotClass: 'bg-zinc-500',
+      };
+    }
+
+    // No model is active globally:
     switch (runtimeState) {
       case 'SERVER_STOPPED':
         return { label: 'Router Offline', variant: 'default' as const, dotClass: 'bg-zinc-500' };
       case 'SERVER_STARTING':
         return { label: 'Router Starting…', variant: 'warning' as const, dotClass: 'bg-amber-500 animate-pulse' };
-      case 'MODEL_UNLOADED':
-        return { label: 'Router Ready / No Model Loaded', variant: 'default' as const, dotClass: 'bg-sky-500' };
-      case 'MODEL_LOADING':
-        return { label: 'Loading…', variant: 'warning' as const, dotClass: 'bg-amber-500 animate-pulse' };
-      case 'MODEL_READY':
-        return { label: 'Loaded / Awake', variant: 'success' as const, dotClass: 'bg-emerald-500 animate-pulse' };
-      case 'MODEL_SLEEPING':
-        return { label: 'Loaded / Sleeping 💤', variant: 'accent' as const, dotClass: 'bg-purple-500' };
-      case 'MODEL_UNLOADING':
-        return { label: 'Unloading…', variant: 'warning' as const, dotClass: 'bg-amber-500 animate-pulse' };
-      case 'MODEL_ERROR':
-        return { label: 'Model Error ⚠️', variant: 'danger' as const, dotClass: 'bg-rose-500' };
       case 'SERVER_ERROR':
         return { label: 'Router Error ⚠️', variant: 'danger' as const, dotClass: 'bg-rose-500' };
       default:
         return {
-          label: 'Standby on Disk',
+          label: 'Selected / Not Active',
           variant: 'default' as const,
           dotClass: 'bg-zinc-500',
         };
@@ -91,15 +103,6 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
   };
 
   const runtimeBadge = getRuntimeBadge();
-
-  // Context calculations
-  const effectiveMaxContext = isLoaded && modelStatus?.applied_context_size
-    ? modelStatus.applied_context_size
-    : model.contextWindow;
-  const activeTokens = isLoaded && isAwake ? Math.min(3840, effectiveMaxContext) : 0;
-  const contextPercentage = isLoaded && isAwake && effectiveMaxContext > 0
-    ? Math.min(Math.round((activeTokens / effectiveMaxContext) * 100), 100)
-    : 0;
 
   return (
     <Card
@@ -134,6 +137,36 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
               <Badge variant={isCloud ? 'accent' : 'default'} size="sm">
                 {isCloud ? 'Cloud API' : 'Local (On-Device)'}
               </Badge>
+              {/* Variant badge */}
+              {model.variant === 'thinking' && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-medium">
+                  Thinking 🧠
+                </span>
+              )}
+              {model.variant === 'instruct' && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 font-medium">
+                  Instruct
+                </span>
+              )}
+              {model.variant === 'base' && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-500/20 text-zinc-300 font-medium">
+                  Base
+                </span>
+              )}
+              {model.variant && model.variant !== 'thinking' && model.variant !== 'instruct' && model.variant !== 'base' && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-500/20 text-zinc-300 font-medium">
+                  {model.variant.charAt(0).toUpperCase() + model.variant.slice(1)}
+                </span>
+              )}
+              {/* Companion / Vision degradation warning */}
+              {(model.capabilities?.includes('vision') || model.hasCompanion) && !model.companionFilesValid && (
+                <span
+                  className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-medium font-mono"
+                  title="Vision companion missing: Text inference remains available, but vision features are unavailable."
+                >
+                  ⚠ Vision companion missing (Degraded)
+                </span>
+              )}
               <Badge variant={runtimeBadge.variant} size="sm">
                 <span className={`w-1.5 h-1.5 rounded-full mr-1 ${runtimeBadge.dotClass}`} />
                 {runtimeBadge.label}
@@ -157,7 +190,7 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
               )}
             </div>
             <p className="text-xs text-[var(--color-text-secondary)] mt-1">
-              {model.family} • {model.parameters} parameters • {model.description || 'General instruction model'}
+              {model.family} • {model.parameters} parameters • {model.description || 'Description unavailable'}
             </p>
           </div>
         </div>
@@ -218,7 +251,7 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
             <span>Model Size</span>
           </div>
           <div className="text-base sm:text-lg font-bold font-mono text-[var(--color-text-primary)]">
-            {isCloud ? 'Hosted' : `${model.sizeGb.toFixed(2)} GB`}
+            {isCloud ? 'Hosted' : (model.sizeGb != null && model.sizeGb > 0 ? `${model.sizeGb.toFixed(2)} GB` : 'Unavailable')}
           </div>
           <div className="text-[10px] text-[var(--color-text-muted)] font-mono">
             {model.parameters} [Configured]
@@ -235,7 +268,7 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
             {model.quantization}
           </div>
           <div className="text-[10px] text-[var(--color-text-muted)] font-mono truncate">
-            {model.tensorType || 'GGUF v3'} [Configured]
+            {model.tensorType || 'Unavailable'} [Configured]
           </div>
         </div>
 
@@ -246,10 +279,18 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
             <span>Runtime</span>
           </div>
           <div className="text-base sm:text-lg font-bold font-mono text-[var(--color-text-primary)] truncate">
-            {modelStatus?.router_running ? 'llama.cpp' : (isCloud ? 'Cloud API' : 'Router Offline')}
+            {modelStatus?.router_running ? (model.engine || 'llama.cpp') : (isCloud ? 'Cloud API' : 'Router Offline')}
           </div>
           <div className="text-[10px] text-[var(--color-text-muted)] font-mono">
-            {modelStatus?.router_running ? 'Vulkan Offload (Core) [Applied]' : 'Standby / Offline'}
+            {isCloud
+              ? 'Cloud Managed'
+              : !isThisModelActive
+              ? 'Offload: Standby'
+              : (modelStatus?.applied_gpu_layers !== undefined && modelStatus.applied_gpu_layers !== null
+                  ? (modelStatus.applied_gpu_layers > 0
+                      ? `GPU Offload: ${modelStatus.applied_gpu_layers} layers [Applied]`
+                      : 'GPU Offload: CPU only / 0 layers [Applied]')
+                  : 'GPU Offload: Unavailable')}
           </div>
         </div>
 
@@ -267,20 +308,22 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
           </div>
         </div>
 
-        {/* 5. VRAM Usage */}
+        {/* 5. VRAM Footprint / Requirement */}
         <div className="p-3.5 rounded-2xl surface-base border border-[var(--color-border-subtle)] space-y-1">
           <div className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-muted)] font-medium">
             <Cpu className="w-3.5 h-3.5 text-violet-400" />
-            <span>VRAM Usage</span>
+            <span>Estimated VRAM</span>
           </div>
           <div className="text-base sm:text-lg font-bold font-mono text-[var(--color-text-primary)]">
             {isCloud
-              ? '0.0 GB'
+              ? 'Cloud API'
               : isSleeping
-              ? '0.0 GB'
-              : isLoaded
-              ? `~${(model.vramUsageGb || 4.5).toFixed(1)} GB`
-              : '0.0 GB'}
+              ? 'VRAM released'
+              : !isLoaded
+              ? 'Not loaded'
+              : (model.vramUsageGb != null && model.vramUsageGb > 0
+                  ? `~${model.vramUsageGb.toFixed(1)} GB [Estimated]`
+                  : 'Unavailable')}
           </div>
           <div className="text-[10px] text-[var(--color-text-muted)] font-mono">
             {isCloud
@@ -288,19 +331,25 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
               : isSleeping
               ? 'VRAM Released (Sleeping) [Applied]'
               : isLoaded
-              ? `${modelStatus?.applied_gpu_layers ?? 28} layers GPU [Applied]`
-              : '0 layers (VRAM Free)'}
+              ? (modelStatus?.applied_gpu_layers !== null && modelStatus?.applied_gpu_layers !== undefined
+                  ? (modelStatus.applied_gpu_layers > 0
+                      ? `${modelStatus.applied_gpu_layers} layers GPU [Applied]`
+                      : 'CPU only / 0 layers [Applied]')
+                  : 'VRAM allocation not reported')
+              : 'Unloaded from VRAM'}
           </div>
         </div>
 
-        {/* 6. RAM Usage */}
+        {/* 6. RAM Requirement */}
         <div className="p-3.5 rounded-2xl surface-base border border-[var(--color-border-subtle)] space-y-1">
           <div className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-muted)] font-medium">
             <Database className="w-3.5 h-3.5 text-teal-400" />
-            <span>System RAM</span>
+            <span>Estimated RAM</span>
           </div>
           <div className="text-base sm:text-lg font-bold font-mono text-[var(--color-text-primary)]">
-            ~{model.ramUsageGb ? `${model.ramUsageGb.toFixed(1)} GB` : '1.2 GB'}
+            {model.ramUsageGb != null && model.ramUsageGb > 0
+              ? `~${model.ramUsageGb.toFixed(1)} GB [Estimated]`
+              : 'Unavailable'}
           </div>
           <div className="text-[10px] text-[var(--color-text-muted)] font-mono">
             Host Overhead [Estimated]
@@ -315,22 +364,17 @@ export const CurrentModelHero: React.FC<CurrentModelHeroProps> = ({
               Context Allocation
             </span>
             <span className="font-mono text-xs text-[var(--color-text-secondary)]">
-              {isLoaded
-                ? `${effectiveMaxContext.toLocaleString()} tokens [Applied]`
-                : `${model.contextWindow.toLocaleString()} tokens [Configured]`}
+              {isThisModelActive && modelStatus?.applied_context_size != null && modelStatus.applied_context_size > 0
+                ? `${modelStatus.applied_context_size.toLocaleString()} tokens [Applied]`
+                : (model.contextWindow != null && model.contextWindow > 0
+                    ? `${model.contextWindow.toLocaleString()} tokens [Configured]`
+                    : 'Unavailable')}
             </span>
           </div>
 
-          <div className="w-full h-2 rounded-full surface-recessed border border-[var(--color-border-subtle)] overflow-hidden mt-2">
-            <div
-              className="h-full bg-accent-gradient rounded-full transition-all duration-300"
-              style={{ width: `${contextPercentage}%` }}
-            />
-          </div>
-
-          <div className="flex items-center justify-between text-[10px] text-[var(--color-text-muted)] font-mono pt-0.5">
-            <span>KV Cache: Unavailable (Live telemetry not polled)</span>
-            <span>{isLoaded && isAwake ? `${contextPercentage}% active` : 'Standby'}</span>
+          <div className="flex items-center justify-between text-[10px] text-[var(--color-text-muted)] font-mono pt-1">
+            <span>KV Cache: Unavailable (Live metric not reported)</span>
+            <span>{isLoaded && isAwake ? 'Ready for input' : 'Standby'}</span>
           </div>
         </div>
       </div>

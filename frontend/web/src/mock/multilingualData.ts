@@ -1,3 +1,4 @@
+/** @deprecated -- mock data for test fixtures only */
 import {
   LanguagePreferences,
   VoiceLanguageCapability,

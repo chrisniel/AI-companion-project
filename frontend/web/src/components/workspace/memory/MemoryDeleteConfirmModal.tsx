@@ -31,10 +31,10 @@ export const MemoryDeleteConfirmModal: React.FC<MemoryDeleteConfirmModalProps> =
           <AlertTriangle className="w-5 h-5 text-rose-500 flex-shrink-0 mt-0.5" />
           <div>
             <p className="font-semibold text-[var(--color-text-primary)]">
-              This action will remove the vector embedding.
+              This action will delete the memory record.
             </p>
             <p className="mt-1 leading-relaxed">
-              The assistant will no longer retrieve this record during semantic queries.
+              The entry will be removed from the SQLite database and FTS5 search index.
             </p>
           </div>
         </div>

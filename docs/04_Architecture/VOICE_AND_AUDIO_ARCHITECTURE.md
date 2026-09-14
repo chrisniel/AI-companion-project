@@ -4,7 +4,7 @@
 **Architecture Area:** Voice Pipeline, Audio Device Management & Speech Processing  
 **Document Role:** Canonical voice and audio architecture specification  
 **Document Status:** Approved Architecture / Planned Implementation (Tracks V0–V6)  
-**Primary Host:** Windows 11 Local AI Core  
+**Primary Host:** Windows 11 Local AI Runtime  
 **Target Hardware:** AMD Ryzen 5 3600, 16 GB RAM, Aisurix RX 580 8 GB VRAM  
 **Remote Companion Client:** Android Companion App  
 
@@ -333,4 +333,4 @@ Android Companion Audio Sinks (Phone Speaker / Earbud)
 
 1. **Zero Retention by Default:** Raw audio streams are never saved to SQLite, file logs, or cloud buckets. Audio memory buffers are overwritten immediately after transcription.
 2. **Local Processing Guarantee:** All audio processing executes on the user's host machine. No audio frames are forwarded to external servers without explicit user confirmation.
-3. **Hardware Privacy Indicator:** When capture is active, the Local AI Core broadcasts `voice.listening` events so Web and Android clients display prominent recording indicators.
+3. **Hardware Privacy Indicator:** When capture is active, the Local AI Runtime broadcasts `voice.listening` events so Web and Android clients display prominent recording indicators.

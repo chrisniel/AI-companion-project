@@ -10,7 +10,7 @@ interface PerformanceProfileSelectorProps {
   appliedProfile?: string | null;
   appliedContextSize?: number | null;
   appliedGpuLayers?: number | null;
-  requestedMmprojOffload?: boolean;
+  requestedMmprojOffload?: boolean | null;
   appliedMmprojOffload?: boolean | null;
   onSelectProfile: (profile: PerformanceProfile) => void;
 }
@@ -89,7 +89,15 @@ export const PerformanceProfileSelector: React.FC<PerformanceProfileSelectorProp
           </p>
         </div>
 
-        <div className="flex items-center gap-2 text-xs font-mono">
+        <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+          {appliedProfile && appliedProfile.toLowerCase() !== activeId && (
+            <span
+              className="px-2 py-0.5 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-mono font-bold"
+              title={`Requested profile "${activeId}" differs from applied runtime profile "${appliedProfile}". Restart runtime to apply.`}
+            >
+              Profile change pending restart
+            </span>
+          )}
           <span className="text-[var(--color-text-muted)]">Requested:</span>
           <span className="font-semibold text-[var(--color-accent)] capitalize">{activeId}</span>
           <span className="text-[var(--color-text-muted)] ml-2">Applied:</span>
@@ -122,9 +130,9 @@ export const PerformanceProfileSelector: React.FC<PerformanceProfileSelectorProp
         <div>
           <span className="text-[var(--color-text-muted)] block text-[10px]">Vision Projector (Req)</span>
           <span className="font-semibold text-[var(--color-text-secondary)]">
-            {requestedMmprojOffload !== undefined
-              ? (requestedMmprojOffload ? 'GPU [Configured]' : 'CPU [Configured]')
-              : (activeId === 'eco' ? 'CPU [Configured]' : 'GPU [Configured]')}
+            {requestedMmprojOffload !== null && requestedMmprojOffload !== undefined
+              ? (requestedMmprojOffload ? 'GPU [Requested]' : 'CPU [Requested]')
+              : 'Unavailable'}
           </span>
         </div>
         <div>

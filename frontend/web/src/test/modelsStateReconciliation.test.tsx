@@ -3,6 +3,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ModelsView } from '../components/workspace/ModelsView';
 import { Header } from '../components/layout/Header';
+import { CurrentModelHero } from '../components/workspace/models/CurrentModelHero';
+import { ModelDetailsModal } from '../components/workspace/models/ModelDetailsModal';
+import { LocalModel } from '../types';
 import { BackendProvider } from '../context/BackendContext';
 import { ThemeProvider } from '../context/ThemeContext';
 import * as api from '../services/api';
@@ -13,7 +16,7 @@ vi.mock('../services/api', async () => {
   const actual = await vi.importActual<typeof import('../services/api')>('../services/api');
   return {
     ...actual,
-    checkHealth: vi.fn().mockResolvedValue({ status: 'healthy', version: '0.1.0' }),
+    checkHealth: vi.fn().mockResolvedValue({ status: 'healthy' }),
     getModelStatus: vi.fn(),
     loadModel: vi.fn(),
     unloadModel: vi.fn(),
@@ -121,6 +124,7 @@ function createMockStatus(overrides: Partial<ModelStatusResponse> = {}): ModelSt
 describe('Phase 4: Models Web UI State Reconciliation & Truthfulness', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(api.checkHealth).mockResolvedValue({ status: 'healthy' });
   });
 
   it('1. backend active model hydrates UI without relying on m-1 default', async () => {
@@ -175,7 +179,7 @@ describe('Phase 4: Models Web UI State Reconciliation & Truthfulness', () => {
 
     // 2B card must now show Selected
     await waitFor(() => {
-      expect(card2b?.textContent).toContain('Selected');
+      expect(document.getElementById('model-card-qwen3-vl-2b-instruct')?.textContent).toContain('Selected');
     });
 
     // 4B card must still show Loaded
@@ -480,12 +484,485 @@ describe('Phase 4: Models Web UI State Reconciliation & Truthfulness', () => {
     await waitFor(() => {
       // Model button should display Core Offline
       expect(screen.getByText('Core Offline')).toBeDefined();
-      // Profile indicator must explicitly indicate Requested, not Applied
-      expect(screen.getByText('Requested')).toBeDefined();
+      // Profile indicator must indicate Unavailable when Core is offline
+      expect(screen.getAllByText('Unavailable').length).toBeGreaterThanOrEqual(1);
     });
 
     // Ensure it does not falsely claim to be [Applied]
     expect(screen.queryByText(/Applied/i)).toBeNull();
   });
+
+  it('12. variant badges render truthfully for base, thinking, instruct, and custom variants without defaulting to instruct', async () => {
+    vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus());
+    vi.mocked(api.fetchModelRegistry).mockResolvedValueOnce([
+      {
+        id: 'model-base',
+        display_name: 'Llama-3-8B-Base',
+        family: 'Llama',
+        variant: 'base',
+        primary_file: 'models/llama3-base.gguf',
+        companion_files: [],
+        capabilities: ['chat'],
+        recommended_profiles: ['balanced'],
+        estimated_vram_gb: 4.0,
+        estimated_ram_gb: 2.0,
+        quantization: 'Q4_K_M',
+        parameters: '8B',
+        context_limit: 4096,
+        license: 'Meta',
+        source: 'local',
+        validation_status: 'verified',
+        primary_file_exists: true,
+        companion_files_valid: true,
+        size_gb: 4.2,
+      },
+      {
+        id: 'model-code',
+        display_name: 'DeepSeek-Coder-6.7B',
+        family: 'DeepSeek',
+        variant: 'code',
+        primary_file: 'models/deepseek-code.gguf',
+        companion_files: [],
+        capabilities: ['chat'],
+        recommended_profiles: ['balanced'],
+        estimated_vram_gb: 3.8,
+        estimated_ram_gb: 2.0,
+        quantization: 'Q4_K_M',
+        parameters: '6.7B',
+        context_limit: 4096,
+        license: 'DeepSeek',
+        source: 'local',
+        validation_status: 'verified',
+        primary_file_exists: true,
+        companion_files_valid: true,
+        size_gb: 3.8,
+      },
+    ]);
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    // Verify Base and Code badges are rendered truthfully
+    await waitFor(() => {
+      expect(screen.getAllByText('Base').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Code').length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  it('13. missing mmproj companion shows degraded warning while model remains loadable for text', async () => {
+    vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus({ active_model: null, model_loaded: false }));
+    vi.mocked(api.fetchModelRegistry).mockResolvedValueOnce([
+      {
+        id: 'qwen3-vl-degraded',
+        display_name: 'Qwen3-VL-2B-Degraded',
+        family: 'Qwen',
+        variant: 'instruct',
+        primary_file: 'models/qwen3-vl-2b-instruct.gguf',
+        companion_files: [{ role: 'mmproj', path: 'models/mmproj-missing.gguf' }],
+        capabilities: ['chat', 'vision'],
+        recommended_profiles: ['balanced'],
+        estimated_vram_gb: 2.1,
+        estimated_ram_gb: 1.1,
+        quantization: 'Q4_K_M',
+        parameters: '2.4B',
+        context_limit: 2048,
+        license: 'Apache-2.0',
+        source: 'local',
+        validation_status: 'missing_companion',
+        primary_file_exists: true,
+        companion_files_valid: false,
+        size_gb: 1.6,
+      },
+    ]);
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    // Degraded warning appears
+    await waitFor(() => {
+      expect(screen.getAllByText(/Vision companion missing \(Degraded\)/i).length).toBeGreaterThan(0);
+    });
+
+    // Model must NOT be marked incompatible; load button remains available
+    const card = document.getElementById('model-card-qwen3-vl-degraded');
+    expect(card).not.toBeNull();
+    expect(card?.textContent).not.toContain('Incompatible');
+    const loadBtn = document.getElementById('model-activate-btn-qwen3-vl-degraded');
+    expect(loadBtn).not.toBeNull();
+    expect(loadBtn).not.toBeDisabled();
+  });
+
+  it('14. requested profile != applied profile displays explicit Profile change pending restart warning', async () => {
+    const restartPendingStatus = createMockStatus({
+      requested_profile: 'maximum',
+      applied_profile: 'balanced',
+      applied_context_size: 4096,
+      applied_gpu_layers: 28,
+    });
+    vi.mocked(api.getModelStatus).mockResolvedValue(restartPendingStatus);
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Profile change pending restart').length).toBeGreaterThan(0);
+    });
+  });
+
+  it('15. missing size_gb renders Unavailable instead of 0.00 GB and does not fabricate 28-layer or 4.5 GB fallbacks', async () => {
+    vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus({
+      active_model: 'model-no-size',
+      applied_gpu_layers: null,
+      applied_profile: 'balanced',
+    }));
+    vi.mocked(api.fetchModelRegistry).mockResolvedValueOnce([
+      {
+        id: 'model-no-size',
+        display_name: 'No Size Model',
+        family: 'Custom',
+        variant: 'instruct',
+        primary_file: 'models/custom.gguf',
+        companion_files: [],
+        capabilities: ['chat'],
+        recommended_profiles: ['balanced'],
+        estimated_vram_gb: 0,
+        estimated_ram_gb: 0,
+        quantization: 'Q4_0',
+        parameters: '7B',
+        context_limit: 2048,
+        license: 'Custom',
+        source: 'local',
+        validation_status: 'verified',
+        primary_file_exists: true,
+        companion_files_valid: true,
+        size_gb: undefined as unknown as number,
+      },
+    ]);
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Unavailable').length).toBeGreaterThan(0);
+    });
+
+    // Verify 0.00 GB is NOT displayed
+    expect(screen.queryByText(/0\.00 GB/i)).toBeNull();
+  });
+
+  it('16. selected model B never inherits active model A MODEL_READY or MODEL_SLEEPING badge in hero', async () => {
+    // Model A is active and MODEL_READY
+    const status = createMockStatus({
+      active_model: 'qwen3-vl-4b-instruct',
+      runtime_state: 'MODEL_READY',
+      model_loaded: true,
+      model_awake: true,
+    });
+    vi.mocked(api.getModelStatus).mockResolvedValue(status);
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    // Initial state: Hero shows active Model A
+    await waitFor(() => {
+      expect(screen.getAllByText('Qwen3-VL-4B-Instruct').length).toBeGreaterThanOrEqual(1);
+    });
+
+    // User selects Model B (2B Instruct)
+    const card2b = document.getElementById('model-card-qwen3-vl-2b-instruct');
+    expect(card2b).not.toBeNull();
+    fireEvent.click(card2b!);
+
+    // Hero now displays Model B
+    await waitFor(() => {
+      const hero = document.getElementById('current-model-hero-card');
+      expect(hero).not.toBeNull();
+      expect(hero?.textContent).toContain('Qwen3-VL-2B-Instruct');
+      // Hero for Model B MUST render Selected / Not Active, NOT Loaded / Awake!
+      expect(hero?.textContent).toContain('Selected / Not Active');
+      expect(hero?.textContent).not.toContain('Loaded / Awake');
+    });
+  });
+
+  it('17. context utilization is not fabricated and does not invent fake active token percentages', async () => {
+    const status = createMockStatus({
+      active_model: 'qwen3-vl-4b-instruct',
+      model_loaded: true,
+      model_awake: true,
+      applied_context_size: 4096,
+    });
+    vi.mocked(api.getModelStatus).mockResolvedValue(status);
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      // Must state that live KV token usage is Unavailable
+      expect(screen.getByText(/KV Cache: Unavailable/i)).toBeInTheDocument();
+    });
+
+    // Ensure fake active token count (3840) or fake percentage is NOT present
+    expect(screen.queryByText(/3840/i)).toBeNull();
+    expect(screen.queryByText(/% active/i)).toBeNull();
+  });
+
+  it('18. missing RAM estimate does not become 1.2 GB fallback', async () => {
+    vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus({
+      active_model: 'model-zero-ram',
+      applied_profile: 'balanced',
+    }));
+    vi.mocked(api.fetchModelRegistry).mockResolvedValueOnce([
+      {
+        id: 'model-zero-ram',
+        display_name: 'Zero RAM Model',
+        family: 'Test',
+        variant: 'instruct',
+        primary_file: 'models/zero-ram.gguf',
+        companion_files: [],
+        capabilities: ['chat'],
+        recommended_profiles: ['balanced'],
+        estimated_vram_gb: 2.0,
+        estimated_ram_gb: 0,
+        quantization: 'Q4_K_M',
+        parameters: '3B',
+        context_limit: 2048,
+        license: 'MIT',
+        source: 'local',
+        validation_status: 'verified',
+        primary_file_exists: true,
+        companion_files_valid: true,
+        size_gb: 2.0,
+      },
+    ]);
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      const hero = document.getElementById('current-model-hero-card');
+      expect(hero).not.toBeNull();
+      // Estimated RAM must be Unavailable, not 1.2 GB
+      expect(hero?.textContent).toContain('Unavailable');
+      expect(hero?.textContent).not.toContain('1.2 GB');
+    });
+  });
+
+  it('19. missing requested_mmproj_offload renders Unavailable without inferring from profile', async () => {
+    const statusWithoutReqMmproj = createMockStatus({
+      requested_mmproj_offload: undefined,
+      applied_mmproj_offload: true,
+      requested_profile: 'balanced',
+      applied_profile: 'balanced',
+    });
+    vi.mocked(api.getModelStatus).mockResolvedValue(statusWithoutReqMmproj);
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      // Vision Projector (Req) must render Unavailable, NOT GPU [Configured] or CPU [Configured]
+      expect(screen.getAllByText('Unavailable').length).toBeGreaterThan(0);
+      expect(screen.queryByText('GPU [Configured]')).toBeNull();
+      expect(screen.queryByText('CPU [Configured]')).toBeNull();
+    });
+  });
+
+  it('20. ModelDetailsModal has no fabricated sampling presets, Open Source license, or GGUF v3 format', async () => {
+    vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus());
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Qwen3-VL-4B-Instruct').length).toBeGreaterThanOrEqual(1);
+    });
+
+    // Click Details button on Model 4B
+    const detailsBtn = document.getElementById('model-details-btn-qwen3-vl-4b-instruct');
+    expect(detailsBtn).not.toBeNull();
+    fireEvent.click(detailsBtn!);
+
+    // Modal opens
+    await waitFor(() => {
+      expect(screen.getByText('Sampling parameters: Not reported by registry')).toBeInTheDocument();
+    });
+
+    // Ensure fake defaults are NOT present
+    expect(screen.queryByText('0.7')).toBeNull();
+    expect(screen.queryByText('0.9')).toBeNull();
+    expect(screen.queryByText('1.1')).toBeNull();
+    expect(screen.queryByText('Repeat Penalty')).toBeNull();
+    expect(screen.queryByText('Open Source')).toBeNull();
+  });
+
+  it('21. registry VRAM estimate is never labeled live or allocated usage and VramTargetSlider has no default 4.9 GB', async () => {
+    vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus({
+      active_model: 'qwen3-vl-4b-instruct',
+    }));
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      // Must say VRAM Planning Breakdown, not Allocated VRAM Breakdown
+      expect(screen.getByText('VRAM Planning Breakdown')).toBeInTheDocument();
+    });
+
+    // Ensure "Allocated VRAM Breakdown" is NOT in the document
+    expect(screen.queryByText('Allocated VRAM Breakdown')).toBeNull();
+    // Ensure "Free for Windows / Display" is NOT in the document
+    expect(screen.queryByText(/Free for Windows \/ Display/i)).toBeNull();
+    // Ensure default 4.9 GB is NOT present
+    expect(screen.queryByText(/4\.9 GB/i)).toBeNull();
+  });
+
+  it('22. absent applied_context_size never causes configured context to display [Applied]', async () => {
+    // Model is loaded, but backend reports applied_context_size as null/undefined
+    const statusNoAppliedContext = createMockStatus({
+      active_model: 'qwen3-vl-4b-instruct',
+      model_loaded: true,
+      model_awake: true,
+      applied_context_size: null,
+    });
+    vi.mocked(api.getModelStatus).mockResolvedValue(statusNoAppliedContext);
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      // Must display [Configured], NOT [Applied]
+      expect(screen.getByText('4,096 tokens [Configured]')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText(/4,096 tokens \[Applied\]/i)).toBeNull();
+  });
+
+  it('23. router_running alone never produces Vulkan Offload [Applied]', async () => {
+    // router_running is true, but applied_gpu_layers is null
+    const statusNoGpuLayers = createMockStatus({
+      active_model: 'qwen3-vl-4b-instruct',
+      router_running: true,
+      applied_gpu_layers: null,
+    });
+    vi.mocked(api.getModelStatus).mockResolvedValue(statusNoGpuLayers);
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      // Must say GPU Offload: Unavailable
+      expect(screen.getByText('GPU Offload: Unavailable')).toBeInTheDocument();
+    });
+
+    // Must NOT claim Vulkan Offload (Core) [Applied]
+    expect(screen.queryByText(/Vulkan Offload.*\[Applied\]/i)).toBeNull();
+  });
+
+  it('24. no instruction-model fallback description is fabricated when description is absent', async () => {
+    const dummyModel: LocalModel = {
+      id: 'model-no-desc',
+      name: 'No Desc Model',
+      family: 'Mystery',
+      parameters: '1B',
+      quantization: 'Q4_0',
+      contextWindow: 2048,
+      status: 'unloaded',
+      engine: 'llama.cpp',
+      description: '',
+    };
+
+    const { rerender } = render(
+      <CurrentModelHero
+        model={dummyModel}
+        activeModelId={null}
+      />
+    );
+
+    // CurrentModelHero must render 'Description unavailable' and NOT 'General instruction model'
+    expect(screen.getByText(/Description unavailable/i)).toBeInTheDocument();
+    expect(screen.queryByText(/General instruction model/i)).toBeNull();
+
+    rerender(
+      <ModelDetailsModal
+        model={dummyModel}
+        isOpen={true}
+        onClose={vi.fn()}
+        isActive={false}
+        onActivate={vi.fn()}
+      />
+    );
+
+    // ModelDetailsModal must render 'Description unavailable' and NOT 'Instruction-tuned transformer model'
+    expect(screen.getAllByText(/Description unavailable/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Instruction-tuned transformer model/i)).toBeNull();
+  });
+
+  it('25. ModelsView does not render fake providers, cloud routing, or mock models', async () => {
+    vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus({
+      active_model: 'qwen3-vl-4b-instruct',
+    }));
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Model Library')).toBeInTheDocument();
+    });
+
+    // Ensure ModelProvidersCard / mockModelProviders are NOT rendered
+    expect(screen.queryByText(/Ollama/i)).toBeNull();
+    expect(screen.queryByText(/Gemini API/i)).toBeNull();
+    expect(screen.queryByText(/DeepSeek-R1-Distill-Qwen-8B/i)).toBeNull();
+
+    // Ensure fake ProviderRoutingCard controls are NOT rendered
+    expect(screen.queryByText(/Local First/i)).toBeNull();
+    expect(screen.queryByText(/Cloud Fallback/i)).toBeNull();
+    expect(screen.queryByText(/Ask before cloud use/i)).toBeNull();
+
+    // Ensure fake AdvancedRuntimeSettings are NOT rendered
+    expect(screen.queryByText(/Technical Runtime Architecture/i)).toBeNull();
+    expect(screen.queryByText(/KV Cache Quantization/i)).toBeNull();
+  });
 });
+
+
 
