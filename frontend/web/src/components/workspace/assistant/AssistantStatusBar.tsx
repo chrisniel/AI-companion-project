@@ -50,7 +50,7 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
   );
   const effectiveModelName = isOnline
     ? (activeModelEntry ? activeModelEntry.display_name : (activeModelId || 'No Model Loaded'))
-    : (currentModelName || 'Offline Demo');
+    : (currentModelName || 'Runtime Offline');
 
   const isModelSleeping = isOnline && modelStatus?.runtime_state === 'MODEL_SLEEPING';
   const isModelAwake = isOnline && modelStatus?.runtime_state === 'MODEL_READY';
@@ -80,12 +80,12 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
     ? (modelStatus?.applied_profile
         ? `llama.cpp (${modelStatus.applied_profile.toUpperCase()})`
         : (modelStatus?.provider || 'llama.cpp'))
-    : 'Offline Mode';
+    : 'Runtime Offline';
 
   // Assistant State Status Label (authoritative runtime truth from client/SSE state)
   const getAssistantStateDisplay = () => {
     if (!isOnline) {
-      return { label: 'Offline', color: 'text-[var(--color-text-muted)]', desc: 'Core server offline — demo mode' };
+      return { label: 'Offline', color: 'text-[var(--color-text-muted)]', desc: 'Core server offline' };
     }
     if (isRouterOffline) {
       return { label: 'Router Stopped', color: 'text-amber-500', desc: 'Core online, llama.cpp router not running' };

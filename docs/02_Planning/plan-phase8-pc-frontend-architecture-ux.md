@@ -363,6 +363,27 @@ Create frontend/web/src/components/workspace/assistant/:
   - mmproj warning badge (vision degraded, not full incompatibility)
   - Applied-vs-requested profile labels (explicit and distinct)
 
+### 8A.3b -- Production Truthfulness Sweep
+
+8A.3b.1 -- Shell + Home
+- App.tsx
+- Header.tsx
+- AssistantPanel.tsx
+- GlobalComposer.tsx
+- HomeView.tsx
+- AssistantView.tsx (only where necessary to remove shell/offline fabricated defaults while preserving streaming behavior)
+
+8A.3b.2 -- Tasks + Schedule
+- TasksView
+- ScheduleView
+- Existing backend Tasks API integration
+
+8A.3b.3 -- Characters + Devices + Logs + Settings
+- CharactersView
+- DevicesView
+- LogsView
+- SettingsView
+
 ### 8A.4 -- Deprecation Annotations
 
 Add /** @deprecated -- mock data for test fixtures only */ to all mock/*.ts headers.

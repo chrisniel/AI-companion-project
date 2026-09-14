@@ -179,7 +179,7 @@ describe('Phase 4: Models Web UI State Reconciliation & Truthfulness', () => {
 
     // 2B card must now show Selected
     await waitFor(() => {
-      expect(card2b?.textContent).toContain('Selected');
+      expect(document.getElementById('model-card-qwen3-vl-2b-instruct')?.textContent).toContain('Selected');
     });
 
     // 4B card must still show Loaded
@@ -484,8 +484,8 @@ describe('Phase 4: Models Web UI State Reconciliation & Truthfulness', () => {
     await waitFor(() => {
       // Model button should display Core Offline
       expect(screen.getByText('Core Offline')).toBeDefined();
-      // Profile indicator must explicitly indicate Requested, not Applied
-      expect(screen.getByText('Requested')).toBeDefined();
+      // Profile indicator must indicate Unavailable when Core is offline
+      expect(screen.getAllByText('Unavailable').length).toBeGreaterThanOrEqual(1);
     });
 
     // Ensure it does not falsely claim to be [Applied]

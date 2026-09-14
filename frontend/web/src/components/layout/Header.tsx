@@ -34,10 +34,6 @@ import {
   DesktopSizeSelector,
   DesktopSimulationPreset,
 } from './DesktopSizeSelector';
-import {
-  mockAssistantPersonas,
-  mockNotifications,
-} from '../../mock/localAiData';
 
 export interface HeaderProps {
   searchQuery: string;
@@ -71,15 +67,13 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectCharacter,
   performanceProfile = 'balanced',
   onChangePerformanceProfile,
-  userName = 'Chris',
+  userName = 'Local User',
   desktopPreset = 'auto',
   onSelectDesktopPreset,
   actualWidth = 1440,
 }) => {
   const { mode, toggleTheme, accent, setAccent, currentAccentPreset } = useTheme();
   const { isOnline, modelStatus, isModelLoading, loadModel, changeProfile, registry } = useBackend();
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [notifications, setNotifications] = useState(mockNotifications);
   const [switchingModelId, setSwitchingModelId] = useState<string | null>(null);
 
   const isLoaded = Boolean(isOnline && modelStatus?.model_loaded && modelStatus?.active_model);
@@ -105,16 +99,6 @@ export const Header: React.FC<HeaderProps> = ({
       ? `${activeDisplayName} (Sleeping)`
       : `${activeDisplayName}`;
   }
-
-  const activePersona =
-    mockAssistantPersonas.find((p) => p.id === activeCharacterId) ||
-    mockAssistantPersonas[0];
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
-
-  const markAllRead = () => {
-    setNotifications(notifications.map((n) => ({ ...n, read: true })));
-  };
 
   // Model options for dropdown — strictly populated from verified installed registry
   const modelOptions = registry.map((entry) => {
@@ -156,65 +140,54 @@ export const Header: React.FC<HeaderProps> = ({
     };
   });
 
-  // Character options for dropdown
-  const characterOptions = mockAssistantPersonas.map((p) => ({
-    id: p.id,
-    label: p.name,
-    badge: p.title.split(' ')[0],
-    icon: <Bot className="w-3.5 h-3.5 text-[var(--color-accent)]" />,
-    onClick: () => onSelectCharacter?.(p.id),
-  }));
-
   // Performance Profile options & truthfulness
-  const requestedProfile = (modelStatus?.requested_profile as PerformanceProfile | undefined) || performanceProfile || 'balanced';
+  const requestedProfile = isOnline ? (modelStatus?.requested_profile as PerformanceProfile | undefined) : undefined;
   const appliedProfile = (isOnline && modelStatus?.router_running) ? (modelStatus?.applied_profile as PerformanceProfile | null) : null;
+  const profileDisplay = !isOnline || !modelStatus ? 'Unavailable' : (requestedProfile || 'Not Set');
 
   const profileOptions = [
     {
       id: 'maximum',
       label: 'Maximum (Max AI)',
-      badge: appliedProfile === 'maximum' ? 'Applied' : requestedProfile === 'maximum' ? 'Requested' : undefined,
+      badge: !isOnline || !modelStatus ? undefined : appliedProfile === 'maximum' ? 'Applied' : requestedProfile === 'maximum' ? 'Requested' : undefined,
       icon: <Zap className="w-3.5 h-3.5 text-amber-500" />,
       onClick: async () => {
+        if (!isOnline) return;
         onChangePerformanceProfile?.('maximum');
-        if (isOnline) {
-          try {
-            await changeProfile('maximum');
-          } catch {
-            // Handled in backend context
-          }
+        try {
+          await changeProfile('maximum');
+        } catch {
+          // Handled in backend context
         }
       },
     },
     {
       id: 'balanced',
       label: 'Balanced Profile',
-      badge: appliedProfile === 'balanced' ? 'Applied' : requestedProfile === 'balanced' ? 'Requested' : undefined,
+      badge: !isOnline || !modelStatus ? undefined : appliedProfile === 'balanced' ? 'Applied' : requestedProfile === 'balanced' ? 'Requested' : undefined,
       icon: <Gauge className="w-3.5 h-3.5 text-[var(--color-accent)]" />,
       onClick: async () => {
+        if (!isOnline) return;
         onChangePerformanceProfile?.('balanced');
-        if (isOnline) {
-          try {
-            await changeProfile('balanced');
-          } catch {
-            // Handled in backend context
-          }
+        try {
+          await changeProfile('balanced');
+        } catch {
+          // Handled in backend context
         }
       },
     },
     {
       id: 'eco',
       label: 'Eco Profile',
-      badge: appliedProfile === 'eco' ? 'Applied' : requestedProfile === 'eco' ? 'Requested' : undefined,
+      badge: !isOnline || !modelStatus ? undefined : appliedProfile === 'eco' ? 'Applied' : requestedProfile === 'eco' ? 'Requested' : undefined,
       icon: <Leaf className="w-3.5 h-3.5 text-emerald-500" />,
       onClick: async () => {
+        if (!isOnline) return;
         onChangePerformanceProfile?.('eco');
-        if (isOnline) {
-          try {
-            await changeProfile('eco');
-          } catch {
-            // Handled in backend context
-          }
+        try {
+          await changeProfile('eco');
+        } catch {
+          // Handled in backend context
         }
       },
     },
@@ -307,11 +280,13 @@ export const Header: React.FC<HeaderProps> = ({
                 type="button"
                 className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-xl surface-raised border border-[var(--color-border-subtle)] hover:border-[var(--color-accent)]/40 transition-all text-xs text-[var(--color-text-primary)]"
                 title={
-                  !isOnline
-                    ? `Profile: ${requestedProfile} (Core Offline — Requested only)`
+                  !isOnline || !modelStatus
+                    ? 'Profile: Unavailable (Core Offline)'
                     : appliedProfile
                     ? `Profile: ${appliedProfile} [Applied]`
-                    : `Profile: ${requestedProfile} (Pending application)`
+                    : requestedProfile
+                    ? `Profile: ${requestedProfile} (Requested)`
+                    : 'Profile: Unavailable'
                 }
               >
                 {requestedProfile === 'turbo' && <Zap className="w-3.5 h-3.5 text-amber-500" />}
@@ -320,15 +295,17 @@ export const Header: React.FC<HeaderProps> = ({
                   <Gauge className="w-3.5 h-3.5 text-[var(--color-accent)]" />
                 )}
                 {requestedProfile === 'eco' && <Leaf className="w-3.5 h-3.5 text-emerald-500" />}
-                <span className="font-medium capitalize">{requestedProfile}</span>
+                <span className="font-medium capitalize">{profileDisplay}</span>
                 <span className={`text-[10px] font-mono px-1 py-0.5 rounded ${
-                  !isOnline
+                  !isOnline || !modelStatus
                     ? 'text-[var(--color-text-muted)] bg-[var(--color-surface-secondary)]'
                     : appliedProfile
                     ? 'text-emerald-400 bg-emerald-500/10'
-                    : 'text-amber-400 bg-amber-500/10'
+                    : requestedProfile
+                    ? 'text-amber-400 bg-amber-500/10'
+                    : 'text-[var(--color-text-muted)] bg-[var(--color-surface-secondary)]'
                 }`}>
-                  {!isOnline ? 'Requested' : appliedProfile ? 'Applied' : 'Pending'}
+                  {!isOnline || !modelStatus ? 'Unavailable' : appliedProfile ? 'Applied' : requestedProfile ? 'Requested' : 'Unavailable'}
                 </span>
                 <ChevronDown className="w-3 h-3 text-[var(--color-text-muted)]" />
               </button>
@@ -352,67 +329,34 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-xl surface-recessed border border-[var(--color-border-subtle)] text-[11px] font-mono">
             <Cpu className="w-3.5 h-3.5 text-[var(--color-accent)]" />
             <span className="text-[var(--color-text-secondary)]">VRAM:</span>
-            <span className={`font-semibold ${modelStatus?.model_resident ? 'text-emerald-400' : isSleeping ? 'text-purple-400' : 'text-[var(--color-text-muted)]'}`}>
-              {modelStatus?.model_resident ? 'Active (Loaded)' : isSleeping ? 'Sleeping (Released)' : 'Free (0 MB)'}
+            <span className={`font-semibold ${
+              !isOnline || !modelStatus
+                ? 'text-[var(--color-text-muted)]'
+                : modelStatus?.model_resident
+                ? 'text-emerald-400'
+                : isSleeping
+                ? 'text-purple-400'
+                : 'text-[var(--color-text-muted)]'
+            }`}>
+              {!isOnline || !modelStatus
+                ? 'Unavailable'
+                : modelStatus?.model_resident
+                ? 'Active (Loaded)'
+                : isSleeping
+                ? 'Released'
+                : 'Not resident'}
             </span>
           </div>
 
-          {/* Notification Bell with Popover */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setNotificationsOpen(!notificationsOpen)}
-              className="relative w-8 h-8 rounded-xl surface-raised border border-[var(--color-border-subtle)] hover:border-[var(--color-accent)]/40 flex items-center justify-center text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-all"
-              title="System Notifications"
-            >
-              <Bell className="w-3.5 h-3.5" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[var(--color-accent)] text-white text-[9px] font-bold flex items-center justify-center shadow-sm">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-
-            {notificationsOpen && (
-              <div className="absolute right-0 top-10 w-80 p-3 rounded-2xl bg-[var(--color-surface-elevated)]/95 backdrop-blur-2xl border border-[var(--color-surface-glass-border)] shadow-2xl z-[100] space-y-2 animate-in fade-in zoom-in-95 duration-150">
-                <div className="flex items-center justify-between pb-2 border-b border-[var(--color-border-subtle)]">
-                  <span className="text-xs font-bold text-[var(--color-text-primary)]">
-                    Notifications
-                  </span>
-                  {unreadCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={markAllRead}
-                      className="text-[10px] text-[var(--color-accent)] hover:underline"
-                    >
-                      Mark all as read
-                    </button>
-                  )}
-                </div>
-
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {notifications.map((n) => (
-                    <div
-                      key={n.id}
-                      className={`p-2.5 rounded-xl border text-xs transition-colors ${
-                        n.read
-                          ? 'surface-recessed border-[var(--color-border-subtle)] opacity-75'
-                          : 'surface-raised border-[var(--color-accent)]/30'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between text-[10px] font-mono text-[var(--color-text-muted)] mb-1">
-                        <span className="font-semibold text-[var(--color-text-primary)]">
-                          {n.title}
-                        </span>
-                        <span>{n.time}</span>
-                      </div>
-                      <p className="text-[11px] text-[var(--color-text-secondary)]">{n.message}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          {/* Notification Bell (Disabled - Planned) */}
+          <button
+            type="button"
+            disabled
+            className="w-8 h-8 rounded-xl surface-recessed border border-[var(--color-border-subtle)] opacity-60 flex items-center justify-center text-[var(--color-text-muted)] cursor-not-allowed"
+            title="Notifications (Planned)"
+          >
+            <Bell className="w-3.5 h-3.5" />
+          </button>
 
           {/* Desktop Resolution & Space Priority Selector (1280, 1366, 1440, 1920) */}
           {onSelectDesktopPreset && (
@@ -442,9 +386,8 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center gap-2 pl-1 sm:pl-2 border-l border-[var(--color-border-subtle)]">
             <div className="relative">
               <div className="w-7 h-7 rounded-xl bg-accent-gradient flex items-center justify-center text-white text-xs font-bold shadow-sm glow-accent-sm">
-                {userName ? userName[0].toUpperCase() : 'C'}
+                {userName ? userName[0].toUpperCase() : 'U'}
               </div>
-              <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-[var(--color-app-bg)]" />
             </div>
             <span className="hidden xl:inline text-xs font-semibold text-[var(--color-text-primary)]">
               {userName}

@@ -23,9 +23,8 @@ import { ApplicationStatesShowcase } from './components/workspace/states/Applica
 import { DesktopSimulationPreset } from './components/layout/DesktopSizeSelector';
 import { WorkspaceErrorBoundary } from './components/workspace/WorkspaceErrorBoundary';
 
-// Types & Mock Data
+// Types
 import { AssistantPanelMode, AssistantState, PerformanceProfile } from './types';
-import { mockAssistantPersonas } from './mock/localAiData';
 
 function MainApp() {
   const { modelStatus } = useBackend();
@@ -109,9 +108,7 @@ function MainApp() {
     }
   };
 
-  const activePersona =
-    mockAssistantPersonas.find((p) => p.id === activeCharacterId) ||
-    mockAssistantPersonas[0];
+  const activeCharacterName = 'Assistant';
 
   const renderSection = () => {
     switch (activeSection) {
@@ -119,19 +116,19 @@ function MainApp() {
         return (
           <HomeView
             onNavigate={(sec) => setActiveSection(sec)}
-            activeCharacterName={activePersona.name}
-            userName="Chris"
+            activeCharacterName={activeCharacterName}
+            userName="Local User"
           />
         );
       case 'assistant':
         return (
           <AssistantView
-            activeCharacterName={activePersona.name}
-            userName="Chris"
+            activeCharacterName={activeCharacterName}
+            userName="Local User"
             assistantState={assistantState}
             onSetAssistantState={setAssistantState}
             currentModelName={
-              backendActiveModelId || selectedModelId || 'qwen3-vl-2b-instruct'
+              backendActiveModelId || selectedModelId || undefined
             }
           />
         );
@@ -171,8 +168,8 @@ function MainApp() {
         return (
           <HomeView
             onNavigate={(sec) => setActiveSection(sec)}
-            activeCharacterName={activePersona.name}
-            userName="Chris"
+            activeCharacterName={activeCharacterName}
+            userName="Local User"
           />
         );
     }
@@ -234,7 +231,7 @@ function MainApp() {
           onSelectCharacter={setActiveCharacterId}
           performanceProfile={performanceProfile}
           onChangePerformanceProfile={setPerformanceProfile}
-          userName="Chris"
+          userName="Local User"
           desktopPreset={desktopPreset}
           onSelectDesktopPreset={setDesktopPreset}
           actualWidth={desktopPreset === 'auto' ? windowWidth : desktopPreset}
@@ -259,13 +256,16 @@ function MainApp() {
 
             {/* Persistent Global Assistant Composer (Overlayed only on Main menu views, with auto-hide on hover/focus) */}
             {['home', 'tasks', 'schedule', 'health', 'memory'].includes(activeSection) && (
-              <GlobalComposer activeCharacterName={activePersona.name} />
+              <GlobalComposer
+                activeCharacterName={activeCharacterName}
+                onOpenAssistant={() => setActiveSection('assistant')}
+              />
             )}
 
             {/* Subdued footer */}
             <footer className="pt-6 pb-2 text-center text-[11px] text-[var(--color-text-muted)]">
               <p>
-                Local AI Control Center • On-Device Neural Core v2.4 • Zero External Cloud Telemetry
+                Local AI Control Center • Local Inference & Companion Workspace
               </p>
             </footer>
           </main>
@@ -274,6 +274,7 @@ function MainApp() {
           <AssistantPanel
             mode={assistantPanelMode}
             onSetMode={setAssistantPanelMode}
+            onOpenAssistant={() => setActiveSection('assistant')}
             selectedPersonaId={activeCharacterId}
             onSelectPersona={setActiveCharacterId}
             assistantState={assistantState}

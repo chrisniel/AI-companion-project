@@ -601,10 +601,8 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
         </BackendProvider>
       );
 
-      // In offline mode, initial demo messages are rendered
-      await screen.findByText(/Airgap security enforcement verified/i);
-
-      const input = screen.getByPlaceholderText(/Message Aura/i);
+      // In offline mode, wait for composer input to be ready
+      const input = await screen.findByPlaceholderText(/Message Aura/i);
       fireEvent.change(input, { target: { value: 'test core offline' } });
       fireEvent.click(screen.getByTitle(/Send prompt to local model/i));
 

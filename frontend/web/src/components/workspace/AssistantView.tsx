@@ -66,7 +66,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
   );
   const effectiveModelName = isOnline
     ? (activeModelEntry ? activeModelEntry.display_name : (activeModelId || 'No Model Loaded'))
-    : (currentModelName || 'Offline Demo');
+    : (currentModelName || 'Runtime Offline');
 
   const isModelSleeping = isOnline && modelStatus?.runtime_state === 'MODEL_SLEEPING';
   const isModelUnloaded = isOnline && (!modelStatus?.model_loaded || modelStatus?.runtime_state === 'MODEL_UNLOADED');
@@ -83,23 +83,8 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
 
   const isBusy = assistantState === 'thinking' || assistantState === 'speaking' || assistantState === 'executing_tool';
 
-  // Initial messages for offline / demo mode without fake CUDA or 42.8 t/s claims
-  const [messages, setMessages] = useState<AssistantMessage[]>([
-    {
-      id: 'msg-1',
-      type: 'system',
-      timestamp: '10:00 AM',
-      content:
-        'Local AI Core session initialized. Airgap security enforcement verified.',
-    },
-    {
-      id: 'msg-2',
-      type: 'assistant',
-      timestamp: '10:00 AM',
-      content:
-        `Good morning, ${userName}! Ready for your local workspace session. Connect to Local AI Core on port 8000 for live model streaming and tools.`,
-    },
-  ]);
+  // Initial messages start empty; live messages load from API or user prompts
+  const [messages, setMessages] = useState<AssistantMessage[]>([]);
 
   const loadConversationMessages = useCallback(async (convId: string) => {
     try {
@@ -322,7 +307,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
           id: `sys-${Date.now()}`,
           type: 'system',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          content: `New session initialized. Context buffer cleared. Pinned model: ${effectiveModelName}.`,
+          content: `New session initialized. Context buffer cleared. Model: ${effectiveModelName}.`,
         },
         {
           id: `ast-${Date.now()}`,
@@ -342,7 +327,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
           id: `sys-${Date.now()}`,
           type: 'system',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          content: `Local session created offline. Pinned model: ${effectiveModelName}.`,
+          content: `Local session created offline. Model: ${effectiveModelName}.`,
         },
         {
           id: `ast-${Date.now()}`,
