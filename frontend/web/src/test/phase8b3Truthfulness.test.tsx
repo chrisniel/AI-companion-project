@@ -108,6 +108,26 @@ describe('Phase 8A.3b.3 Truthfulness Suite', () => {
       expect(content).not.toContain('Direct BLE');
     });
 
+    it('does not contain overstated host status wording in DevicesView source', () => {
+      const filePath = path.resolve(__dirname, '../components/workspace/DevicesView.tsx');
+      const content = fs.readFileSync(filePath, 'utf-8');
+      expect(content).not.toContain('Host Monitored');
+      expect(content).not.toContain('Runtime Offline');
+    });
+
+    it('does not expose unapproved host claims such as Host Monitored or Runtime Offline', async () => {
+      vi.spyOn(healthApiModule, 'getSystemStatus').mockRejectedValueOnce(new Error('Network error'));
+
+      render(<DevicesView />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Runtime Host Unavailable/i)).toBeDefined();
+      });
+
+      expect(screen.queryByText('Host Monitored')).toBeNull();
+      expect(screen.queryByText('Runtime Offline')).toBeNull();
+    });
+
     it('shows loading state and renders real host telemetry on success', async () => {
       const getSystemStatusSpy = vi
         .spyOn(healthApiModule, 'getSystemStatus')
@@ -125,6 +145,8 @@ describe('Phase 8A.3b.3 Truthfulness Suite', () => {
         expect(screen.getByText('3.11.9')).toBeDefined();
         expect(screen.getByText('16 Cores')).toBeDefined();
         expect(screen.getByText('0.8.0')).toBeDefined();
+        expect(screen.getByText('Host Status')).toBeDefined();
+        expect(screen.getByText('Status Available')).toBeDefined();
       });
 
       // Planned capability cards rendered truthfully
@@ -144,6 +166,7 @@ describe('Phase 8A.3b.3 Truthfulness Suite', () => {
 
       await waitFor(() => {
         expect(screen.getByText(/Runtime Host Unavailable/i)).toBeDefined();
+        expect(screen.getByText('Host Unavailable')).toBeDefined();
       });
 
       const retryButton = screen.getByRole('button', { name: /Retry/i });
@@ -151,6 +174,7 @@ describe('Phase 8A.3b.3 Truthfulness Suite', () => {
 
       await waitFor(() => {
         expect(screen.getByText('WORKSTATION-PC')).toBeDefined();
+        expect(screen.getByText('Status Available')).toBeDefined();
       });
 
       expect(getSystemStatusSpy).toHaveBeenCalledTimes(2);
@@ -175,11 +199,30 @@ describe('Phase 8A.3b.3 Truthfulness Suite', () => {
       expect(content).not.toContain('rotating JSON');
     });
 
+    it('does not contain fake connection state or fictional log filename in LogsView source', () => {
+      const filePath = path.resolve(__dirname, '../components/workspace/LogsView.tsx');
+      const content = fs.readFileSync(filePath, 'utf-8');
+      expect(content).not.toContain('Stream Disconnected');
+      expect(content).not.toContain('Status: Disconnected');
+      expect(content).not.toContain('runtime-telemetry.log');
+    });
+
+    it('does not expose fake connection state or fictional log filename in LogsView UI', () => {
+      render(<LogsView />);
+
+      expect(screen.queryByText('Stream Disconnected')).toBeNull();
+      expect(screen.queryByText(/Status: Disconnected/i)).toBeNull();
+      expect(screen.queryByText('runtime-telemetry.log')).toBeNull();
+    });
+
     it('renders truthful messaging and does not simulate operational streaming', () => {
       render(<LogsView />);
 
       expect(screen.getByText('Runtime log streaming is not implemented yet.')).toBeDefined();
       expect(screen.getAllByText(/Planned/i).length).toBeGreaterThan(0);
+      expect(screen.getByText('Telemetry Viewer — Preview')).toBeDefined();
+      expect(screen.getByText('Status: Not Implemented')).toBeDefined();
+      expect(screen.getByText('Planned diagnostic log and telemetry viewer surface.')).toBeDefined();
 
       // No fake operational indicators
       expect(screen.queryByText(/Live Stream/i)).toBeNull();

@@ -58,7 +58,7 @@ export const DevicesView: React.FC = () => {
                 Devices & Hardware Infrastructure
               </h1>
               <Badge variant="primary" size="sm" className="font-semibold">
-                Host Monitored
+                Host Status
               </Badge>
               <Badge variant="neutral" size="sm">
                 Hybrid Truthfulness
@@ -99,12 +99,12 @@ export const DevicesView: React.FC = () => {
                 </h2>
                 {systemStatus && (
                   <Badge variant="success" size="sm">
-                    Runtime Online
+                    Status Available
                   </Badge>
                 )}
                 {error && (
                   <Badge variant="danger" size="sm">
-                    Runtime Offline
+                    Host Unavailable
                   </Badge>
                 )}
               </div>

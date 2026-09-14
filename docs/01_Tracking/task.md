@@ -18,10 +18,10 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — BATCH 8A.3b.3 ACCEPTANCE CORRECTIONS COMPLETED: AWAITING REVIEW]
+## [CURRENT EXECUTION STATE — BATCH 8A.3b.3 FINAL TRUTHFULNESS CORRECTION COMPLETED: AWAITING REVIEW]
 
-- Completed: Phase 8A.3b.3 Acceptance Corrections v1.1 (SearchInput contract, truthful LogsView, generic DevicesView planned cards, simplified Settings planned sections, normalized Character voice layer, extended truthfulness tests).
-- Verification: 128 vitest passed (0 failed), 88 pytest passed (0 failed), 0 tsc errors, production build clean.
+- Completed: Phase 8A.3b.3 Final Truthfulness Copy Corrections (removed fake connection state/filename in LogsView, removed overstated host claims in DevicesView, added negative and positive regression assertions).
+- Verification: 132 vitest passed (0 failed), 88 pytest passed (0 failed), 0 tsc errors, production build clean.
 - Scope Guard: Zero backend changes, zero Android changes, zero migrations, zero new APIs. No dead code purge.
 - Awaiting ChatGPT / User Review before marking [x] 8A.3b.3. Do NOT begin 8A.4.
 - Active Plan: `docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md`

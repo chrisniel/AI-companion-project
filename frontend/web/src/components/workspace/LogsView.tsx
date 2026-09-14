@@ -22,12 +22,12 @@ export const LogsView: React.FC = () => {
               <Badge variant="neutral" size="sm">
                 Preview / Planned
               </Badge>
-              <Badge variant="warning" size="sm">
-                Stream Disconnected
+              <Badge variant="neutral" size="sm">
+                Not Implemented
               </Badge>
             </div>
             <p className="text-xs text-[var(--color-text-secondary)] mt-0.5 max-w-2xl">
-              Centralized diagnostic log streaming and telemetry viewer for the companion runtime.
+              Planned diagnostic log and telemetry viewer surface.
             </p>
           </div>
         </div>
@@ -51,13 +51,13 @@ export const LogsView: React.FC = () => {
               <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
             </div>
             <span className="text-xs font-mono font-semibold text-[var(--color-text-primary)]">
-              runtime-telemetry.log
+              Telemetry Viewer — Preview
             </span>
           </div>
 
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-mono text-[var(--color-text-muted)]">
-              Status: Disconnected
+              Status: Not Implemented
             </span>
           </div>
         </div>
