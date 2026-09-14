@@ -2,11 +2,6 @@ import React from 'react';
 import {
   Terminal,
   Info,
-  Clock,
-  Code,
-  Shield,
-  Layers,
-  Cpu,
 } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 
@@ -32,7 +27,7 @@ export const LogsView: React.FC = () => {
               </Badge>
             </div>
             <p className="text-xs text-[var(--color-text-secondary)] mt-0.5 max-w-2xl">
-              Centralized diagnostic log streaming and telemetry viewer for runtime engines, tools, and background tasks.
+              Centralized diagnostic log streaming and telemetry viewer for the companion runtime.
             </p>
           </div>
         </div>
@@ -40,7 +35,7 @@ export const LogsView: React.FC = () => {
         <div className="flex items-center gap-2 self-start md:self-auto">
           <div className="px-3 py-1.5 rounded-xl surface-recessed border border-[var(--color-border-subtle)] text-xs text-[var(--color-text-muted)] flex items-center gap-2">
             <Info className="w-3.5 h-3.5 text-[var(--color-accent)] flex-shrink-0" />
-            <span>Backend telemetry WebSocket / SSE endpoint not implemented yet</span>
+            <span>This screen is a Preview / Planned viewer surface</span>
           </div>
         </div>
       </div>
@@ -62,7 +57,7 @@ export const LogsView: React.FC = () => {
 
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-mono text-[var(--color-text-muted)]">
-              Channel: /api/v1/logs/stream (Planned)
+              Status: Disconnected
             </span>
           </div>
         </div>
@@ -78,59 +73,15 @@ export const LogsView: React.FC = () => {
               Runtime log streaming is not implemented yet.
             </h2>
             <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed font-sans">
-              No authoritative log stream is connected. Live system events, model inference token velocities, and tool execution traces will stream here once backend telemetry is established.
+              No authoritative log stream is connected. Runtime telemetry/logging may appear here in a future implementation.
             </p>
           </div>
 
-          <div className="p-4 rounded-2xl surface-recessed border border-[var(--color-border-subtle)] max-w-lg w-full text-left space-y-2 text-[11px] text-[var(--color-text-muted)]">
-            <div className="text-[var(--color-text-primary)] font-semibold font-sans">
-              Planned Stream Channels:
-            </div>
-            <ul className="list-disc pl-4 space-y-1">
-              <li>
-                <span className="text-[var(--color-accent)]">engine</span>: llama.cpp token velocity, GPU offload layers, KV cache usage
-              </li>
-              <li>
-                <span className="text-[var(--color-accent)]">assistant</span>: Conversation turn generation, tool dispatch, grounding checks
-              </li>
-              <li>
-                <span className="text-[var(--color-accent)]">system</span>: Database transactions, background routines, memory indexing
-              </li>
-            </ul>
+          <div className="p-4 rounded-2xl surface-recessed border border-[var(--color-border-subtle)] max-w-lg w-full text-center text-[11px] text-[var(--color-text-muted)]">
+            <p className="font-sans">
+              This screen is a Preview / Planned viewer surface. The companion runtime currently provides no live telemetry streaming endpoints.
+            </p>
           </div>
-        </div>
-      </div>
-
-      {/* 3. Observability Architecture Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-        <div className="p-5 rounded-3xl surface-raised border border-[var(--color-border-subtle)] space-y-2">
-          <div className="flex items-center gap-2 text-xs font-semibold text-[var(--color-text-primary)]">
-            <Cpu className="w-4 h-4 text-[var(--color-accent)]" />
-            <span>Airgapped Local Logs</span>
-          </div>
-          <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
-            All future log records remain strictly on-device in SQLite or flat rotating JSON logs. Zero cloud telemetry.
-          </p>
-        </div>
-
-        <div className="p-5 rounded-3xl surface-raised border border-[var(--color-border-subtle)] space-y-2">
-          <div className="flex items-center gap-2 text-xs font-semibold text-[var(--color-text-primary)]">
-            <Code className="w-4 h-4 text-[var(--color-accent)]" />
-            <span>Structured JSON Schema</span>
-          </div>
-          <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
-            Standardized payload format: timestamp, subsystem, severity, message, execution latency, and context metadata.
-          </p>
-        </div>
-
-        <div className="p-5 rounded-3xl surface-raised border border-[var(--color-border-subtle)] space-y-2">
-          <div className="flex items-center gap-2 text-xs font-semibold text-[var(--color-text-primary)]">
-            <Shield className="w-4 h-4 text-emerald-500" />
-            <span>Privacy redaction</span>
-          </div>
-          <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
-            Automated PII scrubbing for conversation content and memory keys prior to stream serialization.
-          </p>
         </div>
       </div>
     </div>

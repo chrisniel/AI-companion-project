@@ -271,25 +271,22 @@ export const DevicesView: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {/* A. Android Companion Sync */}
+          {/* A. Android Companion */}
           <div className="p-5 rounded-3xl surface-raised border border-[var(--color-border-subtle)] space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <Smartphone className="w-4 h-4 text-[var(--color-accent)]" />
                 <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">
-                  Android Companion Sync
+                  Android Companion
                 </h3>
               </div>
               <Badge variant="neutral" size="sm">
-                Planned Bridge
+                Planned
               </Badge>
             </div>
             <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
-              Peer-to-peer synchronization with the Android companion app. Bi-directional memory sync, push notification relay, and on-device alarm coordination.
+              Android companion connectivity and synchronization are not implemented yet.
             </p>
-            <div className="p-3 rounded-xl bg-[var(--color-surface-elevated)] border border-[var(--color-border-subtle)] text-[11px] text-[var(--color-text-muted)]">
-              Status: Sync bridge daemon not implemented in this phase.
-            </div>
           </div>
 
           {/* B. Audio Device Management */}
@@ -302,18 +299,15 @@ export const DevicesView: React.FC = () => {
                 </h3>
               </div>
               <Badge variant="neutral" size="sm">
-                Planned Subsystem
+                Planned
               </Badge>
             </div>
             <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
-              Hardware microphone selection, speaker routing, audio frame buffer configuration, and Bluetooth headset handoff.
+              Microphone, speaker and audio-device management are not implemented yet.
             </p>
-            <div className="p-3 rounded-xl bg-[var(--color-surface-elevated)] border border-[var(--color-border-subtle)] text-[11px] text-[var(--color-text-muted)]">
-              Status: Audio routing will be managed by native wrapper / future audio subsystem.
-            </div>
           </div>
 
-          {/* C. Health & Wearable Sources */}
+          {/* C. Health & Wearables */}
           <div className="p-5 rounded-3xl surface-raised border border-[var(--color-border-subtle)] space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -323,18 +317,15 @@ export const DevicesView: React.FC = () => {
                 </h3>
               </div>
               <Badge variant="neutral" size="sm">
-                Planned Gateway
+                Planned
               </Badge>
             </div>
             <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
-              Direct BLE and Health Connect synchronization for biometric data including sleep metrics, heart rate intervals, and step counts.
+              Health and wearable integrations are not implemented yet.
             </p>
-            <div className="p-3 rounded-xl bg-[var(--color-surface-elevated)] border border-[var(--color-border-subtle)] text-[11px] text-[var(--color-text-muted)]">
-              Status: Wearable integration is deferred to dedicated health integration milestone.
-            </div>
           </div>
 
-          {/* D. Remote Runtime Access (Tailscale) */}
+          {/* D. Remote Runtime Access */}
           <div className="p-5 rounded-3xl surface-raised border border-[var(--color-border-subtle)] space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -344,15 +335,12 @@ export const DevicesView: React.FC = () => {
                 </h3>
               </div>
               <Badge variant="neutral" size="sm">
-                Planned Mesh
+                Planned
               </Badge>
             </div>
             <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
-              Secure remote ingress over Tailscale or encrypted LAN mesh for accessing the companion runtime from secondary devices.
+              Trusted remote access over LAN/Tailscale is future work. The current runtime remains local-only by default.
             </p>
-            <div className="p-3 rounded-xl bg-[var(--color-surface-elevated)] border border-[var(--color-border-subtle)] text-[11px] text-[var(--color-text-muted)]">
-              Status: Remote networking is not implemented; runtime currently binds strictly to localhost.
-            </div>
           </div>
         </div>
       </div>

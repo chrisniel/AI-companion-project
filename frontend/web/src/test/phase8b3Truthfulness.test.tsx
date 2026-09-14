@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import fs from 'fs';
 import path from 'path';
@@ -18,6 +18,13 @@ describe('Phase 8A.3b.3 Truthfulness Suite', () => {
       const content = fs.readFileSync(filePath, 'utf-8');
       expect(content).not.toContain("from '../../mock/characterData'");
       expect(content).not.toContain('mockCharacters');
+    });
+
+    it('does not introduce unapproved voice synthesis engine contracts in CharactersView', () => {
+      const filePath = path.resolve(__dirname, '../components/workspace/CharactersView.tsx');
+      const content = fs.readFileSync(filePath, 'utf-8');
+      expect(content).not.toContain('Piper');
+      expect(content).not.toContain('Kokoro');
     });
 
     it('renders Character Studio as an interactive Preview with Neutral Assistant fallback', () => {
@@ -90,6 +97,17 @@ describe('Phase 8A.3b.3 Truthfulness Suite', () => {
       expect(content).not.toContain('Ping: 14ms');
     });
 
+    it('does not describe unapproved peer-to-peer or bi-directional memory sync mechanisms in DevicesView', () => {
+      const filePath = path.resolve(__dirname, '../components/workspace/DevicesView.tsx');
+      const content = fs.readFileSync(filePath, 'utf-8');
+      expect(content).not.toContain('Peer-to-peer');
+      expect(content).not.toContain('peer-to-peer');
+      expect(content).not.toContain('Bi-directional');
+      expect(content).not.toContain('bi-directional');
+      expect(content).not.toContain('push notification relay');
+      expect(content).not.toContain('Direct BLE');
+    });
+
     it('shows loading state and renders real host telemetry on success', async () => {
       const getSystemStatusSpy = vi
         .spyOn(healthApiModule, 'getSystemStatus')
@@ -110,7 +128,7 @@ describe('Phase 8A.3b.3 Truthfulness Suite', () => {
       });
 
       // Planned capability cards rendered truthfully
-      expect(screen.getByText('Android Companion Sync')).toBeDefined();
+      expect(screen.getByText('Android Companion')).toBeDefined();
       expect(screen.getByText('Audio Device Management')).toBeDefined();
       expect(screen.getByText('Health & Wearables')).toBeDefined();
       expect(screen.getByText('Remote Runtime Access')).toBeDefined();
@@ -148,6 +166,15 @@ describe('Phase 8A.3b.3 Truthfulness Suite', () => {
       expect(content).not.toContain("from '../../mock/logsData'");
     });
 
+    it('does not contain unapproved logging architecture decisions in LogsView', () => {
+      const filePath = path.resolve(__dirname, '../components/workspace/LogsView.tsx');
+      const content = fs.readFileSync(filePath, 'utf-8');
+      expect(content).not.toContain('/api/v1/logs/stream');
+      expect(content).not.toContain('WebSocket');
+      expect(content).not.toContain('SSE');
+      expect(content).not.toContain('rotating JSON');
+    });
+
     it('renders truthful messaging and does not simulate operational streaming', () => {
       render(<LogsView />);
 
@@ -177,6 +204,18 @@ describe('Phase 8A.3b.3 Truthfulness Suite', () => {
       expect(content).not.toContain('Persisted Locally (SQLite & Keyring)');
     });
 
+    it('does not expose unapproved milestone names in SettingsView planned sections', () => {
+      const filePath = path.resolve(__dirname, '../components/workspace/SettingsView.tsx');
+      const content = fs.readFileSync(filePath, 'utf-8');
+      expect(content).not.toContain('Desktop Wrapper Milestone');
+      expect(content).not.toContain('Audio Subsystem Milestone');
+      expect(content).not.toContain('Health Connect Milestone');
+      expect(content).not.toContain('Audio Routing Subsystem');
+      expect(content).not.toContain('Mesh Ingress Milestone');
+      expect(content).not.toContain('Security & Enterprise Milestone');
+      expect(content).not.toContain('Phase 8P Advanced Subsystem');
+    });
+
     it('opens on Appearance by default and keeps ThemeContext functional', () => {
       render(
         <ThemeProvider>
@@ -187,6 +226,33 @@ describe('Phase 8A.3b.3 Truthfulness Suite', () => {
       // Appearance heading / options visible
       expect(screen.getByText(/Theme Mode/i)).toBeDefined();
       expect(screen.getByText(/Appearance preferences are stored in this browser/i)).toBeDefined();
+    });
+
+    it('supports typing in SearchInput and clearing the search query', () => {
+      render(
+        <ThemeProvider>
+          <SettingsView />
+        </ThemeProvider>
+      );
+
+      const searchInput = screen.getByPlaceholderText('Search preferences...') as HTMLInputElement;
+      expect(searchInput.value).toBe('');
+
+      // Type "Voice"
+      fireEvent.change(searchInput, { target: { value: 'Voice' } });
+      expect(searchInput.value).toBe('Voice');
+
+      // Voice should be visible, Appearance should be filtered out
+      expect(screen.getByText('Voice')).toBeDefined();
+      expect(screen.queryByRole('button', { name: /^Appearance/i })).toBeNull();
+
+      // Click clear search button
+      const clearButton = screen.getByRole('button', { name: 'Clear search' });
+      fireEvent.click(clearButton);
+
+      // Value should be empty and Appearance button should be restored
+      expect(searchInput.value).toBe('');
+      expect(screen.getByRole('button', { name: /^Appearance/i })).toBeDefined();
     });
 
     it('renders Planned section without interactive fake toggles when selecting unsupported tabs', () => {

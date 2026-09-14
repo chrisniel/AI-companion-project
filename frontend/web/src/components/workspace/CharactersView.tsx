@@ -163,16 +163,16 @@ export const CharactersView: React.FC<CharactersViewProps> = () => {
               </h3>
             </div>
             <Badge variant="neutral" size="sm">
-              Planned Subsystem
+              Planned
             </Badge>
           </div>
           <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
-            Defines how the companion sounds: maps preferred voice identifier, pitch, rate, and speech synthesis engine hints without affecting user memory or identity.
+            Defines how the companion sounds: maps a preferred voice configuration / voice ID without affecting user memory, conversations, or identity.
           </p>
           <div className="p-3.5 rounded-2xl bg-[var(--color-surface-elevated)] border border-[var(--color-border-subtle)] text-xs text-[var(--color-text-secondary)] space-y-1.5">
-            <div className="font-semibold text-[var(--color-text-primary)]">Decoupled Audio Architecture</div>
+            <div className="font-semibold text-[var(--color-text-primary)]">Decoupled Audio Configuration</div>
             <p className="text-[11px] text-[var(--color-text-muted)]">
-              No voice engine or TTS synthesis is bundled in this phase. Speech synthesis engines (e.g. Piper, Kokoro) will attach to this slot in future audio phases.
+              Voice engine integration and speech synthesis are not implemented in this phase.
             </p>
           </div>
         </div>

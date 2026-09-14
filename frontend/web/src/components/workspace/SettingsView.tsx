@@ -10,9 +10,7 @@ import {
   Network,
   Shield,
   Wrench,
-  Search,
   CheckCircle2,
-  Clock,
   Layers,
   Info,
 } from 'lucide-react';
@@ -59,91 +57,74 @@ const SECTIONS: SectionMenuItem[] = [
     id: 'general',
     label: 'General',
     icon: <SlidersHorizontal className="w-4 h-4" />,
-    description: 'Operating system startup, tray minimization, and background lifecycle',
+    description: 'Startup and desktop lifecycle settings',
     category: 'planned',
-    milestoneHint: 'Desktop Wrapper Milestone',
-    plannedDetails:
-      'Application startup behavior, background tray synchronization, and OS-level launch parameters will be managed by native runtime wrappers in future desktop releases.',
+    plannedDetails: 'Startup and desktop lifecycle settings are not implemented yet.',
   },
   {
     id: 'assistant',
     label: 'Assistant',
     icon: <Bot className="w-4 h-4" />,
-    description: 'Persona routing, prompt addenda, and grounding boundaries',
+    description: 'Character assignment and assistant behavior',
     category: 'planned',
-    milestoneHint: 'Profile & Character Architecture',
-    plannedDetails:
-      'Assistant persona selection, custom system prompt addenda, and behavioral constraints will be managed through the Character Registry and user Profile layers.',
+    plannedDetails: 'Character assignment and assistant behavior configuration are not implemented yet.',
   },
   {
     id: 'voice',
     label: 'Voice',
     icon: <Volume2 className="w-4 h-4" />,
-    description: 'TTS synthesis, STT transcription engine, and wake-word detection',
+    description: 'Voice, STT/TTS, wake-word and listening configuration',
     category: 'planned',
-    milestoneHint: 'Audio Subsystem Milestone',
-    plannedDetails:
-      'Speech-to-text engines (e.g. Whisper), text-to-speech voice models (e.g. Piper, Kokoro), wake-word listeners, and voice activity detection will be configured in dedicated audio phases.',
+    plannedDetails: 'Voice, STT/TTS, wake-word and listening configuration are not implemented yet.',
   },
   {
     id: 'ai',
     label: 'AI Runtime',
     icon: <Cpu className="w-4 h-4" />,
-    description: 'Model library paths, execution engine, acceleration, and profile parameters',
+    description: 'Persistent runtime configuration',
     category: 'planned',
-    milestoneHint: 'Phase 8P (Runtime Configuration)',
-    plannedDetails:
-      'Hardware acceleration backend (Vulkan/ROCm/CPU), GPU layer offloads, KV cache quantization, and COMPANION_DATA_ROOT model paths are formalized in Phase 8P configuration work.',
+    milestoneHint: 'Phase 8P',
+    plannedDetails: 'Persistent runtime configuration is planned for Phase 8P.',
   },
   {
     id: 'health',
     label: 'Health',
     icon: <HeartPulse className="w-4 h-4" />,
-    description: 'Wearable data synchronization, sample intervals, and metric aggregation',
+    description: 'Health-provider configuration',
     category: 'planned',
-    milestoneHint: 'Health Connect Milestone',
-    plannedDetails:
-      'BLE fitness tracker pairing, Health Connect provider bridge, sleep metric analysis, and background biometric sampling will be wired in future health integrations.',
+    plannedDetails: 'Health-provider configuration is not implemented yet.',
   },
   {
     id: 'devices',
     label: 'Devices & Audio',
     icon: <Headphones className="w-4 h-4" />,
-    description: 'Hardware audio routing, buffer sizing, and Bluetooth peripherals',
+    description: 'Audio and peripheral configuration',
     category: 'planned',
-    milestoneHint: 'Audio Routing Subsystem',
-    plannedDetails:
-      'Hardware microphone selection, speaker output routing, audio buffer depths, and peripheral hotplug handling require native audio server integration.',
+    plannedDetails: 'Audio and peripheral configuration are not implemented yet.',
   },
   {
     id: 'network',
     label: 'Network & Mesh',
     icon: <Network className="w-4 h-4" />,
-    description: 'Remote runtime gateway, LAN discovery, and encrypted ingress',
+    description: 'Trusted remote runtime access',
     category: 'planned',
-    milestoneHint: 'Mesh Ingress Milestone',
-    plannedDetails:
-      'Remote companion runtime access, Tailscale peer connections, mTLS encryption keys, and LAN mesh ingress are future capabilities. The companion runtime currently binds strictly to localhost.',
+    plannedDetails: 'Trusted remote runtime access is not implemented yet.',
   },
   {
     id: 'privacy',
     label: 'Privacy & Security',
     icon: <Shield className="w-4 h-4" />,
-    description: 'Database encryption, automated PII redaction, and retention policies',
+    description: 'Runtime privacy and security controls',
     category: 'planned',
-    milestoneHint: 'Security & Enterprise Milestone',
-    plannedDetails:
-      'Full database-at-rest encryption, automated memory scrubbing rules, and audit retention schedules will be introduced alongside enterprise security profiles.',
+    plannedDetails: 'Additional runtime privacy/security controls are not implemented yet.',
   },
   {
     id: 'advanced',
     label: 'Advanced',
     icon: <Wrench className="w-4 h-4" />,
-    description: 'Low-level engine flags, experimental feature toggles, and developer tooling',
+    description: 'Advanced runtime configuration',
     category: 'planned',
-    milestoneHint: 'Phase 8P Advanced Subsystem',
-    plannedDetails:
-      'Low-level runtime compiler flags, llama.cpp context window adjustments, and developer debugging tools will be exposed via runtime configuration files.',
+    plannedDetails: 'Advanced runtime configuration is not implemented yet.',
   },
 
   // UI/UX Showcase Section
@@ -211,7 +192,7 @@ export const SettingsView: React.FC = () => {
           <div className="p-3 rounded-2xl surface-raised border border-[var(--color-border-subtle)] backdrop-blur-md">
             <SearchInput
               value={searchQuery}
-              onChange={setSearchQuery}
+              onChangeValue={setSearchQuery}
               placeholder="Search preferences..."
               className="w-full text-xs"
             />
@@ -328,7 +309,7 @@ export const SettingsView: React.FC = () => {
                   <div>
                     <div className="flex items-center gap-2">
                       <h2 className="text-base font-bold text-[var(--color-text-primary)]">
-                        {currentSection.label} Configuration
+                        {currentSection.label}
                       </h2>
                       <Badge variant="neutral" size="sm">
                         Planned
@@ -352,7 +333,7 @@ export const SettingsView: React.FC = () => {
                   <Info className="w-4 h-4 text-[var(--color-accent)] mt-0.5 flex-shrink-0" />
                   <div className="space-y-1.5 text-xs">
                     <div className="font-semibold text-[var(--color-text-primary)]">
-                      Architecture Roadmap
+                      Architecture Status
                     </div>
                     <p className="text-[var(--color-text-secondary)] leading-relaxed">
                       {currentSection.plannedDetails}
