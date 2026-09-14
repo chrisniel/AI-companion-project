@@ -18,12 +18,12 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — BATCH 8A.4 MOCK DEPRECATION ANNOTATIONS COMPLETED: AWAITING REVIEW]
+## [CURRENT EXECUTION STATE — PHASE 8A FINAL VERIFICATION COMPLETED: AWAITING CHATGPT/USER MERGE APPROVAL]
 
-- Completed: Phase 8A.4 added exact `@deprecated -- mock data for test fixtures only` JSDoc header annotation across all 6 mock/*.ts files.
-- Verification: 132 vitest passed (0 failed), 0 tsc errors, production build clean.
-- Scope Guard: Zero backend changes, zero Android changes, zero migrations, zero new APIs. No deletion of mock files. No changes to mock data contents, imports, or exports.
-- Awaiting ChatGPT / User Review before marking [x] 8A.4. Do NOT begin Phase 8P.
+- Completed: Phase 8A full branch verification passed (0 tsc errors, 132 vitest passed, clean build, 88 backend pytest passed, 9/9 views smoke tested in browser, zero mock authority violations).
+- Checklist: 8A.1 [x], 8A.2 [x], 8A.3 [x], 8A.3b [x] (8A.3b.1 [x], 8A.3b.2 [x], 8A.3b.3 [x]), 8A.4 [x].
+- Scope Guard: Zero backend code changes, zero Android changes, zero migrations, zero new APIs. Phase 8P is NOT started.
+- Awaiting ChatGPT / User Review and merge approval of feature/phase8-ui-foundation.
 - Active Plan: `docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md`
 
 ---
@@ -35,11 +35,11 @@ Branch: `feature/phase8-ui-foundation`
 - [x] 8A.1: Mock removal — HomeView (time-derived greeting), AssistantView (stale mockConversations), HealthView (truthful unavailable state & planned providers), MemoryView (truthful SQLite FTS5 store & contract)
 - [x] 8A.2: AssistantView decomposition — AssistantComposer (stub attach), AssistantMessageList, AssistantStatusBar (provenance), AssistantErrorDisplay
 - [x] 8A.3: ModelsView — variant badges, mmproj warning badge (degraded not incompatible), applied-vs-requested profile labels
-- [ ] 8A.3b: Production Truthfulness Sweep
+- [x] 8A.3b: Production Truthfulness Sweep
   - [x] 8A.3b.1: Shell + Home
   - [x] 8A.3b.2: Tasks + Schedule
   - [x] 8A.3b.3: Characters + Devices + Logs + Settings
-- [ ] 8A.4: mock/*.ts — @deprecated annotations on all file headers (do not delete yet)
+- [x] 8A.4: mock/*.ts — @deprecated annotations on all file headers (do not delete yet)
 
 ---
 
