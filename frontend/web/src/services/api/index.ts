@@ -5,3 +5,4 @@ export * from './chatApi';
 export * from './conversationApi';
 export * from './memoryApi';
 export * from './registryApi';
+export * from './taskApi';

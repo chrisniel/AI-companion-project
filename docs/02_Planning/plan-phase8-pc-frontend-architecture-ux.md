@@ -373,10 +373,19 @@ Create frontend/web/src/components/workspace/assistant/:
 - HomeView.tsx
 - AssistantView.tsx (only where necessary to remove shell/offline fabricated defaults while preserving streaming behavior)
 
-8A.3b.2 -- Tasks + Schedule
-- TasksView
-- ScheduleView
-- Existing backend Tasks API integration
+8A.3b.2 -- Tasks + Schedule — Backend Task Truth + Task-Derived Schedule
+- Web Tasks uses existing backend `/api/v1/tasks` (`taskApi.ts` adapter with `apiFetch`).
+- Tasks backend remains authoritative: server-authoritative mutations (create, update, soft-delete, reopen).
+- Schedule is a chronological projection/aggregation view of backend tasks with `due_date != null`.
+- Schedule is NOT a separate datastore and does not own tasks or events.
+- Tasks without `due_date` remain reachable in Tasks view tabs but are absent from Schedule.
+- Task reminders remain task metadata (`reminder_minutes_before`), not separate duplicate Schedule events.
+- No fake alarm, calendar, reminder, or Android-mirroring backends.
+- No recurrence implementation, no Android implementation, no backend/schema changes.
+- Browser-local date/time conversion rules: parse ISO-8601 to local JS Date, format to local time; send local date+time as ISO-8601 UTC.
+- Real dynamic current-date logic (remove hardcoded `2026-09-09`).
+- Truthful loading, error with Retry, and empty states.
+- Unsupported operational controls (New Alarm, Android audio nodes, calendar sync) removed or rendered as non-interactive Planned affordances.
 
 8A.3b.3 -- Characters + Devices + Logs + Settings
 - CharactersView

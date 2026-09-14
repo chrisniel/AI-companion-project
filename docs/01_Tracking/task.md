@@ -18,11 +18,11 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — BATCH 8A.3b.1 NEW-CHAT RACE CORRECTION COMPLETED: AWAITING REVIEW]
+## [CURRENT EXECUTION STATE — BATCH 8A.3b.2 COMPLETED: AWAITING REVIEW]
 
-- Completed: Phase 8A.3b.1 New Chat vs conversation selection race correction in AssistantView (handleNewConversation captures requestToken; completion and rejection are guarded against newer conversation loads; latest user navigation is strictly preserved without state clobbering or title mismatch).
-- Verification: 85 vitest passed (0 failed), 88 pytest passed (0 failed), 0 tsc errors, clean vite production build, zero regression across all test suites.
-- Next Action: Await user / ChatGPT review on Batch 8A.3b.1 New Chat race correction. Do NOT begin 8A.3b.2.
+- Completed: Phase 8A.3b.2 Tasks + Schedule (real backend Tasks API adapter, server-authoritative TasksView, task-derived ScheduleView projection, local datetime conversion, zero fake alarms/calendar events).
+- Verification: 105 vitest passed (0 failed), 88 pytest passed (0 failed), 0 tsc errors, production build clean.
+- Awaiting ChatGPT / User Review before marking [x] 8A.3b.2. Do NOT begin 8A.3b.3 or 8A.4.
 - Active Plan: `docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md`
 
 ---
@@ -35,7 +35,7 @@ Branch: `feature/phase8-ui-foundation`
 - [x] 8A.2: AssistantView decomposition — AssistantComposer (stub attach), AssistantMessageList, AssistantStatusBar (provenance), AssistantErrorDisplay
 - [x] 8A.3: ModelsView — variant badges, mmproj warning badge (degraded not incompatible), applied-vs-requested profile labels
 - [ ] 8A.3b: Production Truthfulness Sweep
-  - [ ] 8A.3b.1: Shell + Home
+  - [x] 8A.3b.1: Shell + Home
   - [ ] 8A.3b.2: Tasks + Schedule
   - [ ] 8A.3b.3: Characters + Devices + Logs + Settings
 - [ ] 8A.4: mock/*.ts — @deprecated annotations on all file headers (do not delete yet)
