@@ -18,13 +18,12 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — BATCH 8A.3b.3 DESIGN SPEC COMPLETED: AWAITING REVIEW]
+## [CURRENT EXECUTION STATE — BATCH 8A.3b.3 DESIGN CORRECTIONS COMPLETED: AWAITING REVIEW]
 
-- Completed: Phase 8A.3b.3 Characters + Devices + Logs + Settings design specification documentation (`docs/superpowers/specs/2026-09-14-phase8-3b3-truthfulness-design.md`) and Phase 8 plan expansion (`docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md`).
+- Completed: Phase 8A.3b.3 Characters + Devices + Logs + Settings design specification corrections within canonical `docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md`. Removed parallel `docs/superpowers/` directory.
 - Constraints Enforced: Documentation only. Zero code modifications. Zero backend changes. Zero Android changes. Zero migrations. Zero new APIs.
 - Awaiting ChatGPT / User Review of Phase 8A.3b.3 design specification. Do NOT begin implementation. Do NOT begin 8A.4.
 - Active Plan: `docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md`
-- Active Spec: `docs/superpowers/specs/2026-09-14-phase8-3b3-truthfulness-design.md`
 
 ---
 
