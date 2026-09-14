@@ -36,7 +36,7 @@ Use these labels consistently throughout project documentation:
 | Model registry | Repository-verified implementation | `backend/app/services/model_registry.py`; scan + registry-based model discovery; Qwen3-VL verified defaults (not a whitelist) |
 | Voice & speech pipeline | Planned (Tracks V0–V6) | Canonical spec in `docs/04_Architecture/VOICE_AND_AUDIO_ARCHITECTURE.md`; CPU-first speech execution; persistent voice assets under `COMPANION_DATA_ROOT/library/voices/` |
 | Remote access & authentication | Repository-verified local auth; remote planned | Local token/API key authentication verified; Tailscale remote networking and mutual TLS planned |
-| Phase 8 (active) | Active planning — pending APPROVED | 8A Frontend UX → 8P Runtime Config → 8B Multimodal Attachments → 8C Polish; plan in `docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md` |
+| Phase 8 (active) | Active planning — pending APPROVED | 8A Frontend UX → 8P Runtime Config → 8B Multimodal Attachments → 8C Polish; plan in `docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md` |
 | Automated test suite | Repository-verified | **88 passing backend tests** (`pytest backend/tests`), **38 passing vitest** (`npm run test`), 110 passing Android unit tests, 0 tsc errors |
 
 This document supersedes conflicting status claims in drafts. Drafts remain reference material until their unique content is deliberately reconciled or archived.

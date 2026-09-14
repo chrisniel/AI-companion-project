@@ -14,7 +14,7 @@
 ### 2. Architecture & Security Planning
 - [x] Reconcile `full_stack_blueprint.md` with Master Architecture (FastAPI + SQLite + SQLAlchemy 2 + Alembic)
 - [x] Define OWASP API Security Top 10 controls (Token Auth, CORS whitelist, Pydantic v2 schemas, rate limits)
-- [x] Create implementation plan `docs/02_Planning/plan-backend-core-and-security.md` for user approval
+- [x] Create implementation plan `docs/02_Planning/backend/plan-backend-core-and-security.md` for user approval
 
 ### 3. Backend Foundation Implementation (Upon Approval)
 - [x] Initialize `backend/` directory structure, `pyproject.toml` / dependencies, and virtual environment

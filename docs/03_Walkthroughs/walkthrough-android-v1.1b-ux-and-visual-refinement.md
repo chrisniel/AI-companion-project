@@ -1,7 +1,7 @@
 # Walkthrough: Android V1.1B UX & Visual Refinement
 
 **Status**: Complete & Verified on Physical Device (Infinix X6820 / Android 13)
-**Approved Plan**: [plan-android-v1.1b-ux-and-visual-refinement.md](file:///d:/OtherProjects/AI-companion-project/docs/02_Planning/plan-android-v1.1b-ux-and-visual-refinement.md)
+**Approved Plan**: [plan-android-v1.1b-ux-and-visual-refinement.md](file:///d:/OtherProjects/AI-companion-project/docs/02_Planning/android/plan-android-v1.1b-ux-and-visual-refinement.md)
 **Tracking**: [task.md](file:///d:/OtherProjects/AI-companion-project/docs/01_Tracking/task.md)
 
 ---

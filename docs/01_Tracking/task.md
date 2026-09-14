@@ -7,7 +7,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 - Branches: `feature/phase8-ui-foundation` → `feature/phase8-runtime-config` → `feature/multimodal-image-attachments` → `feature/phase8-ui-integration-polish`
 - Target: Mock removal, view decomposition, COMPANION_DATA_ROOT, terminology reconciliation, model schema split, image attachments, 100+ pytest / 50+ vitest
 - Scope Guard: PC-first. No Android. No STT/TTS. No arbitrary file types. No video/PDF. No CUDA. No new state library. No LFS/gitattributes changes.
-- Plan: `docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md`
+- Plan: `docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md`
 - Baseline: 88 pytest, 38 vitest, 0 tsc errors, migration head 005_scope_message_constraints
 
 ## Open Decisions — Resolved
@@ -18,13 +18,11 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — PHASE 8A FINAL VERIFICATION COMPLETED: AWAITING CHATGPT/USER MERGE APPROVAL]
+## [CURRENT EXECUTION STATE — POST-8A DOCUMENTATION HYGIENE PASS COMPLETED: AWAITING REVIEW]
 
-- Completed: Phase 8A full branch verification passed (0 tsc errors, 132 vitest passed, clean build, 88 backend pytest passed, 9/9 views smoke tested in browser, zero mock authority violations).
-- Checklist: 8A.1 [x], 8A.2 [x], 8A.3 [x], 8A.3b [x] (8A.3b.1 [x], 8A.3b.2 [x], 8A.3b.3 [x]), 8A.4 [x].
-- Scope Guard: Zero backend code changes, zero Android changes, zero migrations, zero new APIs. Phase 8P is NOT started.
-- Awaiting ChatGPT / User Review and merge approval of feature/phase8-ui-foundation.
-- Active Plan: `docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md`
+- Completed: Post-8A documentation hygiene reorganization pass (organized docs/02_Planning into phase-08, android, backend, templates; created navigation hubs at docs/README.md, docs/02_Planning/README.md, and docs/02_Planning/phase-08/README.md; repaired all docs links).
+- Scope Guard: Documentation-only under docs/**. Zero code changes. Zero deletions. ProjectWorkflowStarterKit untouched.
+- Active Plan: `docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md`
 
 ---
 
