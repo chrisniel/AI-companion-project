@@ -46,7 +46,6 @@ import {
 } from '../../types';
 import {
   ConversationHistoryDrawer,
-  mockConversations,
 } from './ConversationHistoryDrawer';
 import { ConversationMessageItem } from './ConversationMessageItem';
 
@@ -511,9 +510,6 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     const found = conversations.find((c) => c.id === id);
     if (found) {
       setConversationTitle(found.title);
-    } else {
-      const mockFound = mockConversations.find((c) => c.id === id);
-      if (mockFound) setConversationTitle(mockFound.title);
     }
     loadConversationMessages(id);
   };
@@ -561,17 +557,14 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
   const stateDisplay = getAssistantStateDisplay();
   const isBusy = assistantState === 'thinking' || assistantState === 'speaking' || assistantState === 'executing_tool';
 
-  const drawerConversations: ConversationHistoryItem[] =
-    conversations.length > 0
-      ? conversations.map((c) => ({
-          id: c.id,
-          title: c.title,
-          date: new Date(c.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }),
-          snippet: 'Local conversation session stored in SQLite.',
-          model: effectiveModelName,
-          messagesCount: c.id === activeConversationId ? messages.length : 1,
-        }))
-      : mockConversations;
+  const drawerConversations: ConversationHistoryItem[] = conversations.map((c) => ({
+    id: c.id,
+    title: c.title,
+    date: new Date(c.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }),
+    snippet: 'Local conversation session stored in SQLite.',
+    model: effectiveModelName,
+    messagesCount: c.id === activeConversationId ? messages.length : 1,
+  }));
 
   return (
     <div className="space-y-6">

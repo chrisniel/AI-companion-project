@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Brain,
   Search,
@@ -17,23 +17,63 @@ import {
   Clock,
   ArrowUpDown,
   RefreshCw,
+  Loader2,
+  AlertCircle,
+  WifiOff,
 } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { SearchInput } from '../ui/SearchInput';
 import { NeumorphicButton } from '../ui/NeumorphicButton';
 import { MemoryEntry, MemoryCategory } from '../../types';
-import { initialMemoryEntries } from '../../mock/deviceAndMemoryData';
 import { MemoryItemCard } from './memory/MemoryItemCard';
 import { MemoryEditorModal } from './memory/MemoryEditorModal';
 import { MemoryDeleteConfirmModal } from './memory/MemoryDeleteConfirmModal';
 import { useTheme } from '../../context/ThemeContext';
+import { useBackend } from '../../context/BackendContext';
+import {
+  listMemories,
+  createMemory,
+  updateMemory,
+  deleteMemory,
+  MemoryOut,
+} from '../../services/api/memoryApi';
+
+function mapMemoryOutToEntry(out: MemoryOut): MemoryEntry {
+  let cat: MemoryCategory = 'Fact';
+  const lowerCat = out.category?.toLowerCase() || '';
+  if (lowerCat === 'preference') cat = 'Preference';
+  else if (lowerCat === 'profile' || lowerCat === 'context') cat = 'Profile';
+  else if (lowerCat === 'project') cat = 'Project';
+  else if (lowerCat === 'event') cat = 'Event';
+  else if (lowerCat === 'temporary') cat = 'Temporary';
+  else if (lowerCat === 'fact') cat = 'Fact';
+
+  return {
+    id: out.id,
+    content: out.content,
+    category: cat,
+    source: out.source_type ? `${out.source_type.charAt(0).toUpperCase()}${out.source_type.slice(1)}` : 'Local AI Runtime',
+    confidence: Math.min(1, Math.max(0, out.importance > 1 ? out.importance / 2 : out.importance)),
+    lastUpdated: new Date(out.created_at).toLocaleDateString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+    isArchived: false,
+    tags: [cat.toLowerCase()],
+  };
+}
 
 type StatusFilter = 'active' | 'archived' | 'all';
 type SortOption = 'recent' | 'confidence' | 'category';
 
 export const MemoryView: React.FC = () => {
   const { mode } = useTheme();
-  const [memories, setMemories] = useState<MemoryEntry[]>(initialMemoryEntries);
+  const { isOnline } = useBackend();
+  const [memories, setMemories] = useState<MemoryEntry[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<'All' | MemoryCategory>('All');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
@@ -51,6 +91,26 @@ export const MemoryView: React.FC = () => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
   };
+
+  const loadLiveMemories = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const res = await listMemories();
+      const mapped = (res.items || []).map(mapMemoryOutToEntry);
+      setMemories(mapped);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to connect to memory service';
+      setLoadError(msg);
+      setMemories([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLiveMemories();
+  }, [loadLiveMemories]);
 
   // Category counts calculation
   const categoryCounts = useMemo(() => {
@@ -112,12 +172,12 @@ export const MemoryView: React.FC = () => {
         if (sortBy === 'category') {
           return a.category.localeCompare(b.category);
         }
-        // Default: most recent first (mock order preserved / string comparison)
+        // Default: most recent first (ID/created comparison)
         return b.id.localeCompare(a.id);
       });
   }, [memories, statusFilter, selectedCategory, searchQuery, sortBy]);
 
-  // Handlers for mock controls
+  // Handlers for live memory controls
   const handleEdit = (memory: MemoryEntry) => {
     setMemoryToEdit(memory);
     setIsEditorOpen(true);
@@ -128,27 +188,28 @@ export const MemoryView: React.FC = () => {
     setIsEditorOpen(true);
   };
 
-  const handleSaveMemory = (data: Partial<MemoryEntry>) => {
-    if (data.id) {
-      // Edit existing
-      setMemories((prev) =>
-        prev.map((m) => (m.id === data.id ? ({ ...m, ...data } as MemoryEntry) : m))
-      );
-      showToast('Memory record updated.');
-    } else {
-      // Create new
-      const newEntry: MemoryEntry = {
-        id: `mem-${Date.now()}`,
-        content: data.content || '',
-        category: data.category || 'Preference',
-        source: data.source || 'Manual Input',
-        confidence: data.confidence || 0.95,
-        lastUpdated: 'Just now',
-        isArchived: false,
-        tags: data.tags || [],
-      };
-      setMemories((prev) => [newEntry, ...prev]);
-      showToast('New semantic memory indexed successfully.');
+  const handleSaveMemory = async (data: Partial<MemoryEntry>) => {
+    try {
+      let apiCat: 'fact' | 'preference' | 'context' = 'fact';
+      if (data.category === 'Preference') apiCat = 'preference';
+      else if (data.category === 'Profile') apiCat = 'context';
+
+      if (data.id) {
+        await updateMemory(data.id, {
+          content: data.content,
+          category: apiCat,
+        });
+        showToast('Memory record updated.');
+      } else {
+        await createMemory(data.content || '', apiCat);
+        showToast('New semantic memory indexed successfully.');
+      }
+      setIsEditorOpen(false);
+      setMemoryToEdit(null);
+      await loadLiveMemories();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to save memory record.';
+      showToast(`Error: ${msg}`);
     }
   };
 
@@ -172,11 +233,17 @@ export const MemoryView: React.FC = () => {
     }
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (memoryToDelete) {
-      setMemories((prev) => prev.filter((m) => m.id !== memoryToDelete.id));
-      showToast('Memory permanently deleted from vector store.');
-      setMemoryToDelete(null);
+      try {
+        await deleteMemory(memoryToDelete.id);
+        showToast('Memory permanently deleted from store.');
+        setMemoryToDelete(null);
+        await loadLiveMemories();
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Failed to delete memory.';
+        showToast(`Error: ${msg}`);
+      }
     }
   };
 
@@ -372,7 +439,43 @@ export const MemoryView: React.FC = () => {
 
       {/* Memory Entries List (Highly readable interface without heavy neumorphism) */}
       <div className="space-y-3.5">
-        {filteredMemories.length > 0 ? (
+        {!isOnline && (
+          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3 text-xs text-amber-300">
+            <div className="flex items-center gap-2">
+              <WifiOff className="w-4 h-4 text-amber-400 flex-shrink-0" />
+              <span>
+                <strong>Runtime Offline: </strong> Memory query and SQLite FTS5 updates are paused until Local AI Runtime reconnects.
+              </span>
+            </div>
+            <Badge variant="warning" size="sm" className="font-mono text-[10px]">
+              Offline
+            </Badge>
+          </div>
+        )}
+
+        {loadError && (
+          <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-between gap-3 text-xs text-rose-300">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+              <span>{loadError}</span>
+            </div>
+            <NeumorphicButton size="xs" variant="secondary" onClick={loadLiveMemories}>
+              Retry
+            </NeumorphicButton>
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="p-12 rounded-3xl surface-base border border-[var(--color-border-subtle)] text-center space-y-3">
+            <Loader2 className="w-8 h-8 animate-spin text-[var(--color-accent)] mx-auto opacity-75" />
+            <h3 className="text-sm font-bold text-[var(--color-text-primary)]">
+              Querying Local AI Runtime...
+            </h3>
+            <p className="text-xs text-[var(--color-text-secondary)]">
+              Fetching semantic memory records from SQLite FTS5 store.
+            </p>
+          </div>
+        ) : filteredMemories.length > 0 ? (
           filteredMemories.map((mem) => (
             <MemoryItemCard
               key={mem.id}
@@ -386,22 +489,26 @@ export const MemoryView: React.FC = () => {
           <div className="p-10 rounded-3xl surface-base border border-[var(--color-border-subtle)] text-center space-y-3">
             <Brain className="w-8 h-8 text-[var(--color-text-muted)] mx-auto opacity-50" />
             <h3 className="text-sm font-bold text-[var(--color-text-primary)]">
-              No matching memories found
+              {memories.length === 0 ? 'No memory records yet' : 'No matching memories found'}
             </h3>
             <p className="text-xs text-[var(--color-text-secondary)] max-w-sm mx-auto">
-              No memory records matched category "{selectedCategory}" with query "{searchQuery}".
+              {memories.length === 0
+                ? "No memories have been stored in the SQLite FTS5 database yet. Click 'Add Memory' above to record a user fact or preference."
+                : `No memory records matched category "${selectedCategory}" with query "${searchQuery}".`}
             </p>
-            <NeumorphicButton
-              size="sm"
-              variant="secondary"
-              onClick={() => {
-                setSearchQuery('');
-                setSelectedCategory('All');
-                setStatusFilter('active');
-              }}
-            >
-              Reset Filters
-            </NeumorphicButton>
+            {memories.length > 0 && (
+              <NeumorphicButton
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedCategory('All');
+                  setStatusFilter('active');
+                }}
+              >
+                Reset Filters
+              </NeumorphicButton>
+            )}
           </div>
         )}
       </div>

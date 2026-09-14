@@ -18,9 +18,9 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — FINAL PLAN COMPLETE, AWAITING USER APPROVED SIGNAL]
+## [CURRENT EXECUTION STATE — BATCH 8A.1 COMPLETE, AWAITING USER APPROVAL FOR 8A.2]
 
-- Next Action: User issues APPROVED signal → Gemini starts `feature/phase8-ui-foundation` (8A)
+- Next Action: User reviews Batch 8A.1 results and issues approval signal for Batch 8A.2 (AssistantView decomposition)
 - Active Plan: `docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md` (complete rewrite, self-contained)
 
 ---
@@ -29,7 +29,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 ### 8A — Frontend Architecture & UX Harmonization
 Branch: `feature/phase8-ui-foundation`
-- [ ] 8A.1: Mock removal — HomeView (time-derived greeting), AssistantView (stale mockConversations), HealthView (live BackendContext), MemoryView (live memoryApi)
+- [x] 8A.1: Mock removal — HomeView (time-derived greeting), AssistantView (stale mockConversations), HealthView (live BackendContext), MemoryView (live memoryApi)
 - [ ] 8A.2: AssistantView decomposition — AssistantComposer (stub attach), AssistantMessageList, AssistantStatusBar (provenance), AssistantErrorDisplay
 - [ ] 8A.3: ModelsView — variant badges, mmproj warning badge (degraded not incompatible), applied-vs-requested profile labels
 - [ ] 8A.4: mock/*.ts — @deprecated annotations on all file headers (do not delete yet)

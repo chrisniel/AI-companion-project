@@ -21,7 +21,6 @@ import {
   Calendar,
   Layers,
   ChevronRight,
-  Globe,
 } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { StatusIndicator } from '../ui/StatusIndicator';
@@ -29,8 +28,6 @@ import { NeumorphicButton } from '../ui/NeumorphicButton';
 import { ProgressBar } from '../ui/ProgressBar';
 import { Modal } from '../ui/Modal';
 import { TextInput } from '../ui/TextInput';
-import { SupportedLanguageCode } from '../../types';
-import { getLanguageAwareGreeting } from '../../mock/multilingualData';
 
 export interface HomeViewProps {
   onNavigate: (sectionId: string) => void;
@@ -65,12 +62,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
   activeCharacterName = 'Aura',
   userName = 'Chris',
 }) => {
-  // 1. BATCH 12.1: Dynamic Multilingual Language-Aware Greeting
-  const [greetingLanguage, setGreetingLanguage] = useState<SupportedLanguageCode | 'auto_detect'>('auto_detect');
-
-  const greetingData = useMemo(() => {
-    return getLanguageAwareGreeting(greetingLanguage, userName);
-  }, [greetingLanguage, userName]);
+  // 1. Time-Derived Greeting (Plan 8A.1)
+  const greeting = useMemo(() => {
+    const h = new Date().getHours();
+    return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  }, []);
 
   const currentDateString = useMemo(() => {
     return new Date().toLocaleDateString('en-US', {
@@ -174,37 +170,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 • 0ms Cloud Latency
               </span>
 
-              {/* Language Switcher Chips */}
-              <div className="inline-flex items-center gap-1 p-0.5 rounded-lg surface-recessed border border-[var(--color-border-subtle)] ml-auto sm:ml-2">
-                {[
-                  { id: 'auto_detect' as const, label: 'Auto' },
-                  { id: 'en' as const, label: '🇺🇸 EN' },
-                  { id: 'fil' as const, label: '🇵🇭 FIL' },
-                  { id: 'ja' as const, label: '🇯🇵 JA' },
-                  { id: 'mixed' as const, label: '✨ Mixed' },
-                ].map((l) => (
-                  <button
-                    key={l.id}
-                    type="button"
-                    onClick={() => setGreetingLanguage(l.id)}
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-all ${
-                      greetingLanguage === l.id
-                        ? 'bg-[var(--color-accent)] text-white font-bold shadow-xs'
-                        : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
-                    }`}
-                  >
-                    {l.label}
-                  </button>
-                ))}
-              </div>
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--color-text-primary)] flex items-center gap-2">
-              <span>{greetingData.greeting}</span>
-              <span className="text-lg opacity-85" title={greetingData.langLabel}>{greetingData.flag}</span>
+              <span>{greeting}, {userName}</span>
             </h1>
             <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed">
-              {greetingData.subtitle} <span className="font-semibold text-[var(--color-text-primary)]">{activeCharacterName}</span> is standing by on Llama-3.1-8B-Instruct with all background systems nominal.
+              <span className="font-semibold text-[var(--color-text-primary)]">{activeCharacterName}</span> is standing by on Llama-3.1-8B-Instruct with all background systems nominal.
             </p>
           </div>
 
