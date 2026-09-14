@@ -197,8 +197,9 @@ Fields:
   chat_template: Optional[str]
   chat_template_source: Optional[str]   # "gguf_metadata" | "registry_declared" | None
 
-  # Runtime compatibility (declarative, not acceleration-specific)
-  runtime_compatibility: List[str] = ["llama_cpp"]
+  # Runtime compatibility -- explicitly declared; empty for unregistered/unknown models.
+  # Factory/registered entries declare this (e.g. ["llama_cpp"]). Do NOT default for unknowns.
+  runtime_compatibility: List[str] = Field(default_factory=list)
 
   # Source / integrity
   license: str = ""; source: str = ""; sha256_primary: Optional[str]
@@ -277,16 +278,36 @@ Feature gating:
   - ModelCapability.reasoning in available_capabilities is authoritative
   - Never gate on variant == "thinking" alone
 
-### Registry Locations and Path Resolution
+### Registry Locations, Merging, and Path Resolution
 
-  Factory template: models/registry.template.json (repo, versioned) -- read-only at runtime
-    Artifact paths in this file resolve relative to FACTORY_MODEL_ROOT (<repo-root>/models/)
+#### Two sources, merged effective registry
 
-  Installed runtime: COMPANION_DATA_ROOT/library/registry/models.json -- all writes go here
-    Artifact paths in this file resolve relative to MODEL_LIBRARY_DIR (COMPANION_DATA_ROOT/library/models/llm/)
+  Factory registry:   models/registry.template.json (repo, versioned) -- read-only at runtime
+    Artifact paths resolve relative to FACTORY_MODEL_ROOT (<repo-root>/models/)
+    source tag on each entry: "factory"
 
-_load_registry_json(): check installed first; fall back to template if absent.
-Path resolution MUST use the correct root for the source registry -- never mix roots.
+  Installed registry: COMPANION_DATA_ROOT/library/registry/models.json -- all writes go here
+    Artifact paths resolve relative to MODEL_LIBRARY_DIR (COMPANION_DATA_ROOT/library/models/llm/)
+    source tag on each entry: "installed"
+
+#### Effective registry composition
+
+  effective_registry = merge(factory_entries, installed_entries)
+
+ID collision rule: installed entry with the same stable id shadows the factory entry.
+An empty installed registry MUST NOT hide factory models.
+Factory models remain visible even when the installed registry is absent or empty.
+
+Source preservation: every ModelRegistryEntry carries a registry_source: Literal["factory", "installed"] field.
+Path resolution MUST use the correct root for the source -- never mix roots.
+
+  _build_effective_registry():
+      factory = _load_factory_registry()   # always loaded; never skipped
+      installed = _load_installed_registry() if INSTALLED_REGISTRY_PATH.exists() else []
+      merged = {e.manifest.id: e for e in factory}   # factory first
+      for e in installed:
+          merged[e.manifest.id] = e                  # installed shadows factory on same id
+      return list(merged.values())
 
 ### registry.template.json -- Schema v3
 
@@ -297,7 +318,7 @@ Path resolution MUST use the correct root for the source registry -- never mix r
           llm/ in COMPANION_DATA_ROOT contains persistent installed models organized by family,
           not by acceleration backend."
   models: [ ...entries with asset_type, architecture, input_modalities, model_max_context,
-             reasoning_mode added to all existing entries... ]
+             reasoning_mode, runtime_compatibility added to all existing entries... ]
 
 ---
 
@@ -410,14 +431,52 @@ Fix any badge/tooltip implying models are "Vulkan models":
   - GGUF files are runtime-agnostic; Vulkan is an engine property
   - Display: GGUF (file format) | Engine: llama.cpp | Acceleration: Vulkan
 
-### 8P.2 -- COMPANION_DATA_ROOT Configuration
+### 8P.2 -- COMPANION_DATA_ROOT Bootstrap & Configuration Initialization
+
+Bootstrap resolution MUST occur before Settings constructs DATABASE_PATH or DATABASE_URL,
+and before SQLAlchemy creates the engine. Required initialization order:
+
+  1. env var: COMPANION_DATA_ROOT (highest priority; skip all other steps)
+  2. bootstrap locator: %LOCALAPPDATA%\AI Companion\bootstrap.json { schema_version, data_root }
+  3. default: %LOCALAPPDATA%\AI Companion\Data
+        ↓
+  Settings (config.py) reads the resolved root
+        ↓
+  DATABASE_PATH = COMPANION_DATA_ROOT / "database" / "companion.db"
+  DATABASE_URL  = f"sqlite+aiosqlite:///{DATABASE_PATH.as_posix()}"
+        ↓
+  SQLAlchemy engine construction (uses DATABASE_URL; root already canonical)
+        ↓
+  ensure_data_root() first-run migration (canonical target already resolved)
+
+Bootstrap resolution function (called at module-load time, before Settings instantiation):
+
+  def resolve_data_root() -> Path:   # synchronous; called before async startup
+      if root := os.environ.get("COMPANION_DATA_ROOT"):
+          return Path(root)            # 1. explicit env override
+      localappdata = Path(os.environ.get("LOCALAPPDATA",
+                          str(Path.home() / "AppData" / "Local")))
+      bootstrap_path = localappdata / "AI Companion" / "bootstrap.json"
+      if bootstrap_path.exists():
+          try:
+              data = json.loads(bootstrap_path.read_text(encoding="utf-8"))
+              candidate = Path(data["data_root"])
+              if candidate.is_absolute():
+                  return candidate     # 2. bootstrap locator
+          except Exception:
+              logger.warning("Invalid bootstrap.json; using default data root")
+      return localappdata / "AI Companion" / "Data"  # 3. default
+
+  COMPANION_DATA_ROOT: Path = Field(default_factory=resolve_data_root)
+
+Bootstrap file invariants:
+  - Contains only schema_version (int) and data_root (str). No secrets, no user preferences.
+  - Always located at %LOCALAPPDATA%\AI Companion\bootstrap.json (fixed OS path).
+  - If data_root is unavailable/invalid: log warning; fall back to default. Do not crash.
 
 [MODIFY] backend/app/core/config.py -- add:
 
-  COMPANION_DATA_ROOT: Path = Field(
-      default_factory=lambda: Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local")))
-          / "AI Companion" / "Data"
-  )
+  COMPANION_DATA_ROOT: Path = Field(default_factory=resolve_data_root)
 
   @property DATABASE_DIR -> COMPANION_DATA_ROOT / "database"
   @property DATABASE_PATH -> DATABASE_DIR / "companion.db"
@@ -434,6 +493,17 @@ Fix any badge/tooltip implying models are "Vulkan models":
   @property MEMORY_DIR -> COMPANION_DATA_ROOT / "memory"
 
 Deprecate: DATA_DIR, MODELS_DIR, LLAMA_MODELS_DIR, hardcoded DATABASE_URL string.
+
+### 8P.2b -- Bootstrap Locator Tests
+
+Tests:
+  - Missing locator -> default path used
+  - Valid locator with valid absolute path -> locator path used
+  - Invalid/corrupt bootstrap.json -> warning logged; default used
+  - Unavailable path in bootstrap.json (drive not mounted) -> warning; default used
+  - Explicit COMPANION_DATA_ROOT env var -> env var takes precedence over locator and default
+  - DATABASE_URL uses the resolved canonical path (not a legacy or env DATABASE_URL override)
+  - SQLAlchemy engine: constructed after resolve_data_root() completes
 
 ### 8P.3 -- Runtime Engine Configuration
 
@@ -635,7 +705,10 @@ Tests:
 
 ### 8P Commit Message
 
-feat(8p): runtime config -- COMPANION_DATA_ROOT, terminology, model schema v3, profile portability
+feat(8p): runtime config -- COMPANION_DATA_ROOT, bootstrap, merged registry, terminology, schema v3
+
+BOOTSTRAP: resolve_data_root() (env > bootstrap.json > default) runs before Settings/DATABASE_URL/SQLAlchemy engine;
+bootstrap.json at %LOCALAPPDATA%\AI Companion\bootstrap.json; schema_version + data_root only.
 
 TERMINOLOGY: "Local AI Core" -> "Local AI Runtime" (19 frontend + backend); test assertions updated;
 GGUF/Vulkan label fixed; LLAMA_CPP doc port corrected (8085) + profile table corrected;
@@ -645,12 +718,16 @@ README.md implementation status corrected.
 CONFIG: COMPANION_DATA_ROOT; DATABASE_PATH derived; LLAMA_SERVER_URL port 8085;
 PROFILE_*_* env-overridable (RX 580 defaults preserved); _get_profile_params() reads settings.
 
+REGISTRY: merged factory+installed; installed shadows factory on same id; empty installed does not hide factory;
+registry_source field preserved per entry; path resolution per source root.
+
 SCHEMA v3: ModelManifest + ModelLibraryState + ModelRuntimeHints; new enums; unknown GGUFs capabilities=[];
-partial mmproj handling; model_serializer for backward-compat; registryApi.ts updated; openapi.json updated.
+runtime_compatibility=[] for unknowns; partial mmproj handling; model_serializer for backward-compat;
+registryApi.ts updated; openapi.json updated.
 
-MIGRATION: first-run conditional; backup preserved; restart-safe; no LFS changes.
+MIGRATION: first-run conditional; multi-candidate detection; backup preserved; restart-safe; no LFS changes.
 
-Tests: >= 88 pytest + migration test, >= 38 vitest, 0 tsc.
+Tests: >= 88 pytest + migration/bootstrap tests, >= 38 vitest, 0 tsc.
 
 
 ---
@@ -796,75 +873,110 @@ Storage security invariants:
   3. storage_path never in any API response
   4. Preview validates ownership before serving bytes
 
-### 8B.6b -- Transactional Attachment Binding
+### 8B.6b -- Transactional Attachment Claiming (Concurrency-Safe)
 
 [CREATE/MODIFY] backend/app/services/attachment_service.py (or message_service.py):
 
-When a user message is sent with attachment_ids[], binding must be atomic:
+Binding must be atomic and concurrency-safe. Do NOT use session.get() + conditional assignment:
+that pattern is vulnerable to TOCTOU races where two concurrent sends can both read
+message_id=NULL and both proceed to bind the same attachment.
 
-  async def bind_attachments_to_message(
+Instead, use an atomic conditional UPDATE within the same transaction as user message creation:
+
+  async def claim_attachments_for_message(
       session, message_id, attachment_ids, owner_id, conversation_id
   ) -> None:
-      """Atomically validate and bind staged attachment_ids to a persisted user message.
-      Runs inside the same transaction as user message creation.
+      """Atomically claim staged attachments for a new user message.
+      Each claim is a conditional UPDATE requiring exactly 1 affected row.
+      Runs inside the same transaction as user message INSERT.
+      On any failure the entire transaction rolls back.
       """
       if len(attachment_ids) > MAX_ATTACHMENTS_PER_MESSAGE:
           raise ValidationError(f"Exceeds {MAX_ATTACHMENTS_PER_MESSAGE} attachment limit")
 
       for att_id in attachment_ids:
-          att = await session.get(Attachment, att_id)
-          # Validation order (all inside the transaction):
-          # 1. Exists
-          if att is None:
-              raise ValidationError(f"Attachment {att_id} not found")
-          # 2. Ownership
-          if att.owner_id != owner_id:
-              raise PermissionError(f"Attachment {att_id} not owned by caller")
-          # 3. Same conversation
-          if att.conversation_id != conversation_id:
-              raise ValidationError(f"Attachment {att_id} belongs to a different conversation")
-          # 4. Not deleted
-          if att.is_deleted:
-              raise ValidationError(f"Attachment {att_id} has been deleted")
-          # 5. Staged (unbound): message_id must be NULL
-          if att.message_id is not None:
-              raise ValidationError(f"Attachment {att_id} is already committed to another message")
-          # Bind
-          att.message_id = message_id
+          # Atomic conditional UPDATE: only succeeds if attachment is staged, unbound,
+          # owned by caller, belongs to correct conversation, and not deleted.
+          result = await session.execute(
+              update(Attachment)
+              .where(
+                  Attachment.id == att_id,
+                  Attachment.owner_id == owner_id,
+                  Attachment.conversation_id == conversation_id,
+                  Attachment.message_id.is_(None),     # staged: must be unbound
+                  Attachment.is_deleted.is_(False),
+              )
+              .values(message_id=message_id)
+              .returning(Attachment.id)
+          )
+          claimed = result.scalar_one_or_none()
+          if claimed is None:
+              # The UPDATE matched zero rows: attachment missing, wrong owner,
+              # wrong conversation, already committed, or deleted.
+              # Distinguish the reason for a useful error message:
+              att = await session.get(Attachment, att_id)
+              if att is None:
+                  raise NotFoundError(f"Attachment {att_id} not found")
+              if att.owner_id != owner_id:
+                  raise PermissionError(f"Attachment {att_id} not owned by caller")
+              if att.conversation_id != conversation_id:
+                  raise ValidationError(f"Attachment {att_id} belongs to a different conversation")
+              if att.is_deleted:
+                  raise ValidationError(f"Attachment {att_id} has been deleted")
+              # message_id is not None: already claimed
+              raise ValidationError(f"Attachment {att_id} is already committed to a message")
+          # Exactly one row updated: claim succeeded.
 
-Rollback invariant: if any validation fails, the transaction rolls back.
-Neither partial message creation nor partial attachment bindings survive a failed transaction.
+Concurrency invariant:
+  Two concurrent sends referencing the same attachment_id:
+  Exactly one UPDATE will match (message_id IS NULL condition); the other returns 0 rows.
+  The second request receives a 422 "already committed" error. No double-binding occurs.
+  This is the basis of the existing concurrent duplicate-send test.
 
-Cancellation invariant: if the assistant-stream generation is cancelled AFTER the user message
-and attachments are committed, the user message and all bound attachments remain committed and
-visible in history. Only the partial/empty assistant response follows cancellation semantics.
+Rollback invariant:
+  If any claim fails, the enclosing transaction rolls back.
+  Neither partial message creation nor partial attachment bindings survive.
+
+Cancellation invariant:
+  If assistant-stream generation is cancelled AFTER the user message and attachments are committed,
+  the user message and all bound attachments remain committed and visible in history.
+  Only the partial/empty assistant response follows Phase 5 cancellation semantics.
 
 ### 8B.7 -- Attachment/Media Resolver & Provider Translation
 
-Canonical boundary:
+Canonical type boundary:
 
-  Orchestrator
-    -> Attachment/Media Resolver (service layer)
-       resolves attachment_ids to validated, provider-neutral image resources
-    -> LLMProvider interface (ContentBlock[])
-       -> LlamaCppProvider._translate_messages() (llama.cpp-specific wire format)
+  ImageAttachmentRef         (attachment_id: str, mime_type: str)
+       ↓ media_resolver.resolve_image_content()
+  ResolvedImageContent       (mime_type: str, data: bytes)
+       ↓ orchestrator wraps in ContentBlock[]
+  LLMProvider.chat()
+       ↓ LlamaCppProvider._translate_messages()
+  llama.cpp chat completions wire format
 
 LlamaCppProvider MUST NOT:
   - Construct application attachment paths from attachment IDs directly
   - Query attachment persistence (DB) directly
   - Know about COMPANION_DATA_ROOT or settings.ATTACHMENT_DIR directly
-  - Make any assumption about where bytes come from
+  - Perform any filesystem IO (that is media_resolver's responsibility)
+  - Use asyncio.run_in_executor for file reads (moved to media_resolver)
 
 LlamaCppProvider MUST ONLY:
-  - Receive pre-resolved image bytes (or a coroutine that provides them)
+  - Receive ResolvedImageContent (bytes already loaded) from orchestrator
   - Translate ContentBlock[] -> llama.cpp chat completions wire format
-  - Run file IO via asyncio.run_in_executor (never blocking the event loop)
+  - Encode pre-loaded image bytes as data:{mime_type};base64,{b64} in image_url format
+
+[CREATE] backend/app/schemas/multimodal.py -- add:
+  @dataclass class ImageAttachmentRef: attachment_id: str; mime_type: str
+  @dataclass class ResolvedImageContent: mime_type: str; data: bytes
 
 [CREATE] backend/app/services/assistant/media_resolver.py:
-  async def resolve_image_content(block: ImageAttachmentContent) -> bytes:
+  async def resolve_image_content(ref: ImageAttachmentRef) -> ResolvedImageContent:
       """Load and validate image bytes for a single attachment.
-      Raises on missing file, path traversal, or oversized read.
-      Called by orchestrator before passing ContentBlocks to LLMProvider."""
+      Resolves the filesystem path from settings.ATTACHMENT_DIR.
+      Validates path is inside ATTACHMENT_DIR (traversal guard).
+      Raises on missing file, path traversal, or read error.
+      Called by orchestrator before ContentBlock[] is passed to LLMProvider."""
 
 [MODIFY] backend/app/services/assistant/orchestrator.py:
   # Gate on library state (available_capabilities) -- not manifest.capabilities
@@ -874,21 +986,22 @@ LlamaCppProvider MUST ONLY:
   )
 
   if has_vision and committed_attachments:
-      # Resolve image bytes via media_resolver (before calling provider)
       content_blocks: List[ContentBlock] = []
       for att in committed_attachments:
           if not att.is_deleted:
-              content_blocks.append(ImageAttachmentContent(att.id, att.mime_type))
+              ref = ImageAttachmentRef(attachment_id=att.id, mime_type=att.mime_type)
+              resolved = await media_resolver.resolve_image_content(ref)
+              content_blocks.append(ResolvedImageContent(mime_type=resolved.mime_type, data=resolved.data))
       content_blocks.append(TextContent(text=user_text))
       chat_message = ChatMessage(role="user", content=content_blocks)
   else:
       chat_message = ChatMessage(role="user", content=user_text)
 
 [MODIFY] backend/app/services/llm/llama_cpp.py -- add _translate_messages():
-  Receives ContentBlock[] from orchestrator (bytes already resolved by media_resolver).
-  Does NOT access filesystem paths or attachment IDs directly.
-  Encodes image bytes as data:{mime_type};base64,{b64} in image_url wire format.
-  All IO (if any) via run_in_executor (non-blocking).
+  Receives ContentBlock[] where image blocks carry ResolvedImageContent (bytes already loaded).
+  Does NOT access filesystem, attachment IDs, or ATTACHMENT_DIR.
+  Encodes pre-loaded bytes as data:{mime_type};base64,{b64} in image_url wire format.
+  No run_in_executor required: all IO was completed by media_resolver before this call.
 
 ### 8B.8 -- Frontend Attachment API
 
