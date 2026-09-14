@@ -387,11 +387,70 @@ Create frontend/web/src/components/workspace/assistant/:
 - Truthful loading, error with Retry, and empty states.
 - Unsupported operational controls (New Alarm, Android audio nodes, calendar sync) removed or rendered as non-interactive Planned affordances.
 
-8A.3b.3 -- Characters + Devices + Logs + Settings
-- CharactersView
-- DevicesView
-- LogsView
-- SettingsView
+8A.3b.3 -- Characters + Devices + Logs + Settings Truthfulness Sweep
+Design specification formalized in `docs/superpowers/specs/2026-09-14-phase8-3b3-truthfulness-design.md`.
+
+Core Approach: Approach B — Hybrid Truthfulness
+- Implemented + authoritative source -> show real state
+- Architecture exists but implementation does not -> Planned / Not Implemented
+- UI concept only -> Preview
+- No authoritative source -> Unavailable
+- Never simulate operational success.
+- Zero backend changes, zero Android changes, zero migrations, zero new APIs.
+
+CharactersView (Character Studio):
+- Retain Character Studio as an interactive UI/architecture preview.
+- Remove `mockCharacters` and `mockVoiceOptions` as production authority.
+- Remove fake active-character state, fake local persistence ("Saved to local database"), and fake claims that selecting a character steers llama.cpp inference.
+- Clearly label persistence and activation as Planned.
+- Future Character Architecture:
+  - Decomposed into Identity (id, display name, description, persona/system prompt), Personality (archetype presets + continuous trait values 0–100), Voice (preferred voice ID), Presence (presentation config).
+  - Archetypes (tsundere, dandere, kuudere, yandere, warm, playful, formal, custom) are PRESETS only, not the complete behavioral model.
+  - Continuous trait vector (warmth, teasing, guardedness, directness, expressiveness, affection, formality, verbosity 0–100). Exact final schema deferred.
+  - Safety invariant: personality presets must never override core AI Companion safety, factual constraints, or airgap boundaries.
+- Profile / Character Separation (Netflix model):
+  - Single local installation, multiple local profiles (not cloud accounts).
+  - Profile owns conversations, memories, tasks, preferences, and `preferred_character_id`. Character does NOT own user memories/tasks/conversations.
+  - Neutral built-in Assistant fallback (Approach B) when no character is selected. Lisa or optional character packs are not required for boot.
+- Character Packs / Public Repo Boundary:
+  - Future data-root layout: `<COMPANION_DATA_ROOT>/characters/<character-id>/` (character.json, avatar.png, prompts/system.md, assets/).
+  - Not implemented in 8A.3b.3 (deferred to later asset foundation work).
+  - Zero copyrighted third-party artwork, game assets, or cloned voices bundled in public repo.
+- Character Presence Layer (Far Future only):
+  - Decoupled from identity/personality/voice: Character = WHO/HOW, Voice = HOW IT SOUNDS, Presence = HOW IT APPEARS, Profile = USER DATA.
+  - Changing presentation renderer must never alter memory, tasks, conversations, profile identity, or personality state.
+  - Potential renderers: static image, animated GIF/WebP, 2D/Live2D, 3D model.
+  - Potential desktop behaviors: transparent overlay, draggable, persistent coordinates, always-on-top, click/hover interactions, idle animation loops, semantic emotion states, lip sync, speaking animations, proactive notification reactions.
+  - Zero Presence runtime implemented in Phase 8.
+
+DevicesView:
+- Truthfully display real host workstation state from authoritative backend endpoint `GET /api/v1/system/status`:
+  status, platform, Python version, hostname, CPU count, application version, database_connected, timestamp.
+- Mark all unsupported subsystems as Planned or Unavailable:
+  Android device registry, Android sync bridge, alarms synchronization, health device synchronization, audio-device manager, microphone routing, speaker routing, Bluetooth state, smartwatch/wearable source, Health Connect source, remote gateway, Tailscale connectivity, remote latency, LAN/Tailscale runtime ingress.
+- Remove all simulated production claims:
+  fake endpoint counts, "Local Mesh Healthy", fabricated ping/latency, fake connected phones (e.g. Pixel 9 Pro), fake mTLS claims, fake sync timestamps, fake gateway IPs, fake packet loss meters, mock provider switching.
+- Remote runtime access over LAN/Tailscale is FUTURE; no implementation in 8A.
+
+LogsView:
+- Current backend has no telemetry or log streaming API.
+- Remove `initialMockLogs` as production authority.
+- Remove `streamingEventTemplates` from production behavior.
+- Remove random generated log stream and interval timers synthesizing logs.
+- Remove fake "Live Stream" status, fake average latency, fake error/buffer counts.
+- Display truthful messaging: "Runtime log streaming is not implemented yet."
+- Retain visual log viewer terminal shell as Preview / Planned. No backend log API in 8A.
+
+SettingsView:
+- Browser localStorage state alone does NOT make a runtime setting implemented. If toggling a setting has no actual product/runtime effect, it must not be presented as an operational system setting.
+- REAL NOW: Appearance settings that genuinely affect `ThemeContext` and UI presentation (Theme, Compact View, Font Scaling, Accent).
+- PREVIEW / PLANNED: General startup behavior, Assistant personality behavior, Character assignment persistence, Voice/TTS/STT, wake word/VAD, Health settings, hardware/audio settings, remote network/Tailscale, privacy controls without authoritative runtime implementation, unsupported Advanced settings.
+- AI runtime configuration belongs primarily to Phase 8P; do not duplicate fake runtime state in Settings.
+- Remove false persistence claim: "Persisted Locally (SQLite & Keyring)". Use truthful wording based on actual persistence source (Browser Local Storage vs. Configuration schema planned for Phase 8P).
+- Application States page remains explicitly labeled as a UI/UX showcase or Preview.
+
+Explicit Non-Goals:
+- Do NOT implement profiles, character registry backend, persistent character packs, Lisa/named character packs, voice engines, voice cloning, 3D/GIF avatar runtime, Live2D, desktop overlay, remote Tailscale runtime access, device registry, backend telemetry/log streaming, new Settings backend, Android changes, backend changes, or migrations.
 
 ### 8A.4 -- Deprecation Annotations
 

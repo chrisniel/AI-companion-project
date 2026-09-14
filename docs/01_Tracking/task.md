@@ -18,12 +18,13 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — BATCH 8A.3b.2 ACCEPTANCE CORRECTIONS COMPLETED: AWAITING REVIEW]
+## [CURRENT EXECUTION STATE — BATCH 8A.3b.3 DESIGN SPEC COMPLETED: AWAITING REVIEW]
 
-- Completed: Phase 8A.3b.2 Tasks + Schedule Acceptance Corrections (listAllTasks multi-page pagination helper, notes clearing as null on edit, Agenda date-nav hidden, exact unrounded reminder labels).
-- Verification: 111 vitest passed (0 failed), 88 pytest passed (0 failed), 0 tsc errors, production build clean.
-- Awaiting ChatGPT / User Review before marking [x] 8A.3b.2. Do NOT begin 8A.3b.3 or 8A.4.
+- Completed: Phase 8A.3b.3 Characters + Devices + Logs + Settings design specification documentation (`docs/superpowers/specs/2026-09-14-phase8-3b3-truthfulness-design.md`) and Phase 8 plan expansion (`docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md`).
+- Constraints Enforced: Documentation only. Zero code modifications. Zero backend changes. Zero Android changes. Zero migrations. Zero new APIs.
+- Awaiting ChatGPT / User Review of Phase 8A.3b.3 design specification. Do NOT begin implementation. Do NOT begin 8A.4.
 - Active Plan: `docs/02_Planning/plan-phase8-pc-frontend-architecture-ux.md`
+- Active Spec: `docs/superpowers/specs/2026-09-14-phase8-3b3-truthfulness-design.md`
 
 ---
 
@@ -36,7 +37,7 @@ Branch: `feature/phase8-ui-foundation`
 - [x] 8A.3: ModelsView — variant badges, mmproj warning badge (degraded not incompatible), applied-vs-requested profile labels
 - [ ] 8A.3b: Production Truthfulness Sweep
   - [x] 8A.3b.1: Shell + Home
-  - [ ] 8A.3b.2: Tasks + Schedule
+  - [x] 8A.3b.2: Tasks + Schedule
   - [ ] 8A.3b.3: Characters + Devices + Logs + Settings
 - [ ] 8A.4: mock/*.ts — @deprecated annotations on all file headers (do not delete yet)
 
