@@ -185,8 +185,8 @@ Fields:
   # Do NOT default to 4096 for unknown GGUFs.
   model_max_context: Optional[int] = None
 
-  # Runtime compatibility -- do NOT default to [llama_cpp] for unknown GGUFs.
-  # Stays [] until declared or verified.
+  # Runtime compatibility -- explicitly declared; empty for unregistered/unknown models.
+  # Factory/registered entries declare this (e.g. ["llama_cpp"]). Do NOT default for unknowns.
   runtime_compatibility: List[str] = Field(default_factory=list)
 
   # Artifact paths (relative to the registry source root: FACTORY_MODEL_ROOT or MODEL_LIBRARY_DIR)
@@ -196,10 +196,6 @@ Fields:
   # Chat template
   chat_template: Optional[str]
   chat_template_source: Optional[str]   # "gguf_metadata" | "registry_declared" | None
-
-  # Runtime compatibility -- explicitly declared; empty for unregistered/unknown models.
-  # Factory/registered entries declare this (e.g. ["llama_cpp"]). Do NOT default for unknowns.
-  runtime_compatibility: List[str] = Field(default_factory=list)
 
   # Source / integrity
   license: str = ""; source: str = ""; sha256_primary: Optional[str]
@@ -494,7 +490,7 @@ Bootstrap file invariants:
 
 Deprecate: DATA_DIR, MODELS_DIR, LLAMA_MODELS_DIR, hardcoded DATABASE_URL string.
 
-### 8P.2b -- Bootstrap Locator Tests
+### 8P.2c -- Bootstrap Locator Tests
 
 Tests:
   - Missing locator -> default path used
@@ -556,9 +552,12 @@ Tests:
   Use model_serializer or computed_field for backward-compat flat fields -- NOT @property
 
 [MODIFY] backend/app/services/model_registry.py
-  _load_registry_json(): INSTALLED_REGISTRY_PATH first; template fallback
-    Path resolution: installed entries -> MODEL_LIBRARY_DIR; factory template entries -> FACTORY_MODEL_ROOT
-    Add FACTORY_MODEL_ROOT: Path = settings.BASE_DIR.parent / "models" (or env-overridable)
+  _load_factory_registry(): always loaded from models/registry.template.json; root = FACTORY_MODEL_ROOT
+  _load_installed_registry(): loaded from INSTALLED_REGISTRY_PATH if present; root = MODEL_LIBRARY_DIR
+  _build_effective_registry(): merge factory + installed entries; installed same-ID entries shadow factory entries;
+    empty/missing installed registry never hides factory models; preserve registry_source tag per entry
+  FACTORY_MODEL_ROOT: Path = settings.BASE_DIR.parent / "models" (or env-overridable)
+  Path resolution per registry_source: factory -> FACTORY_MODEL_ROOT; installed -> MODEL_LIBRARY_DIR
   _validate_entry(): populate ModelLibraryState
     - missing mmproj: vision removed from available_capabilities; text usable; model NOT prohibited
     - missing primary file: validation_status=missing_primary; model unavailable
@@ -609,43 +608,6 @@ Tests:
   - Local AI Core -> Local AI Runtime
   - Backend/database/local runtime: implemented (Phase 7 verified baseline); not "planned"
   - Reflect 88 pytest / 38 vitest; Phase 8 = active delivery
-
-### 8P.2b -- Bootstrap Locator
-
-[CREATE/MODIFY] backend/app/core/startup.py (or config_loader.py):
-
-Bootstrap resolution order (highest priority first):
-  1. Explicit env var: COMPANION_DATA_ROOT (if set, use directly -- skip locator)
-  2. Bootstrap file: %LOCALAPPDATA%\AI Companion\bootstrap.json
-     { "schema_version": 1, "data_root": "D:\\CustomPath\\AI Companion\\Data" }
-  3. Default: %LOCALAPPDATA%\AI Companion\Data
-
-Bootstrap file invariants:
-  - Contains only schema_version (int) and data_root (str).
-  - No user content, secrets, or preferences.
-  - If data_root in bootstrap.json is unavailable/invalid: log warning; fall back to default.
-  - The bootstrap.json itself is always at the fixed OS path (%LOCALAPPDATA%\AI Companion\bootstrap.json).
-
-  async def resolve_data_root() -> Path:
-      if os.environ.get("COMPANION_DATA_ROOT"):              # 1. explicit env override
-          return Path(os.environ["COMPANION_DATA_ROOT"])
-      bootstrap_path = Path(os.environ.get("LOCALAPPDATA", ...)) / "AI Companion" / "bootstrap.json"
-      if bootstrap_path.exists():
-          try:
-              data = json.loads(bootstrap_path.read_text())
-              candidate = Path(data["data_root"])
-              if candidate.is_absolute():
-                  return candidate                            # 2. bootstrap locator
-          except Exception:
-              logger.warning("Invalid bootstrap.json; using default data root")
-      return default_data_root()                             # 3. default
-
-Tests:
-  - Missing locator -> default path used
-  - Valid locator with valid absolute path -> locator path used
-  - Invalid/corrupt bootstrap.json -> warning logged; default used
-  - Unavailable path in bootstrap.json (drive not mounted) -> warning; default used
-  - Explicit COMPANION_DATA_ROOT env var -> env var takes precedence over locator and default
 
 ### 8P.7 -- First-Run Data Migration
 
@@ -827,8 +789,11 @@ Mixins: UUIDPrimaryKeyMixin, TimestampMixin (created_at+updated_at), OwnerMixin 
 
 [CREATE] backend/app/schemas/multimodal.py
   class TextContent:            type="text"; text: str
-  class ImageAttachmentContent: type="image_attachment"; attachment_id: str; mime_type: str
-  ContentBlock = Union[TextContent, ImageAttachmentContent]
+  class ImageAttachmentRef:     type="image_attachment"; attachment_id: str; mime_type: str
+  class ResolvedImageContent:   type="image_bytes"; mime_type: str; data: bytes
+  ContentBlock = Union[TextContent, ResolvedImageContent]
+  # Note: ImageAttachmentRef is used in application/orchestrator layer;
+  # media_resolver resolves it into ResolvedImageContent before passing ContentBlock[] to LLMProvider
 
 [MODIFY] schemas/llm.py
   ChatMessage.content: Union[str, List[ContentBlock]]   # str preserved for backward-compat
@@ -1089,13 +1054,14 @@ feat(8b): multimodal image attachment foundation
 - 006_add_attachments migration (006 -> 005_scope_message_constraints)
 - Attachment ORM: 4 mixins; UUID storage path; conversation + message relationships
 - schemas/attachment.py: AttachmentOut (no storage_path), AttachmentRef, constants
-- schemas/multimodal.py: TextContent, ImageAttachmentContent, ContentBlock
+- schemas/multimodal.py: TextContent, ImageAttachmentRef, ResolvedImageContent, ContentBlock
 - schemas/llm.py: ChatMessage.content Union[str, List[ContentBlock]]
 - schemas/message.py: attachment_ids[] + attachments[]
 - attachment_validator.py: Pillow, byte-header MIME, dimensions, megapixel, bomb
 - endpoints/attachments.py: POST/preview/DELETE; path traversal guard
-- orchestrator.py: vision gate via available_capabilities; provider-independent content
-- llama_cpp.py: _translate_messages(); file IO via run_in_executor
+- media_resolver.py: resolve_image_content(); owns async filesystem IO and path validation
+- orchestrator.py: vision gate via available_capabilities; calls media_resolver; provider-independent content
+- llama_cpp.py: _translate_messages(); receives pre-resolved bytes; wire translation only (no filesystem IO)
 - attachmentApi.ts: upload, delete, fetchAttachmentBlobUrl (createObjectURL lifecycle)
 - AssistantComposer: vision gate, authenticated previews, remove->DELETE, count limit
 - ConversationMessageItem: authenticated Blob previews; revokeObjectURL on unmount
