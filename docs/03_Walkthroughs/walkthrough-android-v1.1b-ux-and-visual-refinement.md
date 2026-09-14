@@ -41,17 +41,17 @@ This delivery resolves the visual depth gap and transition latency identified be
 ### Home Screen & Center Floating Action
 Tactile dual-shadow depth, elevated center Assistant button, and clean top bar without theme toggle clutter:
 
-![Home Screen - Center Floating Action](file:///C:/Users/Admin/.gemini/antigravity-ide/brain/0ab4b7a6-2716-409d-a2b0-894be8dd17d1/screen_home.png)
+*(Local verification screenshot was not committed to the repository.)*
 
 ### Assistant Workspace & Compact Events
 Active center action indicator, clean top bar, and compact expandable system warning pill:
 
-![Assistant Workspace - Compact Events](file:///C:/Users/Admin/.gemini/antigravity-ide/brain/0ab4b7a6-2716-409d-a2b0-894be8dd17d1/screen_assistant.png)
+*(Local verification screenshot was not committed to the repository.)*
 
 ### Settings - Sticky Tabs & Appearance Parity
 Sticky section tabs pinned at top, Light/Dark presets, and user-adjustable contrast scrim & brightness sliders:
 
-![Settings Screen - Sticky Tabs and Sliders](file:///C:/Users/Admin/.gemini/antigravity-ide/brain/0ab4b7a6-2716-409d-a2b0-894be8dd17d1/screen_appearance.png)
+*(Local verification screenshot was not committed to the repository.)*
 
 ---
 

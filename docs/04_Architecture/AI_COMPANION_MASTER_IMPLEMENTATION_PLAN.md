@@ -8,7 +8,7 @@
 >
 > **Purpose:** Self-contained architecture and implementation handoff for repository work, backend integration, model runtime management, and hybrid on-device AI.
 >
-> **Current state:** The ecosystem architecture is anchored by a persistent **Local AI Runtime** in `backend/` (FastAPI, SQLite, SQLAlchemy 2, Alembic, 88 passing pytest tests), the PC React control center in `frontend/web/` (TypeScript 5.8, Vite 6, live SSE chat completions, tactile VRAM controls, 38 passing vitest, migration head `005_scope_message_constraints`), and the native Android companion app in `android/` (17 screens, Jetpack Compose, SoftGlass neumorphic theme engine, AMOLED OLED Battery Saver theme, 110 passing unit tests). Local LLM inference is repository-verified using `llama.cpp` Vulkan build b10936 targeting the AMD RX 580 8 GB VRAM. Phase 8 (frontend architecture, runtime config, multimodal image attachments, polish) is the active delivery sequence. Configuration, persistent storage, model library, and asset-root architecture are defined canonically in `docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`.
+> **Current state:** The ecosystem architecture is anchored by a persistent **Local AI Runtime** in `backend/` (FastAPI, SQLite, SQLAlchemy 2, Alembic, 88 passing pytest tests), the PC React control center in `frontend/web/` (TypeScript 5.8, Vite 6, live SSE chat completions, tactile VRAM controls, 132 passing vitest [last verified Phase 8A baseline], migration head `005_scope_message_constraints`), and the native Android companion app in `android/` (17 screens, Jetpack Compose, SoftGlass neumorphic theme engine, AMOLED OLED Battery Saver theme, 110 passing unit tests). Local LLM inference is repository-verified using `llama.cpp` Vulkan build b10936 targeting the AMD RX 580 8 GB VRAM. Phase 8 (frontend architecture, runtime config, multimodal image attachments, polish) is the active delivery sequence. Configuration, persistent storage, model library, and asset-root architecture are defined canonically in `docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`.
 
 ## Status Vocabulary
 
@@ -36,8 +36,8 @@ Use these labels consistently throughout project documentation:
 | Model registry | Repository-verified implementation | `backend/app/services/model_registry.py`; scan + registry-based model discovery; Qwen3-VL verified defaults (not a whitelist) |
 | Voice & speech pipeline | Planned (Tracks V0–V6) | Canonical spec in `docs/04_Architecture/VOICE_AND_AUDIO_ARCHITECTURE.md`; CPU-first speech execution; persistent voice assets under `COMPANION_DATA_ROOT/library/voices/` |
 | Remote access & authentication | Repository-verified local auth; remote planned | Local token/API key authentication verified; Tailscale remote networking and mutual TLS planned |
-| Phase 8 (active) | Active planning — pending APPROVED | 8A Frontend UX → 8P Runtime Config → 8B Multimodal Attachments → 8C Polish; plan in `docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md` |
-| Automated test suite | Repository-verified | **88 passing backend tests** (`pytest backend/tests`), **38 passing vitest** (`npm run test`), 110 passing Android unit tests, 0 tsc errors |
+| Phase 8 (active) | In progress | 8A completed and merged; documentation hygiene pending merge; 8P Runtime Config is next; 8B Multimodal Attachments and 8C Polish remain later; plan in `docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md` |
+| Automated test suite | Repository-verified | **88 passing backend tests** (`pytest backend/tests`), **132 passing vitest** (`npm run test`, last verified Phase 8A baseline), 110 passing Android unit tests, 0 tsc errors |
 
 This document supersedes conflicting status claims in drafts. Drafts remain reference material until their unique content is deliberately reconciled or archived.
 

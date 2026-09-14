@@ -43,27 +43,27 @@ This delivery fulfills the user's requirements for Android V1.2:
 ### Home Screen & Soft Glass Bottom Bar (Zero Border Glow)
 Selected Home tab displays subtle embossed depth with a delicate 0.75dp hairline border, perfectly matching the web client sidebar and eliminating the neon glow:
 
-![Home Screen - Soft Glass Nav Parity](file:///C:/Users/Admin/.gemini/antigravity-ide/brain/0ab4b7a6-2716-409d-a2b0-894be8dd17d1/screen_v12_home.png)
+*(Local verification screenshot was not committed to the repository.)*
 
 ### Horizontal Swipe to Tasks
 Swiping left on the screen glides into the Tasks screen with pre-rendered cards and zero layout latency:
 
-![Tasks Screen - Horizontal Swipe](file:///C:/Users/Admin/.gemini/antigravity-ide/brain/0ab4b7a6-2716-409d-a2b0-894be8dd17d1/screen_v12_tasks_swipe.png)
+*(Local verification screenshot was not committed to the repository.)*
 
 ### Horizontal Swipe to Assistant
 Swiping into the Assistant workspace activates the center action indicator and displays the chat stream:
 
-![Assistant Screen - Horizontal Swipe](file:///C:/Users/Admin/.gemini/antigravity-ide/brain/0ab4b7a6-2716-409d-a2b0-894be8dd17d1/screen_v12_assistant_swipe.png)
+*(Local verification screenshot was not committed to the repository.)*
 
 ### Directional Tap to More (System Hub)
 Tapping "More" triggers directional slide animation to tab 4, presenting settings and diagnostic categories:
 
-![System Hub / More Screen](file:///C:/Users/Admin/.gemini/antigravity-ide/brain/0ab4b7a6-2716-409d-a2b0-894be8dd17d1/screen_v12_more_tap.png)
+*(Local verification screenshot was not committed to the repository.)*
 
 ### Secondary Route Push & Back Navigation (Alarms)
 Pushing to secondary destinations slides from the right, and the back button cleanly returns to the primary pager:
 
-![Alarms Secondary Route](file:///C:/Users/Admin/.gemini/antigravity-ide/brain/0ab4b7a6-2716-409d-a2b0-894be8dd17d1/screen_v12_alarms_secondary.png)
+*(Local verification screenshot was not committed to the repository.)*
 
 ---
 

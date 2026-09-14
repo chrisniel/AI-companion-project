@@ -2,13 +2,13 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: Final planning baseline — awaiting user APPROVED signal before implementation begins
+- Status: Post-8A documentation hygiene — awaiting merge
 - Current Sprint: Phase 8 — PC Frontend Architecture, Runtime Config, Multimodal & Polish
 - Branches: `feature/phase8-ui-foundation` → `feature/phase8-runtime-config` → `feature/multimodal-image-attachments` → `feature/phase8-ui-integration-polish`
 - Target: Mock removal, view decomposition, COMPANION_DATA_ROOT, terminology reconciliation, model schema split, image attachments, 100+ pytest / 50+ vitest
 - Scope Guard: PC-first. No Android. No STT/TTS. No arbitrary file types. No video/PDF. No CUDA. No new state library. No LFS/gitattributes changes.
 - Plan: `docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md`
-- Baseline: 88 pytest, 38 vitest, 0 tsc errors, migration head 005_scope_message_constraints
+- Baseline: 88 backend pytest, 132 frontend vitest, 0 tsc errors, migration head 005_scope_message_constraints (last verified Phase 8A baseline)
 
 ## Open Decisions — Resolved
 
@@ -18,9 +18,11 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — POST-8A DOCUMENTATION HYGIENE PASS COMPLETED: AWAITING REVIEW]
+## [CURRENT EXECUTION STATE — POST-8A DOCUMENTATION HYGIENE PASS COMPLETED: AWAITING MERGE]
 
-- Completed: Post-8A documentation hygiene reorganization pass (organized docs/02_Planning into phase-08, android, backend, templates; created navigation hubs at docs/02_Planning/README.md and docs/02_Planning/phase-08/README.md; repaired all docs links).
+- Status: Post-8A documentation hygiene — awaiting merge.
+- Completed: Post-8A documentation hygiene reorganization pass (organized docs/02_Planning into phase-08, android, backend, templates; created navigation hubs at docs/02_Planning/README.md and docs/02_Planning/phase-08/README.md; repaired all docs links and relative walkthrough paths; enforced AGENTS.md hierarchy).
+- Baseline: 88 backend pytest, 132 frontend vitest, 0 tsc errors, migration head 005_scope_message_constraints (last verified Phase 8A baseline; not rerun during docs pass).
 - Scope Guard: Documentation-only under docs/**. Zero code changes. Zero deletions. ProjectWorkflowStarterKit untouched.
 - Active Plan: `docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md`
 
