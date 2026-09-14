@@ -47,7 +47,6 @@ function MainApp() {
     }
   }, [backendActiveModelId, hasHydratedInitialModel]);
 
-  const [activeCharacterId, setActiveCharacterId] = useState('p-1');
   const [performanceProfile, setPerformanceProfile] = useState<PerformanceProfile>('balanced');
   const [assistantState, setAssistantState] = useState<AssistantState>('idle');
   const [desktopPreset, setDesktopPreset] = useState<DesktopSimulationPreset>('auto');
@@ -149,12 +148,7 @@ function MainApp() {
           />
         );
       case 'characters':
-        return (
-          <CharactersView
-            activeCharacterId={activeCharacterId}
-            onSelectCharacter={setActiveCharacterId}
-          />
-        );
+        return <CharactersView />;
       case 'devices':
         return <DevicesView />;
       case 'logs':

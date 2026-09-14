@@ -1,53 +1,52 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Cpu,
+  HardDrive,
   Monitor,
   Smartphone,
   Mic,
-  Headphones,
-  Speaker,
   Activity,
-  Watch,
   Network,
-  Radio,
-  Sliders,
+  RotateCcw,
+  Loader2,
+  AlertCircle,
   CheckCircle2,
-  HardDrive,
+  Cpu,
+  Clock,
+  Database,
   Layers,
-  Filter,
+  Info,
 } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { NeumorphicButton } from '../ui/NeumorphicButton';
-import { DeviceItem, DeviceCategory } from '../../types';
-import { mockDevicesList } from '../../mock/deviceAndMemoryData';
-import { DeviceCard } from './devices/DeviceCard';
-import { AudioDeviceManager } from './devices/AudioDeviceManager';
-import { AndroidDeviceSyncCard } from './devices/AndroidDeviceSyncCard';
-import { HealthSourceCard } from './devices/HealthSourceCard';
-import { RemoteConnectionCard } from './devices/RemoteConnectionCard';
+import { getSystemStatus, SystemStatusResponse } from '../../services/api';
 
 export const DevicesView: React.FC = () => {
-  const [activeSectionFilter, setActiveSectionFilter] = useState<'all' | DeviceCategory>('all');
+  const [systemStatus, setSystemStatus] = useState<SystemStatusResponse | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Filter devices by category
-  const computerDevices = mockDevicesList.filter((d) => d.category === 'computer');
-  const mobileDevices = mockDevicesList.filter((d) => d.category === 'mobile');
-  const audioDevices = mockDevicesList.filter((d) => d.category === 'audio');
-  const healthDevices = mockDevicesList.filter((d) => d.category === 'health');
-  const networkDevices = mockDevicesList.filter((d) => d.category === 'network');
+  const fetchHostStatus = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getSystemStatus();
+      setSystemStatus(data);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unable to reach backend runtime status endpoint';
+      setError(msg);
+      setSystemStatus(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const filterTabs: { id: 'all' | DeviceCategory; label: string; count: number; icon: React.ReactNode }[] = [
-    { id: 'all', label: 'All Devices', count: mockDevicesList.length, icon: <Layers className="w-3.5 h-3.5" /> },
-    { id: 'computer', label: 'Computers', count: computerDevices.length, icon: <Monitor className="w-3.5 h-3.5" /> },
-    { id: 'mobile', label: 'Mobile', count: mobileDevices.length, icon: <Smartphone className="w-3.5 h-3.5" /> },
-    { id: 'audio', label: 'Audio', count: audioDevices.length, icon: <Mic className="w-3.5 h-3.5" /> },
-    { id: 'health', label: 'Health', count: healthDevices.length, icon: <Activity className="w-3.5 h-3.5" /> },
-    { id: 'network', label: 'Network', count: networkDevices.length, icon: <Network className="w-3.5 h-3.5" /> },
-  ];
+  useEffect(() => {
+    fetchHostStatus();
+  }, [fetchHostStatus]);
 
   return (
     <div id="devices-view" className="space-y-8 pb-12">
-      {/* Top Header */}
+      {/* 1. Top Header Banner */}
       <div className="p-5 sm:p-6 rounded-3xl surface-raised border border-[var(--color-border-subtle)] flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
         <div className="flex items-center gap-3.5">
           <div className="w-11 h-11 rounded-2xl bg-accent-gradient flex items-center justify-center text-white glow-accent-sm flex-shrink-0">
@@ -58,195 +57,305 @@ export const DevicesView: React.FC = () => {
               <h1 className="text-xl font-bold text-[var(--color-text-primary)]">
                 Devices & Hardware Infrastructure
               </h1>
-              <Badge variant="accent" size="sm">
-                8 Active Endpoints
+              <Badge variant="primary" size="sm" className="font-semibold">
+                Host Monitored
+              </Badge>
+              <Badge variant="neutral" size="sm">
+                Hybrid Truthfulness
               </Badge>
             </div>
-            <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
-              Workstation host, mobile companion telemetry, dynamic audio routing, health bridge, and encrypted gateway.
+            <p className="text-xs text-[var(--color-text-secondary)] mt-0.5 max-w-2xl">
+              Real host workstation telemetry from the local runtime service. Mobile, audio routing, wearable devices, and remote mesh are planned subsystems.
             </p>
           </div>
         </div>
 
-        {/* Status badges */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge variant="success" size="sm" className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Local Mesh Healthy</span>
-          </Badge>
-          <Badge variant="glass" size="sm" className="font-mono text-[11px]">
-            Ping: 14ms
-          </Badge>
+        <div className="flex items-center gap-2 self-start md:self-auto">
+          <NeumorphicButton
+            variant="ghost"
+            size="sm"
+            onClick={fetchHostStatus}
+            disabled={loading}
+            className="flex items-center gap-1.5 text-xs text-[var(--color-text-secondary)]"
+            title="Refresh Host Status"
+          >
+            <RotateCcw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </NeumorphicButton>
         </div>
       </div>
 
-      {/* Category Navigation Bar */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-        {filterTabs.map((tab) => {
-          const isActive = activeSectionFilter === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveSectionFilter(tab.id)}
-              className={`px-3.5 py-2 rounded-2xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all duration-150 cursor-pointer ${
-                isActive
-                  ? 'surface-raised text-[var(--color-text-primary)] border border-[var(--color-accent)]/50 shadow-xs'
-                  : 'surface-base text-[var(--color-text-secondary)] border border-[var(--color-border-subtle)] hover:text-[var(--color-text-primary)]'
-              }`}
-            >
-              <span className={isActive ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-muted)]'}>
-                {tab.icon}
-              </span>
-              <span>{tab.label}</span>
-              <span
-                className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                  isActive ? 'bg-[var(--color-accent)]/20 text-[var(--color-accent)]' : 'surface-recessed text-[var(--color-text-muted)]'
-                }`}
+      {/* 2. Primary Host Workstation Card (REAL AUTHORITATIVE DATA) */}
+      <div className="p-5 sm:p-6 rounded-3xl surface-raised border border-[var(--color-border-subtle)] space-y-5">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-[var(--color-accent)]/10 text-[var(--color-accent)] flex items-center justify-center flex-shrink-0">
+              <Monitor className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-[var(--color-text-primary)]">
+                  Primary Host Workstation
+                </h2>
+                {systemStatus && (
+                  <Badge variant="success" size="sm">
+                    Runtime Online
+                  </Badge>
+                )}
+                {error && (
+                  <Badge variant="danger" size="sm">
+                    Runtime Offline
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-[var(--color-text-secondary)]">
+                Authoritative runtime telemetry via GET /api/v1/system/status
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Loading State */}
+        {loading && (
+          <div
+            id="devices-host-loading"
+            className="py-12 flex flex-col items-center justify-center gap-3 text-center"
+          >
+            <Loader2 className="w-7 h-7 text-[var(--color-accent)] animate-spin" />
+            <p className="text-xs text-[var(--color-text-secondary)]">
+              Querying local workstation runtime telemetry...
+            </p>
+          </div>
+        )}
+
+        {/* Error / Unavailable State */}
+        {!loading && error && (
+          <div
+            id="devices-host-error"
+            className="p-6 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-4"
+          >
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold text-amber-600 dark:text-amber-400">
+                  Runtime Host Unavailable
+                </h3>
+                <p className="text-xs text-[var(--color-text-secondary)]">
+                  Could not retrieve authoritative host telemetry from the local companion runtime.
+                  The backend service may be offline or initializing.
+                </p>
+                <p className="text-[11px] font-mono text-[var(--color-text-muted)] mt-1">
+                  {error}
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <NeumorphicButton
+                variant="primary"
+                size="sm"
+                onClick={fetchHostStatus}
+                className="flex items-center gap-1.5 text-xs"
               >
-                {tab.count}
-              </span>
-            </button>
-          );
-        })}
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Retry</span>
+              </NeumorphicButton>
+            </div>
+          </div>
+        )}
+
+        {/* Success: Real Telemetry Grid */}
+        {!loading && systemStatus && (
+          <div id="devices-host-telemetry" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {/* Hostname */}
+            <div className="p-4 rounded-2xl surface-recessed border border-[var(--color-border-subtle)] space-y-1">
+              <div className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider">
+                Hostname
+              </div>
+              <div className="text-sm font-bold text-[var(--color-text-primary)] truncate font-mono">
+                {systemStatus.hostname}
+              </div>
+            </div>
+
+            {/* Platform / OS */}
+            <div className="p-4 rounded-2xl surface-recessed border border-[var(--color-border-subtle)] space-y-1">
+              <div className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider">
+                Platform
+              </div>
+              <div className="text-sm font-bold text-[var(--color-text-primary)] truncate">
+                {systemStatus.platform}
+              </div>
+            </div>
+
+            {/* Backend Version */}
+            <div className="p-4 rounded-2xl surface-recessed border border-[var(--color-border-subtle)] space-y-1">
+              <div className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider">
+                Backend Version
+              </div>
+              <div className="text-sm font-bold text-[var(--color-text-primary)] font-mono">
+                {systemStatus.version}
+              </div>
+            </div>
+
+            {/* Python Version */}
+            <div className="p-4 rounded-2xl surface-recessed border border-[var(--color-border-subtle)] space-y-1">
+              <div className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider">
+                Python Runtime
+              </div>
+              <div className="text-sm font-bold text-[var(--color-text-primary)] font-mono truncate">
+                {systemStatus.python_version}
+              </div>
+            </div>
+
+            {/* CPU Cores */}
+            <div className="p-4 rounded-2xl surface-recessed border border-[var(--color-border-subtle)] space-y-1">
+              <div className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider">
+                CPU Count
+              </div>
+              <div className="text-sm font-bold text-[var(--color-text-primary)]">
+                {systemStatus.cpu_count} Cores
+              </div>
+            </div>
+
+            {/* Database Connected */}
+            <div className="p-4 rounded-2xl surface-recessed border border-[var(--color-border-subtle)] space-y-1">
+              <div className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider">
+                SQLite Store
+              </div>
+              <div className="flex items-center gap-1.5 text-sm font-bold">
+                {systemStatus.database_connected ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    <span className="text-emerald-600 dark:text-emerald-400">Connected</span>
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="w-4 h-4 text-amber-500" />
+                    <span className="text-amber-500">Unavailable</span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Runtime Status */}
+            <div className="p-4 rounded-2xl surface-recessed border border-[var(--color-border-subtle)] space-y-1">
+              <div className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider">
+                Runtime Health
+              </div>
+              <div className="text-sm font-bold text-[var(--color-text-primary)] uppercase">
+                {systemStatus.status}
+              </div>
+            </div>
+
+            {/* Timestamp */}
+            <div className="p-4 rounded-2xl surface-recessed border border-[var(--color-border-subtle)] space-y-1">
+              <div className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider">
+                Reported Timestamp
+              </div>
+              <div className="text-xs text-[var(--color-text-secondary)] font-mono truncate">
+                {new Date(systemStatus.timestamp).toLocaleTimeString()}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* ========================================================================= */}
-      {/* 1. COMPUTERS SECTION */}
-      {/* ========================================================================= */}
-      {(activeSectionFilter === 'all' || activeSectionFilter === 'computer') && (
-        <section id="section-computers" className="space-y-4">
-          <div className="flex items-center justify-between pb-1 border-b border-[var(--color-border-subtle)]">
-            <div className="flex items-center gap-2">
-              <Monitor className="w-4 h-4 text-[var(--color-accent)]" />
-              <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
-                Computers
-              </h2>
+      {/* 3. Unsupported Subsystems (Truthfully Labeled Planned) */}
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-base font-bold text-[var(--color-text-primary)]">
+            Subsystem Infrastructure
+          </h2>
+          <p className="text-xs text-[var(--color-text-secondary)]">
+            External hardware endpoints, audio device routing, and synchronization bridges are planned capabilities.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* A. Android Companion Sync */}
+          <div className="p-5 rounded-3xl surface-raised border border-[var(--color-border-subtle)] space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Smartphone className="w-4 h-4 text-[var(--color-accent)]" />
+                <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">
+                  Android Companion Sync
+                </h3>
+              </div>
+              <Badge variant="neutral" size="sm">
+                Planned Bridge
+              </Badge>
             </div>
-            <span className="text-xs text-[var(--color-text-muted)] font-mono">
-              Desktop PC Host
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4">
-            {computerDevices.map((dev) => (
-              <DeviceCard key={dev.id} device={dev} highlight={true} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 2. MOBILE SECTION */}
-      {/* ========================================================================= */}
-      {(activeSectionFilter === 'all' || activeSectionFilter === 'mobile') && (
-        <section id="section-mobile" className="space-y-4">
-          <div className="flex items-center justify-between pb-1 border-b border-[var(--color-border-subtle)]">
-            <div className="flex items-center gap-2">
-              <Smartphone className="w-4 h-4 text-emerald-500" />
-              <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
-                Mobile
-              </h2>
+            <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
+              Peer-to-peer synchronization with the Android companion app. Bi-directional memory sync, push notification relay, and on-device alarm coordination.
+            </p>
+            <div className="p-3 rounded-xl bg-[var(--color-surface-elevated)] border border-[var(--color-border-subtle)] text-[11px] text-[var(--color-text-muted)]">
+              Status: Sync bridge daemon not implemented in this phase.
             </div>
-            <span className="text-xs text-[var(--color-text-muted)] font-mono">
-              Android Phone Companion
-            </span>
           </div>
 
-          <div className="grid grid-cols-1 gap-4">
-            {mobileDevices.map((dev) => (
-              <DeviceCard key={dev.id} device={dev} />
-            ))}
-          </div>
-
-          {/* Android Device Sync Status (alarms, tasks, health, assistant connection) */}
-          <AndroidDeviceSyncCard />
-        </section>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 3. AUDIO SECTION */}
-      {/* ========================================================================= */}
-      {(activeSectionFilter === 'all' || activeSectionFilter === 'audio') && (
-        <section id="section-audio" className="space-y-4">
-          <div className="flex items-center justify-between pb-1 border-b border-[var(--color-border-subtle)]">
-            <div className="flex items-center gap-2">
-              <Speaker className="w-4 h-4 text-cyan-400" />
-              <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
-                Audio
-              </h2>
+          {/* B. Audio Device Management */}
+          <div className="p-5 rounded-3xl surface-raised border border-[var(--color-border-subtle)] space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Mic className="w-4 h-4 text-[var(--color-accent)]" />
+                <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">
+                  Audio Device Management
+                </h3>
+              </div>
+              <Badge variant="neutral" size="sm">
+                Planned Subsystem
+              </Badge>
             </div>
-            <span className="text-xs text-[var(--color-text-muted)] font-mono">
-              Microphone • Bluetooth Headset • System/Default Devices
-            </span>
-          </div>
-
-          {/* Audio Device Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {audioDevices.map((dev) => (
-              <DeviceCard key={dev.id} device={dev} />
-            ))}
-          </div>
-
-          {/* Audio Device Manager (Selectors for Input, Output, Preferred Output, Fallback Output, Test buttons) */}
-          <AudioDeviceManager />
-        </section>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 4. HEALTH SECTION */}
-      {/* ========================================================================= */}
-      {(activeSectionFilter === 'all' || activeSectionFilter === 'health') && (
-        <section id="section-health" className="space-y-4">
-          <div className="flex items-center justify-between pb-1 border-b border-[var(--color-border-subtle)]">
-            <div className="flex items-center gap-2">
-              <Activity className="w-4 h-4 text-rose-500" />
-              <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
-                Health
-              </h2>
+            <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
+              Hardware microphone selection, speaker routing, audio frame buffer configuration, and Bluetooth headset handoff.
+            </p>
+            <div className="p-3 rounded-xl bg-[var(--color-surface-elevated)] border border-[var(--color-border-subtle)] text-[11px] text-[var(--color-text-muted)]">
+              Status: Audio routing will be managed by native wrapper / future audio subsystem.
             </div>
-            <span className="text-xs text-[var(--color-text-muted)] font-mono">
-              Health Connect • Smartwatch Source
-            </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {healthDevices.map((dev) => (
-              <DeviceCard key={dev.id} device={dev} />
-            ))}
-          </div>
-
-          {/* Health Source Card (Health Connect Connected, Source: FitCloudPro, Replaceable providers) */}
-          <HealthSourceCard />
-        </section>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 5. NETWORK SECTION */}
-      {/* ========================================================================= */}
-      {(activeSectionFilter === 'all' || activeSectionFilter === 'network') && (
-        <section id="section-network" className="space-y-4">
-          <div className="flex items-center justify-between pb-1 border-b border-[var(--color-border-subtle)]">
-            <div className="flex items-center gap-2">
-              <Network className="w-4 h-4 text-purple-400" />
-              <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
-                Network
-              </h2>
+          {/* C. Health & Wearable Sources */}
+          <div className="p-5 rounded-3xl surface-raised border border-[var(--color-border-subtle)] space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Activity className="w-4 h-4 text-[var(--color-accent)]" />
+                <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">
+                  Health & Wearables
+                </h3>
+              </div>
+              <Badge variant="neutral" size="sm">
+                Planned Gateway
+              </Badge>
             </div>
-            <span className="text-xs text-[var(--color-text-muted)] font-mono">
-              Remote Gateway Node
-            </span>
+            <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
+              Direct BLE and Health Connect synchronization for biometric data including sleep metrics, heart rate intervals, and step counts.
+            </p>
+            <div className="p-3 rounded-xl bg-[var(--color-surface-elevated)] border border-[var(--color-border-subtle)] text-[11px] text-[var(--color-text-muted)]">
+              Status: Wearable integration is deferred to dedicated health integration milestone.
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4">
-            {networkDevices.map((dev) => (
-              <DeviceCard key={dev.id} device={dev} />
-            ))}
+          {/* D. Remote Runtime Access (Tailscale) */}
+          <div className="p-5 rounded-3xl surface-raised border border-[var(--color-border-subtle)] space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Network className="w-4 h-4 text-[var(--color-accent)]" />
+                <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">
+                  Remote Runtime Access
+                </h3>
+              </div>
+              <Badge variant="neutral" size="sm">
+                Planned Mesh
+              </Badge>
+            </div>
+            <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
+              Secure remote ingress over Tailscale or encrypted LAN mesh for accessing the companion runtime from secondary devices.
+            </p>
+            <div className="p-3 rounded-xl bg-[var(--color-surface-elevated)] border border-[var(--color-border-subtle)] text-[11px] text-[var(--color-text-muted)]">
+              Status: Remote networking is not implemented; runtime currently binds strictly to localhost.
+            </div>
           </div>
-
-          {/* Remote Connection Card (Remote Gateway, Tailscale replaceable, IP, Latency, Protocol) */}
-          <RemoteConnectionCard />
-        </section>
-      )}
+        </div>
+      </div>
     </div>
   );
 };

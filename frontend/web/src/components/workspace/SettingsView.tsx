@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
-  Settings,
-  SlidersHorizontal,
   Palette,
+  SlidersHorizontal,
   Bot,
   Volume2,
   Cpu,
@@ -13,29 +12,18 @@ import {
   Wrench,
   Search,
   CheckCircle2,
-  RotateCcw,
+  Clock,
   Layers,
+  Info,
 } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { SearchInput } from '../ui/SearchInput';
-import { useTheme } from '../../context/ThemeContext';
-
-// Sub-sections
-import { GeneralSection, GeneralSettingsState } from './settings/GeneralSection';
 import { AppearanceSection } from './settings/AppearanceSection';
-import { AssistantSection, AssistantSettingsState } from './settings/AssistantSection';
-import { VoiceSection, VoiceSettingsState } from './settings/VoiceSection';
-import { AiSection, AiSettingsState } from './settings/AiSection';
-import { HealthSection, HealthSettingsState } from './settings/HealthSection';
-import { DevicesSection, DeviceSettingsState } from './settings/DevicesSection';
-import { NetworkSection, NetworkSettingsState } from './settings/NetworkSection';
-import { PrivacySection, PrivacySettingsState } from './settings/PrivacySection';
-import { AdvancedSection, AdvancedSettingsState } from './settings/AdvancedSection';
 import { ApplicationStatesShowcase } from './states/ApplicationStatesShowcase';
 
 export type SettingsSectionId =
-  | 'general'
   | 'appearance'
+  | 'general'
   | 'assistant'
   | 'voice'
   | 'ai'
@@ -51,351 +39,159 @@ interface SectionMenuItem {
   label: string;
   icon: React.ReactNode;
   description: string;
+  category: 'available' | 'planned' | 'preview';
+  milestoneHint?: string;
+  plannedDetails?: string;
 }
 
 const SECTIONS: SectionMenuItem[] = [
-  {
-    id: 'general',
-    label: 'General',
-    icon: <SlidersHorizontal className="w-4 h-4" />,
-    description: 'Startup behavior, language, timezone',
-  },
+  // Available / Real Section
   {
     id: 'appearance',
     label: 'Appearance',
     icon: <Palette className="w-4 h-4" />,
-    description: 'Light/Dark, accent presets, effect intensity, animations, density',
+    description: 'Theme preference, accent colors, effect intensity, interface density, and window glass styling',
+    category: 'available',
+  },
+
+  // Planned Runtime / System Sections
+  {
+    id: 'general',
+    label: 'General',
+    icon: <SlidersHorizontal className="w-4 h-4" />,
+    description: 'Operating system startup, tray minimization, and background lifecycle',
+    category: 'planned',
+    milestoneHint: 'Desktop Wrapper Milestone',
+    plannedDetails:
+      'Application startup behavior, background tray synchronization, and OS-level launch parameters will be managed by native runtime wrappers in future desktop releases.',
   },
   {
     id: 'assistant',
     label: 'Assistant',
     icon: <Bot className="w-4 h-4" />,
-    description: 'Default character, behavior preferences',
+    description: 'Persona routing, prompt addenda, and grounding boundaries',
+    category: 'planned',
+    milestoneHint: 'Profile & Character Architecture',
+    plannedDetails:
+      'Assistant persona selection, custom system prompt addenda, and behavioral constraints will be managed through the Character Registry and user Profile layers.',
   },
   {
     id: 'voice',
     label: 'Voice',
     icon: <Volume2 className="w-4 h-4" />,
-    description: 'TTS provider, STT provider, listening mode, audio behavior',
+    description: 'TTS synthesis, STT transcription engine, and wake-word detection',
+    category: 'planned',
+    milestoneHint: 'Audio Subsystem Milestone',
+    plannedDetails:
+      'Speech-to-text engines (e.g. Whisper), text-to-speech voice models (e.g. Piper, Kokoro), wake-word listeners, and voice activity detection will be configured in dedicated audio phases.',
   },
   {
     id: 'ai',
-    label: 'AI',
+    label: 'AI Runtime',
     icon: <Cpu className="w-4 h-4" />,
-    description: 'Model routing, performance profile, cloud fallback',
+    description: 'Model library paths, execution engine, acceleration, and profile parameters',
+    category: 'planned',
+    milestoneHint: 'Phase 8P (Runtime Configuration)',
+    plannedDetails:
+      'Hardware acceleration backend (Vulkan/ROCm/CPU), GPU layer offloads, KV cache quantization, and COMPANION_DATA_ROOT model paths are formalized in Phase 8P configuration work.',
   },
   {
     id: 'health',
     label: 'Health',
     icon: <HeartPulse className="w-4 h-4" />,
-    description: 'Health provider, synchronization, wellness insights',
+    description: 'Wearable data synchronization, sample intervals, and metric aggregation',
+    category: 'planned',
+    milestoneHint: 'Health Connect Milestone',
+    plannedDetails:
+      'BLE fitness tracker pairing, Health Connect provider bridge, sleep metric analysis, and background biometric sampling will be wired in future health integrations.',
   },
   {
     id: 'devices',
-    label: 'Devices',
+    label: 'Devices & Audio',
     icon: <Headphones className="w-4 h-4" />,
-    description: 'Microphone, speaker, frame buffers, Bluetooth',
+    description: 'Hardware audio routing, buffer sizing, and Bluetooth peripherals',
+    category: 'planned',
+    milestoneHint: 'Audio Routing Subsystem',
+    plannedDetails:
+      'Hardware microphone selection, speaker output routing, audio buffer depths, and peripheral hotplug handling require native audio server integration.',
   },
   {
     id: 'network',
-    label: 'Network',
+    label: 'Network & Mesh',
     icon: <Network className="w-4 h-4" />,
-    description: 'Remote gateway, connection state',
+    description: 'Remote runtime gateway, LAN discovery, and encrypted ingress',
+    category: 'planned',
+    milestoneHint: 'Mesh Ingress Milestone',
+    plannedDetails:
+      'Remote companion runtime access, Tailscale peer connections, mTLS encryption keys, and LAN mesh ingress are future capabilities. The companion runtime currently binds strictly to localhost.',
   },
   {
     id: 'privacy',
-    label: 'Privacy',
+    label: 'Privacy & Security',
     icon: <Shield className="w-4 h-4" />,
-    description: 'Chat history, memory, health storage, cloud, diagnostics',
+    description: 'Database encryption, automated PII redaction, and retention policies',
+    category: 'planned',
+    milestoneHint: 'Security & Enterprise Milestone',
+    plannedDetails:
+      'Full database-at-rest encryption, automated memory scrubbing rules, and audit retention schedules will be introduced alongside enterprise security profiles.',
   },
   {
     id: 'advanced',
     label: 'Advanced',
     icon: <Wrench className="w-4 h-4" />,
-    description: 'Developer settings, experimental features',
+    description: 'Low-level engine flags, experimental feature toggles, and developer tooling',
+    category: 'planned',
+    milestoneHint: 'Phase 8P Advanced Subsystem',
+    plannedDetails:
+      'Low-level runtime compiler flags, llama.cpp context window adjustments, and developer debugging tools will be exposed via runtime configuration files.',
   },
+
+  // UI/UX Showcase Section
   {
     id: 'states',
     label: 'Application States',
     icon: <Layers className="w-4 h-4" />,
-    description: '27 verified states: loading, empty, error, AI, health, devices, tasks, assistant',
+    description: 'UI/UX state showcase',
+    category: 'preview',
   },
 ];
 
-// Initial default settings
-const defaultGeneralSettings: GeneralSettingsState = {
-  launchAtBoot: true,
-  startMinimized: false,
-  resumeLastView: true,
-  defaultStartupView: 'home',
-  language: 'en-US',
-  assistantVoiceLanguage: 'en-US',
-  autoDetectTimezone: true,
-  timezone: 'America/Los_Angeles',
-  use24HourTime: false,
-};
-
-const defaultAssistantSettings: AssistantSettingsState = {
-  defaultCharacterId: 'p-1',
-  proactiveSuggestions: true,
-  concisenessLevel: 50,
-  empathyLevel: 65,
-  strictFactualGrounding: true,
-  autoExtractMemories: true,
-  customSystemPromptAddendum: '',
-};
-
-const defaultVoiceSettings: VoiceSettingsState = {
-  ttsProvider: 'kokoro-82m',
-  ttsVoice: 'af_sarah',
-  speechRate: 1.0,
-  speechPitch: 1.0,
-  sttProvider: 'whisper-small-metal',
-  streamingTranscription: true,
-  listeningMode: 'vad',
-  wakeWordPhrase: 'Hey Iris',
-  vadSensitivity: 60,
-  echoCancellation: true,
-  noiseSuppression: true,
-  audioDucking: true,
-};
-
-const defaultAiSettings: AiSettingsState = {
-  modelRoutingStrategy: 'smart_auto',
-  primaryModelId: 'llama-3.1-8b-instruct',
-  speculativeDecoding: true,
-  performanceProfile: 'balanced',
-  cloudFallbackPolicy: 'strict_airgap',
-  kvCacheQuantization: false,
-  gpuLayerOffload: 33,
-};
-
-const defaultHealthSettings: HealthSettingsState = {
-  healthProvider: 'fitcloudpro_ble',
-  syncIntervalMinutes: 5,
-  syncWhileIdle: true,
-  continuousHeartRateSampling: true,
-  sleepScoreAnalysis: true,
-  postureAlerts: true,
-  hydrationAlerts: true,
-  stressAlerts: true,
-};
-
-const defaultDeviceSettings: DeviceSettingsState = {
-  selectedMicId: 'builtin_mic',
-  selectedSpeakerId: 'usb_dac',
-  audioBufferSize: 256,
-  autoReconnectBluetooth: true,
-  usbHotplugAutoSwitch: true,
-  exclusiveDeviceAccess: false,
-  wearableAutoSync: true,
-};
-
-const defaultNetworkSettings: NetworkSettingsState = {
-  gatewayProvider: 'tailscale',
-  gatewayIp: '100.84.192.42',
-  gatewayPort: 8000,
-  allowRemoteCompanion: true,
-  enforceTlsCertificates: true,
-  blockOutboundWan: true,
-};
-
-const defaultPrivacySettings: PrivacySettingsState = {
-  historyRetention: 'forever',
-  autoRedactPii: true,
-  enableEpisodicMemory: true,
-  associateBiometricFacts: true,
-  encryptHealthDb: true,
-  retainDiagnosticLogs: true,
-};
-
-const defaultAdvancedSettings: AdvancedSettingsState = {
-  developerMode: false,
-  exposeSwaggerDocs: false,
-  metalVulkanLogging: false,
-  streamingThrottleMs: 0,
-  multiAgentDebate: false,
-  voiceBargeIn: true,
-  visionScreenAnalyzer: false,
-};
-
 export const SettingsView: React.FC = () => {
-  const { mode, setThemePreference, setAccent, setEffectIntensity, setInterfaceDensity, setAnimationPreference } = useTheme();
-
-  // Active section
-  const [activeSection, setActiveSection] = useState<SettingsSectionId>('general');
+  // Active section — defaults to Appearance (the primary operational section)
+  const [activeSection, setActiveSection] = useState<SettingsSectionId>('appearance');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Settings states with localStorage persistence
-  const [general, setGeneral] = useState<GeneralSettingsState>(() => {
-    const saved = localStorage.getItem('localai-settings-general');
-    return saved ? { ...defaultGeneralSettings, ...JSON.parse(saved) } : defaultGeneralSettings;
-  });
-
-  const [assistant, setAssistant] = useState<AssistantSettingsState>(() => {
-    const saved = localStorage.getItem('localai-settings-assistant');
-    return saved ? { ...defaultAssistantSettings, ...JSON.parse(saved) } : defaultAssistantSettings;
-  });
-
-  const [voice, setVoice] = useState<VoiceSettingsState>(() => {
-    const saved = localStorage.getItem('localai-settings-voice');
-    return saved ? { ...defaultVoiceSettings, ...JSON.parse(saved) } : defaultVoiceSettings;
-  });
-
-  const [ai, setAi] = useState<AiSettingsState>(() => {
-    const saved = localStorage.getItem('localai-settings-ai');
-    return saved ? { ...defaultAiSettings, ...JSON.parse(saved) } : defaultAiSettings;
-  });
-
-  const [health, setHealth] = useState<HealthSettingsState>(() => {
-    const saved = localStorage.getItem('localai-settings-health');
-    return saved ? { ...defaultHealthSettings, ...JSON.parse(saved) } : defaultHealthSettings;
-  });
-
-  const [devices, setDevices] = useState<DeviceSettingsState>(() => {
-    const saved = localStorage.getItem('localai-settings-devices');
-    return saved ? { ...defaultDeviceSettings, ...JSON.parse(saved) } : defaultDeviceSettings;
-  });
-
-  const [network, setNetwork] = useState<NetworkSettingsState>(() => {
-    const saved = localStorage.getItem('localai-settings-network');
-    return saved ? { ...defaultNetworkSettings, ...JSON.parse(saved) } : defaultNetworkSettings;
-  });
-
-  const [privacy, setPrivacy] = useState<PrivacySettingsState>(() => {
-    const saved = localStorage.getItem('localai-settings-privacy');
-    return saved ? { ...defaultPrivacySettings, ...JSON.parse(saved) } : defaultPrivacySettings;
-  });
-
-  const [advanced, setAdvanced] = useState<AdvancedSettingsState>(() => {
-    const saved = localStorage.getItem('localai-settings-advanced');
-    return saved ? { ...defaultAdvancedSettings, ...JSON.parse(saved) } : defaultAdvancedSettings;
-  });
-
-  // Save states
-  const updateGeneral = <K extends keyof GeneralSettingsState>(key: K, value: GeneralSettingsState[K]) => {
-    setGeneral((prev) => {
-      const next = { ...prev, [key]: value };
-      localStorage.setItem('localai-settings-general', JSON.stringify(next));
-      return next;
-    });
-  };
-
-  const updateAssistant = <K extends keyof AssistantSettingsState>(key: K, value: AssistantSettingsState[K]) => {
-    setAssistant((prev) => {
-      const next = { ...prev, [key]: value };
-      localStorage.setItem('localai-settings-assistant', JSON.stringify(next));
-      return next;
-    });
-  };
-
-  const updateVoice = <K extends keyof VoiceSettingsState>(key: K, value: VoiceSettingsState[K]) => {
-    setVoice((prev) => {
-      const next = { ...prev, [key]: value };
-      localStorage.setItem('localai-settings-voice', JSON.stringify(next));
-      return next;
-    });
-  };
-
-  const updateAi = <K extends keyof AiSettingsState>(key: K, value: AiSettingsState[K]) => {
-    setAi((prev) => {
-      const next = { ...prev, [key]: value };
-      localStorage.setItem('localai-settings-ai', JSON.stringify(next));
-      return next;
-    });
-  };
-
-  const updateHealth = <K extends keyof HealthSettingsState>(key: K, value: HealthSettingsState[K]) => {
-    setHealth((prev) => {
-      const next = { ...prev, [key]: value };
-      localStorage.setItem('localai-settings-health', JSON.stringify(next));
-      return next;
-    });
-  };
-
-  const updateDevices = <K extends keyof DeviceSettingsState>(key: K, value: DeviceSettingsState[K]) => {
-    setDevices((prev) => {
-      const next = { ...prev, [key]: value };
-      localStorage.setItem('localai-settings-devices', JSON.stringify(next));
-      return next;
-    });
-  };
-
-  const updateNetwork = <K extends keyof NetworkSettingsState>(key: K, value: NetworkSettingsState[K]) => {
-    setNetwork((prev) => {
-      const next = { ...prev, [key]: value };
-      localStorage.setItem('localai-settings-network', JSON.stringify(next));
-      return next;
-    });
-  };
-
-  const updatePrivacy = <K extends keyof PrivacySettingsState>(key: K, value: PrivacySettingsState[K]) => {
-    setPrivacy((prev) => {
-      const next = { ...prev, [key]: value };
-      localStorage.setItem('localai-settings-privacy', JSON.stringify(next));
-      return next;
-    });
-  };
-
-  const updateAdvanced = <K extends keyof AdvancedSettingsState>(key: K, value: AdvancedSettingsState[K]) => {
-    setAdvanced((prev) => {
-      const next = { ...prev, [key]: value };
-      localStorage.setItem('localai-settings-advanced', JSON.stringify(next));
-      return next;
-    });
-  };
-
-  const handleResetAll = () => {
-    setGeneral(defaultGeneralSettings);
-    setAssistant(defaultAssistantSettings);
-    setVoice(defaultVoiceSettings);
-    setAi(defaultAiSettings);
-    setHealth(defaultHealthSettings);
-    setDevices(defaultDeviceSettings);
-    setNetwork(defaultNetworkSettings);
-    setPrivacy(defaultPrivacySettings);
-    setAdvanced(defaultAdvancedSettings);
-    setThemePreference('system');
-    setAccent('aurora');
-    setEffectIntensity('normal');
-    setInterfaceDensity('comfortable');
-    setAnimationPreference('fluid');
-
-    localStorage.removeItem('localai-settings-general');
-    localStorage.removeItem('localai-settings-assistant');
-    localStorage.removeItem('localai-settings-voice');
-    localStorage.removeItem('localai-settings-ai');
-    localStorage.removeItem('localai-settings-health');
-    localStorage.removeItem('localai-settings-devices');
-    localStorage.removeItem('localai-settings-network');
-    localStorage.removeItem('localai-settings-privacy');
-    localStorage.removeItem('localai-settings-advanced');
-  };
-
   // Filter sections by search query
-  const filteredSections = SECTIONS.filter((sec) => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      sec.label.toLowerCase().includes(q) ||
-      sec.description.toLowerCase().includes(q)
-    );
-  });
+  const filteredSections = SECTIONS.filter(
+    (sec) =>
+      sec.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      sec.description.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const currentSection = SECTIONS.find((s) => s.id === activeSection) || SECTIONS[0];
 
   return (
-    <div className="space-y-6">
-      {/* View Header */}
+    <div id="settings-view" className="space-y-6 pb-12">
+      {/* 1. Header Banner */}
       <div className="p-5 sm:p-6 rounded-3xl surface-raised border border-[var(--color-border-subtle)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
           <div className="w-11 h-11 rounded-2xl bg-accent-gradient flex items-center justify-center text-white glow-accent-sm flex-shrink-0 shadow-sm">
-            <Settings className="w-5 h-5" />
+            <Palette className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-[var(--color-text-primary)]">
-              Preferences & System Configuration
-            </h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg font-bold text-[var(--color-text-primary)]">
+                Preferences & System Configuration
+              </h1>
+              <Badge variant="primary" size="sm">
+                Appearance Active
+              </Badge>
+              <Badge variant="neutral" size="sm">
+                Hybrid Truthfulness
+              </Badge>
+            </div>
             <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
-              10 organized sections: General, Appearance, Assistant, Voice, AI, Health, Devices, Network, Privacy, Advanced.
+              Client visual preferences and planned future runtime configurations.
             </p>
           </div>
         </div>
@@ -403,102 +199,178 @@ export const SettingsView: React.FC = () => {
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-[var(--color-surface-elevated)] border border-[var(--color-border-subtle)] text-xs font-medium text-[var(--color-text-secondary)]">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-            <span>Persisted Locally (SQLite & Keyring)</span>
+            <span>Appearance preferences are stored in this browser</span>
           </div>
         </div>
       </div>
 
-      {/* Main Settings Layout (Left Nav + Right Content) */}
+      {/* 2. Main Layout Grid (Navigation + Active Content) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Navigation Sidebar (Sticky on desktop) */}
+        {/* Left Navigation Sidebar */}
         <div className="lg:col-span-4 space-y-3 lg:sticky lg:top-2 self-start z-10">
-          {/* Section Search Bar */}
           <div className="p-3 rounded-2xl surface-raised border border-[var(--color-border-subtle)] backdrop-blur-md">
             <SearchInput
               value={searchQuery}
-              onChangeValue={setSearchQuery}
-              placeholder="Search preferences & parameters..."
-              sizeVariant="sm"
+              onChange={setSearchQuery}
+              placeholder="Search preferences..."
+              className="w-full text-xs"
             />
           </div>
 
-          {/* Section Tabs List (Scrollable if viewport is compact) */}
-          <div className="p-2 rounded-3xl surface-raised border border-[var(--color-border-subtle)] space-y-1 max-h-[calc(100vh-180px)] overflow-y-auto overscroll-contain shadow-xs">
-            {filteredSections.map((sec) => {
-              const isSelected = activeSection === sec.id;
+          <nav
+            aria-label="Settings navigation"
+            className="p-2 rounded-2xl surface-raised border border-[var(--color-border-subtle)] space-y-1"
+          >
+            {filteredSections.map((section) => {
+              const isActive = activeSection === section.id;
               return (
                 <button
-                  key={sec.id}
+                  key={section.id}
                   type="button"
-                  onClick={() => setActiveSection(sec.id)}
-                  className={`w-full p-3 rounded-2xl text-left transition-all flex items-center gap-3 ${
-                    isSelected
-                      ? 'bg-accent-gradient text-white shadow-sm font-semibold'
+                  onClick={() => setActiveSection(section.id)}
+                  className={`w-full flex items-start gap-3 p-3 rounded-xl transition-all text-left cursor-pointer ${
+                    isActive
+                      ? 'bg-[var(--color-accent)] text-white shadow-sm'
                       : 'hover:bg-[var(--color-surface-elevated)] text-[var(--color-text-primary)]'
                   }`}
                 >
                   <div
-                    className={`p-2 rounded-xl flex-shrink-0 ${
-                      isSelected
-                        ? 'bg-white/20 text-white'
-                        : 'bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)]'
+                    className={`mt-0.5 flex-shrink-0 ${
+                      isActive ? 'text-white' : 'text-[var(--color-accent)]'
                     }`}
                   >
-                    {sec.icon}
+                    {section.icon}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <span className="text-xs font-bold block uppercase tracking-wider font-mono">
-                      {sec.label}
-                    </span>
-                    <span
-                      className={`text-[11px] truncate block mt-0.5 ${
-                        isSelected ? 'text-white/80' : 'text-[var(--color-text-muted)]'
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="text-xs font-semibold truncate">{section.label}</span>
+                      {section.category === 'available' && (
+                        <span
+                          className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold uppercase ${
+                            isActive
+                              ? 'bg-white/20 text-white'
+                              : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                          }`}
+                        >
+                          Available
+                        </span>
+                      )}
+                      {section.category === 'planned' && (
+                        <span
+                          className={`text-[9px] px-1.5 py-0.2 rounded-full font-semibold uppercase ${
+                            isActive
+                              ? 'bg-white/20 text-white'
+                              : 'bg-[var(--color-surface-sunken)] text-[var(--color-text-muted)]'
+                          }`}
+                        >
+                          Planned
+                        </span>
+                      )}
+                      {section.category === 'preview' && (
+                        <span
+                          className={`text-[9px] px-1.5 py-0.2 rounded-full font-semibold uppercase ${
+                            isActive
+                              ? 'bg-white/20 text-white'
+                              : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                          }`}
+                        >
+                          Preview
+                        </span>
+                      )}
+                    </div>
+                    <p
+                      className={`text-[11px] truncate mt-0.5 ${
+                        isActive ? 'text-white/80' : 'text-[var(--color-text-muted)]'
                       }`}
                     >
-                      {sec.description}
-                    </span>
+                      {section.description}
+                    </p>
                   </div>
                 </button>
               );
             })}
-          </div>
+          </nav>
         </div>
 
-        {/* Right Content Area */}
+        {/* Right Active Content Area */}
         <div className="lg:col-span-8">
-          {activeSection === 'general' && (
-            <GeneralSection settings={general} onUpdate={updateGeneral} />
+          {/* A. Real Active Appearance Section */}
+          {activeSection === 'appearance' && (
+            <div id="settings-appearance-container">
+              <AppearanceSection />
+            </div>
           )}
-          {activeSection === 'appearance' && <AppearanceSection />}
-          {activeSection === 'assistant' && (
-            <AssistantSection settings={assistant} onUpdate={updateAssistant} />
+
+          {/* B. Preview Application States Showcase */}
+          {activeSection === 'states' && (
+            <div id="settings-states-container" className="space-y-4">
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-300 flex items-center gap-2">
+                <Info className="w-4 h-4 flex-shrink-0" />
+                <span>
+                  UI/UX State Showcase — Displays simulated error, loading, and empty layout states for design verification only.
+                </span>
+              </div>
+              <ApplicationStatesShowcase />
+            </div>
           )}
-          {activeSection === 'voice' && (
-            <VoiceSection settings={voice} onUpdate={updateVoice} />
+
+          {/* C. Truthful Planned Section Component */}
+          {currentSection.category === 'planned' && (
+            <div
+              id={`settings-${currentSection.id}-planned`}
+              className="p-6 sm:p-8 rounded-3xl surface-raised border border-[var(--color-border-subtle)] space-y-6 shadow-sm"
+            >
+              <div className="flex items-center justify-between flex-wrap gap-3 pb-4 border-b border-[var(--color-border-subtle)]">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-[var(--color-accent)]/10 text-[var(--color-accent)] flex items-center justify-center flex-shrink-0">
+                    {currentSection.icon}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-base font-bold text-[var(--color-text-primary)]">
+                        {currentSection.label} Configuration
+                      </h2>
+                      <Badge variant="neutral" size="sm">
+                        Planned
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-[var(--color-text-secondary)]">
+                      {currentSection.description}
+                    </p>
+                  </div>
+                </div>
+
+                {currentSection.milestoneHint && (
+                  <Badge variant="primary" size="sm">
+                    {currentSection.milestoneHint}
+                  </Badge>
+                )}
+              </div>
+
+              <div className="p-5 rounded-2xl bg-[var(--color-surface-sunken)] border border-[var(--color-border-subtle)] space-y-3">
+                <div className="flex items-start gap-2.5">
+                  <Info className="w-4 h-4 text-[var(--color-accent)] mt-0.5 flex-shrink-0" />
+                  <div className="space-y-1.5 text-xs">
+                    <div className="font-semibold text-[var(--color-text-primary)]">
+                      Architecture Roadmap
+                    </div>
+                    <p className="text-[var(--color-text-secondary)] leading-relaxed">
+                      {currentSection.plannedDetails}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl surface-recessed border border-[var(--color-border-subtle)] text-xs text-[var(--color-text-muted)] space-y-2">
+                <div className="font-medium text-[var(--color-text-primary)]">
+                  Epistemic Truthfulness Notice
+                </div>
+                <p className="leading-relaxed">
+                  Browser local storage is not used to simulate fake runtime state. Interactive parameters for this section will be enabled once the corresponding backend architecture is implemented.
+                </p>
+              </div>
+            </div>
           )}
-          {activeSection === 'ai' && (
-            <AiSection settings={ai} onUpdate={updateAi} />
-          )}
-          {activeSection === 'health' && (
-            <HealthSection settings={health} onUpdate={updateHealth} />
-          )}
-          {activeSection === 'devices' && (
-            <DevicesSection settings={devices} onUpdate={updateDevices} />
-          )}
-          {activeSection === 'network' && (
-            <NetworkSection settings={network} onUpdate={updateNetwork} />
-          )}
-          {activeSection === 'privacy' && (
-            <PrivacySection settings={privacy} onUpdate={updatePrivacy} />
-          )}
-          {activeSection === 'advanced' && (
-            <AdvancedSection
-              settings={advanced}
-              onUpdate={updateAdvanced}
-              onResetAll={handleResetAll}
-            />
-          )}
-          {activeSection === 'states' && <ApplicationStatesShowcase />}
         </div>
       </div>
     </div>
