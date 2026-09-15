@@ -18,13 +18,16 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — PHASE 8P.3 IMPLEMENTATION COMPLETE — AWAITING CHATGPT/USER REVIEW]
+## [CURRENT EXECUTION STATE — PHASE 8P.3 STORAGE SAFETY CORRECTION COMPLETE — AWAITING CHATGPT/USER REVIEW]
 
-- Status: Phase 8P.3 Atomic Persistent Storage Foundation implemented and verified; awaiting ChatGPT/user review.
-- Completed: Dedicated storage module `backend/app/core/storage.py` (resolve_data_root, bootstrap handler, get_canonical_paths, read-only legacy candidate inspection, preflight ambiguity safety, atomic copy/verification migration); config.py canonical paths & factory roots; session.py explicit runtime lifecycle (initialize_database_runtime, dispose_database_runtime, get_db guard, WAL/foreign keys/pragmas); main.py lifespan preflight & migration integration; test isolation fixture in conftest.py ensuring zero %LOCALAPPDATA% pollution; backend/.env.example updated; 24 new focused unit/integration tests added.
-- Verified: 118 backend pytest passed (94 baseline + 24 new storage/migration tests), 132 frontend vitest passed, 0 tsc errors.
-- Baseline: 118 backend pytest, 132 frontend vitest, 0 tsc errors, migration head 005_scope_message_constraints.
-- Scope Guard: Batch 8P.3 scope strictly honored. Zero real user databases migrated or reset. Zero %LOCALAPPDATA% directories created on host machine. Zero factory models moved. Batch 8P.4 not started.
+- Status: Phase 8P.3 Storage Safety Correction implemented and fully verified; awaiting ChatGPT/user review.
+- Completed:
+  1. SQLite WAL-safe migration: native `sqlite3.Connection.backup()` captures uncheckpointed committed WAL transactions; ambiguity check fails closed if any candidate has an active `-wal` file.
+  2. Schema lifecycle helper: `prepare_database_schema()` brings canonical DB to Alembic head in a worker thread before normal app DB runtime initializes; legacy sources are never modified.
+  3. Canonical DB validation: fails closed with `CorruptCanonicalDatabaseError` on 0-byte or corrupt canonical DBs.
+  4. Absolute data root invariant: strictly requires and validates absolute paths for `COMPANION_DATA_ROOT` and `bootstrap.json` `data_root`, rejecting relative paths with `StorageError`.
+- Verified: 129 backend pytest passed (zero failures), 132 frontend vitest passed, 0 tsc errors.
+- Scope Guard: Zero real user databases migrated or reset. Zero %LOCALAPPDATA% directories created on host machine. Zero factory models moved. Batch 8P.4 not started. User draft `docs/00_Drafts/09-16-2026-roadmap.md` untouched.
 - Active Plan: `docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md`
 
 ---

@@ -125,7 +125,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Initializing Local AI Runtime...")
 
     # Step 1: Storage preflight & safe migration (Batch 8P.3)
-    from app.core.storage import assess_migration_preflight, execute_migration
+    from app.core.storage import (
+        assess_migration_preflight,
+        execute_migration,
+        prepare_database_schema,
+    )
 
     legacy_candidates = [
         settings.BASE_DIR / "data" / "companion.db",           # backend/data/companion.db
@@ -141,8 +145,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         backup_dir=settings.BACKUP_DIR,
     )
 
-    # Step 2: Ensure database directory exists and initialize runtime engine
+    # Step 2: Ensure schema is at Alembic head BEFORE initializing runtime engine
     settings.DATABASE_DIR.mkdir(parents=True, exist_ok=True)
+    prepare_database_schema(canonical_db_path=settings.DATABASE_PATH)
     initialize_database_runtime(database_url=settings.DATABASE_URL, debug=settings.DEBUG)
 
     # Step 3: Ensure pairing key exists

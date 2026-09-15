@@ -124,3 +124,45 @@ def test_authoritative_bootstrap_target_not_silently_switched(monkeypatch, tmp_p
     )
     assert resolved == uncreated_target.resolve()
     assert not uncreated_target.exists()
+
+
+def test_relative_companion_data_root_rejected(monkeypatch, tmp_path):
+    """Relative COMPANION_DATA_ROOT must be rejected with a StorageError."""
+    from app.core.storage import StorageError
+    monkeypatch.setenv("COMPANION_DATA_ROOT", "./relative_custom_root")
+
+    with pytest.raises(StorageError) as exc_info:
+        resolve_data_root()
+    assert "absolute" in str(exc_info.value).lower()
+
+
+def test_relative_bootstrap_data_root_rejected(monkeypatch, tmp_path):
+    """Relative data_root in bootstrap.json must be rejected with a StorageError."""
+    from app.core.storage import StorageError
+    monkeypatch.delenv("COMPANION_DATA_ROOT", raising=False)
+    bootstrap_file = tmp_path / "bootstrap.json"
+    bootstrap_file.write_text(json.dumps({"schema_version": 1, "data_root": "./relative_bootstrap_root"}))
+
+    with pytest.raises(StorageError) as exc_info:
+        resolve_data_root(bootstrap_path=bootstrap_file)
+    assert "absolute" in str(exc_info.value).lower()
+
+
+def test_absolute_companion_data_root_accepted(monkeypatch, tmp_path):
+    """Absolute COMPANION_DATA_ROOT is accepted without error."""
+    abs_path = (tmp_path / "AbsoluteRoot").resolve()
+    monkeypatch.setenv("COMPANION_DATA_ROOT", str(abs_path))
+
+    resolved = resolve_data_root()
+    assert resolved == abs_path
+
+
+def test_absolute_bootstrap_data_root_accepted(monkeypatch, tmp_path):
+    """Absolute data_root in bootstrap.json is accepted without error."""
+    monkeypatch.delenv("COMPANION_DATA_ROOT", raising=False)
+    abs_path = (tmp_path / "AbsoluteBootstrapRoot").resolve()
+    bootstrap_file = tmp_path / "bootstrap.json"
+    bootstrap_file.write_text(json.dumps({"schema_version": 1, "data_root": str(abs_path)}))
+
+    resolved = resolve_data_root(bootstrap_path=bootstrap_file)
+    assert resolved == abs_path

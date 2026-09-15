@@ -47,6 +47,11 @@ class MigrationVerificationError(StorageError):
     pass
 
 
+class CorruptCanonicalDatabaseError(StorageError):
+    """Raised when an existing canonical database fails validation or integrity checks."""
+    pass
+
+
 # ---------------------------------------------------------------------------
 # Data Models
 # ---------------------------------------------------------------------------
@@ -149,7 +154,11 @@ def resolve_data_root(
     # 1. Environment override
     override = env_override if env_override is not None else os.environ.get("COMPANION_DATA_ROOT")
     if override and override.strip():
-        return Path(override.strip()).resolve()
+        val = override.strip()
+        p = Path(val)
+        if not p.is_absolute():
+            raise StorageError(f"COMPANION_DATA_ROOT must be an absolute path, got relative path: '{val}'")
+        return p.resolve()
 
     # 2. Bootstrap locator file
     b_path = bootstrap_path if bootstrap_path is not None else get_bootstrap_path()
@@ -158,10 +167,17 @@ def resolve_data_root(
             content = b_path.read_text(encoding="utf-8")
             data = json.loads(content)
             if isinstance(data, dict) and "data_root" in data and isinstance(data["data_root"], str):
-                target = data["data_root"].strip()
-                if target:
-                    return Path(target).resolve()
+                target_str = data["data_root"].strip()
+                if target_str:
+                    target_p = Path(target_str)
+                    if not target_p.is_absolute():
+                        raise StorageError(
+                            f"Bootstrap data_root must be an absolute path, got relative path: '{target_str}' in {b_path}"
+                        )
+                    return target_p.resolve()
             logger.warning(f"Bootstrap file {b_path} is missing valid 'data_root'; falling back to default.")
+        except StorageError:
+            raise
         except Exception as exc:
             logger.warning(f"Failed to parse bootstrap file {b_path} ({exc}); falling back to default.")
 
@@ -380,11 +396,20 @@ def assess_migration_preflight(
     4. Canonical absent + multiple byte-identical valid DBs -> MIGRATE_EQUIVALENT
     5. Canonical absent + multiple differing valid DBs -> STOP (MigrationAmbiguityError)
     """
-    if canonical_db_path.exists() and canonical_db_path.is_file() and canonical_db_path.stat().st_size > 0:
+    if canonical_db_path.exists():
+        if not canonical_db_path.is_file():
+            raise CorruptCanonicalDatabaseError(f"Canonical database path {canonical_db_path} is not a regular file.")
+        if canonical_db_path.stat().st_size == 0:
+            raise CorruptCanonicalDatabaseError(f"Canonical database at {canonical_db_path} is an invalid zero-byte file.")
+        canonical_info = inspect_legacy_candidate(canonical_db_path)
+        if not canonical_info.is_valid or not canonical_info.integrity_ok:
+            raise CorruptCanonicalDatabaseError(
+                f"Canonical database at {canonical_db_path} failed integrity checks: {canonical_info.error}"
+            )
         return MigrationDecision(
             action="CANONICAL_EXISTS",
             source=None,
-            note="Canonical database already exists in persistent storage. Using existing database.",
+            note="Canonical database already exists in persistent storage and passed integrity checks.",
         )
 
     # Inspect all legacy candidates
@@ -408,19 +433,26 @@ def assess_migration_preflight(
             note=f"Exactly one valid legacy database candidate found: {valid_candidates[0].path}",
         )
 
-    # Multiple valid candidates found: check if byte-identical
+    # Multiple valid candidates found: check if byte-identical without active WAL state
     distinct_hashes = {c.sha256 for c in valid_candidates}
     if len(distinct_hashes) == 1:
-        # Sort deterministically by string path
-        chosen = sorted(valid_candidates, key=lambda x: str(x.path))[0]
-        return MigrationDecision(
-            action="MIGRATE_EQUIVALENT",
-            source=chosen.path.resolve(),
-            note=(
-                f"Multiple byte-identical legacy candidates detected ({[str(c.path) for c in valid_candidates]}). "
-                f"Using representative: {chosen.path}"
-            ),
-        )
+        has_active_wal = False
+        for c in valid_candidates:
+            wal_file = c.path.parent / f"{c.path.name}-wal"
+            if wal_file.exists() and wal_file.stat().st_size > 0:
+                has_active_wal = True
+                break
+        if not has_active_wal:
+            # Sort deterministically by string path
+            chosen = sorted(valid_candidates, key=lambda x: str(x.path))[0]
+            return MigrationDecision(
+                action="MIGRATE_EQUIVALENT",
+                source=chosen.path.resolve(),
+                note=(
+                    f"Multiple byte-identical legacy candidates detected without WAL state ({[str(c.path) for c in valid_candidates]}). "
+                    f"Using representative: {chosen.path}"
+                ),
+            )
 
     # Differing candidates: strictly STOP and raise MigrationAmbiguityError
     candidates_info = [
@@ -446,9 +478,10 @@ def execute_migration(
     canonical_db_path: Path,
     backup_dir: Path,
 ) -> MigrationResult:
-    """Execute the migration decision with atomic copy, verification, and backup.
+    """Execute the migration decision with atomic SQLite logical backup, verification, and backup.
 
     Original legacy source file is NEVER moved or deleted; it remains untouched.
+    SQLite's native backup API is used to capture committed WAL state safely.
     """
     if decision.action in ("CANONICAL_EXISTS", "FRESH_INSTALL"):
         # Safe cleanup of any stale migration temp files without touching canonical DB
@@ -486,31 +519,29 @@ def execute_migration(
     if temp_target.exists():
         temp_target.unlink()
 
-    # Step 1: Copy to temp file (leave source untouched)
+    # Step 1: Logical SQLite backup to temp file (leave source untouched and capture WAL state)
     try:
-        shutil.copy2(source_path, temp_target)
+        ro_src = sqlite3.connect(f"file:{source_path.resolve()}?mode=ro", uri=True)
+        dest_conn = sqlite3.connect(temp_target)
+        try:
+            ro_src.backup(dest_conn)
+        finally:
+            dest_conn.close()
+            ro_src.close()
     except Exception as exc:
         if temp_target.exists():
             temp_target.unlink(missing_ok=True)
-        raise StorageError(f"Failed to copy legacy database from {source_path} to {temp_target}: {exc}")
+        raise StorageError(f"Failed to create SQLite backup snapshot from {source_path} to {temp_target}: {exc}")
 
-    # Step 2: Thorough verification of copied file
+    # Step 2: Thorough verification of copied snapshot
     copied_info = inspect_legacy_candidate(temp_target)
-    if not copied_info.is_valid:
+    if not copied_info.is_valid or not copied_info.integrity_ok:
         temp_target.unlink(missing_ok=True)
         raise MigrationVerificationError(f"Copied database failed inspection: {copied_info.error}")
 
-    if copied_info.size != source_info.size:
+    if copied_info.size == 0:
         temp_target.unlink(missing_ok=True)
-        raise MigrationVerificationError(
-            f"Copied size mismatch: source has {source_info.size} bytes, copy has {copied_info.size} bytes"
-        )
-
-    if copied_info.sha256 != source_info.sha256:
-        temp_target.unlink(missing_ok=True)
-        raise MigrationVerificationError(
-            f"Copied checksum mismatch: source SHA256 is {source_info.sha256}, copy is {copied_info.sha256}"
-        )
+        raise MigrationVerificationError("Copied database snapshot is an invalid zero-byte file.")
 
     if copied_info.alembic_version != source_info.alembic_version:
         temp_target.unlink(missing_ok=True)
@@ -533,9 +564,10 @@ def execute_migration(
     except Exception as exc:
         logger.warning(f"Failed to create persistent backup copy at {backup_file}: {exc}")
 
+    canonical_info = inspect_legacy_candidate(canonical_db_path)
     logger.info(
         f"Successfully migrated legacy database from {source_path} to {canonical_db_path} "
-        f"(SHA256={source_info.sha256}, Backup={backup_file.name})"
+        f"(Logical backup verified, Alembic revision={canonical_info.alembic_version}, Backup={backup_file.name})"
     )
 
     return MigrationResult(
@@ -543,5 +575,59 @@ def execute_migration(
         source=source_path,
         canonical_path=canonical_db_path,
         backup_path=backup_file if backup_file.exists() else None,
-        sha256=source_info.sha256,
+        sha256=canonical_info.sha256,
     )
+
+
+# ---------------------------------------------------------------------------
+# Schema Lifecycle & Upgrade (Correction Requirement 2)
+# ---------------------------------------------------------------------------
+
+def prepare_database_schema(
+    canonical_db_path: Path,
+    alembic_ini_path: Optional[Path] = None,
+) -> str:
+    """Ensure canonical database exists and is upgraded to current Alembic head.
+
+    Executes Alembic migrations in an isolated worker thread so that asyncio.run()
+    inside migrations/env.py does not collide with an active event loop.
+    Returns the current Alembic revision string.
+    """
+    import concurrent.futures
+    from alembic.config import Config
+    from alembic import command
+
+    canonical_db_path.parent.mkdir(parents=True, exist_ok=True)
+    db_url = f"sqlite+aiosqlite:///{canonical_db_path.resolve().as_posix()}"
+
+    ini_path = alembic_ini_path
+    if ini_path is None:
+        ini_path = Path(__file__).resolve().parent.parent.parent / "alembic.ini"
+
+    if not ini_path.exists():
+        raise StorageError(f"Alembic configuration file not found at {ini_path}")
+
+    def _run_upgrade():
+        cfg = Config(str(ini_path))
+        migrations_dir = ini_path.parent / "migrations"
+        cfg.set_main_option("script_location", str(migrations_dir.resolve()))
+        cfg.set_main_option("sqlalchemy.url", db_url)
+        command.upgrade(cfg, "head")
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(_run_upgrade)
+        try:
+            future.result()
+        except Exception as exc:
+            raise StorageError(f"Failed to apply Alembic migrations to {canonical_db_path}: {exc}") from exc
+
+    inspection = inspect_legacy_candidate(canonical_db_path)
+    if not inspection.is_valid or not inspection.integrity_ok:
+        raise StorageError(
+            f"Canonical database at {canonical_db_path} failed integrity checks after migration: {inspection.error}"
+        )
+    if not inspection.alembic_version:
+        raise StorageError(f"Canonical database at {canonical_db_path} missing alembic_version after upgrade.")
+
+    logger.info(f"Canonical database at {canonical_db_path} successfully upgraded to Alembic head: {inspection.alembic_version}")
+    return inspection.alembic_version

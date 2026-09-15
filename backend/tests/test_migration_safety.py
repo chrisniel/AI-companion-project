@@ -12,10 +12,16 @@ from app.core.storage import (
     MigrationDecision,
     MigrationAmbiguityError,
     MigrationVerificationError,
+    StorageError,
     inspect_legacy_candidate,
     assess_migration_preflight,
     execute_migration,
 )
+try:
+    from app.core.storage import CorruptCanonicalDatabaseError
+except ImportError:
+    class CorruptCanonicalDatabaseError(StorageError):
+        pass
 
 
 def _create_sqlite_db(path: Path, alembic_version: str = "005_scope_message_constraints", extra_table: bool = True) -> None:
@@ -168,19 +174,23 @@ def test_execute_migration_safe_copy_verification_and_backup(tmp_path):
     )
 
     assert result.migrated is True
-    # Canonical DB exists and matches
+    # Canonical DB exists and passes integrity check & retains alembic revision
     assert canonical_db.exists()
-    assert hashlib.sha256(canonical_db.read_bytes()).hexdigest() == original_sha256
+    canonical_info = inspect_legacy_candidate(canonical_db)
+    assert canonical_info.is_valid is True
+    assert canonical_info.integrity_ok is True
+    assert canonical_info.alembic_version == "005_scope"
 
     # Legacy source remains untouched
     assert legacy_db.exists()
     assert hashlib.sha256(legacy_db.read_bytes()).hexdigest() == original_sha256
     assert legacy_db.stat().st_size == original_stat.st_size
 
-    # Backup created
+    # Backup created from canonical DB
     backups = list(backup_dir.glob("companion.db.backup-*"))
     assert len(backups) == 1
-    assert hashlib.sha256(backups[0].read_bytes()).hexdigest() == original_sha256
+    assert hashlib.sha256(backups[0].read_bytes()).hexdigest() == hashlib.sha256(canonical_db.read_bytes()).hexdigest()
+    assert inspect_legacy_candidate(backups[0]).integrity_ok is True
 
     # No leftover .migrating file
     assert not (canonical_dir / "companion.db.migrating").exists()
@@ -239,3 +249,113 @@ def test_stale_temp_file_cleaned_without_overwriting_canonical(tmp_path):
     conn = sqlite3.connect(canonical_db)
     assert conn.execute("PRAGMA integrity_check;").fetchone()[0] == "ok"
     conn.close()
+
+
+def test_wal_safe_migration_preserves_uncheckpointed_committed_data(tmp_path):
+    """Migration must preserve committed data in SQLite WAL without requiring checkpoint."""
+    source_dir = tmp_path / "legacy"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    source_db = source_dir / "companion.db"
+
+    # Create DB in WAL mode and disable autocheckpoint
+    conn = sqlite3.connect(source_db)
+    conn.execute("PRAGMA journal_mode = WAL;")
+    conn.execute("PRAGMA wal_autocheckpoint = 0;")
+    conn.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL);")
+    conn.execute("INSERT INTO alembic_version (version_num) VALUES ('005_scope_message_constraints');")
+    conn.execute("CREATE TABLE wal_test_table (id INTEGER PRIMARY KEY, payload TEXT);")
+    conn.commit()
+    # Checkpoint initial DDL so main .db has tables
+    conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+
+    # Insert committed transaction strictly into WAL
+    conn.execute("INSERT INTO wal_test_table (payload) VALUES ('committed_in_wal_only');")
+    conn.commit()
+
+    wal_file = source_dir / "companion.db-wal"
+    assert wal_file.exists()
+    assert wal_file.stat().st_size > 0
+
+    canonical_dir = tmp_path / "canonical" / "database"
+    canonical_db = canonical_dir / "companion.db"
+    backup_dir = tmp_path / "canonical" / "backups"
+
+    decision = assess_migration_preflight(
+        canonical_db_path=canonical_db,
+        legacy_candidates=[source_db],
+    )
+    assert decision.action == "MIGRATE"
+
+    result = execute_migration(
+        decision=decision,
+        canonical_db_path=canonical_db,
+        backup_dir=backup_dir,
+    )
+    assert result.migrated is True
+    assert canonical_db.exists()
+
+    # Query destination to prove uncheckpointed WAL row is preserved
+    dest_conn = sqlite3.connect(canonical_db)
+    rows = dest_conn.execute("SELECT payload FROM wal_test_table;").fetchall()
+    dest_conn.close()
+    conn.close()
+
+    assert len(rows) == 1
+    assert rows[0][0] == "committed_in_wal_only"
+
+
+def test_corrupt_canonical_db_fails_closed(tmp_path):
+    """Corrupt non-zero canonical database must raise CorruptCanonicalDatabaseError and fail closed."""
+    canonical_dir = tmp_path / "canonical" / "database"
+    canonical_dir.mkdir(parents=True, exist_ok=True)
+    canonical_db = canonical_dir / "companion.db"
+    canonical_db.write_bytes(b"corrupt non-sqlite content")
+
+    legacy_db = tmp_path / "legacy" / "companion.db"
+    _create_sqlite_db(legacy_db)
+
+    with pytest.raises(CorruptCanonicalDatabaseError) as exc_info:
+        assess_migration_preflight(
+            canonical_db_path=canonical_db,
+            legacy_candidates=[legacy_db],
+        )
+    assert "corrupt" in str(exc_info.value).lower() or "failed" in str(exc_info.value).lower()
+
+
+def test_zero_byte_canonical_db_fails_closed(tmp_path):
+    """Zero-byte canonical database must raise CorruptCanonicalDatabaseError and fail closed."""
+    canonical_dir = tmp_path / "canonical" / "database"
+    canonical_dir.mkdir(parents=True, exist_ok=True)
+    canonical_db = canonical_dir / "companion.db"
+    canonical_db.write_bytes(b"")
+
+    legacy_db = tmp_path / "legacy" / "companion.db"
+    _create_sqlite_db(legacy_db)
+
+    with pytest.raises(CorruptCanonicalDatabaseError) as exc_info:
+        assess_migration_preflight(
+            canonical_db_path=canonical_db,
+            legacy_candidates=[legacy_db],
+        )
+    assert "zero-byte" in str(exc_info.value).lower() or "corrupt" in str(exc_info.value).lower()
+
+
+def test_candidates_with_active_wal_treated_as_ambiguous(tmp_path):
+    """Multiple candidates where at least one has an active WAL cannot rely on main .db SHA256 alone."""
+    canonical_db = tmp_path / "canonical" / "database" / "companion.db"
+    legacy_1 = tmp_path / "legacy1" / "companion.db"
+    legacy_2 = tmp_path / "legacy2" / "companion.db"
+
+    _create_sqlite_db(legacy_1, alembic_version="005_scope")
+    legacy_2.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(legacy_1, legacy_2)
+
+    # Add an active WAL file to legacy_2
+    wal_file = legacy_2.parent / "companion.db-wal"
+    wal_file.write_bytes(b"active wal state")
+
+    with pytest.raises(MigrationAmbiguityError):
+        assess_migration_preflight(
+            canonical_db_path=canonical_db,
+            legacy_candidates=[legacy_1, legacy_2],
+        )
