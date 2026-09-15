@@ -1,6 +1,6 @@
 # Phase 8 Implementation Plan — PC Frontend Architecture, Runtime Config, Multimodal & Polish
 
-> **Status:** Final planning baseline — awaiting user APPROVED signal
+> **Status:** Phase 8P plan reconciled — awaiting Batch 8P.1 implementation approval
 > **This is the single authoritative version. No supplements. No pass references.**
 > **Canonical reference:** `docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`
 
@@ -8,7 +8,7 @@
 
 ## Branch Strategy
 
-develop (baseline: 88 pytest, 38 vitest, 0 tsc, migration head 005_scope_message_constraints)
+develop (baseline: 88 backend pytest, 132 frontend vitest [last verified Phase 8A baseline], 0 tsc, migration head 005_scope_message_constraints)
   +-- feature/phase8-ui-foundation           (8A: frontend-only, zero backend schema changes)
         merge to develop
   +-- feature/phase8-runtime-config          (8P: config, terminology, schema v3, data root)
@@ -55,12 +55,13 @@ develop (baseline: 88 pytest, 38 vitest, 0 tsc, migration head 005_scope_message
 | _get_profile_params() inline constants | llama_cpp.py L151-164 | Move to env-overridable PROFILE_*_* settings |
 | _engine_version = "b10936" hardcoded | llama_cpp.py L56 | Move to settings.LLAMA_ENGINE_VERSION |
 | LLAMA_SERVER_URL = "http://127.0.0.1:8085/v1" -- VERIFIED port 8085 | config.py/.env | Router is 8085, NOT 8080. Correct in all docs. |
-| "Local AI Core" in 19 frontend locations | Various .tsx/.ts | Full rename in 8P.1b |
-| ModelRegistryEntry flat struct mixes identity/state/hints | schemas/model_registry.py | Split into ModelManifest + ModelLibraryState + ModelRuntimeHints |
+| "Local AI Core" in frontend & backend | Decomposed frontend, mock files & test assertions | Full rename in 8P.1; include shellHomeTruthfulness.test.tsx and test_llm.py |
+| ModelRegistryEntry flat struct mixes identity/state/hints | schemas/model_registry.py | Split into ModelManifest + ModelLibraryState + ModelRuntimeHints with temporary @computed_field bridge |
 | variant defaults to "instruct" for unregistered scan | model_registry.py L132 | Must be ModelVariant.unknown |
 | capabilities=[ModelCapability.chat] auto-assigned to discovered GGUFs | model_registry.py L132 | REMOVE. Unknown GGUFs get capabilities=[] |
 | Migration head: 005_scope_message_constraints | backend/migrations/versions/ | Next: 006_add_attachments |
 | registry.template.json schema v1, Qwen-only | models/registry.template.json | Update to schema v3 |
+| contracts/openapi/openapi.json missing model endpoints | contracts/openapi/openapi.json | Generate and add /models and /models/registry endpoints in 8P.6 |
 
 ---
 
@@ -321,7 +322,7 @@ Path resolution MUST use the correct root for the source -- never mix roots.
 ## Phase 8A -- Frontend Architecture & UX Harmonization
 
 Branch: feature/phase8-ui-foundation
-Test gate: >= 88 pytest (unchanged), >= 38 vitest, 0 tsc, clean build.
+Test gate: >= 88 pytest (unchanged), >= 132 vitest (last verified Phase 8A baseline), 0 tsc, clean build.
 Constraint: Zero backend schema changes. Zero migrations. Zero new API endpoints.
 Note: Do NOT rename "Local AI Core" strings in 8A -- that happens in 8P to avoid merge conflicts.
 
@@ -388,7 +389,7 @@ Create frontend/web/src/components/workspace/assistant/:
 - Unsupported operational controls (New Alarm, Android audio nodes, calendar sync) removed or rendered as non-interactive Planned affordances.
 
 8A.3b.3 -- Characters + Devices + Logs + Settings Truthfulness Sweep
-Status: DESIGN DOCUMENTED — AWAITING REVIEW (Implementation Deferred)
+Status: COMPLETED & MERGED (feature/phase8-ui-foundation squashed into develop)
 
 Core Approach: Approach B — Hybrid Truthfulness
 - Implemented + authoritative source -> show real state
@@ -492,7 +493,7 @@ feat(8a): frontend architecture -- mock removal, decomposition, provenance label
 - HealthView, MemoryView: wired to live BackendContext/memoryApi
 - ModelsView: variant badges, mmproj warning, applied-vs-requested profile labels
 - mock/*.ts: @deprecated annotations; retained as test fixtures
-Tests: >= 88 pytest, >= 38 vitest, 0 tsc, clean build
+Tests: >= 88 pytest, >= 132 vitest, 0 tsc, clean build
 
 
 ---
@@ -500,311 +501,303 @@ Tests: >= 88 pytest, >= 38 vitest, 0 tsc, clean build
 ## Phase 8P -- Runtime Configuration & Persistent Asset Foundation
 
 Branch: feature/phase8-runtime-config (based on merged 8A)
-Test gate: >= 88 pytest, >= 38 vitest (string assertions updated), 0 tsc, clean build.
-Constraint: No DB migrations. No new API endpoints. No new frontend pages.
-Critical prereq for 8B: settings.ATTACHMENT_DIR must exist before 8B writes files.
+Test gate: >= 88 pytest, >= 132 vitest (string assertions updated), 0 tsc, clean build.
+Constraint: No DB migrations. Zero data loss. No new frontend pages.
+Critical prereq for 8B: settings.ATTACHMENT_DIR (established in 8P.3) must exist before 8B writes files.
 
-### 8P.1 -- Terminology Reconciliation
+### Verification Gate Rules (Locked)
+- Focused tests for fast RED/GREEN iteration during development.
+- When backend is affected: full backend test suite is mandatory before batch approval (floor: >= 88 pytest passed).
+- When frontend is affected: full frontend test suite (floor: >= 132 vitest passed), `npx tsc --noEmit` (0 errors), and `npm run build` (clean production build) are mandatory before batch approval.
+- Counts are floors: backend >= 88, frontend >= 132.
 
-#### 8P.1a -- Backend
+---
 
-  grep -r "Local AI Core" backend/ --include="*.py" -l
-  # Fix each occurrence -- replace with "Local AI Runtime"
+### 8P.1 -- Terminology & Test Alignment
 
-[MODIFY] backend/app/core/config.py
-  PROJECT_NAME: str = "Local AI Runtime"  # Canonical. Previously "Local AI Core" in legacy docs.
+#### 8P.1a -- Backend Terminology
+- Grep and replace remaining occurrences of "Local AI Core" with canonical "Local AI Runtime":
+  - `backend/app/__init__.py` (docstring)
+  - `backend/app/services/retention.py` (CLI parser description)
+  - `backend/app/services/llm/mock.py` (operational message responses)
+  - `backend/app/api/v1/endpoints/auth.py` (token verification confirmation message)
+  - `backend/.env.example` (header comment)
+- `backend/app/core/config.py`: Add canonical naming reconciliation comment explaining "Local AI Runtime" supersedes legacy "Local AI Core".
+- `backend/tests/test_llm.py`: Update string assertion at line 51 from `assert "Local AI Core is operational"` to `assert "Local AI Runtime is operational"`.
 
-[MODIFY] backend/app/main.py -- ensure title=settings.PROJECT_NAME (not hardcoded string)
+#### 8P.1b -- Frontend Terminology
+Rename "Local AI Core" -> "Local AI Runtime" across all current decomposed component locations:
+- `frontend/web/src/components/workspace/assistant/AssistantErrorDisplay.tsx` (L45)
+- `frontend/web/src/components/layout/Header.tsx` (L221 status label, L304 comment)
+- `frontend/web/src/components/workspace/HomeView.tsx` (L86, L99, L103 status labels and messages)
+- `frontend/web/src/components/layout/AssistantPanel.tsx` (L123 description)
+- `frontend/web/src/components/workspace/ModelsView.tsx` (L314 label)
+- `frontend/web/src/components/workspace/models/ModelProvidersCard.tsx` (L34 description)
+- `frontend/web/src/components/workspace/states/ApplicationStatesShowcase.tsx` (L330, L346, L358 preview labels)
+- `frontend/web/src/components/workspace/health/HealthPipelineCard.tsx` (L137 comment)
+- `frontend/web/src/mock/healthData.ts` (L92, L337 mock strings)
 
-#### 8P.1b -- Frontend (19 confirmed locations)
+#### 8P.1c -- Frontend Test Assertions (Mandatory)
+Update error/status string assertions across both affected test suites:
+- `frontend/web/src/test/assistantViewReliability.test.tsx` (L545, L612, L665)
+- `frontend/web/src/test/shellHomeTruthfulness.test.tsx` (L132, L176, L177, L238, L429)
 
-  AssistantView.tsx L93   "Local AI Core is offline..." -> "Local AI Runtime is offline..."
-  AssistantView.tsx L241  "Local AI Core session initialized..." -> "Local AI Runtime session initialized..."
-  AssistantView.tsx L248  "Connect to Local AI Core on port 8000" -> "Connect to Local AI Runtime on port 8000"
-  Header.tsx L254         Local AI Core (label) -> Local AI Runtime
-  Header.tsx L343         comment -> update
-  HomeView.tsx L168       "Local AI Core Online" -> "Local AI Runtime Online"
-  HealthView.tsx L121,L180  description/comment -> update
-  ModelsView.tsx L337     Local AI Core: -> Local AI Runtime:
-  ModelProvidersCard.tsx L34  description -> "Local AI Runtime orchestrates..."
-  ApplicationStatesShowcase.tsx L330,L346,L358  state labels -> "Local AI Runtime Offline" etc.
-  HealthPipelineCard.tsx L138  comment/diagram -> update
-  mock/healthData.ts L91,L336  mock strings -> update for consistency
+#### 8P.1d -- ModelsView Label & Property Correction
+Fix badge/tooltip conflation in `ModelsView.tsx`:
+- GGUF files are runtime-agnostic; Vulkan is an engine acceleration property.
+- Clearly separate display: Format: GGUF | Engine: llama.cpp | Acceleration: Vulkan.
 
-#### 8P.1c -- Frontend Tests (mandatory -- tests fail without this)
+**Batch 8P.1 Gate:** Focused tests for RED/GREEN (`backend/tests/test_llm.py`, `frontend/web/src/test/assistantViewReliability.test.tsx`, `frontend/web/src/test/shellHomeTruthfulness.test.tsx`); full backend suite before approval (>= 88 pytest passed); full frontend suite (>= 132 vitest passed), `npx tsc --noEmit` (0 errors), `npm run build` (clean production build).
 
-[MODIFY] frontend/web/src/test/assistantViewReliability.test.tsx
-  L544, L613, L666: update assertions "Local AI Core" -> "Local AI Runtime"
+---
 
-#### 8P.1d -- GGUF/Vulkan Label Correction in ModelsView
+### 8P.2 -- Runtime Engine Configuration & Performance Profiles
 
-Fix any badge/tooltip implying models are "Vulkan models":
-  - GGUF files are runtime-agnostic; Vulkan is an engine property
-  - Display: GGUF (file format) | Engine: llama.cpp | Acceleration: Vulkan
+#### 8P.2a -- Declarative Engine Fields & Profile Settings in config.py
+[MODIFY] `backend/app/core/config.py` -- add:
+```python
+# Declarative runtime engine properties
+LLM_ENGINE: str = "llama_cpp"
+LLM_ACCELERATION: str = "vulkan"
+LLAMA_ENGINE_VERSION: str = "b10936"
+LLAMA_SERVER_URL: str = "http://127.0.0.1:8085/v1"  # Verified port 8085
 
-### 8P.2 -- COMPANION_DATA_ROOT Bootstrap & Configuration Initialization
+# Performance profiles (AMD RX 580 / Vulkan b10936 verified baseline; env-overridable)
+PROFILE_ECO_CTX: int = 2048
+PROFILE_ECO_GPU_LAYERS: int = 0         # 0 = CPU-only offload for Eco
+PROFILE_ECO_THREADS: int = 4
+PROFILE_ECO_MMPROJ_OFFLOAD: bool = False
 
-Bootstrap resolution MUST occur before Settings constructs DATABASE_PATH or DATABASE_URL,
-and before SQLAlchemy creates the engine. Required initialization order:
+PROFILE_BALANCED_CTX: int = 4096
+PROFILE_BALANCED_GPU_LAYERS: int = 28
+PROFILE_BALANCED_THREADS: int = 6
+PROFILE_BALANCED_MMPROJ_OFFLOAD: bool = True
 
-  1. env var: COMPANION_DATA_ROOT (highest priority; skip all other steps)
-  2. bootstrap locator: %LOCALAPPDATA%\AI Companion\bootstrap.json { schema_version, data_root }
-  3. default: %LOCALAPPDATA%\AI Companion\Data
-        ↓
-  Settings (config.py) reads the resolved root
-        ↓
-  DATABASE_PATH = COMPANION_DATA_ROOT / "database" / "companion.db"
-  DATABASE_URL  = f"sqlite+aiosqlite:///{DATABASE_PATH.as_posix()}"
-        ↓
-  SQLAlchemy engine construction (uses DATABASE_URL; root already canonical)
-        ↓
-  ensure_data_root() first-run migration (canonical target already resolved)
+PROFILE_MAXIMUM_CTX: int = 8192
+PROFILE_MAXIMUM_GPU_LAYERS: int = 33
+PROFILE_MAXIMUM_THREADS: int = 8
+PROFILE_MAXIMUM_MMPROJ_OFFLOAD: bool = True
+```
 
-Bootstrap resolution function (called at module-load time, before Settings instantiation):
+#### 8P.2b -- llama_cpp.py Profile Mapping
+[MODIFY] `backend/app/services/llm/llama_cpp.py`:
+- Line 56: Read `self._engine_version = settings.LLAMA_ENGINE_VERSION` (replaces hardcoded `"b10936"`).
+- Lines 151–164: Rewrite `_get_profile_params(self, profile: str) -> Dict[str, Any]` to read from `settings.PROFILE_*_*` instead of inline RX 580 constants.
 
-  def resolve_data_root() -> Path:   # synchronous; called before async startup
-      if root := os.environ.get("COMPANION_DATA_ROOT"):
-          return Path(root)            # 1. explicit env override
-      localappdata = Path(os.environ.get("LOCALAPPDATA",
-                          str(Path.home() / "AppData" / "Local")))
-      bootstrap_path = localappdata / "AI Companion" / "bootstrap.json"
-      if bootstrap_path.exists():
-          try:
-              data = json.loads(bootstrap_path.read_text(encoding="utf-8"))
-              candidate = Path(data["data_root"])
-              if candidate.is_absolute():
-                  return candidate     # 2. bootstrap locator
-          except Exception:
-              logger.warning("Invalid bootstrap.json; using default data root")
-      return localappdata / "AI Companion" / "Data"  # 3. default
+**Batch 8P.2 Gate:** Focused tests for RED/GREEN (`backend/tests/test_llm_router.py`, `backend/tests/test_llm_router_lifecycle.py`); full backend suite before approval (>= 88 pytest passed).
 
-  COMPANION_DATA_ROOT: Path = Field(default_factory=resolve_data_root)
+---
 
-Bootstrap file invariants:
-  - Contains only schema_version (int) and data_root (str). No secrets, no user preferences.
-  - Always located at %LOCALAPPDATA%\AI Companion\bootstrap.json (fixed OS path).
-  - If data_root is unavailable/invalid: log warning; fall back to default. Do not crash.
+### 8P.3 -- Atomic Persistent Storage Foundation
 
-[MODIFY] backend/app/core/config.py -- add:
+> **Locked Review Decision 1:** Storage root resolution and legacy database migration MUST be atomic in one batch.
+> **Locked Review Decision 2:** Multiple differing legacy database candidates MUST NOT be auto-selected.
 
-  COMPANION_DATA_ROOT: Path = Field(default_factory=resolve_data_root)
+#### 8P.3a -- COMPANION_DATA_ROOT Bootstrap & Derived Paths in config.py
+Resolution order (synchronous, before Settings instantiation and engine creation):
+1. Explicit environment variable: `COMPANION_DATA_ROOT` (highest priority)
+2. Bootstrap locator file: `%LOCALAPPDATA%\AI Companion\bootstrap.json` (`{ "schema_version": 1, "data_root": "..." }`)
+3. Built-in default: `%LOCALAPPDATA%\AI Companion\Data`
 
-  @property DATABASE_DIR -> COMPANION_DATA_ROOT / "database"
-  @property DATABASE_PATH -> DATABASE_DIR / "companion.db"
-  # Remove hardcoded DATABASE_URL field; derive from: f"sqlite+aiosqlite:///{settings.DATABASE_PATH.as_posix()}"
+Derived absolute paths on `settings`:
+- `DATABASE_DIR` -> `COMPANION_DATA_ROOT / "database"`
+- `DATABASE_PATH` -> `DATABASE_DIR / "companion.db"`
+- `DATABASE_URL` derived property: `f"sqlite+aiosqlite:///{settings.DATABASE_PATH.as_posix()}"`
+- `LIBRARY_DIR` -> `COMPANION_DATA_ROOT / "library"`
+- `MODEL_LIBRARY_DIR` -> `LIBRARY_DIR / "models" / "llm"` (family-organized; NOT vulkan/ or cuda/)
+- `INSTALLED_REGISTRY_PATH` -> `LIBRARY_DIR / "registry" / "models.json"`
+- `VOICE_LIBRARY_DIR` -> `LIBRARY_DIR / "voices"`
+- `ATTACHMENT_DIR` -> `COMPANION_DATA_ROOT / "attachments"`
+- `IMPORT_INBOX_DIR` -> `COMPANION_DATA_ROOT / "imports" / "inbox"`
+- `IMPORT_STAGING_DIR` -> `COMPANION_DATA_ROOT / "imports" / "staging"`
+- `CHARACTER_DIR` -> `COMPANION_DATA_ROOT / "characters"`
+- `MEMORY_DIR` -> `COMPANION_DATA_ROOT / "memory"`
 
-  @property LIBRARY_DIR -> COMPANION_DATA_ROOT / "library"
-  @property MODEL_LIBRARY_DIR -> LIBRARY_DIR / "models" / "llm"    # NOT vulkan/ or cuda/
-  @property INSTALLED_REGISTRY_PATH -> LIBRARY_DIR / "registry" / "models.json"
-  @property VOICE_LIBRARY_DIR -> LIBRARY_DIR / "voices"
-  @property ATTACHMENT_DIR -> COMPANION_DATA_ROOT / "attachments"
-  @property IMPORT_INBOX_DIR -> COMPANION_DATA_ROOT / "imports" / "inbox"
-  @property IMPORT_STAGING_DIR -> COMPANION_DATA_ROOT / "imports" / "staging"
-  @property CHARACTER_DIR -> COMPANION_DATA_ROOT / "characters"
-  @property MEMORY_DIR -> COMPANION_DATA_ROOT / "memory"
+Deprecate: `DATA_DIR`, `MODELS_DIR`, `LLAMA_MODELS_DIR`, hardcoded `DATABASE_URL` string.
 
-Deprecate: DATA_DIR, MODELS_DIR, LLAMA_MODELS_DIR, hardcoded DATABASE_URL string.
+#### 8P.3b -- Engine Initialization & Startup Ordering
+- Synchronous migration check runs before any SQLAlchemy connection or query is initiated.
+- Application must never create or open a fresh canonical database before migration eligibility has been evaluated.
+- `backend/app/db/session.py`: Re-bind engine creation to use the derived canonical `settings.DATABASE_URL`.
 
-### 8P.2c -- Bootstrap Locator Tests
+#### 8P.3c -- First-Run Data Migration & Multi-Candidate Safety
+Known legacy candidate locations (checked in order):
+1. `backend/data/companion.db` (common dev working directory)
+2. `<repo-root>/data/companion.db` (repository root data directory)
 
-Tests:
+Migration Rules:
+- `COMPANION_DATA_ROOT/database/companion.db` already exists? -> Use canonical DB directly; zero migration needed.
+- Exactly one valid legacy candidate found? -> Safe copy to canonical path -> verify Alembic migration head (`005_scope_message_constraints`) matches -> create `.pre-migration-backup.db` alongside legacy file.
+- Multiple differing candidates found? -> **STOP migration immediately and raise RuntimeError reporting ambiguity with candidate paths.** Do not choose silently. Do not overwrite.
+- Neither candidate exists? -> Fresh install; canonical directory created lazily.
+
+#### 8P.3d -- Test Isolation & Unit Tests
+- Pytest test fixtures in `conftest.py` must isolate storage via temporary directories (`tmp_path`) or preserve in-memory SQLite (`:memory:`). Running tests must never pollute `%LOCALAPPDATA%\AI Companion\Data`.
+- [NEW] `backend/tests/test_bootstrap.py`:
   - Missing locator -> default path used
-  - Valid locator with valid absolute path -> locator path used
-  - Invalid/corrupt bootstrap.json -> warning logged; default used
-  - Unavailable path in bootstrap.json (drive not mounted) -> warning; default used
-  - Explicit COMPANION_DATA_ROOT env var -> env var takes precedence over locator and default
-  - DATABASE_URL uses the resolved canonical path (not a legacy or env DATABASE_URL override)
-  - SQLAlchemy engine: constructed after resolve_data_root() completes
+  - Valid locator with absolute path -> locator path used
+  - Invalid/corrupt JSON -> warning logged; default used
+  - Unavailable/unmounted drive path -> warning logged; default used
+  - Explicit `COMPANION_DATA_ROOT` env var -> overrides locator and default
+- [NEW] `backend/tests/test_migration_safety.py`:
+  - No legacy DB -> canonical path created fresh
+  - Single legacy DB -> copied, verified against Alembic head, backup created
+  - Multiple differing candidates -> `RuntimeError` raised with paths listed
+  - Restart-safe: existing canonical DB is never overwritten
 
-### 8P.3 -- Runtime Engine Configuration
+**Batch 8P.3 Gate:** Focused tests for RED/GREEN (`backend/tests/test_bootstrap.py`, `backend/tests/test_migration_safety.py`); full backend suite before approval (>= 88 pytest passed).
 
-[MODIFY] backend/app/core/config.py -- add:
+---
 
-  LLM_ENGINE: str = "llama_cpp"
-  LLM_ACCELERATION: str = "vulkan"
-  LLAMA_ENGINE_VERSION: str = "b10936"
-  LLAMA_SERVER_URL: str = "http://127.0.0.1:8085/v1"  # Verified port 8085
+### 8P.4 -- Model Registry Schema v3 & Temporary Serialization Bridge
 
-[MODIFY] llama_cpp.py L56:
-  self._engine_version: str = settings.LLAMA_ENGINE_VERSION
+> **Locked Review Decision 3:** Flat compatibility fields are TEMPORARY during backend transition.
 
-### 8P.4 -- Performance Profile Portability
+#### 8P.4a -- Enumerations & Sub-schemas
+[MODIFY] `backend/app/schemas/model_registry.py`:
+- Enums: `ModelAssetType` (gguf, mmproj, lora, embedding, tokenizer), `ModelVariant` (instruct, thinking, base, code, unknown), `InputModality` (text, image, audio, video), `ModelDiscoveryState` (discovered, registered, verified, incompatible), `ReasoningMode` (always_on, toggleable, unsupported, unknown), `CapabilityProvenance` (declared, detected, verified, unknown).
+- Update `ValidationStatus`: add `incompatible`.
+- Sub-schemas: `CompanionArtifactStatus`, `CapabilityEntry`, `GenerationDefaults`, `CompanionFile` (with optional `sha256`).
 
-[MODIFY] backend/app/core/config.py -- add:
+#### 8P.4b -- Three-Layer Model Schema Split
+- `ModelManifest`: Stable identity and artifact metadata (id, display_name, asset_type, family, architecture, variant, parameters, quantization, reasoning_mode, capabilities, input_modalities, model_max_context, runtime_compatibility: List[str] = [], primary_file, companion_files, chat_template, license, source, sha256_primary).
+- `ModelLibraryState`: Computed validation state (discovery_state, validation_status, primary_file_exists, size_gb, companion_artifact_statuses, available_capabilities, capability_provenance).
+- `ModelRuntimeHints`: Non-authoritative recommendations (recommended_profiles, estimated_vram_gb, estimated_ram_gb, generation_defaults).
+- `ModelRegistryEntry`: Composes `manifest`, `library_state`, `hints` + `runtime_model_id: str` + `registry_source: Literal["factory", "installed"]`.
 
-  # Verified for RX 580 / Vulkan (llama.cpp b10936). Override via env vars.
-  PROFILE_ECO_CTX: int = 2048
-  PROFILE_ECO_GPU_LAYERS: int = 0         # 0 = CPU-only for Eco
-  PROFILE_ECO_THREADS: int = 4
-  PROFILE_ECO_MMPROJ_OFFLOAD: bool = False
-  PROFILE_BALANCED_CTX: int = 4096
-  PROFILE_BALANCED_GPU_LAYERS: int = 28
-  PROFILE_BALANCED_THREADS: int = 6
-  PROFILE_BALANCED_MMPROJ_OFFLOAD: bool = True
-  PROFILE_MAXIMUM_CTX: int = 8192
-  PROFILE_MAXIMUM_GPU_LAYERS: int = 33
-  PROFILE_MAXIMUM_THREADS: int = 8
-  PROFILE_MAXIMUM_MMPROJ_OFFLOAD: bool = True
+#### 8P.4c -- Temporary Serialization Bridge
+- In Pydantic v2, Python `@property` does not serialize into JSON.
+- Add `@computed_field` properties on `ModelRegistryEntry` for existing flat fields (`context_limit`, `estimated_vram_gb`, `estimated_ram_gb`, `variant`, `capabilities`, `validation_status`, `primary_file_exists`, `companion_files_valid`, `size_gb`) so current frontend views and test suites continue functioning without disruption.
 
-[MODIFY] llama_cpp.py _get_profile_params():
-  def _get_profile_params(self, profile: str) -> dict:
-      p = profile.lower()
-      if p == "eco":
-          return {n_ctx: ECO_CTX, n_gpu_layers: ECO_GPU, n_threads: ECO_THREADS, mmproj_offload: False}
-      elif p == "maximum":
-          return {n_ctx: MAX_CTX, n_gpu_layers: MAX_GPU, n_threads: MAX_THREADS, mmproj_offload: True}
-      else:  # balanced
-          return {n_ctx: BAL_CTX, n_gpu_layers: BAL_GPU, n_threads: BAL_THREADS, mmproj_offload: True}
-  (reads from settings.PROFILE_*_* -- removes inline RX 580 constants)
+#### 8P.4d -- models/registry.template.json Schema v3
+- Update template to `_schema_version: "3"`.
+- Add `asset_type`, `architecture`, `input_modalities`, `model_max_context`, `reasoning_mode`, `runtime_compatibility` to all 5 verified Qwen3-VL entries.
+- Add canonical `_note` explaining factory defaults vs installed models and persistent paths.
 
-### 8P.5 -- Model Registry Schema (Final -- Schema v3 directly; no v2 intermediate)
+**Batch 8P.4 Gate:** Focused tests for RED/GREEN (`backend/tests/test_model_registry.py`); full backend suite before approval (>= 88 pytest passed).
 
-[MODIFY] backend/app/schemas/model_registry.py -- complete replacement
-  New enums: ModelAssetType, ModelVariant, InputModality, ModelDiscoveryState, ReasoningMode, CapabilityProvenance
-  ValidationStatus: add incompatible
-  New sub-schemas: CompanionFile (add optional sha256), CompanionArtifactStatus, CapabilityEntry, GenerationDefaults
-  ModelManifest / ModelLibraryState / ModelRuntimeHints / ModelRegistryEntry per design above
-  Use model_serializer or computed_field for backward-compat flat fields -- NOT @property
+---
 
-[MODIFY] backend/app/services/model_registry.py
-  _load_factory_registry(): always loaded from models/registry.template.json; root = FACTORY_MODEL_ROOT
-  _load_installed_registry(): loaded from INSTALLED_REGISTRY_PATH if present; root = MODEL_LIBRARY_DIR
-  _build_effective_registry(): merge factory + installed entries; installed same-ID entries shadow factory entries;
-    empty/missing installed registry never hides factory models; preserve registry_source tag per entry
-  FACTORY_MODEL_ROOT: Path = settings.BASE_DIR.parent / "models" (or env-overridable)
-  Path resolution per registry_source: factory -> FACTORY_MODEL_ROOT; installed -> MODEL_LIBRARY_DIR
-  _validate_entry(): populate ModelLibraryState
-    - missing mmproj: vision removed from available_capabilities; text usable; model NOT prohibited
-    - missing primary file: validation_status=missing_primary; model unavailable
-  Unregistered scanner: discovery_state=discovered, validation_status=unregistered
-    capabilities=[]  (NO auto-assignment)
-    input_modalities=[]  (NO default [text])
-    model_max_context=None  (NO default 4096)
-    runtime_compatibility=[]  (NO default [llama_cpp])
-    variant=ModelVariant.unknown
-  GGUF metadata extraction (best-effort, non-blocking): populate only fields that are reliably detected
-    (architecture, model_max_context, quantization, chat_template) -- never fabricate defaults
+### 8P.5 -- Effective Registry, Validation, GGUF Metadata & Capability Availability
 
-[MODIFY] models/registry.template.json -> schema v3; add asset_type, architecture, input_modalities,
-  model_max_context, reasoning_mode on all entries; update _note
+> **Locked Review Decision 4:** Bounded, zero-dependency, best-effort Python GGUF header reader.
 
-[MODIFY] frontend/web/src/services/api/registryApi.ts
-  Add ModelManifest, ModelLibraryState, ModelRuntimeHints interfaces
-  Update RegistryEntry; migrate context_limit -> model_max_context in all consumers
+#### 8P.5a -- Dual-Source Effective Registry Merging
+[MODIFY] `backend/app/services/model_registry.py`:
+- Factory models loaded from `models/registry.template.json`, paths resolve relative to `FACTORY_MODEL_ROOT` (`<repo-root>/models/`), tagged `registry_source="factory"`.
+- Installed models loaded from `INSTALLED_REGISTRY_PATH` (`COMPANION_DATA_ROOT/library/registry/models.json`), paths resolve relative to `MODEL_LIBRARY_DIR`, tagged `registry_source="installed"`.
+- Merging logic: Factory loaded always; installed shadows factory on same ID; empty or absent installed registry never hides factory models.
 
-[MODIFY] contracts/openapi/openapi.json -- update /api/v1/models/registry response schema
+#### 8P.5b -- Partial Companion Graceful Degradation
+- Missing `mmproj` artifact removes `vision` from `available_capabilities`.
+- Text chat capability remains usable; model is NOT prohibited from loading and is NOT marked incompatible.
+- Missing primary file marks `validation_status=missing_primary`; model is unavailable.
 
-### 8P.6 -- Canonical Documentation Updates
+#### 8P.5c -- Unregistered Scanner Rules
+- Discovered GGUF files not in registry:
+  - `capabilities = []` (zero auto-assigned chat capability)
+  - `input_modalities = []` (zero default to [text])
+  - `model_max_context = None` (zero default to 4096)
+  - `runtime_compatibility = []` (zero default to [llama_cpp])
+  - `variant = ModelVariant.unknown`
+  - `discovery_state = discovered`, `validation_status = unregistered`
 
-[MODIFY] AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md
-  - Local AI Core -> Local AI Runtime (canonical sections; preserve historical walkthrough wording)
-  - Test baseline: 88 pytest, 38 vitest, migration head 005_scope_message_constraints
-  - Phase 8 sequence (8A -> 8P -> 8B -> 8C) in delivery roadmap
-  - Cross-reference to AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md
-  - Model invariants: Qwen = verified defaults not whitelist; capability provenance rules
+#### 8P.5d -- Bounded Zero-Dependency GGUF Header Reader
+- Lightweight pure-Python binary parser using `struct` to inspect GGUF magic (`0x46554747`), version, and metadata key-value pairs.
+- Boundaries & Metadata Extraction Rules:
+  - Reads metadata/header only; NEVER loads tensor payloads into memory.
+  - Strict limits: max 256 KV pairs, max string length 1024 bytes, max array items 64.
+  - Read `general.architecture`.
+  - Derive context key dynamically as `<architecture>.context_length` (e.g. `f"{arch}.context_length"`).
+  - `general.quantization_version` is NOT the quantization scheme (it denotes GGUF format quantization version, not model quantization scheme); preserve `quantization_version` separately only if useful.
+  - Use `general.file_type` only when recognized to populate `quantization` (via standard GGUF file_type enum mapping); otherwise quantization remains unknown (`""`).
+  - Never infer quantization from arbitrary filename text.
+  - Never infer capabilities from arbitrary filename text.
+  - Malformed or unsupported header safely yields unknown/empty metadata; parser failure never makes an otherwise discoverable GGUF disappear.
 
-[MODIFY] LLAMA_CPP_RUNTIME_ARCHITECTURE.md
-  - Local AI Core -> Local AI Runtime
-  - Correct port 8080 -> 8085 throughout
-  - Eco profile: GPU layers = 0 (not 20 as in old table)
-  - Remove/label as planned/unverified: flash attention, KV cache quantization, batch/ubatch values
-    (these are not currently applied by _get_profile_params())
-  - Scope note: general config/storage/manifest rules defer to AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md
+**Batch 8P.5 Gate:** Focused tests for RED/GREEN (`backend/tests/test_model_registry.py` with schema v3 tests); full backend suite before approval (>= 88 pytest passed).
 
-[MODIFY] VOICE_AND_AUDIO_ARCHITECTURE.md
-  - Local AI Core -> Local AI Runtime
-  - Add note: voice/model asset locations defer to AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md section 6.2
+---
 
-[MODIFY] AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md
-  - Section 33: rename "Open Decisions" -> "Resolved Decisions"; record OD1/OD2/OD3 resolutions
-  - Note: per-library override is a future/deferred feature
+### 8P.6 -- Frontend Contract & OpenAPI Reconciliation
 
-[MODIFY] README.md
-  - Local AI Core -> Local AI Runtime
-  - Backend/database/local runtime: implemented (Phase 7 verified baseline); not "planned"
-  - Reflect 88 pytest / 38 vitest; Phase 8 = active delivery
+> **Locked Review Decision 3 Cleanup:** Migrate all repository consumers to structured fields; retire flat compatibility aliases.
 
-### 8P.7 -- First-Run Data Migration
+#### 8P.6a -- TypeScript Registry API Contract
+[MODIFY] `frontend/web/src/services/api/registryApi.ts`:
+- Define `ModelManifest`, `ModelLibraryState`, `ModelRuntimeHints` TypeScript interfaces matching backend schema v3.
+- Update `RegistryEntry` to compose these layers while supporting transitional properties.
+- Migrate consumers from `context_limit` to `model_max_context`.
 
-[MODIFY] backend/app/core/startup.py (or equivalent startup hook):
+#### 8P.6b -- ModelsView UI Structured Consumption
+[MODIFY] `frontend/web/src/components/workspace/ModelsView.tsx`:
+- Map model attributes from structured layers (`e.manifest.model_max_context ?? e.context_limit`, `e.hints.estimated_vram_gb`, `e.library_state.available_capabilities`).
+- Use `available_capabilities` for UI feature gating.
 
-Known legacy candidate locations (check both):
-  backend/data/companion.db          (most common: dev server working directory)
-  <repo-root>/data/companion.db      (alternative: repo root data/ dir)
+#### 8P.6c -- Frontend Test Fixture Updates
+- Update mock `RegistryEntry` objects in:
+  - `frontend/web/src/test/modelsStateReconciliation.test.tsx`
+  - `frontend/web/src/test/assistantViewReliability.test.tsx`
+  - `frontend/web/src/test/shellHomeTruthfulness.test.tsx`
 
-  async def ensure_data_root() -> None:
-      canonical = settings.DATABASE_PATH
-      if canonical.exists():
-          return
+#### 8P.6d -- Flat Compatibility Cleanup
+- Search repository-wide for remaining flat consumers of `ModelRegistryEntry`.
+- Once all internal consumers are verified on structured fields, remove deprecated `@computed_field` compatibility aliases from backend schema.
 
-      repo_root = Path(__file__).resolve().parents[3]       # adjust depth to actual layout
-      candidates = [
-          repo_root / "backend" / "data" / "companion.db",
-          repo_root / "data" / "companion.db",
-      ]
-      found = [c for c in candidates if c.exists()]
+#### 8P.6e -- OpenAPI Contract Regeneration & Full LLM Route Verification
+- Regenerate `contracts/openapi/openapi.json` directly from the actual FastAPI application (`app.openapi()`).
+- Do NOT hand-author only two endpoints.
+- Verify all existing model and LLM routes are represented in the generated contract:
+  - `GET /api/v1/models`
+  - `GET /api/v1/models/registry`
+  - `POST /api/v1/models/load`
+  - `POST /api/v1/models/unload`
+  - `PATCH /api/v1/models/profile`
+  - `POST /api/v1/chat/completions`
+- Carefully review the generated contract diff for unrelated drift before finalizing.
 
-      if len(found) == 0:
-          canonical.parent.mkdir(parents=True, exist_ok=True)   # fresh install
-      elif len(found) == 1:
-          legacy = found[0]
-          canonical.parent.mkdir(parents=True, exist_ok=True)
-          backup = legacy.with_suffix(".pre-migration-backup.db")
-          shutil.copy2(legacy, backup)
-          shutil.copy2(legacy, canonical)
-          _verify_migrated_db(canonical)                        # verify Alembic head matches
-          logger.info(f"Migrated legacy DB from {legacy} -> {canonical}")
-      else:
-          # Multiple candidates: STOP and report ambiguity; do not choose silently
-          raise RuntimeError(
-              f"Multiple legacy database candidates found: {found}. "
-              "Resolve manually before starting the server."
-          )
+**Batch 8P.6 Gate:** Focused tests for RED/GREEN (`frontend/web/src/test/modelsStateReconciliation.test.tsx`, `backend/tests/test_model_registry.py`); full backend suite before approval (>= 88 pytest passed); full frontend suite (>= 132 vitest passed), `npx tsc --noEmit` (0 errors), `npm run build` (clean production build).
 
-  _verify_migrated_db(): connect to canonical; run Alembic check to confirm migration head is correct
-    (current head: 005_scope_message_constraints; after 8B: 006_add_attachments).
-    Alembic DATABASE_URL must derive from settings.DATABASE_PATH -- not from env DATABASE_URL.
+---
 
-Tests:
-  - No legacy -> canonical created fresh
-  - Exactly one legacy -> copied, verified, backup preserved, restart-safe
-  - Multiple differing candidates -> RuntimeError raised with paths listed
-  - After migration: Alembic uses settings.DATABASE_PATH (canonical); not the legacy path
+### 8P Final Integration Verification Gate
 
-### 8P Verification Gate
-
-  grep -r "Local AI Core" frontend/web/src --include="*.tsx" --include="*.ts"  # expected: empty
-  grep -r "Local AI Core" backend/ --include="*.py"                             # expected: empty
-  python -c "from app.core.config import settings; print(settings.COMPANION_DATA_ROOT)"
-  pytest tests/ -v --tb=short   # >= 88 passed
-  npm run test                   # >= 38 passed (updated strings)
-  npx tsc --noEmit               # 0 errors
+Before Phase 8P is submitted for approval:
+1. `grep -r "Local AI Core" frontend/web/src --include="*.tsx" --include="*.ts"` -> empty
+2. `grep -r "Local AI Core" backend/ --include="*.py"` -> empty
+3. `python -c "from app.core.config import settings; print(settings.COMPANION_DATA_ROOT)"` -> displays canonical root
+4. `pytest backend/tests/ -v --tb=short` -> >= 88 passed + all new bootstrap, migration, and schema v3 tests passed
+5. `npm run test -- --run` -> >= 132 passed
+6. `npx tsc --noEmit` -> 0 errors
+7. `npm run build` -> clean production build
 
 ### 8P Commit Message
 
-feat(8p): runtime config -- COMPANION_DATA_ROOT, bootstrap, merged registry, terminology, schema v3
+```text
+feat(8p): runtime config -- atomic storage root, schema v3, merged registry, terminology
 
-BOOTSTRAP: resolve_data_root() (env > bootstrap.json > default) runs before Settings/DATABASE_URL/SQLAlchemy engine;
-bootstrap.json at %LOCALAPPDATA%\AI Companion\bootstrap.json; schema_version + data_root only.
+TERMINOLOGY: Reconcile "Local AI Core" -> "Local AI Runtime" across backend and frontend;
+update error and status assertions in assistantViewReliability and shellHomeTruthfulness tests;
+separate GGUF format, llama.cpp engine, and Vulkan acceleration in ModelsView.
 
-TERMINOLOGY: "Local AI Core" -> "Local AI Runtime" (19 frontend + backend); test assertions updated;
-GGUF/Vulkan label fixed; LLAMA_CPP doc port corrected (8085) + profile table corrected;
-AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md section 33 -> Resolved Decisions;
-README.md implementation status corrected.
+CONFIG & PROFILES: Declare LLM_ENGINE, LLM_ACCELERATION, LLAMA_ENGINE_VERSION in config.py;
+move RX 580 profile constants to env-overridable PROFILE_*_* settings; llama_cpp reads from settings.
 
-CONFIG: COMPANION_DATA_ROOT; DATABASE_PATH derived; LLAMA_SERVER_URL port 8085;
-PROFILE_*_* env-overridable (RX 580 defaults preserved); _get_profile_params() reads settings.
+STORAGE: Atomic persistent storage foundation; resolve_data_root() (env > bootstrap.json > default);
+derive all 11 canonical paths; enforce synchronous migration check before engine creation;
+safe first-run migration with Alembic head check (005_scope_message_constraints);
+stop on multi-candidate ambiguity; strict test isolation.
 
-REGISTRY: merged factory+installed; installed shadows factory on same id; empty installed does not hide factory;
-registry_source field preserved per entry; path resolution per source root.
+REGISTRY & SCHEMA v3: Three-layer ModelManifest, ModelLibraryState, ModelRuntimeHints split;
+new enums and subschemas; dual-source effective registry (factory + installed);
+graceful vision degradation on missing mmproj; zero fabricated defaults on unregistered GGUFs;
+bounded zero-dependency Python GGUF header reader; models/registry.template.json schema v3.
 
-SCHEMA v3: ModelManifest + ModelLibraryState + ModelRuntimeHints; new enums; unknown GGUFs capabilities=[];
-runtime_compatibility=[] for unknowns; partial mmproj handling; model_serializer for backward-compat;
-registryApi.ts updated; openapi.json updated.
+CONTRACTS: Reconcile registryApi.ts interfaces; ModelsView consumes structured layers;
+update frontend test fixtures; regenerate openapi.json from FastAPI app and verify all model/LLM routes.
 
-MIGRATION: first-run conditional; multi-candidate detection; backup preserved; restart-safe; no LFS changes.
-
-Tests: >= 88 pytest + migration/bootstrap tests, >= 38 vitest, 0 tsc.
+Tests: >= 88 backend pytest + bootstrap/migration/schema tests, >= 132 vitest, 0 tsc.
+```
 
 
 ---
@@ -813,7 +806,7 @@ Tests: >= 88 pytest + migration/bootstrap tests, >= 38 vitest, 0 tsc.
 
 Branch: feature/multimodal-image-attachments (based on merged 8P)
 Test gate: migration 006 applies cleanly; >= 88 + attachment tests; 0 tsc; clean build.
-Dependency: settings.ATTACHMENT_DIR (from 8P.2) must exist.
+Dependency: settings.ATTACHMENT_DIR (from 8P.3) must exist.
 
 ### Attachment Lifecycle
 
