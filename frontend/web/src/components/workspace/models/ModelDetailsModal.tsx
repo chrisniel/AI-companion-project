@@ -125,9 +125,11 @@ export const ModelDetailsModal: React.FC<ModelDetailsModalProps> = ({
             <div className="flex flex-wrap gap-2 text-[10px] text-[var(--color-text-muted)] font-mono">
               <span>License: {model.license || 'Unavailable'}</span>
               <span>•</span>
+              <span>Format: {model.tensorType || 'Unavailable'}</span>
+              <span>•</span>
               <span>Engine: {model.engine || 'Unavailable'}</span>
               <span>•</span>
-              <span>Format: {model.tensorType || 'Unavailable'}</span>
+              <span>Acceleration: {isCloud ? 'Cloud Managed' : 'Vulkan [Configured]'}</span>
             </div>
           </div>
         </div>

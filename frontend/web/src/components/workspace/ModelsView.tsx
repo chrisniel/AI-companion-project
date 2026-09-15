@@ -142,6 +142,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
         filePath: e.primary_file,
         description: `${e.variant} · ${e.capabilities.join(', ')} · ${e.license}`,
         license: e.license,
+        tensorType: 'GGUF',
         variant: e.variant,
         capabilities: e.capabilities,
         validationStatus: e.validation_status,
@@ -311,7 +312,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
         <div className="flex items-center gap-2 self-start md:self-center">
           <div className="px-3 py-1.5 rounded-xl surface-recessed border border-[var(--color-border-subtle)] flex items-center gap-2 text-xs font-mono text-[var(--color-text-secondary)]">
             <span className={`w-2 h-2 rounded-full ${headerRuntime.dotClass}`} />
-            <span>Local AI Core:</span>
+            <span>Local AI Runtime:</span>
             <span className="font-semibold text-[var(--color-text-primary)]">
               {headerRuntime.label}
             </span>

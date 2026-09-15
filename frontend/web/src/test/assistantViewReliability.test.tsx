@@ -542,7 +542,7 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
 
       // Must NOT falsely tell user to ensure model is loaded
       expect(
-        screen.queryByText(/Ensure Local AI Core is running and model is loaded/i)
+        screen.queryByText(/Ensure Local AI Runtime is running and model is loaded/i)
       ).not.toBeInTheDocument();
     });
 
@@ -609,7 +609,7 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText(/Local AI Core is offline\. Ensure Local AI Core is running on :8000\. \[CORE_OFFLINE: Failed to fetch\]/i)
+          screen.getByText(/Local AI Runtime is offline\. Ensure Local AI Runtime is running on :8000\. \[CORE_OFFLINE: Failed to fetch\]/i)
         ).toBeInTheDocument();
       });
     });
@@ -662,7 +662,7 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
         const res = classifyStreamError(new TypeError('Failed to fetch'), false, null);
         expect(res.code).toBe('CORE_OFFLINE');
         expect(res.visibleMessage).toContain('[CORE_OFFLINE: Failed to fetch]');
-        expect(res.visibleMessage).toContain('Ensure Local AI Core is running on :8000');
+        expect(res.visibleMessage).toContain('Ensure Local AI Runtime is running on :8000');
       });
 
       it('classifies MODEL_NOT_LOADED when model is unloaded', () => {

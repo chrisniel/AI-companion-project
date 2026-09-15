@@ -218,7 +218,7 @@ export const Header: React.FC<HeaderProps> = ({
           {!sidebarCollapsed && (
             <div className="flex flex-col truncate">
               <span className="font-bold text-xs tracking-tight text-[var(--color-text-primary)] truncate">
-                Local AI Core
+                Local AI Runtime
               </span>
               <span className="text-[10px] font-medium text-[var(--color-text-secondary)] truncate">
                 Desktop Control Center
@@ -301,7 +301,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right Tools & User */}
         <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
-          {/* Local AI Core & VRAM Status Badges */}
+          {/* Local AI Runtime & VRAM Status Badges */}
           <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-xl surface-recessed border border-[var(--color-border-subtle)] text-[11px] font-mono">
             <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
             <span className="text-[var(--color-text-secondary)] font-medium">Core :8000</span>

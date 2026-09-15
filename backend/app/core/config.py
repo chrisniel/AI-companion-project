@@ -23,7 +23,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Server Info
+    # Server Info — "Local AI Runtime" is the canonical backend name (supersedes legacy "Local AI Core")
     PROJECT_NAME: str = "Local AI Runtime"
     VERSION: str = "0.1.0"
     ENVIRONMENT: str = "development"

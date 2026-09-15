@@ -83,7 +83,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div className="space-y-2 max-w-xl">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant={isOnline ? 'accent' : 'glass'} size="sm">
-                {isOnline ? 'Local AI Core Online' : 'Local AI Core Offline'}
+                {isOnline ? 'Local AI Runtime Online' : 'Local AI Runtime Offline'}
               </Badge>
               <span className="text-xs text-[var(--color-text-secondary)] font-mono">
                 {currentDateString}
@@ -96,11 +96,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed">
               {!isOnline ? (
                 <span>
-                  <strong className="text-[var(--color-text-primary)]">{activeCharacterName}</strong> is standing by. Local AI Core runtime is currently offline.
+                  <strong className="text-[var(--color-text-primary)]">{activeCharacterName}</strong> is standing by. Local AI Runtime is currently offline.
                 </span>
               ) : !backendActiveModelId ? (
                 <span>
-                  <strong className="text-[var(--color-text-primary)]">{activeCharacterName}</strong> is connected. No model is currently loaded in Local AI Core.
+                  <strong className="text-[var(--color-text-primary)]">{activeCharacterName}</strong> is connected. No model is currently loaded in Local AI Runtime.
                 </span>
               ) : (
                 <span>

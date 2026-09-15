@@ -2,7 +2,7 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: Phase 8P plan reconciled — awaiting Batch 8P.1 implementation approval
+- Status: Phase 8P.1 completed — awaiting review
 - Current Sprint: Phase 8 — PC Frontend Architecture, Runtime Config, Multimodal & Polish
 - Branches: `feature/phase8-ui-foundation` → `feature/phase8-runtime-config` → `feature/multimodal-image-attachments` → `feature/phase8-ui-integration-polish`
 - Target: Mock removal, view decomposition, COMPANION_DATA_ROOT, terminology reconciliation, model schema split, image attachments, 100+ pytest / 132+ vitest
@@ -18,12 +18,13 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — PHASE 8P PLAN RECONCILED: AWAITING BATCH 8P.1 IMPLEMENTATION APPROVAL]
+## [CURRENT EXECUTION STATE — PHASE 8P.1 COMPLETED — AWAITING CHATGPT/USER REVIEW]
 
-- Status: Phase 8P plan reconciled — awaiting Batch 8P.1 implementation approval.
-- Completed: Phase 8P pre-implementation reconciliation audit and plan alignment (locked storage atomicity, multi-candidate stop, temporary flat compatibility bridge, bounded zero-dependency GGUF reader, full-suite verification floors: 88 pytest / 132 vitest).
-- Baseline: 88 backend pytest, 132 frontend vitest, 0 tsc errors, migration head 005_scope_message_constraints (verified on branch).
-- Scope Guard: Documentation-only. Zero production code changes. Zero deletions. ProjectWorkflowStarterKit untouched.
+- Status: Phase 8P.1 Terminology & Test Alignment implemented and verified; awaiting approval to begin Batch 8P.2.
+- Completed: Batch 8P.1 terminology reconciliation ("Local AI Core" -> "Local AI Runtime" across backend and frontend), ModelsView Format/Engine/Acceleration clarification, test assertion alignment.
+- Verified: 88 backend pytest passed, 132 frontend vitest passed, 0 tsc errors, clean production build (`npm run build`).
+- Baseline: 88 backend pytest, 132 frontend vitest, 0 tsc errors, migration head 005_scope_message_constraints.
+- Scope Guard: Batch 8P.1 scope strictly honored. Zero migrations. Zero database changes. Zero 8P.2 changes.
 - Active Plan: `docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md`
 
 ---
@@ -47,10 +48,10 @@ Branch: `feature/phase8-ui-foundation`
 Branch: `feature/phase8-runtime-config` (based on merged 8A)
 
 **8P.1 — Terminology & Test Alignment**
-- [ ] 8P.1a: Backend — grep/fix remaining "Local AI Core" in backend/app/__init__.py, retention.py, mock.py, auth.py, .env.example; add reconciliation comment in config.py; update backend/tests/test_llm.py string assertion
-- [ ] 8P.1b: Frontend — rename "Local AI Core" → "Local AI Runtime" across decomposed locations (AssistantErrorDisplay.tsx, Header.tsx, HomeView.tsx, AssistantPanel.tsx, ModelsView.tsx, ModelProvidersCard.tsx, ApplicationStatesShowcase.tsx, HealthPipelineCard.tsx, mock/healthData.ts)
-- [ ] 8P.1c: Frontend tests — update assistantViewReliability.test.tsx AND shellHomeTruthfulness.test.tsx error/status string assertions
-- [ ] 8P.1d: ModelsView — fix GGUF/Vulkan label conflation; separate GGUF (format), llama.cpp (engine), Vulkan (acceleration) fields
+- [x] 8P.1a: Backend — grep/fix remaining "Local AI Core" in backend/app/__init__.py, retention.py, mock.py, auth.py, .env.example; add reconciliation comment in config.py; update backend/tests/test_llm.py string assertion
+- [x] 8P.1b: Frontend — rename "Local AI Core" → "Local AI Runtime" across decomposed locations (AssistantErrorDisplay.tsx, Header.tsx, HomeView.tsx, AssistantPanel.tsx, ModelsView.tsx, ModelProvidersCard.tsx, ApplicationStatesShowcase.tsx, HealthPipelineCard.tsx, mock/healthData.ts)
+- [x] 8P.1c: Frontend tests — update assistantViewReliability.test.tsx AND shellHomeTruthfulness.test.tsx error/status string assertions
+- [x] 8P.1d: ModelsView — fix GGUF/Vulkan label conflation; separate GGUF (format), llama.cpp (engine), Vulkan (acceleration) fields
 
 **8P.2 — Runtime Engine Configuration & Performance Profiles**
 - [ ] 8P.2a: config.py — LLM_ENGINE, LLM_ACCELERATION, LLAMA_ENGINE_VERSION declarative fields; PROFILE_*_* env-overridable constants (RX 580 defaults preserved)

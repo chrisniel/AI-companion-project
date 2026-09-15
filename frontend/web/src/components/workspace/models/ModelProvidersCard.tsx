@@ -31,7 +31,7 @@ export const ModelProvidersCard: React.FC<ModelProvidersCardProps> = ({
             </Badge>
           </div>
           <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
-            Local AI Core orchestrates modular backends without hardcoding to a single runtime.
+            Local AI Runtime orchestrates modular backends without hardcoding to a single runtime.
           </p>
         </div>
 
@@ -160,7 +160,7 @@ export const ModelProvidersCard: React.FC<ModelProvidersCardProps> = ({
                   </span>
                 </div>
                 <span className="px-1.5 py-0.5 rounded surface-recessed font-mono">
-                  {isLocal ? 'Local Core' : 'Cloud API'}
+                  {isLocal ? 'Local Runtime' : 'Cloud API'}
                 </span>
               </div>
             </div>

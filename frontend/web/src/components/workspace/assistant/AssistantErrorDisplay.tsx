@@ -38,11 +38,11 @@ export function classifyStreamError(
     };
   }
 
-  // 2. Core Offline
+  // 2. Runtime Offline
   if (!isOnline) {
     return {
       code: 'CORE_OFFLINE',
-      visibleMessage: `Local AI Core is offline. Ensure Local AI Core is running on :8000. [CORE_OFFLINE: ${errMessage}]`,
+      visibleMessage: `Local AI Runtime is offline. Ensure Local AI Runtime is running on :8000. [CORE_OFFLINE: ${errMessage}]`,
     };
   }
 

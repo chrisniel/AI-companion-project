@@ -22,5 +22,5 @@ async def verify_credentials() -> AuthVerifyResponse:
     return AuthVerifyResponse(
         authenticated=True,
         token_type="Bearer",
-        message="Token successfully verified against Local AI Core.",
+        message="Token successfully verified against Local AI Runtime.",
     )

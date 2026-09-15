@@ -120,7 +120,7 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({
             </div>
 
             <p className="text-xs text-[var(--color-text-muted)] italic mb-3">
-              Conversational reasoning and tool orchestration via Local AI Core.
+              Conversational reasoning and tool orchestration via Local AI Runtime.
             </p>
 
             {onOpenAssistant && (

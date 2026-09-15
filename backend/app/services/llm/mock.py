@@ -107,7 +107,7 @@ class MockLLMProvider(BaseLLMProvider):
     ) -> str:
         self._last_active_at = datetime.now(timezone.utc)
         last_user_msg = next((m.content for m in reversed(messages) if m.role == "user"), "Hello!")
-        return f"[Mock AI Companion]: I received your message: '{last_user_msg}'. Local AI Core is operational."
+        return f"[Mock AI Companion]: I received your message: '{last_user_msg}'. Local AI Runtime is operational."
 
     async def generate_stream(
         self,
@@ -118,7 +118,7 @@ class MockLLMProvider(BaseLLMProvider):
     ) -> AsyncGenerator[str, None]:
         self._last_active_at = datetime.now(timezone.utc)
         last_user_msg = next((m.content for m in reversed(messages) if m.role == "user"), "Hello!")
-        response_text = f"I received your message: '{last_user_msg}'. Local AI Core is operational."
+        response_text = f"I received your message: '{last_user_msg}'. Local AI Runtime is operational."
         tokens = response_text.split(" ")
 
         for i, token in enumerate(tokens):

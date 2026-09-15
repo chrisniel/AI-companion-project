@@ -134,7 +134,7 @@ export const HealthPipelineCard: React.FC<HealthPipelineCardProps> = ({
         </div>
       </div>
 
-      {/* The 4-Stage Ingestion Pipeline Flow: FitCloudPro → Health Connect → Mobile App → Local AI Core */}
+      {/* The 4-Stage Ingestion Pipeline Flow: FitCloudPro → Health Connect → Mobile App → Local AI Runtime */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 relative">
         {pipelineStages.map((stage, idx) => {
           const getStageIcon = () => {

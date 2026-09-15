@@ -129,7 +129,7 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
     });
 
     // Home badge must show offline
-    expect(screen.getByText('Local AI Core Offline')).toBeInTheDocument();
+    expect(screen.getByText('Local AI Runtime Offline')).toBeInTheDocument();
 
     // Must NOT contain "Active & Nominal"
     expect(screen.queryByText(/Active & Nominal/i)).not.toBeInTheDocument();
@@ -173,8 +173,8 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
       expect(noModelTexts.length).toBeGreaterThanOrEqual(1);
     });
 
-    expect(screen.getByText('Local AI Core Online')).toBeInTheDocument();
-    expect(screen.getByText(/No model is currently loaded in Local AI Core/i)).toBeInTheDocument();
+    expect(screen.getByText('Local AI Runtime Online')).toBeInTheDocument();
+    expect(screen.getByText(/No model is currently loaded in Local AI Runtime/i)).toBeInTheDocument();
   });
 
   // 3. Backend active model
@@ -235,7 +235,7 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Local AI Core Online')).toBeInTheDocument();
+      expect(screen.getByText('Local AI Runtime Online')).toBeInTheDocument();
     });
 
     // None of these fabricated metrics must exist:
@@ -426,7 +426,7 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
 
     renderWithProviders(<HomeView onNavigate={() => {}} />);
     await waitFor(() => {
-      expect(screen.getByText('Local AI Core Online')).toBeInTheDocument();
+      expect(screen.getByText('Local AI Runtime Online')).toBeInTheDocument();
     });
 
     expect(screen.getAllByText('Unavailable').length).toBeGreaterThanOrEqual(1);
