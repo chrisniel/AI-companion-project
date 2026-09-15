@@ -49,7 +49,11 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///./data/companion.db"
     DATA_RETENTION_DAYS: int = 30
 
-    # Native Runtime Engines & Local LLM (Track B4 & Sections 11-14)
+    # Native Runtime Engines & Local LLM (Track B4, Sections 11-14, Phase 8P.2)
+    LLM_ENGINE: str = "llama_cpp"
+    LLM_ACCELERATION: str = "vulkan"
+    LLAMA_ENGINE_VERSION: str = "b10936"
+
     BASE_DIR: Path = BASE_DIR
     RUNTIME_DIR: Path = BASE_DIR.parent / "runtime"
     LLAMA_CPP_BIN_DIR: Path = RUNTIME_DIR / "llama.cpp"
@@ -60,8 +64,26 @@ class Settings(BaseSettings):
     LLM_PROVIDER: str = "auto"  # "auto" | "llama_cpp" | "mock"
     LLM_PROFILE: str = "balanced"  # "eco" | "balanced" | "maximum"
     LLM_IDLE_TIMEOUT_SECONDS: int = 900  # 15 minutes auto-unload
-    LLM_GPU_LAYERS: int = 28  # default GPU layers offload for RX 580
     LLAMA_SERVER_URL: str = "http://127.0.0.1:8085/v1"
+
+    # Hardware Performance Profiles (Batch 8P.2 — env-overridable)
+    PROFILE_ECO_CTX: int = 2048
+    PROFILE_ECO_GPU_LAYERS: int = 0
+    PROFILE_ECO_THREADS: int = 4
+    PROFILE_ECO_MMPROJ_OFFLOAD: bool = False
+
+    PROFILE_BALANCED_CTX: int = 4096
+    PROFILE_BALANCED_GPU_LAYERS: int = 28
+    PROFILE_BALANCED_THREADS: int = 6
+    PROFILE_BALANCED_MMPROJ_OFFLOAD: bool = True
+
+    PROFILE_MAXIMUM_CTX: int = 8192
+    PROFILE_MAXIMUM_GPU_LAYERS: int = 33
+    PROFILE_MAXIMUM_THREADS: int = 8
+    PROFILE_MAXIMUM_MMPROJ_OFFLOAD: bool = True
+
+    # Retained backward-compatibility alias for balanced GPU offload (mock / legacy consumers)
+    LLM_GPU_LAYERS: int = 28
 
     # LLM Router launch (LLAMA_CPP_RUNTIME_ARCHITECTURE.md §3)
     LLAMA_ROUTER_HOST: str = "127.0.0.1"  # localhost only — never 0.0.0.0

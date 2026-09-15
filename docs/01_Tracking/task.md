@@ -2,7 +2,7 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: Phase 8P.1 completed — awaiting review
+- Status: Phase 8P.2 completed — awaiting review
 - Current Sprint: Phase 8 — PC Frontend Architecture, Runtime Config, Multimodal & Polish
 - Branches: `feature/phase8-ui-foundation` → `feature/phase8-runtime-config` → `feature/multimodal-image-attachments` → `feature/phase8-ui-integration-polish`
 - Target: Mock removal, view decomposition, COMPANION_DATA_ROOT, terminology reconciliation, model schema split, image attachments, 100+ pytest / 132+ vitest
@@ -18,13 +18,13 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — PHASE 8P.1 COMPLETED — AWAITING CHATGPT/USER REVIEW]
+## [CURRENT EXECUTION STATE — PHASE 8P.2 COMPLETED — AWAITING CHATGPT/USER REVIEW]
 
-- Status: Phase 8P.1 Terminology & Test Alignment implemented and verified; awaiting approval to begin Batch 8P.2.
-- Completed: Batch 8P.1 terminology reconciliation ("Local AI Core" -> "Local AI Runtime" across backend and frontend), ModelsView Format/Engine/Acceleration clarification, test assertion alignment.
-- Verified: 88 backend pytest passed, 132 frontend vitest passed, 0 tsc errors, clean production build (`npm run build`).
-- Baseline: 88 backend pytest, 132 frontend vitest, 0 tsc errors, migration head 005_scope_message_constraints.
-- Scope Guard: Batch 8P.1 scope strictly honored. Zero migrations. Zero database changes. Zero 8P.2 changes.
+- Status: Phase 8P.2 Runtime Engine Configuration & Performance Profiles implemented and verified; awaiting approval to begin Batch 8P.3.
+- Completed: Batch 8P.2 runtime engine settings (LLM_ENGINE, LLM_ACCELERATION, LLAMA_ENGINE_VERSION) and hardware performance profiles (PROFILE_*_CTX, PROFILE_*_GPU_LAYERS, PROFILE_*_THREADS, PROFILE_*_MMPROJ_OFFLOAD) implemented in config.py, wired into llama_cpp.py, and covered by 6 focused regression tests.
+- Verified: 94 backend pytest passed, 132 frontend vitest passed, 0 tsc errors.
+- Baseline: 94 backend pytest, 132 frontend vitest, 0 tsc errors, migration head 005_scope_message_constraints.
+- Scope Guard: Batch 8P.2 scope strictly honored. Zero migrations. Zero database changes. Zero 8P.3 changes. No Whisper/voice changes.
 - Active Plan: `docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md`
 
 ---
@@ -54,8 +54,8 @@ Branch: `feature/phase8-runtime-config` (based on merged 8A)
 - [x] 8P.1d: ModelsView — fix GGUF/Vulkan label conflation; separate GGUF (format), llama.cpp (engine), Vulkan (acceleration) fields
 
 **8P.2 — Runtime Engine Configuration & Performance Profiles**
-- [ ] 8P.2a: config.py — LLM_ENGINE, LLM_ACCELERATION, LLAMA_ENGINE_VERSION declarative fields; PROFILE_*_* env-overridable constants (RX 580 defaults preserved)
-- [ ] 8P.2b: llama_cpp.py — _engine_version reads settings.LLAMA_ENGINE_VERSION; _get_profile_params() reads settings.PROFILE_*_*; remove inline RX 580 constants
+- [x] 8P.2a: config.py — LLM_ENGINE, LLM_ACCELERATION, LLAMA_ENGINE_VERSION declarative fields; PROFILE_*_* env-overridable constants (RX 580 defaults preserved)
+- [x] 8P.2b: llama_cpp.py — _engine_version reads settings.LLAMA_ENGINE_VERSION; _get_profile_params() reads settings.PROFILE_*_*; remove inline RX 580 constants
 
 **8P.3 — Atomic Persistent Storage Foundation**
 - [ ] 8P.3a: config.py — resolve_data_root() (env COMPANION_DATA_ROOT > bootstrap.json data_root > default %LOCALAPPDATA%\AI Companion\Data); derive all 11 canonical paths (DATABASE_DIR, DATABASE_PATH, LIBRARY_DIR, MODEL_LIBRARY_DIR, INSTALLED_REGISTRY_PATH, VOICE_LIBRARY_DIR, ATTACHMENT_DIR, IMPORT_INBOX_DIR, IMPORT_STAGING_DIR, CHARACTER_DIR, MEMORY_DIR); deprecate DATA_DIR, MODELS_DIR, LLAMA_MODELS_DIR; remove hardcoded DATABASE_URL
