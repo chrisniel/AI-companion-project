@@ -462,7 +462,7 @@ describe('Phase 4: Models Web UI State Reconciliation & Truthfulness', () => {
     expect(api.loadModel).toHaveBeenCalledWith('qwen3-vl-4b-instruct', undefined);
   });
 
-  it('11. When Core is offline, Header selector shows Core Offline and Profile indicates Requested only', async () => {
+  it('11. When Runtime is offline, Header selector shows Runtime Offline and Profile indicates Requested only', async () => {
     vi.mocked(api.checkHealth).mockRejectedValue(new Error('Network error'));
 
     render(
@@ -482,9 +482,9 @@ describe('Phase 4: Models Web UI State Reconciliation & Truthfulness', () => {
     );
 
     await waitFor(() => {
-      // Model button should display Core Offline
-      expect(screen.getByText('Core Offline')).toBeDefined();
-      // Profile indicator must indicate Unavailable when Core is offline
+      // Model button should display Runtime Offline
+      expect(screen.getByText('Runtime Offline')).toBeDefined();
+      // Profile indicator must indicate Unavailable when Runtime is offline
       expect(screen.getAllByText('Unavailable').length).toBeGreaterThanOrEqual(1);
     });
 

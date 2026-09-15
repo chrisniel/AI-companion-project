@@ -204,7 +204,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <div className="grid grid-cols-2 gap-2.5 text-xs font-mono">
               <div className="p-3 rounded-2xl surface-recessed border border-[var(--color-border-subtle)]">
                 <span className="text-[10px] text-[var(--color-text-muted)] uppercase block">
-                  Core Status
+                  Runtime Status
                 </span>
                 <span className="font-bold text-[var(--color-text-primary)] mt-0.5 block">
                   {isOnline ? 'Online (Port 8000)' : 'Offline'}
@@ -250,14 +250,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   {isOnline ? (
                     <>
                       <ShieldCheck className="w-3.5 h-3.5" />
-                      <span>Core Runtime (:8000)</span>
+                      <span>Local Runtime (:8000)</span>
                     </>
                   ) : (
                     <span className="text-[var(--color-text-muted)]">Offline</span>
                   )}
                 </span>
                 <span className="text-[10px] text-[var(--color-text-secondary)]">
-                  {isOnline ? 'Operating on port 8000' : 'Core offline'}
+                  {isOnline ? 'Operating on port 8000' : 'Runtime offline'}
                 </span>
               </div>
             </div>

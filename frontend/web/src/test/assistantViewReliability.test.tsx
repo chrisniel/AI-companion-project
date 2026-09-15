@@ -536,7 +536,7 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText(/Connection to the Assistant stream failed\. Core and model status remain available\. \[STREAM_CONNECTION_FAILED: Failed to fetch\]/i)
+          screen.getByText(/Connection to the Assistant stream failed\. Runtime and model status remain available\. \[STREAM_CONNECTION_FAILED: Failed to fetch\]/i)
         ).toBeInTheDocument();
       });
 
@@ -689,7 +689,7 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
         const res = classifyStreamError(new TypeError('Failed to fetch'), true, readyStatus);
         expect(res.code).toBe('STREAM_CONNECTION_FAILED');
         expect(res.visibleMessage).toContain('[STREAM_CONNECTION_FAILED: Failed to fetch]');
-        expect(res.visibleMessage).toContain('Connection to the Assistant stream failed. Core and model status remain available.');
+        expect(res.visibleMessage).toContain('Connection to the Assistant stream failed. Runtime and model status remain available.');
       });
 
       it('classifies STREAM_TERMINATED on premature stream EOF', () => {

@@ -97,7 +97,7 @@ export function classifyStreamError(
     };
   }
 
-  // 7. Transport / Stream Connection failure while Core and Model are ready
+  // 7. Transport / Stream Connection failure while Runtime and Model are ready
   const isTransportError =
     errMessage.toLowerCase().includes('failed to fetch') ||
     errMessage.toLowerCase().includes('networkerror') ||
@@ -108,7 +108,7 @@ export function classifyStreamError(
   if (modelStatus?.model_loaded && isTransportError) {
     return {
       code: 'STREAM_CONNECTION_FAILED',
-      visibleMessage: `Connection to the Assistant stream failed. Core and model status remain available. [STREAM_CONNECTION_FAILED: ${errMessage}]`,
+      visibleMessage: `Connection to the Assistant stream failed. Runtime and model status remain available. [STREAM_CONNECTION_FAILED: ${errMessage}]`,
     };
   }
 

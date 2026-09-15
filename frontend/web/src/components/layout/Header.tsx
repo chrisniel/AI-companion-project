@@ -81,7 +81,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   let activeModelLabel = 'Router Offline';
   if (!isOnline) {
-    activeModelLabel = 'Core Offline';
+    activeModelLabel = 'Runtime Offline';
   } else if (modelStatus?.runtime_state === 'SERVER_STOPPED') {
     activeModelLabel = 'Router Offline';
   } else if (modelStatus?.runtime_state === 'MODEL_LOADING' || isModelLoading) {
@@ -265,7 +265,7 @@ export const Header: React.FC<HeaderProps> = ({
                 className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-xl surface-raised border border-[var(--color-border-subtle)] hover:border-[var(--color-accent)]/40 transition-all text-xs text-[var(--color-text-primary)]"
                 title={
                   !isOnline || !modelStatus
-                    ? 'Profile: Unavailable (Core Offline)'
+                    ? 'Profile: Unavailable (Runtime Offline)'
                     : appliedProfile
                     ? `Profile: ${appliedProfile} [Applied]`
                     : requestedProfile
@@ -304,7 +304,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Local AI Runtime & VRAM Status Badges */}
           <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-xl surface-recessed border border-[var(--color-border-subtle)] text-[11px] font-mono">
             <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
-            <span className="text-[var(--color-text-secondary)] font-medium">Core :8000</span>
+            <span className="text-[var(--color-text-secondary)] font-medium">Runtime :8000</span>
             <span className={isOnline ? 'text-emerald-500 font-semibold' : 'text-rose-400'}>
               {isOnline ? 'Online' : 'Offline'}
             </span>

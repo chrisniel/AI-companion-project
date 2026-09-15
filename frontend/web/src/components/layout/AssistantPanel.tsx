@@ -74,7 +74,7 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({
                 Assistant Panel
               </h3>
               <p className="text-[10px] text-[var(--color-text-muted)] truncate font-mono">
-                {isOnline ? 'Core Online' : 'Core Offline'} • UI: {assistantState}
+                {isOnline ? 'Runtime Online' : 'Runtime Offline'} • UI: {assistantState}
               </p>
             </div>
           </div>
@@ -149,7 +149,7 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({
 
             <div className="space-y-1.5 text-xs font-mono">
               <div className="flex justify-between items-center text-[11px]">
-                <span className="text-[var(--color-text-muted)]">Core Status:</span>
+                <span className="text-[var(--color-text-muted)]">Runtime Status:</span>
                 <span className={isOnline ? 'text-emerald-500 font-semibold' : 'text-rose-400 font-semibold'}>
                   {isOnline ? 'Online (Port 8000)' : 'Offline'}
                 </span>
@@ -220,7 +220,7 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({
               <Bot className="w-5 h-5" />
             </button>
 
-            {/* Core Status Indicator */}
+            {/* Runtime Status Indicator */}
             <div
               className="w-8 h-8 rounded-lg surface-raised border border-[var(--color-border-subtle)] flex items-center justify-center cursor-pointer"
               onClick={() => onSetMode('expanded')}

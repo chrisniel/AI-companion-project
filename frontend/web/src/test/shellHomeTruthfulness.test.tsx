@@ -123,9 +123,9 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
       </>
     );
 
-    // Header model dropdown label must be Core Offline
+    // Header model dropdown label must be Runtime Offline
     await waitFor(() => {
-      expect(screen.getByText('Core Offline')).toBeInTheDocument();
+      expect(screen.getByText('Runtime Offline')).toBeInTheDocument();
     });
 
     // Home badge must show offline
@@ -364,8 +364,8 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
     expect(screen.getByText(/Wearable synchronization not configured/i)).toBeInTheDocument();
   });
 
-  // 9. AssistantStatusBar: no simulated Airgapped/Web mode toggle, no "Core Offline (Demo)", no "Low-Latency Loopback"
-  it('AssistantStatusBar has no simulated Airgapped/Web mode toggle, no "Core Offline (Demo)", and no "Low-Latency Loopback"', () => {
+  // 9. AssistantStatusBar: no simulated Airgapped/Web mode toggle, no "Runtime Offline (Demo)", no "Low-Latency Loopback"
+  it('AssistantStatusBar has no simulated Airgapped/Web mode toggle, no "Runtime Offline (Demo)", and no "Low-Latency Loopback"', () => {
     render(
       <AssistantStatusBar
         conversationTitle="Test Chat"
@@ -385,8 +385,9 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
     expect(screen.queryByText(/Web Simulated/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/simulated web search/i)).not.toBeInTheDocument();
 
-    // Truthful Core Offline label without (Demo)
-    expect(screen.getByText('Core Offline')).toBeInTheDocument();
+    // Truthful Runtime Offline label without (Demo)
+    expect(screen.getAllByText('Runtime Offline').length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText(/Runtime Offline \(Demo\)/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Core Offline \(Demo\)/i)).not.toBeInTheDocument();
 
     // No Low-Latency Loopback claim

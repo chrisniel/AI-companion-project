@@ -78,10 +78,10 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
   // Assistant State Status Label (authoritative runtime truth from client/SSE state)
   const getAssistantStateDisplay = () => {
     if (!isOnline) {
-      return { label: 'Offline', color: 'text-[var(--color-text-muted)]', desc: 'Core server offline' };
+      return { label: 'Offline', color: 'text-[var(--color-text-muted)]', desc: 'Runtime server offline' };
     }
     if (isRouterOffline) {
-      return { label: 'Router Stopped', color: 'text-amber-500', desc: 'Core online, llama.cpp router not running' };
+      return { label: 'Router Stopped', color: 'text-amber-500', desc: 'Runtime online, llama.cpp router not running' };
     }
     if (isTransitioning) {
       return { label: 'Restarting / Loading', color: 'text-amber-500 animate-pulse', desc: 'Applying runtime changes' };
@@ -211,7 +211,7 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
             ) : (
               <>
                 <AlertCircle className="w-3.5 h-3.5 text-[var(--color-text-muted)]" />
-                <span className="text-[var(--color-text-muted)]">Core Offline</span>
+                <span className="text-[var(--color-text-muted)]">Runtime Offline</span>
               </>
             )}
           </div>
@@ -320,7 +320,7 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
             </>
           ) : (
             <span className="px-2 py-0.5 rounded-lg surface-recessed border border-[var(--color-border-subtle)] text-[var(--color-text-muted)]">
-              Unavailable (Core Offline)
+              Unavailable (Runtime Offline)
             </span>
           )}
         </div>
