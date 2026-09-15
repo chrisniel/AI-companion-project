@@ -19,7 +19,7 @@ from app.core.errors import (
     format_error_response,
 )
 from app.core.logging import logger, setup_logging
-from app.db.session import engine
+from app.db.session import dispose_database_runtime, initialize_database_runtime
 
 REQUEST_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 
@@ -124,8 +124,28 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     setup_logging(debug=settings.DEBUG)
     logger.info("Initializing Local AI Runtime...")
 
-    # Ensure data directory and pairing key exist
-    settings.DATA_DIR.mkdir(parents=True, exist_ok=True)
+    # Step 1: Storage preflight & safe migration (Batch 8P.3)
+    from app.core.storage import assess_migration_preflight, execute_migration
+
+    legacy_candidates = [
+        settings.BASE_DIR / "data" / "companion.db",           # backend/data/companion.db
+        settings.BASE_DIR.parent / "data" / "companion.db",    # data/companion.db
+    ]
+    preflight_decision = assess_migration_preflight(
+        canonical_db_path=settings.DATABASE_PATH,
+        legacy_candidates=legacy_candidates,
+    )
+    execute_migration(
+        decision=preflight_decision,
+        canonical_db_path=settings.DATABASE_PATH,
+        backup_dir=settings.BACKUP_DIR,
+    )
+
+    # Step 2: Ensure database directory exists and initialize runtime engine
+    settings.DATABASE_DIR.mkdir(parents=True, exist_ok=True)
+    initialize_database_runtime(database_url=settings.DATABASE_URL, debug=settings.DEBUG)
+
+    # Step 3: Ensure pairing key exists
     settings.ensure_pairing_token()
     logger.info("==================================================================")
     logger.info(f"Local AI Runtime Ready on http://{settings.HOST}:{settings.PORT}")
@@ -143,7 +163,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await llm_manager.get_provider().shutdown()
     except Exception as exc:
         logger.warning(f"Error during LLM provider shutdown: {exc}")
-    await engine.dispose()
+    await dispose_database_runtime()
 
 
 def create_app() -> FastAPI:

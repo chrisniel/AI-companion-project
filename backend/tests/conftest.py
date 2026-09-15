@@ -26,6 +26,19 @@ def anyio_backend():
 
 
 @pytest.fixture(autouse=True)
+def isolate_test_environment(tmp_path_factory, monkeypatch):
+    """Ensure all tests run with isolated temporary storage roots.
+
+    Guarantees no test touches the real %LOCALAPPDATA%\\AI Companion or real databases.
+    """
+    temp_local_app_data = tmp_path_factory.mktemp("mock_localappdata")
+    temp_companion_data = tmp_path_factory.mktemp("mock_companion_data")
+    monkeypatch.setenv("LOCALAPPDATA", str(temp_local_app_data))
+    monkeypatch.setenv("COMPANION_DATA_ROOT", str(temp_companion_data))
+    yield temp_companion_data
+
+
+@pytest.fixture(autouse=True)
 def default_mock_llm_provider():
     """Ensure all tests run deterministically against MockLLMProvider unless explicitly overridden."""
     mock = MockLLMProvider()

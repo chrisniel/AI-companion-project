@@ -2,7 +2,7 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: Phase 8P.2 completed — awaiting review
+- Status: Phase 8P.3 completed — awaiting review
 - Current Sprint: Phase 8 — PC Frontend Architecture, Runtime Config, Multimodal & Polish
 - Branches: `feature/phase8-ui-foundation` → `feature/phase8-runtime-config` → `feature/multimodal-image-attachments` → `feature/phase8-ui-integration-polish`
 - Target: Mock removal, view decomposition, COMPANION_DATA_ROOT, terminology reconciliation, model schema split, image attachments, 100+ pytest / 132+ vitest
@@ -18,13 +18,13 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — PHASE 8P.2 COMPLETED — AWAITING CHATGPT/USER REVIEW]
+## [CURRENT EXECUTION STATE — PHASE 8P.3 IMPLEMENTATION COMPLETE — AWAITING CHATGPT/USER REVIEW]
 
-- Status: Phase 8P.2 Runtime Engine Configuration & Performance Profiles implemented and verified; awaiting approval to begin Batch 8P.3.
-- Completed: Batch 8P.2 runtime engine settings (LLM_ENGINE, LLM_ACCELERATION, LLAMA_ENGINE_VERSION) and hardware performance profiles (PROFILE_*_CTX, PROFILE_*_GPU_LAYERS, PROFILE_*_THREADS, PROFILE_*_MMPROJ_OFFLOAD) implemented in config.py, wired into llama_cpp.py, and covered by 6 focused regression tests.
-- Verified: 94 backend pytest passed, 132 frontend vitest passed, 0 tsc errors.
-- Baseline: 94 backend pytest, 132 frontend vitest, 0 tsc errors, migration head 005_scope_message_constraints.
-- Scope Guard: Batch 8P.2 scope strictly honored. Zero migrations. Zero database changes. Zero 8P.3 changes. No Whisper/voice changes.
+- Status: Phase 8P.3 Atomic Persistent Storage Foundation implemented and verified; awaiting ChatGPT/user review.
+- Completed: Dedicated storage module `backend/app/core/storage.py` (resolve_data_root, bootstrap handler, get_canonical_paths, read-only legacy candidate inspection, preflight ambiguity safety, atomic copy/verification migration); config.py canonical paths & factory roots; session.py explicit runtime lifecycle (initialize_database_runtime, dispose_database_runtime, get_db guard, WAL/foreign keys/pragmas); main.py lifespan preflight & migration integration; test isolation fixture in conftest.py ensuring zero %LOCALAPPDATA% pollution; backend/.env.example updated; 24 new focused unit/integration tests added.
+- Verified: 118 backend pytest passed (94 baseline + 24 new storage/migration tests), 132 frontend vitest passed, 0 tsc errors.
+- Baseline: 118 backend pytest, 132 frontend vitest, 0 tsc errors, migration head 005_scope_message_constraints.
+- Scope Guard: Batch 8P.3 scope strictly honored. Zero real user databases migrated or reset. Zero %LOCALAPPDATA% directories created on host machine. Zero factory models moved. Batch 8P.4 not started.
 - Active Plan: `docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md`
 
 ---
@@ -58,10 +58,10 @@ Branch: `feature/phase8-runtime-config` (based on merged 8A)
 - [x] 8P.2b: llama_cpp.py — _engine_version reads settings.LLAMA_ENGINE_VERSION; _get_profile_params() reads settings.PROFILE_*_*; remove inline RX 580 constants
 
 **8P.3 — Atomic Persistent Storage Foundation**
-- [ ] 8P.3a: config.py — resolve_data_root() (env COMPANION_DATA_ROOT > bootstrap.json data_root > default %LOCALAPPDATA%\AI Companion\Data); derive all 11 canonical paths (DATABASE_DIR, DATABASE_PATH, LIBRARY_DIR, MODEL_LIBRARY_DIR, INSTALLED_REGISTRY_PATH, VOICE_LIBRARY_DIR, ATTACHMENT_DIR, IMPORT_INBOX_DIR, IMPORT_STAGING_DIR, CHARACTER_DIR, MEMORY_DIR); deprecate DATA_DIR, MODELS_DIR, LLAMA_MODELS_DIR; remove hardcoded DATABASE_URL
-- [ ] 8P.3b: session.py / startup hook — atomic migration & engine ordering: ensure_data_root() evaluates legacy candidates before SQLAlchemy engine binds or creates a fresh database
-- [ ] 8P.3c: Multi-candidate legacy safety — check backend/data/companion.db and <repo-root>/data/companion.db; exactly one -> safe copy, verify Alembic head (005_scope_message_constraints), create backup; multiple differing -> STOP with RuntimeError and report ambiguity; none -> fresh install
-- [ ] 8P.3d: Test isolation & bootstrap tests — test_bootstrap.py (locator resolution, corruption fallback, unmounted path, env precedence) + test_migration_safety.py (fresh, single legacy, multi-candidate ambiguity stop, test isolation without %LOCALAPPDATA% pollution)
+- [x] 8P.3a: config.py & storage.py — resolve_data_root() (env COMPANION_DATA_ROOT > bootstrap.json data_root > default %LOCALAPPDATA%\AI Companion\Data); derive all 11 canonical paths (DATABASE_DIR, DATABASE_PATH, LIBRARY_DIR, MODEL_LIBRARY_DIR, INSTALLED_REGISTRY_PATH, VOICE_LIBRARY_DIR, ATTACHMENT_DIR, IMPORT_INBOX_DIR, IMPORT_STAGING_DIR, CHARACTER_DIR, MEMORY_DIR, BACKUP_DIR); deprecate independent DATA_DIR and DATABASE_URL; retain FACTORY_MODEL_ROOT and compatibility aliases
+- [x] 8P.3b: session.py / startup hook — atomic migration & engine ordering: preflight evaluates legacy candidates before SQLAlchemy engine binds or creates a fresh database; explicit initialize_database_runtime() and dispose_database_runtime() lifecycle
+- [x] 8P.3c: Multi-candidate legacy safety — check backend/data/companion.db and <repo-root>/data/companion.db; exactly one -> safe copy, verify Alembic head (005_scope_message_constraints), create backup; multiple differing -> STOP with MigrationAmbiguityError and report ambiguity; none -> fresh install; multiple byte-identical -> safe equivalence handling
+- [x] 8P.3d: Test isolation & bootstrap tests — test_bootstrap.py (locator resolution, corruption fallback, unmounted path, env precedence) + test_migration_safety.py (fresh, single legacy, multi-candidate ambiguity stop, restart safety, stale temp safety) + test_storage_engine_lifecycle.py (canonical paths, lazy directory creation, SQLite PRAGMAs) + conftest.py test isolation without %LOCALAPPDATA% pollution
 
 **8P.4 — Model Registry Schema v3 & Temporary Serialization Bridge**
 - [ ] 8P.4a: schemas/model_registry.py — new enums (ModelAssetType, ModelVariant, InputModality, ModelDiscoveryState, ReasoningMode, CapabilityProvenance) + sub-schemas (CompanionArtifactStatus, CapabilityEntry, GenerationDefaults, CompanionFile extended)
