@@ -166,3 +166,17 @@ def test_absolute_bootstrap_data_root_accepted(monkeypatch, tmp_path):
 
     resolved = resolve_data_root(bootstrap_path=bootstrap_file)
     assert resolved == abs_path
+
+
+def test_write_bootstrap_rejects_relative_data_root(tmp_path):
+    """write_bootstrap must reject relative data_root with StorageError and not create the file."""
+    from app.core.storage import StorageError
+    bootstrap_target = tmp_path / "bootstrap.json"
+
+    with pytest.raises(StorageError) as exc_info:
+        write_bootstrap(
+            data_root=Path("./relative-root"),
+            bootstrap_path=bootstrap_target,
+        )
+    assert "absolute" in str(exc_info.value).lower()
+    assert not bootstrap_target.exists()

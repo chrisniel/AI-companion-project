@@ -199,6 +199,12 @@ def write_bootstrap(
       "data_root": "..."
     }
     """
+    if not data_root.is_absolute():
+        raise StorageError(
+            f"Bootstrap data_root must be an absolute path, got relative path: '{data_root}'. "
+            "Relative custom roots are rejected to ensure path invariants."
+        )
+
     b_path = bootstrap_path if bootstrap_path is not None else get_bootstrap_path()
     b_path.parent.mkdir(parents=True, exist_ok=True)
 

@@ -25,8 +25,8 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
   1. SQLite WAL-safe migration: native `sqlite3.Connection.backup()` captures uncheckpointed committed WAL transactions; ambiguity check fails closed if any candidate has an active `-wal` file.
   2. Schema lifecycle helper: `prepare_database_schema()` brings canonical DB to Alembic head in a worker thread before normal app DB runtime initializes; legacy sources are never modified.
   3. Canonical DB validation: fails closed with `CorruptCanonicalDatabaseError` on 0-byte or corrupt canonical DBs.
-  4. Absolute data root invariant: strictly requires and validates absolute paths for `COMPANION_DATA_ROOT` and `bootstrap.json` `data_root`, rejecting relative paths with `StorageError`.
-- Verified: 129 backend pytest passed (zero failures), 132 frontend vitest passed, 0 tsc errors.
+  4. Absolute data root invariant: strictly requires and validates absolute paths for `COMPANION_DATA_ROOT`, `bootstrap.json` `data_root`, and `write_bootstrap()`, rejecting relative paths with `StorageError`.
+- Verified: 130 backend pytest passed (zero failures), 132 frontend vitest passed, 0 tsc errors.
 - Scope Guard: Zero real user databases migrated or reset. Zero %LOCALAPPDATA% directories created on host machine. Zero factory models moved. Batch 8P.4 not started. User draft `docs/00_Drafts/09-16-2026-roadmap.md` untouched.
 - Active Plan: `docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md`
 
