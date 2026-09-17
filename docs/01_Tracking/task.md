@@ -2,7 +2,7 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: Phase 8P.4 COMPLETE / VERIFIED — Phase 8P.5 next
+- Status: Phase 8P.5 COMPLETE / VERIFIED — Phase 8P.6 next
 - Current Sprint: Phase 8 — PC Frontend Architecture, Runtime Config, Multimodal & Polish
 - Branches: `feature/phase8-ui-foundation` → `feature/phase8-runtime-config` → `feature/multimodal-image-attachments` → `feature/phase8-ui-integration-polish`
 - Target: Mock removal, view decomposition, COMPANION_DATA_ROOT, terminology reconciliation, model schema split, image attachments, 100+ pytest / 132+ vitest
@@ -18,21 +18,19 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — PHASE 8P.4 MODEL REGISTRY SCHEMA V3 & SERIALIZATION BRIDGE COMPLETE]
+## [CURRENT EXECUTION STATE — PHASE 8P.5 EFFECTIVE MODEL REGISTRY & GGUF METADATA COMPLETE]
 
-- Status: Phase 8P.4 is COMPLETE / VERIFIED. Phase 8P.5 (Effective Registry, Validation, GGUF Metadata & Capability Availability) is NOT STARTED.
+- Status: Phase 8P.5 is COMPLETE / VERIFIED. Phase 8P.6 (Frontend Contract & OpenAPI Reconciliation) is NOT STARTED.
 - Verification Completed:
-  1. Enumerations: Added `ModelAssetType` (gguf, mmproj, lora, embedding, tokenizer), `ModelVariant` (instruct, thinking, base, code, unknown), `InputModality` (text, image, audio, video), `ModelDiscoveryState` (discovered, registered, verified, incompatible), `ReasoningMode` (always_on, toggleable, unsupported, unknown), `CapabilityProvenance` (declared, detected, verified, unknown); updated `ValidationStatus` to include `incompatible`.
-  2. Sub-schemas: `CompanionArtifactStatus`, `CapabilityEntry`, `GenerationDefaults`; extended `CompanionFile` with optional `sha256: Optional[str] = None` preserving backward compatibility.
-  3. Structured Models: Implemented `ModelManifest` (stable identity and artifact metadata; safe list factories; `model_max_context` distinct from runtime context size; `runtime_compatibility`), `ModelLibraryState` (computed local state), and `ModelRuntimeHints` (non-authoritative recommendations).
-  4. Composition: Redefined `ModelRegistryEntry` composing `manifest`, `library_state`, `hints`, `runtime_model_id`, and `registry_source` (defaulting to `"factory"` during transition).
-  5. Flat Serialization Bridge: Implemented `@computed_field` properties with setters for all 19 flat fields (`id`, `display_name`, `family`, `variant`, `primary_file`, `companion_files`, `quantization`, `parameters`, `context_limit`, `capabilities`, `recommended_profiles`, `estimated_vram_gb`, `estimated_ram_gb`, `license`, `source`, `validation_status`, `primary_file_exists`, `companion_files_valid`, `size_gb`) plus `@model_validator(mode="before")` mapping flat dictionaries into structured sub-models while strictly forbidding unrecognized extra fields (`extra="forbid"`).
-  6. Minimal Service Compatibility: Adapted `backend/app/services/model_registry.py` only enough to populate and query structured sub-models, preserving all existing scanning, filtering, mmproj-prefix exclusion, size threshold, and sorting behaviors; zero Phase 8P.5 logic introduced.
-  7. Registry Template Schema v3: Upgraded `models/registry.template.json` to `_schema_version: "3"`, added canonical explanation note on factory template vs persistent `COMPANION_DATA_ROOT`, and updated all 5 Qwen3-VL entries with `asset_type: "gguf"`, `architecture: "qwen3vl"`, `input_modalities: ["text", "image"]`, `model_max_context: 32768`, `runtime_compatibility: ["llama.cpp"]`, and `reasoning_mode` (`"unsupported"` for instruct, `"always_on"` for thinking).
-  8. Test Suite Verification: 15 model registry tests passing (100%), 138 backend pytest passing (0 failures), 138 frontend vitest passing (7 suites, 0 failures), 0 TypeScript errors (`tsc --noEmit`).
+  1. Dual-Source Effective Registry: Implemented `_build_effective_registry()` merging factory registry (`models/registry.template.json`, root `models/`) and installed registry (`COMPANION_DATA_ROOT/library/registry/models.json`, root `COMPANION_DATA_ROOT/library/models/`). Installed models shadow factory models on matching ID; new IDs are appended; empty or missing installed registry preserves factory models; malformed installed files and entries fail safely without dropping factory models; legacy `models/registry.json` is safely ignored.
+  2. Source-Aware Asset Resolution & Traversal Guard: Assets resolve strictly relative to their respective root (`FACTORY_MODEL_ROOT` vs `MODEL_LIBRARY_DIR`). Implemented `_resolve_asset_path()` ensuring asset paths are relative and confined within their root, rejecting absolute paths or traversal attempts (`..`).
+  3. Truthful Validation & Graceful Degradation: Missing primary file marks model unavailable (`validation_status = "missing_primary"`, `available_capabilities = []`). Missing declared companion file (e.g. `mmproj`) truthfully marks `validation_status = "missing_companion"`, strips vision from `available_capabilities` while preserving text/chat capabilities, keeps `manifest.capabilities` unchanged, and does not prohibit text loading.
+  4. Truthful Unregistered Scanner: Completely removed fabricated defaults from discovered GGUFs (`variant = ModelVariant.unknown`, `capabilities = []`, `input_modalities = []`, `model_max_context = None`, `runtime_compatibility = []`, `reasoning_mode = ReasoningMode.unknown`, `discovery_state = ModelDiscoveryState.discovered`, `validation_status = ValidationStatus.unregistered`, `size_gb` measured). No capabilities are ever inferred from filenames.
+  5. Bounded Zero-Dependency GGUF Parser: Implemented pure Python stdlib `read_gguf_metadata()` using `struct` with strict defensive bounds (max 256 KVs, max 1024 bytes per string, max 64 array items, safe type dispatch). Reads `general.architecture`, extracts dynamic context length (`<architecture>.context_length`), conservatively maps recognized `general.file_type` to quantization string while isolating `general.quantization_version`, and never seeks into tensor payload. Malformed GGUFs fail safely to unknown metadata while remaining discoverable.
+  6. Test Suite Verification: 38 model registry tests passing (100%), 161 backend pytest passing (0 failures), 138 frontend vitest passing (7 suites, 0 failures), 0 TypeScript errors (`tsc --noEmit`).
 - Deferred QA Finding (Recorded for Phase 8C):
-  - Responsive Web Layout & Pagination Hardening recorded under Phase 8C; NOT implemented in Phase 8P.4.
-- Next Batch: Phase 8P.5 — Effective Registry, Validation, GGUF Metadata & Capability Availability (NOT STARTED).
+  - Responsive Web Layout & Pagination Hardening recorded under Phase 8C; NOT implemented in Phase 8P.5.
+- Next Batch: Phase 8P.6 — Frontend Contract & OpenAPI Reconciliation (NOT STARTED).
 - Active Plan: `docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md`
 
 ---
@@ -78,10 +76,10 @@ Branch: `feature/phase8-runtime-config` (based on merged 8A)
 - [x] 8P.4d: models/registry.template.json — upgrade to schema v3; asset_type, architecture, input_modalities, model_max_context, reasoning_mode on all entries; clarifying _note
 
 **8P.5 — Effective Registry, Validation, GGUF Metadata & Capability Availability**
-- [ ] 8P.5a: model_registry.py — _build_effective_registry(): load factory (models/registry.template.json relative to FACTORY_MODEL_ROOT); load installed (INSTALLED_REGISTRY_PATH relative to MODEL_LIBRARY_DIR) if present; installed entry shadows factory on same id; empty installed never hides factory; registry_source tag per entry
-- [ ] 8P.5b: model_registry.py — _validate_entry(): missing mmproj -> vision removed from available_capabilities; text usable; model NOT prohibited from loading; missing primary -> unavailable
-- [ ] 8P.5c: model_registry.py — unregistered scanner: capabilities=[], input_modalities=[], model_max_context=None, runtime_compatibility=[], variant=unknown (NO fabricated defaults)
-- [ ] 8P.5d: model_registry.py — bounded, zero-dependency, best-effort Python GGUF header reader (metadata only; read general.architecture, derive context key dynamically as <architecture>.context_length; general.quantization_version is NOT quantization scheme; use general.file_type only when recognized to populate quantization, else unknown; never infer quantization or capabilities from arbitrary filename text; bounded KV/string counts; never loads tensors; safe error fallback)
+- [x] 8P.5a: model_registry.py — _build_effective_registry(): load factory (models/registry.template.json relative to FACTORY_MODEL_ROOT); load installed (INSTALLED_REGISTRY_PATH relative to MODEL_LIBRARY_DIR) if present; installed entry shadows factory on same id; empty installed never hides factory; registry_source tag per entry
+- [x] 8P.5b: model_registry.py — _validate_entry(): missing mmproj -> vision removed from available_capabilities; text usable; model NOT prohibited from loading; missing primary -> unavailable
+- [x] 8P.5c: model_registry.py — unregistered scanner: capabilities=[], input_modalities=[], model_max_context=None, runtime_compatibility=[], variant=unknown (NO fabricated defaults)
+- [x] 8P.5d: model_registry.py — bounded, zero-dependency, best-effort Python GGUF header reader (metadata only; read general.architecture, derive context key dynamically as <architecture>.context_length; general.quantization_version is NOT quantization scheme; use general.file_type only when recognized to populate quantization, else unknown; never infer quantization or capabilities from arbitrary filename text; bounded KV/string counts; never loads tensors; safe error fallback)
 
 **8P.6 — Frontend Contract & OpenAPI Reconciliation**
 - [ ] 8P.6a: registryApi.ts — ModelManifest, ModelLibraryState, ModelRuntimeHints TypeScript interfaces; RegistryEntry updated; migrate consumers to model_max_context

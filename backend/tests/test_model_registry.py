@@ -1,6 +1,7 @@
 """Tests for model registry service — Master Plan §16.2."""
 import json
 import importlib
+from typing import Any, Dict, List, Optional, Tuple
 import pytest
 from unittest.mock import patch
 
@@ -406,3 +407,695 @@ def test_registry_template_v3_structure_and_parsing():
         assert entry.manifest.model_max_context == 32768
         assert entry.context_limit == 32768
         assert entry.variant in (ModelVariant.instruct.value, ModelVariant.thinking.value)
+
+
+# ==============================================================================
+# Phase 8P.5 Effective Registry, Validation, Degradation & GGUF Parser Tests
+# ==============================================================================
+
+def make_synthetic_gguf(
+    arch: Optional[str] = None,
+    context_length: Optional[int] = None,
+    file_type: Optional[int] = None,
+    quantization_version: Optional[int] = None,
+    magic: bytes = b"GGUF",
+    version: int = 3,
+    tensor_count: int = 0,
+    extra_kvs: Optional[dict] = None,
+    raw_payload_at_end: bytes = b"",
+    override_kv_count: Optional[int] = None,
+) -> bytes:
+    """Build a minimal synthetic GGUF binary header for unit testing."""
+    import struct
+    buf = bytearray()
+    buf.extend(magic)
+    buf.extend(struct.pack("<I", version))
+    buf.extend(struct.pack("<Q", tensor_count))
+
+    kvs = []
+    if arch is not None:
+        kvs.append(("general.architecture", 8, arch))
+    if context_length is not None and arch:
+        kvs.append((f"{arch}.context_length", 4, context_length))
+    if file_type is not None:
+        kvs.append(("general.file_type", 4, file_type))
+    if quantization_version is not None:
+        kvs.append(("general.quantization_version", 4, quantization_version))
+    if extra_kvs:
+        for k, (t, v) in extra_kvs.items():
+            kvs.append((k, t, v))
+
+    kv_count = len(kvs) if override_kv_count is None else override_kv_count
+    buf.extend(struct.pack("<Q", kv_count))
+
+    for k, vtype, val in kvs:
+        k_bytes = k.encode("utf-8")
+        buf.extend(struct.pack("<Q", len(k_bytes)))
+        buf.extend(k_bytes)
+        buf.extend(struct.pack("<I", vtype))
+        if vtype == 4:  # UINT32
+            buf.extend(struct.pack("<I", val))
+        elif vtype == 8:  # STRING
+            val_bytes = val.encode("utf-8") if isinstance(val, str) else val
+            buf.extend(struct.pack("<Q", len(val_bytes)))
+            buf.extend(val_bytes)
+        elif vtype == 9:  # ARRAY
+            elem_type, items = val
+            buf.extend(struct.pack("<I", elem_type))
+            buf.extend(struct.pack("<Q", len(items)))
+            for item in items:
+                if elem_type == 4:
+                    buf.extend(struct.pack("<I", item))
+                elif elem_type == 8:
+                    item_bytes = item.encode("utf-8") if isinstance(item, str) else item
+                    buf.extend(struct.pack("<Q", len(item_bytes)))
+                    buf.extend(item_bytes)
+
+    if raw_payload_at_end:
+        buf.extend(raw_payload_at_end)
+
+    return bytes(buf)
+
+
+def test_gguf_parser_valid_metadata(tmp_path):
+    """Verify GGUF parser extracts architecture, dynamic context_length, quantization, and format version."""
+    from app.services.model_registry import read_gguf_metadata
+    gguf_bytes = make_synthetic_gguf(
+        arch="qwen3vl",
+        context_length=32768,
+        file_type=15,  # Q4_K_M
+        quantization_version=2,
+    )
+    test_file = tmp_path / "valid.gguf"
+    test_file.write_bytes(gguf_bytes)
+
+    meta = read_gguf_metadata(test_file)
+    assert meta.architecture == "qwen3vl"
+    assert meta.context_length == 32768
+    assert meta.quantization == "Q4_K_M"
+    assert meta.quantization_version == 2
+    # Ensure quantization_version is NOT used as the quantization scheme
+    assert meta.quantization != "2"
+
+
+def test_gguf_parser_rejects_bad_magic(tmp_path):
+    """Verify GGUF parser safely rejects invalid magic bytes."""
+    from app.services.model_registry import read_gguf_metadata
+    bad_file = tmp_path / "bad_magic.gguf"
+    bad_file.write_bytes(b"NOTGGUF_HEADER_DATA")
+    meta = read_gguf_metadata(bad_file)
+    assert meta.architecture == ""
+    assert meta.context_length is None
+    assert meta.quantization == ""
+
+
+def test_gguf_parser_handles_truncated_file(tmp_path):
+    """Verify GGUF parser safely handles truncated files without crashing."""
+    from app.services.model_registry import read_gguf_metadata
+    full = make_synthetic_gguf(arch="llama", context_length=8192)
+    trunc_file = tmp_path / "truncated.gguf"
+    trunc_file.write_bytes(full[:14])  # Truncate mid-header
+    meta = read_gguf_metadata(trunc_file)
+    assert meta.architecture == ""
+    assert meta.context_length is None
+
+
+def test_gguf_parser_bounds_excessive_kv_count(tmp_path):
+    """Verify GGUF parser stops safely when metadata_kv_count exceeds 256."""
+    from app.services.model_registry import read_gguf_metadata
+    huge_kv_bytes = make_synthetic_gguf(arch="test", override_kv_count=300)
+    test_file = tmp_path / "huge_kv.gguf"
+    test_file.write_bytes(huge_kv_bytes)
+    meta = read_gguf_metadata(test_file)
+    assert meta.architecture == ""
+
+
+def test_gguf_parser_bounds_excessive_string_length(tmp_path):
+    """Verify GGUF parser stops safely when string length exceeds 1024."""
+    from app.services.model_registry import read_gguf_metadata
+    import struct
+    buf = bytearray(b"GGUF")
+    buf.extend(struct.pack("<I", 3))  # version
+    buf.extend(struct.pack("<Q", 0))  # tensor_count
+    buf.extend(struct.pack("<Q", 1))  # kv_count = 1
+    buf.extend(struct.pack("<Q", 2048))  # key string length = 2048 (> 1024 limit)
+    buf.extend(b"x" * 2048)
+    buf.extend(struct.pack("<I", 4))
+    buf.extend(struct.pack("<I", 123))
+
+    test_file = tmp_path / "long_str.gguf"
+    test_file.write_bytes(bytes(buf))
+    meta = read_gguf_metadata(test_file)
+    assert meta.architecture == ""
+
+
+def test_gguf_parser_bounds_excessive_array_length(tmp_path):
+    """Verify GGUF parser stops safely when array element count exceeds 64."""
+    from app.services.model_registry import read_gguf_metadata
+    huge_arr = (4, [i for i in range(100)])  # 100 items > 64 limit
+    buf = make_synthetic_gguf(extra_kvs={"tokenizer.tokens": (9, huge_arr)})
+    test_file = tmp_path / "huge_arr.gguf"
+    test_file.write_bytes(buf)
+    meta = read_gguf_metadata(test_file)
+    assert meta.architecture == ""
+
+
+def test_gguf_parser_unknown_file_type_produces_empty_quantization(tmp_path):
+    """Verify unknown general.file_type produces quantization='' without fabricating names."""
+    from app.services.model_registry import read_gguf_metadata
+    buf = make_synthetic_gguf(arch="llama", file_type=99999)
+    test_file = tmp_path / "unknown_ftype.gguf"
+    test_file.write_bytes(buf)
+    meta = read_gguf_metadata(test_file)
+    assert meta.architecture == "llama"
+    assert meta.quantization == ""
+
+
+def test_gguf_parser_never_reads_tensor_payloads(tmp_path):
+    """Verify GGUF parser stops after metadata and does not read trailing tensor bytes."""
+    from app.services.model_registry import read_gguf_metadata
+    trailing_payload = b"DO_NOT_READ_RAW_TENSOR_BYTES" * 100
+    buf = make_synthetic_gguf(arch="qwen3vl", context_length=16384, raw_payload_at_end=trailing_payload)
+    test_file = tmp_path / "tensor_payload.gguf"
+    test_file.write_bytes(buf)
+    meta = read_gguf_metadata(test_file)
+    assert meta.architecture == "qwen3vl"
+    assert meta.context_length == 16384
+
+
+def test_effective_registry_factory_when_installed_absent(tmp_path):
+    """Verify factory registry loads normally when installed registry does not exist."""
+    import app.services.model_registry as mr
+
+    factory_dir = tmp_path / "factory"
+    factory_dir.mkdir()
+    template_file = factory_dir / "registry.template.json"
+    template_file.write_text(json.dumps({
+        "_schema_version": "3",
+        "models": [{
+            "id": "model-f1",
+            "display_name": "Factory Model 1",
+            "primary_file": "vision/model1.gguf",
+            "capabilities": ["chat"],
+        }]
+    }), encoding="utf-8")
+
+    nonexistent_installed = tmp_path / "nonexistent" / "models.json"
+
+    with patch.object(mr, "_get_factory_model_root", return_value=factory_dir), \
+         patch.object(mr, "_get_factory_template_path", return_value=template_file), \
+         patch.object(mr, "_get_installed_registry_path", return_value=nonexistent_installed):
+        entries = mr._build_effective_registry()
+
+    assert len(entries) == 1
+    assert entries[0].manifest.id == "model-f1"
+    assert entries[0].registry_source == "factory"
+
+
+def test_empty_installed_registry_preserves_factory(tmp_path):
+    """Verify an empty installed registry file preserves factory models."""
+    import app.services.model_registry as mr
+
+    factory_dir = tmp_path / "factory"
+    factory_dir.mkdir()
+    template_file = factory_dir / "registry.template.json"
+    template_file.write_text(json.dumps({
+        "_schema_version": "3",
+        "models": [{
+            "id": "model-f1",
+            "display_name": "Factory Model 1",
+            "primary_file": "vision/model1.gguf",
+        }]
+    }), encoding="utf-8")
+
+    installed_file = tmp_path / "installed" / "models.json"
+    installed_file.parent.mkdir()
+    installed_file.write_text(json.dumps({"_schema_version": "3", "models": []}), encoding="utf-8")
+
+    with patch.object(mr, "_get_factory_model_root", return_value=factory_dir), \
+         patch.object(mr, "_get_factory_template_path", return_value=template_file), \
+         patch.object(mr, "_get_installed_registry_path", return_value=installed_file):
+        entries = mr._build_effective_registry()
+
+    assert len(entries) == 1
+    assert entries[0].manifest.id == "model-f1"
+    assert entries[0].registry_source == "factory"
+
+
+def test_installed_model_with_new_id_appends(tmp_path):
+    """Verify an installed model with a new ID is appended to the effective registry."""
+    import app.services.model_registry as mr
+
+    factory_dir = tmp_path / "factory"
+    factory_dir.mkdir()
+    template_file = factory_dir / "registry.template.json"
+    template_file.write_text(json.dumps({
+        "_schema_version": "3",
+        "models": [{
+            "id": "model-f1",
+            "display_name": "Factory Model 1",
+            "primary_file": "vision/model1.gguf",
+        }]
+    }), encoding="utf-8")
+
+    installed_file = tmp_path / "installed" / "models.json"
+    installed_file.parent.mkdir()
+    installed_file.write_text(json.dumps({
+        "_schema_version": "3",
+        "models": [{
+            "id": "model-installed-new",
+            "display_name": "Installed Model",
+            "primary_file": "llm/new_model.gguf",
+        }]
+    }), encoding="utf-8")
+
+    with patch.object(mr, "_get_factory_model_root", return_value=factory_dir), \
+         patch.object(mr, "_get_factory_template_path", return_value=template_file), \
+         patch.object(mr, "_get_installed_registry_path", return_value=installed_file):
+        entries = mr._build_effective_registry()
+
+    assert len(entries) == 2
+    ids = [e.manifest.id for e in entries]
+    assert ids == ["model-f1", "model-installed-new"]
+    sources = [e.registry_source for e in entries]
+    assert sources == ["factory", "installed"]
+
+
+def test_installed_model_shadows_factory_model_same_id(tmp_path):
+    """Verify an installed model shadows a factory model of the same ID, appearing only once."""
+    import app.services.model_registry as mr
+
+    factory_dir = tmp_path / "factory"
+    factory_dir.mkdir()
+    template_file = factory_dir / "registry.template.json"
+    template_file.write_text(json.dumps({
+        "_schema_version": "3",
+        "models": [{
+            "id": "qwen3-vl-4b-instruct",
+            "display_name": "Factory Qwen 4B",
+            "primary_file": "vision/factory_4b.gguf",
+        }]
+    }), encoding="utf-8")
+
+    installed_file = tmp_path / "installed" / "models.json"
+    installed_file.parent.mkdir()
+    installed_file.write_text(json.dumps({
+        "_schema_version": "3",
+        "models": [{
+            "id": "qwen3-vl-4b-instruct",
+            "display_name": "Custom Installed Qwen 4B",
+            "primary_file": "custom/qwen4b.gguf",
+        }]
+    }), encoding="utf-8")
+
+    with patch.object(mr, "_get_factory_model_root", return_value=factory_dir), \
+         patch.object(mr, "_get_factory_template_path", return_value=template_file), \
+         patch.object(mr, "_get_installed_registry_path", return_value=installed_file):
+        entries = mr._build_effective_registry()
+
+    # Appears only once
+    assert len(entries) == 1
+    entry = entries[0]
+    assert entry.manifest.id == "qwen3-vl-4b-instruct"
+    assert entry.manifest.display_name == "Custom Installed Qwen 4B"
+    assert entry.manifest.primary_file == "custom/qwen4b.gguf"
+    assert entry.registry_source == "installed"
+
+
+def test_malformed_installed_entry_preserves_factory_entry(tmp_path):
+    """Verify a malformed individual installed entry does not erase a valid factory entry of the same ID."""
+    import app.services.model_registry as mr
+
+    factory_dir = tmp_path / "factory"
+    factory_dir.mkdir()
+    template_file = factory_dir / "registry.template.json"
+    template_file.write_text(json.dumps({
+        "_schema_version": "3",
+        "models": [{
+            "id": "model-target",
+            "display_name": "Valid Factory Target",
+            "primary_file": "target.gguf",
+        }]
+    }), encoding="utf-8")
+
+    installed_file = tmp_path / "installed" / "models.json"
+    installed_file.parent.mkdir()
+    # Missing required primary_file
+    installed_file.write_text(json.dumps({
+        "_schema_version": "3",
+        "models": [{
+            "id": "model-target",
+            "display_name": "Malformed Entry",
+        }]
+    }), encoding="utf-8")
+
+    with patch.object(mr, "_get_factory_model_root", return_value=factory_dir), \
+         patch.object(mr, "_get_factory_template_path", return_value=template_file), \
+         patch.object(mr, "_get_installed_registry_path", return_value=installed_file):
+        entries = mr._build_effective_registry()
+
+    assert len(entries) == 1
+    assert entries[0].manifest.id == "model-target"
+    assert entries[0].manifest.display_name == "Valid Factory Target"
+    assert entries[0].registry_source == "factory"
+
+
+def test_malformed_installed_registry_file_preserves_factory(tmp_path):
+    """Verify a corrupted installed registry JSON file fails safely and preserves factory entries."""
+    import app.services.model_registry as mr
+
+    factory_dir = tmp_path / "factory"
+    factory_dir.mkdir()
+    template_file = factory_dir / "registry.template.json"
+    template_file.write_text(json.dumps({
+        "_schema_version": "3",
+        "models": [{
+            "id": "model-f1",
+            "display_name": "Factory 1",
+            "primary_file": "f1.gguf",
+        }]
+    }), encoding="utf-8")
+
+    installed_file = tmp_path / "installed" / "models.json"
+    installed_file.parent.mkdir()
+    installed_file.write_text("NOT_VALID_JSON{:::broken", encoding="utf-8")
+
+    with patch.object(mr, "_get_factory_model_root", return_value=factory_dir), \
+         patch.object(mr, "_get_factory_template_path", return_value=template_file), \
+         patch.object(mr, "_get_installed_registry_path", return_value=installed_file):
+        entries = mr._build_effective_registry()
+
+    assert len(entries) == 1
+    assert entries[0].manifest.id == "model-f1"
+    assert entries[0].registry_source == "factory"
+
+
+def test_source_aware_asset_root_resolution(tmp_path):
+    """Verify factory asset paths resolve under FACTORY_MODEL_ROOT and installed under MODEL_LIBRARY_DIR."""
+    import app.services.model_registry as mr
+    from app.schemas.model_registry import ModelManifest, ModelLibraryState, ModelRuntimeHints, ModelRegistryEntry
+
+    factory_root = tmp_path / "factory_root"
+    factory_root.mkdir()
+    installed_root = tmp_path / "installed_root"
+    installed_root.mkdir()
+
+    (factory_root / "f_model.gguf").write_bytes(b"F" * 100)
+    (installed_root / "i_model.gguf").write_bytes(b"I" * 100)
+
+    f_entry = ModelRegistryEntry(
+        manifest=ModelManifest(id="f", display_name="F", primary_file="f_model.gguf"),
+        library_state=ModelLibraryState(),
+        hints=ModelRuntimeHints(),
+        registry_source="factory",
+    )
+    i_entry = ModelRegistryEntry(
+        manifest=ModelManifest(id="i", display_name="I", primary_file="i_model.gguf"),
+        library_state=ModelLibraryState(),
+        hints=ModelRuntimeHints(),
+        registry_source="installed",
+    )
+
+    with patch.object(mr, "_get_factory_model_root", return_value=factory_root), \
+         patch.object(mr, "_get_model_library_dir", return_value=installed_root):
+        val_f = mr._validate_entry(f_entry)
+        val_i = mr._validate_entry(i_entry)
+
+    assert val_f.primary_file_exists is True
+    assert val_i.primary_file_exists is True
+
+
+def test_path_traversal_and_absolute_paths_rejected(tmp_path):
+    """Verify path traversal (..) and absolute paths are rejected and cannot escape source root."""
+    import app.services.model_registry as mr
+    from app.schemas.model_registry import ModelManifest, ModelLibraryState, ModelRuntimeHints, ModelRegistryEntry
+
+    base_dir = tmp_path / "root"
+    base_dir.mkdir()
+
+    # Traversal test
+    assert mr._resolve_asset_path(base_dir, "../../../escaped.gguf") is None
+    # Absolute path test
+    assert mr._resolve_asset_path(base_dir, "C:/Windows/System32/calc.exe") is None
+    assert mr._resolve_asset_path(base_dir, "/etc/passwd") is None
+
+    entry = ModelRegistryEntry(
+        manifest=ModelManifest(id="bad-traversal", display_name="Bad", primary_file="../../secret.txt"),
+        library_state=ModelLibraryState(),
+        hints=ModelRuntimeHints(),
+        registry_source="installed",
+    )
+
+    with patch.object(mr, "_get_model_library_dir", return_value=base_dir):
+        validated = mr._validate_entry(entry)
+
+    assert validated.primary_file_exists is False
+    assert validated.validation_status.value == "missing_primary"
+
+
+def test_missing_primary_validation_semantics(tmp_path):
+    """Verify missing primary file produces missing_primary, primary_file_exists=False, available_capabilities=[]."""
+    import app.services.model_registry as mr
+    from app.schemas.model_registry import ModelManifest, ModelLibraryState, ModelRuntimeHints, ModelRegistryEntry, ModelCapability
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+
+    entry = ModelRegistryEntry(
+        manifest=ModelManifest(
+            id="missing-p",
+            display_name="Missing Primary",
+            primary_file="nonexistent.gguf",
+            capabilities=[ModelCapability.chat, ModelCapability.vision],
+        ),
+        library_state=ModelLibraryState(),
+        hints=ModelRuntimeHints(),
+        registry_source="factory",
+    )
+
+    with patch.object(mr, "_get_factory_model_root", return_value=models_dir):
+        res = mr._validate_entry(entry)
+
+    assert res.validation_status.value == "missing_primary"
+    assert res.primary_file_exists is False
+    assert res.library_state.available_capabilities == []
+    # Manifest capabilities must NOT be cleared
+    assert res.manifest.capabilities == [ModelCapability.chat, ModelCapability.vision]
+
+
+def test_complete_model_verified_semantics(tmp_path):
+    """Verify present primary file and companions produce verified validation state."""
+    import app.services.model_registry as mr
+    from app.schemas.model_registry import (
+        ModelManifest, ModelLibraryState, ModelRuntimeHints,
+        ModelRegistryEntry, ModelCapability, CompanionFile
+    )
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    (models_dir / "primary.gguf").write_bytes(b"P" * 1024)
+    (models_dir / "mmproj.gguf").write_bytes(b"M" * 512)
+
+    entry = ModelRegistryEntry(
+        manifest=ModelManifest(
+            id="complete-model",
+            display_name="Complete",
+            primary_file="primary.gguf",
+            companion_files=[CompanionFile(role="mmproj", path="mmproj.gguf")],
+            capabilities=[ModelCapability.chat, ModelCapability.vision],
+        ),
+        library_state=ModelLibraryState(),
+        hints=ModelRuntimeHints(),
+        registry_source="factory",
+    )
+
+    with patch.object(mr, "_get_factory_model_root", return_value=models_dir):
+        res = mr._validate_entry(entry)
+
+    assert res.validation_status.value == "verified"
+    assert res.library_state.discovery_state.value == "verified"
+    assert res.primary_file_exists is True
+    assert res.companion_files_valid is True
+    assert res.library_state.available_capabilities == [ModelCapability.chat, ModelCapability.vision]
+
+
+def test_missing_mmproj_graceful_capability_degradation(tmp_path):
+    """Verify missing mmproj degrades vision from available_capabilities, keeps chat, and leaves manifest untouched."""
+    import app.services.model_registry as mr
+    from app.schemas.model_registry import (
+        ModelManifest, ModelLibraryState, ModelRuntimeHints,
+        ModelRegistryEntry, ModelCapability, CompanionFile, ValidationStatus
+    )
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    (models_dir / "primary.gguf").write_bytes(b"P" * 1024)
+    # mmproj is deliberately missing!
+
+    entry = ModelRegistryEntry(
+        manifest=ModelManifest(
+            id="degraded-model",
+            display_name="Degraded",
+            primary_file="primary.gguf",
+            companion_files=[CompanionFile(role="mmproj", path="missing_mmproj.gguf")],
+            capabilities=[ModelCapability.chat, ModelCapability.vision, ModelCapability.multilingual],
+        ),
+        library_state=ModelLibraryState(),
+        hints=ModelRuntimeHints(),
+        registry_source="factory",
+    )
+
+    with patch.object(mr, "_get_factory_model_root", return_value=models_dir):
+        res = mr._validate_entry(entry)
+
+    # Status is missing_companion, NOT incompatible
+    assert res.validation_status == ValidationStatus.missing_companion
+    assert res.validation_status != ValidationStatus.incompatible
+    assert res.primary_file_exists is True
+    assert res.companion_files_valid is False
+
+    # Vision capability degraded from available_capabilities
+    assert ModelCapability.vision not in res.library_state.available_capabilities
+    # Text capabilities preserved
+    assert ModelCapability.chat in res.library_state.available_capabilities
+    assert ModelCapability.multilingual in res.library_state.available_capabilities
+
+    # Manifest capabilities MUST REMAIN UNCHANGED
+    assert res.manifest.capabilities == [ModelCapability.chat, ModelCapability.vision, ModelCapability.multilingual]
+
+
+def test_truthful_unregistered_scanner(tmp_path):
+    """Verify unregistered GGUF scanner returns truthful UNKNOWN metadata without fabricating capabilities or context."""
+    import app.services.model_registry as mr
+    from app.schemas.model_registry import ModelVariant, ReasoningMode, ModelDiscoveryState, ValidationStatus
+
+    factory_models = tmp_path / "factory_models"
+    factory_models.mkdir()
+    template_file = factory_models / "registry.template.json"
+    template_file.write_text(json.dumps({"_schema_version": "3", "models": []}), encoding="utf-8")
+
+    # Write synthetic GGUF with architecture and context
+    gguf_data = make_synthetic_gguf(arch="qwen3vl", context_length=32768, file_type=15)
+    # Even if filename contains "VL", "Vision", "Thinking", NO capabilities may be inferred!
+    model_file = factory_models / "Qwen3-VL-Vision-Thinking-7B.gguf"
+    model_file.write_bytes(gguf_data)
+
+    with patch.object(mr, "_get_factory_model_root", return_value=factory_models), \
+         patch.object(mr, "_get_factory_template_path", return_value=template_file), \
+         patch.object(mr, "_MIN_SIZE_BYTES", 0):
+        entries = mr.build_model_list()
+
+    assert len(entries) == 1
+    entry = entries[0]
+
+    # Truthful unregistered metadata
+    assert entry.manifest.variant == ModelVariant.unknown
+    assert entry.variant == "unknown"
+    assert entry.manifest.capabilities == []
+    assert entry.capabilities == []
+    assert entry.manifest.input_modalities == []
+    assert entry.manifest.runtime_compatibility == []
+    assert entry.manifest.reasoning_mode == ReasoningMode.unknown
+    assert entry.library_state.discovery_state == ModelDiscoveryState.discovered
+    assert entry.validation_status == ValidationStatus.unregistered
+    assert entry.primary_file_exists is True
+
+    # Metadata detected from GGUF header
+    assert entry.manifest.architecture == "qwen3vl"
+    assert entry.manifest.model_max_context == 32768
+    assert entry.context_limit == 32768
+    assert entry.manifest.quantization == "Q4_K_M"
+    assert entry.quantization == "Q4_K_M"
+
+
+
+def test_malformed_gguf_remains_discoverable_as_unregistered(tmp_path):
+    """Verify a malformed or non-GGUF file remains discoverable with unknown metadata."""
+    from app.core.config import settings
+    import app.services.model_registry as mr
+    from app.schemas.model_registry import ModelVariant
+
+    factory_models = tmp_path / "factory_models"
+    factory_models.mkdir()
+    template_file = factory_models / "registry.template.json"
+    template_file.write_text(json.dumps({"_schema_version": "3", "models": []}), encoding="utf-8")
+
+    # Corrupt GGUF file
+    model_file = factory_models / "corrupt_model.gguf"
+    model_file.write_bytes(b"CORRUPT_NOT_GGUF_HEADER")
+
+    with patch.object(settings, "FACTORY_MODEL_ROOT", factory_models), \
+         patch.object(settings, "FACTORY_REGISTRY_TEMPLATE", template_file), \
+         patch.object(settings, "MODELS_DIR", factory_models), \
+         patch.object(mr, "_MIN_SIZE_BYTES", 0):
+        entries = mr.build_model_list()
+
+    assert len(entries) == 1
+    entry = entries[0]
+    assert entry.manifest.id == "corrupt-model"
+    assert entry.manifest.variant == ModelVariant.unknown
+    assert entry.manifest.architecture == ""
+    assert entry.manifest.quantization == ""
+
+
+def test_legacy_registry_json_does_not_override_factory(tmp_path):
+    """Verify legacy repository models/registry.json is ignored in favor of canonical factory template."""
+    import app.services.model_registry as mr
+
+    factory_dir = tmp_path / "factory"
+    factory_dir.mkdir()
+    template_file = factory_dir / "registry.template.json"
+    template_file.write_text(json.dumps({
+        "_schema_version": "3",
+        "models": [{
+            "id": "canonical-factory-model",
+            "display_name": "Canonical Template Model",
+            "primary_file": "canonical.gguf",
+        }]
+    }), encoding="utf-8")
+
+    # Legacy gitignored registry.json in same dir with different data
+    legacy_file = factory_dir / "registry.json"
+    legacy_file.write_text(json.dumps({
+        "_schema_version": "1",
+        "models": [{
+            "id": "legacy-override-attempt",
+            "display_name": "Should Be Ignored",
+            "primary_file": "legacy.gguf",
+        }]
+    }), encoding="utf-8")
+
+    with patch.object(mr, "_get_factory_model_root", return_value=factory_dir), \
+         patch.object(mr, "_get_factory_template_path", return_value=template_file), \
+         patch.object(mr, "_get_installed_registry_path", return_value=tmp_path / "no_installed.json"):
+        entries = mr._build_effective_registry()
+
+    assert len(entries) == 1
+    assert entries[0].manifest.id == "canonical-factory-model"
+    assert entries[0].manifest.display_name == "Canonical Template Model"
+
+
+def test_unregistered_model_without_gguf_metadata_has_none_context(tmp_path):
+    """Verify unregistered GGUF without context_length in header has model_max_context=None and context_limit=None."""
+    import app.services.model_registry as mr
+
+    factory_models = tmp_path / "factory_models"
+    factory_models.mkdir()
+    template_file = factory_models / "registry.template.json"
+    template_file.write_text(json.dumps({"_schema_version": "3", "models": []}), encoding="utf-8")
+
+    # Write synthetic GGUF with architecture but NO context_length
+    gguf_data = make_synthetic_gguf(arch="llama", context_length=None)
+    model_file = factory_models / "plain_llama.gguf"
+    model_file.write_bytes(gguf_data)
+
+    with patch.object(mr, "_get_factory_model_root", return_value=factory_models), \
+         patch.object(mr, "_get_factory_template_path", return_value=template_file), \
+         patch.object(mr, "_MIN_SIZE_BYTES", 0):
+        entries = mr.build_model_list()
+
+    assert len(entries) == 1
+    entry = entries[0]
+    assert entry.manifest.architecture == "llama"
+    assert entry.manifest.model_max_context is None
+    assert entry.context_limit is None
