@@ -41,7 +41,7 @@ MAX_METADATA_KV_COUNT = 256
 MAX_STRING_LENGTH = 1024
 MAX_ARRAY_LENGTH = 64
 
-# Standard GGUF file_type (ggml_ftype) to quantization name mapping
+# Standard GGUF file_type (llama_ftype from include/llama.h at llama.cpp b10936)
 GGUF_FILE_TYPE_MAP: Dict[int, str] = {
     0: "F32",
     1: "F16",
@@ -73,9 +73,13 @@ GGUF_FILE_TYPE_MAP: Dict[int, str] = {
     30: "IQ4_XS",
     31: "IQ1_M",
     32: "BF16",
-    33: "Q4_0_4_4",
-    34: "Q4_0_4_8",
-    35: "Q4_0_8_8",
+    # 33, 34, 35 removed from GGUF files in llama.cpp b10936
+    36: "TQ1_0",
+    37: "TQ2_0",
+    38: "MXFP4_MOE",
+    39: "NVFP4",
+    40: "Q1_0",
+    41: "Q2_0",
 }
 
 
@@ -97,17 +101,15 @@ def _read_exact(f, n: int) -> bytes:
     return data
 
 
-def _read_gguf_string(f, is_v1: bool) -> str:
-    len_fmt = "<I" if is_v1 else "<Q"
-    len_size = 4 if is_v1 else 8
-    (slen,) = struct.unpack(len_fmt, _read_exact(f, len_size))
+def _read_gguf_string(f) -> str:
+    (slen,) = struct.unpack("<Q", _read_exact(f, 8))
     if slen < 0 or slen > MAX_STRING_LENGTH:
         raise ValueError(f"String length {slen} outside allowed bounds [0, {MAX_STRING_LENGTH}]")
     raw = _read_exact(f, slen)
     return raw.decode("utf-8", errors="replace")
 
 
-def _read_gguf_value(f, val_type: int, is_v1: bool) -> Any:
+def _read_gguf_value(f, val_type: int) -> Any:
     if val_type == 0:  # UINT8
         return struct.unpack("<B", _read_exact(f, 1))[0]
     elif val_type == 1:  # INT8
@@ -125,17 +127,15 @@ def _read_gguf_value(f, val_type: int, is_v1: bool) -> Any:
     elif val_type == 7:  # BOOL
         return bool(struct.unpack("<B", _read_exact(f, 1))[0])
     elif val_type == 8:  # STRING
-        return _read_gguf_string(f, is_v1)
+        return _read_gguf_string(f)
     elif val_type == 9:  # ARRAY
         elem_type = struct.unpack("<I", _read_exact(f, 4))[0]
         if elem_type == 9:
             raise ValueError("Nested arrays are not supported in GGUF metadata")
-        len_fmt = "<I" if is_v1 else "<Q"
-        len_size = 4 if is_v1 else 8
-        (arr_len,) = struct.unpack(len_fmt, _read_exact(f, len_size))
+        (arr_len,) = struct.unpack("<Q", _read_exact(f, 8))
         if arr_len < 0 or arr_len > MAX_ARRAY_LENGTH:
             raise ValueError(f"Array length {arr_len} outside allowed bounds [0, {MAX_ARRAY_LENGTH}]")
-        return [_read_gguf_value(f, elem_type, is_v1) for _ in range(arr_len)]
+        return [_read_gguf_value(f, elem_type) for _ in range(arr_len)]
     elif val_type == 10:  # UINT64
         return struct.unpack("<Q", _read_exact(f, 8))[0]
     elif val_type == 11:  # INT64
@@ -149,6 +149,8 @@ def _read_gguf_value(f, val_type: int, is_v1: bool) -> Any:
 def read_gguf_metadata(path: Path) -> GGUFMetadata:
     """
     Pure Python, bounded, zero-dependency GGUF header reader.
+    Supports GGUF v2 and v3 (aligned with llama.cpp b10936). GGUF v1 and unsupported
+    versions fail safely to empty metadata.
     Reads metadata only; never loads tensor payloads or memory-maps the model.
     Returns safe default GGUFMetadata on missing, truncated, or malformed files.
     """
@@ -163,15 +165,11 @@ def read_gguf_metadata(path: Path) -> GGUFMetadata:
                 return result
 
             (version,) = struct.unpack("<I", _read_exact(f, 4))
-            if version not in (1, 2, 3):
+            if version not in (2, 3):
                 return result
 
-            is_v1 = (version == 1)
-            count_fmt = "<I" if is_v1 else "<Q"
-            count_size = 4 if is_v1 else 8
-
-            (tensor_count,) = struct.unpack(count_fmt, _read_exact(f, count_size))
-            (kv_count,) = struct.unpack(count_fmt, _read_exact(f, count_size))
+            (tensor_count,) = struct.unpack("<Q", _read_exact(f, 8))
+            (kv_count,) = struct.unpack("<Q", _read_exact(f, 8))
 
             if kv_count < 0 or kv_count > MAX_METADATA_KV_COUNT:
                 logger.debug(
@@ -181,9 +179,9 @@ def read_gguf_metadata(path: Path) -> GGUFMetadata:
 
             raw_metadata: Dict[str, Any] = {}
             for _ in range(kv_count):
-                key = _read_gguf_string(f, is_v1)
+                key = _read_gguf_string(f)
                 val_type = struct.unpack("<I", _read_exact(f, 4))[0]
-                val = _read_gguf_value(f, val_type, is_v1)
+                val = _read_gguf_value(f, val_type)
                 raw_metadata[key] = val
 
             result.raw_metadata = raw_metadata
@@ -198,7 +196,7 @@ def read_gguf_metadata(path: Path) -> GGUFMetadata:
                 if isinstance(ctx_val, int) and ctx_val > 0:
                     result.context_length = ctx_val
 
-            # 3. Quantization from general.file_type ONLY
+            # 3. Quantization from general.file_type ONLY (llama.cpp b10936 llama_ftype mapping)
             ftype = raw_metadata.get("general.file_type")
             if isinstance(ftype, int):
                 result.quantization = GGUF_FILE_TYPE_MAP.get(ftype, "")

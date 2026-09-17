@@ -357,18 +357,20 @@ def test_schema_extra_forbid():
     from app.schemas.model_registry import ModelManifest, ModelRegistryEntry, ModelRuntimeHints, ModelLibraryState
 
     with pytest.raises(ValidationError):
-        ModelManifest(id="m", display_name="M", primary_file="p", unrecognized_manifest_field="bad")
+        ModelManifest.model_validate({
+            "id": "m", "display_name": "M", "primary_file": "p", "unrecognized_manifest_field": "bad"
+        })
 
     with pytest.raises(ValidationError):
-        ModelRuntimeHints(unrecognized_hints_field=123)
+        ModelRuntimeHints.model_validate({"unrecognized_hints_field": 123})
 
     with pytest.raises(ValidationError):
-        ModelRegistryEntry(
-            manifest=ModelManifest(id="m", display_name="M", primary_file="p"),
-            library_state=ModelLibraryState(),
-            hints=ModelRuntimeHints(),
-            unrecognized_entry_field="bad"
-        )
+        ModelRegistryEntry.model_validate({
+            "manifest": {"id": "m", "display_name": "M", "primary_file": "p"},
+            "library_state": {},
+            "hints": {},
+            "unrecognized_entry_field": "bad"
+        })
 
 
 def test_registry_template_v3_structure_and_parsing():
@@ -569,6 +571,83 @@ def test_gguf_parser_unknown_file_type_produces_empty_quantization(tmp_path):
     meta = read_gguf_metadata(test_file)
     assert meta.architecture == "llama"
     assert meta.quantization == ""
+
+
+@pytest.mark.parametrize(
+    "ftype,expected_quant",
+    [
+        (15, "Q4_K_M"),
+        (32, "BF16"),
+        (33, ""),  # Removed from GGUF in llama.cpp b10936
+        (34, ""),  # Removed from GGUF in llama.cpp b10936
+        (35, ""),  # Removed from GGUF in llama.cpp b10936
+        (36, "TQ1_0"),
+        (37, "TQ2_0"),
+        (38, "MXFP4_MOE"),
+        (39, "NVFP4"),
+        (40, "Q1_0"),
+        (41, "Q2_0"),
+        (999, ""),
+    ]
+)
+def test_gguf_file_type_mappings_aligned_to_llama_b10936(tmp_path, ftype, expected_quant):
+    """Verify general.file_type precisely follows llama.cpp b10936 llama_ftype enum."""
+    from app.services.model_registry import read_gguf_metadata
+    buf = make_synthetic_gguf(arch="test", file_type=ftype)
+    test_file = tmp_path / f"ftype_{ftype}.gguf"
+    test_file.write_bytes(buf)
+    meta = read_gguf_metadata(test_file)
+    assert meta.architecture == "test"
+    assert meta.quantization == expected_quant
+
+
+def test_gguf_parser_version_support_and_rejection(tmp_path):
+    """Verify GGUF parser strictly supports v2/v3 and safely rejects v1, v0, and future versions > 3."""
+    from app.services.model_registry import read_gguf_metadata
+
+    # 1. GGUF v2 parses valid bounded metadata
+    v2_buf = make_synthetic_gguf(arch="qwen3vl", context_length=16384, file_type=15, version=2)
+    v2_file = tmp_path / "v2.gguf"
+    v2_file.write_bytes(v2_buf)
+    v2_meta = read_gguf_metadata(v2_file)
+    assert v2_meta.architecture == "qwen3vl"
+    assert v2_meta.context_length == 16384
+    assert v2_meta.quantization == "Q4_K_M"
+
+    # 2. GGUF v3 parses valid bounded metadata
+    v3_buf = make_synthetic_gguf(arch="qwen3vl", context_length=32768, file_type=15, version=3)
+    v3_file = tmp_path / "v3.gguf"
+    v3_file.write_bytes(v3_buf)
+    v3_meta = read_gguf_metadata(v3_file)
+    assert v3_meta.architecture == "qwen3vl"
+    assert v3_meta.context_length == 32768
+    assert v3_meta.quantization == "Q4_K_M"
+
+    # 3. GGUF v1 is safely rejected (unsupported by llama.cpp b10936)
+    v1_buf = make_synthetic_gguf(arch="qwen3vl", context_length=8192, version=1)
+    v1_file = tmp_path / "v1.gguf"
+    v1_file.write_bytes(v1_buf)
+    v1_meta = read_gguf_metadata(v1_file)
+    assert v1_meta.architecture == ""
+    assert v1_meta.context_length is None
+    assert v1_meta.quantization == ""
+
+    # 4. GGUF v0 is safely rejected
+    v0_buf = make_synthetic_gguf(arch="qwen3vl", version=0)
+    v0_file = tmp_path / "v0.gguf"
+    v0_file.write_bytes(v0_buf)
+    v0_meta = read_gguf_metadata(v0_file)
+    assert v0_meta.architecture == ""
+
+    # 5. Future version > 3 (e.g. v4, v99) is safely rejected
+    for bad_ver in (4, 99):
+        f_buf = make_synthetic_gguf(arch="qwen3vl", version=bad_ver)
+        f_file = tmp_path / f"v{bad_ver}.gguf"
+        f_file.write_bytes(f_buf)
+        f_meta = read_gguf_metadata(f_file)
+        assert f_meta.architecture == ""
+        assert f_meta.context_length is None
+        assert f_meta.quantization == ""
 
 
 def test_gguf_parser_never_reads_tensor_payloads(tmp_path):
