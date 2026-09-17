@@ -143,7 +143,13 @@ Known legacy candidate locations (checked in order):
   backend/data/companion.db
   <repo-root>/data/companion.db
 
-Safety: never overwrite newer DB; keep backup until verified; restart-safe; no LFS/git changes.
+Source Immutability Invariant:
+  1. companion.db: SHA-256 unchanged, size unchanged, mtime unchanged.
+  2. companion.db-wal: SHA-256 unchanged, size unchanged, no checkpoint/truncate/write.
+  3. companion.db-shm: SHA-256 unchanged, size unchanged, filesystem mtime MAY change due to SQLite read-lock coordination in WAL mode (Case C semantics; not considered data mutation).
+  4. No source rows modified; no Alembic migrations on legacy source; no forced WAL checkpoints.
+  5. Canonical destination integrity and logical row preservation verified.
+  Safety: never overwrite newer DB; keep backup until verified; restart-safe; no LFS/git changes.
 
 ---
 
@@ -645,7 +651,36 @@ Migration Rules:
   - Multiple differing candidates -> `RuntimeError` raised with paths listed
   - Restart-safe: existing canonical DB is never overwritten
 
-**Batch 8P.3 Gate:** Focused tests for RED/GREEN (`backend/tests/test_bootstrap.py`, `backend/tests/test_migration_safety.py`); full backend suite before approval (>= 88 pytest passed).
+#### 8P.3e -- Source Immutability Invariants & Acceptance Semantics (Verified & Closed)
+The Phase 8P.3 source-immutability invariant is codified as:
+1. `companion.db`:
+   - SHA-256 MUST remain unchanged
+   - size MUST remain unchanged
+   - mtime MUST remain unchanged
+2. `companion.db-wal`:
+   - SHA-256 MUST remain unchanged
+   - size MUST remain unchanged
+   - no checkpoint/truncate/write may occur
+3. `companion.db-shm`:
+   - SHA-256 MUST remain unchanged
+   - size MUST remain unchanged
+   - filesystem mtime MAY change as a result of legitimate SQLite read-lock / memory-mapped WAL-index coordination
+   - an mtime-only change is NOT considered source-data mutation (Case C semantics confirmed via empirical isolation testing)
+4. No source database rows may be modified.
+5. No Alembic migration may run against a legacy source.
+6. No source WAL checkpoint may be forced.
+7. Migration destination integrity and logical row preservation remain required.
+
+**Architectural Decision on Connection Semantics:**
+KEEP the current production `mode=ro` behavior. DO NOT change inspection or migration connections to `immutable=1`.
+*Rationale:* The migration architecture must remain safe for a source that may have WAL state and must not assert that the underlying database can never change. `immutable=1` disables normal SQLite locking/change-detection semantics and is not appropriate as a generic production migration assumption. The observed SHM mtime change is therefore accepted as transient SQLite/OS coordination metadata, provided SHM content and size remain unchanged.
+
+**Batch 8P.3 Gate (COMPLETED & VERIFIED):**
+- 130 backend pytest tests passed; 132 frontend vitest tests passed; 0 tsc errors.
+- Controlled migration rehearsal (`D:\AICompanionMigrationRehearsal`) verified non-destructive migration and destination Alembic head `005_scope_message_constraints`.
+- Authoritative source `backend/data/companion.db` verified byte-identical (size 188,416, SHA-256 `80758cbff04e0436d0465f7799a9ff6a074115aef7574aa52a3cc2758f246027`, mtime unchanged).
+- Local-state/Git-ignored audit completed with zero secret leakage.
+- SQLite SHM investigation confirmed Case C (metadata-only update, zero content mutation).
 
 ---
 

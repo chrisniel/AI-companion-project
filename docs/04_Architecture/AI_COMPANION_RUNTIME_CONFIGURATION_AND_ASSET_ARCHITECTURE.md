@@ -593,6 +593,34 @@ Rules:
 - migration must be restart-safe;
 - path migration must not alter unrelated repository files.
 
+### 9.1 Source-Immutability Invariants (Phase 8P.3 Canonical Semantics)
+
+During preflight inspection and migration execution, the legacy source must satisfy strict immutability invariants:
+
+1. `companion.db`:
+   - SHA-256 MUST remain unchanged
+   - File size MUST remain unchanged
+   - Filesystem `mtime` MUST remain unchanged
+2. `companion.db-wal`:
+   - SHA-256 MUST remain unchanged
+   - File size MUST remain unchanged
+   - No checkpoint, truncation, or write operations may occur
+3. `companion.db-shm`:
+   - SHA-256 MUST remain unchanged
+   - File size MUST remain unchanged
+   - Filesystem `mtime` MAY change as a result of legitimate SQLite read-lock / memory-mapped WAL-index coordination (Case C semantics)
+   - An `mtime`-only change is NOT considered source-data mutation
+4. No source database rows may be modified.
+5. No Alembic migration may run against a legacy source.
+6. No source WAL checkpoint may be forced.
+7. Migration destination integrity and logical row preservation remain required.
+
+### 9.2 SQLite Connection & Concurrency Semantics
+
+Production inspection and migration source connections MUST retain `mode=ro` (`file:<path>?mode=ro`) and MUST NOT introduce `immutable=1`.
+
+*Rationale:* The persistent storage migration architecture must remain safe for arbitrary legacy sources that may contain uncheckpointed WAL state. `immutable=1` disables standard SQLite locking and change-detection protocols, asserting that the file will never be modified, which is unsafe for generic migration assumptions. SQLite read transactions against a WAL-mode database participate in WAL shared-memory reader coordination; on Windows, memory-mapped locking of the `-shm` file updates its filesystem `mtime` while preserving 100% of its content bytes. This behavior is formally classified as non-mutating transient coordination metadata.
+
 ---
 
 # 10. Repository Model-Storage Policy Boundary

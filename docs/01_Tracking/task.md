@@ -2,7 +2,7 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: Phase 8P.3 completed — awaiting review
+- Status: Phase 8P.3 COMPLETE / VERIFIED — Phase 8P.4 next
 - Current Sprint: Phase 8 — PC Frontend Architecture, Runtime Config, Multimodal & Polish
 - Branches: `feature/phase8-ui-foundation` → `feature/phase8-runtime-config` → `feature/multimodal-image-attachments` → `feature/phase8-ui-integration-polish`
 - Target: Mock removal, view decomposition, COMPANION_DATA_ROOT, terminology reconciliation, model schema split, image attachments, 100+ pytest / 132+ vitest
@@ -18,16 +18,34 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — PHASE 8P.3 STORAGE SAFETY CORRECTION COMPLETE — AWAITING CHATGPT/USER REVIEW]
+## [CURRENT EXECUTION STATE — PHASE 8P.3 PERSISTENT STORAGE FOUNDATION VERIFIED & CLOSED]
 
-- Status: Phase 8P.3 Storage Safety Correction implemented and fully verified; awaiting ChatGPT/user review.
-- Completed:
-  1. SQLite WAL-safe migration: native `sqlite3.Connection.backup()` captures uncheckpointed committed WAL transactions; ambiguity check fails closed if any candidate has an active `-wal` file.
-  2. Schema lifecycle helper: `prepare_database_schema()` brings canonical DB to Alembic head in a worker thread before normal app DB runtime initializes; legacy sources are never modified.
+- Status: Phase 8P.3 is COMPLETE / VERIFIED. Phase 8P.4 (Model Registry Schema v3 & Temporary Serialization Bridge) is NOT started.
+- Verification Completed:
+  1. WAL-safe SQLite migration: native `sqlite3.Connection.backup()` captures uncheckpointed committed WAL transactions; ambiguity check fails closed if any candidate has an active `-wal` file.
+  2. Schema lifecycle helper: `prepare_database_schema()` brings canonical DB to Alembic head in an isolated worker thread; legacy sources are never modified.
   3. Canonical DB validation: fails closed with `CorruptCanonicalDatabaseError` on 0-byte or corrupt canonical DBs.
   4. Absolute data root invariant: strictly requires and validates absolute paths for `COMPANION_DATA_ROOT`, `bootstrap.json` `data_root`, and `write_bootstrap()`, rejecting relative paths with `StorageError`.
-- Verified: 130 backend pytest passed (zero failures), 132 frontend vitest passed, 0 tsc errors.
-- Scope Guard: Zero real user databases migrated or reset. Zero %LOCALAPPDATA% directories created on host machine. Zero factory models moved. Batch 8P.4 not started. User draft `docs/00_Drafts/09-16-2026-roadmap.md` untouched.
+  5. Real legacy DB controlled rehearsal: verified non-destructive migration rehearsal against isolated destination (`D:\AICompanionMigrationRehearsal`); destination integrity passed and Alembic head verified at `005_scope_message_constraints`.
+  6. Source DB byte-immutability: authoritative legacy source (`backend/data/companion.db`) confirmed byte-identical (size 188,416 bytes, SHA-256 `80758cbff04e0436d0465f7799a9ff6a074115aef7574aa52a3cc2758f246027`, mtime unchanged).
+  7. Git-ignored / local state audit: verified clean repository baseline, cataloged model weights, runtime binaries, Android build outputs, and environment variables with zero secret leakage.
+  8. SQLite SHM investigation & Case C confirmation: classified observed SHM mtime change as Case C (transient OS-level reader-lock coordination metadata on Windows memory-mapped files; content SHA-256 and size remain 100% byte-identical).
+- Source-Immutability Invariants (Phase 8P.3 Canonical Semantics):
+  1. `companion.db`: SHA-256 MUST remain unchanged, size MUST remain unchanged, mtime MUST remain unchanged.
+  2. `companion.db-wal`: SHA-256 MUST remain unchanged, size MUST remain unchanged, no checkpoint/truncate/write may occur.
+  3. `companion.db-shm`: SHA-256 MUST remain unchanged, size MUST remain unchanged, filesystem mtime MAY change as a result of legitimate SQLite read-lock / memory-mapped WAL-index coordination; an mtime-only change is NOT considered source-data mutation.
+  4. No source database rows may be modified.
+  5. No Alembic migration may run against a legacy source.
+  6. No source WAL checkpoint may be forced.
+  7. Migration destination integrity and logical row preservation remain required.
+- Architectural Decision: Production inspection and migration retain `mode=ro`. `immutable=1` is NOT introduced because `immutable=1` disables standard SQLite locking/change-detection and is unsafe for active WAL sources.
+- Operational Notes (Preserved without cleanup):
+  - Differing legacy DB candidates (`backend/data/companion.db` vs `data/companion.db`) are intentionally handled by fail-closed ambiguity detection (`MigrationAmbiguityError`).
+  - Zero-byte placeholder `backend/companion.db` is harmless local debris.
+  - Stale un-bootstrapped `%LOCALAPPDATA%\AI Companion\Data\database\companion.db` preserved.
+  - Scratch file `temp.txt` preserved.
+  - Rehearsal and demo roots outside repository preserved.
+- Test Baseline Verified: 130 backend pytest passed, 132 frontend vitest passed, 0 tsc errors.
 - Active Plan: `docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md`
 
 ---
