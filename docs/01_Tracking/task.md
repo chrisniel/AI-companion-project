@@ -2,7 +2,7 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: Phase 8P.3 COMPLETE / VERIFIED — Phase 8P.4 next
+- Status: Phase 8P.4 COMPLETE / VERIFIED — Phase 8P.5 next
 - Current Sprint: Phase 8 — PC Frontend Architecture, Runtime Config, Multimodal & Polish
 - Branches: `feature/phase8-ui-foundation` → `feature/phase8-runtime-config` → `feature/multimodal-image-attachments` → `feature/phase8-ui-integration-polish`
 - Target: Mock removal, view decomposition, COMPANION_DATA_ROOT, terminology reconciliation, model schema split, image attachments, 100+ pytest / 132+ vitest
@@ -18,34 +18,21 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — PHASE 8P.3 PERSISTENT STORAGE FOUNDATION VERIFIED & CLOSED]
+## [CURRENT EXECUTION STATE — PHASE 8P.4 MODEL REGISTRY SCHEMA V3 & SERIALIZATION BRIDGE COMPLETE]
 
-- Status: Phase 8P.3 is COMPLETE / VERIFIED. Phase 8P.4 (Model Registry Schema v3 & Temporary Serialization Bridge) is NOT started.
+- Status: Phase 8P.4 is COMPLETE / VERIFIED. Phase 8P.5 (Effective Registry, Validation, GGUF Metadata & Capability Availability) is NOT STARTED.
 - Verification Completed:
-  1. WAL-safe SQLite migration: native `sqlite3.Connection.backup()` captures uncheckpointed committed WAL transactions; ambiguity check fails closed if any candidate has an active `-wal` file.
-  2. Schema lifecycle helper: `prepare_database_schema()` brings canonical DB to Alembic head in an isolated worker thread; legacy sources are never modified.
-  3. Canonical DB validation: fails closed with `CorruptCanonicalDatabaseError` on 0-byte or corrupt canonical DBs.
-  4. Absolute data root invariant: strictly requires and validates absolute paths for `COMPANION_DATA_ROOT`, `bootstrap.json` `data_root`, and `write_bootstrap()`, rejecting relative paths with `StorageError`.
-  5. Real legacy DB controlled rehearsal: verified non-destructive migration rehearsal against isolated destination (`D:\AICompanionMigrationRehearsal`); destination integrity passed and Alembic head verified at `005_scope_message_constraints`.
-  6. Source DB byte-immutability: authoritative legacy source (`backend/data/companion.db`) confirmed byte-identical (size 188,416 bytes, SHA-256 `80758cbff04e0436d0465f7799a9ff6a074115aef7574aa52a3cc2758f246027`, mtime unchanged).
-  7. Git-ignored / local state audit: verified clean repository baseline, cataloged model weights, runtime binaries, Android build outputs, and environment variables with zero secret leakage.
-  8. SQLite SHM investigation & Case C confirmation: classified observed SHM mtime change as Case C (transient OS-level reader-lock coordination metadata on Windows memory-mapped files; content SHA-256 and size remain 100% byte-identical).
-- Source-Immutability Invariants (Phase 8P.3 Canonical Semantics):
-  1. `companion.db`: SHA-256 MUST remain unchanged, size MUST remain unchanged, mtime MUST remain unchanged.
-  2. `companion.db-wal`: SHA-256 MUST remain unchanged, size MUST remain unchanged, no checkpoint/truncate/write may occur.
-  3. `companion.db-shm`: SHA-256 MUST remain unchanged, size MUST remain unchanged, filesystem mtime MAY change as a result of legitimate SQLite read-lock / memory-mapped WAL-index coordination; an mtime-only change is NOT considered source-data mutation.
-  4. No source database rows may be modified.
-  5. No Alembic migration may run against a legacy source.
-  6. No source WAL checkpoint may be forced.
-  7. Migration destination integrity and logical row preservation remain required.
-- Architectural Decision: Production inspection and migration retain `mode=ro`. `immutable=1` is NOT introduced because `immutable=1` disables standard SQLite locking/change-detection and is unsafe for active WAL sources.
-- Operational Notes (Preserved without cleanup):
-  - Differing legacy DB candidates (`backend/data/companion.db` vs `data/companion.db`) are intentionally handled by fail-closed ambiguity detection (`MigrationAmbiguityError`).
-  - Zero-byte placeholder `backend/companion.db` is harmless local debris.
-  - Stale un-bootstrapped `%LOCALAPPDATA%\AI Companion\Data\database\companion.db` preserved.
-  - Scratch file `temp.txt` preserved.
-  - Rehearsal and demo roots outside repository preserved.
-- Test Baseline Verified: 130 backend pytest passed, 132 frontend vitest passed, 0 tsc errors.
+  1. Enumerations: Added `ModelAssetType` (gguf, mmproj, lora, embedding, tokenizer), `ModelVariant` (instruct, thinking, base, code, unknown), `InputModality` (text, image, audio, video), `ModelDiscoveryState` (discovered, registered, verified, incompatible), `ReasoningMode` (always_on, toggleable, unsupported, unknown), `CapabilityProvenance` (declared, detected, verified, unknown); updated `ValidationStatus` to include `incompatible`.
+  2. Sub-schemas: `CompanionArtifactStatus`, `CapabilityEntry`, `GenerationDefaults`; extended `CompanionFile` with optional `sha256: Optional[str] = None` preserving backward compatibility.
+  3. Structured Models: Implemented `ModelManifest` (stable identity and artifact metadata; safe list factories; `model_max_context` distinct from runtime context size; `runtime_compatibility`), `ModelLibraryState` (computed local state), and `ModelRuntimeHints` (non-authoritative recommendations).
+  4. Composition: Redefined `ModelRegistryEntry` composing `manifest`, `library_state`, `hints`, `runtime_model_id`, and `registry_source` (defaulting to `"factory"` during transition).
+  5. Flat Serialization Bridge: Implemented `@computed_field` properties with setters for all 19 flat fields (`id`, `display_name`, `family`, `variant`, `primary_file`, `companion_files`, `quantization`, `parameters`, `context_limit`, `capabilities`, `recommended_profiles`, `estimated_vram_gb`, `estimated_ram_gb`, `license`, `source`, `validation_status`, `primary_file_exists`, `companion_files_valid`, `size_gb`) plus `@model_validator(mode="before")` mapping flat dictionaries into structured sub-models while strictly forbidding unrecognized extra fields (`extra="forbid"`).
+  6. Minimal Service Compatibility: Adapted `backend/app/services/model_registry.py` only enough to populate and query structured sub-models, preserving all existing scanning, filtering, mmproj-prefix exclusion, size threshold, and sorting behaviors; zero Phase 8P.5 logic introduced.
+  7. Registry Template Schema v3: Upgraded `models/registry.template.json` to `_schema_version: "3"`, added canonical explanation note on factory template vs persistent `COMPANION_DATA_ROOT`, and updated all 5 Qwen3-VL entries with `asset_type: "gguf"`, `architecture: "qwen3vl"`, `input_modalities: ["text", "image"]`, `model_max_context: 32768`, `runtime_compatibility: ["llama.cpp"]`, and `reasoning_mode` (`"unsupported"` for instruct, `"always_on"` for thinking).
+  8. Test Suite Verification: 15 model registry tests passing (100%), 138 backend pytest passing (0 failures), 138 frontend vitest passing (7 suites, 0 failures), 0 TypeScript errors (`tsc --noEmit`).
+- Deferred QA Finding (Recorded for Phase 8C):
+  - Responsive Web Layout & Pagination Hardening recorded under Phase 8C; NOT implemented in Phase 8P.4.
+- Next Batch: Phase 8P.5 — Effective Registry, Validation, GGUF Metadata & Capability Availability (NOT STARTED).
 - Active Plan: `docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md`
 
 ---
@@ -85,10 +72,10 @@ Branch: `feature/phase8-runtime-config` (based on merged 8A)
 - [x] 8P.3d: Test isolation & bootstrap tests — test_bootstrap.py (locator resolution, corruption fallback, unmounted path, env precedence) + test_migration_safety.py (fresh, single legacy, multi-candidate ambiguity stop, restart safety, stale temp safety) + test_storage_engine_lifecycle.py (canonical paths, lazy directory creation, SQLite PRAGMAs) + conftest.py test isolation without %LOCALAPPDATA% pollution
 
 **8P.4 — Model Registry Schema v3 & Temporary Serialization Bridge**
-- [ ] 8P.4a: schemas/model_registry.py — new enums (ModelAssetType, ModelVariant, InputModality, ModelDiscoveryState, ReasoningMode, CapabilityProvenance) + sub-schemas (CompanionArtifactStatus, CapabilityEntry, GenerationDefaults, CompanionFile extended)
-- [ ] 8P.4b: schemas/model_registry.py — ModelManifest (stable identity + artifact metadata; runtime_compatibility: List[str] = []), ModelLibraryState (validation status, available capabilities, sizes), ModelRuntimeHints (recommendations only), ModelRegistryEntry (composes all three + runtime_model_id + registry_source: Literal["factory","installed"])
-- [ ] 8P.4c: schemas/model_registry.py — temporary @computed_field compatibility bridge on ModelRegistryEntry for existing flat fields (context_limit, estimated_vram_gb, variant, capabilities, etc.)
-- [ ] 8P.4d: models/registry.template.json — upgrade to schema v3; asset_type, architecture, input_modalities, model_max_context, reasoning_mode on all entries; clarifying _note
+- [x] 8P.4a: schemas/model_registry.py — new enums (ModelAssetType, ModelVariant, InputModality, ModelDiscoveryState, ReasoningMode, CapabilityProvenance) + sub-schemas (CompanionArtifactStatus, CapabilityEntry, GenerationDefaults, CompanionFile extended)
+- [x] 8P.4b: schemas/model_registry.py — ModelManifest (stable identity + artifact metadata; runtime_compatibility: List[str] = []), ModelLibraryState (validation status, available capabilities, sizes), ModelRuntimeHints (recommendations only), ModelRegistryEntry (composes all three + runtime_model_id + registry_source: Literal["factory","installed"])
+- [x] 8P.4c: schemas/model_registry.py — temporary @computed_field compatibility bridge on ModelRegistryEntry for existing flat fields (context_limit, estimated_vram_gb, variant, capabilities, etc.)
+- [x] 8P.4d: models/registry.template.json — upgrade to schema v3; asset_type, architecture, input_modalities, model_max_context, reasoning_mode on all entries; clarifying _note
 
 **8P.5 — Effective Registry, Validation, GGUF Metadata & Capability Availability**
 - [ ] 8P.5a: model_registry.py — _build_effective_registry(): load factory (models/registry.template.json relative to FACTORY_MODEL_ROOT); load installed (INSTALLED_REGISTRY_PATH relative to MODEL_LIBRARY_DIR) if present; installed entry shadows factory on same id; empty installed never hides factory; registry_source tag per entry
@@ -137,6 +124,7 @@ Branch: `feature/multimodal-image-attachments` (based on merged 8P; depends on s
 
 ### 8C — Integration, Accessibility & Polish
 Branch: `feature/phase8-ui-integration-polish` (based on merged 8B)
+- [ ] 8C.0: Deferred QA Finding — Responsive Web Layout & Pagination Hardening (phone/narrow browser layout issues, small-screen pagination adaptation, container overflow, text clipping, and mis-sizing across 1920x1080, 1600x900, 1440x900, 1366x768, 1024px-class, 768px-class, phone portrait/landscape; audit scope: Assistant, composer, Models view, Tasks/Schedule, Settings, modals, touch targets, viewport-height)
 - [ ] 8C.1: Delete mock/*.ts files (verify zero production imports first; grep check mandatory)
 - [ ] 8C.2: Bundle analysis — vite-bundle-visualizer; lazy-load ScheduleView if > 500KB chunk
 - [ ] 8C.3: Accessibility — aria-labels on all icon-only buttons; role="article" on message bubbles; focus management; keyboard nav
