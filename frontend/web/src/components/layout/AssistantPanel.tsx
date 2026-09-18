@@ -10,6 +10,7 @@ import { useBackend } from '../../context/BackendContext';
 import { Badge } from '../ui/Badge';
 import { StatusIndicator } from '../ui/StatusIndicator';
 import { AssistantPanelMode, AssistantState } from '../../types';
+import { getRegistryEntryDisplayName, registryEntryMatchesIdentifier } from '../../services/api';
 
 export interface AssistantPanelProps {
   mode: AssistantPanelMode;
@@ -33,8 +34,10 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({
 
   // Authoritative runtime model identity
   const activeModelId = isOnline && modelStatus?.model_loaded ? (modelStatus?.active_model ?? null) : null;
-  const activeRegistryEntry = activeModelId ? registry.find((m) => m.id === activeModelId) : null;
-  const activeModelDisplay = activeRegistryEntry?.display_name || activeModelId || (isOnline ? 'No Model Loaded' : 'Unavailable');
+  const activeRegistryEntry = activeModelId ? registry.find((m) => registryEntryMatchesIdentifier(m, activeModelId)) : null;
+  const activeModelDisplay = activeRegistryEntry
+    ? getRegistryEntryDisplayName(activeRegistryEntry)
+    : (activeModelId || (isOnline ? 'No Model Loaded' : 'Unavailable'));
 
   const runtimeState = isOnline ? (modelStatus?.runtime_state || 'Unknown') : 'Offline';
   const appliedLayers = isOnline && modelStatus?.applied_gpu_layers != null

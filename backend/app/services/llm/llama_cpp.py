@@ -637,7 +637,7 @@ class LlamaCppProvider(BaseLLMProvider):
                 ):
                     available.append(f.relative_to(settings.MODELS_DIR).as_posix())
 
-        registry_entries = [m.primary_file for m in build_model_list() if m.primary_file_exists]
+        registry_entries = [m.manifest.primary_file for m in build_model_list() if m.library_state.primary_file_exists]
 
         # Determine residency & readiness booleans
         model_resident = (self._runtime_state == LLMRuntimeState.MODEL_READY and bool(self._active_model_name))

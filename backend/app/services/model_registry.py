@@ -517,6 +517,7 @@ def _validate_entry(entry: ModelRegistryEntry) -> ModelRegistryEntry:
         ]
         return entry
 
+    assert primary_resolved is not None
     entry.library_state.size_gb = round(primary_resolved.stat().st_size / (1024 ** 3), 2)
 
     companion_statuses: List[CompanionArtifactStatus] = []

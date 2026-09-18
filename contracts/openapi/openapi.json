@@ -9,10 +9,10 @@
     "/api/v1/health": {
       "get": {
         "tags": [
-          "Health & System"
+          "Health"
         ],
         "summary": "Public Health Check",
-        "description": "Public liveness and readiness probe.\nAndroid uses this to detect if the Windows host PC is online on the local network.\nDoes not require pairing credentials.",
+        "description": "Public liveness and readiness probe.\nAndroid uses this to detect if the Windows host PC is online on the local network.\nDoes not require pairing credentials or expose internal versions or database metrics.",
         "operationId": "health_check_api_v1_health_get",
         "responses": {
           "200": {
@@ -31,10 +31,10 @@
     "/api/v1/system/status": {
       "get": {
         "tags": [
-          "Health & System"
+          "System Status"
         ],
         "summary": "Host System Status (Protected)",
-        "description": "Detailed Windows host machine telemetry.\nRequires valid pairing token.",
+        "description": "Detailed Windows host machine telemetry and database diagnostics.\nRequires valid pairing token.",
         "operationId": "system_status_api_v1_system_status_get",
         "security": [
           {
@@ -144,7 +144,7 @@
           "Tasks"
         ],
         "summary": "List Tasks",
-        "description": "List all tasks owned by the authenticated profile with optional filtering.",
+        "description": "List active (non-deleted) tasks owned by the authenticated profile with optional filtering.",
         "operationId": "list_tasks_api_v1_tasks_get",
         "security": [
           {
@@ -187,6 +187,24 @@
               "title": "Priority"
             },
             "description": "Filter tasks by priority."
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TaskCategory"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter tasks by category.",
+              "title": "Category"
+            },
+            "description": "Filter tasks by category."
           },
           {
             "name": "skip",
@@ -319,13 +337,95 @@
         }
       }
     },
+    "/api/v1/tasks/trash": {
+      "get": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "List Soft-Deleted Tasks (Recycle Bin)",
+        "description": "List soft-deleted tasks in the Recycle Bin for the authenticated profile with purge expiry countdown.",
+        "operationId": "list_trash_api_v1_tasks_trash_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Offset for pagination.",
+              "default": 0,
+              "title": "Skip"
+            },
+            "description": "Offset for pagination."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Page limit.",
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "Page limit."
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/tasks/{task_id}": {
       "get": {
         "tags": [
           "Tasks"
         ],
         "summary": "Get Task by ID",
-        "description": "Retrieve a single task by its unique UUID identifier.",
+        "description": "Retrieve an active single task by its unique UUID identifier.",
         "operationId": "get_task_api_v1_tasks__task_id__get",
         "security": [
           {
@@ -387,7 +487,7 @@
           "Tasks"
         ],
         "summary": "Partial Update Task",
-        "description": "Partially update specific fields on an existing task.",
+        "description": "Partially update specific fields on an existing active task.",
         "operationId": "update_task_api_v1_tasks__task_id__patch",
         "security": [
           {
@@ -458,8 +558,8 @@
         "tags": [
           "Tasks"
         ],
-        "summary": "Delete Task",
-        "description": "Permanently delete a task by ID.",
+        "summary": "Soft Delete Task",
+        "description": "Move a task to the Recycle Bin (soft delete, Section 16.1).",
         "operationId": "delete_task_api_v1_tasks__task_id__delete",
         "security": [
           {
@@ -474,6 +574,1274 @@
             "schema": {
               "type": "string",
               "title": "Task Id"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{task_id}/restore": {
+      "post": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Restore Soft-Deleted Task",
+        "description": "Restore a soft-deleted task from the Recycle Bin back to active status.",
+        "operationId": "restore_task_api_v1_tasks__task_id__restore_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{task_id}/permanent": {
+      "delete": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Permanently Delete Task",
+        "description": "Permanently delete a task row from the database (must currently reside in Trash).",
+        "operationId": "permanent_delete_task_api_v1_tasks__task_id__permanent_delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/models": {
+      "get": {
+        "summary": "Get LLM model status and hardware profiles",
+        "description": "Return active model, loaded state, VRAM profile, and available GGUF files.",
+        "operationId": "get_model_status_api_v1_models_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/models/registry": {
+      "get": {
+        "summary": "Get Model Registry",
+        "description": "Return all known and discovered models with validation status,\ncapabilities, VRAM estimates, and companion file status.\nMaster Plan §16.2.",
+        "operationId": "get_model_registry_api_v1_models_registry_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ModelRegistryEntry"
+                  },
+                  "title": "Response Get Model Registry Api V1 Models Registry Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/models/load": {
+      "post": {
+        "summary": "Load LLM model into VRAM",
+        "description": "Load model weights into GPU VRAM or memory.",
+        "operationId": "load_model_api_v1_models_load_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ModelLoadRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/models/unload": {
+      "post": {
+        "summary": "Unload LLM model and release VRAM",
+        "description": "Unload model from GPU memory to free VRAM immediately.",
+        "operationId": "unload_model_api_v1_models_unload_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/models/profile": {
+      "patch": {
+        "summary": "Update hardware performance profile",
+        "description": "Switch hardware profile (eco, balanced, maximum).",
+        "operationId": "update_profile_api_v1_models_profile_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelProfileUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat/completions": {
+      "post": {
+        "summary": "Generate chat completions (streaming or synchronous)",
+        "description": "Generate conversational completions matching OpenAI API format.\n\nSupports Server-Sent Events (SSE) streaming with `stream: true`.",
+        "operationId": "create_chat_completion_api_v1_chat_completions_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatCompletionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatCompletionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations": {
+      "post": {
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Create Conversation",
+        "description": "Create a new persistent conversation thread.",
+        "operationId": "create_conversation_api_v1_conversations_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ConversationCreate"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "List Conversations",
+        "description": "List active conversations for the authenticated owner, ordered by updated_at descending.",
+        "operationId": "list_conversations_api_v1_conversations_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationListOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversation_id}": {
+      "get": {
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Get Conversation",
+        "description": "Get single conversation by ID.",
+        "operationId": "get_conversation_api_v1_conversations__conversation_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Rename Conversation",
+        "description": "Rename a conversation title.",
+        "operationId": "rename_conversation_api_v1_conversations__conversation_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Delete Conversation",
+        "description": "Soft-delete a conversation.",
+        "operationId": "delete_conversation_api_v1_conversations__conversation_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversation_id}/messages": {
+      "get": {
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "List Conversation Messages",
+        "description": "List messages for a conversation ordered chronologically by sequence_no ASC.",
+        "operationId": "list_messages_api_v1_conversations__conversation_id__messages_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageListOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Send Message & Stream Response",
+        "description": "Send user message and receive streaming assistant tokens via SSE.",
+        "operationId": "send_message_stream_api_v1_conversations__conversation_id__messages_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageSend"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "SSE Token Stream",
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "text/event-stream": {}
+            }
+          },
+          "404": {
+            "description": "Conversation not found"
+          },
+          "409": {
+            "description": "CONVERSATION_BUSY or DUPLICATE_MESSAGE"
+          },
+          "503": {
+            "description": "LLM_UNAVAILABLE"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/memories": {
+      "get": {
+        "tags": [
+          "Memories"
+        ],
+        "summary": "List Memories",
+        "description": "List active memories owned by the user, optionally filtered by category.",
+        "operationId": "list_memories_api_v1_memories_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by category (fact, preference, context)",
+              "title": "Category"
+            },
+            "description": "Filter by category (fact, preference, context)"
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryListOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Memories"
+        ],
+        "summary": "Create Memory",
+        "description": "Create a new manual memory record (synced automatically to FTS5).",
+        "operationId": "create_memory_api_v1_memories_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemoryCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/memories/{memory_id}": {
+      "patch": {
+        "tags": [
+          "Memories"
+        ],
+        "summary": "Update Memory",
+        "description": "Update memory content, category, or importance.",
+        "operationId": "update_memory_api_v1_memories__memory_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "memory_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Memory Id"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemoryUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Memories"
+        ],
+        "summary": "Delete Memory",
+        "description": "Soft-delete memory (FTS5 triggers remove it from index).",
+        "operationId": "delete_memory_api_v1_memories__memory_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "memory_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Memory Id"
             }
           },
           {
@@ -539,6 +1907,463 @@
         "title": "AuthVerifyResponse",
         "description": "Result returned on token verification check."
       },
+      "CapabilityEntry": {
+        "properties": {
+          "capability": {
+            "$ref": "#/components/schemas/ModelCapability"
+          },
+          "supported": {
+            "type": "boolean",
+            "title": "Supported",
+            "default": true
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/CapabilityProvenance",
+            "default": "unknown"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "capability"
+        ],
+        "title": "CapabilityEntry"
+      },
+      "CapabilityProvenance": {
+        "type": "string",
+        "enum": [
+          "declared",
+          "detected",
+          "verified",
+          "unknown"
+        ],
+        "title": "CapabilityProvenance"
+      },
+      "ChatCompletionChoice": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "title": "Index",
+            "default": 0
+          },
+          "message": {
+            "$ref": "#/components/schemas/ChatMessage"
+          },
+          "finish_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finish Reason",
+            "default": "stop"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "ChatCompletionChoice",
+        "description": "Individual completion choice."
+      },
+      "ChatCompletionRequest": {
+        "properties": {
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ChatMessage"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Messages"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "stream": {
+            "type": "boolean",
+            "title": "Stream",
+            "default": false
+          },
+          "temperature": {
+            "type": "number",
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Temperature",
+            "default": 0.7
+          },
+          "top_p": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Top P",
+            "default": 0.9
+          },
+          "max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 8192.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tokens",
+            "default": 1024
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "eco",
+                  "balanced",
+                  "maximum"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "messages"
+        ],
+        "title": "ChatCompletionRequest",
+        "description": "Request payload for /api/v1/chat/completions."
+      },
+      "ChatCompletionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "object": {
+            "type": "string",
+            "title": "Object",
+            "default": "chat.completion"
+          },
+          "created": {
+            "type": "integer",
+            "title": "Created"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/ChatCompletionChoice"
+            },
+            "type": "array",
+            "title": "Choices"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/ChatCompletionUsage"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "created",
+          "model",
+          "choices"
+        ],
+        "title": "ChatCompletionResponse",
+        "description": "OpenAI-compatible synchronous chat completion response."
+      },
+      "ChatCompletionUsage": {
+        "properties": {
+          "prompt_tokens": {
+            "type": "integer",
+            "title": "Prompt Tokens",
+            "default": 0
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "title": "Completion Tokens",
+            "default": 0
+          },
+          "total_tokens": {
+            "type": "integer",
+            "title": "Total Tokens",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ChatCompletionUsage",
+        "description": "Token usage counters."
+      },
+      "ChatMessage": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "system",
+              "user",
+              "assistant"
+            ],
+            "title": "Role"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "ChatMessage",
+        "description": "Chat message in OpenAI-compatible format."
+      },
+      "CompanionArtifactStatus": {
+        "properties": {
+          "artifact": {
+            "$ref": "#/components/schemas/CompanionFile"
+          },
+          "exists": {
+            "type": "boolean",
+            "title": "Exists",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "artifact"
+        ],
+        "title": "CompanionArtifactStatus"
+      },
+      "CompanionFile": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sha256"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "role",
+          "path"
+        ],
+        "title": "CompanionFile"
+      },
+      "ConversationCreate": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title",
+            "default": "New Conversation"
+          },
+          "character_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Character Id",
+            "default": "default"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ConversationCreate",
+        "description": "Payload to start a new persistent conversation."
+      },
+      "ConversationListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConversationOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "ConversationListOut",
+        "description": "Paginated or listed conversation response."
+      },
+      "ConversationOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "character_id": {
+            "type": "string",
+            "title": "Character Id"
+          },
+          "owner_id": {
+            "type": "string",
+            "title": "Owner Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "character_id",
+          "owner_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ConversationOut",
+        "description": "Conversation summary output."
+      },
+      "ConversationUpdate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Title"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "ConversationUpdate",
+        "description": "Payload to rename/update a conversation."
+      },
+      "GenerationDefaults": {
+        "properties": {
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature"
+          },
+          "top_p": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top P"
+          },
+          "top_k": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top K"
+          },
+          "min_p": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min P"
+          },
+          "repeat_penalty": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repeat Penalty"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "GenerationDefaults"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -557,35 +2382,918 @@
           "status": {
             "type": "string",
             "title": "Status",
-            "description": "Overall system health status.",
+            "description": "Overall system liveness status.",
             "default": "healthy"
-          },
-          "version": {
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "HealthResponse",
+        "description": "Liveness and readiness status indicator."
+      },
+      "InputModality": {
+        "type": "string",
+        "enum": [
+          "text",
+          "image",
+          "audio",
+          "video"
+        ],
+        "title": "InputModality"
+      },
+      "LLMRuntimeState": {
+        "type": "string",
+        "enum": [
+          "SERVER_STOPPED",
+          "SERVER_STARTING",
+          "MODEL_UNLOADED",
+          "MODEL_LOADING",
+          "MODEL_READY",
+          "MODEL_SLEEPING",
+          "MODEL_UNLOADING",
+          "MODEL_ERROR",
+          "SERVER_ERROR"
+        ],
+        "title": "LLMRuntimeState"
+      },
+      "MemoryCreate": {
+        "properties": {
+          "content": {
             "type": "string",
-            "title": "Version",
-            "description": "Application version."
+            "minLength": 1,
+            "title": "Content"
           },
-          "database_connected": {
-            "type": "boolean",
-            "title": "Database Connected",
-            "description": "SQLite database read/write connectivity flag."
-          },
-          "timestamp": {
+          "category": {
             "type": "string",
-            "format": "date-time",
-            "title": "Timestamp",
-            "description": "UTC server timestamp."
+            "enum": [
+              "fact",
+              "preference",
+              "context"
+            ],
+            "title": "Category",
+            "default": "fact"
+          },
+          "importance": {
+            "type": "number",
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Importance",
+            "default": 1.0
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "version",
-          "database_connected",
-          "timestamp"
+          "content"
         ],
-        "title": "HealthResponse",
-        "description": "Liveness and dependency connectivity status."
+        "title": "MemoryCreate",
+        "description": "Payload to insert a new memory record."
+      },
+      "MemoryListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page",
+            "default": 1
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size",
+            "default": 50
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "MemoryListOut",
+        "description": "List of memories with pagination info."
+      },
+      "MemoryOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "importance": {
+            "type": "number",
+            "title": "Importance"
+          },
+          "source_type": {
+            "type": "string",
+            "title": "Source Type"
+          },
+          "user_verified": {
+            "type": "boolean",
+            "title": "User Verified"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "owner_id": {
+            "type": "string",
+            "title": "Owner Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "content",
+          "category",
+          "importance",
+          "source_type",
+          "user_verified",
+          "created_at",
+          "owner_id"
+        ],
+        "title": "MemoryOut",
+        "description": "Memory representation output."
+      },
+      "MemoryUpdate": {
+        "properties": {
+          "content": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "fact",
+                  "preference",
+                  "context"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "importance": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 2.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Importance"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "MemoryUpdate",
+        "description": "Payload to update an existing memory record."
+      },
+      "MessageListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MessageOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "MessageListOut",
+        "description": "Message collection for a conversation."
+      },
+      "MessageOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "conversation_id": {
+            "type": "string",
+            "title": "Conversation Id"
+          },
+          "sender": {
+            "type": "string",
+            "title": "Sender"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "sequence_no": {
+            "type": "integer",
+            "title": "Sequence No"
+          },
+          "client_message_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Message Id"
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          },
+          "prompt_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Tokens"
+          },
+          "completion_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completion Tokens"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "conversation_id",
+          "sender",
+          "content",
+          "status",
+          "sequence_no",
+          "created_at"
+        ],
+        "title": "MessageOut",
+        "description": "Message detail response."
+      },
+      "MessageSend": {
+        "properties": {
+          "user_text": {
+            "type": "string",
+            "minLength": 1,
+            "title": "User Text"
+          },
+          "client_message_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Message Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "user_text"
+        ],
+        "title": "MessageSend",
+        "description": "Payload sent by client to add a user message and trigger generation."
+      },
+      "ModelAssetType": {
+        "type": "string",
+        "enum": [
+          "gguf",
+          "mmproj",
+          "lora",
+          "embedding",
+          "tokenizer"
+        ],
+        "title": "ModelAssetType"
+      },
+      "ModelCapability": {
+        "type": "string",
+        "enum": [
+          "chat",
+          "vision",
+          "reasoning",
+          "structured_output",
+          "tool_calling",
+          "multilingual"
+        ],
+        "title": "ModelCapability"
+      },
+      "ModelDiscoveryState": {
+        "type": "string",
+        "enum": [
+          "discovered",
+          "registered",
+          "verified",
+          "incompatible"
+        ],
+        "title": "ModelDiscoveryState"
+      },
+      "ModelLibraryState": {
+        "properties": {
+          "discovery_state": {
+            "$ref": "#/components/schemas/ModelDiscoveryState",
+            "default": "discovered"
+          },
+          "validation_status": {
+            "$ref": "#/components/schemas/ValidationStatus",
+            "default": "unregistered"
+          },
+          "primary_file_exists": {
+            "type": "boolean",
+            "title": "Primary File Exists",
+            "default": false
+          },
+          "size_gb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Gb"
+          },
+          "companion_artifact_statuses": {
+            "items": {
+              "$ref": "#/components/schemas/CompanionArtifactStatus"
+            },
+            "type": "array",
+            "title": "Companion Artifact Statuses"
+          },
+          "available_capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/ModelCapability"
+            },
+            "type": "array",
+            "title": "Available Capabilities"
+          },
+          "capability_provenance": {
+            "items": {
+              "$ref": "#/components/schemas/CapabilityEntry"
+            },
+            "type": "array",
+            "title": "Capability Provenance"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ModelLibraryState",
+        "description": "Computed/local validation state (what the library knows)."
+      },
+      "ModelLoadRequest": {
+        "properties": {
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "eco",
+                  "balanced",
+                  "maximum"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ModelLoadRequest",
+        "description": "Payload to trigger loading a model into memory/VRAM."
+      },
+      "ModelManifest": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "asset_type": {
+            "$ref": "#/components/schemas/ModelAssetType",
+            "default": "gguf"
+          },
+          "family": {
+            "type": "string",
+            "title": "Family",
+            "default": ""
+          },
+          "architecture": {
+            "type": "string",
+            "title": "Architecture",
+            "default": ""
+          },
+          "variant": {
+            "$ref": "#/components/schemas/ModelVariant",
+            "default": "unknown"
+          },
+          "parameters": {
+            "type": "string",
+            "title": "Parameters",
+            "default": ""
+          },
+          "quantization": {
+            "type": "string",
+            "title": "Quantization",
+            "default": ""
+          },
+          "reasoning_mode": {
+            "$ref": "#/components/schemas/ReasoningMode",
+            "default": "unknown"
+          },
+          "capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/ModelCapability"
+            },
+            "type": "array",
+            "title": "Capabilities"
+          },
+          "input_modalities": {
+            "items": {
+              "$ref": "#/components/schemas/InputModality"
+            },
+            "type": "array",
+            "title": "Input Modalities"
+          },
+          "model_max_context": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Max Context"
+          },
+          "runtime_compatibility": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Runtime Compatibility"
+          },
+          "primary_file": {
+            "type": "string",
+            "title": "Primary File"
+          },
+          "companion_files": {
+            "items": {
+              "$ref": "#/components/schemas/CompanionFile"
+            },
+            "type": "array",
+            "title": "Companion Files"
+          },
+          "chat_template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chat Template"
+          },
+          "license": {
+            "type": "string",
+            "title": "License",
+            "default": ""
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": ""
+          },
+          "sha256_primary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sha256 Primary"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "display_name",
+          "primary_file"
+        ],
+        "title": "ModelManifest",
+        "description": "Stable identity and artifact metadata (what the artifact IS)."
+      },
+      "ModelProfileUpdateRequest": {
+        "properties": {
+          "profile": {
+            "type": "string",
+            "enum": [
+              "eco",
+              "balanced",
+              "maximum"
+            ],
+            "title": "Profile"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "profile"
+        ],
+        "title": "ModelProfileUpdateRequest",
+        "description": "Payload to update hardware profile."
+      },
+      "ModelRegistryEntry": {
+        "properties": {
+          "manifest": {
+            "$ref": "#/components/schemas/ModelManifest"
+          },
+          "library_state": {
+            "$ref": "#/components/schemas/ModelLibraryState"
+          },
+          "hints": {
+            "$ref": "#/components/schemas/ModelRuntimeHints"
+          },
+          "runtime_model_id": {
+            "type": "string",
+            "title": "Runtime Model Id",
+            "default": ""
+          },
+          "registry_source": {
+            "type": "string",
+            "enum": [
+              "factory",
+              "installed"
+            ],
+            "title": "Registry Source",
+            "default": "factory"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "manifest",
+          "library_state",
+          "hints"
+        ],
+        "title": "ModelRegistryEntry",
+        "description": "Three-layer structured model registry entry (Schema v3)."
+      },
+      "ModelRuntimeHints": {
+        "properties": {
+          "recommended_profiles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Recommended Profiles"
+          },
+          "estimated_vram_gb": {
+            "type": "number",
+            "title": "Estimated Vram Gb",
+            "default": 0.0
+          },
+          "estimated_ram_gb": {
+            "type": "number",
+            "title": "Estimated Ram Gb",
+            "default": 0.0
+          },
+          "generation_defaults": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GenerationDefaults"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ModelRuntimeHints",
+        "description": "Non-authoritative runtime/hardware recommendations."
+      },
+      "ModelStatusResponse": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "engine_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine Version",
+            "default": "b10936"
+          },
+          "router_running": {
+            "type": "boolean",
+            "title": "Router Running",
+            "default": false
+          },
+          "managed_by_core": {
+            "type": "boolean",
+            "title": "Managed By Core",
+            "default": false
+          },
+          "runtime_state": {
+            "$ref": "#/components/schemas/LLMRuntimeState",
+            "default": "SERVER_STOPPED"
+          },
+          "active_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Model"
+          },
+          "model_resident": {
+            "type": "boolean",
+            "title": "Model Resident",
+            "default": false
+          },
+          "model_loaded": {
+            "type": "boolean",
+            "title": "Model Loaded",
+            "default": false
+          },
+          "model_awake": {
+            "type": "boolean",
+            "title": "Model Awake",
+            "default": false
+          },
+          "requested_profile": {
+            "type": "string",
+            "title": "Requested Profile",
+            "default": "balanced"
+          },
+          "applied_profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied Profile"
+          },
+          "applied_context_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied Context Size"
+          },
+          "applied_gpu_layers": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied Gpu Layers"
+          },
+          "requested_mmproj_offload": {
+            "type": "boolean",
+            "title": "Requested Mmproj Offload",
+            "default": true
+          },
+          "applied_mmproj_offload": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied Mmproj Offload"
+          },
+          "generation_active": {
+            "type": "boolean",
+            "title": "Generation Active",
+            "default": false
+          },
+          "last_runtime_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Runtime Error"
+          },
+          "mmproj_offload": {
+            "type": "boolean",
+            "title": "Mmproj Offload",
+            "default": true
+          },
+          "is_loaded": {
+            "type": "boolean",
+            "title": "Is Loaded",
+            "default": false
+          },
+          "active_profile": {
+            "type": "string",
+            "title": "Active Profile",
+            "default": "balanced"
+          },
+          "context_size": {
+            "type": "integer",
+            "title": "Context Size",
+            "default": 4096
+          },
+          "gpu_layers": {
+            "type": "integer",
+            "title": "Gpu Layers",
+            "default": 28
+          },
+          "idle_timeout_seconds": {
+            "type": "integer",
+            "title": "Idle Timeout Seconds",
+            "default": 900
+          },
+          "seconds_until_idle": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds Until Idle"
+          },
+          "seconds_until_unload": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds Until Unload"
+          },
+          "available_models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Available Models",
+            "default": []
+          },
+          "available_registry": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available Registry"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "provider"
+        ],
+        "title": "ModelStatusResponse",
+        "description": "Runtime inspection of active models, router lifecycle, and truthful applied hardware profiles.\nPhase 3 Truthful Telemetry Contract:\n- Distinguishes router process liveness (`router_running`) from model residency (`model_resident`).\n- Distinguishes requested profile configuration (`requested_profile`) from actually verified\n  applied launch parameters (`applied_profile`, `applied_context_size`, `applied_gpu_layers`, `mmproj_offload`).\n- Expressive MODEL_SLEEPING semantics via dual fields:\n    `model_loaded = True` (Logical model residency: worker process exists, model registered in router)\n    `model_awake = False` (VRAM/Compute readiness: allocations unmapped while sleeping)\n    `model_resident = False` (VRAM residency: GPU memory released while sleeping)"
+      },
+      "ModelVariant": {
+        "type": "string",
+        "enum": [
+          "instruct",
+          "thinking",
+          "base",
+          "code",
+          "unknown"
+        ],
+        "title": "ModelVariant"
+      },
+      "ReasoningMode": {
+        "type": "string",
+        "enum": [
+          "always_on",
+          "toggleable",
+          "unsupported",
+          "unknown"
+        ],
+        "title": "ReasoningMode"
       },
       "SystemStatusResponse": {
         "properties": {
@@ -621,6 +3329,16 @@
             "title": "Cpu Count",
             "description": "Logical CPU core count."
           },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "description": "Application version."
+          },
+          "database_connected": {
+            "type": "boolean",
+            "title": "Database Connected",
+            "description": "Database connectivity flag."
+          },
           "timestamp": {
             "type": "string",
             "format": "date-time",
@@ -634,10 +3352,25 @@
           "platform",
           "python_version",
           "hostname",
+          "version",
+          "database_connected",
           "timestamp"
         ],
         "title": "SystemStatusResponse",
-        "description": "Host machine hardware profile and runtime status."
+        "description": "Host machine hardware profile and runtime status (protected)."
+      },
+      "TaskCategory": {
+        "type": "string",
+        "enum": [
+          "general",
+          "work",
+          "personal",
+          "dev",
+          "shopping",
+          "health"
+        ],
+        "title": "TaskCategory",
+        "description": "Category classification matching Android TaskCategory."
       },
       "TaskCreate": {
         "properties": {
@@ -660,6 +3393,11 @@
             "title": "Notes",
             "description": "Detailed instructions or context."
           },
+          "category": {
+            "$ref": "#/components/schemas/TaskCategory",
+            "description": "Category or project tag.",
+            "default": "general"
+          },
           "priority": {
             "$ref": "#/components/schemas/TaskPriority",
             "description": "Urgency rating.",
@@ -677,6 +3415,32 @@
             ],
             "title": "Due Date",
             "description": "Target completion timestamp in ISO-8601."
+          },
+          "reminder_minutes_before": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reminder Minutes Before",
+            "description": "Minutes before due date to alert."
+          },
+          "reminder_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reminder At",
+            "description": "Explicit alert timestamp in ISO-8601."
           }
         },
         "additionalProperties": false,
@@ -709,7 +3473,7 @@
           "total"
         ],
         "title": "TaskListResponse",
-        "description": "Paginated or listed collection of tasks."
+        "description": "Paginated or listed collection of active tasks."
       },
       "TaskPriority": {
         "type": "string",
@@ -751,6 +3515,11 @@
             "title": "Notes",
             "description": "Task notes."
           },
+          "category": {
+            "$ref": "#/components/schemas/TaskCategory",
+            "description": "Category or project tag.",
+            "default": "general"
+          },
           "status": {
             "$ref": "#/components/schemas/TaskStatus",
             "description": "Current lifecycle state."
@@ -771,6 +3540,50 @@
             ],
             "title": "Due Date",
             "description": "Due date timestamp."
+          },
+          "reminder_minutes_before": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reminder Minutes Before",
+            "description": "Minutes before due date to alert."
+          },
+          "reminder_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reminder At",
+            "description": "Alert trigger timestamp."
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "description": "Soft-deletion flag.",
+            "default": false
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At",
+            "description": "Soft-deletion timestamp."
           },
           "created_at": {
             "type": "string",
@@ -836,6 +3649,16 @@
             ],
             "title": "Notes"
           },
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskCategory"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "status": {
             "anyOf": [
               {
@@ -867,12 +3690,193 @@
               }
             ],
             "title": "Due Date"
+          },
+          "reminder_minutes_before": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reminder Minutes Before"
+          },
+          "reminder_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reminder At"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "title": "TaskUpdate",
         "description": "Payload to update an existing task. Fields omitted remain unchanged."
+      },
+      "TrashListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TrashTaskResponse"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "List of soft-deleted tasks."
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Total count of soft-deleted tasks matching query."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "total"
+        ],
+        "title": "TrashListResponse",
+        "description": "Paginated or listed collection of soft-deleted tasks."
+      },
+      "TrashTaskResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Unique UUID identifier."
+          },
+          "owner_id": {
+            "type": "string",
+            "title": "Owner Id",
+            "description": "Account/profile ownership identifier."
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Task title."
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes",
+            "description": "Task notes."
+          },
+          "category": {
+            "$ref": "#/components/schemas/TaskCategory",
+            "description": "Category or project tag.",
+            "default": "general"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaskStatus",
+            "description": "Current lifecycle state."
+          },
+          "priority": {
+            "$ref": "#/components/schemas/TaskPriority",
+            "description": "Urgency rating."
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date",
+            "description": "Due date timestamp."
+          },
+          "reminder_minutes_before": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reminder Minutes Before",
+            "description": "Minutes before due date to alert."
+          },
+          "reminder_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reminder At",
+            "description": "Alert trigger timestamp."
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "description": "Soft-deletion flag.",
+            "default": false
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At",
+            "description": "Soft-deletion timestamp."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Creation timestamp in UTC."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "Last modification timestamp in UTC."
+          },
+          "expires_in_days": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expires In Days",
+            "description": "Days remaining before permanent automated purge."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "owner_id",
+          "title",
+          "status",
+          "priority",
+          "created_at",
+          "updated_at",
+          "expires_in_days"
+        ],
+        "title": "TrashTaskResponse",
+        "description": "Representation of a soft-deleted task residing in the Recycle Bin."
       },
       "ValidationError": {
         "properties": {
@@ -913,6 +3917,17 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "ValidationStatus": {
+        "type": "string",
+        "enum": [
+          "verified",
+          "missing_primary",
+          "missing_companion",
+          "unregistered",
+          "incompatible"
+        ],
+        "title": "ValidationStatus"
       }
     },
     "securitySchemes": {

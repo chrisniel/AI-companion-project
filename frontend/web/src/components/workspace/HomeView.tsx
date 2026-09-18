@@ -23,6 +23,7 @@ import { useBackend } from '../../context/BackendContext';
 import { Badge } from '../ui/Badge';
 import { StatusIndicator } from '../ui/StatusIndicator';
 import { NeumorphicButton } from '../ui/NeumorphicButton';
+import { getRegistryEntryDisplayName, registryEntryMatchesIdentifier } from '../../services/api';
 
 export interface HomeViewProps {
   onNavigate: (sectionId: string) => void;
@@ -56,9 +57,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
     ? modelStatus.active_model
     : null;
   const activeModelEntry = backendActiveModelId
-    ? registry.find((m) => m.id === backendActiveModelId)
+    ? registry.find((m) => registryEntryMatchesIdentifier(m, backendActiveModelId))
     : null;
-  const activeDisplayName = activeModelEntry?.display_name || backendActiveModelId;
+  const activeDisplayName = activeModelEntry
+    ? getRegistryEntryDisplayName(activeModelEntry)
+    : backendActiveModelId;
 
   const runtimeState = isOnline ? (modelStatus?.runtime_state || 'Unknown') : 'Offline';
   const appliedLayers = isOnline && modelStatus?.applied_gpu_layers != null

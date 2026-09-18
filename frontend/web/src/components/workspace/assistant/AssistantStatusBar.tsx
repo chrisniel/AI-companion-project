@@ -8,7 +8,12 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { NeumorphicButton } from '../../ui/NeumorphicButton';
-import { ModelStatusResponse, RegistryEntry } from '../../../services/api';
+import {
+  ModelStatusResponse,
+  RegistryEntry,
+  getRegistryEntryDisplayName,
+  registryEntryMatchesIdentifier,
+} from '../../../services/api';
 import { AssistantState } from '../../../types';
 
 export type TelemetryProvenance = 'Configured' | 'Estimated' | 'Unavailable';
@@ -40,11 +45,11 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
 }) => {
   // Authoritative runtime model identity from backend
   const activeModelId = modelStatus?.active_model || null;
-  const activeModelEntry = registry.find(
-    (m) => m.id === activeModelId || m.display_name === activeModelId
-  );
+  const activeModelEntry = activeModelId
+    ? registry.find((m) => registryEntryMatchesIdentifier(m, activeModelId))
+    : null;
   const effectiveModelName = isOnline
-    ? (activeModelEntry ? activeModelEntry.display_name : (activeModelId || 'No Model Loaded'))
+    ? (activeModelEntry ? getRegistryEntryDisplayName(activeModelEntry) : (activeModelId || 'No Model Loaded'))
     : 'Runtime Offline';
 
   const isModelSleeping = isOnline && modelStatus?.runtime_state === 'MODEL_SLEEPING';

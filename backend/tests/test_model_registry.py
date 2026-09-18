@@ -71,8 +71,8 @@ def test_registry_validates_missing_primary(tmp_path):
         importlib.reload(mr)
         result = mr.build_model_list()
     assert len(result) == 1
-    assert result[0].validation_status == "missing_primary"
-    assert result[0].primary_file_exists is False
+    assert result[0].library_state.validation_status.value == "missing_primary"
+    assert result[0].library_state.primary_file_exists is False
 
 
 @pytest.mark.asyncio
@@ -84,7 +84,7 @@ async def test_registry_endpoint_requires_auth(client):
 
 @pytest.mark.asyncio
 async def test_registry_endpoint_authenticated_shape(client, auth_headers):
-    """GET /api/v1/models/registry with auth returns both structured layers and flat bridge."""
+    """GET /api/v1/models/registry with auth returns canonical structured layers with zero flat aliases."""
     res = await client.get("/api/v1/models/registry", headers=auth_headers)
     assert res.status_code == 200
     data = res.json()
@@ -97,7 +97,7 @@ async def test_registry_endpoint_authenticated_shape(client, auth_headers):
         assert "hints" in entry
         assert "runtime_model_id" in entry
         assert "registry_source" in entry
-        # Verify full flat compatibility bridge for frontend
+        # Verify retired flat compatibility aliases are strictly absent
         flat_fields = [
             "id", "display_name", "family", "variant", "primary_file", "companion_files",
             "capabilities", "recommended_profiles", "estimated_vram_gb", "estimated_ram_gb",
@@ -105,7 +105,7 @@ async def test_registry_endpoint_authenticated_shape(client, auth_headers):
             "validation_status", "primary_file_exists", "companion_files_valid", "size_gb"
         ]
         for field in flat_fields:
-            assert field in entry, f"Missing flat field '{field}' in API response"
+            assert field not in entry, f"Retired flat field '{field}' unexpectedly present in API response"
 
 
 def test_resolve_runtime_model_id():
@@ -230,8 +230,8 @@ def test_model_manifest_fields_and_defaults():
     assert m2.runtime_compatibility is not m3.runtime_compatibility
 
 
-def test_model_registry_entry_structured_and_flat_bridge():
-    """Verify ModelRegistryEntry composition, structured serialization, and complete flat bridge."""
+def test_model_registry_entry_canonical_structured_serialization():
+    """Verify ModelRegistryEntry canonical structured serialization and complete retirement of flat aliases."""
     from app.schemas.model_registry import (
         ModelRegistryEntry, ModelManifest, ModelLibraryState, ModelRuntimeHints,
         ModelAssetType, ModelVariant, ModelCapability, InputModality, ReasoningMode,
@@ -277,7 +277,7 @@ def test_model_registry_entry_structured_and_flat_bridge():
         registry_source="factory"
     )
 
-    # 8. Structured layers serialized
+    # Structured layers serialized
     dump = entry.model_dump()
     assert "manifest" in dump
     assert "library_state" in dump
@@ -285,41 +285,41 @@ def test_model_registry_entry_structured_and_flat_bridge():
     assert dump["runtime_model_id"] == "qwen3-vl-2b-instruct"
     assert dump["registry_source"] == "factory"
 
-    # 9, 10-18. Temporary flat serialization bridge verification
-    assert entry.id == "qwen3-vl-2b-instruct"
-    assert entry.display_name == "Qwen3-VL 2B Instruct"
-    assert entry.family == "Qwen3-VL"
-    assert entry.variant == "instruct"
-    assert entry.primary_file == "vision/qwen3-vl-2b-instruct/Qwen.gguf"
-    assert len(entry.companion_files) == 1
-    assert entry.quantization == "Q4_K_M"
-    assert entry.parameters == "2.0B"
-    assert entry.context_limit == 32768
-    assert entry.context_limit == entry.manifest.model_max_context
-    assert entry.capabilities == [ModelCapability.chat, ModelCapability.vision]
-    assert entry.recommended_profiles == ["eco", "balanced"]
-    assert entry.estimated_vram_gb == 2.4
-    assert entry.estimated_ram_gb == 0.6
-    assert entry.license == "Apache-2.0"
-    assert entry.source == "local"
-    assert entry.validation_status == ValidationStatus.verified
-    assert entry.primary_file_exists is True
-    assert entry.companion_files_valid is True
-    assert entry.size_gb == 1.6
+    # Structured field values accessible via layers
+    assert entry.manifest.id == "qwen3-vl-2b-instruct"
+    assert entry.manifest.display_name == "Qwen3-VL 2B Instruct"
+    assert entry.manifest.family == "Qwen3-VL"
+    assert entry.manifest.variant == ModelVariant.instruct
+    assert entry.manifest.primary_file == "vision/qwen3-vl-2b-instruct/Qwen.gguf"
+    assert len(entry.manifest.companion_files) == 1
+    assert entry.manifest.quantization == "Q4_K_M"
+    assert entry.manifest.parameters == "2.0B"
+    assert entry.manifest.model_max_context == 32768
+    assert entry.manifest.capabilities == [ModelCapability.chat, ModelCapability.vision]
+    assert entry.hints.recommended_profiles == ["eco", "balanced"]
+    assert entry.hints.estimated_vram_gb == 2.4
+    assert entry.hints.estimated_ram_gb == 0.6
+    assert entry.manifest.license == "Apache-2.0"
+    assert entry.manifest.source == "local"
+    assert entry.library_state.validation_status == ValidationStatus.verified
+    assert entry.library_state.primary_file_exists is True
+    assert entry.library_state.size_gb == 1.6
+    assert all(s.exists for s in entry.library_state.companion_artifact_statuses) is True
 
-    # 19. The COMPLETE current frontend RegistryEntry shape is present in serialized output
-    frontend_required_fields = [
+    # Obsolete flat compatibility aliases must NOT be in model_dump() and NOT on entry
+    retired_flat_fields = [
         "id", "display_name", "family", "variant", "primary_file", "companion_files",
         "capabilities", "recommended_profiles", "estimated_vram_gb", "estimated_ram_gb",
         "quantization", "parameters", "context_limit", "license", "source",
         "validation_status", "primary_file_exists", "companion_files_valid", "size_gb"
     ]
-    for field_name in frontend_required_fields:
-        assert field_name in dump, f"Missing frontend compatibility field: {field_name}"
+    for field_name in retired_flat_fields:
+        assert field_name not in dump, f"Retired flat alias unexpectedly present in model_dump(): {field_name}"
+        assert not hasattr(entry, field_name), f"Retired flat attribute unexpectedly accessible on entry: {field_name}"
 
 
-def test_companion_files_valid_derivation():
-    """Verify companion_files_valid truthfully reflects artifact existence."""
+def test_companion_files_artifact_statuses_derivation():
+    """Verify companion artifact existence status truthfully reflects artifact state."""
     from app.schemas.model_registry import (
         ModelRegistryEntry, ModelManifest, ModelLibraryState, ModelRuntimeHints,
         CompanionFile, CompanionArtifactStatus
@@ -335,7 +335,7 @@ def test_companion_files_valid_derivation():
         library_state=ModelLibraryState(companion_artifact_statuses=[CompanionArtifactStatus(artifact=cf1, exists=True)]),
         hints=ModelRuntimeHints()
     )
-    assert e_valid.companion_files_valid is True
+    assert all(s.exists for s in e_valid.library_state.companion_artifact_statuses) is True
 
     # When companion missing -> False
     e_invalid = ModelRegistryEntry(
@@ -343,12 +343,7 @@ def test_companion_files_valid_derivation():
         library_state=ModelLibraryState(companion_artifact_statuses=[CompanionArtifactStatus(artifact=cf1, exists=False)]),
         hints=ModelRuntimeHints()
     )
-    assert e_invalid.companion_files_valid is False
-
-    # When no companions declared -> True
-    m_no_comp = ModelManifest(id="test2", display_name="Test 2", primary_file="test2.gguf", companion_files=[])
-    e_no_comp = ModelRegistryEntry(manifest=m_no_comp, library_state=ModelLibraryState(), hints=ModelRuntimeHints())
-    assert e_no_comp.companion_files_valid is True
+    assert all(s.exists for s in e_invalid.library_state.companion_artifact_statuses) is False
 
 
 def test_schema_extra_forbid():
@@ -372,6 +367,14 @@ def test_schema_extra_forbid():
             "unrecognized_entry_field": "bad"
         })
 
+    # Flat dict input without manifest is now forbidden
+    with pytest.raises(ValidationError):
+        ModelRegistryEntry.model_validate({
+            "id": "m",
+            "display_name": "M",
+            "primary_file": "p"
+        })
+
 
 def test_registry_template_v3_structure_and_parsing():
     """Verify models/registry.template.json schema version 3 and parse all 5 factory entries."""
@@ -379,6 +382,7 @@ def test_registry_template_v3_structure_and_parsing():
     from app.schemas.model_registry import (
         ModelAssetType, ModelVariant, ModelRegistryEntry
     )
+    from app.services.model_registry import _parse_registry_entry_dict
     template_path = settings.MODELS_DIR / "registry.template.json"
     assert template_path.exists()
     content = json.loads(template_path.read_text(encoding="utf-8"))
@@ -403,12 +407,14 @@ def test_registry_template_v3_structure_and_parsing():
         else:
             assert m["reasoning_mode"] == "unsupported"
 
-        # Verify it parses into ModelRegistryEntry
-        entry = ModelRegistryEntry(**m)
+        # Verify it parses into ModelRegistryEntry via canonical parser
+        entry = _parse_registry_entry_dict(m, source="factory")
+        assert entry is not None
         assert entry.manifest.asset_type == ModelAssetType.gguf
         assert entry.manifest.model_max_context == 32768
-        assert entry.context_limit == 32768
-        assert entry.variant in (ModelVariant.instruct.value, ModelVariant.thinking.value)
+        assert entry.manifest.variant in (ModelVariant.instruct, ModelVariant.thinking)
+        assert "context_limit" not in entry.model_dump()
+        assert "id" not in entry.model_dump()
 
 
 # ==============================================================================
@@ -900,8 +906,8 @@ def test_source_aware_asset_root_resolution(tmp_path):
         val_f = mr._validate_entry(f_entry)
         val_i = mr._validate_entry(i_entry)
 
-    assert val_f.primary_file_exists is True
-    assert val_i.primary_file_exists is True
+    assert val_f.library_state.primary_file_exists is True
+    assert val_i.library_state.primary_file_exists is True
 
 
 def test_path_traversal_and_absolute_paths_rejected(tmp_path):
@@ -928,8 +934,8 @@ def test_path_traversal_and_absolute_paths_rejected(tmp_path):
     with patch.object(mr, "_get_model_library_dir", return_value=base_dir):
         validated = mr._validate_entry(entry)
 
-    assert validated.primary_file_exists is False
-    assert validated.validation_status.value == "missing_primary"
+    assert validated.library_state.primary_file_exists is False
+    assert validated.library_state.validation_status.value == "missing_primary"
 
 
 def test_missing_primary_validation_semantics(tmp_path):
@@ -955,8 +961,8 @@ def test_missing_primary_validation_semantics(tmp_path):
     with patch.object(mr, "_get_factory_model_root", return_value=models_dir):
         res = mr._validate_entry(entry)
 
-    assert res.validation_status.value == "missing_primary"
-    assert res.primary_file_exists is False
+    assert res.library_state.validation_status.value == "missing_primary"
+    assert res.library_state.primary_file_exists is False
     assert res.library_state.available_capabilities == []
     # Manifest capabilities must NOT be cleared
     assert res.manifest.capabilities == [ModelCapability.chat, ModelCapability.vision]
@@ -991,10 +997,10 @@ def test_complete_model_verified_semantics(tmp_path):
     with patch.object(mr, "_get_factory_model_root", return_value=models_dir):
         res = mr._validate_entry(entry)
 
-    assert res.validation_status.value == "verified"
+    assert res.library_state.validation_status.value == "verified"
     assert res.library_state.discovery_state.value == "verified"
-    assert res.primary_file_exists is True
-    assert res.companion_files_valid is True
+    assert res.library_state.primary_file_exists is True
+    assert all(s.exists for s in res.library_state.companion_artifact_statuses) is True
     assert res.library_state.available_capabilities == [ModelCapability.chat, ModelCapability.vision]
 
 
@@ -1028,10 +1034,10 @@ def test_missing_mmproj_graceful_capability_degradation(tmp_path):
         res = mr._validate_entry(entry)
 
     # Status is missing_companion, NOT incompatible
-    assert res.validation_status == ValidationStatus.missing_companion
-    assert res.validation_status != ValidationStatus.incompatible
-    assert res.primary_file_exists is True
-    assert res.companion_files_valid is False
+    assert res.library_state.validation_status == ValidationStatus.missing_companion
+    assert res.library_state.validation_status != ValidationStatus.incompatible
+    assert res.library_state.primary_file_exists is True
+    assert any(not s.exists for s in res.library_state.companion_artifact_statuses) is True
 
     # Vision capability degraded from available_capabilities
     assert ModelCapability.vision not in res.library_state.available_capabilities
@@ -1069,22 +1075,18 @@ def test_truthful_unregistered_scanner(tmp_path):
 
     # Truthful unregistered metadata
     assert entry.manifest.variant == ModelVariant.unknown
-    assert entry.variant == "unknown"
     assert entry.manifest.capabilities == []
-    assert entry.capabilities == []
     assert entry.manifest.input_modalities == []
     assert entry.manifest.runtime_compatibility == []
     assert entry.manifest.reasoning_mode == ReasoningMode.unknown
     assert entry.library_state.discovery_state == ModelDiscoveryState.discovered
-    assert entry.validation_status == ValidationStatus.unregistered
-    assert entry.primary_file_exists is True
+    assert entry.library_state.validation_status == ValidationStatus.unregistered
+    assert entry.library_state.primary_file_exists is True
 
     # Metadata detected from GGUF header
     assert entry.manifest.architecture == "qwen3vl"
     assert entry.manifest.model_max_context == 32768
-    assert entry.context_limit == 32768
     assert entry.manifest.quantization == "Q4_K_M"
-    assert entry.quantization == "Q4_K_M"
 
 
 
@@ -1177,4 +1179,46 @@ def test_unregistered_model_without_gguf_metadata_has_none_context(tmp_path):
     entry = entries[0]
     assert entry.manifest.architecture == "llama"
     assert entry.manifest.model_max_context is None
-    assert entry.context_limit is None
+
+
+def test_openapi_schema_regression_and_model_routes():
+    """Verify OpenAPI contract generated from actual app has required routes and structured ModelRegistryEntry."""
+    from app.main import app
+
+    schema = app.openapi()
+    paths = schema.get("paths", {})
+
+    required_routes = [
+        ("/api/v1/models", "get"),
+        ("/api/v1/models/registry", "get"),
+        ("/api/v1/models/load", "post"),
+        ("/api/v1/models/unload", "post"),
+        ("/api/v1/models/profile", "patch"),
+        ("/api/v1/chat/completions", "post"),
+    ]
+
+    for route, method in required_routes:
+        assert route in paths, f"Missing route in OpenAPI: {route}"
+        assert method in paths[route], f"Missing HTTP method '{method}' for route {route}"
+
+    schemas = schema.get("components", {}).get("schemas", {})
+    assert "ModelRegistryEntry" in schemas
+    assert "ModelManifest" in schemas
+    assert "ModelLibraryState" in schemas
+    assert "ModelRuntimeHints" in schemas
+    assert "CompanionFile" in schemas
+    assert "CompanionArtifactStatus" in schemas
+    assert "CapabilityEntry" in schemas
+    assert "GenerationDefaults" in schemas
+
+    mre_props = set(schemas["ModelRegistryEntry"].get("properties", {}).keys())
+    assert mre_props == {"manifest", "library_state", "hints", "runtime_model_id", "registry_source"}
+
+    retired_flat_fields = [
+        "id", "display_name", "family", "variant", "primary_file", "companion_files",
+        "capabilities", "recommended_profiles", "estimated_vram_gb", "estimated_ram_gb",
+        "quantization", "parameters", "context_limit", "license", "source",
+        "validation_status", "primary_file_exists", "companion_files_valid", "size_gb"
+    ]
+    for field in retired_flat_fields:
+        assert field not in mre_props, f"Retired flat alias '{field}' found in OpenAPI ModelRegistryEntry schema"

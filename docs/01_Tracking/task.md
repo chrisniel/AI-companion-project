@@ -2,7 +2,7 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: Phase 8P.5 COMPLETE / VERIFIED — Phase 8P.6 next
+- Status: Phase 8P COMPLETE / VERIFIED — Phase 8B next
 - Current Sprint: Phase 8 — PC Frontend Architecture, Runtime Config, Multimodal & Polish
 - Branches: `feature/phase8-ui-foundation` → `feature/phase8-runtime-config` → `feature/multimodal-image-attachments` → `feature/phase8-ui-integration-polish`
 - Target: Mock removal, view decomposition, COMPANION_DATA_ROOT, terminology reconciliation, model schema split, image attachments, 100+ pytest / 132+ vitest
@@ -18,20 +18,19 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — PHASE 8P.5 EFFECTIVE MODEL REGISTRY & GGUF METADATA COMPLETE]
+## [CURRENT EXECUTION STATE — PHASE 8P COMPLETE / VERIFIED — PHASE 8B NEXT]
 
-- Status: Phase 8P.5 is COMPLETE / VERIFIED. Phase 8P.6 (Frontend Contract & OpenAPI Reconciliation) is NOT STARTED.
+- Status: Phase 8P is COMPLETE / VERIFIED across all batches (8P.1 through 8P.7). Phase 8B (Multimodal Image Attachment Foundation) is NOT STARTED.
 - Verification Completed:
-  1. Dual-Source Effective Registry: Implemented `_build_effective_registry()` merging factory registry (`models/registry.template.json`, root `models/`) and installed registry (`COMPANION_DATA_ROOT/library/registry/models.json`, root `COMPANION_DATA_ROOT/library/models/`). Installed models shadow factory models on matching ID; new IDs are appended; empty or missing installed registry preserves factory models; malformed installed files and entries fail safely without dropping factory models; legacy `models/registry.json` is safely ignored.
-  2. Source-Aware Asset Resolution & Traversal Guard: Assets resolve strictly relative to their respective root (`FACTORY_MODEL_ROOT` vs `MODEL_LIBRARY_DIR`). Implemented `_resolve_asset_path()` ensuring asset paths are relative and confined within their root, rejecting absolute paths or traversal attempts (`..`).
-  3. Truthful Validation & Graceful Degradation: Missing primary file marks model unavailable (`validation_status = "missing_primary"`, `available_capabilities = []`). Missing declared companion file (e.g. `mmproj`) truthfully marks `validation_status = "missing_companion"`, strips vision from `available_capabilities` while preserving text/chat capabilities, keeps `manifest.capabilities` unchanged, and does not prohibit text loading.
-  4. Truthful Unregistered Scanner: Completely removed fabricated defaults from discovered GGUFs (`variant = ModelVariant.unknown`, `capabilities = []`, `input_modalities = []`, `model_max_context = None`, `runtime_compatibility = []`, `reasoning_mode = ReasoningMode.unknown`, `discovery_state = ModelDiscoveryState.discovered`, `validation_status = ValidationStatus.unregistered`, `size_gb` measured). No capabilities are ever inferred from filenames.
-  5. Bounded Zero-Dependency GGUF Parser: Implemented pure Python stdlib `read_gguf_metadata()` using `struct` with strict defensive bounds (max 256 KVs, max 1024 bytes per string, max 64 array items, safe type dispatch). Reads `general.architecture`, extracts dynamic context length (`<architecture>.context_length`), conservatively maps recognized `general.file_type` to quantization string while isolating `general.quantization_version`, and never seeks into tensor payload. Malformed GGUFs fail safely to unknown metadata while remaining discoverable.
-  6. GGUF llama.cpp b10936 Runtime Alignment & Pyright Cleanup: Aligned `GGUF_FILE_TYPE_MAP` to pinned upstream `llama.cpp` tag `b10936` (`llama_ftype`), removing obsolete runtime-repack 33-35 mappings (evaluating to `""`) and adding valid 36-41 mappings (`TQ1_0`, `TQ2_0`, `MXFP4_MOE`, `NVFP4`, `Q1_0`, `Q2_0`). Aligned parser version support strictly to GGUF v2 and v3 while safely rejecting v1, v0, and future versions > 3. Replaced direct invalid constructor keywords with `model_validate({...})` in `test_schema_extra_forbid()`, eliminating Pyright editor diagnostics while maintaining strict `extra='forbid'`.
-  7. Test Suite Verification: 51 model registry tests passing (100%), 174 backend pytest passing (0 failures), 138 frontend vitest passing (7 suites, 0 failures), 0 TypeScript errors (`tsc --noEmit`), 0 Pyright diagnostics.
+  1. Frontend Structured Registry Contract (8P.6a): Replaced flat `RegistryEntry` contract in `registryApi.ts` with strict TypeScript Schema v3 interfaces (`ModelManifest`, `ModelLibraryState`, `ModelRuntimeHints`, `RegistryEntry`) using exact unions and zero flat alias properties. Migrated `DEFAULT_INSTALLED_REGISTRY` to Schema v3. Added pure helpers `getRegistryEntryId()`, `getRegistryEntryDisplayName()`, and `registryEntryMatchesIdentifier()`.
+  2. Active Frontend Consumers Migrated (8P.6b): Migrated all production frontend components (`ModelsView.tsx`, `Header.tsx`, `AssistantPanel.tsx`, `AssistantStatusBar.tsx`, `HomeView.tsx`, `ModelLibraryGrid.tsx`, `ModelDetailsModal.tsx`) to structured layers. Gated active UI capabilities truthfully via `library_state.available_capabilities` rather than declared manifest capabilities. Represented model max context truthfully via `manifest.model_max_context` (allowing `null` without fabricating 4096 or 4K). Resolved active models consistently.
+  3. Frontend Test Fixture Migration & Contract Proofs (8P.6c): Migrated mock fixtures in `modelsStateReconciliation.test.tsx`, `assistantViewReliability.test.tsx`, and `shellHomeTruthfulness.test.tsx` to Schema v3. Proved missing mmproj degrades vision from available capabilities while keeping model loadable for text. Proved unknown unregistered model does not fabricate 4096 context, chat, vision, llama.cpp, or instruct.
+  4. Backend Flat Bridge Retirement (8P.6d): Completely removed all 19 temporary `@computed_field` flat aliases and `_migrate_flat_input` validator from `ModelRegistryEntry` in `backend/app/schemas/model_registry.py`. Updated backend services (`mock.py`, `llama_cpp.py`) and tests (`test_model_registry.py`) to access structured fields. Verified zero active obsolete flat consumers exist repository-wide.
+  5. OpenAPI Contract Regeneration & Regression Test (8P.6e): Safely regenerated `contracts/openapi/openapi.json` directly from `app.openapi()` with isolated environment roots. Verified all 19 application routes (including all 6 required model/LLM routes) are present. Confirmed `ModelRegistryEntry` schema component contains only structured properties with zero flat aliases. Added automated `test_openapi_schema_regression_and_model_routes` test. Confirmed `backend/.env` was not touched.
+  6. Final Phase 8P Integration Gate: 175 backend tests passing (100%), 139 frontend Vitest tests passing (100%), 0 TypeScript errors (`tsc --noEmit`), clean production build (`npm run build`), 0 Pyright diagnostics, 0 active "Local AI Core" occurrences in production code, canonical data root resolution safe, `git diff --check` clean.
 - Deferred QA Finding (Recorded for Phase 8C):
-  - Responsive Web Layout & Pagination Hardening recorded under Phase 8C; NOT implemented in Phase 8P.5.
-- Next Batch: Phase 8P.6 — Frontend Contract & OpenAPI Reconciliation (NOT STARTED).
+  - 8C.0: Responsive Web Layout & Pagination Hardening remains deferred for Phase 8C; NOT touched in Phase 8P.6.
+- Next Phase: Phase 8B — Multimodal Image Attachment Foundation (branch `feature/multimodal-image-attachments`, NOT STARTED).
 - Active Plan: `docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md`
 
 ---
@@ -83,11 +82,11 @@ Branch: `feature/phase8-runtime-config` (based on merged 8A)
 - [x] 8P.5d: model_registry.py — bounded, zero-dependency, best-effort Python GGUF header reader (metadata only; read general.architecture, derive context key dynamically as <architecture>.context_length; general.quantization_version is NOT quantization scheme; use general.file_type only when recognized to populate quantization, else unknown; never infer quantization or capabilities from arbitrary filename text; bounded KV/string counts; never loads tensors; safe error fallback)
 
 **8P.6 — Frontend Contract & OpenAPI Reconciliation**
-- [ ] 8P.6a: registryApi.ts — ModelManifest, ModelLibraryState, ModelRuntimeHints TypeScript interfaces; RegistryEntry updated; migrate consumers to model_max_context
-- [ ] 8P.6b: ModelsView.tsx — update model mapping to use structured layers and model_max_context
-- [ ] 8P.6c: Frontend test fixtures — update mock registries in modelsStateReconciliation.test.tsx, assistantViewReliability.test.tsx, shellHomeTruthfulness.test.tsx
-- [ ] 8P.6d: Flat field cleanup — search repository-wide for remaining flat consumers; retire temporary @computed_field aliases if no active consumers remain
-- [ ] 8P.6e: contracts/openapi/openapi.json — regenerate contract from actual FastAPI app (app.openapi()); verify all existing model/LLM routes represented (GET /api/v1/models, GET /api/v1/models/registry, POST /api/v1/models/load, POST /api/v1/models/unload, PATCH /api/v1/models/profile, POST /api/v1/chat/completions); do not hand-author partial endpoints; review diff for unrelated drift
+- [x] 8P.6a: registryApi.ts — ModelManifest, ModelLibraryState, ModelRuntimeHints TypeScript interfaces; RegistryEntry updated; migrate consumers to model_max_context
+- [x] 8P.6b: ModelsView.tsx — update model mapping to use structured layers and model_max_context
+- [x] 8P.6c: Frontend test fixtures — update mock registries in modelsStateReconciliation.test.tsx, assistantViewReliability.test.tsx, shellHomeTruthfulness.test.tsx
+- [x] 8P.6d: Flat field cleanup — search repository-wide for remaining flat consumers; retire temporary @computed_field aliases if no active consumers remain
+- [x] 8P.6e: contracts/openapi/openapi.json — regenerate contract from actual FastAPI app (app.openapi()); verify all existing model/LLM routes represented (GET /api/v1/models, GET /api/v1/models/registry, POST /api/v1/models/load, POST /api/v1/models/unload, PATCH /api/v1/models/profile, POST /api/v1/chat/completions); do not hand-author partial endpoints; review diff for unrelated drift
 
 **8P.7 — Canonical Documentation Alignment (Historical Verification)**
 - [x] 8P.7a: AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md — terminology, test baseline, Phase 8 sequence, arch doc cross-reference, model invariants

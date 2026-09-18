@@ -60,7 +60,7 @@ class MockLLMProvider(BaseLLMProvider):
                 if f.is_file() and f.name != "lfs-test.gguf" and not f.name.startswith("mmproj") and f.stat().st_size > 100 * 1024 * 1024
             ]
 
-        registry_entries = [m.primary_file for m in build_model_list() if m.primary_file_exists]
+        registry_entries = [m.manifest.primary_file for m in build_model_list() if m.library_state.primary_file_exists]
 
         is_loaded = self._is_loaded
         applied_ctx = context_sizes.get(self._active_profile, 4096)

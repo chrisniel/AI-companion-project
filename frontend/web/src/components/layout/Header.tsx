@@ -32,6 +32,11 @@ import {
   DesktopSizeSelector,
   DesktopSimulationPreset,
 } from './DesktopSizeSelector';
+import {
+  getRegistryEntryId,
+  getRegistryEntryDisplayName,
+  registryEntryMatchesIdentifier,
+} from '../../services/api';
 
 export interface HeaderProps {
   searchQuery?: string;
@@ -75,9 +80,11 @@ export const Header: React.FC<HeaderProps> = ({
   const backendActiveModelId = isLoaded ? (modelStatus?.active_model ?? null) : null;
 
   const activeRegistryEntry = backendActiveModelId
-    ? registry.find((e) => e.id === backendActiveModelId)
+    ? registry.find((e) => registryEntryMatchesIdentifier(e, backendActiveModelId))
     : null;
-  const activeDisplayName = activeRegistryEntry?.display_name || backendActiveModelId;
+  const activeDisplayName = activeRegistryEntry
+    ? getRegistryEntryDisplayName(activeRegistryEntry)
+    : backendActiveModelId;
 
   let activeModelLabel = 'Router Offline';
   if (!isOnline) {
@@ -96,12 +103,16 @@ export const Header: React.FC<HeaderProps> = ({
 
   // Model options for dropdown — strictly populated from verified installed registry
   const modelOptions = registry.map((entry) => {
+    const entryId = getRegistryEntryId(entry);
+    const entryDisplayName = getRegistryEntryDisplayName(entry);
+    const isThisActive = Boolean(backendActiveModelId && registryEntryMatchesIdentifier(entry, backendActiveModelId));
+
     let badge = 'Disk';
     if (!isOnline) {
       badge = 'Disk';
-    } else if (isModelLoading && switchingModelId === entry.id) {
+    } else if (isModelLoading && switchingModelId === entryId) {
       badge = 'Loading';
-    } else if (backendActiveModelId === entry.id) {
+    } else if (isThisActive) {
       if (isSleeping) {
         badge = 'Sleeping';
       } else if (modelStatus?.runtime_state === 'MODEL_ERROR') {
@@ -112,19 +123,19 @@ export const Header: React.FC<HeaderProps> = ({
     }
 
     return {
-      id: entry.id,
-      label: entry.display_name || entry.id,
+      id: entryId,
+      label: entryDisplayName,
       badge,
       icon: <Cpu className="w-3.5 h-3.5 text-[var(--color-accent)]" />,
       onClick: async () => {
-        onSelectModel?.(entry.id);
+        onSelectModel?.(entryId);
         if (!isOnline) return;
-        if (backendActiveModelId === entry.id && modelStatus?.runtime_state === 'MODEL_READY') {
+        if (isThisActive && modelStatus?.runtime_state === 'MODEL_READY') {
           return;
         }
         try {
-          setSwitchingModelId(entry.id);
-          await loadModel(entry.id);
+          setSwitchingModelId(entryId);
+          await loadModel(entryId);
         } catch {
           // Handled in backend context
         } finally {

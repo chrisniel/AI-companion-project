@@ -6,7 +6,7 @@ import {
   LocalModel,
   PerformanceProfile,
 } from '../../types';
-import { RegistryEntry } from '../../services/api';
+import { RegistryEntry, registryEntryMatchesIdentifier } from '../../services/api';
 import { CurrentModelHero } from './models/CurrentModelHero';
 import { PerformanceProfileSelector } from './models/PerformanceProfileSelector';
 import { VramTargetSlider } from './models/VramTargetSlider';
@@ -120,34 +120,43 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
     }
     return registry.map((e: RegistryEntry) => {
       const isThisLoaded = Boolean(
-        backendActiveModelId &&
-        (
-          e.id === backendActiveModelId ||
-          (e.primary_file && e.primary_file === backendActiveModelId)
-        )
+        backendActiveModelId && registryEntryMatchesIdentifier(e, backendActiveModelId)
       );
+      const companionFiles = e.manifest.companion_files || [];
+      const hasCompanion = companionFiles.length > 0;
+      const statuses = e.library_state.companion_artifact_statuses || [];
+      const companionFilesValid = !hasCompanion
+        ? true
+        : statuses.length > 0
+        ? statuses.every((s) => s.exists)
+        : e.library_state.validation_status !== 'missing_companion';
+
+      const availableCapabilities = e.library_state.available_capabilities || [];
+
       return {
-        id: e.id,
-        name: e.display_name,
-        family: e.family,
-        parameters: e.parameters,
-        quantization: e.quantization,
-        sizeGb: e.size_gb ?? null,
-        contextWindow: e.context_limit,
+        id: e.manifest.id,
+        name: e.manifest.display_name,
+        family: e.manifest.family || '',
+        parameters: e.manifest.parameters || '',
+        quantization: e.manifest.quantization || '',
+        sizeGb: e.library_state.size_gb ?? null,
+        contextWindow: e.manifest.model_max_context ?? null,
         status: isThisLoaded ? ('loaded' as const) : ('unloaded' as const),
-        engine: 'llama.cpp',
+        engine: (e.manifest.runtime_compatibility && e.manifest.runtime_compatibility.length > 0)
+          ? (e.manifest.runtime_compatibility.includes('llama.cpp') ? 'llama.cpp' : e.manifest.runtime_compatibility[0])
+          : 'unknown',
         isCloud: false,
-        vramUsageGb: e.estimated_vram_gb,
-        ramUsageGb: e.estimated_ram_gb,
-        filePath: e.primary_file,
-        description: `${e.variant} · ${e.capabilities.join(', ')} · ${e.license}`,
-        license: e.license,
+        vramUsageGb: e.hints.estimated_vram_gb,
+        ramUsageGb: e.hints.estimated_ram_gb,
+        filePath: e.manifest.primary_file,
+        description: `${e.manifest.variant || 'unknown'}${availableCapabilities.length > 0 ? ` · ${availableCapabilities.join(', ')}` : ''} · ${e.manifest.license || 'unknown license'}`,
+        license: e.manifest.license || '',
         tensorType: 'GGUF',
-        variant: e.variant,
-        capabilities: e.capabilities,
-        validationStatus: e.validation_status,
-        hasCompanion: e.companion_files.length > 0,
-        companionFilesValid: e.companion_files_valid,
+        variant: e.manifest.variant,
+        capabilities: availableCapabilities,
+        validationStatus: e.library_state.validation_status,
+        hasCompanion,
+        companionFilesValid,
       };
     });
   }, [registry, backendActiveModelId]);
@@ -155,7 +164,9 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
   // Find currently selected model object (the one user is viewing in Hero)
   const currentSelectedModel =
     liveModels.find((m) => m.id === selectedModelId) ||
-    (backendActiveModelId ? liveModels.find((m) => m.id === backendActiveModelId) : null) ||
+    (backendActiveModelId
+      ? liveModels.find((m) => m.id === backendActiveModelId || m.filePath === backendActiveModelId)
+      : null) ||
     liveModels[0] ||
     null;
 
