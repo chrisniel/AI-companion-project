@@ -20,16 +20,18 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 ## [CURRENT EXECUTION STATE — PHASE 8P COMPLETE / VERIFIED — PHASE 8B NEXT]
 
-- Status: Phase 8P is COMPLETE / VERIFIED across all batches (8P.1 through 8P.7). Phase 8B (Multimodal Image Attachment Foundation) is NOT STARTED.
-- Verification Completed:
-  1. Frontend Structured Registry Contract (8P.6a): Replaced flat `RegistryEntry` contract in `registryApi.ts` with strict TypeScript Schema v3 interfaces (`ModelManifest`, `ModelLibraryState`, `ModelRuntimeHints`, `RegistryEntry`) using exact unions and zero flat alias properties. Migrated `DEFAULT_INSTALLED_REGISTRY` to Schema v3. Added pure helpers `getRegistryEntryId()`, `getRegistryEntryDisplayName()`, and `registryEntryMatchesIdentifier()`.
-  2. Active Frontend Consumers Migrated (8P.6b): Migrated all production frontend components (`ModelsView.tsx`, `Header.tsx`, `AssistantPanel.tsx`, `AssistantStatusBar.tsx`, `HomeView.tsx`, `ModelLibraryGrid.tsx`, `ModelDetailsModal.tsx`) to structured layers. Gated active UI capabilities truthfully via `library_state.available_capabilities` rather than declared manifest capabilities. Represented model max context truthfully via `manifest.model_max_context` (allowing `null` without fabricating 4096 or 4K). Resolved active models consistently.
-  3. Frontend Test Fixture Migration & Contract Proofs (8P.6c): Migrated mock fixtures in `modelsStateReconciliation.test.tsx`, `assistantViewReliability.test.tsx`, and `shellHomeTruthfulness.test.tsx` to Schema v3. Proved missing mmproj degrades vision from available capabilities while keeping model loadable for text. Proved unknown unregistered model does not fabricate 4096 context, chat, vision, llama.cpp, or instruct.
-  4. Backend Flat Bridge Retirement (8P.6d): Completely removed all 19 temporary `@computed_field` flat aliases and `_migrate_flat_input` validator from `ModelRegistryEntry` in `backend/app/schemas/model_registry.py`. Updated backend services (`mock.py`, `llama_cpp.py`) and tests (`test_model_registry.py`) to access structured fields. Verified zero active obsolete flat consumers exist repository-wide.
-  5. OpenAPI Contract Regeneration & Regression Test (8P.6e): Safely regenerated `contracts/openapi/openapi.json` directly from `app.openapi()` with isolated environment roots. Verified all 19 application routes (including all 6 required model/LLM routes) are present. Confirmed `ModelRegistryEntry` schema component contains only structured properties with zero flat aliases. Added automated `test_openapi_schema_regression_and_model_routes` test. Confirmed `backend/.env` was not touched.
-  6. Final Phase 8P Integration Gate: 175 backend tests passing (100%), 139 frontend Vitest tests passing (100%), 0 TypeScript errors (`tsc --noEmit`), clean production build (`npm run build`), 0 Pyright diagnostics, 0 active "Local AI Core" occurrences in production code, canonical data root resolution safe, `git diff --check` clean.
+- Status: Phase 8P is COMPLETE / VERIFIED across all implementation and pre-merge hardening batches. Phase 8B (Multimodal Image Attachment Foundation) is NOT STARTED.
+- Pre-Merge Hardening Delivered:
+  1. Frontend Registry Truthfulness: Eliminated fabricated `DEFAULT_INSTALLED_REGISTRY` fallback. Frontend registry initializes truthfully to `[]` (representing model registry unknown/not yet loaded until backend responds). `fetchModelRegistry()` propagates API errors so `BackendContext` distinguishes successful empty registry (`[]`) from failed requests. Preserves last-known registry on transient network failure without fabricating defaults. Added 8 truthfulness tests (tests 27–34).
+  2. GitHub Actions CI Foundation (`.github/workflows/ci.yml`): Automated verification gates on `windows-latest` for Python 3.11 backend (`pytest`) and Node 22 frontend (`vitest`, `tsc --noEmit`, `vite build`). Isolated environment roots (`COMPANION_DATA_ROOT=${{ runner.temp }}/ai-companion-ci`, `COMPANION_API_KEY=ci-ephemeral-test-key`). Least-privilege `contents: read` permissions, concurrency cancellation on branch updates, zero LFS model weight downloads, and zero real secrets required.
+  3. OpenAPI Drift Gate (`scripts/check_openapi_contract.py`): Automated deterministic comparison between `contracts/openapi/openapi.json` and `app.openapi()`, enforcing model/LLM route integrity and schema synchronization without runtime mutation.
+  4. Final Status Gate (`CI Gate`): Consolidated status check job requiring both backend and frontend jobs to succeed.
+- Branch Protection Requirement:
+  - Note: After the first successful GitHub Actions workflow run, repository administration should configure the `develop` branch to require the `CI Gate` status check before merge. Canonical flow remains `feature/*` → `develop`.
+- CD Status:
+  - DEFERRED: No cloud, server, or deployment target exists at this stage. Automated CD will be established as a release pipeline once packaging/installer builds exist (version tag → Windows package → test → checksum → optional signing → GitHub Release artifact).
 - Deferred QA Finding (Recorded for Phase 8C):
-  - 8C.0: Responsive Web Layout & Pagination Hardening remains deferred for Phase 8C; NOT touched in Phase 8P.6.
+  - 8C.0: Responsive Web Layout & Pagination Hardening remains deferred for Phase 8C; NOT touched in Phase 8P.
 - Next Phase: Phase 8B — Multimodal Image Attachment Foundation (branch `feature/multimodal-image-attachments`, NOT STARTED).
 - Active Plan: `docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md`
 
