@@ -72,7 +72,7 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
     currentModelName &&
     activeModelId &&
     currentModelName !== activeModelId &&
-    currentModelName !== activeModelEntry?.display_name
+    currentModelName !== (activeModelEntry ? getRegistryEntryDisplayName(activeModelEntry) : undefined)
   );
 
   // Truthful runtime badge label (backend truth only, no hardcoded llama.cpp)

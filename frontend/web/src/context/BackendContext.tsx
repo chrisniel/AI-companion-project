@@ -12,7 +12,6 @@ import {
   setApiKey as saveApiKey,
   fetchModelRegistry,
   RegistryEntry,
-  DEFAULT_INSTALLED_REGISTRY,
 } from '../services/api';
 
 export interface BackendContextType {
@@ -39,7 +38,7 @@ export const BackendProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [isOnline, setIsOnline] = useState<boolean>(false);
   const [modelStatus, setModelStatus] = useState<ModelStatusResponse | null>(null);
   const [isModelLoading, setIsModelLoading] = useState<boolean>(false);
-  const [registry, setRegistry] = useState<RegistryEntry[]>(DEFAULT_INSTALLED_REGISTRY);
+  const [registry, setRegistry] = useState<RegistryEntry[]>([]);
   const [apiUrlState, setApiUrlState] = useState<string>(getApiBaseUrl());
   const [apiKeyState, setApiKeyState] = useState<string>(getApiKey());
   const [lastError, setLastError] = useState<string | null>(null);
@@ -59,11 +58,11 @@ export const BackendProvider: React.FC<{ children: ReactNode }> = ({ children })
   const refreshRegistry = useCallback(async () => {
     try {
       const entries = await fetchModelRegistry(apiKeyState);
-      if (entries && entries.length > 0) {
+      if (Array.isArray(entries)) {
         setRegistry(entries);
       }
     } catch {
-      // Keep baseline installed registry
+      // Preserve last-known registry on failure; do not inject fabricated defaults
     }
   }, [apiKeyState]);
 
@@ -88,11 +87,11 @@ export const BackendProvider: React.FC<{ children: ReactNode }> = ({ children })
       // 3. Model registry probe
       try {
         const entries = await fetchModelRegistry(apiKeyState);
-        if (entries && entries.length > 0) {
+        if (Array.isArray(entries)) {
           setRegistry(entries);
         }
       } catch {
-        // Keep baseline installed registry
+        // Preserve last-known registry on failure; do not inject fabricated defaults
       }
     } catch {
       setIsOnline(false);

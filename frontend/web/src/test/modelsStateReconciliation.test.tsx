@@ -1,12 +1,12 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { ModelsView } from '../components/workspace/ModelsView';
 import { Header } from '../components/layout/Header';
 import { CurrentModelHero } from '../components/workspace/models/CurrentModelHero';
 import { ModelDetailsModal } from '../components/workspace/models/ModelDetailsModal';
 import { LocalModel } from '../types';
-import { BackendProvider } from '../context/BackendContext';
+import { BackendProvider, useBackend } from '../context/BackendContext';
 import { ThemeProvider } from '../context/ThemeContext';
 import * as api from '../services/api';
 import { ModelStatusResponse } from '../services/api/modelApi';
@@ -446,7 +446,7 @@ describe('Phase 4: Models Web UI State Reconciliation & Truthfulness', () => {
 
     // Dropdown must contain verified registry entries
     await waitFor(() => {
-      expect(screen.getByText(/Qwen3-VL.*2B.*Instruct/i)).toBeDefined();
+      expect(screen.getAllByText(/Qwen3-VL.*2B.*Instruct/i).length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText(/Qwen3-VL.*4B.*Instruct/i)).toBeDefined();
       expect(screen.getByText(/Qwen3-VL.*2B.*Thinking/i)).toBeDefined();
     });
@@ -1182,7 +1182,293 @@ describe('Phase 4: Models Web UI State Reconciliation & Truthfulness', () => {
     // Runtime compatibility must not fabricate llama.cpp
     expect(card?.textContent).not.toContain('llama.cpp');
   });
+
+  it('27. fresh application state before registry response has no hardcoded registry models', async () => {
+    let resolveRegistry!: (value: api.RegistryEntry[]) => void;
+    const pendingRegistryPromise = new Promise<api.RegistryEntry[]>((resolve) => {
+      resolveRegistry = resolve;
+    });
+    vi.mocked(api.fetchModelRegistry).mockReturnValueOnce(pendingRegistryPromise);
+
+    const RegistryWatcher = () => {
+      const { registry } = useBackend();
+      return (
+        <div>
+          <span data-testid="registry-count">{registry.length}</span>
+          <ModelsView />
+        </div>
+      );
+    };
+
+    render(
+      <BackendProvider>
+        <RegistryWatcher />
+      </BackendProvider>
+    );
+
+    // Initial state before registry API returns must be 0 entries, not hardcoded defaults
+    expect(screen.getByTestId('registry-count').textContent).toBe('0');
+    expect(screen.getByText('0 Models Available')).toBeInTheDocument();
+    expect(screen.getByText('No Models Discovered')).toBeInTheDocument();
+    expect(document.getElementById('model-card-qwen3-vl-2b-instruct')).toBeNull();
+
+    // Clean up pending promise
+    await act(async () => {
+      resolveRegistry([]);
+    });
+  });
+
+  it('28. backend unavailable on fresh startup: registry remains empty', async () => {
+    vi.mocked(api.checkHealth).mockRejectedValue(new Error('Connection refused'));
+    vi.mocked(api.getModelStatus).mockRejectedValue(new Error('Connection refused'));
+    vi.mocked(api.fetchModelRegistry).mockRejectedValue(new Error('Connection refused'));
+
+    const RegistryWatcher = () => {
+      const { registry, isOnline } = useBackend();
+      return (
+        <div>
+          <span data-testid="online-state">{isOnline ? 'online' : 'offline'}</span>
+          <span data-testid="registry-count">{registry.length}</span>
+          <ModelsView />
+        </div>
+      );
+    };
+
+    render(
+      <BackendProvider>
+        <RegistryWatcher />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('online-state').textContent).toBe('offline');
+    });
+
+    expect(screen.getByTestId('registry-count').textContent).toBe('0');
+    expect(screen.getByText(/Local AI Runtime is offline/i)).toBeInTheDocument();
+    expect(screen.getByText('0 Models Available')).toBeInTheDocument();
+    expect(document.getElementById('model-card-qwen3-vl-2b-instruct')).toBeNull();
+  });
+
+  it('29. registry fetch failure: no DEFAULT_INSTALLED_REGISTRY models appear', async () => {
+    vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus({ model_loaded: false, active_model: null }));
+    vi.mocked(api.fetchModelRegistry).mockRejectedValueOnce(new Error('500 Internal Server Error'));
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('No Models Discovered')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('0 Models Available')).toBeInTheDocument();
+    expect(document.getElementById('model-card-qwen3-vl-2b-instruct')).toBeNull();
+    expect(document.getElementById('model-card-qwen3-vl-4b-instruct')).toBeNull();
+    expect(document.getElementById('model-card-qwen3-vl-2b-thinking')).toBeNull();
+    expect(document.getElementById('model-card-qwen3-vl-4b-thinking')).toBeNull();
+  });
+
+  it('30. successful registry response: returned backend models display normally', async () => {
+    const backendModel: api.RegistryEntry = {
+      manifest: {
+        id: 'custom-backend-model',
+        display_name: 'Custom Backend Model',
+        asset_type: 'gguf',
+        family: 'CustomFamily',
+        architecture: 'qwen3vl',
+        variant: 'instruct',
+        parameters: '3.0B',
+        quantization: 'Q4_K_M',
+        reasoning_mode: 'unsupported',
+        capabilities: ['chat'],
+        input_modalities: ['text'],
+        model_max_context: 4096,
+        runtime_compatibility: ['llama.cpp'],
+        primary_file: 'models/custom.gguf',
+        companion_files: [],
+        license: 'MIT',
+        source: 'local',
+      },
+      library_state: {
+        discovery_state: 'verified',
+        validation_status: 'verified',
+        primary_file_exists: true,
+        size_gb: 2.0,
+        companion_artifact_statuses: [],
+        available_capabilities: ['chat'],
+      },
+      hints: {
+        recommended_profiles: ['balanced'],
+        estimated_vram_gb: 2.5,
+        estimated_ram_gb: 0.8,
+      },
+      runtime_model_id: 'custom-backend-model',
+      registry_source: 'installed',
+    };
+
+    vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus({ model_loaded: false, active_model: null }));
+    vi.mocked(api.fetchModelRegistry).mockResolvedValueOnce([backendModel]);
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Custom Backend Model').length).toBeGreaterThanOrEqual(1);
+    });
+
+    expect(screen.getByText('1 Model Available')).toBeInTheDocument();
+    expect(document.getElementById('model-card-custom-backend-model')).not.toBeNull();
+  });
+
+  it('31. successful empty registry: frontend reflects no models rather than preserving old bootstrap defaults', async () => {
+    vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus({ model_loaded: false, active_model: null }));
+    vi.mocked(api.fetchModelRegistry).mockResolvedValueOnce([]);
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('No Models Discovered')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('0 Models Available')).toBeInTheDocument();
+    expect(document.getElementById('model-card-qwen3-vl-2b-instruct')).toBeNull();
+    expect(document.getElementById('model-card-qwen3-vl-4b-instruct')).toBeNull();
+  });
+
+  it('32. transient registry fetch failure AFTER a successful fetch does not replace last-known data with fabricated defaults', async () => {
+    const initialModel: api.RegistryEntry = {
+      manifest: {
+        id: 'initial-verified-model',
+        display_name: 'Initial Verified Model',
+        asset_type: 'gguf',
+        family: 'InitialFamily',
+        architecture: 'qwen3vl',
+        variant: 'instruct',
+        parameters: '1.5B',
+        quantization: 'Q4_K_M',
+        reasoning_mode: 'unsupported',
+        capabilities: ['chat'],
+        input_modalities: ['text'],
+        model_max_context: 4096,
+        runtime_compatibility: ['llama.cpp'],
+        primary_file: 'models/initial.gguf',
+        companion_files: [],
+        license: 'MIT',
+        source: 'local',
+      },
+      library_state: {
+        discovery_state: 'verified',
+        validation_status: 'verified',
+        primary_file_exists: true,
+        size_gb: 1.2,
+        companion_artifact_statuses: [],
+        available_capabilities: ['chat'],
+      },
+      hints: {
+        recommended_profiles: ['eco'],
+        estimated_vram_gb: 1.5,
+        estimated_ram_gb: 0.5,
+      },
+      runtime_model_id: 'initial-verified-model',
+      registry_source: 'installed',
+    };
+
+    vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus({ model_loaded: false, active_model: null }));
+    vi.mocked(api.fetchModelRegistry).mockResolvedValueOnce([initialModel]);
+
+    const TriggerComponent = () => {
+      const { refreshRegistry, registry } = useBackend();
+      return (
+        <div>
+          <button type="button" onClick={() => refreshRegistry()} data-testid="trigger-refresh">
+            Refresh
+          </button>
+          <span data-testid="model-count">{registry.length}</span>
+          <ModelsView />
+        </div>
+      );
+    };
+
+    render(
+      <BackendProvider>
+        <TriggerComponent />
+      </BackendProvider>
+    );
+
+    // Initial fetch succeeds
+    await waitFor(() => {
+      expect(screen.getAllByText('Initial Verified Model').length).toBeGreaterThanOrEqual(1);
+    });
+    expect(screen.getByTestId('model-count').textContent).toBe('1');
+
+    // Next fetch fails
+    vi.mocked(api.fetchModelRegistry).mockRejectedValueOnce(new Error('Network timeout'));
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('trigger-refresh'));
+    });
+
+    // Last-known data must be preserved, not wiped or replaced by fabricated defaults
+    expect(screen.getByTestId('model-count').textContent).toBe('1');
+    expect(screen.getAllByText('Initial Verified Model').length).toBeGreaterThanOrEqual(1);
+    expect(document.getElementById('model-card-qwen3-vl-2b-instruct')).toBeNull();
+  });
+
+  it('33. offline ModelsView does not present hardcoded models as verified/installed', async () => {
+    vi.mocked(api.checkHealth).mockRejectedValue(new Error('Offline'));
+    vi.mocked(api.getModelStatus).mockRejectedValue(new Error('Offline'));
+    vi.mocked(api.fetchModelRegistry).mockRejectedValue(new Error('Offline'));
+
+    render(
+      <BackendProvider>
+        <ModelsView />
+      </BackendProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Local AI Runtime is offline/i)).toBeInTheDocument();
+    });
+
+    // Verify 0 models available and no verified badges from fabricated installed registry
+    expect(screen.getByText('0 Models Available')).toBeInTheDocument();
+    expect(screen.queryByText(/Verified/i)).toBeNull();
+    expect(screen.queryByText('Qwen3-VL 2B Instruct')).toBeNull();
+  });
+
+  it('34. Header does not populate model choices from fabricated local defaults when registry is empty', async () => {
+    vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus({ model_loaded: false, active_model: null }));
+    vi.mocked(api.fetchModelRegistry).mockResolvedValueOnce([]);
+
+    render(
+      <ThemeProvider>
+        <BackendProvider>
+          <Header
+            sidebarCollapsed={false}
+            onToggleSidebarCollapse={() => {}}
+            assistantPanelMode="expanded"
+            onCycleAssistantPanelMode={() => {}}
+          />
+        </BackendProvider>
+      </ThemeProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('No Model Loaded')).toBeInTheDocument();
+    });
+
+    // Header model dropdown must have no fabricated choices
+    expect(screen.queryByText('Qwen3-VL 2B Instruct')).toBeNull();
+    expect(screen.queryByText('Qwen3-VL 4B Instruct')).toBeNull();
+    expect(screen.queryByText('Qwen3-VL 2B Thinking')).toBeNull();
+  });
 });
-
-
-
