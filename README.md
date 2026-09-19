@@ -626,6 +626,9 @@ scripts/
 
 ## Recommended Implementation Order
 
+> [!NOTE]
+> **Historical Planning & Sequencing Notice:** The sequence below reflects an earlier project drafting baseline and is non-authoritative. For the canonical system baseline and locked V1 boundaries (Decisions D1–D9), consult [docs/04_Architecture/SYSTEM_BASELINE.md](docs/04_Architecture/SYSTEM_BASELINE.md). For active execution state and sprint tracking, consult [docs/01_Tracking/task.md](docs/01_Tracking/task.md). Comprehensive roadmap and planning reconciliation is formally deferred to Pass R4.
+
 ```text
 1. Finish / freeze PC UI V1
 2. Finish / freeze Android UI V1
@@ -651,7 +654,7 @@ scripts/
 
 ## V1 Success Criteria (PC-Hosted Release Boundary)
 
-Per canonical Decision D1 ([SYSTEM_BASELINE.md](file:///D:/OtherProjects/AI-companion-project/docs/04_Architecture/SYSTEM_BASELINE.md)), V1 is defined as the first complete, stable, PC-hosted release.
+Per canonical Decision D1 ([SYSTEM_BASELINE.md](docs/04_Architecture/SYSTEM_BASELINE.md)), V1 is defined as the first complete, stable, PC-hosted release.
 
 V1 is operational when:
 
@@ -669,7 +672,7 @@ V1 is operational when:
 - Remote access over Tailscale/private mesh is authenticated with revocable credentials
 - Master secrets remain outside clients, logs, and normal Git content
 
-*(Note: Production Android backend sync, Android offline inference, voice/audio pipeline, and Health Connect are strategic post-V1 roadmap capabilities; see [SYSTEM_BASELINE.md](file:///D:/OtherProjects/AI-companion-project/docs/04_Architecture/SYSTEM_BASELINE.md)).*
+*(Note: Production Android backend sync, Android offline inference, voice/audio pipeline, and Health Connect are strategic post-V1 roadmap capabilities; see [SYSTEM_BASELINE.md](docs/04_Architecture/SYSTEM_BASELINE.md)).*
 
 ---
 

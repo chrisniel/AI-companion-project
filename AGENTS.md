@@ -92,7 +92,7 @@ Configure project-specific paths and boundaries in the Project Profile below. If
 
 ## 8. Single Source of Truth & Documentation Alignment
 
-- Canonical entry-point sequence: Start with [AGENTS.md](file:///D:/OtherProjects/AI-companion-project/AGENTS.md) -> [DOCUMENTATION_MAP.md](file:///D:/OtherProjects/AI-companion-project/docs/06_Guides/DOCUMENTATION_MAP.md) -> [SYSTEM_BASELINE.md](file:///D:/OtherProjects/AI-companion-project/docs/04_Architecture/SYSTEM_BASELINE.md) -> domain architecture / ADRs -> active [task.md](file:///D:/OtherProjects/AI-companion-project/docs/01_Tracking/task.md).
+- Canonical entry-point sequence: Start with [AGENTS.md](AGENTS.md) -> [DOCUMENTATION_MAP.md](docs/06_Guides/DOCUMENTATION_MAP.md) -> [SYSTEM_BASELINE.md](docs/04_Architecture/SYSTEM_BASELINE.md) -> domain architecture / ADRs -> active [task.md](docs/01_Tracking/task.md).
 - When contracts, APIs, configurations, or behaviors change, update the closest canonical document in the same delivery.
 - Prefer linking or referring to canonical documents over duplicating content across multiple markdown files.
 - Treat drafts, legacy notes, and attached documents as reference material unless explicitly approved as current requirements.

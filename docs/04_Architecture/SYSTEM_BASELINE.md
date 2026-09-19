@@ -26,13 +26,13 @@
 AI Companion **V1** is defined as the first complete, stable, **PC-hosted release**.
 
 ### In Scope for V1
-- **Local AI Runtime** Windows host service
+- **Local AI Runtime** independent Windows host process
 - **React Web** primary desktop interface
 - **Local text LLM inference** via `llama.cpp` (GGUF, Vulkan offload on AMD RX 580)
 - **Multi-turn conversation management** with live SSE streaming completions
 - **Memory persistence & retrieval** (SQLite with FTS5 lexical/keyword search)
 - **Task and reminder lifecycle** (CRUD, soft-delete, automated retention purge)
-- **Model library & runtime management** (Schema v3 registry, GGUF metadata parsing, profile switching)
+- **Model library & runtime management** (Schema v3 registry, GGUF metadata parsing, runtime profile switching)
 - **Phase 8B Multimodal Vision** (image attachment API, client composer, and vision-model inference)
 - **Phase 8C Integration & Polish** (accessibility, bundle optimization, UI consistency, responsive web cleanup)
 - **Release Hardening** (automated SQLite backup, migration safety preflight, secure configuration)
@@ -79,7 +79,7 @@ AI Companion **V1** is defined as the first complete, stable, **PC-hosted releas
 - Closing or reloading the React Web browser interface must **never** terminate backend execution, cancel active inference, disrupt database transactions, or abort scheduled background tasks.
 - React Web is the primary V1 PC UI. A native desktop shell (e.g., Tauri, Electron, or WinUI) is **not** part of V1.
 - Any future native shell will wrap or launch the stable Local AI Runtime API; it must never absorb backend business logic.
-- Exact Windows startup mechanism (Task Scheduler, Windows Service, or startup script) remains intentionally decoupled from application logic.
+- Exact Windows startup mechanism (startup app, Scheduled Task, service, or launcher) remains intentionally decoupled and open.
 
 ### Remote Access Trust Boundary (D5)
 - V1 network access is restricted to:
@@ -87,9 +87,9 @@ AI Companion **V1** is defined as the first complete, stable, **PC-hosted releas
   2. Explicitly configured, trusted local area network (LAN) bindings
   3. **Tailscale / private mesh networks** as the approved mechanism for remote connectivity
 - V1 does **not** support or require direct public internet exposure or router port forwarding.
-- Future public ingress may utilize Cloudflare HTTPS as an optional edge tunnel, but transport encryption never replaces application-level authentication.
+- Future controlled public ingress may use Cloudflare HTTPS / edge services, but transport encryption never replaces application-level authentication.
 - **Three-Tier Trust Boundary:**
-  $$\text{Transport Trust (TLS / Tailscale)} \longrightarrow \text{Device Authentication (API Token)} \longrightarrow \text{Profile Authorization (RBAC)}$$
+  $$\text{Network / Transport Trust (Tailscale / TLS)} \longrightarrow \text{Trusted-Device Authentication (Revocable Credential)} \longrightarrow \text{Profile Authorization}$$
 
 ---
 
@@ -150,25 +150,25 @@ Character (Persona Configuration)
 
 > [!IMPORTANT]
 > **Ownership Invariant:** Characters do **not** own the user's fundamental identity, conversation history, task items, or canonical memory records.  
-> Switching the active character from Lisa to another persona alters the *perspective and presentation* of the assistant, but **never** deletes, truncates, or resets the user's memories or tasks.
+> Switching from one character/persona to another alters the *perspective and presentation* of the assistant, but **never** deletes, truncates, or resets the user's memories or tasks.
 
 ---
 
 ## 6. Model Acquisition & Installation Pipeline (Decision D6)
 
-All local model artifacts must enter the ecosystem through a deterministic, validated pipeline:
+Primary user-facing local model imports enter the ecosystem through a deterministic, validated pipeline:
 
 ```text
-User / Download Source
+User / Import Source
          │
          ▼
 ┌──────────────────┐
-│ IMPORT_INBOX_DIR │  (Staging landing zone for raw model files)
+│ IMPORT_INBOX_DIR │  (Landing zone for raw model files)
 └────────┬─────────┘
          │
          ▼
 ┌──────────────────┐
-│ Preflight Check  │  (Validate GGUF magic, header metadata, architecture, SHA-256)
+│ Preflight Check  │  (Validate GGUF format, header metadata, architecture, path/capacity safety)
 └────────┬─────────┘
          │
          ▼
@@ -178,7 +178,7 @@ User / Download Source
          │
          ▼
 ┌──────────────────┐
-│ Atomic Install   │  (Atomic file move / rename into library)
+│ Atomic Install   │  (Atomic file move / promotion into library)
 └────────┬─────────┘
          │
          ▼
@@ -193,8 +193,9 @@ User / Download Source
 ```
 
 - `MODEL_LIBRARY_DIR` (`%LOCALAPPDATA%\AI Companion\Data\library\models`) is the canonical storage location for all user-installed model files.
-- Direct manual placement into the library directory remains supported as an advanced developer fallback, discovered via filesystem preflight scans.
-- Future automated acquisition sources (e.g., Hugging Face hub integration, network downloads, mobile-triggered acquisition) must feed into this identical validation pipeline rather than implementing custom placement logic.
+- The managed import pipeline provides the primary user-facing path (`inbox` → `preflight` → `staging` → `atomic install` → `library` → `registry`). Preflight includes format checks, capacity/path safety, and integrity/checksum validation as defined by the eventual importer contract.
+- Direct manual placement into `MODEL_LIBRARY_DIR` remains supported as an advanced developer fallback, recognized by runtime preflight scans and discovery.
+- Future automated acquisition sources (e.g., Hugging Face, network downloads, mobile-driven acquisition) feed into this same validated pipeline rather than introducing disjoint installation logic.
 
 ---
 
@@ -229,7 +230,7 @@ The system architecture reserves the following deterministic controls:
 1. **Stop Generation:** Immediate abort of current inference streaming.
 2. **Stop Current Action:** Immediate cancellation of an in-flight tool request.
 3. **Stop All Actions:** Termination of an active multi-step agent loop.
-4. **Global Autonomous Disable:** Master hardware/configuration toggle disabling all tool execution.
+4. **Global Autonomous Disable:** Master application configuration kill switch disabling all tool execution.
 
 ---
 
@@ -303,4 +304,4 @@ Decisions D1 through D9 were formally resolved during the documentation reconcil
 | **D8** | **Single-User Baseline** | Single-primary-user for V1; schema uses `owner_id` representing profile boundary. No gratuitous renames. | `docs/00_Drafts/REPOSITORY_DOCUMENTATION_RECONCILIATION_AUDIT.md` §D8 |
 | **D9** | **Security & Permissions** | DEFAULT DENY. 4-tier risk matrix (Risk 0–3). Typed requests through deterministic policy engine. Emergency stop controls. | `docs/00_Drafts/REPOSITORY_DOCUMENTATION_RECONCILIATION_AUDIT.md` §D9 |
 
-*Forensic reconciliation history, diagnostics, and working notes remain documented in [REPOSITORY_DOCUMENTATION_RECONCILIATION_AUDIT.md](file:///D:/OtherProjects/AI-companion-project/docs/00_Drafts/REPOSITORY_DOCUMENTATION_RECONCILIATION_AUDIT.md).*
+*Forensic reconciliation history, diagnostics, and working notes remain documented in [REPOSITORY_DOCUMENTATION_RECONCILIATION_AUDIT.md](../00_Drafts/REPOSITORY_DOCUMENTATION_RECONCILIATION_AUDIT.md).*

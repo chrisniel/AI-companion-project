@@ -18,21 +18,22 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — DOCUMENTATION RECONCILIATION PASS R2 — SYSTEM BASELINE & DOCS MAP]
+## [CURRENT EXECUTION STATE — DOCUMENTATION RECONCILIATION — PASS R2 VERIFIED / PASS R3 NEXT]
 
 - Branch: `chore/repository-documentation-reconciliation`
-- Active Work: Documentation Reconciliation Pass R2 — Authority Model, Documentation Map & System Baseline
+- Active Sprint: Repository Documentation Reconciliation
 - Status:
   - Pass R0: COMPLETE / VERIFIED (Forensic audit committed in `3a5a8db`).
   - Pass R1: COMPLETE / VERIFIED (Architectural decisions D1–D9 locked).
-  - Pass R2: IN PROGRESS (`docs/06_Guides/DOCUMENTATION_MAP.md` updated, `docs/04_Architecture/SYSTEM_BASELINE.md` created, entry-point navigation linked).
-- Preserved Boundaries:
+  - Pass R2: COMPLETE / VERIFIED (Authority model, documentation map, and canonical system baseline established, committed in `6c5bf7a`).
+  - Pass R3: NEXT (Domain Architecture Reconciliation: runtime, storage, voice, and ADRs).
+- Execution Invariants:
+  - Phase 8B (Multimodal Image Attachments) remains blocked until repository reconciliation is complete.
   - `docs/00_Drafts/09-16-2026-roadmap.md` is strictly protected (untouched).
   - `docs/ProjectWorkflowStarterKit/` is strictly protected (untouched).
-  - No archive/move cleanup yet (deferred to Pass R5).
-  - No source code, runtime, or CI modification.
-  - Phase 8B (Multimodal Image Attachments) is queued and will resume after reconciliation completes.
-- Active Plan / Guidance: Pass R2 Authority Model & System Baseline specification.
+  - Archive/move cleanup deferred to Pass R5.
+  - Zero source code, runtime, or CI modification.
+- Active Plan / Guidance: Pass R2/R2.1 Authority Model & System Baseline specification.
 
 ---
 

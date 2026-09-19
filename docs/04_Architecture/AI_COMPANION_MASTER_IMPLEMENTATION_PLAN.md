@@ -3,7 +3,7 @@
 > **Project:** AI-companion-project
 >
 > **Document role:** Historical master architecture and reference sequencing plan.  
-> **Canonical System Baseline:** See [SYSTEM_BASELINE.md](file:///D:/OtherProjects/AI-companion-project/docs/04_Architecture/SYSTEM_BASELINE.md) for the active normative system baseline, V1 release boundary, and locked decisions D1–D9.  
+> **Canonical System Baseline:** See [SYSTEM_BASELINE.md](./SYSTEM_BASELINE.md) for the active normative system baseline, V1 release boundary, and locked decisions D1–D9.  
 >
 > **Last updated:** 2026-09-14 (Annotated with Reconciliation Pass R2 baseline link)
 >
