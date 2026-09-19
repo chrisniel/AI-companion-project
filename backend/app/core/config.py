@@ -23,7 +23,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Server Info
+    # Server Info — "Local AI Runtime" is the canonical backend name (supersedes legacy "Local AI Core")
     PROJECT_NAME: str = "Local AI Runtime"
     VERSION: str = "0.1.0"
     ENVIRONMENT: str = "development"
@@ -45,23 +45,114 @@ class Settings(BaseSettings):
     ]
 
     # Database & Retention Policy (Section 16.1)
-    DATA_DIR: Path = BASE_DIR.parent / "data"
-    DATABASE_URL: str = "sqlite+aiosqlite:///./data/companion.db"
     DATA_RETENTION_DAYS: int = 30
 
-    # Native Runtime Engines & Local LLM (Track B4 & Sections 11-14)
+    # Native Runtime Engines & Local LLM (Track B4, Sections 11-14, Phase 8P.2)
+    LLM_ENGINE: str = "llama_cpp"
+    LLM_ACCELERATION: str = "vulkan"
+    LLAMA_ENGINE_VERSION: str = "b10936"
+
     BASE_DIR: Path = BASE_DIR
+    FACTORY_MODEL_ROOT: Path = BASE_DIR.parent / "models"
+    FACTORY_REGISTRY_TEMPLATE: Path = BASE_DIR.parent / "models" / "registry.template.json"
     RUNTIME_DIR: Path = BASE_DIR.parent / "runtime"
     LLAMA_CPP_BIN_DIR: Path = RUNTIME_DIR / "llama.cpp"
     BIN_DIR: Path = RUNTIME_DIR  # backward-compatibility alias
     MODELS_DIR: Path = BASE_DIR.parent / "models"
     LLAMA_MODELS_DIR: Path = BASE_DIR.parent / "models" / "vision"
+
+    # Persistent Storage Root & Canonical Paths (Batch 8P.3B)
+    @property
+    def COMPANION_DATA_ROOT(self) -> Path:
+        """Resolved persistent storage root (precedence: env -> bootstrap -> OS default)."""
+        from app.core.storage import resolve_data_root
+        return resolve_data_root()
+
+    @property
+    def canonical_paths(self):
+        from app.core.storage import get_canonical_paths
+        return get_canonical_paths(self.COMPANION_DATA_ROOT)
+
+    @property
+    def DATABASE_DIR(self) -> Path:
+        return self.canonical_paths.DATABASE_DIR
+
+    @property
+    def DATABASE_PATH(self) -> Path:
+        return self.canonical_paths.DATABASE_PATH
+
+    @property
+    def DATABASE_URL(self) -> str:
+        return self.canonical_paths.DATABASE_URL
+
+    @property
+    def DATA_DIR(self) -> Path:
+        """Backward-compatibility alias to canonical DATABASE_DIR."""
+        return self.canonical_paths.DATABASE_DIR
+
+    @property
+    def LIBRARY_DIR(self) -> Path:
+        return self.canonical_paths.LIBRARY_DIR
+
+    @property
+    def MODEL_LIBRARY_DIR(self) -> Path:
+        return self.canonical_paths.MODEL_LIBRARY_DIR
+
+    @property
+    def INSTALLED_REGISTRY_PATH(self) -> Path:
+        return self.canonical_paths.INSTALLED_REGISTRY_PATH
+
+    @property
+    def VOICE_LIBRARY_DIR(self) -> Path:
+        return self.canonical_paths.VOICE_LIBRARY_DIR
+
+    @property
+    def ATTACHMENT_DIR(self) -> Path:
+        return self.canonical_paths.ATTACHMENT_DIR
+
+    @property
+    def IMPORT_INBOX_DIR(self) -> Path:
+        return self.canonical_paths.IMPORT_INBOX_DIR
+
+    @property
+    def IMPORT_STAGING_DIR(self) -> Path:
+        return self.canonical_paths.IMPORT_STAGING_DIR
+
+    @property
+    def CHARACTER_DIR(self) -> Path:
+        return self.canonical_paths.CHARACTER_DIR
+
+    @property
+    def MEMORY_DIR(self) -> Path:
+        return self.canonical_paths.MEMORY_DIR
+
+    @property
+    def BACKUP_DIR(self) -> Path:
+        return self.canonical_paths.BACKUP_DIR
     DEFAULT_MODEL_NAME: str = "Qwen2.5-7B-Instruct-Q4_K_M.gguf"
     LLM_PROVIDER: str = "auto"  # "auto" | "llama_cpp" | "mock"
     LLM_PROFILE: str = "balanced"  # "eco" | "balanced" | "maximum"
     LLM_IDLE_TIMEOUT_SECONDS: int = 900  # 15 minutes auto-unload
-    LLM_GPU_LAYERS: int = 28  # default GPU layers offload for RX 580
     LLAMA_SERVER_URL: str = "http://127.0.0.1:8085/v1"
+
+    # Hardware Performance Profiles (Batch 8P.2 — env-overridable)
+    PROFILE_ECO_CTX: int = 2048
+    PROFILE_ECO_GPU_LAYERS: int = 0
+    PROFILE_ECO_THREADS: int = 4
+    PROFILE_ECO_MMPROJ_OFFLOAD: bool = False
+
+    PROFILE_BALANCED_CTX: int = 4096
+    PROFILE_BALANCED_GPU_LAYERS: int = 28
+    PROFILE_BALANCED_THREADS: int = 6
+    PROFILE_BALANCED_MMPROJ_OFFLOAD: bool = True
+
+    PROFILE_MAXIMUM_CTX: int = 8192
+    PROFILE_MAXIMUM_GPU_LAYERS: int = 33
+    PROFILE_MAXIMUM_THREADS: int = 8
+    PROFILE_MAXIMUM_MMPROJ_OFFLOAD: bool = True
+
+    # Retained backward-compatibility alias for balanced GPU offload (mock / legacy consumers)
+    LLM_GPU_LAYERS: int = 28
 
     # LLM Router launch (LLAMA_CPP_RUNTIME_ARCHITECTURE.md §3)
     LLAMA_ROUTER_HOST: str = "127.0.0.1"  # localhost only — never 0.0.0.0

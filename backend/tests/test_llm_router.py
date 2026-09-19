@@ -8,12 +8,30 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
+from app.core.config import settings
 from app.services.llm.llama_cpp import LlamaCppProvider
 from app.services.llm.runtime_state import LLMRuntimeState
 
 
 @pytest.fixture
-def llama_provider():
+def llama_provider(tmp_path, monkeypatch):
+    runtime_dir = tmp_path / "runtime" / "llama.cpp"
+    runtime_dir.mkdir(parents=True)
+
+    fake_server = runtime_dir / "llama-server.exe"
+    fake_server.write_bytes(b"")
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir(parents=True)
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
+
+    monkeypatch.setattr(settings, "LLAMA_CPP_BIN_DIR", runtime_dir)
+    monkeypatch.setattr(settings, "LLAMA_MODELS_DIR", models_dir)
+    monkeypatch.setattr(settings, "MODELS_DIR", models_dir)
+    monkeypatch.setattr(type(settings), "DATA_DIR", property(lambda self: data_dir))
+
     provider = LlamaCppProvider()
     yield provider
 
@@ -705,5 +723,138 @@ async def test_status_contract_backwards_compatible_fields(llama_provider):
         assert status.idle_timeout_seconds > 0
         assert status.seconds_until_unload is None
         assert isinstance(status.available_models, list)
+
+
+# ==============================================================================
+# Phase 8P.2: Runtime Engine Configuration & Performance Profiles
+# ==============================================================================
+
+def test_profile_params_eco_resolves_exact_defaults(llama_provider):
+    """
+    1. Eco resolves exactly:
+       ctx = 2048, gpu_layers = 0, threads = 4, mmproj_offload = False
+    """
+    params = llama_provider._get_profile_params("eco")
+    assert params["n_ctx"] == 2048
+    assert params["n_gpu_layers"] == 0
+    assert params["n_threads"] == 4
+    assert params["mmproj_offload"] is False
+
+
+def test_profile_params_balanced_resolves_exact_defaults(llama_provider):
+    """
+    2. Balanced resolves exactly:
+       ctx = 4096, gpu_layers = 28, threads = 6, mmproj_offload = True
+    """
+    params = llama_provider._get_profile_params("balanced")
+    assert params["n_ctx"] == 4096
+    assert params["n_gpu_layers"] == 28
+    assert params["n_threads"] == 6
+    assert params["mmproj_offload"] is True
+
+
+def test_profile_params_maximum_resolves_exact_defaults(llama_provider):
+    """
+    3. Maximum resolves exactly:
+       ctx = 8192, gpu_layers = 33, threads = 8, mmproj_offload = True
+    """
+    params = llama_provider._get_profile_params("maximum")
+    assert params["n_ctx"] == 8192
+    assert params["n_gpu_layers"] == 33
+    assert params["n_threads"] == 8
+    assert params["mmproj_offload"] is True
+
+
+def test_profile_params_settings_overrides(llama_provider, monkeypatch):
+    """
+    4. Environment/settings overrides actually change provider profile output.
+    """
+    monkeypatch.setattr(settings, "PROFILE_ECO_CTX", 1024)
+    monkeypatch.setattr(settings, "PROFILE_ECO_GPU_LAYERS", 5)
+    monkeypatch.setattr(settings, "PROFILE_ECO_THREADS", 2)
+    monkeypatch.setattr(settings, "PROFILE_ECO_MMPROJ_OFFLOAD", True)
+
+    monkeypatch.setattr(settings, "PROFILE_BALANCED_CTX", 8192)
+    monkeypatch.setattr(settings, "PROFILE_BALANCED_GPU_LAYERS", 30)
+    monkeypatch.setattr(settings, "PROFILE_BALANCED_THREADS", 12)
+    monkeypatch.setattr(settings, "PROFILE_BALANCED_MMPROJ_OFFLOAD", False)
+
+    monkeypatch.setattr(settings, "PROFILE_MAXIMUM_CTX", 16384)
+    monkeypatch.setattr(settings, "PROFILE_MAXIMUM_GPU_LAYERS", 40)
+    monkeypatch.setattr(settings, "PROFILE_MAXIMUM_THREADS", 16)
+    monkeypatch.setattr(settings, "PROFILE_MAXIMUM_MMPROJ_OFFLOAD", False)
+
+    eco = llama_provider._get_profile_params("eco")
+    assert eco["n_ctx"] == 1024
+    assert eco["n_gpu_layers"] == 5
+    assert eco["n_threads"] == 2
+    assert eco["mmproj_offload"] is True
+
+    balanced = llama_provider._get_profile_params("balanced")
+    assert balanced["n_ctx"] == 8192
+    assert balanced["n_gpu_layers"] == 30
+    assert balanced["n_threads"] == 12
+    assert balanced["mmproj_offload"] is False
+
+    maximum = llama_provider._get_profile_params("maximum")
+    assert maximum["n_ctx"] == 16384
+    assert maximum["n_gpu_layers"] == 40
+    assert maximum["n_threads"] == 16
+    assert maximum["mmproj_offload"] is False
+
+
+@pytest.mark.asyncio
+async def test_provider_engine_version_and_declarative_settings(monkeypatch):
+    """
+    5. Provider engine_version reflects settings.LLAMA_ENGINE_VERSION,
+       and declarative engine / acceleration settings exist.
+    """
+    assert settings.LLM_ENGINE == "llama_cpp"
+    assert settings.LLM_ACCELERATION == "vulkan"
+    assert settings.LLAMA_ENGINE_VERSION == "b10936"
+
+    # Default provider reflects settings
+    provider = LlamaCppProvider()
+    status = await provider.get_status()
+    assert status.engine_version == "b10936"
+
+    # Override engine version and ensure provider reflects it
+    monkeypatch.setattr(settings, "LLAMA_ENGINE_VERSION", "b99999")
+    provider_override = LlamaCppProvider()
+    status_override = await provider_override.get_status()
+    assert status_override.engine_version == "b99999"
+
+
+@pytest.mark.asyncio
+async def test_no_regression_in_requested_vs_applied_profile_semantics(llama_provider):
+    """
+    6. No regression in requested-vs-applied profile semantics:
+       - stopped router has requested_profile set but applied_profile is None
+       - active router has applied_profile matching verified runtime state
+    """
+    llama_provider._active_profile = "eco"
+    llama_provider._server_is_active = False
+
+    stopped_status = await llama_provider.get_status()
+    assert stopped_status.requested_profile == "eco"
+    assert stopped_status.applied_profile is None
+    assert stopped_status.applied_context_size is None
+    assert stopped_status.applied_gpu_layers is None
+
+    # Simulate active router with balanced applied
+    llama_provider._active_profile = "maximum"
+    llama_provider._applied_profile = "balanced"
+    llama_provider._applied_context_size = settings.PROFILE_BALANCED_CTX
+    llama_provider._applied_gpu_layers = settings.PROFILE_BALANCED_GPU_LAYERS
+    llama_provider._applied_mmproj_offload = settings.PROFILE_BALANCED_MMPROJ_OFFLOAD
+
+    with patch.object(llama_provider, "_check_external_server", new_callable=AsyncMock, return_value=True), \
+         patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=MagicMock(status_code=200, json=lambda: {"data": []})):
+        active_status = await llama_provider.get_status()
+        assert active_status.requested_profile == "maximum"
+        assert active_status.applied_profile == "balanced"
+        assert active_status.applied_context_size == settings.PROFILE_BALANCED_CTX
+        assert active_status.applied_gpu_layers == settings.PROFILE_BALANCED_GPU_LAYERS
+        assert active_status.applied_mmproj_offload == settings.PROFILE_BALANCED_MMPROJ_OFFLOAD
 
 

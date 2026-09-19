@@ -327,7 +327,7 @@ export const ApplicationStatesShowcase: React.FC<{
     {
       id: 'ai-core-offline',
       category: 'ai',
-      name: 'Local AI Core Offline',
+      name: 'Local AI Runtime Offline',
       badgeText: 'DAEMON STOPPED',
       badgeVariant: 'danger',
       icon: <ServerOff className="w-4 h-4 text-rose-500" />,
@@ -343,7 +343,7 @@ export const ApplicationStatesShowcase: React.FC<{
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ServerOff className="w-4 h-4 text-rose-500" />
-              <h4 className="text-xs font-bold text-rose-600 dark:text-rose-400">Local AI Core Inactive</h4>
+              <h4 className="text-xs font-bold text-rose-600 dark:text-rose-400">Local AI Runtime Inactive</h4>
             </div>
             <Badge variant="danger" size="sm">Port 8000 Down</Badge>
           </div>
@@ -355,7 +355,7 @@ export const ApplicationStatesShowcase: React.FC<{
               type="button"
               className="px-3 py-1.5 rounded-xl bg-rose-600 text-white text-xs font-semibold hover:bg-rose-700 cursor-pointer"
             >
-              Start Local AI Core
+              Start Local AI Runtime
             </button>
           </div>
         </div>

@@ -1,10 +1,28 @@
 /**
  * Model Registry API — fetches the live model list from the backend.
- * Master Plan §16.2 — ModelRegistry
+ * Master Plan §16.2, §16.3 — Schema v3 ModelRegistry Contract
  */
 import { apiFetch, getApiKey } from './client';
 
-export type ModelVariant = 'instruct' | 'thinking' | 'base' | string;
+export type ModelAssetType = 'gguf' | 'mmproj' | 'lora' | 'embedding' | 'tokenizer';
+
+export type ModelVariant = 'instruct' | 'thinking' | 'base' | 'code' | 'unknown';
+
+export type InputModality = 'text' | 'image' | 'audio' | 'video';
+
+export type ModelDiscoveryState = 'discovered' | 'registered' | 'verified' | 'incompatible';
+
+export type ReasoningMode = 'always_on' | 'toggleable' | 'unsupported' | 'unknown';
+
+export type CapabilityProvenance = 'declared' | 'detected' | 'verified' | 'unknown';
+
+export type ValidationStatus =
+  | 'verified'
+  | 'missing_primary'
+  | 'missing_companion'
+  | 'unregistered'
+  | 'incompatible';
+
 export type ModelCapability =
   | 'chat'
   | 'vision'
@@ -12,141 +30,106 @@ export type ModelCapability =
   | 'structured_output'
   | 'tool_calling'
   | 'multilingual';
-export type ValidationStatus =
-  | 'verified'
-  | 'missing_primary'
-  | 'missing_companion'
-  | 'unregistered';
+
+export type RegistrySource = 'factory' | 'installed';
 
 export interface CompanionFile {
   role: string;
   path: string;
+  sha256?: string | null;
+}
+
+export interface CapabilityEntry {
+  capability: ModelCapability;
+  supported?: boolean;
+  provenance?: CapabilityProvenance;
+}
+
+export interface CompanionArtifactStatus {
+  artifact: CompanionFile;
+  exists: boolean;
+}
+
+export interface GenerationDefaults {
+  temperature?: number | null;
+  top_p?: number | null;
+  top_k?: number | null;
+  min_p?: number | null;
+  repeat_penalty?: number | null;
+}
+
+export interface ModelManifest {
+  id: string;
+  display_name: string;
+  asset_type?: ModelAssetType;
+  family?: string;
+  architecture?: string;
+  variant?: ModelVariant;
+  parameters?: string;
+  quantization?: string;
+  reasoning_mode?: ReasoningMode;
+  capabilities?: ModelCapability[];
+  input_modalities?: InputModality[];
+  model_max_context?: number | null;
+  runtime_compatibility?: string[];
+  primary_file: string;
+  companion_files?: CompanionFile[];
+  chat_template?: string | null;
+  license?: string;
+  source?: string;
+  sha256_primary?: string | null;
+}
+
+export interface ModelLibraryState {
+  discovery_state?: ModelDiscoveryState;
+  validation_status?: ValidationStatus;
+  primary_file_exists?: boolean;
+  size_gb?: number | null;
+  companion_artifact_statuses?: CompanionArtifactStatus[];
+  available_capabilities?: ModelCapability[];
+  capability_provenance?: CapabilityEntry[];
+}
+
+export interface ModelRuntimeHints {
+  recommended_profiles?: string[];
+  estimated_vram_gb?: number;
+  estimated_ram_gb?: number;
+  generation_defaults?: GenerationDefaults | null;
 }
 
 export interface RegistryEntry {
-  id: string;
-  display_name: string;
-  family: string;
-  variant: ModelVariant;
-  primary_file: string;
-  companion_files: CompanionFile[];
-  capabilities: ModelCapability[];
-  recommended_profiles: string[];
-  estimated_vram_gb: number;
-  estimated_ram_gb: number;
-  quantization: string;
-  parameters: string;
-  context_limit: number;
-  license: string;
-  source: string;
-  validation_status: ValidationStatus;
-  primary_file_exists: boolean;
-  companion_files_valid: boolean;
-  size_gb: number | null;
+  manifest: ModelManifest;
+  library_state: ModelLibraryState;
+  hints: ModelRuntimeHints;
+  runtime_model_id: string;
+  registry_source: RegistrySource;
 }
 
-export const DEFAULT_INSTALLED_REGISTRY: RegistryEntry[] = [
-  {
-    id: 'qwen3-vl-2b-instruct',
-    display_name: 'Qwen3-VL 2B Instruct',
-    family: 'Qwen3-VL',
-    variant: 'instruct',
-    primary_file: 'vision/qwen3-vl-2b-instruct/Qwen_Qwen3-VL-2B-Instruct-Q4_K_M.gguf',
-    companion_files: [
-      { role: 'mmproj', path: 'vision/qwen3-vl-2b-instruct/mmproj-Qwen_Qwen3-VL-2B-Instruct-f16.gguf' },
-    ],
-    quantization: 'Q4_K_M',
-    parameters: '2.0B',
-    context_limit: 32768,
-    capabilities: ['chat', 'vision', 'multilingual'],
-    recommended_profiles: ['eco', 'balanced'],
-    estimated_vram_gb: 2.4,
-    estimated_ram_gb: 0.6,
-    license: 'Apache-2.0',
-    source: 'local',
-    validation_status: 'verified',
-    primary_file_exists: true,
-    companion_files_valid: true,
-    size_gb: 1.6,
-  },
-  {
-    id: 'qwen3-vl-2b-thinking',
-    display_name: 'Qwen3-VL 2B Thinking',
-    family: 'Qwen3-VL',
-    variant: 'thinking',
-    primary_file: 'vision/qwen3-vl-2b-thinking/Qwen_Qwen3-VL-2B-Thinking-Q4_K_M.gguf',
-    companion_files: [
-      { role: 'mmproj', path: 'vision/qwen3-vl-2b-thinking/mmproj-Qwen_Qwen3-VL-2B-Thinking-f16.gguf' },
-    ],
-    quantization: 'Q4_K_M',
-    parameters: '2.0B',
-    context_limit: 32768,
-    capabilities: ['chat', 'vision', 'reasoning', 'multilingual'],
-    recommended_profiles: ['balanced', 'maximum'],
-    estimated_vram_gb: 2.4,
-    estimated_ram_gb: 0.6,
-    license: 'Apache-2.0',
-    source: 'local',
-    validation_status: 'verified',
-    primary_file_exists: true,
-    companion_files_valid: true,
-    size_gb: 1.6,
-  },
-  {
-    id: 'qwen3-vl-4b-instruct',
-    display_name: 'Qwen3-VL 4B Instruct',
-    family: 'Qwen3-VL',
-    variant: 'instruct',
-    primary_file: 'vision/qwen3-vl-4b-instruct/Qwen_Qwen3-VL-4B-Instruct-Q4_K_M.gguf',
-    companion_files: [
-      { role: 'mmproj', path: 'vision/qwen3-vl-4b-instruct/mmproj-Qwen_Qwen3-VL-4B-Instruct-f16.gguf' },
-    ],
-    quantization: 'Q4_K_M',
-    parameters: '4.0B',
-    context_limit: 32768,
-    capabilities: ['chat', 'vision', 'multilingual'],
-    recommended_profiles: ['balanced', 'maximum'],
-    estimated_vram_gb: 3.8,
-    estimated_ram_gb: 0.8,
-    license: 'Apache-2.0',
-    source: 'local',
-    validation_status: 'verified',
-    primary_file_exists: true,
-    companion_files_valid: true,
-    size_gb: 2.8,
-  },
-  {
-    id: 'qwen3-vl-4b-thinking',
-    display_name: 'Qwen3-VL 4B Thinking',
-    family: 'Qwen3-VL',
-    variant: 'thinking',
-    primary_file: 'vision/qwen3-vl-4b-thinking/Qwen_Qwen3-VL-4B-Thinking-Q4_K_M.gguf',
-    companion_files: [
-      { role: 'mmproj', path: 'vision/qwen3-vl-4b-thinking/mmproj-Qwen_Qwen3-VL-4B-Thinking-f16.gguf' },
-    ],
-    quantization: 'Q4_K_M',
-    parameters: '4.0B',
-    context_limit: 32768,
-    capabilities: ['chat', 'vision', 'reasoning', 'multilingual'],
-    recommended_profiles: ['balanced', 'maximum'],
-    estimated_vram_gb: 3.8,
-    estimated_ram_gb: 0.8,
-    license: 'Apache-2.0',
-    source: 'local',
-    validation_status: 'verified',
-    primary_file_exists: true,
-    companion_files_valid: true,
-    size_gb: 2.8,
-  },
-];
+export function getRegistryEntryId(entry: RegistryEntry): string {
+  return entry.manifest.id;
+}
+
+export function getRegistryEntryDisplayName(entry: RegistryEntry): string {
+  return entry.manifest.display_name || entry.manifest.id;
+}
+
+export function registryEntryMatchesIdentifier(
+  entry: RegistryEntry,
+  identifier: string | null | undefined
+): boolean {
+  if (!identifier) return false;
+  if (entry.manifest.id === identifier) return true;
+  if (entry.runtime_model_id && entry.runtime_model_id === identifier) return true;
+  if (entry.manifest.primary_file === identifier) return true;
+  const primaryBasename = entry.manifest.primary_file.split(/[/\\]/).pop();
+  if (primaryBasename && primaryBasename === identifier) return true;
+  return false;
+}
 
 export async function fetchModelRegistry(apiKey?: string | null): Promise<RegistryEntry[]> {
-  const key = apiKey || getApiKey();
-  if (!key) return [];
-  try {
-    return await apiFetch<RegistryEntry[]>('/api/v1/models/registry');
-  } catch {
-    return [];
+  const options: RequestInit = {};
+  if (apiKey) {
+    options.headers = { Authorization: `Bearer ${apiKey}` };
   }
+  return await apiFetch<RegistryEntry[]>('/api/v1/models/registry', options);
 }
-

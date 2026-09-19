@@ -189,9 +189,9 @@ export interface LocalModel {
   parameters: string;
   quantization: string;
   sizeGb?: number | null;
-  contextWindow: number;
+  contextWindow?: number | null;
   status: 'loaded' | 'unloaded' | 'downloading';
-  engine: 'llama.cpp' | 'vllm' | 'ollama' | 'exllama2' | 'gemini';
+  engine: 'llama.cpp' | 'vllm' | 'ollama' | 'exllama2' | 'gemini' | 'unknown' | string;
   isCloud?: boolean;
   ramUsageGb?: number;
   vramUsageGb?: number;

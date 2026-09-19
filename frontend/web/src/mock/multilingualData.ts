@@ -339,7 +339,7 @@ export function getLanguageAwareGreeting(
       if (isMorning) {
         return {
           greeting: `Good morning, ${userName}.`,
-          subtitle: 'Local AI core standing by on Llama-3.1-8B-Instruct with all background daemons nominal.',
+          subtitle: 'Local AI Runtime standing by on Llama-3.1-8B-Instruct with all background daemons nominal.',
           flag: '🇺🇸',
           langLabel: 'English',
         };

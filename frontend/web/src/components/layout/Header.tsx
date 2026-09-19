@@ -32,6 +32,11 @@ import {
   DesktopSizeSelector,
   DesktopSimulationPreset,
 } from './DesktopSizeSelector';
+import {
+  getRegistryEntryId,
+  getRegistryEntryDisplayName,
+  registryEntryMatchesIdentifier,
+} from '../../services/api';
 
 export interface HeaderProps {
   searchQuery?: string;
@@ -75,13 +80,15 @@ export const Header: React.FC<HeaderProps> = ({
   const backendActiveModelId = isLoaded ? (modelStatus?.active_model ?? null) : null;
 
   const activeRegistryEntry = backendActiveModelId
-    ? registry.find((e) => e.id === backendActiveModelId)
+    ? registry.find((e) => registryEntryMatchesIdentifier(e, backendActiveModelId))
     : null;
-  const activeDisplayName = activeRegistryEntry?.display_name || backendActiveModelId;
+  const activeDisplayName = activeRegistryEntry
+    ? getRegistryEntryDisplayName(activeRegistryEntry)
+    : backendActiveModelId;
 
   let activeModelLabel = 'Router Offline';
   if (!isOnline) {
-    activeModelLabel = 'Core Offline';
+    activeModelLabel = 'Runtime Offline';
   } else if (modelStatus?.runtime_state === 'SERVER_STOPPED') {
     activeModelLabel = 'Router Offline';
   } else if (modelStatus?.runtime_state === 'MODEL_LOADING' || isModelLoading) {
@@ -96,12 +103,16 @@ export const Header: React.FC<HeaderProps> = ({
 
   // Model options for dropdown — strictly populated from verified installed registry
   const modelOptions = registry.map((entry) => {
+    const entryId = getRegistryEntryId(entry);
+    const entryDisplayName = getRegistryEntryDisplayName(entry);
+    const isThisActive = Boolean(backendActiveModelId && registryEntryMatchesIdentifier(entry, backendActiveModelId));
+
     let badge = 'Disk';
     if (!isOnline) {
       badge = 'Disk';
-    } else if (isModelLoading && switchingModelId === entry.id) {
+    } else if (isModelLoading && switchingModelId === entryId) {
       badge = 'Loading';
-    } else if (backendActiveModelId === entry.id) {
+    } else if (isThisActive) {
       if (isSleeping) {
         badge = 'Sleeping';
       } else if (modelStatus?.runtime_state === 'MODEL_ERROR') {
@@ -112,19 +123,19 @@ export const Header: React.FC<HeaderProps> = ({
     }
 
     return {
-      id: entry.id,
-      label: entry.display_name || entry.id,
+      id: entryId,
+      label: entryDisplayName,
       badge,
       icon: <Cpu className="w-3.5 h-3.5 text-[var(--color-accent)]" />,
       onClick: async () => {
-        onSelectModel?.(entry.id);
+        onSelectModel?.(entryId);
         if (!isOnline) return;
-        if (backendActiveModelId === entry.id && modelStatus?.runtime_state === 'MODEL_READY') {
+        if (isThisActive && modelStatus?.runtime_state === 'MODEL_READY') {
           return;
         }
         try {
-          setSwitchingModelId(entry.id);
-          await loadModel(entry.id);
+          setSwitchingModelId(entryId);
+          await loadModel(entryId);
         } catch {
           // Handled in backend context
         } finally {
@@ -218,7 +229,7 @@ export const Header: React.FC<HeaderProps> = ({
           {!sidebarCollapsed && (
             <div className="flex flex-col truncate">
               <span className="font-bold text-xs tracking-tight text-[var(--color-text-primary)] truncate">
-                Local AI Core
+                Local AI Runtime
               </span>
               <span className="text-[10px] font-medium text-[var(--color-text-secondary)] truncate">
                 Desktop Control Center
@@ -265,7 +276,7 @@ export const Header: React.FC<HeaderProps> = ({
                 className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-xl surface-raised border border-[var(--color-border-subtle)] hover:border-[var(--color-accent)]/40 transition-all text-xs text-[var(--color-text-primary)]"
                 title={
                   !isOnline || !modelStatus
-                    ? 'Profile: Unavailable (Core Offline)'
+                    ? 'Profile: Unavailable (Runtime Offline)'
                     : appliedProfile
                     ? `Profile: ${appliedProfile} [Applied]`
                     : requestedProfile
@@ -301,10 +312,10 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right Tools & User */}
         <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
-          {/* Local AI Core & VRAM Status Badges */}
+          {/* Local AI Runtime & VRAM Status Badges */}
           <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-xl surface-recessed border border-[var(--color-border-subtle)] text-[11px] font-mono">
             <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
-            <span className="text-[var(--color-text-secondary)] font-medium">Core :8000</span>
+            <span className="text-[var(--color-text-secondary)] font-medium">Runtime :8000</span>
             <span className={isOnline ? 'text-emerald-500 font-semibold' : 'text-rose-400'}>
               {isOnline ? 'Online' : 'Offline'}
             </span>

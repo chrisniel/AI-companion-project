@@ -57,7 +57,7 @@ export const StatusIndicator: React.FC<StatusIndicatorProps> = ({
       break;
     case 'error':
       colorClass = 'bg-red-600 shadow-[0_0_8px_rgba(220,38,38,0.6)]';
-      defaultLabel = 'Core Error';
+      defaultLabel = 'Runtime Error';
       shouldPulse = true;
       break;
   }

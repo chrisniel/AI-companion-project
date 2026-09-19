@@ -8,7 +8,12 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { NeumorphicButton } from '../../ui/NeumorphicButton';
-import { ModelStatusResponse, RegistryEntry } from '../../../services/api';
+import {
+  ModelStatusResponse,
+  RegistryEntry,
+  getRegistryEntryDisplayName,
+  registryEntryMatchesIdentifier,
+} from '../../../services/api';
 import { AssistantState } from '../../../types';
 
 export type TelemetryProvenance = 'Configured' | 'Estimated' | 'Unavailable';
@@ -40,11 +45,11 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
 }) => {
   // Authoritative runtime model identity from backend
   const activeModelId = modelStatus?.active_model || null;
-  const activeModelEntry = registry.find(
-    (m) => m.id === activeModelId || m.display_name === activeModelId
-  );
+  const activeModelEntry = activeModelId
+    ? registry.find((m) => registryEntryMatchesIdentifier(m, activeModelId))
+    : null;
   const effectiveModelName = isOnline
-    ? (activeModelEntry ? activeModelEntry.display_name : (activeModelId || 'No Model Loaded'))
+    ? (activeModelEntry ? getRegistryEntryDisplayName(activeModelEntry) : (activeModelId || 'No Model Loaded'))
     : 'Runtime Offline';
 
   const isModelSleeping = isOnline && modelStatus?.runtime_state === 'MODEL_SLEEPING';
@@ -67,7 +72,7 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
     currentModelName &&
     activeModelId &&
     currentModelName !== activeModelId &&
-    currentModelName !== activeModelEntry?.display_name
+    currentModelName !== (activeModelEntry ? getRegistryEntryDisplayName(activeModelEntry) : undefined)
   );
 
   // Truthful runtime badge label (backend truth only, no hardcoded llama.cpp)
@@ -78,10 +83,10 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
   // Assistant State Status Label (authoritative runtime truth from client/SSE state)
   const getAssistantStateDisplay = () => {
     if (!isOnline) {
-      return { label: 'Offline', color: 'text-[var(--color-text-muted)]', desc: 'Core server offline' };
+      return { label: 'Offline', color: 'text-[var(--color-text-muted)]', desc: 'Runtime server offline' };
     }
     if (isRouterOffline) {
-      return { label: 'Router Stopped', color: 'text-amber-500', desc: 'Core online, llama.cpp router not running' };
+      return { label: 'Router Stopped', color: 'text-amber-500', desc: 'Runtime online, llama.cpp router not running' };
     }
     if (isTransitioning) {
       return { label: 'Restarting / Loading', color: 'text-amber-500 animate-pulse', desc: 'Applying runtime changes' };
@@ -211,7 +216,7 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
             ) : (
               <>
                 <AlertCircle className="w-3.5 h-3.5 text-[var(--color-text-muted)]" />
-                <span className="text-[var(--color-text-muted)]">Core Offline</span>
+                <span className="text-[var(--color-text-muted)]">Runtime Offline</span>
               </>
             )}
           </div>
@@ -320,7 +325,7 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
             </>
           ) : (
             <span className="px-2 py-0.5 rounded-lg surface-recessed border border-[var(--color-border-subtle)] text-[var(--color-text-muted)]">
-              Unavailable (Core Offline)
+              Unavailable (Runtime Offline)
             </span>
           )}
         </div>

@@ -70,7 +70,7 @@ async def run_retention_purge_job(retention_days: Optional[int] = None) -> int:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Purge expired soft-deleted records from Local AI Core.")
+    parser = argparse.ArgumentParser(description="Purge expired soft-deleted records from Local AI Runtime.")
     parser.add_argument("--days", type=int, default=None, help="Retention period in days (default from config)")
     args = parser.parse_args()
 

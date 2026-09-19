@@ -10,6 +10,7 @@ import { useBackend } from '../../context/BackendContext';
 import { Badge } from '../ui/Badge';
 import { StatusIndicator } from '../ui/StatusIndicator';
 import { AssistantPanelMode, AssistantState } from '../../types';
+import { getRegistryEntryDisplayName, registryEntryMatchesIdentifier } from '../../services/api';
 
 export interface AssistantPanelProps {
   mode: AssistantPanelMode;
@@ -33,8 +34,10 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({
 
   // Authoritative runtime model identity
   const activeModelId = isOnline && modelStatus?.model_loaded ? (modelStatus?.active_model ?? null) : null;
-  const activeRegistryEntry = activeModelId ? registry.find((m) => m.id === activeModelId) : null;
-  const activeModelDisplay = activeRegistryEntry?.display_name || activeModelId || (isOnline ? 'No Model Loaded' : 'Unavailable');
+  const activeRegistryEntry = activeModelId ? registry.find((m) => registryEntryMatchesIdentifier(m, activeModelId)) : null;
+  const activeModelDisplay = activeRegistryEntry
+    ? getRegistryEntryDisplayName(activeRegistryEntry)
+    : (activeModelId || (isOnline ? 'No Model Loaded' : 'Unavailable'));
 
   const runtimeState = isOnline ? (modelStatus?.runtime_state || 'Unknown') : 'Offline';
   const appliedLayers = isOnline && modelStatus?.applied_gpu_layers != null
@@ -74,7 +77,7 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({
                 Assistant Panel
               </h3>
               <p className="text-[10px] text-[var(--color-text-muted)] truncate font-mono">
-                {isOnline ? 'Core Online' : 'Core Offline'} • UI: {assistantState}
+                {isOnline ? 'Runtime Online' : 'Runtime Offline'} • UI: {assistantState}
               </p>
             </div>
           </div>
@@ -120,7 +123,7 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({
             </div>
 
             <p className="text-xs text-[var(--color-text-muted)] italic mb-3">
-              Conversational reasoning and tool orchestration via Local AI Core.
+              Conversational reasoning and tool orchestration via Local AI Runtime.
             </p>
 
             {onOpenAssistant && (
@@ -149,7 +152,7 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({
 
             <div className="space-y-1.5 text-xs font-mono">
               <div className="flex justify-between items-center text-[11px]">
-                <span className="text-[var(--color-text-muted)]">Core Status:</span>
+                <span className="text-[var(--color-text-muted)]">Runtime Status:</span>
                 <span className={isOnline ? 'text-emerald-500 font-semibold' : 'text-rose-400 font-semibold'}>
                   {isOnline ? 'Online (Port 8000)' : 'Offline'}
                 </span>
@@ -220,7 +223,7 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({
               <Bot className="w-5 h-5" />
             </button>
 
-            {/* Core Status Indicator */}
+            {/* Runtime Status Indicator */}
             <div
               className="w-8 h-8 rounded-lg surface-raised border border-[var(--color-border-subtle)] flex items-center justify-center cursor-pointer"
               onClick={() => onSetMode('expanded')}

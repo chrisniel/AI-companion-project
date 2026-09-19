@@ -60,7 +60,7 @@ class MockLLMProvider(BaseLLMProvider):
                 if f.is_file() and f.name != "lfs-test.gguf" and not f.name.startswith("mmproj") and f.stat().st_size > 100 * 1024 * 1024
             ]
 
-        registry_entries = [m.primary_file for m in build_model_list() if m.primary_file_exists]
+        registry_entries = [m.manifest.primary_file for m in build_model_list() if m.library_state.primary_file_exists]
 
         is_loaded = self._is_loaded
         applied_ctx = context_sizes.get(self._active_profile, 4096)
@@ -107,7 +107,7 @@ class MockLLMProvider(BaseLLMProvider):
     ) -> str:
         self._last_active_at = datetime.now(timezone.utc)
         last_user_msg = next((m.content for m in reversed(messages) if m.role == "user"), "Hello!")
-        return f"[Mock AI Companion]: I received your message: '{last_user_msg}'. Local AI Core is operational."
+        return f"[Mock AI Companion]: I received your message: '{last_user_msg}'. Local AI Runtime is operational."
 
     async def generate_stream(
         self,
@@ -118,7 +118,7 @@ class MockLLMProvider(BaseLLMProvider):
     ) -> AsyncGenerator[str, None]:
         self._last_active_at = datetime.now(timezone.utc)
         last_user_msg = next((m.content for m in reversed(messages) if m.role == "user"), "Hello!")
-        response_text = f"I received your message: '{last_user_msg}'. Local AI Core is operational."
+        response_text = f"I received your message: '{last_user_msg}'. Local AI Runtime is operational."
         tokens = response_text.split(" ")
 
         for i, token in enumerate(tokens):

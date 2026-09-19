@@ -38,11 +38,11 @@ export function classifyStreamError(
     };
   }
 
-  // 2. Core Offline
+  // 2. Runtime Offline
   if (!isOnline) {
     return {
       code: 'CORE_OFFLINE',
-      visibleMessage: `Local AI Core is offline. Ensure Local AI Core is running on :8000. [CORE_OFFLINE: ${errMessage}]`,
+      visibleMessage: `Local AI Runtime is offline. Ensure Local AI Runtime is running on :8000. [CORE_OFFLINE: ${errMessage}]`,
     };
   }
 
@@ -97,7 +97,7 @@ export function classifyStreamError(
     };
   }
 
-  // 7. Transport / Stream Connection failure while Core and Model are ready
+  // 7. Transport / Stream Connection failure while Runtime and Model are ready
   const isTransportError =
     errMessage.toLowerCase().includes('failed to fetch') ||
     errMessage.toLowerCase().includes('networkerror') ||
@@ -108,7 +108,7 @@ export function classifyStreamError(
   if (modelStatus?.model_loaded && isTransportError) {
     return {
       code: 'STREAM_CONNECTION_FAILED',
-      visibleMessage: `Connection to the Assistant stream failed. Core and model status remain available. [STREAM_CONNECTION_FAILED: ${errMessage}]`,
+      visibleMessage: `Connection to the Assistant stream failed. Runtime and model status remain available. [STREAM_CONNECTION_FAILED: ${errMessage}]`,
     };
   }
 

@@ -125,9 +125,11 @@ export const ModelDetailsModal: React.FC<ModelDetailsModalProps> = ({
             <div className="flex flex-wrap gap-2 text-[10px] text-[var(--color-text-muted)] font-mono">
               <span>License: {model.license || 'Unavailable'}</span>
               <span>•</span>
+              <span>Format: {model.tensorType || 'Unavailable'}</span>
+              <span>•</span>
               <span>Engine: {model.engine || 'Unavailable'}</span>
               <span>•</span>
-              <span>Format: {model.tensorType || 'Unavailable'}</span>
+              <span>Acceleration: {isCloud ? 'Cloud Managed' : 'Vulkan [Configured]'}</span>
             </div>
           </div>
         </div>
@@ -147,7 +149,7 @@ export const ModelDetailsModal: React.FC<ModelDetailsModalProps> = ({
           <div className="p-3 rounded-xl surface-base border border-[var(--color-border-subtle)] space-y-0.5">
             <span className="text-[10px] text-[var(--color-text-muted)] block">Context Window</span>
             <span className="font-bold text-[var(--color-text-primary)]">
-              {model.contextWindow.toLocaleString()} tokens
+              {model.contextWindow != null && model.contextWindow > 0 ? `${model.contextWindow.toLocaleString()} tokens` : 'Unknown'}
             </span>
           </div>
 

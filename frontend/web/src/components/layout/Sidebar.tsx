@@ -207,7 +207,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         })}
       </div>
 
-      {/* Bottom Core Engine Status */}
+      {/* Bottom Runtime Engine Status */}
       <div
         className={`border-t border-[var(--color-surface-glass-border)] ${
           collapsed ? 'p-2 flex justify-center items-center' : 'p-2.5'

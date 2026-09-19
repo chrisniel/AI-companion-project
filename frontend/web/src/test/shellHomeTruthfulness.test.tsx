@@ -36,25 +36,40 @@ vi.mock('../services/api', async () => {
 
 const mockRegistry: RegistryEntry[] = [
   {
-    id: 'qwen3-vl-2b-instruct',
-    display_name: 'Qwen3-VL-2B-Instruct',
-    family: 'Qwen',
-    variant: 'instruct',
-    primary_file: 'models/qwen3-vl-2b-instruct.gguf',
-    companion_files: [],
-    capabilities: ['chat'],
-    recommended_profiles: ['eco', 'balanced'],
-    estimated_vram_gb: 2.1,
-    estimated_ram_gb: 1.1,
-    quantization: 'Q4_K_M',
-    parameters: '2.4B',
-    context_limit: 2048,
-    license: 'Apache-2.0',
-    source: 'local',
-    validation_status: 'verified',
-    primary_file_exists: true,
-    companion_files_valid: true,
-    size_gb: 1.6,
+    manifest: {
+      id: 'qwen3-vl-2b-instruct',
+      display_name: 'Qwen3-VL-2B-Instruct',
+      asset_type: 'gguf',
+      family: 'Qwen',
+      architecture: 'qwen3vl',
+      variant: 'instruct',
+      parameters: '2.4B',
+      quantization: 'Q4_K_M',
+      reasoning_mode: 'unsupported',
+      capabilities: ['chat'],
+      input_modalities: ['text'],
+      model_max_context: 2048,
+      runtime_compatibility: ['llama.cpp'],
+      primary_file: 'models/qwen3-vl-2b-instruct.gguf',
+      companion_files: [],
+      license: 'Apache-2.0',
+      source: 'local',
+    },
+    library_state: {
+      discovery_state: 'verified',
+      validation_status: 'verified',
+      primary_file_exists: true,
+      size_gb: 1.6,
+      companion_artifact_statuses: [],
+      available_capabilities: ['chat'],
+    },
+    hints: {
+      recommended_profiles: ['eco', 'balanced'],
+      estimated_vram_gb: 2.1,
+      estimated_ram_gb: 1.1,
+    },
+    runtime_model_id: 'qwen3-vl-2b-instruct',
+    registry_source: 'factory',
   },
 ];
 
@@ -123,13 +138,13 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
       </>
     );
 
-    // Header model dropdown label must be Core Offline
+    // Header model dropdown label must be Runtime Offline
     await waitFor(() => {
-      expect(screen.getByText('Core Offline')).toBeInTheDocument();
+      expect(screen.getByText('Runtime Offline')).toBeInTheDocument();
     });
 
     // Home badge must show offline
-    expect(screen.getByText('Local AI Core Offline')).toBeInTheDocument();
+    expect(screen.getByText('Local AI Runtime Offline')).toBeInTheDocument();
 
     // Must NOT contain "Active & Nominal"
     expect(screen.queryByText(/Active & Nominal/i)).not.toBeInTheDocument();
@@ -173,8 +188,8 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
       expect(noModelTexts.length).toBeGreaterThanOrEqual(1);
     });
 
-    expect(screen.getByText('Local AI Core Online')).toBeInTheDocument();
-    expect(screen.getByText(/No model is currently loaded in Local AI Core/i)).toBeInTheDocument();
+    expect(screen.getByText('Local AI Runtime Online')).toBeInTheDocument();
+    expect(screen.getByText(/No model is currently loaded in Local AI Runtime/i)).toBeInTheDocument();
   });
 
   // 3. Backend active model
@@ -235,7 +250,7 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Local AI Core Online')).toBeInTheDocument();
+      expect(screen.getByText('Local AI Runtime Online')).toBeInTheDocument();
     });
 
     // None of these fabricated metrics must exist:
@@ -364,8 +379,8 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
     expect(screen.getByText(/Wearable synchronization not configured/i)).toBeInTheDocument();
   });
 
-  // 9. AssistantStatusBar: no simulated Airgapped/Web mode toggle, no "Core Offline (Demo)", no "Low-Latency Loopback"
-  it('AssistantStatusBar has no simulated Airgapped/Web mode toggle, no "Core Offline (Demo)", and no "Low-Latency Loopback"', () => {
+  // 9. AssistantStatusBar: no simulated Airgapped/Web mode toggle, no "Runtime Offline (Demo)", no "Low-Latency Loopback"
+  it('AssistantStatusBar has no simulated Airgapped/Web mode toggle, no "Runtime Offline (Demo)", and no "Low-Latency Loopback"', () => {
     render(
       <AssistantStatusBar
         conversationTitle="Test Chat"
@@ -385,8 +400,9 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
     expect(screen.queryByText(/Web Simulated/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/simulated web search/i)).not.toBeInTheDocument();
 
-    // Truthful Core Offline label without (Demo)
-    expect(screen.getByText('Core Offline')).toBeInTheDocument();
+    // Truthful Runtime Offline label without (Demo)
+    expect(screen.getAllByText('Runtime Offline').length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText(/Runtime Offline \(Demo\)/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Core Offline \(Demo\)/i)).not.toBeInTheDocument();
 
     // No Low-Latency Loopback claim
@@ -426,7 +442,7 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
 
     renderWithProviders(<HomeView onNavigate={() => {}} />);
     await waitFor(() => {
-      expect(screen.getByText('Local AI Core Online')).toBeInTheDocument();
+      expect(screen.getByText('Local AI Runtime Online')).toBeInTheDocument();
     });
 
     expect(screen.getAllByText('Unavailable').length).toBeGreaterThanOrEqual(1);

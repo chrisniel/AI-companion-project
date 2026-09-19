@@ -53,7 +53,15 @@ class LlamaCppProvider(BaseLLMProvider):
         self._lock = asyncio.Lock()
         self._runtime_state: LLMRuntimeState = LLMRuntimeState.SERVER_STOPPED
         self._generation_active: bool = False
-        self._engine_version: str = "b10936"
+        self._custom_engine_version: Optional[str] = None
+
+    @property
+    def _engine_version(self) -> str:
+        return self._custom_engine_version or settings.LLAMA_ENGINE_VERSION
+
+    @_engine_version.setter
+    def _engine_version(self, val: Optional[str]) -> None:
+        self._custom_engine_version = val
 
     @property
     def provider_name(self) -> str:
@@ -152,15 +160,25 @@ class LlamaCppProvider(BaseLLMProvider):
         """Map performance profiles (Section 13) to technical context, VRAM layers, and mmproj offload."""
         p = profile.lower()
         if p == "eco":
-            return {"n_ctx": 2048, "n_gpu_layers": 0, "n_threads": 4, "mmproj_offload": False}
-        elif p == "maximum":
-            return {"n_ctx": 8192, "n_gpu_layers": 33, "n_threads": 8, "mmproj_offload": True}
-        else:  # balanced
             return {
-                "n_ctx": 4096,
-                "n_gpu_layers": settings.LLM_GPU_LAYERS,
-                "n_threads": 6,
-                "mmproj_offload": True,
+                "n_ctx": settings.PROFILE_ECO_CTX,
+                "n_gpu_layers": settings.PROFILE_ECO_GPU_LAYERS,
+                "n_threads": settings.PROFILE_ECO_THREADS,
+                "mmproj_offload": settings.PROFILE_ECO_MMPROJ_OFFLOAD,
+            }
+        elif p == "maximum":
+            return {
+                "n_ctx": settings.PROFILE_MAXIMUM_CTX,
+                "n_gpu_layers": settings.PROFILE_MAXIMUM_GPU_LAYERS,
+                "n_threads": settings.PROFILE_MAXIMUM_THREADS,
+                "mmproj_offload": settings.PROFILE_MAXIMUM_MMPROJ_OFFLOAD,
+            }
+        else:  # balanced or fallback
+            return {
+                "n_ctx": settings.PROFILE_BALANCED_CTX,
+                "n_gpu_layers": settings.PROFILE_BALANCED_GPU_LAYERS,
+                "n_threads": settings.PROFILE_BALANCED_THREADS,
+                "mmproj_offload": settings.PROFILE_BALANCED_MMPROJ_OFFLOAD,
             }
 
     def _check_port_listening(self, host: str, port: int) -> bool:
@@ -619,7 +637,7 @@ class LlamaCppProvider(BaseLLMProvider):
                 ):
                     available.append(f.relative_to(settings.MODELS_DIR).as_posix())
 
-        registry_entries = [m.primary_file for m in build_model_list() if m.primary_file_exists]
+        registry_entries = [m.manifest.primary_file for m in build_model_list() if m.library_state.primary_file_exists]
 
         # Determine residency & readiness booleans
         model_resident = (self._runtime_state == LLMRuntimeState.MODEL_READY and bool(self._active_model_name))

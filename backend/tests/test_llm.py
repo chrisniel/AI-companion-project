@@ -48,7 +48,7 @@ async def test_chat_completions_sync(client: AsyncClient, auth_headers: dict):
     assert data["object"] == "chat.completion"
     assert len(data["choices"]) == 1
     assert data["choices"][0]["message"]["role"] == "assistant"
-    assert "Local AI Core is operational" in data["choices"][0]["message"]["content"]
+    assert "Local AI Runtime is operational" in data["choices"][0]["message"]["content"]
     assert data["usage"]["total_tokens"] > 0
 
 

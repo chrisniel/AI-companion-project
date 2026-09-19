@@ -6,7 +6,22 @@
 const DEFAULT_BASE_URL = 'http://127.0.0.1:8000';
 
 export function getApiBaseUrl(): string {
-  return localStorage.getItem('companion_api_url') || DEFAULT_BASE_URL;
+  const stored = localStorage.getItem('companion_api_url');
+  if (stored) {
+    return stored;
+  }
+
+  if (typeof window !== 'undefined' && window.location) {
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return DEFAULT_BASE_URL;
+    }
+    if (window.location.origin) {
+      return window.location.origin.replace(/\/+$/, '');
+    }
+  }
+
+  return DEFAULT_BASE_URL;
 }
 
 export function setApiBaseUrl(url: string): void {

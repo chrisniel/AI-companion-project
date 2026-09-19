@@ -23,6 +23,7 @@ import { useBackend } from '../../context/BackendContext';
 import { Badge } from '../ui/Badge';
 import { StatusIndicator } from '../ui/StatusIndicator';
 import { NeumorphicButton } from '../ui/NeumorphicButton';
+import { getRegistryEntryDisplayName, registryEntryMatchesIdentifier } from '../../services/api';
 
 export interface HomeViewProps {
   onNavigate: (sectionId: string) => void;
@@ -56,9 +57,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
     ? modelStatus.active_model
     : null;
   const activeModelEntry = backendActiveModelId
-    ? registry.find((m) => m.id === backendActiveModelId)
+    ? registry.find((m) => registryEntryMatchesIdentifier(m, backendActiveModelId))
     : null;
-  const activeDisplayName = activeModelEntry?.display_name || backendActiveModelId;
+  const activeDisplayName = activeModelEntry
+    ? getRegistryEntryDisplayName(activeModelEntry)
+    : backendActiveModelId;
 
   const runtimeState = isOnline ? (modelStatus?.runtime_state || 'Unknown') : 'Offline';
   const appliedLayers = isOnline && modelStatus?.applied_gpu_layers != null
@@ -83,7 +86,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div className="space-y-2 max-w-xl">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant={isOnline ? 'accent' : 'glass'} size="sm">
-                {isOnline ? 'Local AI Core Online' : 'Local AI Core Offline'}
+                {isOnline ? 'Local AI Runtime Online' : 'Local AI Runtime Offline'}
               </Badge>
               <span className="text-xs text-[var(--color-text-secondary)] font-mono">
                 {currentDateString}
@@ -96,11 +99,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed">
               {!isOnline ? (
                 <span>
-                  <strong className="text-[var(--color-text-primary)]">{activeCharacterName}</strong> is standing by. Local AI Core runtime is currently offline.
+                  <strong className="text-[var(--color-text-primary)]">{activeCharacterName}</strong> is standing by. Local AI Runtime is currently offline.
                 </span>
               ) : !backendActiveModelId ? (
                 <span>
-                  <strong className="text-[var(--color-text-primary)]">{activeCharacterName}</strong> is connected. No model is currently loaded in Local AI Core.
+                  <strong className="text-[var(--color-text-primary)]">{activeCharacterName}</strong> is connected. No model is currently loaded in Local AI Runtime.
                 </span>
               ) : (
                 <span>
@@ -204,7 +207,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <div className="grid grid-cols-2 gap-2.5 text-xs font-mono">
               <div className="p-3 rounded-2xl surface-recessed border border-[var(--color-border-subtle)]">
                 <span className="text-[10px] text-[var(--color-text-muted)] uppercase block">
-                  Core Status
+                  Runtime Status
                 </span>
                 <span className="font-bold text-[var(--color-text-primary)] mt-0.5 block">
                   {isOnline ? 'Online (Port 8000)' : 'Offline'}
@@ -250,14 +253,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   {isOnline ? (
                     <>
                       <ShieldCheck className="w-3.5 h-3.5" />
-                      <span>Core Runtime (:8000)</span>
+                      <span>Local Runtime (:8000)</span>
                     </>
                   ) : (
                     <span className="text-[var(--color-text-muted)]">Offline</span>
                   )}
                 </span>
                 <span className="text-[10px] text-[var(--color-text-secondary)]">
-                  {isOnline ? 'Operating on port 8000' : 'Core offline'}
+                  {isOnline ? 'Operating on port 8000' : 'Runtime offline'}
                 </span>
               </div>
             </div>

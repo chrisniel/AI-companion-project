@@ -2,10 +2,10 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: Post-8A documentation hygiene — awaiting merge
+- Status: Phase 8P COMPLETE / VERIFIED — Phase 8B next
 - Current Sprint: Phase 8 — PC Frontend Architecture, Runtime Config, Multimodal & Polish
 - Branches: `feature/phase8-ui-foundation` → `feature/phase8-runtime-config` → `feature/multimodal-image-attachments` → `feature/phase8-ui-integration-polish`
-- Target: Mock removal, view decomposition, COMPANION_DATA_ROOT, terminology reconciliation, model schema split, image attachments, 100+ pytest / 50+ vitest
+- Target: Mock removal, view decomposition, COMPANION_DATA_ROOT, terminology reconciliation, model schema split, image attachments, 100+ pytest / 132+ vitest
 - Scope Guard: PC-first. No Android. No STT/TTS. No arbitrary file types. No video/PDF. No CUDA. No new state library. No LFS/gitattributes changes.
 - Plan: `docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md`
 - Baseline: 88 backend pytest, 132 frontend vitest, 0 tsc errors, migration head 005_scope_message_constraints (last verified Phase 8A baseline)
@@ -18,12 +18,21 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — POST-8A DOCUMENTATION HYGIENE COMPLETED — READY FOR PHASE 8P]
+## [CURRENT EXECUTION STATE — PHASE 8P COMPLETE / VERIFIED — PHASE 8B NEXT]
 
-- Status: Post-8A documentation hygiene — completed; Phase 8P next.
-- Completed: Post-8A documentation hygiene reorganization pass (organized docs/02_Planning into phase-08, android, backend, templates; created navigation hubs at docs/02_Planning/README.md and docs/02_Planning/phase-08/README.md; repaired all docs links and relative walkthrough paths; enforced AGENTS.md hierarchy).
-- Baseline: 88 backend pytest, 132 frontend vitest, 0 tsc errors, migration head 005_scope_message_constraints (last verified Phase 8A baseline; not rerun during docs pass).
-- Scope Guard: Documentation-only under docs/**. Zero code changes. Zero deletions. ProjectWorkflowStarterKit untouched.
+- Status: Phase 8P is COMPLETE / VERIFIED across all implementation and pre-merge hardening batches. Phase 8B (Multimodal Image Attachment Foundation) is NOT STARTED.
+- Pre-Merge Hardening Delivered:
+  1. Frontend Registry Truthfulness: Eliminated fabricated `DEFAULT_INSTALLED_REGISTRY` fallback. Frontend registry initializes truthfully to `[]` (representing model registry unknown/not yet loaded until backend responds). `fetchModelRegistry()` propagates API errors so `BackendContext` distinguishes successful empty registry (`[]`) from failed requests. Preserves last-known registry on transient network failure without fabricating defaults. Added 8 truthfulness tests (tests 27–34).
+  2. GitHub Actions CI Foundation (`.github/workflows/ci.yml`): Automated verification gates on `windows-latest` for Python 3.11 backend (`pytest`) and Node 22 frontend (`vitest`, `tsc --noEmit`, `vite build`). Isolated environment roots (`COMPANION_DATA_ROOT=${{ runner.temp }}/ai-companion-ci`, `COMPANION_API_KEY=ci-ephemeral-test-key`). Least-privilege `contents: read` permissions, concurrency cancellation on branch updates, zero LFS model weight downloads, and zero real secrets required.
+  3. OpenAPI Drift Gate (`scripts/check_openapi_contract.py`): Automated deterministic comparison between `contracts/openapi/openapi.json` and `app.openapi()`, enforcing model/LLM route integrity and schema synchronization without runtime mutation.
+  4. Final Status Gate (`CI Gate`): Consolidated status check job requiring both backend and frontend jobs to succeed.
+- Branch Protection Requirement:
+  - Note: After the first successful GitHub Actions workflow run, repository administration should configure the `develop` branch to require the `CI Gate` status check before merge. Canonical flow remains `feature/*` → `develop`.
+- CD Status:
+  - DEFERRED: No cloud, server, or deployment target exists at this stage. Automated CD will be established as a release pipeline once packaging/installer builds exist (version tag → Windows package → test → checksum → optional signing → GitHub Release artifact).
+- Deferred QA Finding (Recorded for Phase 8C):
+  - 8C.0: Responsive Web Layout & Pagination Hardening remains deferred for Phase 8C; NOT touched in Phase 8P.
+- Next Phase: Phase 8B — Multimodal Image Attachment Foundation (branch `feature/multimodal-image-attachments`, NOT STARTED).
 - Active Plan: `docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md`
 
 ---
@@ -46,54 +55,52 @@ Branch: `feature/phase8-ui-foundation`
 ### 8P — Runtime Configuration & Persistent Asset Foundation
 Branch: `feature/phase8-runtime-config` (based on merged 8A)
 
-**8P.1 — Terminology Reconciliation**
-- [ ] 8P.1a: Backend — grep/fix remaining "Local AI Core" in .py; reconciliation comment in config.py
-- [ ] 8P.1b: Frontend — rename "Local AI Core" → "Local AI Runtime" in all 19 confirmed locations
-- [ ] 8P.1c: Frontend tests — update assistantViewReliability.test.tsx error string assertions (mandatory — tests will fail without this)
-- [ ] 8P.1d: ModelsView — fix GGUF/Vulkan label conflation; separate GGUF / Engine / Acceleration fields
+**8P.1 — Terminology & Test Alignment**
+- [x] 8P.1a: Backend — grep/fix remaining "Local AI Core" in backend/app/__init__.py, retention.py, mock.py, auth.py, .env.example; add reconciliation comment in config.py; update backend/tests/test_llm.py string assertion
+- [x] 8P.1b: Frontend — rename "Local AI Core" → "Local AI Runtime" across decomposed locations (AssistantErrorDisplay.tsx, Header.tsx, HomeView.tsx, AssistantPanel.tsx, ModelsView.tsx, ModelProvidersCard.tsx, ApplicationStatesShowcase.tsx, HealthPipelineCard.tsx, mock/healthData.ts)
+- [x] 8P.1c: Frontend tests — update assistantViewReliability.test.tsx AND shellHomeTruthfulness.test.tsx error/status string assertions
+- [x] 8P.1d: ModelsView — fix GGUF/Vulkan label conflation; separate GGUF (format), llama.cpp (engine), Vulkan (acceleration) fields
 
-**8P.2 — COMPANION_DATA_ROOT Bootstrap & Configuration Initialization**
-- [ ] 8P.2: config.py — resolve_data_root() called before Settings instantiation: env COMPANION_DATA_ROOT > bootstrap.json data_root > default; DATABASE_PATH/DATABASE_URL derived from resolved root; SQLAlchemy engine constructed after
-- [ ] 8P.2b: config.py — all derived path properties (DATABASE_DIR, DATABASE_PATH, LIBRARY_DIR, MODEL_LIBRARY_DIR, INSTALLED_REGISTRY_PATH, VOICE_LIBRARY_DIR, ATTACHMENT_DIR, IMPORT_INBOX_DIR, IMPORT_STAGING_DIR, CHARACTER_DIR, MEMORY_DIR); remove hardcoded DATABASE_URL; deprecate DATA_DIR, MODELS_DIR, LLAMA_MODELS_DIR
+**8P.2 — Runtime Engine Configuration & Performance Profiles**
+- [x] 8P.2a: config.py — LLM_ENGINE, LLM_ACCELERATION, LLAMA_ENGINE_VERSION declarative fields; PROFILE_*_* env-overridable constants (RX 580 defaults preserved)
+- [x] 8P.2b: llama_cpp.py — _engine_version reads settings.LLAMA_ENGINE_VERSION; _get_profile_params() reads settings.PROFILE_*_*; remove inline RX 580 constants
 
-**8P.3 — Runtime Engine Fields**
-- [ ] 8P.3: config.py — LLM_ENGINE, LLM_ACCELERATION, LLAMA_ENGINE_VERSION declarative fields
-- [ ] 8P.3b: llama_cpp.py — _engine_version reads settings.LLAMA_ENGINE_VERSION
+**8P.3 — Atomic Persistent Storage Foundation**
+- [x] 8P.3a: config.py & storage.py — resolve_data_root() (env COMPANION_DATA_ROOT > bootstrap.json data_root > default %LOCALAPPDATA%\AI Companion\Data); derive all 11 canonical paths (DATABASE_DIR, DATABASE_PATH, LIBRARY_DIR, MODEL_LIBRARY_DIR, INSTALLED_REGISTRY_PATH, VOICE_LIBRARY_DIR, ATTACHMENT_DIR, IMPORT_INBOX_DIR, IMPORT_STAGING_DIR, CHARACTER_DIR, MEMORY_DIR, BACKUP_DIR); deprecate independent DATA_DIR and DATABASE_URL; retain FACTORY_MODEL_ROOT and compatibility aliases
+- [x] 8P.3b: session.py / startup hook — atomic migration & engine ordering: preflight evaluates legacy candidates before SQLAlchemy engine binds or creates a fresh database; explicit initialize_database_runtime() and dispose_database_runtime() lifecycle
+- [x] 8P.3c: Multi-candidate legacy safety — check backend/data/companion.db and <repo-root>/data/companion.db; exactly one -> safe copy, verify Alembic head (005_scope_message_constraints), create backup; multiple differing -> STOP with MigrationAmbiguityError and report ambiguity; none -> fresh install; multiple byte-identical -> safe equivalence handling
+- [x] 8P.3d: Test isolation & bootstrap tests — test_bootstrap.py (locator resolution, corruption fallback, unmounted path, env precedence) + test_migration_safety.py (fresh, single legacy, multi-candidate ambiguity stop, restart safety, stale temp safety) + test_storage_engine_lifecycle.py (canonical paths, lazy directory creation, SQLite PRAGMAs) + conftest.py test isolation without %LOCALAPPDATA% pollution
 
-**8P.4 — Profile Portability**
-- [ ] 8P.4: config.py — PROFILE_*_* env-overridable constants (RX 580 defaults preserved as current values)
-- [ ] 8P.4b: llama_cpp.py — _get_profile_params() reads settings.PROFILE_*; remove inline RX 580 constants
+**8P.4 — Model Registry Schema v3 & Temporary Serialization Bridge**
+- [x] 8P.4a: schemas/model_registry.py — new enums (ModelAssetType, ModelVariant, InputModality, ModelDiscoveryState, ReasoningMode, CapabilityProvenance) + sub-schemas (CompanionArtifactStatus, CapabilityEntry, GenerationDefaults, CompanionFile extended)
+- [x] 8P.4b: schemas/model_registry.py — ModelManifest (stable identity + artifact metadata; runtime_compatibility: List[str] = []), ModelLibraryState (validation status, available capabilities, sizes), ModelRuntimeHints (recommendations only), ModelRegistryEntry (composes all three + runtime_model_id + registry_source: Literal["factory","installed"])
+- [x] 8P.4c: schemas/model_registry.py — temporary @computed_field compatibility bridge on ModelRegistryEntry for existing flat fields (context_limit, estimated_vram_gb, variant, capabilities, etc.)
+- [x] 8P.4d: models/registry.template.json — upgrade to schema v3; asset_type, architecture, input_modalities, model_max_context, reasoning_mode on all entries; clarifying _note
 
-**8P.5 — Model Registry Schema (Final)**
-- [ ] 8P.5a: schemas/model_registry.py — new enums (ModelAssetType, ModelVariant, InputModality, ModelDiscoveryState, ReasoningMode, CapabilityProvenance) + sub-schemas (CompanionArtifactStatus, CapabilityEntry, GenerationDefaults, CompanionFile extended)
-- [ ] 8P.5b: schemas/model_registry.py — ModelManifest (identity + artifact metadata, immutable; runtime_compatibility: List[str] = [] default), ModelLibraryState (computed validation state), ModelRuntimeHints (recommendations only), ModelRegistryEntry (composes all three + runtime_model_id + registry_source: Literal["factory","installed"])
-- [ ] 8P.5c: schemas/model_registry.py — API response shape: use model_serializer or computed_field for flat backward-compat fields (NOT Python @property); update contracts/openapi/openapi.json + registryApi.ts
-- [ ] 8P.5d: model_registry.py — _build_effective_registry(): load factory always; load installed if present; installed entry shadows factory on same stable id; empty installed does not hide factory; registry_source tag per entry; path resolution per source root (FACTORY_MODEL_ROOT vs MODEL_LIBRARY_DIR)
-- [ ] 8P.5e: model_registry.py — _validate_entry(): missing mmproj -> vision removed from available_capabilities; text usable; model NOT prohibited from loading; missing primary -> unavailable
-- [ ] 8P.5f: model_registry.py — unregistered scanner: capabilities=[], input_modalities=[], model_max_context=None, runtime_compatibility=[], variant=unknown (NO fabricated defaults)
-- [ ] 8P.5g: model_registry.py — GGUF metadata extraction (best-effort, non-blocking): populate only reliably detected fields; no invented defaults
-- [ ] 8P.5h: models/registry.template.json — schema v3; asset_type, architecture, input_modalities, model_max_context on all entries; clarifying _note
-- [ ] 8P.5i: registryApi.ts — ModelManifest, ModelLibraryState, ModelRuntimeHints TypeScript interfaces; RegistryEntry updated; context_limit → model_max_context migration in all consumers
+**8P.5 — Effective Registry, Validation, GGUF Metadata & Capability Availability**
+- [x] 8P.5a: model_registry.py — _build_effective_registry(): load factory (models/registry.template.json relative to FACTORY_MODEL_ROOT); load installed (INSTALLED_REGISTRY_PATH relative to MODEL_LIBRARY_DIR) if present; installed entry shadows factory on same id; empty installed never hides factory; registry_source tag per entry
+- [x] 8P.5b: model_registry.py — _validate_entry(): missing mmproj -> vision removed from available_capabilities; text usable; model NOT prohibited from loading; missing primary -> unavailable
+- [x] 8P.5c: model_registry.py — unregistered scanner: capabilities=[], input_modalities=[], model_max_context=None, runtime_compatibility=[], variant=unknown (NO fabricated defaults)
+- [x] 8P.5d: model_registry.py — bounded, zero-dependency, best-effort Python GGUF header reader (metadata only; read general.architecture, derive context key dynamically as <architecture>.context_length; general.quantization_version is NOT quantization scheme; use general.file_type only when recognized to populate quantization, else unknown; never infer quantization or capabilities from arbitrary filename text; bounded KV/string counts; never loads tensors; safe error fallback)
 
-**8P.6 — Canonical Documentation Updates**
-- [x] 8P.6a: AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md — terminology, test baseline 88/38, Phase 8 sequence, arch doc cross-reference, model invariants
-- [x] 8P.6b: LLAMA_CPP_RUNTIME_ARCHITECTURE.md — terminology, port corrected to 8085, Eco GPU layers corrected to 0, unverified flash-attention/KV-cache/batch rows removed, scope note added
-- [x] 8P.6c: VOICE_AND_AUDIO_ARCHITECTURE.md — terminology, storage cross-reference note
-- [x] 8P.6d: AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md — Section 33 rewritten from Open to Resolved Decisions (OD1/OD2/OD3)
-- [x] 8P.6e: README.md — terminology; backend/database/runtime marked implemented; Phase 7 baseline (88 pytest/38 vitest) and Phase 8 active delivery
-- [x] plan-phase8-pc-frontend-architecture-ux.md — complete rewrite, single authoritative version, no stale pass/supplement content
+**8P.6 — Frontend Contract & OpenAPI Reconciliation**
+- [x] 8P.6a: registryApi.ts — ModelManifest, ModelLibraryState, ModelRuntimeHints TypeScript interfaces; RegistryEntry updated; migrate consumers to model_max_context
+- [x] 8P.6b: ModelsView.tsx — update model mapping to use structured layers and model_max_context
+- [x] 8P.6c: Frontend test fixtures — update mock registries in modelsStateReconciliation.test.tsx, assistantViewReliability.test.tsx, shellHomeTruthfulness.test.tsx
+- [x] 8P.6d: Flat field cleanup — search repository-wide for remaining flat consumers; retire temporary @computed_field aliases if no active consumers remain
+- [x] 8P.6e: contracts/openapi/openapi.json — regenerate contract from actual FastAPI app (app.openapi()); verify all existing model/LLM routes represented (GET /api/v1/models, GET /api/v1/models/registry, POST /api/v1/models/load, POST /api/v1/models/unload, PATCH /api/v1/models/profile, POST /api/v1/chat/completions); do not hand-author partial endpoints; review diff for unrelated drift
 
-**8P.2c — Bootstrap Locator Tests**
-- [ ] 8P.2c: bootstrap tests — missing locator -> default; valid locator -> locator path; invalid JSON -> warning + default; unavailable path -> warning + default; env var overrides all; DATABASE_URL uses canonical path; engine constructed after resolution
-
-**8P.7 — First-Run Data Migration (multi-candidate aware)**
-- [ ] 8P.7: startup.py — check both known legacy candidates (backend/data/companion.db + repo-root/data/companion.db); exactly one -> copy/verify/backup; multiple -> RuntimeError with paths; none -> fresh
-- [ ] 8P.7b: _verify_migrated_db() — Alembic head check against settings.DATABASE_PATH (not env DATABASE_URL); migration test: no legacy, one legacy, two candidates
+**8P.7 — Canonical Documentation Alignment (Historical Verification)**
+- [x] 8P.7a: AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md — terminology, test baseline, Phase 8 sequence, arch doc cross-reference, model invariants
+- [x] 8P.7b: LLAMA_CPP_RUNTIME_ARCHITECTURE.md — terminology, port corrected to 8085, Eco GPU layers corrected to 0, unverified rows removed, scope note added
+- [x] 8P.7c: VOICE_AND_AUDIO_ARCHITECTURE.md — terminology, storage cross-reference note
+- [x] 8P.7d: AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md — Section 33 rewritten from Open to Resolved Decisions (OD1/OD2/OD3)
+- [x] 8P.7e: README.md — terminology, implemented baseline status, Phase 8 active delivery
 
 ---
 
 ### 8B — Multimodal Image Attachment Foundation
-Branch: `feature/multimodal-image-attachments` (based on merged 8P)
+Branch: `feature/multimodal-image-attachments` (based on merged 8P; depends on settings.ATTACHMENT_DIR from 8P.3)
 - [ ] 8B.1: migrations/versions/006_add_attachments.py (revision=006_add_attachments, down_revision=005_scope_message_constraints)
 - [ ] 8B.2: models/attachment.py — Attachment ORM (UUIDPrimaryKeyMixin + TimestampMixin + OwnerMixin + SoftDeleteMixin); add relationships to Conversation + Message
 - [ ] 8B.3: schemas/attachment.py — AttachmentOut (no storage_path), AttachmentRef, validation constants
@@ -117,6 +124,7 @@ Branch: `feature/multimodal-image-attachments` (based on merged 8P)
 
 ### 8C — Integration, Accessibility & Polish
 Branch: `feature/phase8-ui-integration-polish` (based on merged 8B)
+- [ ] 8C.0: Deferred QA Finding — Responsive Web Layout & Pagination Hardening (phone/narrow browser layout issues, small-screen pagination adaptation, container overflow, text clipping, and mis-sizing across 1920x1080, 1600x900, 1440x900, 1366x768, 1024px-class, 768px-class, phone portrait/landscape; audit scope: Assistant, composer, Models view, Tasks/Schedule, Settings, modals, touch targets, viewport-height)
 - [ ] 8C.1: Delete mock/*.ts files (verify zero production imports first; grep check mandatory)
 - [ ] 8C.2: Bundle analysis — vite-bundle-visualizer; lazy-load ScheduleView if > 500KB chunk
 - [ ] 8C.3: Accessibility — aria-labels on all icon-only buttons; role="article" on message bubbles; focus management; keyboard nav

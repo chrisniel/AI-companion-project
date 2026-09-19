@@ -65,46 +65,78 @@ vi.mock('../services/api', async () => {
     }),
     fetchModelRegistry: vi.fn().mockResolvedValue([
       {
-        id: 'qwen3-vl-2b-instruct',
-        display_name: 'Qwen3-VL-2B-Instruct',
-        family: 'Qwen',
-        variant: 'instruct',
-        primary_file: 'models/qwen3-vl-2b-instruct.gguf',
-        companion_files: [{ role: 'mmproj', path: 'models/mmproj-qwen3-vl-2b-instruct.gguf' }],
-        capabilities: ['chat', 'vision'],
-        recommended_profiles: ['eco', 'balanced'],
-        estimated_vram_gb: 2.1,
-        estimated_ram_gb: 1.1,
-        quantization: 'Q4_K_M',
-        parameters: '2.4B',
-        context_limit: 2048,
-        license: 'Apache-2.0',
-        source: 'local',
-        validation_status: 'verified',
-        primary_file_exists: true,
-        companion_files_valid: true,
-        size_gb: 1.6,
+        manifest: {
+          id: 'qwen3-vl-2b-instruct',
+          display_name: 'Qwen3-VL-2B-Instruct',
+          asset_type: 'gguf',
+          family: 'Qwen',
+          architecture: 'qwen3vl',
+          variant: 'instruct',
+          primary_file: 'models/qwen3-vl-2b-instruct.gguf',
+          companion_files: [{ role: 'mmproj', path: 'models/mmproj-qwen3-vl-2b-instruct.gguf' }],
+          capabilities: ['chat', 'vision'],
+          input_modalities: ['text', 'image'],
+          model_max_context: 2048,
+          runtime_compatibility: ['llama.cpp'],
+          quantization: 'Q4_K_M',
+          parameters: '2.4B',
+          license: 'Apache-2.0',
+          source: 'local',
+        },
+        library_state: {
+          discovery_state: 'verified',
+          validation_status: 'verified',
+          primary_file_exists: true,
+          companion_artifact_statuses: [
+            { artifact: { role: 'mmproj', path: 'models/mmproj-qwen3-vl-2b-instruct.gguf' }, exists: true },
+          ],
+          available_capabilities: ['chat', 'vision'],
+          size_gb: 1.6,
+        },
+        hints: {
+          recommended_profiles: ['eco', 'balanced'],
+          estimated_vram_gb: 2.1,
+          estimated_ram_gb: 1.1,
+        },
+        runtime_model_id: 'qwen3-vl-2b-instruct',
+        registry_source: 'factory',
       },
       {
-        id: 'qwen3-vl-4b-instruct',
-        display_name: 'Qwen3-VL-4B-Instruct',
-        family: 'Qwen',
-        variant: 'instruct',
-        primary_file: 'models/qwen3-vl-4b-instruct.gguf',
-        companion_files: [{ role: 'mmproj', path: 'models/mmproj-qwen3-vl-4b-instruct.gguf' }],
-        capabilities: ['chat', 'vision'],
-        recommended_profiles: ['balanced', 'maximum'],
-        estimated_vram_gb: 4.2,
-        estimated_ram_gb: 1.5,
-        quantization: 'Q4_K_M',
-        parameters: '4.4B',
-        context_limit: 4096,
-        license: 'Apache-2.0',
-        source: 'local',
-        validation_status: 'verified',
-        primary_file_exists: true,
-        companion_files_valid: true,
-        size_gb: 2.8,
+        manifest: {
+          id: 'qwen3-vl-4b-instruct',
+          display_name: 'Qwen3-VL-4B-Instruct',
+          asset_type: 'gguf',
+          family: 'Qwen',
+          architecture: 'qwen3vl',
+          variant: 'instruct',
+          primary_file: 'models/qwen3-vl-4b-instruct.gguf',
+          companion_files: [{ role: 'mmproj', path: 'models/mmproj-qwen3-vl-4b-instruct.gguf' }],
+          capabilities: ['chat', 'vision'],
+          input_modalities: ['text', 'image'],
+          model_max_context: 4096,
+          runtime_compatibility: ['llama.cpp'],
+          quantization: 'Q4_K_M',
+          parameters: '4.4B',
+          license: 'Apache-2.0',
+          source: 'local',
+        },
+        library_state: {
+          discovery_state: 'verified',
+          validation_status: 'verified',
+          primary_file_exists: true,
+          companion_artifact_statuses: [
+            { artifact: { role: 'mmproj', path: 'models/mmproj-qwen3-vl-4b-instruct.gguf' }, exists: true },
+          ],
+          available_capabilities: ['chat', 'vision'],
+          size_gb: 2.8,
+        },
+        hints: {
+          recommended_profiles: ['balanced', 'maximum'],
+          estimated_vram_gb: 4.2,
+          estimated_ram_gb: 1.5,
+        },
+        runtime_model_id: 'qwen3-vl-4b-instruct',
+        registry_source: 'factory',
       },
     ]),
   };
@@ -536,13 +568,13 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText(/Connection to the Assistant stream failed\. Core and model status remain available\. \[STREAM_CONNECTION_FAILED: Failed to fetch\]/i)
+          screen.getByText(/Connection to the Assistant stream failed\. Runtime and model status remain available\. \[STREAM_CONNECTION_FAILED: Failed to fetch\]/i)
         ).toBeInTheDocument();
       });
 
       // Must NOT falsely tell user to ensure model is loaded
       expect(
-        screen.queryByText(/Ensure Local AI Core is running and model is loaded/i)
+        screen.queryByText(/Ensure Local AI Runtime is running and model is loaded/i)
       ).not.toBeInTheDocument();
     });
 
@@ -609,7 +641,7 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByText(/Local AI Core is offline\. Ensure Local AI Core is running on :8000\. \[CORE_OFFLINE: Failed to fetch\]/i)
+          screen.getByText(/Local AI Runtime is offline\. Ensure Local AI Runtime is running on :8000\. \[CORE_OFFLINE: Failed to fetch\]/i)
         ).toBeInTheDocument();
       });
     });
@@ -662,7 +694,7 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
         const res = classifyStreamError(new TypeError('Failed to fetch'), false, null);
         expect(res.code).toBe('CORE_OFFLINE');
         expect(res.visibleMessage).toContain('[CORE_OFFLINE: Failed to fetch]');
-        expect(res.visibleMessage).toContain('Ensure Local AI Core is running on :8000');
+        expect(res.visibleMessage).toContain('Ensure Local AI Runtime is running on :8000');
       });
 
       it('classifies MODEL_NOT_LOADED when model is unloaded', () => {
@@ -689,7 +721,7 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
         const res = classifyStreamError(new TypeError('Failed to fetch'), true, readyStatus);
         expect(res.code).toBe('STREAM_CONNECTION_FAILED');
         expect(res.visibleMessage).toContain('[STREAM_CONNECTION_FAILED: Failed to fetch]');
-        expect(res.visibleMessage).toContain('Connection to the Assistant stream failed. Core and model status remain available.');
+        expect(res.visibleMessage).toContain('Connection to the Assistant stream failed. Runtime and model status remain available.');
       });
 
       it('classifies STREAM_TERMINATED on premature stream EOF', () => {

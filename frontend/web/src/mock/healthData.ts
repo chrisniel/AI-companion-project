@@ -89,7 +89,7 @@ export function getPipelineStages(providerName: string): HealthPipelineStage[] {
     },
     {
       step: 4,
-      label: 'Local AI Core',
+      label: 'Local AI Runtime',
       detail: 'Workstation Vault',
       subtext: 'Encrypted LAN sync (offline)',
       status: 'synced',
@@ -334,7 +334,7 @@ export const mockHealthInsights: HealthInsight[] = [
     category: 'general',
     title: 'Sync & Ingestion Continuity',
     observation:
-      'Local AI Core received 3,410 discrete telemetry readings via Android Health Connect with 99.1% temporal consistency.',
+      'Local AI Runtime received 3,410 discrete telemetry readings via Android Health Connect with 99.1% temporal consistency.',
     tag: 'Pipeline',
     timeframe: 'Last sync 4m ago',
     type: 'info',

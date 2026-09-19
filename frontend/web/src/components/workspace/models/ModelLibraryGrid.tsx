@@ -205,7 +205,7 @@ export const ModelLibraryGrid: React.FC<ModelLibraryGridProps> = ({
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-[var(--color-text-muted)]">Context:</span>
-                    <span>{model.contextWindow >= 1000000 ? '1M' : `${Math.round(model.contextWindow / 1024)}k`}</span>
+                    <span>{model.contextWindow != null && model.contextWindow > 0 ? (model.contextWindow >= 1000000 ? '1M' : `${Math.round(model.contextWindow / 1024)}k`) : 'Unknown'}</span>
                   </div>
                 </div>
 
