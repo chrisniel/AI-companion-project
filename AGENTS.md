@@ -16,8 +16,10 @@ Configure project-specific paths and boundaries in the Project Profile below. If
 - Implementation Plan Directory: docs/02_Planning/
 - Walkthrough Folder: docs/03_Walkthroughs/
 - Changelog File: CHANGELOG.md
-- Canonical Architecture Document: docs/04_Architecture/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md
-- Primary Tech Stack: React 19, TypeScript 5.8, Vite 6, Tailwind CSS 4; Kotlin, Jetpack Compose for Android; Python, FastAPI, SQLAlchemy 2, Alembic, SQLite/FTS5 (planned); llama.cpp / ONNX Runtime
+- Documentation Map: docs/06_Guides/DOCUMENTATION_MAP.md
+- Canonical Architecture Document: docs/04_Architecture/SYSTEM_BASELINE.md
+- Master Reference Plan: docs/04_Architecture/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md
+- Primary Tech Stack: React 19, TypeScript 5.8, Vite 6, Tailwind CSS 4; Kotlin, Jetpack Compose for Android; Python, FastAPI, SQLAlchemy 2, Alembic, SQLite/FTS5; llama.cpp / ONNX Runtime
 - Execution Mode: Read-only by default; inspect and report unless the user explicitly authorizes the specific edit or other state-changing action
 - Major Change Commit Policy: Every completed major change must be committed as one coherent user-owned Git commit; the AI supplies a proposed commit message, while the user manually reviews, commits, and pushes
 - Manual Verification Areas: Responsive desktop UI, themes and accessibility, Windows runtime behavior, RX 580 model benchmarks, microphone/Bluetooth audio, Android physical-device behavior, alarms, Health Connect, and remote authentication
@@ -90,6 +92,7 @@ Configure project-specific paths and boundaries in the Project Profile below. If
 
 ## 8. Single Source of Truth & Documentation Alignment
 
+- Canonical entry-point sequence: Start with [AGENTS.md](file:///D:/OtherProjects/AI-companion-project/AGENTS.md) -> [DOCUMENTATION_MAP.md](file:///D:/OtherProjects/AI-companion-project/docs/06_Guides/DOCUMENTATION_MAP.md) -> [SYSTEM_BASELINE.md](file:///D:/OtherProjects/AI-companion-project/docs/04_Architecture/SYSTEM_BASELINE.md) -> domain architecture / ADRs -> active [task.md](file:///D:/OtherProjects/AI-companion-project/docs/01_Tracking/task.md).
 - When contracts, APIs, configurations, or behaviors change, update the closest canonical document in the same delivery.
 - Prefer linking or referring to canonical documents over duplicating content across multiple markdown files.
 - Treat drafts, legacy notes, and attached documents as reference material unless explicitly approved as current requirements.

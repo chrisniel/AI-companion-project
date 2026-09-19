@@ -2,9 +2,10 @@
 
 > **Project:** AI-companion-project
 >
-> **Document role:** Canonical product architecture and implementation-sequencing source of truth.
+> **Document role:** Historical master architecture and reference sequencing plan.  
+> **Canonical System Baseline:** See [SYSTEM_BASELINE.md](file:///D:/OtherProjects/AI-companion-project/docs/04_Architecture/SYSTEM_BASELINE.md) for the active normative system baseline, V1 release boundary, and locked decisions D1–D9.  
 >
-> **Last updated:** 2026-09-14
+> **Last updated:** 2026-09-14 (Annotated with Reconciliation Pass R2 baseline link)
 >
 > **Purpose:** Self-contained architecture and implementation handoff for repository work, backend integration, model runtime management, and hybrid on-device AI.
 >
@@ -1042,7 +1043,7 @@ PC mic → STT → Core → LLM → TTS → PC headset
 Away:
 
 ```text
-Android mic → remote connection → PC Core → response/audio → Android
+Android mic → remote connection → Local AI Runtime → response/audio → Android
 ```
 
 Possible future network audio format:

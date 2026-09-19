@@ -18,22 +18,21 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
 | OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
 
-## [CURRENT EXECUTION STATE — PHASE 8P COMPLETE / VERIFIED — PHASE 8B NEXT]
+## [CURRENT EXECUTION STATE — DOCUMENTATION RECONCILIATION PASS R2 — SYSTEM BASELINE & DOCS MAP]
 
-- Status: Phase 8P is COMPLETE / VERIFIED across all implementation and pre-merge hardening batches. Phase 8B (Multimodal Image Attachment Foundation) is NOT STARTED.
-- Pre-Merge Hardening Delivered:
-  1. Frontend Registry Truthfulness: Eliminated fabricated `DEFAULT_INSTALLED_REGISTRY` fallback. Frontend registry initializes truthfully to `[]` (representing model registry unknown/not yet loaded until backend responds). `fetchModelRegistry()` propagates API errors so `BackendContext` distinguishes successful empty registry (`[]`) from failed requests. Preserves last-known registry on transient network failure without fabricating defaults. Added 8 truthfulness tests (tests 27–34).
-  2. GitHub Actions CI Foundation (`.github/workflows/ci.yml`): Automated verification gates on `windows-latest` for Python 3.11 backend (`pytest`) and Node 22 frontend (`vitest`, `tsc --noEmit`, `vite build`). Isolated environment roots (`COMPANION_DATA_ROOT=${{ runner.temp }}/ai-companion-ci`, `COMPANION_API_KEY=ci-ephemeral-test-key`). Least-privilege `contents: read` permissions, concurrency cancellation on branch updates, zero LFS model weight downloads, and zero real secrets required.
-  3. OpenAPI Drift Gate (`scripts/check_openapi_contract.py`): Automated deterministic comparison between `contracts/openapi/openapi.json` and `app.openapi()`, enforcing model/LLM route integrity and schema synchronization without runtime mutation.
-  4. Final Status Gate (`CI Gate`): Consolidated status check job requiring both backend and frontend jobs to succeed.
-- Branch Protection Requirement:
-  - Note: After the first successful GitHub Actions workflow run, repository administration should configure the `develop` branch to require the `CI Gate` status check before merge. Canonical flow remains `feature/*` → `develop`.
-- CD Status:
-  - DEFERRED: No cloud, server, or deployment target exists at this stage. Automated CD will be established as a release pipeline once packaging/installer builds exist (version tag → Windows package → test → checksum → optional signing → GitHub Release artifact).
-- Deferred QA Finding (Recorded for Phase 8C):
-  - 8C.0: Responsive Web Layout & Pagination Hardening remains deferred for Phase 8C; NOT touched in Phase 8P.
-- Next Phase: Phase 8B — Multimodal Image Attachment Foundation (branch `feature/multimodal-image-attachments`, NOT STARTED).
-- Active Plan: `docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md`
+- Branch: `chore/repository-documentation-reconciliation`
+- Active Work: Documentation Reconciliation Pass R2 — Authority Model, Documentation Map & System Baseline
+- Status:
+  - Pass R0: COMPLETE / VERIFIED (Forensic audit committed in `3a5a8db`).
+  - Pass R1: COMPLETE / VERIFIED (Architectural decisions D1–D9 locked).
+  - Pass R2: IN PROGRESS (`docs/06_Guides/DOCUMENTATION_MAP.md` updated, `docs/04_Architecture/SYSTEM_BASELINE.md` created, entry-point navigation linked).
+- Preserved Boundaries:
+  - `docs/00_Drafts/09-16-2026-roadmap.md` is strictly protected (untouched).
+  - `docs/ProjectWorkflowStarterKit/` is strictly protected (untouched).
+  - No archive/move cleanup yet (deferred to Pass R5).
+  - No source code, runtime, or CI modification.
+  - Phase 8B (Multimodal Image Attachments) is queued and will resume after reconciliation completes.
+- Active Plan / Guidance: Pass R2 Authority Model & System Baseline specification.
 
 ---
 

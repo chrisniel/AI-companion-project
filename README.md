@@ -649,39 +649,42 @@ scripts/
 
 ---
 
-## V1 Success Criteria
+## V1 Success Criteria (PC-Hosted Release Boundary)
 
-V1 is considered operational when:
+Per canonical Decision D1 ([SYSTEM_BASELINE.md](file:///D:/OtherProjects/AI-companion-project/docs/04_Architecture/SYSTEM_BASELINE.md)), V1 is defined as the first complete, stable, PC-hosted release.
 
-- Local AI Runtime starts reliably on Windows
-- React connects to FastAPI
-- Local LLM can load, answer, and unload
-- Eco / Balanced / Maximum profiles work
-- Conversation history persists
-- SQLite migrations are reliable
-- Tasks and reminders work
-- FTS5 memory retrieval works
-- Scheduler continues when the React UI is closed
-- Basic PC voice interaction works
-- STT handles English, Tagalog, Japanese, and reasonable code-switching
-- At least one usable local TTS voice works
-- Voice interruption works
-- Android connects to the PC
-- Android chat works
-- Android tasks and schedules synchronize
-- Critical Android alarms remain locally armed
-- Health Connect can synchronize selected data
-- Remote access is authenticated
-- Secrets stay outside clients and normal Git content
+V1 is operational when:
+
+- Local AI Runtime starts and runs reliably as an independent Windows host process
+- React Web desktop control center connects to Local AI Runtime
+- Local LLM loads, generates streaming responses via SSE, and unloads reliably
+- Eco / Balanced / Maximum performance profiles switch runtime parameters
+- Conversation threads persist and restore accurately
+- SQLite migrations (Alembic) execute safely without data loss
+- Task and reminder lifecycle works (create, complete, soft-delete, automated retention purge)
+- SQLite FTS5 lexical memory retrieval accurately returns relevant context
+- Background scheduler operates independently of browser tab lifetime
+- Phase 8B multimodal image/vision attachments can be uploaded, resolved, and inferred
+- Phase 8C accessibility, UI polish, and responsive web adaptations are complete
+- Remote access over Tailscale/private mesh is authenticated with revocable credentials
+- Master secrets remain outside clients, logs, and normal Git content
+
+*(Note: Production Android backend sync, Android offline inference, voice/audio pipeline, and Health Connect are strategic post-V1 roadmap capabilities; see [SYSTEM_BASELINE.md](file:///D:/OtherProjects/AI-companion-project/docs/04_Architecture/SYSTEM_BASELINE.md)).*
 
 ---
 
-## Documentation
+## Documentation & Architecture Authority
 
-Important architecture documents belong in:
+New contributors and AI agents navigate the project starting from the canonical documentation map:
 
 ```text
-docs/04_Architecture/
+docs/06_Guides/DOCUMENTATION_MAP.md
+```
+
+Canonical system baseline, locked architectural decisions (D1–D9), and current boundaries are defined in:
+
+```text
+docs/04_Architecture/SYSTEM_BASELINE.md
 ```
 
 Major architectural decisions are recorded as ADRs under:
@@ -696,25 +699,22 @@ docs/04_Architecture/decisions/
 
 For a new development session:
 
-1. Provide `docs/04_Architecture/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md`.
-2. State the current implementation phase.
-3. Provide or link the relevant project source.
-4. Mention changes made since the plan was written.
-5. Do not assume planned features are already implemented.
+1. Follow the canonical documentation hierarchy starting with `AGENTS.md` and `docs/06_Guides/DOCUMENTATION_MAP.md`.
+2. Consult `docs/04_Architecture/SYSTEM_BASELINE.md` for current system baseline and locked decisions D1–D9.
+3. Check `docs/01_Tracking/task.md` for current execution state and immediate blockers.
+4. Do not assume planned features are already implemented; verify via source code and tests.
 
 Suggested handoff:
 
 ```text
-This is the master implementation plan for my AI Companion project.
+I am resuming work on AI Companion.
 
-Read it first and use it as the architecture source of truth unless I explicitly revise a decision.
+Please inspect:
+1. AGENTS.md and docs/06_Guides/DOCUMENTATION_MAP.md for process and documentation authority.
+2. docs/04_Architecture/SYSTEM_BASELINE.md for system baseline and locked decisions D1-D9.
+3. docs/01_Tracking/task.md for active sprint status and immediate blockers.
 
-Current implementation phase:
-[PHASE]
-
-I will provide the relevant project files or repository next.
-
-Do not assume planned features are already implemented.
+Do not assume planned features are already implemented. Verify with source code and tests.
 ```
 
 ---
