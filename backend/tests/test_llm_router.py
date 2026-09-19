@@ -14,7 +14,24 @@ from app.services.llm.runtime_state import LLMRuntimeState
 
 
 @pytest.fixture
-def llama_provider():
+def llama_provider(tmp_path, monkeypatch):
+    runtime_dir = tmp_path / "runtime" / "llama.cpp"
+    runtime_dir.mkdir(parents=True)
+
+    fake_server = runtime_dir / "llama-server.exe"
+    fake_server.write_bytes(b"")
+
+    models_dir = tmp_path / "models"
+    models_dir.mkdir(parents=True)
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
+
+    monkeypatch.setattr(settings, "LLAMA_CPP_BIN_DIR", runtime_dir)
+    monkeypatch.setattr(settings, "LLAMA_MODELS_DIR", models_dir)
+    monkeypatch.setattr(settings, "MODELS_DIR", models_dir)
+    monkeypatch.setattr(type(settings), "DATA_DIR", property(lambda self: data_dir))
+
     provider = LlamaCppProvider()
     yield provider
 
