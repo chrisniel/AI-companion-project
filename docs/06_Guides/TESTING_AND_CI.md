@@ -2,7 +2,7 @@
 
 > **Document Role:** Canonical verification and CI pipeline reference for all contributors and automated agents.  
 > **Status:** Active Canonical Guide  
-> **Last Updated:** 2026-09-21 (Reconciliation Pass R4)
+> **Last Updated:** 2026-09-21 (Reconciliation Pass R8 Baseline Lock)
 
 ---
 
@@ -13,14 +13,14 @@ The AI Companion project maintains a strict test-first verification discipline. 
 ### Verified Test Suites & Last Verified Baselines
 
 > [!NOTE]
-> **Baseline Attribution:** The passing test counts below represent the last formally executed delivery baselines (established during Phase 8 / 8P deliveries). Reconciliation passes R0–R7 did not establish a new full-suite test baseline unless a specific pass explicitly executed one. Existing counts remain the last formally executed delivery baselines until Pass R8 final verification.
+> **Baseline Attribution:** The passing test counts below represent the fresh, fully executed R8 repository verification baselines locked on 2026-09-21. All test suites executed with 0 failures and 0 errors against isolated test roots.
 
 | Subsystem | Test Framework | Test Location | Last Verified Baseline | Primary Scope |
 | :--- | :--- | :--- | :--- | :--- |
-| **Backend** | `pytest` + `httpx` + `pytest-asyncio` | `backend/tests/` | **88 passed** (Phase 8P) | Fast REST/SSE endpoints, memory, tasks, storage, models, auth |
-| **Frontend** | `vitest` + React Testing Library | `frontend/web/src/` | **132 passed** (Phase 8A) | Components, hooks, state, navigation, controls, soft-glass rendering |
-| **Android** | `JUnit4` + `Robolectric` + `Roborazzi` + `kotlinx-coroutines-test` | `android/app/src/test/` | **110 passed** (Phase 8 UI) | ViewModels, repository contracts, MVI state flow, Compose UI components, screenshot regression |
-| **Contract** | Python drift detection script | `contracts/openapi/` | **Deterministic** (CI Verified) | OpenAPI 3.1 schema equality between FastAPI routes and committed spec |
+| **Backend** | `pytest` + `httpx` + `pytest-asyncio` | `backend/tests/` | **175 passed** (Pass R8) | Fast REST/SSE endpoints, memory, tasks, storage, models, auth |
+| **Frontend** | `vitest` + React Testing Library | `frontend/web/src/` | **147 passed** (Pass R8) | Components, hooks, state, navigation, controls, soft-glass rendering |
+| **Android** | `JUnit4` + `Robolectric` + `Roborazzi` + `kotlinx-coroutines-test` | `android/app/src/test/` | **124 passed** (Pass R8) | ViewModels, repository contracts, MVI state flow, Compose UI components, screenshot regression |
+| **Contract** | Python drift detection script | `contracts/openapi/` | **Synchronized (19 routes)** (Pass R8) | OpenAPI 3.1 schema equality between FastAPI routes and committed spec |
 
 ---
 

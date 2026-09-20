@@ -8,8 +8,8 @@ This directory contains the authoritative implementation planning and navigation
 |---|---|---|---|
 | **8A** | Frontend Architecture & UX Harmonization | `feature/phase8-ui-foundation` | **COMPLETE / VERIFIED** (Mock removal, decomposition, truthfulness sweep, deprecation annotations) |
 | **8P** | Runtime Configuration & Persistent Asset Foundation | `feature/phase8-runtime-config` | **COMPLETE / VERIFIED** (Terminology reconciliation, `COMPANION_DATA_ROOT`, bootstrap locator, Model Registry Schema v3, atomic migrations) |
-| **R0–R8** | Repository Documentation Reconciliation | `chore/repository-documentation-reconciliation` | **CURRENT GATE** (Mandatory prerequisite; blocks Phase 8B) |
-| **8B** | Multimodal Image Attachment Foundation | `feature/multimodal-image-attachments` | **NEXT AFTER RECONCILIATION** (Attachment ORM, validation, secure preview endpoints, vision gate) |
+| **R0–R8** | Repository Documentation Reconciliation | `chore/repository-documentation-reconciliation` | **COMPLETE / VERIFIED** (Full audit, baseline lock, documentation routing, verified test suites) |
+| **8B** | Multimodal Image Attachment Foundation | `feature/multimodal-image-attachments` | **NEXT / UNBLOCKED / NOT STARTED** (Attachment ORM, validation, secure preview endpoints, vision gate; starts upon branch cut) |
 | **8C** | Integration, Accessibility & Polish | `feature/phase8-ui-integration-polish` | **PLANNED AFTER 8B** (Dead mock deletion, bundle code-splitting, a11y, regression verification) |
 
 ---

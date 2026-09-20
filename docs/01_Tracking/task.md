@@ -2,58 +2,47 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Current Sprint: Repository Documentation Reconciliation (Passes R0–R8)
+- Current State: Repository Documentation Reconciliation (Passes R0–R8) = **COMPLETE / VERIFIED**
 - Current Branch: `chore/repository-documentation-reconciliation`
-- Immediate Blocker: **Phase 8B (Multimodal Image Attachments) remains strictly BLOCKED** until reconciliation passes R0–R8 are complete.
-- Target Scope: Resolve authority model, establish canonical roadmap, decompose master plan, slim active task tracker, create developer/testing guides, and archive historical materials without code or CI changes.
-- Execution Mode: Read-only by default; inspect and report; zero source code, runtime, CI, or git mutation.
-- Commit Owner: Chris manually reviews, commits, and pushes all changes.
+- Next Engineering Milestone: **Phase 8B — Multimodal Image Attachment Foundation**
+- Phase 8B Status: **READY / UNBLOCKED / NOT STARTED**
+- Commit Owner: Chris manually reviews, commits, merges, and branches all changes.
 
 ---
 
 ## Current Execution State
 
-| Milestone / Pass | Status | Primary Focus |
+| Milestone / Gate | Status | Primary Focus |
 | :--- | :--- | :--- |
-| **Pass R0: Forensic Audit** | `COMPLETE / VERIFIED` | Repository inventory & baseline diff audit (`3a5a8db`). |
-| **Pass R1: Architectural Decisions** | `COMPLETE / VERIFIED` | Locked ecosystem architectural decisions D1–D9. |
-| **Pass R2 / R2.1: Canonical Entry** | `COMPLETE / VERIFIED` | Authority model, documentation map, and system baseline (`6c5bf7a`, `597b77d`). |
-| **Pass R3 / R3.1 / R3.2: Domain Architecture** | `COMPLETE / VERIFIED` | Domain specifications created, baseline slimmed, precision reconciled (`ecca717`, `361e6e9`, `3abd91a`). |
-| **Pass R4 / R4.1 / R4.2: Planning & Guides** | `COMPLETE / VERIFIED` | Canonical ROADMAP, master plan decomposition, dev/test guides, and active-state truthfulness sweep (`7eabc5f`). |
-| **Pass R5 / R5.1 / R5.2: Archival & Android Truth** | `COMPLETE / VERIFIED` | Archived historical plans, walkthrough indexing, Android connectivity & network source truth reconciled (`7832e9d`). |
-| **Pass R6 / R6A / R6B: Data Audit & Cleanup** | `COMPLETE / VERIFIED` | Read-only storage audit, logical backups created, local legacy databases cleaned. |
-| **Pass R7: Active Docs & Routing Finalization** | `COMPLETE / VERIFIED` | Authority routing, Git governance, component quickstarts, precision reconciled. |
-| **Pass R8: Final Baseline Verification & Signoff** | `NEXT` | Full test execution (88/132/110), OpenAPI verification, Phase 8B unblocking. |
-| **Phase 8B: Multimodal Vision** | `BLOCKED` | Next engineering milestone upon Pass R8 sign-off. |
+| **Passes R0–R8 Reconciliation** | `COMPLETE / VERIFIED` | Full audit, baseline lock, routing, and fresh test verification. |
+| **Phase 8B: Multimodal Vision** | `READY / NOT STARTED` | Next milestone; unblocked upon manual branch transition. |
+| **Phase 8C: Integration & Polish** | `PLANNED` | Polish, accessibility, and bundle optimization after 8B. |
 
 ---
 
-## Active Checklist — Pass R7 (Active Documentation, Cross-Reference & Routing Finalization)
+## Required User-Owned Transition to Phase 8B
 
-- [x] Deliverable 1: Align `AGENTS.md` and `CONTRIBUTING.md` with user-owned Git operations and canonical routing.
-- [x] Deliverable 2: Reconcile `DOCUMENTATION_MAP.md` routing, 00_Drafts role, StarterKit rules, and component quickstarts.
-- [x] Deliverable 3: Correct root `README.md` transport (`HTTP / SSE`) and refine Local AI Runtime ownership.
-- [x] Deliverable 4: Reconcile `android/README.md` (retire Local AI Core, prototype vs post-V1 production truth).
-- [x] Deliverable 5: Reconcile `backend/README.md` (Python 3.11, implemented controls, lifespan schema prep).
-- [x] Deliverable 6: Rewrite `frontend/web/README.md` (purge AI Studio boilerplate, provide clean React Web quickstart).
-- [x] Deliverable 7: Modernize `PROJECT_INPUTS_CHECKLIST.md` and prune resolved decisions.
-- [x] Deliverable 8: Precision sweep on `SYSTEM_BASELINE.md` (D2), `SECURITY_AND_TRUST_ARCHITECTURE.md`, `AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md` (D6 inbox flow), and `VOICE_AND_AUDIO_ARCHITECTURE.md`.
-- [x] Deliverable 9: Global cross-reference and repository-relative link validation (0 broken links in active docs).
+1. **Review R8 Deliverables:** Chris inspects git status and diff for Pass R8 verification.
+2. **Commit & Push R8:** Commit on `chore/repository-documentation-reconciliation`:
+   `docs(reconciliation): lock final verified baseline`
+3. **Merge to Develop:** Chris manually merges `chore/repository-documentation-reconciliation` into `develop`.
+4. **Create Feature Branch:** Chris creates and switches to `feature/multimodal-image-attachments`.
+5. **Begin Phase 8B:** Implementation starts strictly on `feature/multimodal-image-attachments`.
 
 ---
 
-## Execution Invariants & Non-Negotiable Boundaries
+## Invariants & Boundaries for Upcoming Work
 
-1. **Phase 8B strictly blocked:** No image attachment code, ORM migrations, or API changes until R0–R8 sign-off.
-2. **Protected files:** `docs/00_Drafts/09-16-2026-roadmap.md` and `docs/ProjectWorkflowStarterKit/` remain strictly protected and untouched.
-3. **Git governance:** The AI never executes git add, commit, push, or branch mutations. Ordinary filesystem moves performed per prompt mandate; Chris performs all Git operations manually.
+1. **User-Owned Git Operations:** AI agents must never execute git commit, push, merge, checkout, or branch creation.
+2. **Data Safety:** Never execute tests or mutations against `%LOCALAPPDATA%\AI Companion\Data`. Use isolated ephemeral roots.
+3. **Feature-Named Planning:** Phase 8B execution follows the approved plan in `plan-phase8-pc-frontend-architecture-ux.md`.
 
 ---
 
 ## Authoritative Reference Pointers
 
-- **Canonical Product Roadmap:** [`docs/02_Planning/ROADMAP.md`](../02_Planning/ROADMAP.md)
+- **Documentation Map:** [`docs/06_Guides/DOCUMENTATION_MAP.md`](../06_Guides/DOCUMENTATION_MAP.md)
 - **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md)
-- **Active Feature Plan:** [`docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md`](../02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md) (owns upcoming Phase 8B / 8C checklists)
-- **Developer Onboarding Guide:** [`docs/06_Guides/DEVELOPMENT_SETUP.md`](../06_Guides/DEVELOPMENT_SETUP.md)
-- **Testing & CI Standards:** [`docs/06_Guides/TESTING_AND_CI.md`](../06_Guides/TESTING_AND_CI.md)
+- **Canonical Product Roadmap:** [`docs/02_Planning/ROADMAP.md`](../02_Planning/ROADMAP.md)
+- **Active Feature Plan:** [`docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md`](../02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md)
+- **Testing Standards & CI Guide:** [`docs/06_Guides/TESTING_AND_CI.md`](../06_Guides/TESTING_AND_CI.md)

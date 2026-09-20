@@ -29,9 +29,9 @@
               │
 [Phase 8P: Runtime Config] ────────► COMPLETE / VERIFIED
               │
-[Reconciliation Passes R0–R8] ─────► CURRENT GATE (Blocks Phase 8B)
+[Reconciliation Passes R0–R8] ─────► COMPLETE / VERIFIED
               │
-[Phase 8B: Multimodal Vision] ─────► NEXT AFTER RECONCILIATION
+[Phase 8B: Multimodal Vision] ─────► NEXT / UNBLOCKED
               │
 [Phase 8C: Integration & Polish] ──► V1 REQUIRED
               │
@@ -43,18 +43,15 @@
 ### 2.1 Completed Milestones
 - **Phase 8A — Frontend Architecture & UX Harmonization (`COMPLETE`):** Decomposed Assistant views into focused components, removed stale mock conversations, implemented time-derived home greetings, added truthful system states, annotated mock files as `@deprecated`.
 - **Phase 8P — Runtime Configuration & Persistent Asset Foundation (`COMPLETE`):** Unified subsystem terminology to *Local AI Runtime*, resolved `COMPANION_DATA_ROOT` precedence and bootstrap locator, derived atomic storage layout, implemented Model Registry Schema v3, and verified migration safety.
+- **Repository Documentation Reconciliation Passes R0–R8 (`COMPLETE / VERIFIED`):** Conducted full repository forensic audit, locked architectural decisions D1–D9, established canonical documentation routing, purged obsolete terminology, validated Android cleartext/network boundaries, audited and cleaned local legacy database data, verified automated test suites (175 backend pytest, 147 frontend vitest, 124 Android unit/Robolectric), confirmed OpenAPI schema synchronization, and locked the fresh verified baseline.
 
-### 2.2 Current Milestone Gate
-- **Repository Documentation Reconciliation Passes R0–R8 (`CURRENT GATE`):**
-  - *Current Status:* Passes R0, R1, R2/R2.1, R3/R3.1/R3.2, and R4/R4.1 COMPLETE / VERIFIED; Pass R5 is NEXT.
-  - *Gate Invariant:* **Phase 8B remains strictly blocked** until documentation reconciliation is completed and signed off.
-
-### 2.3 Immediate Next Milestone
-- **Phase 8B — Multimodal Image Attachment Foundation (`NEXT`):**
+### 2.2 Immediate Next Milestone
+- **Phase 8B — Multimodal Image Attachment Foundation (`NEXT / UNBLOCKED / NOT STARTED`):**
+  - *Gate Status:* Phase 8B is now eligible to begin after Chris merges the reconciliation branch (`chore/repository-documentation-reconciliation`) into `develop` and creates/switches to: `feature/multimodal-image-attachments`.
   - *Scope:* Database migration `006_add_attachments`, Attachment ORM model, validation pipeline (MIME, megapixel, dimensions), authenticated Blob preview endpoints, media resolver, vision capability gate, and multimodal chat composer.
   - *Authoritative Feature Plan:* [`phase-08/plan-phase8-pc-frontend-architecture-ux.md`](./phase-08/plan-phase8-pc-frontend-architecture-ux.md).
 
-### 2.4 Remaining V1 Delivery Milestones
+### 2.3 Remaining V1 Delivery Milestones
 - **Phase 8C — Integration, Accessibility & Polish (`V1 REQUIRED`):**
   - *Scope:* Elimination of deprecated mock files, bundle analysis and code-splitting, comprehensive keyboard navigation and ARIA accessibility, responsive layout hardening across desktop viewports, end-to-end multimodal regression testing.
   - *Authoritative Feature Plan:* [`phase-08/plan-phase8-pc-frontend-architecture-ux.md`](./phase-08/plan-phase8-pc-frontend-architecture-ux.md).

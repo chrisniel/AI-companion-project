@@ -2,7 +2,7 @@
 
 > **Document Role:** High-level normative architecture and product baseline for AI Companion V1 and future capabilities.  
 > **Status:** Active Canonical (Decisions D1–D9 Locked)  
-> **Last Updated:** 2026-09-21 (Reconciliation Pass R3.2)
+> **Last Updated:** 2026-09-21 (Reconciliation Pass R8 Baseline Lock)
 
 ---
 
@@ -104,7 +104,7 @@ As of active reconciliation on branch `chore/repository-documentation-reconcilia
 | **Model Registry** | Schema v3 bridge, dual factory/installed discovery, GGUF binary header parser for metadata, contract drift checks. | Controlled local importer execution service is an active V1 implementation gap; automated online download manager is post-V1. |
 | **Frontend Web** | React 19, TypeScript 5.8, Vite 6, Tailwind CSS 4, live SSE streaming chat, tactile VRAM controls, decomposed Assistant components, truthful registry. | Full attachment uploading (Phase 8B) and responsive mobile web layout hardening (Phase 8C) not implemented. |
 | **Android Prototype** | 17 Jetpack Compose screens, SoftGlass neumorphic theme, OLED theme, OkHttp `LocalAiRuntimeClient` (health/auth/task CRUD sync), SharedPreferences connection storage, unit tests. | Production trusted-device auth, secure Keystore credentials, Room/offline persistence, full sync/reconciliation, offline inference, and D3 package rename not implemented. |
-| **Testing & CI** | Last verified baseline: 88 backend pytest (Phase 8P) / 132 frontend vitest (Phase 8A); GitHub Actions CI workflow on `windows-latest` with automated gates; see `TESTING_AND_CI.md`. | CI gate not yet hardened as an always-running failure aggregator or set as a required branch protection rule on GitHub. |
+| **Testing & CI** | Verified baseline: 175 backend pytest, 147 frontend vitest, 124 Android unit/Robolectric tests (Pass R8); GitHub Actions CI workflow on `windows-latest` with automated gates; see `TESTING_AND_CI.md`. | CI gate not yet hardened as an always-running failure aggregator or set as a required branch protection rule on GitHub. |
 
 ---
 

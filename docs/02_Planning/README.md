@@ -22,7 +22,7 @@ The plans below represent active engineering hubs and approved implementation pl
 
 | Document Path | Title / Focus Area | Current Classification | Scope & Gate Status | Canonical Authority |
 | :--- | :--- | :--- | :--- | :--- |
-| [`phase-08/README.md`](./phase-08/README.md) | Phase 8 Planning Hub | **`ACTIVE / CURRENT`** | Active hub for Phase 8. 8A & 8P complete; R0–R8 current reconciliation gate; 8B next; 8C planned. | Authoritative Phase 8 hub. |
+| [`phase-08/README.md`](./phase-08/README.md) | Phase 8 Planning Hub | **`ACTIVE / CURRENT`** | Active hub for Phase 8. 8A & 8P complete; R0–R8 reconciliation complete & verified; 8B unblocked / next; 8C planned. | Authoritative Phase 8 hub. |
 | [`phase-08/plan-phase8-pc-frontend-architecture-ux.md`](./phase-08/plan-phase8-pc-frontend-architecture-ux.md) | Phase 8 Architecture & Multimodal Plan | **`ACTIVE / CURRENT`** | 8A and 8P verified; owns upcoming execution steps for 8B (Multimodal Vision) and 8C (Polish). | Authoritative feature plan for 8B and 8C. |
 
 ---
