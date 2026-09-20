@@ -1065,11 +1065,11 @@ User / Import Source
 5. **Registry Synchronization:** The installed manifest (`INSTALLED_REGISTRY_PATH`, `<COMPANION_DATA_ROOT>/library/registry/models.json`) is updated and immediately exposed via `GET /api/v1/models`.
 
 ### 16.2 Direct Placement Fallback
-- Direct manual placement of `.gguf` files into `MODEL_LIBRARY_DIR` remains fully supported as an advanced developer fallback.
+- Direct manual placement of `.gguf` files into `MODEL_LIBRARY_DIR` may remain available as an advanced/developer fallback.
 - The un-registered model scanner inspects and discovers directly placed models using the bounded GGUF header parser without requiring the user to run an import wizard.
 
 ### 16.3 Implementation Status & V1 Boundary
-- `MODEL_LIBRARY_DIR` (`library/models/llm`), `IMPORT_INBOX_DIR`, `IMPORT_STAGING_DIR`, and `INSTALLED_REGISTRY_PATH` (`library/registry/models.json`) are derived and created by `storage.py` (Phase 8P).
+- `MODEL_LIBRARY_DIR` (`library/models/llm`), `IMPORT_INBOX_DIR`, `IMPORT_STAGING_DIR`, and `INSTALLED_REGISTRY_PATH` (`library/registry/models.json`) are canonically derived by `storage.py` (Phase 8P). Directory creation occurs lazily as required by corresponding feature or startup execution paths.
 - Schema v3 registry and GGUF header extraction are implemented in `model_registry.py`.
 - The controlled local model import pipeline is an architectural **requirement for V1** (Decision D6). The execution service (inbox scanning, staging quarantine, preflight validation, and atomic promotion) represents an **active V1 implementation gap**, not a post-V1 capability.
 - The specific presentation mechanism (e.g., background watcher, import wizard, CLI, API, or other UX) has not been permanently locked; the V1 requirement is the controlled, validated local import capability itself.

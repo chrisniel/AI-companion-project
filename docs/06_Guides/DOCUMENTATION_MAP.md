@@ -2,7 +2,7 @@
 
 > **Document Role:** Canonical entry-point guide for all human contributors and AI agents.  
 > **Status:** Active Canonical  
-> **Last Updated:** 2026-09-20 (Reconciliation Pass R2)
+> **Last Updated:** 2026-09-21 (Reconciliation Pass R3.2)
 
 ---
 

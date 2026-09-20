@@ -2,7 +2,7 @@
 
 > **Document Role:** Canonical architecture specification for authentication, device trust, network boundaries, and tool security.  
 > **Status:** Active Canonical (Decisions D4, D5, D9 Locked)  
-> **Last Updated:** 2026-09-20 (Reconciliation Pass R3)
+> **Last Updated:** 2026-09-21 (Reconciliation Pass R3.2)
 
 ---
 
@@ -135,7 +135,7 @@ The policy engine operates under an immutable **DEFAULT DENY** posture.
 | Tier | Classification | Description & Scope | Execution Policy |
 | :--- | :--- | :--- | :--- |
 | **Risk 0** | **Read-Only / Information** | Public web search, weather queries, permitted webpage text reading, internal memory/task inspection, runtime telemetry. | May auto-execute when enabled by profile and device policy. |
-| **Risk 1** | **Reversible Low-Impact** | Creating personal tasks, scheduling non-alarm reminders, user notifications, harmless preference toggles. | Profile-configurable auto-approval. |
+| **Risk 1** | **Reversible Low-Impact** | Creating personal tasks, scheduling non-alarm reminders, user notifications, harmless preference toggles. | Profile-configurable policy (ALLOW, CONFIRM, or DENY; initial implementation may default to confirmation). Does not imply auto-approval only. |
 | **Risk 2** | **Significant State Change** | Deleting tasks or conversations, external message transmission, web form submission, model uninstallation, sensitive configuration changes. | **Explicit user confirmation required** by default. |
 | **Risk 3** | **Privileged / Destructive (Prohibited Generic Capabilities)** | Arbitrary shell/command execution, unrestricted filesystem access, credential access, raw root/device administration, network/security configuration. | **PROHIBITED BY DEFAULT.** Not exposed as generic assistant tools. Any future elevated capability requires a separately designed narrow interface, explicit authorization, bounded scope, and appropriate expiration/revocation; never unlocked merely by ordinary one-time confirmation. |
 
