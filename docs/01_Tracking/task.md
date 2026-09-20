@@ -19,14 +19,14 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | **Pass R1: Architectural Decisions** | `COMPLETE / VERIFIED` | Locked ecosystem architectural decisions D1–D9. |
 | **Pass R2 / R2.1: Canonical Entry** | `COMPLETE / VERIFIED` | Authority model, documentation map, and system baseline (`6c5bf7a`, `597b77d`). |
 | **Pass R3 / R3.1 / R3.2: Domain Architecture** | `COMPLETE / VERIFIED` | Domain specifications created, baseline slimmed, precision reconciled (`ecca717`, `361e6e9`, `3abd91a`). |
-| **Pass R4 / R4.1: Planning & Guides** | `COMPLETE / VERIFIED` | Canonical ROADMAP, master plan decomposition, dev/test guides, and source-truth precision. |
+| **Pass R4 / R4.1 / R4.2: Planning & Guides** | `COMPLETE / VERIFIED` | Canonical ROADMAP, master plan decomposition, dev/test guides, and active-state truthfulness sweep. |
 | **Pass R5: Archival & File Moves** | `NEXT` | Filesystem moves to `docs/07_Archive/`, historical link validation. |
 | **Pass R6–R8: Data & Signoff** | `PLANNED` | Legacy local DB audit, final verification, Phase 8B unblocking sign-off. |
 | **Phase 8B: Multimodal Vision** | `BLOCKED` | Next engineering milestone upon reconciliation sign-off. |
 
 ---
 
-## Active Checklist — Pass R4 & R4.1 (Planning, Guides & Precision)
+## Active Checklist — Pass R4, R4.1 & R4.2 (Planning, Guides & Final Sweep)
 
 - [x] Deliverable 1: Create canonical product roadmap [`docs/02_Planning/ROADMAP.md`](../02_Planning/ROADMAP.md).
 - [x] Deliverable 2: Decompose master implementation plan [`AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md`](../04_Architecture/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md) with historical notice and mapping.
@@ -40,6 +40,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 - [x] Pass R4.1: Clarify retention purge wiring, reminder metadata, and remote auth in `README.md`, `SYSTEM_BASELINE.md`, and `ROADMAP.md`.
 - [x] Pass R4.1: Qualify post-V1 candidate technologies and fix Android sync authority attribution in `ROADMAP.md`.
 - [x] Pass R4.1: Correct OD3 canonical path and Phase 8C documentation target in `plan-phase8-pc-frontend-architecture-ux.md`.
+- [x] Pass R4.2: Complete whole-document README truthfulness sweep, BACKUP_DIR precision in `DEVELOPMENT_SETUP.md`, SYSTEM_BASELINE test count qualification, and D3 production target clarification.
 - [x] Validation: Zero source/runtime/CI changes, protected drafts untouched, link checks passing, git status verified.
 
 ---

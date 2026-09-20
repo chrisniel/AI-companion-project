@@ -2,7 +2,7 @@
 
 A local-first personal AI companion ecosystem centered around a Windows PC running a persistent **Local AI Runtime**, with a React desktop control center and a native Android companion app.
 
-> **Development status:** The PC React web UI (`frontend/web/`), the native Android companion app (`android/`), and the FastAPI **Local AI Runtime** backend are repository-verified. The Android app features 17 screens in Jetpack Compose, the SoftGlass design system, AMOLED pitch-black theme, persistent SharedPreferences storage, fluid overscroll physics, real Local AI Runtime Host IP/port configuration, and 110 passing unit tests. The FastAPI backend, SQLite database, Alembic migrations (head: `005_scope_message_constraints`), and local llama.cpp model runtime integration are **implemented and verified** (Phase 7 baseline: 88 pytest, 38 vitest, 0 tsc errors). Voice pipeline, health synchronization, and native device integrations are planned. **Phase 8** (frontend architecture, runtime configuration, multimodal attachments) is the active delivery.
+> **Development status:** The PC React web UI (`frontend/web/`), the native Android companion app prototype (`android/`), and the FastAPI **Local AI Runtime** backend are repository-verified. Implemented core foundations include the FastAPI backend, SQLite database with Alembic migrations (head: `005_scope_message_constraints`), conversation persistence, live SSE generation, SQLite FTS5 lexical memory retrieval, task CRUD with soft-delete, Model Registry Schema v3, and local `llama.cpp` Vulkan GPU offload on AMD RX 580 (last verified baselines: 88 backend pytest, 132 frontend vitest, 110 Android unit tests; see [`docs/06_Guides/TESTING_AND_CI.md`](docs/06_Guides/TESTING_AND_CI.md)). Phase 8A (UI decomposition & truthfulness) and Phase 8P (runtime configuration & asset foundation) are complete. Repository Documentation Reconciliation (Passes R0–R8) is the current gate blocking Phase 8B (multimodal image attachments).
 
 ---
 
@@ -19,7 +19,7 @@ The project is designed to support:
 - English, Filipino / Tagalog, Japanese, and code-switching
 - Tasks, reminders, schedules, and alarms
 - Long-term memory
-- Health Connect integration
+- Health Connect integration (strategic post-V1 direction)
 - Configurable characters and voices
 - PC and Android clients
 - Local and remote access
@@ -43,7 +43,9 @@ Replaceable infrastructure
 
 ---
 
-## Core Architecture
+## Core Architecture (Conceptual Product Topology)
+
+> **Status Framing:** The diagram below illustrates the target conceptual architecture across current and future capabilities. Implemented V1 core foundations include the FastAPI runtime, SQLite+FTS5 lexical memory, conversations, tasks, model registry, and `llama.cpp` Vulkan provider. The voice pipeline, autonomous tools, device synchronization, and health integrations are strategic post-V1 roadmap capabilities (see [`docs/02_Planning/ROADMAP.md`](docs/02_Planning/ROADMAP.md)).
 
 ```text
                   React Web Control Center
@@ -51,7 +53,7 @@ Replaceable infrastructure
                             │ HTTP / WebSocket
                             ▼
 ┌─────────────────────────────────────────────────────┐
-│                  Local AI Runtime                      │
+│                  Local AI Runtime                   │
 │                     FastAPI                         │
 │                                                     │
 │  Assistant • Memory • Tasks • Scheduling • Tools   │
@@ -68,14 +70,14 @@ Replaceable infrastructure
                 Android Companion App
 ```
 
-The **Local AI Runtime** is intended to become the source of truth for assistant logic, memory, tools, tasks, scheduling, provider orchestration, and synchronization.
+The **Local AI Runtime** is the persistent source of truth for assistant logic, memory, tools, tasks, scheduling, provider orchestration, and synchronization.
 
 The clients remain clients:
 
 - **React Web:** PC dashboard, configuration, detailed runtime management, logs, devices, models, memory administration
 - **Android:** mobile assistant, voice, alarms, health, notifications, tasks, quick actions, offline-capable companion features
 
-Closing the browser should eventually **not** stop the Local AI Runtime.
+The Local AI Runtime is independent of browser lifetime; closing React Web must not define or terminate backend lifecycle.
 
 ---
 
@@ -138,15 +140,13 @@ AI-companion-project/
 └── tests/
 ```
 
-Some application directories are currently empty local placeholders. Empty directories are not preserved by Git until they contain tracked files.
-
 ---
 
 ## Development Progress
 
 ### React Web Control Center
 
-The React/TypeScript UI prototype is largely complete.
+The React 19 / TypeScript UI desktop client is repository-verified in `frontend/web/`.
 
 Implemented or designed:
 
@@ -170,14 +170,8 @@ Implemented or designed:
 
 Current state:
 
-```text
-UI/UX prototype        ✅
-Multilingual UI patch  ✅ Prototype
-Backend integration    ⏳
-Production cleanup     ⏳
-```
-
-Before FastAPI integration, the frontend still needs a focused cleanup pass for mock-data boundaries, dependency cleanup, text selection, theme storage safety, accessibility details, and production configuration.
+- **Implemented / Verified:** Soft Glass desktop interface, live FastAPI backend integration, live SSE chat streaming, conversation thread persistence, personal task CRUD, SQLite FTS5 lexical memory management, model and runtime profile controls, and Phase 8A UI decomposition / truthfulness work.
+- **Remaining / Planned:** Multimodal image attachment foundation (Phase 8B), keyboard accessibility, responsive desktop adaptations, and mock-cleanup polish (Phase 8C). Prototype or post-V1 surfaces (such as devices or health) retain placeholder or unavailable states pending dedicated milestone planning.
 
 ### Android Companion
 
@@ -219,27 +213,24 @@ On-device hybrid failover controls    ✅ Repository-verified
 110 Robolectric/unit tests passing    ✅ 110 passed (0 failures)
 ```
 
-Real integrations such as FastAPI, Room, DataStore, Health Connect, AlarmManager, WorkManager, microphone capture, STT, TTS, Bluetooth APIs, remote connectivity, and authentication come later.
+Real companion integrations (FastAPI client connection, Room persistence, DataStore, Health Connect, AlarmManager, offline model inference, and authentication) are strategic post-V1 roadmap capabilities (Decision D1).
 
 ### Backend / Local AI Runtime
 
-Planned stack:
+Implemented stack:
 
 ```text
-Python
+Python 3.11
 FastAPI
-SQLite
-FTS5
-llama.cpp
+SQLAlchemy 2 / Alembic
+SQLite (WAL mode + FTS5 lexical search)
+llama.cpp (multi-model router on port 8085 with Vulkan RX 580 offload)
 ```
 
 Current state:
 
-```text
-Architecture planned   ✅
-Directory structure    ⏳ Empty local placeholder
-Implementation         ⏳ Not started
-```
+- **Implemented / Verified:** Persistent FastAPI Local AI Runtime, SQLite database migrations (`005_scope_message_constraints`), conversation & message persistence, live SSE generation, SQLite FTS5 lexical memory retrieval, task CRUD with soft-delete and retention period calculation, task reminder metadata, Model Registry Schema v3, `llama.cpp` Vulkan provider on port 8085, canonical storage root resolution (`storage.py`), fail-closed authentication (`verify_token`), and OpenAPI contract drift verification.
+- **Remaining / Known Gaps:** Multimodal image attachment API & persistence (Phase 8B), backend character persistence table, controlled local model importer execution service (Decision D6 V1 gap), automatic periodic retention lifecycle scheduling, scheduled reminder notification delivery, autonomous tool execution engine, and post-V1 voice/health pipelines.
 
 ---
 
@@ -310,7 +301,7 @@ The frontend decides which asset or animation represents each state.
 
 ---
 
-## Voice Architecture
+## Voice Architecture (Post-V1 / Planned)
 
 Planned local voice pipeline:
 
@@ -351,36 +342,41 @@ ERROR
 
 The voice system should support **barge-in**, allowing the user to interrupt TTS while the assistant is speaking.
 
-Likely candidates to benchmark later include:
+Voice processing is a strategic post-V1 roadmap capability. Candidate technologies under exploration include:
 
 ```text
 STT: Whisper-family / whisper.cpp-style runtime
 TTS: Piper / Kokoro
 ```
 
+No universal provider is locked. For full voice architecture specifications, see [`docs/04_Architecture/VOICE_AND_AUDIO_ARCHITECTURE.md`](docs/04_Architecture/VOICE_AND_AUDIO_ARCHITECTURE.md).
+
 ---
 
-## Health Architecture
+## Health Architecture (Post-V1 Direction)
 
-Current practical V1 path:
+Health synchronization is a strategic post-V1 direction (deferred beyond PC-hosted V1 per Decision D1).
+
+The previously explored conceptual topology:
 
 ```text
-itel ISW-O11
+Wearable Device
     ↓
-FitCloudPro
+Vendor Companion App
     ↓
 Android Health Connect
     ↓
-Android Companion
+Android Companion Client
     ↓
-Local AI Runtime
+Local AI Runtime (FastAPI)
     ↓
 SQLite
 ```
 
-FitCloudPro is a current source, not a permanent architectural dependency.
-
-Unavailable measurements must never be represented as fake zero values.
+- **Post-V1 Scope:** Health Connect integration is not part of the PC-hosted V1 release and is not currently implemented.
+- **Replaceable Sources:** Specific hardware or vendor companion applications are exploratory examples only, not permanent architectural dependencies.
+- **Privacy & Consent:** Future health telemetry ingestion requires its own dedicated implementation design covering user consent, biometric data retention, and isolated storage boundaries.
+- **Data Integrity:** Unavailable measurements must never be represented as fake zero values.
 
 ---
 
@@ -537,7 +533,7 @@ Balanced
 Maximum
 ```
 
-The backend eventually maps them to model selection, context size, GPU offload, CPU threads, idle timeout, and memory strategy.
+The backend currently maps Eco / Balanced / Maximum profiles to configuration-driven context, GPU layer, thread, and multimodal offload parameters (see [docs/04_Architecture/LLAMA_CPP_RUNTIME_ARCHITECTURE.md](docs/04_Architecture/LLAMA_CPP_RUNTIME_ARCHITECTURE.md)).
 
 ---
 
@@ -726,8 +722,6 @@ A license will be added deliberately when the project's distribution and contrib
 
 This is an experimental personal AI companion project under active development.
 
-Many screens currently use mock data.
+Implemented domains (chat, conversations, tasks, memory, and model controls) reflect live backend reality. Some prototype or post-V1 surfaces (such as devices or health) may still use placeholder states or legacy mock-support files; final deprecated mock cleanup is scheduled for Phase 8C.
 
-Many capabilities described in this README are **planned architecture**, not completed functionality.
-
-Do not treat prototype status indicators, sample device names, example model values, sample health values, or mock runtime metrics as claims about real connected hardware or implemented services.
+Many capabilities described across high-level vision documents remain **planned architecture**, not completed functionality. Do not treat prototype status indicators, sample device names, example model values, sample health values, or mock runtime metrics as claims about real connected hardware or implemented services.

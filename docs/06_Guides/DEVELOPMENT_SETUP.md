@@ -62,7 +62,7 @@ All persistent asset paths derive deterministically from the resolved `COMPANION
 - `IMPORT_STAGING_DIR`: `<COMPANION_DATA_ROOT>/imports/staging` — Preflight validation and quarantine staging (Decision D6)
 - `CHARACTER_DIR`: `<COMPANION_DATA_ROOT>/characters` — Character cards and persona definitions
 - `MEMORY_DIR`: `<COMPANION_DATA_ROOT>/memory` — Profile and memory exports
-- `BACKUP_DIR`: `<COMPANION_DATA_ROOT>/backups` — Pre-upgrade database snapshots and backups
+- `BACKUP_DIR`: `<COMPANION_DATA_ROOT>/backups` — Persistent database backup location; currently used by verified legacy database migration backup flow
 
 ### Key Environment Variables
 Create a `backend/.env` file or export environment variables as needed:
