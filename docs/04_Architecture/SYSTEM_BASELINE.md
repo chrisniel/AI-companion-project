@@ -33,6 +33,7 @@ AI Companion **V1** is defined as the first complete, stable, **PC-hosted releas
 - **Memory persistence & retrieval** (SQLite with FTS5 lexical search)
 - **Task and reminder lifecycle** (CRUD, soft-delete, automated retention purge)
 - **Model library & runtime management** (Schema v3 registry, GGUF metadata parsing, runtime profiles)
+- **Controlled local model import pipeline** (inbox → preflight → staging → atomic install → library; execution service is an active V1 implementation gap)
 - **Phase 8B Multimodal Vision** (image attachment API, client composer, and vision-model inference)
 - **Phase 8C Integration & Polish** (accessibility, bundle optimization, UI consistency, responsive web cleanup)
 - **Release Hardening** (automated SQLite backup, migration safety preflight, secure configuration)
@@ -45,7 +46,7 @@ AI Companion **V1** is defined as the first complete, stable, **PC-hosted releas
 - Proactive companion routines / scheduled autonomous check-ins
 - Autonomous external tools and general web-action agents
 - Direct public internet exposure or port forwarding
-- Managed online model downloading (in-app Hugging Face downloaders)
+- Managed online model downloading (in-app Hugging Face browsing / remote downloaders)
 - Vector / semantic embedding database
 
 ---
@@ -82,12 +83,12 @@ AI Companion **V1** is defined as the first complete, stable, **PC-hosted releas
 
 The following major architectural invariants are locked across the ecosystem. Detailed domain specifications reside in their respective canonical documents:
 
-- **Profiles & Trusted Devices (D4 & D8):** AI Companion V1 operates as a single-primary-user system. The **Profile** owns all personal data (`owner_id`); **Devices** represent paired client endpoints with independent revocable credentials. Master secrets are never distributed to client devices. Details: [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md).
+- **Profiles & Trusted Devices (D4 & D8):** AI Companion V1 operates as a single-primary-user system. The **Profile** owns all personal data (`owner_id`). Currently implemented using a single shared application credential; future architecture introduces per-device revocable credentials. Master secrets are never distributed to client devices. Details: [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md).
 - **Memory & Character Scoping (D7):** Memory adheres to a strict Profile-First model. Memories belong to the Profile (default `PROFILE` scope, optional `CHARACTER` scope). Characters define persona presentation (system prompt, avatar, voice profile) and never own the user's canonical identity. Persona switching alters perspective, never user data. Details: [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](MEMORY_AND_CHARACTER_ARCHITECTURE.md).
-- **Model Acquisition & Installation Pipeline (D6):** Managed local model imports follow a deterministic pipeline: `inbox` → `preflight` → `staging` → `atomic install` → `library` → `registry`. `MODEL_LIBRARY_DIR` (`%LOCALAPPDATA%\AI Companion\Data\library\models`) is the canonical storage location. Direct placement remains supported as an advanced fallback. Details: [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md).
-- **Tool & Autonomy Security Model (D9):** Tool execution enforces an immutable **DEFAULT DENY** posture and a 4-tier risk matrix (Risk 0–3). Generative models possess zero self-elevation authority. Prompt injection cannot elevate permissions, and fetched web content is treated as untrusted data. Deterministic emergency stop controls are reserved. Details: [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md).
-- **Android Product Identity & Mobile Inference (D3):** Application ID and package namespace: `com.cnl.aicompanion`. Connected Mode uses PC Local AI Runtime as the canonical authority; future Offline Mode uses local ~0.5B–1B quantized models (demonstrated viable on mid-range reference hardware). Android sync and offline inference are strictly post-V1. Details: [`ANDROID_COMPANION_ARCHITECTURE.md`](ANDROID_COMPANION_ARCHITECTURE.md).
-- **Voice & Audio Pipeline:** CPU-first speech execution; vendor-independent `TTSProvider` abstraction (PC: Kokoro/Piper; Mobile: KittenTTS/Kokoro/System TTS). Voice capabilities are strictly post-V1. Details: [`VOICE_AND_AUDIO_ARCHITECTURE.md`](VOICE_AND_AUDIO_ARCHITECTURE.md).
+- **Model Acquisition & Installation Pipeline (D6):** Managed local model imports follow a deterministic pipeline: `inbox` → `preflight` → `staging` → `atomic install` → `library` → `registry`. Controlled local import is a V1 requirement (the execution service is currently an active implementation gap). `MODEL_LIBRARY_DIR` (`%LOCALAPPDATA%\AI Companion\Data\library\models\llm`) is the canonical storage location. Direct placement remains supported as an advanced fallback. Details: [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md).
+- **Tool & Autonomy Security Model (D9):** Tool execution enforces an immutable **DEFAULT DENY** posture and a 4-tier risk matrix (Risk 0–3). Generative models possess zero self-elevation authority. Prompt injection cannot elevate permissions, and fetched web content is isolated as untrusted data. Deterministic emergency stop controls are reserved. Details: [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md).
+- **Android Product Identity & Mobile Inference (D3):** Application ID and package namespace: `com.cnl.aicompanion`. Connected Mode uses PC Local AI Runtime as the canonical authority; future Offline Mode targets local compact quantized models (tested envelope of ~0.27B–1.24B produced ~11.75–25.56 tok/s on reference hardware). Android sync and offline inference are strictly post-V1. Details: [`ANDROID_COMPANION_ARCHITECTURE.md`](ANDROID_COMPANION_ARCHITECTURE.md).
+- **Voice & Audio Pipeline:** CPU-first speech execution; vendor-independent `TTSProvider` abstraction (candidate engines: Kokoro, Piper, KittenTTS, Android System TTS; no universal default locked). Voice capabilities are strictly post-V1. Details: [`VOICE_AND_AUDIO_ARCHITECTURE.md`](VOICE_AND_AUDIO_ARCHITECTURE.md).
 
 ---
 
@@ -98,9 +99,9 @@ As of active reconciliation on branch `chore/repository-documentation-reconcilia
 | Subsystem | Implemented & Verified Reality | Known Non-Implemented Boundary |
 | :--- | :--- | :--- |
 | **Backend Core** | FastAPI application, CORS origin validation, request streaming body limiter (HTTP 413), fail-closed auth (`verify_token`), logging. | Tool execution engine and provider adapters not implemented. |
-| **Persistence** | SQLite WAL mode, Alembic migrations 001–005 (`005_scope_message_constraints`), Task CRUD, soft-delete, automated retention purge. Canonical paths resolved via `COMPANION_DATA_ROOT`. | Attachment table (006) and backend character persistence table not implemented. |
-| **Local LLM Engine** | `llama.cpp` Vulkan x64 (b10936), AMD RX 580 VRAM offload profiles (Eco/Balanced/Maximum), subprocess management, isolated log. | Multiple concurrent active models not supported. Loader currently resolves factory models (`MODELS_DIR`). |
-| **Model Registry** | Schema v3 bridge, dual factory/installed discovery, GGUF binary header parser for metadata, contract drift checks. | Automated background download manager and import staging pipeline service not implemented. |
+| **Persistence** | SQLite WAL mode, Alembic migrations 001–005 (`005_scope_message_constraints`), Task CRUD, soft-delete, automated retention purge. Canonical paths derived via `storage.py` (`MODEL_LIBRARY_DIR` = `library/models/llm`, `INSTALLED_REGISTRY_PATH` = `library/registry/models.json`). | Attachment table (006) and backend character persistence table not implemented. |
+| **Local LLM Engine** | `llama.cpp` Vulkan x64 (b10936), AMD RX 580 VRAM offload profiles (Eco/Balanced/Maximum), subprocess management, router log (`database/llama_server.log`). | Multiple concurrent active models not supported. Managed router receives `LLAMA_MODELS_DIR`. |
+| **Model Registry** | Schema v3 bridge, dual factory/installed discovery, GGUF binary header parser for metadata, contract drift checks. | Controlled local importer execution service is an active V1 implementation gap; automated online download manager is post-V1. |
 | **Frontend Web** | React 19, TypeScript 5.8, Vite 6, Tailwind CSS 4, live SSE streaming chat, tactile VRAM controls, decomposed Assistant components, truthful registry. | Full attachment uploading (Phase 8B) and responsive mobile web layout hardening (Phase 8C) not implemented. |
 | **Android Prototype** | 17 Jetpack Compose screens, SoftGlass neumorphic theme, OLED battery-saver theme, SharedPreferences storage, 110 passing unit tests. | Real FastAPI network client, Room persistence, and on-device offline inference not implemented. |
 | **Testing & CI** | 88 passing backend pytest tests, 132 passing frontend vitest tests, GitHub Actions CI workflow on `windows-latest` with automated gates. | CI gate not yet set as a required branch protection rule on GitHub. |
@@ -131,7 +132,7 @@ For detailed architectural contracts, refer to the authoritative domain specific
 | **D3** | **Android Identity** | Application ID & package: `com.cnl.aicompanion`; product-oriented, character-independent. | `ANDROID_COMPANION_ARCHITECTURE.md` |
 | **D4** | **Profiles & Devices** | Profile represents user identity; Device represents trusted client endpoint. Independent revocable credentials per device. | `SECURITY_AND_TRUST_ARCHITECTURE.md` |
 | **D5** | **Remote Access Trust** | Localhost, trusted LAN, and Tailscale private mesh supported for V1. Public exposure not required. Multi-tier trust model. | `SECURITY_AND_TRUST_ARCHITECTURE.md` |
-| **D6** | **Model Acquisition** | Controlled local import pipeline: inbox → preflight → staging → atomic install → library. `MODEL_LIBRARY_DIR` is canonical. | `AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md` |
+| **D6** | **Model Acquisition** | Controlled local import pipeline (V1 requirement): inbox → preflight → staging → atomic install → library. `MODEL_LIBRARY_DIR` is canonical. | `AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md` |
 | **D7** | **Memory Scoping** | Profile-first ownership. Memories belong to profile (default `PROFILE` scope, optional `CHARACTER` scope). Characters do not own data. | `MEMORY_AND_CHARACTER_ARCHITECTURE.md` |
 | **D8** | **Single-User Baseline** | Single-primary-user for V1; schema uses `owner_id` representing profile boundary. Preserved in place. | `SECURITY_AND_TRUST_ARCHITECTURE.md`, `MEMORY_AND_CHARACTER_ARCHITECTURE.md` |
 | **D9** | **Security & Permissions** | DEFAULT DENY. 4-tier risk matrix (Risk 0–3). Typed requests through deterministic policy engine. Emergency stop controls. | `SECURITY_AND_TRUST_ARCHITECTURE.md` |
@@ -139,4 +140,5 @@ For detailed architectural contracts, refer to the authoritative domain specific
 ---
 
 *Forensic reconciliation history, diagnostics, and working notes remain documented in [`REPOSITORY_DOCUMENTATION_RECONCILIATION_AUDIT.md`](../00_Drafts/REPOSITORY_DOCUMENTATION_RECONCILIATION_AUDIT.md).*
+
 

@@ -53,10 +53,11 @@ The architecture defines two distinct scoping tiers for persistent memories:
 
 ---
 
-## 3. Persistent Entities & Ownership Relationships
+## 3. Conceptual Ownership Model & Persistent Entities
 
 ```text
 ┌────────────────────────────────────────────────────────┐
+│               CONCEPTUAL OWNERSHIP MODEL               │
 │                        Profile                         │
 │                    (User Identity)                     │
 └───────┬──────────────┬───────────────┬──────────────┬──┘
@@ -65,8 +66,8 @@ The architecture defines two distinct scoping tiers for persistent memories:
         │ N            │ N             │ N            │ N
         ▼              ▼               ▼              ▼
 ┌──────────────┐┌──────────────┐┌──────────────┐┌──────────────┐
-│ Conversation ││    Memory    ││     Task     ││   Reminder   │
-│              ││              ││              ││              │
+│ Conversation ││    Memory    ││     Task     ││  Reminder*   │
+│              ││              ││              ││ (Conceptual) │
 │ - id         ││ - id         ││ - id         ││ - id         │
 │ - owner_id   ││ - owner_id   ││ - owner_id   ││ - owner_id   │
 │ - character_id│ - content    ││ - title      ││ - task_id    │
@@ -83,6 +84,7 @@ The architecture defines two distinct scoping tiers for persistent memories:
 ### 3.2 Tasks & Reminders
 - Tasks and reminders are owned exclusively by the Profile (`owner_id`).
 - Characters may assist in scheduling, reviewing, or reminding the user about tasks, but tasks never belong to a character. Changing characters does not alter task deadlines or states.
+- *Reminder Persistence Note:* Reminders are shown above as a **conceptual ownership entity**. There is currently no backend `Reminder` table or SQLAlchemy model in the repository; reminder functionality is currently represented through tasks or future scheduling abstractions.
 
 ### 3.3 Character Persona Boundaries
 - A Character defines **how** the assistant communicates and presents itself:
@@ -112,8 +114,9 @@ The active repository implementation (`backend/app/models/memory.py`, `backend/a
 - **Conversations Table:** Persists `owner_id` and `character_id: String(64)`.
 
 ### 4.2 Non-Implemented Boundaries (Truthful Accounting)
-1. **Memory Scope Column:** The `memories` table currently lacks a dedicated `scope` column or `character_id` foreign key. All active memories behave effectively as profile-scoped. The two-tier `PROFILE` vs `CHARACTER` scoping is an approved architectural invariant (Decision D7) that will be activated when character backend persistence is introduced.
-2. **Character Backend Persistence:** Character persistence in the backend is **not currently implemented**.
+1. **Memory Scope & Future Schema Boundary:** Decision D7 locks the semantic model: Profile-first ownership, `PROFILE` default scope, optional `CHARACTER` scope, and character-scoped memories still belonging to the Profile. However, D7 does **not** lock an exact database implementation. Future implementation does not necessarily require a literal `scope` column, a literal `character_id` foreign key on `Memory`, or a specific migration timing tied exactly to character persistence—these are valid implementation candidates, not locked schema. Currently, the `memories` table lacks these fields, and all active memories behave as profile-scoped. The exact persistence representation remains future implementation design.
+2. **Reminder Model Reality:** There is currently no `Reminder` model or database table implemented in the backend. Reminders are part of the conceptual product ownership model, but are not implemented persistence reality in the current codebase.
+3. **Character Backend Persistence:** Character persistence in the backend is **not currently implemented**.
    - No `characters` table or Alembic migration exists in `backend/app/models/` or `backend/alembic/`.
    - Characters currently exist solely as client-side configuration: TypeScript interfaces (`CharacterConfig`), React component state, and test fixtures (`frontend/web/src/mock/characterData.ts`).
    - The backend accepts incoming `character_id` strings on conversation endpoints, but does not yet validate them against a persistent backend character catalog.
@@ -124,7 +127,7 @@ The active repository implementation (`backend/app/models/memory.py`, `backend/a
 
 When injecting persistent memories into the LLM prompt context during conversation generation:
 1. **Lexical Filtering:** Active conversation queries trigger FTS5 search against user memories.
-2. **Context Budgeting:** The `AssistantOrchestrator` limits injected memories to a strict token budget (e.g., ~500 tokens) to prevent context exhaustion.
+2. **Context Budgeting:** The `AssistantOrchestrator` bounds injected memories to a configurable token budget defined by `settings.MEMORY_BUDGET_TOKENS` (currently defaulting to 256 tokens) to prevent context exhaustion.
 3. **Trust Framing (Prompt Isolation):**
    - Retrieved memories are wrapped in a dedicated system context block clearly demarcated as stored user facts.
    - Memories are treated as contextual data, not executable system instructions.

@@ -16,9 +16,9 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 |----------|-----------|
 | OD1: Default Windows data-root | **A** — `%LOCALAPPDATA%\AI Companion\Data` |
 | OD2: Bootstrap locator | **A** — `%LOCALAPPDATA%\AI Companion\bootstrap.json` |
-| OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/` |
+| OD3: Dev models vs installed library | **A** — Dev/bootstrap models remain under existing Git/LFS policy; installed/user-imported models use `COMPANION_DATA_ROOT/library/models/llm` |
 
-## [CURRENT EXECUTION STATE — DOCUMENTATION RECONCILIATION — PASS R3 VERIFIED / PASS R4 NEXT]
+## [CURRENT EXECUTION STATE — DOCUMENTATION RECONCILIATION — PASS R3 / R3.1 VERIFIED / PASS R4 NEXT]
 
 - Branch: `chore/repository-documentation-reconciliation`
 - Active Sprint: Repository Documentation Reconciliation
@@ -26,7 +26,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
   - Pass R0: COMPLETE / VERIFIED (Forensic audit committed in `3a5a8db`).
   - Pass R1: COMPLETE / VERIFIED (Architectural decisions D1–D9 locked).
   - Pass R2 / R2.1: COMPLETE / VERIFIED (Authority model, documentation map, and system baseline established, committed in `6c5bf7a` and `597b77d`).
-  - Pass R3: COMPLETE / VERIFIED (Domain architecture reconciled, canonical domain specs created, SYSTEM_BASELINE slimmed).
+  - Pass R3 / R3.1: COMPLETE / VERIFIED (Domain architecture reconciled, canonical precision corrected, V1 local import locked, SYSTEM_BASELINE slimmed).
   - Pass R4: NEXT (Planning, roadmap, and tracking reconciliation).
 - Execution Invariants:
   - Phase 8B (Multimodal Image Attachments) remains blocked until repository reconciliation is complete.
@@ -34,7 +34,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
   - `docs/ProjectWorkflowStarterKit/` is strictly protected (untouched).
   - Archive/move cleanup deferred to Pass R5.
   - Zero source code, runtime, or CI modification.
-- Active Plan / Guidance: Pass R3 Domain Architecture Reconciliation & Baseline Slimming specification.
+- Active Plan / Guidance: Pass R3.1 Canonical Domain Precision Correction specification.
 
 ---
 

@@ -95,18 +95,18 @@ To ground future mobile local-inference planning in physical evidence rather tha
 
 ### 4.2 Observed Generation Speeds
 
-| Model Candidate | Parameter Size | Quantization | Observed Token Speed | Suitability Assessment |
+| Model Candidate | Parameter Size | Quantization | Observed Token Speed | Benchmark Notes |
 | :--- | :--- | :--- | :--- | :--- |
-| **Gemma 3** | 270M (~0.3B) | Q8 | **~25.56 tok/s** | Extremely fast; ideal for responsive utility and text transforms. |
-| **Qwen3.5** | 0.8B | Q4_K_M | **~14.81 tok/s** | Strong conversational fluency; very viable for daily mobile chat. |
-| **Llama 3.2** | ~1B (1.2B) | Q4_K_M | **~12.37 tok/s** | Solid coherence; acceptable conversational throughput. |
-| **Qwen3** | ~0.6B | Q8 | **~11.75 tok/s** | Compact footprint; reliable baseline performance. |
+| **Gemma 3** | 270M (~0.27B) | Q8 | **~25.56 tok/s** | Throughput tested; chat/instruction quality NOT meaningfully tested. |
+| **Qwen3.5** | ~0.8B | Q4_K_M | **~14.81 tok/s** | Throughput tested; no formal quality benchmark recorded. |
+| **Llama 3.2** | ~1.24B | Q4_K_M | **~12.37 tok/s** | Throughput tested; user observed phone UI/framerate degradation during execution. |
+| **Qwen3** | ~0.6B | Q8 | **~11.75 tok/s** | Throughput tested; no formal quality benchmark recorded. |
 
 ### 4.3 Engineering Interpretation & Invariants
-1. **Viability Demonstrated:** 0.5B–1B quantized GGUF models are physically demonstrated as viable for local mobile inference on mid-range Android hardware (achieving 12–25+ tokens per second).
-2. **Hardware Generalization Prohibition:** These benchmarks represent physical evidence on a specific MediaTek Dimensity 920 device. They must **not** be generalized as guaranteed performance across all Android hardware or lower-spec devices.
+1. **Physical Envelope Evidence:** The tested envelope from approximately 0.27B through 1.24B produced roughly 11.75–25.56 tok/s on this reference device. Within the approximately 0.6B–1.24B tested models, observed generation was roughly 11.75–14.81 tok/s.
+2. **Reference Hardware Context Only:** These numbers represent physical evidence on a specific MediaTek Dimensity 920 reference device. They do not establish minimum supported hardware, nor are they guaranteed performance across other Android devices.
 3. **No Premature Model Lock:** The project has **not** permanently selected a single mobile model. Model selection remains open until dedicated post-V1 mobile offline planning.
-4. **Multimodal Status:** While Qwen3.5 ~0.8B is an architecturally promising multimodal candidate, mobile vision/projector execution on Android hardware remains **completely unvalidated**.
+4. **Multimodal Status:** Qwen3.5 ~0.8B remains a candidate worth evaluating for future mobile multimodal use, but the exact model packaging, matching projector/`mmproj` artifacts, mobile runtime support, and Android vision path must be independently verified. Mobile VL capability is not an established fact.
 
 ---
 

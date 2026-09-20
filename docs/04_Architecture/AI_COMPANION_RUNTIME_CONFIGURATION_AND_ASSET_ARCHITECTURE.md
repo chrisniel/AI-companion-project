@@ -33,12 +33,12 @@ Following the completion and verification of Phase 8P:
 - **Canonical Path Resolution:** `COMPANION_DATA_ROOT` dynamically resolved (environment variable > `bootstrap.json` locator > default `%LOCALAPPDATA%\AI Companion\Data`), with all 11 canonical paths derived in `storage.py`.
 - **Bootstrap Locator Behavior:** `%LOCALAPPDATA%\AI Companion\bootstrap.json` tracks custom relocated data roots.
 - **Database Migration Safety:** Legacy multi-candidate candidate inspection, preflight verification, automated SQLite backup, and WAL mode startup lifecycle.
-- **Canonical Model Storage Path:** `MODEL_LIBRARY_DIR` (`<COMPANION_DATA_ROOT>/library/models/`) established as canonical user-installed model location.
+- **Canonical Model Storage Path:** `MODEL_LIBRARY_DIR` (`<COMPANION_DATA_ROOT>/library/models/llm`) established as canonical user-installed model location.
 - **Model Registry & Discovery Foundation:** Schema v3 registry bridge (`schemas/model_registry.py`), dual discovery from both factory (`models/`) and installed library roots (`model_registry.py`), and bounded GGUF binary header parser.
 
 #### Planned / Not Yet Implemented:
-- **User-Facing Importer Service:** The managed local import pipeline service (automatic inbox scanning, staging quarantine, preflight validation API/CLI, and atomic promotion) is specified (Section 16, Decision D6) but **not yet implemented as an active service**.
-- **Managed Online Download Manager:** In-app network downloading or background acquisition from model hubs (e.g., Hugging Face) is deferred post-V1.
+- **Controlled Local Importer Service (V1 Implementation Gap):** The managed local model import pipeline (inbox → preflight → staging → atomic install → library → registry; Decision D6) is an architectural **requirement for V1**. While storage paths and registry schemas are implemented, the active execution service is not yet built.
+- **Managed Online Download Manager (Post-V1):** In-app network downloading, background acquisition, and online model hub integrations (e.g., Hugging Face browsing) are deferred post-V1.
 - **Future Asset Persistence:** Persistent voice assets, backend character persistence tables, and multimodal image attachment tables (Phase 8B) remain to be implemented.
 
 The Phase 8 sequence is:
@@ -648,7 +648,7 @@ Repository development/bootstrap model assets
 → existing Git/LFS policy
 
 Installed application / user-imported runtime model library
-→ COMPANION_DATA_ROOT/library/models/
+→ COMPANION_DATA_ROOT/library/models/llm/
 ```
 
 A future transition of existing development models into the installed persistent library requires an explicit migration plan and user authorization.
@@ -1048,7 +1048,7 @@ User / Import Source
          │
          ▼
 ┌──────────────────┐
-│ MODEL_LIBRARY_DIR│  (<COMPANION_DATA_ROOT>/library/models/ — canonical storage)
+│ MODEL_LIBRARY_DIR│  (<COMPANION_DATA_ROOT>/library/models/llm — canonical storage)
 └────────┬─────────┘
          │
          ▼
@@ -1062,16 +1062,18 @@ User / Import Source
 2. **Preflight Validation:** Bounded GGUF header inspection reads format markers, architecture, context length, and companion artifact requirements. Capacity and traversal checks verify the file is safe to promote.
 3. **Quarantine Staging:** Files move to `IMPORT_STAGING_DIR` (`<COMPANION_DATA_ROOT>/imports/staging/`) while integrity and companion relationships (such as vision `mmproj` files) are confirmed.
 4. **Atomic Promotion:** Promotion from staging to `MODEL_LIBRARY_DIR` is atomic (same-filesystem move/rename) to prevent partially copied files from appearing in the library.
-5. **Registry Synchronization:** The installed manifest (`INSTALLED_REGISTRY_PATH`, `<COMPANION_DATA_ROOT>/library/models/registry.json`) is updated and immediately exposed via `GET /api/v1/models`.
+5. **Registry Synchronization:** The installed manifest (`INSTALLED_REGISTRY_PATH`, `<COMPANION_DATA_ROOT>/library/registry/models.json`) is updated and immediately exposed via `GET /api/v1/models`.
 
 ### 16.2 Direct Placement Fallback
 - Direct manual placement of `.gguf` files into `MODEL_LIBRARY_DIR` remains fully supported as an advanced developer fallback.
-- The un-registered model scanner inspects and discovers directly placed models using the bounded GGUF header parser without requiring the user to run the import wizard.
+- The un-registered model scanner inspects and discovers directly placed models using the bounded GGUF header parser without requiring the user to run an import wizard.
 
-### 16.3 Implementation Status
-- `MODEL_LIBRARY_DIR`, `IMPORT_INBOX_DIR`, `IMPORT_STAGING_DIR`, and `INSTALLED_REGISTRY_PATH` are derived and created by `storage.py` (Phase 8P).
+### 16.3 Implementation Status & V1 Boundary
+- `MODEL_LIBRARY_DIR` (`library/models/llm`), `IMPORT_INBOX_DIR`, `IMPORT_STAGING_DIR`, and `INSTALLED_REGISTRY_PATH` (`library/registry/models.json`) are derived and created by `storage.py` (Phase 8P).
 - Schema v3 registry and GGUF header extraction are implemented in `model_registry.py`.
-- The user-facing automated importer service (background watcher, automated inbox processor, import wizard UI) is **planned post-V1** and is not currently running as an active background daemon.
+- The controlled local model import pipeline is an architectural **requirement for V1** (Decision D6). The execution service (inbox scanning, staging quarantine, preflight validation, and atomic promotion) represents an **active V1 implementation gap**, not a post-V1 capability.
+- The specific presentation mechanism (e.g., background watcher, import wizard, CLI, API, or other UX) has not been permanently locked; the V1 requirement is the controlled, validated local import capability itself.
+- Managed online model downloading, remote model hub integrations, and background download managers remain deferred post-V1.
 
 ---
 
@@ -1721,7 +1723,7 @@ The locator file contains only `data_root` and `schema_version`. No user content
 
 ## 33.4 Development models vs installed-library migration — Resolved
 
-**Decision:** Development and bootstrap models remain under the existing repository Git/LFS policy. Installed/user-imported models use `COMPANION_DATA_ROOT/library/models/`. The implementation must not change LFS policy, `.gitattributes`, or `.lfsconfig` without explicit user authorization.
+**Decision:** Development and bootstrap models remain under the existing repository Git/LFS policy. Installed/user-imported models use `COMPANION_DATA_ROOT/library/models/llm/`. The implementation must not change LFS policy, `.gitattributes`, or `.lfsconfig` without explicit user authorization.
 
 ---
 

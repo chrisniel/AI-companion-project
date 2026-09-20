@@ -20,7 +20,7 @@ The AI Companion voice architecture enables fluid, multilingual spoken conversat
 
 1. **CPU-First Speech Execution:** Speech processing (VAD, STT, TTS, Wake Word, and Speaker ID) runs primarily on CPU/RAM. The 8 GB VRAM on the Aisurix RX 580 is reserved almost exclusively for the active generative LLM/VLM (`--models-max 1`). Speech models must never casually compete with the primary model for VRAM.
 2. **Provider Independence:** Every voice component implements a clean Python interface (`AudioDeviceManager`, `VADProvider`, `STTProvider`, `TTSProvider`, `WakeWordProvider`). No engine or vendor library is hardcoded into Core application logic.
-3. **Local-First & Offline Capable:** Spoken conversations are synthesized and transcribed on the local machine without cloud speech APIs unless the user explicitly configures an external provider.
+3. **Local-First & On-Device by Default:** Spoken conversations are synthesized and transcribed locally without cloud speech APIs unless the user explicitly configures an external provider. Speech processing runs locally on the PC host when the PC serves the interaction, or on-device in Android Offline Mode where hardware permits. The non-negotiable invariant is local/on-device processing by default, with no cloud speech transmission unless explicitly configured and authorized.
 4. **Privacy & Zero Audio Retention by Default:** Audio PCM buffers are ephemeral, streamed in memory, and immediately discarded after processing. No raw audio recordings or voice transcripts are persisted to disk unless the user explicitly enables debug logging.
 5. **Multilingual Parity:** The pipeline explicitly measures and reports speech capability across English, Filipino / Tagalog, Japanese, and conversational code-switching.
 
@@ -267,7 +267,7 @@ The conversation lifecycle follows an unambiguous, event-driven state machine:
 | **Audio I/O** | `sounddevice` / PortAudio | Windows Core Audio API | System | < 20 ms buffer latency (TARGET) |
 
 ### TTS Engine Direction & Invariants
-- **No Locked Default:** The project does **not** permanently lock KittenTTS, Kokoro, Piper, or any single engine as the universal default across all platforms.
+- **No Locked Default:** The project does **not** permanently lock KittenTTS, Kokoro, Piper, Android System TTS, or any single engine as the universal default across all platforms. Each remains an evaluation candidate for its respective tier.
 - **Mobile TTS Evaluation:**
   - **KittenTTS:** Promising lightweight on-device candidate, but currently has language limitations and must **not** be presented as a universal multilingual solution.
   - **Kokoro:** High quality, but observed slower during mobile evaluation on reference phone hardware.
@@ -287,19 +287,19 @@ The voice system must never report uniform language capabilities if underlying s
 
 | Language Dimension | STT (Whisper Base/Small) | TTS (Kokoro-82M) | TTS (Piper) | Notes (Proposed Targets) |
 |---|---|---|---|---|
-| **English (EN)** | Supported (TARGET) | Supported (TARGET) | Supported (TARGET) | Full fidelity, natural cadence |
-| **Filipino / Tagalog (FIL)** | Supported (TARGET) | Limited (accented / phonetic fallback) | Limited | Whisper transcribes accurately; TTS phonemes require benchmark tuning |
-| **Japanese (JA)** | Supported (TARGET) | Supported (TARGET) | Supported (TARGET) | Kanji/kana grapheme handling required |
-| **Code-Switching (Taglish / EN-JA)** | Supported (TARGET) | Limited | Unsupported | Whisper handles mixed-phrase transcription well; synthesis requires multi-speaker/cross-lingual acoustic models |
+| **English (EN)** | PROPOSED TARGET | PROPOSED TARGET | PROPOSED TARGET | Full fidelity, natural cadence |
+| **Filipino / Tagalog (FIL)** | PROPOSED TARGET | UNKNOWN / UNVERIFIED | UNKNOWN / UNVERIFIED | Whisper transcribes accurately; TTS phonemes require benchmark tuning |
+| **Japanese (JA)** | PROPOSED TARGET | PROPOSED TARGET | PROPOSED TARGET | Kanji/kana grapheme handling required |
+| **Code-Switching (Taglish / EN-JA)** | PROPOSED TARGET | UNKNOWN / UNVERIFIED | UNKNOWN / UNVERIFIED | Whisper handles mixed-phrase transcription well; synthesis requires multi-speaker/cross-lingual acoustic models |
 
 > [!NOTE]
-> Values in this matrix represent **proposed engineering targets** for future benchmark validation. They are not yet verified in automated test suites in the current repository.
+> Values in this matrix represent **proposed engineering targets** for future benchmark validation. They are unverified in the current repository. Statuses such as `PROPOSED TARGET` and `UNKNOWN / UNVERIFIED` remain in effect until real hardware benchmarks establish actual measured capabilities.
 
-Statuses are strictly typed as:
+Typed status definitions for future benchmark reporting:
 - `Supported`: Fully verified in benchmarks with native accuracy.
 - `Limited`: Operational with known pronunciation, accent, or formatting quirks.
 - `Unsupported`: Engine does not produce coherent output.
-- `Unknown`: Untested in local hardware benchmark.
+- `Unknown / Unverified`: Untested in local hardware benchmark.
 
 ---
 
@@ -312,7 +312,8 @@ Android Companion Microphone
        │ (16kHz PCM audio frame)
        ▼
 Opus Audio Encoder (Android Client)
-       │ Encrypted UDP / WebSocket via Tailscale
+       │ Encrypted Streaming Transport via Tailscale
+       │ (UDP / WebSocket — PROPOSED / TO BE VALIDATED)
        ▼
 Opus Audio Decoder (FastAPI Core Gateway)
        │
@@ -327,7 +328,8 @@ Opus Audio Encoder (FastAPI Core Gateway)
 Android Companion Audio Sinks (Phone Speaker / Earbud)
 ```
 
-- **Audio Codec:** Opus 16kHz mono, target bitrate 24–32 kbps (ultra-low bandwidth, resilient to jitter).
+- **Audio Codec:** Opus 16kHz mono (target bitrate 24–32 kbps; ultra-low bandwidth, resilient to jitter) is the initial codec candidate.
+- **Streaming Transport:** Exact streaming transport (e.g., UDP vs WebSocket over Tailscale) is **PROPOSED / TO BE VALIDATED**; neither protocol is permanently locked.
 - **Latency Budget (Target / Proposed):** Network transport < 50 ms (TARGET), STT < 400 ms (TARGET), LLM Time-to-First-Token < 800 ms (TARGET), TTS chunk < 300 ms (TARGET). Total voice roundtrip target: < 1.6 seconds (TARGET; unverified in repository).
 
 ---
@@ -349,5 +351,5 @@ Android Companion Audio Sinks (Phone Speaker / Earbud)
 ## 9. Security, Privacy & Data Retention
 
 1. **Zero Retention by Default:** Raw audio streams are never saved to SQLite, file logs, or cloud buckets. Audio memory buffers are overwritten immediately after transcription.
-2. **Local Processing Guarantee:** All audio processing executes on the user's host machine. No audio frames are forwarded to external servers without explicit user confirmation.
+2. **Local-First Processing Guarantee:** Speech processing executes on local devices by default (on the PC host when PC serves the interaction, or on-device in Android Offline Mode where hardware permits). No audio frames are forwarded to external servers without explicit user configuration and authorization.
 3. **Hardware Privacy Indicator:** When capture is active, the Local AI Runtime broadcasts `voice.listening` events so Web and Android clients display prominent recording indicators.

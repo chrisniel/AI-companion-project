@@ -67,13 +67,13 @@ Future multi-device milestones separate human user identity from physical client
 
 ### 3.2 Revocable Device Credentials
 - Master PC application secrets are **never** distributed directly to client devices.
-- During initial pairing (e.g., via QR code or pairing phrase exchange), each device is issued an independent, cryptographically random revocable credential.
+- During initial device enrollment, each client is issued an independent, cryptographically random revocable credential. (Specific pairing exchange mechanisms—such as QR code scanning or pairing phrase entry—are illustrative UX possibilities; the exact enrollment UX, cryptographic exchange protocol, credential/token format, and rotation/expiration interval remain open implementation design under Decision D4).
 - Revoking a single device credential immediately severs that hardware endpoint's access without invalidating credentials held by other paired devices.
 
 ### 3.3 Secure Client Storage Direction
 - Client devices must persist credentials using platform-native secure credential stores:
-  - Windows: Windows Credential Manager or encrypted local app state.
-  - Android: Android KeyStore / EncryptedSharedPreferences.
+  - Windows Packaged Application: OS-protected secret storage such as DPAPI or Windows Credential Manager.
+  - Android: Keystore-backed secure storage. Production credentials must **not** remain in ordinary `SharedPreferences`. Credentials and encryption keys should be excluded from auto-backup and device transfer where applicable. (Do not lock `EncryptedSharedPreferences` as the permanent implementation; the exact secure-storage library/mechanism remains future implementation design).
 - Plaintext API tokens must never be committed to source control or logged in telemetry.
 
 ---
@@ -137,14 +137,14 @@ The policy engine operates under an immutable **DEFAULT DENY** posture.
 | **Risk 0** | **Read-Only / Information** | Public web search, weather queries, permitted webpage text reading, internal memory/task inspection, runtime telemetry. | May auto-execute when enabled by profile and device policy. |
 | **Risk 1** | **Reversible Low-Impact** | Creating personal tasks, scheduling non-alarm reminders, user notifications, harmless preference toggles. | Profile-configurable auto-approval. |
 | **Risk 2** | **Significant State Change** | Deleting tasks or conversations, external message transmission, web form submission, model uninstallation, sensitive configuration changes. | **Explicit user confirmation required** by default. |
-| **Risk 3** | **Privileged / Destructive** | Arbitrary shell/command execution, unrestricted filesystem mutations, credential access, OS/network configuration. | **DEFAULT DENY.** Requires explicit, narrow, time-bounded user authorization. |
+| **Risk 3** | **Privileged / Destructive (Prohibited Generic Capabilities)** | Arbitrary shell/command execution, unrestricted filesystem access, credential access, raw root/device administration, network/security configuration. | **PROHIBITED BY DEFAULT.** Not exposed as generic assistant tools. Any future elevated capability requires a separately designed narrow interface, explicit authorization, bounded scope, and appropriate expiration/revocation; never unlocked merely by ordinary one-time confirmation. |
 
 ### 5.3 Security & Elevation Invariants
 - **No Self-Privilege:** Models cannot grant permissions or elevate risk tiers for themselves.
 - **Prompt Injection Defense:** Untrusted user prompt content cannot elevate execution privileges or override system risk policies.
-- **Untrusted Web Content:** External web pages, search snippets, and API responses fetched during tool execution are treated as untrusted data and sanitized before feeding into prompt contexts.
-- **Interactive Shell Prohibition:** General-purpose interactive command shells (e.g., raw bash, PowerShell, cmd) are prohibited as standard assistant tools.
-- **Auditable Logging:** All sensitive tool invocations (Risk 1+) produce structured, persistent diagnostic logs recording requester, parameters, confirmation status, and outcome.
+- **Untrusted Web Content & Prompt Injection Isolation:** External web pages, search snippets, and API responses fetched during tool execution are explicitly framed and isolated outside the model loop as **UNTRUSTED DATA**. Sanitization may be applied for parsing, HTML stripping, or rendering safety, but sanitization is **not** the prompt-injection defense boundary. The deterministic permission and policy engine exists completely outside model-generated text and remains authoritative even if the model is manipulated or injected.
+- **Prohibited Generic Capabilities (Risk 3):** Generic privileged, destructive, or security-sensitive capabilities (such as arbitrary shell execution, unrestricted filesystem mutations, credential access, raw OS/device administration, or network reconfiguration) are strictly **prohibited by default** and are never exposed as generic assistant tools. A generic command shell does not become available merely because the user confirms a prompt. Any future elevated action requires a separately designed narrow interface, explicit user authorization, strictly bounded scope, and appropriate expiration/revocation.
+- **Auditable Logging & Privacy:** Sensitive or state-changing tool executions (Risk 1+) produce structured, persistent diagnostic logs recording appropriate metadata (tool/action, profile, device/source, risk classification, confirmation state, outcome, and timestamp/correlation ID). To protect user privacy, audit logs must **not** indiscriminately record full parameters, sensitive personal payloads, credentials, secrets, or full request bodies unless an explicit future design mandates it.
 
 ---
 
@@ -156,29 +156,39 @@ External information capabilities use vendor-independent provider abstractions r
 
 | Provider Role | Initial / Primary Candidate | Alternate / Self-Hosted Candidate | Research / Deferred Option |
 | :--- | :--- | :--- | :--- |
-| **`WebSearchProvider`** | **Tavily** (initial hosted candidate) | **SearXNG** (self-hosted option) | **Exa** (specialized research candidate) |
-| **`FetchProvider`** | **Jina Reader** (clean markdown extraction) | **Direct HTTP** (where appropriate) | **Firecrawl** (optional crawler) |
-| **`WeatherProvider`** | **Open-Meteo** (routine global forecast) | **PAGASA** (official Philippine severe weather) | — |
-| **`NewsProvider`** | Composite (Search + Fetch) | Composite | — |
-| **`BrowserProvider`** | **Local Playwright** (future post-V1) | **Steel** (future evaluation candidate) | — |
+| **`WebSearchProvider`** | **Tavily** (initial candidate) | **SearXNG** (optional / self-hosted) | **Exa** (optional research candidate) |
+| **`FetchProvider`** | **Jina Reader** (initial candidate) | **Direct HTTP** (where appropriate) | **Firecrawl** (optional crawler) |
+| **`WeatherProvider`** | **Open-Meteo** (routine forecasts) | **PAGASA** (official public bulletins/pages for severe weather) | — |
+| **News / Current Info** | **Web Search + Fetch** (initial capability) | — | Dedicated **`NewsProvider`** (deferred until feeds/digests justify it) |
+| **`BrowserProvider`** | **Local Playwright** (future candidate) | — | **Steel** (future evaluation candidate) |
 
 > [!NOTE]
-> All external services listed above are **implementation candidates**, not permanent vendor dependencies. The system architecture preserves provider-independent interfaces so services can be swapped, self-hosted, or disabled.
+> All external services listed above are **implementation candidates**, not permanent vendor dependencies:
+> - **Provider Independence:** The system architecture preserves provider-independent interfaces so services can be swapped, self-hosted, or disabled.
+> - **Philippine Severe Weather:** PAGASA reference relies on official public bulletins and public advisory web pages; no private or authenticated API integration is currently available, implemented, or required.
+> - **News / Current Information:** The initial capability is fulfilled via existing Web Search + Fetch tools. A standalone dedicated `NewsProvider` abstraction is **deferred** until scheduled news digests, RSS/Atom feeds, or structured news monitoring requirements justify a specialized provider interface.
 
 ### 6.2 SSRF Defenses & Private Network Restrictions
-All web-fetch adapters must enforce strict Server-Side Request Forgery (SSRF) protections:
+Generic public `FetchProvider` implementations must enforce strict Server-Side Request Forgery (SSRF) protections:
 - **Loopback Blocking:** Strict rejection of `127.0.0.1`, `localhost`, `::1`, and equivalent loopback representations.
-- **Private Subnet Blocking:** Rejection of RFC 1918 private ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`).
+- **Private Subnet Blocking:** Rejection of RFC 1918 private network ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`).
 - **Link-Local & Cloud Metadata Blocking:** Rejection of link-local addresses (`169.254.0.0/16`, including cloud metadata endpoints like `169.254.169.254`).
-- **Redirect Validation:** HTTP redirect chains must be inspected; each redirect hop re-validates the target IP against SSRF blocklists before connection.
+- **Unsafe Protocols & Redirect Validation:** Rejection of non-HTTP(S) schemes (e.g., `file://`, `gopher://`); each HTTP redirect hop re-validates the destination IP against SSRF blocklists before connecting.
+- **LAN Boundary Isolation:** Generic web fetch must never silently gain internal LAN or localhost access. If the product later requires communication with trusted local-network resources (e.g., local home automation or local servers), that must be architected as a **separate, explicitly authorized local-network capability**, completely decoupled from public web fetching.
 - **Capability Separation:** Read-only web search and fetch capabilities are strictly isolated from interactive web actions (e.g., clicking, form submission, authenticated sessions).
 
 ---
 
-## 7. Emergency Tool Controls
+## 7. Emergency Tool Controls & Cancellation Semantics
 
-The system architecture reserves deterministic kill switches and execution controls:
+The system architecture reserves deterministic execution controls and kill switches:
 1. **Stop Generation:** Immediate abort of current SSE inference token streaming.
-2. **Stop Current Action:** Immediate cancellation of an in-flight tool or provider request.
-3. **Stop All Actions:** Immediate termination of an active multi-step agent or tool loop.
+2. **Stop Current Action:** Request cancellation of the active in-flight tool or provider request where cancellation is supported by the transport/runtime.
+3. **Stop All Actions:** Termination of an active multi-step agent or tool loop, halting any queued, not-yet-started actions.
 4. **Global Autonomous Disable:** Master application configuration kill switch disabling all external tool execution across the runtime.
+
+> [!IMPORTANT]
+> **Cancellation vs. Rollback Boundaries:**
+> - Cancellation reliably stops queued, pending, or not-yet-started tool operations and halts further steps in a multi-action agent sequence.
+> - For in-flight network or provider operations, cancellation requests termination where underlying libraries/transports support cooperative cancellation.
+> - The architecture does **not** promise impossible rollback: already-committed external side effects (e.g., an external HTTP mutation or a completed external action) cannot always be undone. The exact handling and user notification semantics for non-cancellable external side effects remain future implementation design.
