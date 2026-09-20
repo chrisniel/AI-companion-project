@@ -122,3 +122,20 @@ The following documents exist for historical, forensic, or template purposes and
    Completed sprint checklists preserved for tracking continuity only.
 5. **Starter Reference (`docs/ProjectWorkflowStarterKit/*`)**  
    Reusable workflow templates, not active project documentation.
+
+---
+
+## 6. Canonical Domain Architecture Routing Table
+
+When investigating specific subsystems, load only the focused domain specification relevant to the task:
+
+| If your question is... | Consult this Canonical Document | Core Topics Owned |
+| :--- | :--- | :--- |
+| **"What is the product identity, V1 boundary, or host process model?"** | [`SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md) | Ecosystem subsystems, V1 scope vs. post-V1, Windows host process, D1–D9 matrix. |
+| **"Where does data live? How do model imports and config work?"** | [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) | `COMPANION_DATA_ROOT`, bootstrap locator, D6 import pipeline, database migration safety. |
+| **"How does the LLM run? What are the VRAM profiles and router states?"** | [`LLAMA_CPP_RUNTIME_ARCHITECTURE.md`](../04_Architecture/LLAMA_CPP_RUNTIME_ARCHITECTURE.md) | `llama-server.exe` lifecycle, Eco/Balanced/Max profiles, port 8085, RX 580 benchmarks. |
+| **"How do auth, device pairing, network trust, and tool permissions work?"** | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](../04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md) | Fail-closed auth, D4 per-device tokens, D5 Tailscale trust, D9 4-tier risk matrix, SSRF. |
+| **"Who owns memory and character data? How does scoping work?"** | [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../04_Architecture/MEMORY_AND_CHARACTER_ARCHITECTURE.md) | Profile-first memory, `PROFILE` vs `CHARACTER` scopes, SQLite+FTS5, persona boundaries. |
+| **"How will Android connected and offline modes work?"** | [`ANDROID_COMPANION_ARCHITECTURE.md`](../04_Architecture/ANDROID_COMPANION_ARCHITECTURE.md) | `com.cnl.aicompanion`, Connected vs Offline Mode, Dimensity 920 inference evidence. |
+| **"How will voice and audio processing work?"** | [`VOICE_AND_AUDIO_ARCHITECTURE.md`](../04_Architecture/VOICE_AND_AUDIO_ARCHITECTURE.md) | CPU-first speech execution, `TTSProvider` candidates (Kokoro, Piper, KittenTTS), post-V1. |
+

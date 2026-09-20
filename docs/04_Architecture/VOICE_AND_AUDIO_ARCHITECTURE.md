@@ -2,11 +2,15 @@
 
 **Project:** AI Companion Project  
 **Architecture Area:** Voice Pipeline, Audio Device Management & Speech Processing  
-**Document Role:** Canonical voice and audio architecture specification  
-**Document Status:** Approved Architecture / Planned Implementation (Tracks V0–V6)  
+**Document Role:** Canonical future-domain architecture specification  
+**Document Status:** Approved Architecture / Planned Post-V1 Implementation (Tracks V0–V6)  
 **Primary Host:** Windows 11 Local AI Runtime  
 **Target Hardware:** AMD Ryzen 5 3600, 16 GB RAM, Aisurix RX 580 8 GB VRAM  
 **Remote Companion Client:** Android Companion App  
+
+> [!IMPORTANT]
+> **Release Boundary Notice (Decision D1):**
+> Voice & audio capabilities are strictly **POST-V1**. No voice interfaces, audio pipelines, speech models, or background audio capture services are currently implemented in the repository. This document defines the canonical architecture for future implementation phases without creating blockers for the V1 release.
 
 ---
 
@@ -94,7 +98,7 @@ The AI Companion voice architecture enables fluid, multilingual spoken conversat
 
 ## 3. Core Provider Interfaces
 
-All voice components reside in `backend/app/providers/voice/` and adhere to typed abstract interfaces:
+All planned voice components are architected to reside in `backend/app/providers/voice/` (directory not yet created in repository; planned for future Track V0) and adhere to typed abstract interfaces:
 
 ### 3.1 AudioDeviceManager Interface
 ```python
@@ -253,13 +257,23 @@ The conversation lifecycle follows an unambiguous, event-driven state machine:
 
 ## 5. Candidate Implementations & CPU-First Policy
 
-| Subsystem | Primary Candidate | Fallback / Alternative | Placement | Target Metric |
+| Subsystem | Primary Candidate | Fallback / Alternative | Placement | Target Metric (Proposed) |
 |---|---|---|---|---|
-| **VAD** | Silero VAD (ONNX Runtime) | WebRTC VAD | CPU / RAM | < 5 ms per 30ms frame, < 20 MB RAM |
-| **STT** | `whisper.cpp` (quantized Q5_1 / Q8_0) | Faster-Whisper | CPU / RAM | RTF < 0.4x on Ryzen 5 3600 (threads=4) |
-| **TTS** | Kokoro-82M (ONNX Runtime) | Piper TTS / sherpa-onnx | CPU / RAM | RTF < 0.3x, natural cadence |
-| **Wake Word** | openWakeWord (tflite/ONNX) | sherpa-onnx KWS | CPU / RAM | < 1% CPU utilization idle |
-| **Audio I/O** | `sounddevice` / PortAudio | Windows Core Audio API | System | < 20 ms buffer latency |
+| **VAD** | Silero VAD (ONNX Runtime) | WebRTC VAD | CPU / RAM | < 5 ms per 30ms frame, < 20 MB RAM (TARGET) |
+| **STT** | `whisper.cpp` (quantized Q5_1 / Q8_0) | Faster-Whisper | CPU / RAM | RTF < 0.4x on Ryzen 5 3600 (threads=4) (TARGET) |
+| **TTS (PC)** | Kokoro-82M (ONNX Runtime) | Piper TTS / sherpa-onnx | CPU / RAM | RTF < 0.3x, natural cadence (TARGET) |
+| **TTS (Mobile)** | KittenTTS (lightweight offline candidate) | Kokoro / Android System TTS | Mobile CPU | Under evaluation; benchmarking deferred (TARGET) |
+| **Wake Word** | openWakeWord (tflite/ONNX) | sherpa-onnx KWS | CPU / RAM | < 1% CPU utilization idle (TARGET) |
+| **Audio I/O** | `sounddevice` / PortAudio | Windows Core Audio API | System | < 20 ms buffer latency (TARGET) |
+
+### TTS Engine Direction & Invariants
+- **No Locked Default:** The project does **not** permanently lock KittenTTS, Kokoro, Piper, or any single engine as the universal default across all platforms.
+- **Mobile TTS Evaluation:**
+  - **KittenTTS:** Promising lightweight on-device candidate, but currently has language limitations and must **not** be presented as a universal multilingual solution.
+  - **Kokoro:** High quality, but observed slower during mobile evaluation on reference phone hardware.
+  - **Android System TTS:** Universal reliable fallback when neural synthesis is unavailable or too slow.
+  - Further mobile TTS benchmarking is deferred until the dedicated Android Offline Runtime / Voice implementation planning phase.
+- **PC TTS Evaluation:** Kokoro and Piper remain strong local CPU neural candidates.
 
 ### Why CPU-First for Speech?
 - **VRAM Contention:** The AMD RX 580 has 8 GB VRAM. A 4B GGUF model at Q4_K_M requires ~3.5–4.5 GB VRAM with context and KV cache. Loading Whisper or Kokoro on the same GPU via Vulkan risks out-of-memory (OOM) crashes, driver resets, and latency spikes during model swapping.
@@ -267,16 +281,19 @@ The conversation lifecycle follows an unambiguous, event-driven state machine:
 
 ---
 
-## 6. Language Capability Reporting Matrix
+## 6. Language Capability Reporting Matrix (Target Proposals)
 
 The voice system must never report uniform language capabilities if underlying speech engines differ. Each provider reports capability per language:
 
-| Language Dimension | STT (Whisper Base/Small) | TTS (Kokoro-82M) | TTS (Piper) | Notes |
+| Language Dimension | STT (Whisper Base/Small) | TTS (Kokoro-82M) | TTS (Piper) | Notes (Proposed Targets) |
 |---|---|---|---|---|
-| **English (EN)** | Supported | Supported | Supported | Full fidelity, natural cadence |
-| **Filipino / Tagalog (FIL)** | Supported | Limited (accented / phonetic fallback) | Limited | Whisper transcribes accurately; TTS phonemes require benchmark tuning |
-| **Japanese (JA)** | Supported | Supported | Supported | Kanji/kana grapheme handling required |
-| **Code-Switching (Taglish / EN-JA)** | Supported | Limited | Unsupported | Whisper handles mixed-phrase transcription well; synthesis requires multi-speaker/cross-lingual acoustic models |
+| **English (EN)** | Supported (TARGET) | Supported (TARGET) | Supported (TARGET) | Full fidelity, natural cadence |
+| **Filipino / Tagalog (FIL)** | Supported (TARGET) | Limited (accented / phonetic fallback) | Limited | Whisper transcribes accurately; TTS phonemes require benchmark tuning |
+| **Japanese (JA)** | Supported (TARGET) | Supported (TARGET) | Supported (TARGET) | Kanji/kana grapheme handling required |
+| **Code-Switching (Taglish / EN-JA)** | Supported (TARGET) | Limited | Unsupported | Whisper handles mixed-phrase transcription well; synthesis requires multi-speaker/cross-lingual acoustic models |
+
+> [!NOTE]
+> Values in this matrix represent **proposed engineering targets** for future benchmark validation. They are not yet verified in automated test suites in the current repository.
 
 Statuses are strictly typed as:
 - `Supported`: Fully verified in benchmarks with native accuracy.
@@ -311,7 +328,7 @@ Android Companion Audio Sinks (Phone Speaker / Earbud)
 ```
 
 - **Audio Codec:** Opus 16kHz mono, target bitrate 24–32 kbps (ultra-low bandwidth, resilient to jitter).
-- **Latency Budget:** Network transport < 50 ms (LAN/Tailscale), STT < 400 ms, LLM Time-to-First-Token < 800 ms, TTS chunk < 300 ms. Total voice roundtrip target: < 1.6 seconds.
+- **Latency Budget (Target / Proposed):** Network transport < 50 ms (TARGET), STT < 400 ms (TARGET), LLM Time-to-First-Token < 800 ms (TARGET), TTS chunk < 300 ms (TARGET). Total voice roundtrip target: < 1.6 seconds (TARGET; unverified in repository).
 
 ---
 

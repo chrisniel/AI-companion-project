@@ -1,5 +1,8 @@
 ### Future — Proactive Companion Routines / Scheduled Check-ins
 
+> **Status:** Future Architecture / Post-V1 Milestone  
+> **Authority Notice:** Proactive companion routines are explicitly excluded from AI Companion V1 (Decision D1). This specification is preserved for post-V1 milestone planning; candidate for relocation or archival in Pass R5.
+
 AI Companion should support configurable recurring personal routines that
 trigger proactive character messages or notifications without representing
 them as Tasks.

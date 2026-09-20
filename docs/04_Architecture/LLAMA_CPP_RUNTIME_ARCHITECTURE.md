@@ -78,23 +78,23 @@ The AI Companion project uses a local build of `llama.cpp` as its primary infere
 
 ## 3. Persistent Router Launch Specification
 
-When the backend initializes the local LLM runtime, it executes `llama-server.exe` with absolute paths:
+When the backend initializes the local LLM runtime, it executes `llama-server.exe` using configured paths:
 
 ```powershell
 runtime\llama.cpp\llama-server.exe `
   --host 127.0.0.1 `
   --port 8085 `
-  --models-dir D:\OtherProjects\AI-companion-project\models `
+  --models-dir <LLAMA_MODELS_DIR> `
   --models-max 1 `
   --sleep-idle-seconds 900 `
   --parallel 1 `
   --no-webui `
   --metrics `
-  --log-file data\llama_server.log
+  --log-file <LOG_FILE_PATH>
 ```
 
 ### Launch Flags & Invariants:
-- `--models-dir`: Absolute path to models root. No relative paths or client-supplied directory traversal.
+- `--models-dir`: Resolved from `settings.LLAMA_MODELS_DIR` (defaults to `<REPO_ROOT>/models/vision`). Absolute path passed to binary; no client-supplied directory traversal.
 - `--models-max 1`: Enforces single-model residency in VRAM.
 - `--sleep-idle-seconds 900`: Configures 15-minute native inactivity sleep.
 - `--no-webui`: Disables embedded upstream HTML interface to ensure FastAPI is the sole frontend gateway.
@@ -174,6 +174,12 @@ If the router becomes totally unresponsive (e.g. driver hang during Vulkan kerne
 2. Verify that the PID matches the Core-owned subprocess handle.
 3. Terminate only that PID via `process.kill()` / Win32 `TerminateProcess`.
 4. Reset state to `SERVER_STOPPED`. Never execute `taskkill /IM llama-server.exe /F`.
+
+### 5.4 Model Resolution Nuance: Factory vs. Installed Models
+The codebase maintains a deliberate separation between factory development models and user-installed library models:
+- **Registry Discovery:** `model_registry.py` discovers manifests and GGUF files across both `FACTORY_MODEL_ROOT` (`<REPO_ROOT>/models/`) and `MODEL_LIBRARY_DIR` (`<COMPANION_DATA_ROOT>/library/models/`).
+- **Active Router Loader:** In the current implementation, `_resolve_model_path()` in `llama_cpp.py` resolves requested model filenames against `settings.MODELS_DIR` (`<REPO_ROOT>/models/`).
+- **Truthful Boundary:** The model registry can discover more installed models than the active router daemon may currently load directly without manual path alignment. The full automated importer and atomic promotion pipeline (Decision D6) is planned post-V1 and not yet integrated into the live router loader. Architecture must not pretend the loader already routes to arbitrary installed library paths seamlessly.
 
 ---
 

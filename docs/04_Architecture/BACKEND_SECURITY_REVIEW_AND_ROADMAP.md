@@ -4,7 +4,12 @@
 **Reviewed branches:** `fix/backend-security-hardening`, `fix/backend-security-v1.1.1-corrective-pass`  
 **Purpose:** Consolidated review of the Local AI Core security hardening work, delivered corrective actions, and future security phases.
 
-> This document distinguishes between what is already implemented, what has been delivered in the V1.1.1 corrective pass, and what belongs in later phases. It should not be read as a claim that every future security capability is already implemented.
+> [!IMPORTANT]
+> **Documentation Authority Notice:**
+> - This document records **historical review evidence and post-hardening roadmap notes** from past security passes.
+> - Active, normative security and trust architecture canonically lives in [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md).
+> - Implementation reality must be verified against current source code (`backend/app/core/security.py`, `backend/app/api/v1/router.py`) and automated test suites.
+> - This document is scheduled as a candidate for archival to `docs/07_Archive/` during Reconciliation Pass R5.
 
 ---
 
