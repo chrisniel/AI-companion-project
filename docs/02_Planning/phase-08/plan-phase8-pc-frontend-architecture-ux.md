@@ -1,24 +1,23 @@
 # Phase 8 Implementation Plan — PC Frontend Architecture, Runtime Config, Multimodal & Polish
 
-> **Status:** Phase 8P plan reconciled — awaiting Batch 8P.1 implementation approval
-> **This is the single authoritative version. No supplements. No pass references.**
-> **Canonical reference:** `docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`
+> **Status:** 8A and 8P COMPLETE / VERIFIED. Repository Documentation Reconciliation (Passes R0–R8) is COMPLETE / VERIFIED. Phase 8B is NEXT / UNBLOCKED upon branch creation. 8C is PLANNED AFTER 8B.
+> **Authority Precedence:** Normative architecture is owned by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md). Canonical product sequencing is owned by [`docs/02_Planning/ROADMAP.md`](../ROADMAP.md). Runtime config architecture is owned by [`docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../../04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md).  
+> **This is the single authoritative feature implementation plan for Phase 8.**
 
 ---
 
 ## Branch Strategy
 
-develop (baseline: 88 backend pytest, 132 frontend vitest [last verified Phase 8A baseline], 0 tsc, migration head 005_scope_message_constraints)
-  +-- feature/phase8-ui-foundation           (8A: frontend-only, zero backend schema changes)
-        merge to develop
-  +-- feature/phase8-runtime-config          (8P: config, terminology, schema v3, data root)
-        based on merged 8A; merge to develop
-  +-- feature/multimodal-image-attachments   (8B: full stack, depends on 8P ATTACHMENT_DIR)
-        based on merged 8P; merge to develop
-  +-- feature/phase8-ui-integration-polish   (8C: polish, cleanup, final tests)
+develop (verified baseline: 175 backend pytest, 147 frontend vitest, 124 Android unit/Robolectric, 0 tsc, migration head 005_scope_message_constraints)
+  +-- feature/phase8-ui-foundation           (8A: COMPLETE / VERIFIED — merged to develop)
+  +-- feature/phase8-runtime-config          (8P: COMPLETE / VERIFIED — merged to develop)
+  +-- [GATE: Documentation Reconciliation]   (R0–R8: COMPLETE / VERIFIED — Phase 8B unblocked)
+  +-- feature/multimodal-image-attachments   (8B: NEXT / UNBLOCKED — full stack image upload & vision inference)
+        based on develop; merge to develop
+  +-- feature/phase8-ui-integration-polish   (8C: PLANNED AFTER 8B — polish, a11y, cleanup)
         based on merged 8B
 
-8P precedes 8B: 8B writes to COMPANION_DATA_ROOT/attachments/ -- 8P must establish that path first.
+8P established canonical COMPANION_DATA_ROOT/attachments/. 8B activates image uploads to that directory now that documentation reconciliation is complete and verified.
 
 ---
 
@@ -28,8 +27,8 @@ develop (baseline: 88 backend pytest, 132 frontend vitest [last verified Phase 8
 - No STT/TTS. No video. No PDF. No arbitrary file types.
 - No CUDA (boundary documented in 8P only).
 - No new state management library.
-- No import UI, auto-downloads, quantization, benchmarking.
-- No MODEL_LIBRARY_AND_REGISTRY_ARCHITECTURE.md -- deferred until Import Manager phase.
+- No import UI, auto-downloads, quantization, benchmarking (local model import capability is a locked V1 requirement under Decision D6, but execution service and import UI are out of scope for Phase 8B/8C; managed online downloads remain post-V1).
+- No MODEL_LIBRARY_AND_REGISTRY_ARCHITECTURE.md -- deferred until dedicated Import Manager planning.
 - No .gitattributes / .lfsconfig / LFS remote changes without explicit user authorization.
 
 ---
@@ -40,7 +39,7 @@ develop (baseline: 88 backend pytest, 132 frontend vitest [last verified Phase 8
 |----------|-----------|
 | OD1: Default Windows data-root | %LOCALAPPDATA%\AI Companion\Data |
 | OD2: Bootstrap locator | %LOCALAPPDATA%\AI Companion\bootstrap.json |
-| OD3: Dev vs installed models | Dev/bootstrap models stay under Git/LFS. Installed/user-imported models use COMPANION_DATA_ROOT/library/models/ |
+| OD3: Dev vs installed models | Dev/bootstrap models stay under Git/LFS. Installed/user-imported models use COMPANION_DATA_ROOT/library/models/llm/ |
 
 ---
 
@@ -840,7 +839,7 @@ Tests: >= 88 backend pytest + bootstrap/migration/schema tests, >= 132 vitest, 0
 ## Phase 8B -- Multimodal Image Attachment Foundation
 
 Branch: feature/multimodal-image-attachments (based on merged 8P)
-Test gate: migration 006 applies cleanly; >= 88 + attachment tests; 0 tsc; clean build.
+Test gate: migration 006 applies cleanly; >= 175 + attachment tests; 0 tsc; clean build.
 Dependency: settings.ATTACHMENT_DIR (from 8P.3) must exist.
 
 ### Attachment Lifecycle
@@ -1266,9 +1265,9 @@ Backend regression:
 
 ### 8C.5 -- Documentation Completion
 
-[MODIFY] AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md
-  - Test totals: 100+ pytest, 50+ vitest
-  - Mark Phase 8 complete
+[MODIFY] docs/02_Planning/ROADMAP.md
+  - Mark Phase 8C complete / verified
+  - Reconcile active delivery gates
 
 [CREATE] docs/03_Walkthroughs/walkthrough-phase8-multimodal-attachments.md
   - Follow walkthrough-template.md (7-section format)
@@ -1286,7 +1285,7 @@ feat(8c): integration polish -- mock cleanup, bundle, a11y, final tests, docs
 - Accessibility: aria-labels, role=article, focus management, keyboard
 - phase8Integration.test.tsx: reload/cancel/vision gate/mmproj-absent/limits
 - walkthrough-phase8-multimodal-attachments.md (7-section)
-- AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md: 100+/50+ counts; Phase 8 complete
+- ROADMAP.md: Phase 8 complete / verified
 - task.md: sprint archived
 
 ---
@@ -1297,9 +1296,9 @@ feat(8c): integration polish -- mock cleanup, bundle, a11y, final tests, docs
   Video/audio/PDF       -- out of scope
   Android multimodal    -- deferred
   CUDA implementation   -- out of scope; boundary documented only
-  Model Import Manager  -- deferred (separate planning phase)
-  MODEL_LIBRARY_AND_REGISTRY_ARCHITECTURE.md -- deferred until Import Manager planned
-  Auto HuggingFace downloads / quantization  -- deferred
+  Model Import Manager  -- execution service & UI out of scope for Phase 8B/8C (controlled local import is a locked V1 requirement under Decision D6; managed online downloads remain post-V1)
+  MODEL_LIBRARY_AND_REGISTRY_ARCHITECTURE.md -- deferred until dedicated Import Manager planning
+  Auto HuggingFace downloads / quantization  -- deferred post-V1
   Benchmarking wizard   -- deferred
   Attachment retention purge job -- deferred to Phase 9
   OS-backed secret storage (DPAPI) -- deferred

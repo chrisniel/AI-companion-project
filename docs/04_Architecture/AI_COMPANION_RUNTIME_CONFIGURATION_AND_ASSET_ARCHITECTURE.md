@@ -4,15 +4,15 @@
 > **Backend service:** Local AI Runtime  
 > **Document role:** Canonical architecture plan for naming, configuration, persistent data, model/voice assets, runtime modularity, character identity, and Phase 8 prerequisites  
 > **Target repository path:** `docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`  
-> **Status:** Final planning baseline; implementation still requires explicit user approval  
+> **Status:** Active Canonical Architecture (Phase 8P Implemented; Decisions D1–D9 Locked)  
 > **Current implementation baseline:** Windows + `llama.cpp` b10936 Vulkan; current tested hardware is AMD RX 580 8 GB  
-> **Last updated:** 2026-09-14
+> **Last updated:** 2026-09-20 (Reconciliation Pass R3)
 
 ---
 
 ## 1. Purpose
 
-This document captures architectural decisions that must not be lost while Phase 8 is being planned.
+This document provides the canonical architectural specification for configuration domains, persistent storage paths, model registry contracts, and asset management across AI Companion.
 
 The AI Companion project must remain:
 
@@ -25,21 +25,33 @@ The AI Companion project must remain:
 - persistent across application reinstall where the user preserves data;
 - modular enough to support future runtime distributions such as CUDA without redesigning the application contract.
 
-This document does **not** authorize implementation by itself. It defines the architecture that Phase 8 planning and later implementation must follow.
+### Implemented vs. Planned Boundary (Post-Phase 8P Reality)
 
-The immediate Phase 8 sequence becomes:
+Following the completion and verification of Phase 8P:
+
+#### Implemented & Verified in Repository:
+- **Canonical Path Resolution:** `COMPANION_DATA_ROOT` dynamically resolved (environment variable > `bootstrap.json` locator > default `%LOCALAPPDATA%\AI Companion\Data`), with all 11 canonical paths derived in `storage.py`.
+- **Bootstrap Locator Behavior:** `%LOCALAPPDATA%\AI Companion\bootstrap.json` tracks custom relocated data roots.
+- **Database Migration Safety:** Legacy multi-candidate candidate inspection, preflight verification, automated SQLite backup, and WAL mode startup lifecycle.
+- **Canonical Model Storage Path:** `MODEL_LIBRARY_DIR` (`<COMPANION_DATA_ROOT>/library/models/llm`) established as canonical user-installed model location.
+- **Model Registry & Discovery Foundation:** Schema v3 registry bridge (`schemas/model_registry.py`), dual discovery from both factory (`models/`) and installed library roots (`model_registry.py`), and bounded GGUF binary header parser.
+
+#### Planned / Not Yet Implemented:
+- **Controlled Local Importer Service (V1 Implementation Gap):** The managed local model import pipeline (inbox → preflight → staging → atomic install → library → registry; Decision D6) is an architectural **requirement for V1**. While storage paths and registry schemas are implemented, the active execution service is not yet built.
+- **Managed Online Download Manager (Post-V1):** In-app network downloading, background acquisition, and online model hub integrations (e.g., Hugging Face browsing) are deferred post-V1.
+- **Future Asset Persistence:** Persistent voice assets, backend character persistence tables, and multimodal image attachment tables (Phase 8B) remain to be implemented.
+
+The Phase 8 sequence is:
 
 ```text
-8A — Frontend Architecture & UX Foundation
+8A — Frontend Architecture & UX Foundation          [COMPLETE / VERIFIED]
         ↓
-8P — Runtime Configuration & Persistent Asset Foundation
+8P — Runtime Configuration & Persistent Asset Foundation [COMPLETE / VERIFIED]
         ↓
-8B — Multimodal Image Attachments
+8B — Multimodal Image Attachments                     [PLANNED / NEXT AFTER RECONCILIATION]
         ↓
-8C — Integration, Accessibility & Polish
+8C — Integration, Accessibility & Polish             [PLANNED]
 ```
-
-A later dedicated Model/Voice Import Manager may expand the asset-library capabilities defined here.
 
 ---
 
@@ -636,7 +648,7 @@ Repository development/bootstrap model assets
 → existing Git/LFS policy
 
 Installed application / user-imported runtime model library
-→ COMPANION_DATA_ROOT/library/models/
+→ COMPANION_DATA_ROOT/library/models/llm/
 ```
 
 A future transition of existing development models into the installed persistent library requires an explicit migration plan and user authorization.
@@ -1007,41 +1019,61 @@ Do not infer complex capabilities purely from arbitrary filenames.
 
 ---
 
-# 16. Model Import Architecture
+# 16. Model Import Architecture (Decision D6)
 
-Full import UI is not required in 8P, but the contract must be defined now.
-
-Target flow:
+Primary user-facing local model imports enter the ecosystem through a deterministic, validated pipeline:
 
 ```text
-source/import
-    ↓
-staging
-    ↓
-validate file
-    ↓
-read GGUF metadata
-    ↓
-identify architecture
-    ↓
-read parameter/quantization/context/template metadata
-    ↓
-find companion artifacts
-    ↓
-derive candidate capabilities
-    ↓
-runtime compatibility validation
-    ↓
-install to persistent model library
-    ↓
-register manifest
+User / Import Source
+         │
+         ▼
+┌──────────────────┐
+│ IMPORT_INBOX_DIR │  (<COMPANION_DATA_ROOT>/imports/inbox/ — landing zone for raw model files)
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│ Preflight Check  │  (Validate GGUF format, header metadata, architecture, path/capacity safety)
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│ IMPORT_STAGING   │  (<COMPANION_DATA_ROOT>/imports/staging/ — quarantine staging while validating)
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│ Atomic Install   │  (Atomic file move / promotion into library)
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│ MODEL_LIBRARY_DIR│  (<COMPANION_DATA_ROOT>/library/models/llm — canonical storage)
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│ Model Registry   │  (Updated in INSTALLED_REGISTRY_PATH; discoverable in UI)
+└──────────────────┘
 ```
 
-The system should auto-detect information whenever reliable.
+### 16.1 Pipeline Stages & Invariants:
+1. **Inbox Landing:** Files placed into `IMPORT_INBOX_DIR` (`<COMPANION_DATA_ROOT>/imports/inbox/`) await scanning and preflight inspection.
+2. **Preflight Validation:** Bounded GGUF header inspection reads format markers, architecture, context length, and companion artifact requirements. Capacity and traversal checks verify the file is safe to promote.
+3. **Quarantine Staging:** Files move to `IMPORT_STAGING_DIR` (`<COMPANION_DATA_ROOT>/imports/staging/`) while integrity and companion relationships (such as vision `mmproj` files) are confirmed.
+4. **Atomic Promotion:** Promotion from staging to `MODEL_LIBRARY_DIR` is atomic (same-filesystem move/rename) to prevent partially copied files from appearing in the library.
+5. **Registry Synchronization:** The installed manifest (`INSTALLED_REGISTRY_PATH`, `<COMPANION_DATA_ROOT>/library/registry/models.json`) is updated and immediately exposed via `GET /api/v1/models`.
 
-The user should not be forced to manually fill fields that can be safely extracted from the artifact.
+### 16.2 Direct Placement Fallback
+- Direct manual placement of `.gguf` files into `MODEL_LIBRARY_DIR` may remain available as an advanced/developer fallback.
+- The un-registered model scanner inspects and discovers directly placed models using the bounded GGUF header parser without requiring the user to run an import wizard.
 
-Unknown compatible GGUFs must not be rejected merely because they are absent from a factory registry.
+### 16.3 Implementation Status & V1 Boundary
+- `MODEL_LIBRARY_DIR` (`library/models/llm`), `IMPORT_INBOX_DIR`, `IMPORT_STAGING_DIR`, and `INSTALLED_REGISTRY_PATH` (`library/registry/models.json`) are canonically derived by `storage.py` (Phase 8P). Directory creation occurs lazily as required by corresponding feature or startup execution paths.
+- Schema v3 registry and GGUF header extraction are implemented in `model_registry.py`.
+- The controlled local model import pipeline is an architectural **requirement for V1** (Decision D6). The execution service (inbox scanning, staging quarantine, preflight validation, and atomic promotion) represents an **active V1 implementation gap**, not a post-V1 capability.
+- The specific presentation mechanism (e.g., background watcher, import wizard, CLI, API, or other UX) has not been permanently locked; the V1 requirement is the controlled, validated local import capability itself.
+- Managed online model downloading, remote model hub integrations, and background download managers remain deferred post-V1.
 
 ---
 
@@ -1049,15 +1081,19 @@ Unknown compatible GGUFs must not be rejected merely because they are absent fro
 
 Browser security means a normal Web UI should not be granted arbitrary filesystem authority.
 
-For normal/smaller assets:
+If a future Web UI import flow is provided for model assets, it must still route through the canonical Decision D6 inbox-first pipeline:
 
 ```text
 browser file picker
-→ authenticated upload
-→ imports/staging
+→ authenticated bounded upload into IMPORT_INBOX_DIR
+→ preflight
+→ IMPORT_STAGING_DIR
 → validation
-→ persistent library
+→ atomic install
+→ MODEL_LIBRARY_DIR / registry
 ```
+
+The exact importer UX (e.g., file picker upload, folder drop + scan, import wizard, or CLI/API tool) remains an OPEN implementation design under Decision D6. Note: Multimodal image attachments (Phase 8B) operate under their own dedicated chat attachment endpoints and storage directory (`ATTACHMENT_DIR`), completely separate from this model import pipeline.
 
 For very large local GGUF files, a same-PC upload may be inefficient.
 
@@ -1560,13 +1596,13 @@ character names used as backend/product identity
 
 Historical walkthroughs should not be rewritten merely for terminology if doing so would falsify historical evidence.
 
-The master implementation plan should summarize rather than duplicate this entire document.
+Canonical system documentation should summarize rather than duplicate this entire document.
 
 Suggested canonical links:
 
 ```text
-AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md
-    → references this document
+SYSTEM_BASELINE.md & ROADMAP.md
+    → reference this document
 
 LLAMA_CPP_RUNTIME_ARCHITECTURE.md
     → owns current llama.cpp lifecycle/runtime specifics
@@ -1691,7 +1727,7 @@ The locator file contains only `data_root` and `schema_version`. No user content
 
 ## 33.4 Development models vs installed-library migration — Resolved
 
-**Decision:** Development and bootstrap models remain under the existing repository Git/LFS policy. Installed/user-imported models use `COMPANION_DATA_ROOT/library/models/`. The implementation must not change LFS policy, `.gitattributes`, or `.lfsconfig` without explicit user authorization.
+**Decision:** Development and bootstrap models remain under the existing repository Git/LFS policy. Installed/user-imported models use `COMPANION_DATA_ROOT/library/models/llm/`. The implementation must not change LFS policy, `.gitattributes`, or `.lfsconfig` without explicit user authorization.
 
 ---
 

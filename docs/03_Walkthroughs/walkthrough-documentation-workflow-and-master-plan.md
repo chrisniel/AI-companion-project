@@ -1,5 +1,12 @@
 # Walkthrough: Documentation Workflow and Master Plan Reconciliation
 
+
+> [!NOTE]
+> **Historical Delivery Evidence**  
+> This walkthrough records repository state and verification at the time of delivery. It is non-authoritative for current architecture or product scope. At delivery time, the Master Implementation Plan was cited as canonical; active documentation authority is now governed canonically by [`docs/06_Guides/DOCUMENTATION_MAP.md`](../06_Guides/DOCUMENTATION_MAP.md) and [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md).
+
+---
+
 - Purpose: Explain the new documentation organization and identify the authoritative project sources.
 - Audience: User, future developer, AI-assisted development session, and maintainer
 - Status: Verified

@@ -78,27 +78,27 @@ The AI Companion project uses a local build of `llama.cpp` as its primary infere
 
 ## 3. Persistent Router Launch Specification
 
-When the backend initializes the local LLM runtime, it executes `llama-server.exe` with absolute paths:
+When the backend initializes the local LLM runtime, it executes `llama-server.exe` using configured paths:
 
 ```powershell
 runtime\llama.cpp\llama-server.exe `
   --host 127.0.0.1 `
   --port 8085 `
-  --models-dir D:\OtherProjects\AI-companion-project\models `
+  --models-dir <LLAMA_MODELS_DIR> `
   --models-max 1 `
   --sleep-idle-seconds 900 `
   --parallel 1 `
   --no-webui `
   --metrics `
-  --log-file data\llama_server.log
+  --log-file <LOG_FILE_PATH>
 ```
 
 ### Launch Flags & Invariants:
-- `--models-dir`: Absolute path to models root. No relative paths or client-supplied directory traversal.
+- `--models-dir`: Resolved from `settings.LLAMA_MODELS_DIR` (defaults to `<REPO_ROOT>/models/vision`). Absolute path passed to binary; no client-supplied directory traversal.
 - `--models-max 1`: Enforces single-model residency in VRAM.
 - `--sleep-idle-seconds 900`: Configures 15-minute native inactivity sleep.
 - `--no-webui`: Disables embedded upstream HTML interface to ensure FastAPI is the sole frontend gateway.
-- `--log-file`: Logs routed strictly to root `data/llama_server.log` outside `backend/` to prevent WatchFiles hot-reload loops.
+- `--log-file`: Resolved via `settings.DATA_DIR / "llama_server.log"` (conceptually `<COMPANION_DATA_ROOT>/database/llama_server.log`, via the `DATA_DIR` compatibility alias to `DATABASE_DIR`). Logs reside outside `backend/` to prevent WatchFiles hot-reload loops.
 
 ---
 
@@ -151,13 +151,13 @@ The runtime reports normalized semantic states reflecting the true status of bot
 ## 5. Explicit Load / Unload Lifecycle Semantics
 
 ### Explicit Load Flow
-1. Client issues `POST /api/v1/models/load` with `{ "model_name": "Qwen3-VL-4B-Instruct-Q4_K_M.gguf" }`.
+1. Client issues `POST /api/v1/models/load` with `{ "model_name": "Qwen3-VL-4B-Instruct-Q4_K_M.gguf" }` (or a registry model ID).
 2. FastAPI validates:
-   - File exists inside `MODELS_DIR`.
-   - File has valid `.gguf` extension.
-   - Name contains no path traversal sequences (`..`, `/`, `\`).
+   - Traversal-oriented characters (`..`, `/`, `\`) are rejected on `model_name`.
+   - Maps `model_name` to `runtime_id` via `resolve_runtime_model_id()` using registered manifests or configured defaults.
+   *(Note: File existence within `--models-dir`, GGUF binary format validation, and architecture compatibility checks are handled during registry indexing or directly by the upstream `llama-server.exe` daemon).*
 3. State transitions to `MODEL_LOADING`.
-4. FastAPI issues `POST http://127.0.0.1:8085/models/load`.
+4. FastAPI issues `POST http://127.0.0.1:8085/models/load` with `{"model": runtime_id}`.
 5. When the engine responds 200 OK, telemetry probes measure resident VRAM and state transitions to `MODEL_READY`.
 
 ### Explicit Unload Flow
@@ -171,9 +171,16 @@ The runtime reports normalized semantic states reflecting the true status of bot
 ### Scoped Process Termination (Fallback Only)
 If the router becomes totally unresponsive (e.g. driver hang during Vulkan kernel compilation):
 1. Retrieve `self._process.pid` stored during startup.
-2. Verify that the PID matches the Core-owned subprocess handle.
+2. Verify that the PID matches the Local AI Runtime-owned subprocess handle.
 3. Terminate only that PID via `process.kill()` / Win32 `TerminateProcess`.
 4. Reset state to `SERVER_STOPPED`. Never execute `taskkill /IM llama-server.exe /F`.
+
+### 5.4 Model Resolution Nuance: Factory vs. Installed Models
+The codebase maintains a deliberate separation between factory development models and user-installed library models:
+- **Registry Discovery:** `model_registry.py` discovers manifests and GGUF files across both `FACTORY_MODEL_ROOT` (`<REPO_ROOT>/models/`) and `MODEL_LIBRARY_DIR` (`<COMPANION_DATA_ROOT>/library/models/llm`).
+- **Active Router Loader Path:** The managed `llama-server.exe` daemon is launched with `--models-dir settings.LLAMA_MODELS_DIR` (current default: `<REPO_ROOT>/models/vision`). Requests use `resolve_runtime_model_id()` before calling the router `/models/load` endpoint.
+- **In-Process Helper Status:** `_resolve_model_path()` remains present in `llama_cpp.py` as a helper resolving against `settings.MODELS_DIR` (`<REPO_ROOT>/models/`), but no active production call site is currently observed in `LlamaCppProvider`. It must not be treated as the managed-router model-selection path.
+- **Truthful Boundary & V1 Gap:** Installed-library discovery currently exceeds the set of models the managed router daemon can necessarily activate directly without explicit directory alignment. Completing the controlled local model import pipeline (Decision D6) is an architectural **requirement for V1**; its execution service is an **active V1 implementation gap** (not a post-V1 feature). V1 D6 completion must reconcile installed-library activation with the validated import pipeline. Architecture must not pretend the loader already routes to arbitrary installed library paths seamlessly.
 
 ---
 
