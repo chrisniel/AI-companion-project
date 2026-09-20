@@ -1,15 +1,32 @@
-# AI Companion Project — Master Implementation Plan
+# AI Companion Project — Master Implementation Plan (Historical Reference)
 
-> **Project:** AI-companion-project
->
-> **Document role:** Historical master architecture and reference sequencing plan.  
-> **Canonical System Baseline:** See [SYSTEM_BASELINE.md](./SYSTEM_BASELINE.md) for the active normative system baseline, V1 release boundary, and locked decisions D1–D9.  
->
-> **Last updated:** 2026-09-14 (Annotated with Reconciliation Pass R2 baseline link)
->
-> **Purpose:** Self-contained architecture and implementation handoff for repository work, backend integration, model runtime management, and hybrid on-device AI.
->
-> **Current state:** The ecosystem architecture is anchored by a persistent **Local AI Runtime** in `backend/` (FastAPI, SQLite, SQLAlchemy 2, Alembic, 88 passing pytest tests), the PC React control center in `frontend/web/` (TypeScript 5.8, Vite 6, live SSE chat completions, tactile VRAM controls, 132 passing vitest [last verified Phase 8A baseline], migration head `005_scope_message_constraints`), and the native Android companion app in `android/` (17 screens, Jetpack Compose, SoftGlass neumorphic theme engine, AMOLED OLED Battery Saver theme, 110 passing unit tests). Local LLM inference is repository-verified using `llama.cpp` Vulkan build b10936 targeting the AMD RX 580 8 GB VRAM. Phase 8 (frontend architecture, runtime config, multimodal image attachments, polish) is the active delivery sequence. Configuration, persistent storage, model library, and asset-root architecture are defined canonically in `docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`.
+> [!WARNING]
+> **HISTORICAL / NON-AUTHORITATIVE REFERENCE DOCUMENT — PASS R5 ARCHIVAL CANDIDATE**  
+> This document is a **historical master architecture and reference sequencing plan** reflecting mid-September 2026 project drafting. It is **non-authoritative** for active system architecture, product sequencing, or execution tracking:
+> - **Normative System Architecture:** Owned strictly by [`SYSTEM_BASELINE.md`](./SYSTEM_BASELINE.md) and focused domain architecture specifications in `docs/04_Architecture/`.
+> - **Canonical Product & Milestone Roadmap:** Owned strictly by [`docs/02_Planning/ROADMAP.md`](../02_Planning/ROADMAP.md).
+> - **Active Sprint Execution State:** Tracked strictly in [`docs/01_Tracking/task.md`](../01_Tracking/task.md).
+> - **Feature Implementation Details:** Owned by feature-named plans under [`docs/02_Planning/`](../02_Planning/).
+> - **Disposition:** Candidate for archival relocation to `docs/07_Archive/` in Reconciliation Pass R5.
+
+---
+
+## Content Canonicalization & Decomposition Map (Pass R4)
+
+To prevent competing sources of truth, this document's contents have been decomposed into their canonical owners:
+
+| Category | Description | Authoritative Destination / Current Owner |
+| :--- | :--- | :--- |
+| **A. Core System Baseline** | Vision, hardware targets, ecosystem subsystems, V1 scope boundary, acceptance criteria. | [`docs/04_Architecture/SYSTEM_BASELINE.md`](./SYSTEM_BASELINE.md) |
+| **B. Domain Architecture** | Local AI Runtime, model lifecycle, VRAM offload profiles, routing, database schema, storage paths, security model, profile-first memory, voice pipeline, mobile inference evidence. | Focused domain specifications in `docs/04_Architecture/` (`LLAMA_CPP_...`, `AI_COMPANION_RUNTIME_...`, `SECURITY_...`, `MEMORY_...`, `ANDROID_...`, `VOICE_...`). |
+| **C. Product Roadmap** | Delivery milestones, V1 remaining gates, post-V1 tracks, open designs, audit hardening recommendations. | [`docs/02_Planning/ROADMAP.md`](../02_Planning/ROADMAP.md) |
+| **D. Developer & Setup Guidance** | Repository prerequisites, backend/web startup, llama-server relationship, environment configuration. | [`docs/06_Guides/DEVELOPMENT_SETUP.md`](../06_Guides/DEVELOPMENT_SETUP.md) |
+| **E. Testing & CI Guidance** | Backend pytest, frontend vitest, Android gradle tests, OpenAPI verification, CI gate governance. | [`docs/06_Guides/TESTING_AND_CI.md`](../06_Guides/TESTING_AND_CI.md) |
+| **F. Historical Delivery Evidence** | Mid-September UI states, Android UI batches 1–4, point-in-time test numbers. | Preserved in place in this document as historical record. |
+| **G. Unique Unresolved Details** | Exploratory health data schemas, decision test rubric. | Mapped to post-V1 consideration and PR review guidance. |
+| **H. Stale / Superseded Content** | Stale port 8081 manual examples, pre-Phase 8A mock descriptions, Health as V1 path. | Superseded by canonical architecture and locked Decisions D1–D9. |
+
+---
 
 ## Status Vocabulary
 

@@ -1,24 +1,23 @@
 # Phase 8 Implementation Plan — PC Frontend Architecture, Runtime Config, Multimodal & Polish
 
-> **Status:** Phase 8P plan reconciled — awaiting Batch 8P.1 implementation approval
-> **This is the single authoritative version. No supplements. No pass references.**
-> **Canonical reference:** `docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`
+> **Status:** 8A and 8P COMPLETE / VERIFIED. Repository Documentation Reconciliation (Passes R0–R8) is CURRENT GATE (blocking 8B). 8B is NEXT upon clearing the gate. 8C is PLANNED AFTER 8B.  
+> **Authority Precedence:** Normative architecture is owned by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md). Canonical product sequencing is owned by [`docs/02_Planning/ROADMAP.md`](../ROADMAP.md). Runtime config architecture is owned by [`docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../../04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md).  
+> **This is the single authoritative feature implementation plan for Phase 8.**
 
 ---
 
 ## Branch Strategy
 
-develop (baseline: 88 backend pytest, 132 frontend vitest [last verified Phase 8A baseline], 0 tsc, migration head 005_scope_message_constraints)
-  +-- feature/phase8-ui-foundation           (8A: frontend-only, zero backend schema changes)
-        merge to develop
-  +-- feature/phase8-runtime-config          (8P: config, terminology, schema v3, data root)
-        based on merged 8A; merge to develop
-  +-- feature/multimodal-image-attachments   (8B: full stack, depends on 8P ATTACHMENT_DIR)
-        based on merged 8P; merge to develop
-  +-- feature/phase8-ui-integration-polish   (8C: polish, cleanup, final tests)
+develop (baseline: 88 backend pytest, 132 frontend vitest, 0 tsc, migration head 005_scope_message_constraints)
+  +-- feature/phase8-ui-foundation           (8A: COMPLETE / VERIFIED — merged to develop)
+  +-- feature/phase8-runtime-config          (8P: COMPLETE / VERIFIED — merged to develop)
+  +-- [GATE: Documentation Reconciliation]   (R0–R8: CURRENT GATE — blocks Phase 8B)
+  +-- feature/multimodal-image-attachments   (8B: NEXT — full stack image upload & vision inference)
+        based on develop; merge to develop
+  +-- feature/phase8-ui-integration-polish   (8C: PLANNED AFTER 8B — polish, a11y, cleanup)
         based on merged 8B
 
-8P precedes 8B: 8B writes to COMPANION_DATA_ROOT/attachments/ -- 8P must establish that path first.
+8P established canonical COMPANION_DATA_ROOT/attachments/. 8B activates image uploads to that directory upon completion of documentation reconciliation.
 
 ---
 
