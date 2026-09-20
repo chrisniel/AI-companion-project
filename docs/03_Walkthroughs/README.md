@@ -12,7 +12,7 @@
 - **Source Code Establishes Reality:** Current system behavior must be verified against active source code (`backend/`, `frontend/web/`, `android/`) and automated test suites.
 - **Canonical Architecture:** Authoritative technical specifications reside exclusively in [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md) and domain specifications.
 - **Point-in-Time Status & Test Counts:** Delivery statuses (e.g. "Implemented & Verified") and test suite numbers (e.g. 110, 115, 122 tests) reflect the test suite at delivery date, not current active baselines.
-- **Retired Terminology:** Walkthroughs may contain superseded terminology (e.g., "Local AI Core", "Core-owned PID", older master-plan references). These are preserved intentionally as immutable forensic evidence.
+- **Retired Terminology:** Walkthroughs may contain superseded terminology (e.g., "Local AI Core", "Core-owned PID", older master-plan references). These are preserved intentionally as point-in-time historical evidence; navigation and authority metadata may be maintained without rewriting the substantive historical record.
 
 ---
 
