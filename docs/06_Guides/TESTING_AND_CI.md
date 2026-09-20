@@ -13,7 +13,7 @@ The AI Companion project maintains a strict test-first verification discipline. 
 ### Verified Test Suites & Last Verified Baselines
 
 > [!NOTE]
-> **Baseline Attribution:** The passing test counts below represent the last formally executed and verified repository baselines (established during Phase 8 / 8P deliveries). Documentation reconciliation passes (R0–R8) operate under read-only mode and do not freshly execute complete test suites.
+> **Baseline Attribution:** The passing test counts below represent the last formally executed delivery baselines (established during Phase 8 / 8P deliveries). Reconciliation passes R0–R7 did not establish a new full-suite test baseline unless a specific pass explicitly executed one. Existing counts remain the last formally executed delivery baselines until Pass R8 final verification.
 
 | Subsystem | Test Framework | Test Location | Last Verified Baseline | Primary Scope |
 | :--- | :--- | :--- | :--- | :--- |

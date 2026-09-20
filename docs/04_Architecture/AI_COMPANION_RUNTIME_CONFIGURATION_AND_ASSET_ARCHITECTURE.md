@@ -1081,15 +1081,19 @@ User / Import Source
 
 Browser security means a normal Web UI should not be granted arbitrary filesystem authority.
 
-For normal/smaller assets:
+If a future Web UI import flow is provided for model assets, it must still route through the canonical Decision D6 inbox-first pipeline:
 
 ```text
 browser file picker
-→ authenticated upload
-→ imports/staging
+→ authenticated bounded upload into IMPORT_INBOX_DIR
+→ preflight
+→ IMPORT_STAGING_DIR
 → validation
-→ persistent library
+→ atomic install
+→ MODEL_LIBRARY_DIR / registry
 ```
+
+The exact importer UX (e.g., file picker upload, folder drop + scan, import wizard, or CLI/API tool) remains an OPEN implementation design under Decision D6. Note: Multimodal image attachments (Phase 8B) operate under their own dedicated chat attachment endpoints and storage directory (`ATTACHMENT_DIR`), completely separate from this model import pipeline.
 
 For very large local GGUF files, a same-PC upload may be inefficient.
 
@@ -1592,13 +1596,13 @@ character names used as backend/product identity
 
 Historical walkthroughs should not be rewritten merely for terminology if doing so would falsify historical evidence.
 
-The master implementation plan should summarize rather than duplicate this entire document.
+Canonical system documentation should summarize rather than duplicate this entire document.
 
 Suggested canonical links:
 
 ```text
-AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md
-    → references this document
+SYSTEM_BASELINE.md & ROADMAP.md
+    → reference this document
 
 LLAMA_CPP_RUNTIME_ARCHITECTURE.md
     → owns current llama.cpp lifecycle/runtime specifics

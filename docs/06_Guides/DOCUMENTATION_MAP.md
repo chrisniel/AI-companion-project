@@ -1,7 +1,7 @@
 # Documentation Authority Model & Repository Navigation Map
 
-> **Document Role:** Canonical entry-point guide for all human contributors and AI agents.  
-> **Status:** Active Canonical  
+> **Document Role:** Canonical entry-point guide for all human contributors and AI agents.
+> **Status:** Active Canonical
 > **Last Updated:** 2026-09-21 (Reconciliation Pass R5)
 
 ---
@@ -12,7 +12,7 @@ New contributors and AI agents must navigate the repository through this explici
 
 ```text
 AGENTS.md
-  │  (Process rules, token boundaries, git constraints)
+  │  (Process rules, token boundaries, user-owned git constraints)
   ▼
 docs/06_Guides/DOCUMENTATION_MAP.md  [YOU ARE HERE]
   │  (Authority model, question-type routing, directory roles)
@@ -20,16 +20,24 @@ docs/06_Guides/DOCUMENTATION_MAP.md  [YOU ARE HERE]
 docs/04_Architecture/SYSTEM_BASELINE.md
   │  (Product identity, V1 boundary, host topology, locked D1–D9 decisions)
   ▼
-docs/02_Planning/ROADMAP.md (when product sequencing or delivery milestones matter)
+docs/02_Planning/ROADMAP.md
+  │  (Consulted only when sequencing / release scope / milestone ownership matters)
   ▼
-Domain Architecture / ADRs (as relevant to task)
-  │  (docs/04_Architecture/LLAMA_CPP_*, VOICE_*, decisions/ADR-*)
+Relevant Domain Architecture & Accepted ADR(s)
+  │  (Load only the domain relevant to active task, e.g., LLAMA_CPP_*, VOICE_*, SECURITY_*)
   ▼
-docs/01_Tracking/task.md  ──►  docs/02_Planning/plan-*.md
-  (Current sprint & state)       (Task-specific implementation plan)
+docs/01_Tracking/task.md
+  │  (Active sprint, current state, immediate blockers)
+  ▼
+Relevant ACTIVE Implementation Plan
+  (Located via docs/02_Planning/ index, e.g., in phase-08/ or feature plan)
 ```
 
-The reader does **not** need to consume giant historical master plans, retrospective audits, walkthroughs, or old drafts to understand current system architecture.
+> [!IMPORTANT]
+> **Context & Reality Invariants:**
+> - **SOURCE / TESTS** remain authoritative for implemented reality. Implementation reality must never be invented from documentation.
+> - **Historical Context Discipline:** Historical walkthroughs (`docs/03_Walkthroughs/`), archives (`docs/07_Archive/`), completed task checklists (`docs/01_Tracking/archive/`), working drafts (`docs/00_Drafts/`), and the historical Master Implementation Plan are **NOT** normal startup context.
+> - **Domain Focus:** Do not require an AI agent to load every domain architecture document; load only the specific domain specification relevant to the task.
 
 ---
 
@@ -80,7 +88,7 @@ When seeking the authoritative answer to a question, consult documents in the fo
 Historical documentation does not override normative architecture. However, when conflicts arise across layers, apply this nuanced rule:
 
 > [!CAUTION]
-> If historical evidence, implementation reality, and canonical architecture conflict, **do not blindly declare that "canonical architecture always wins."**  
+> If historical evidence, implementation reality, and canonical architecture conflict, **do not blindly declare that "canonical architecture always wins."**
 > Such a conflict must trigger an explicit reconciliation step:
 > - **Source code** establishes what is *currently implemented*.
 > - **Canonical architecture** establishes the *intended normative design*.
@@ -96,9 +104,9 @@ Per `AGENTS.md`, all documentation directories adhere to a zero-padded two-digit
 
 | Directory | Canonical Status | Role & Content | AI Default Context Rule |
 | :--- | :--- | :--- | :--- |
-| `docs/00_Drafts/` | **Non-Canonical** | Raw ideas, scratchpads, unreviewed notes, forensic audits. | **Strictly ignored** unless explicitly requested by user. |
+| `docs/00_Drafts/` | **Non-Canonical** | Raw ideas, scratchpads, unreviewed working notes (forensic audits archived to `docs/07_Archive/audits/`). | **Strictly ignored** unless explicitly requested by user. |
 | `docs/01_Tracking/` | **Canonical (Execution)** | Active `task.md` (target < 80 lines) and per-feature `archive/`. | Active `task.md` read on resume; `archive/` ignored. |
-| `docs/02_Planning/` | **Canonical (Planning)** | Canonical `ROADMAP.md`, planning catalog, feature plans (`plan-[feature].md`), and post-V1 sources (`post-v1/`). | Active plan read during planning; ignored during execution. |
+| `docs/02_Planning/` | **Canonical (Planning)** | Canonical `ROADMAP.md`, planning catalog, feature plans (in root or nested hubs like `phase-08/`), and post-V1 sources (`post-v1/`). | Active plan read during planning; ignored during execution. |
 | `docs/03_Walkthroughs/` | **Historical Evidence** | Verified delivery explanations and developer handoffs (7-section format); indexed in [`README.md`](../03_Walkthroughs/README.md). | Ignored unless investigating PR implementation history. |
 | `docs/04_Architecture/` | **Canonical (Normative)** | System baseline, core contracts, API schemas, ADRs (`decisions/`). | Read on demand when relevant to active domain. |
 | `docs/05_Design/` | **Canonical (Design)** | Product UI/UX, wireframes, character visual specs, narrative guides. | Read on demand when building frontend/mobile UI. |
@@ -106,7 +114,7 @@ Per `AGENTS.md`, all documentation directories adhere to a zero-padded two-digit
 | `docs/07_Archive/` | **Historical Reference** | Superseded drafts, old audits, deprecated documentation. | **Strictly ignored** unless performing a retrospective. |
 
 ### Permanent Exception
-- `docs/ProjectWorkflowStarterKit/` is a user-owned permanent starter reference and is exempt from the numbered layout. It must never be moved, rewritten, deleted, or loaded into AI agent context.
+- `docs/ProjectWorkflowStarterKit/` is a user-owned permanent starter reference and is exempt from the numbered layout. It is ignored by default and protected from modification; it may be inspected only when Chris explicitly asks about the StarterKit.
 
 ---
 
@@ -114,17 +122,17 @@ Per `AGENTS.md`, all documentation directories adhere to a zero-padded two-digit
 
 The following documents exist for historical, forensic, or template purposes and must **never** be treated as normative product or architectural authority:
 
-1. **`docs/00_Drafts/09-16-2026-roadmap.md`**  
+1. **`docs/00_Drafts/09-16-2026-roadmap.md`**
    An old user-authored working draft. It contains historical brainstorms and table status markers, but is non-normative and superseded by `docs/04_Architecture/SYSTEM_BASELINE.md` and `docs/02_Planning/ROADMAP.md`.
-2. **`docs/07_Archive/audits/REPOSITORY_DOCUMENTATION_RECONCILIATION_AUDIT.md`**  
+2. **`docs/07_Archive/audits/REPOSITORY_DOCUMENTATION_RECONCILIATION_AUDIT.md`**
    A forensic reconciliation audit document (Pass R0–R1). It records diagnostic evidence and reconciliation history, but the resulting decisions are codified in `SYSTEM_BASELINE.md`.
-3. **`docs/07_Archive/reference/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md`**  
+3. **`docs/07_Archive/reference/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md`**
    Historical reference master plan. Decomposed in Pass R4 into canonical architecture and `docs/02_Planning/ROADMAP.md`; archived in Pass R5 as historical reference material.
-4. **Historical Walkthroughs (`docs/03_Walkthroughs/*`)**  
+4. **Historical Walkthroughs (`docs/03_Walkthroughs/*`)**
    Walkthroughs are point-in-time snapshots explaining specific past PR deliveries. They do not reflect subsequent refactors or active system architecture. See the historical navigation index in [`docs/03_Walkthroughs/README.md`](../03_Walkthroughs/README.md).
-5. **Archived Task Files (`docs/01_Tracking/archive/*`)**  
+5. **Archived Task Files (`docs/01_Tracking/archive/*`)**
    Completed sprint checklists preserved for tracking continuity only.
-6. **Starter Reference (`docs/ProjectWorkflowStarterKit/*`)**  
+6. **Starter Reference (`docs/ProjectWorkflowStarterKit/*`)**
    Reusable workflow templates, not active project documentation.
 
 ---
@@ -147,5 +155,16 @@ When investigating specific questions or subsystems, consult the dedicated canon
 | **"Who owns memory and character data? How does scoping work?"** | [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../04_Architecture/MEMORY_AND_CHARACTER_ARCHITECTURE.md) | Profile-first memory, `PROFILE` vs `CHARACTER` scopes, SQLite+FTS5, persona boundaries. |
 | **"How will Android connected and offline modes work?"** | [`ANDROID_COMPANION_ARCHITECTURE.md`](../04_Architecture/ANDROID_COMPANION_ARCHITECTURE.md) | `com.cnl.aicompanion`, Connected vs Offline Mode, Dimensity 920 inference evidence. |
 | **"How will voice and audio processing work?"** | [`VOICE_AND_AUDIO_ARCHITECTURE.md`](../04_Architecture/VOICE_AND_AUDIO_ARCHITECTURE.md) | CPU-first speech execution, `TTSProvider` candidates (Kokoro, Piper, KittenTTS), post-V1. |
+
+---
+
+## 7. Component Quickstarts (Operational Subsystem Orientation)
+
+Component READMEs provide operational quickstarts and local directory orientation. They are operational entry points, **not** normative architecture authorities:
+
+- **Root [`README.md`](../../README.md):** Repository-level orientation, conceptual product topology, and directory roadmap.
+- **Backend [`backend/README.md`](../../backend/README.md):** Local AI Runtime FastAPI developer quickstart and local service startup.
+- **Frontend [`frontend/web/README.md`](../../frontend/web/README.md):** React Web desktop control center quickstart, build commands, and local dev server.
+- **Android [`android/README.md`](../../android/README.md):** Android companion prototype quickstart, Gradle verification, and build targets.
 
 

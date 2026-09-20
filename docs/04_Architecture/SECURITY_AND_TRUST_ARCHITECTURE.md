@@ -1,7 +1,7 @@
 # AI Companion — Security and Trust Architecture Specification
 
-> **Document Role:** Canonical architecture specification for authentication, device trust, network boundaries, and tool security.  
-> **Status:** Active Canonical (Decisions D4, D5, D9 Locked)  
+> **Document Role:** Canonical architecture specification for authentication, device trust, network boundaries, and tool security.
+> **Status:** Active Canonical (Decisions D4, D5, D9 Locked)
 > **Last Updated:** 2026-09-21 (Reconciliation Pass R3.2)
 
 ---
@@ -112,11 +112,15 @@ V1 network connectivity is strictly bounded to three trusted topologies:
 - Direct UPnP or unsolicited public port binding is prohibited.
 - Future controlled public access may evaluate Cloudflare HTTPS / edge services, but transport encryption never replaces application-level authentication.
 
-### 4.3 Three-Tier Trust Model
-All remote requests must satisfy three sequential, independent verification gates:
-$$\text{Tier 1: Network / Transport Trust (Tailscale / TLS)} \longrightarrow \text{Tier 2: Trusted-Device Authentication (Revocable Credential)} \longrightarrow \text{Tier 3: Profile Authorization}$$
+### 4.3 Three-Tier Trust Model (Target Architecture vs. Current Reality)
+In the target multi-device architecture (Decisions D4 & D5), all remote requests must satisfy three sequential, independent verification gates:
+$$\text{Tier 1: Network / Transport Trust (trusted LAN / Tailscale mesh; app-layer TLS where applicable)} \longrightarrow \text{Tier 2: Trusted-Device Auth (Revocable Credential)} \longrightarrow \text{Tier 3: Profile Auth}$$
 
-Network proximity, VPN presence, or private IP addresses never substitute for device authentication or profile authorization.
+> [!IMPORTANT]
+> **Current vs. Target Implementation State:**
+> - **Current Repository Reality:** The active codebase uses a single shared application pairing token (`COMPANION_API_KEY`) across all clients.
+> - **Target D4/D5 Model:** Independent revocable per-device credentials, client Keystore storage, and multi-device identity separation are planned future targets.
+> - **Transport Boundary:** Network proximity, VPN/Tailscale presence, or private IP addresses never substitute for application-level authentication. Exact application-layer TLS and certificate enrollment mechanisms remain an open implementation design where applicable; direct public exposure is excluded from V1.
 
 ---
 
@@ -144,7 +148,7 @@ The policy engine operates under an immutable **DEFAULT DENY** posture.
 - **Prompt Injection Defense:** Untrusted user prompt content cannot elevate execution privileges or override system risk policies.
 - **Untrusted Web Content & Prompt Injection Isolation:** External web pages, search snippets, and API responses fetched during tool execution are explicitly framed and isolated outside the model loop as **UNTRUSTED DATA**. Sanitization may be applied for parsing, HTML stripping, or rendering safety, but sanitization is **not** the prompt-injection defense boundary. The deterministic permission and policy engine exists completely outside model-generated text and remains authoritative even if the model is manipulated or injected.
 - **Prohibited Generic Capabilities (Risk 3):** Generic privileged, destructive, or security-sensitive capabilities (such as arbitrary shell execution, unrestricted filesystem mutations, credential access, raw OS/device administration, or network reconfiguration) are strictly **prohibited by default** and are never exposed as generic assistant tools. A generic command shell does not become available merely because the user confirms a prompt. Any future elevated action requires a separately designed narrow interface, explicit user authorization, strictly bounded scope, and appropriate expiration/revocation.
-- **Auditable Logging & Privacy:** Sensitive or state-changing tool executions (Risk 1+) produce structured, persistent diagnostic logs recording appropriate metadata (tool/action, profile, device/source, risk classification, confirmation state, outcome, and timestamp/correlation ID). To protect user privacy, audit logs must **not** indiscriminately record full parameters, sensitive personal payloads, credentials, secrets, or full request bodies unless an explicit future design mandates it.
+- **Auditable Logging & Privacy:** Security-sensitive and state-changing actions (Risk 1+) must be auditable by construction, recording appropriate metadata (action type, profile, device origin, risk level, confirmation state, outcome, timestamp/request ID). The permanent retention duration, exact database table/schema, exact persisted fields, and whether all Risk 1 events use identical persistence mechanics remain open future implementation designs. To protect user privacy, audit logging must **not** indiscriminately record raw parameter blobs, sensitive user payloads, credentials, or private message bodies unless an explicit future security policy requires it.
 
 ---
 

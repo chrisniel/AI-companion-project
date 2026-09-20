@@ -21,19 +21,24 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | **Pass R3 / R3.1 / R3.2: Domain Architecture** | `COMPLETE / VERIFIED` | Domain specifications created, baseline slimmed, precision reconciled (`ecca717`, `361e6e9`, `3abd91a`). |
 | **Pass R4 / R4.1 / R4.2: Planning & Guides** | `COMPLETE / VERIFIED` | Canonical ROADMAP, master plan decomposition, dev/test guides, and active-state truthfulness sweep (`7eabc5f`). |
 | **Pass R5 / R5.1 / R5.2: Archival & Android Truth** | `COMPLETE / VERIFIED` | Archived historical plans, walkthrough indexing, Android connectivity & network source truth reconciled (`7832e9d`). |
-| **Pass R6: Local DB & Legacy Audit** | `NEXT` | Local dev database health, schema inspection, legacy cleanup. |
-| **Pass R7–R8: Verification & Signoff** | `QUEUED` | Final link and consistency sweeps, Phase 8B unblocking sign-off. |
-| **Phase 8B: Multimodal Vision** | `BLOCKED` | Next engineering milestone upon reconciliation sign-off. |
+| **Pass R6 / R6A / R6B: Data Audit & Cleanup** | `COMPLETE / VERIFIED` | Read-only storage audit, logical backups created, local legacy databases cleaned. |
+| **Pass R7: Active Docs & Routing Finalization** | `COMPLETE / VERIFIED` | Authority routing, Git governance, component quickstarts, precision reconciled. |
+| **Pass R8: Final Baseline Verification & Signoff** | `NEXT` | Full test execution (88/132/110), OpenAPI verification, Phase 8B unblocking. |
+| **Phase 8B: Multimodal Vision** | `BLOCKED` | Next engineering milestone upon Pass R8 sign-off. |
 
 ---
 
-## Active Checklist — Pass R5.2 (Android Network Source-Truth Micro-Correction)
+## Active Checklist — Pass R7 (Active Documentation, Cross-Reference & Routing Finalization)
 
-- [x] Deliverable 1: Source verification of Android `network_security_config.xml` (`<base-config cleartextTrafficPermitted="true">`).
-- [x] Deliverable 2: Update [`docs/04_Architecture/ANDROID_COMPANION_ARCHITECTURE.md`](../04_Architecture/ANDROID_COMPANION_ARCHITECTURE.md) to truthfully reflect global cleartext base-config while keeping production D4/D5 transport hardening open (no premature certificate pinning lock).
-- [x] Deliverable 3: Update [`docs/03_Walkthroughs/README.md`](../03_Walkthroughs/README.md) to replace "immutable forensic evidence" with maintainable point-in-time evidence phrasing.
-- [x] Deliverable 4: Verify report-only discrepancies (POST `/api/v1/auth/verify`, `PREFS_NAME = "app_connection_prefs"`).
-- [x] Deliverable 5: Validate repository-relative links and confirm zero source code or protected file mutations.
+- [x] Deliverable 1: Align `AGENTS.md` and `CONTRIBUTING.md` with user-owned Git operations and canonical routing.
+- [x] Deliverable 2: Reconcile `DOCUMENTATION_MAP.md` routing, 00_Drafts role, StarterKit rules, and component quickstarts.
+- [x] Deliverable 3: Correct root `README.md` transport (`HTTP / SSE`) and refine Local AI Runtime ownership.
+- [x] Deliverable 4: Reconcile `android/README.md` (retire Local AI Core, prototype vs post-V1 production truth).
+- [x] Deliverable 5: Reconcile `backend/README.md` (Python 3.11, implemented controls, lifespan schema prep).
+- [x] Deliverable 6: Rewrite `frontend/web/README.md` (purge AI Studio boilerplate, provide clean React Web quickstart).
+- [x] Deliverable 7: Modernize `PROJECT_INPUTS_CHECKLIST.md` and prune resolved decisions.
+- [x] Deliverable 8: Precision sweep on `SYSTEM_BASELINE.md` (D2), `SECURITY_AND_TRUST_ARCHITECTURE.md`, `AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md` (D6 inbox flow), and `VOICE_AND_AUDIO_ARCHITECTURE.md`.
+- [x] Deliverable 9: Global cross-reference and repository-relative link validation (0 broken links in active docs).
 
 ---
 

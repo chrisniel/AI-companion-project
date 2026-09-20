@@ -19,9 +19,9 @@
 The AI Companion voice architecture enables fluid, multilingual spoken conversation across Windows PC and Android. It maintains five non-negotiable architectural principles:
 
 1. **CPU-First Speech Execution:** Speech processing (VAD, STT, TTS, Wake Word, and Speaker ID) runs primarily on CPU/RAM. The 8 GB VRAM on the Aisurix RX 580 is reserved almost exclusively for the active generative LLM/VLM (`--models-max 1`). Speech models must never casually compete with the primary model for VRAM.
-2. **Provider Independence:** Every voice component implements a clean Python interface (`AudioDeviceManager`, `VADProvider`, `STTProvider`, `TTSProvider`, `WakeWordProvider`). No engine or vendor library is hardcoded into Core application logic.
+2. **Provider Independence:** Every voice component implements a clean Python interface (`AudioDeviceManager`, `VADProvider`, `STTProvider`, `TTSProvider`, `WakeWordProvider`). No engine or vendor library is hardcoded into Local AI Runtime application logic. Provider names (Kokoro, Piper, KittenTTS, Whisper-family, Silero) remain candidates rather than permanent defaults.
 3. **Local-First & On-Device by Default:** Spoken conversations are synthesized and transcribed locally without cloud speech APIs unless the user explicitly configures an external provider. Speech processing runs locally on the PC host when the PC serves the interaction, or on-device in Android Offline Mode where hardware permits. The non-negotiable invariant is local/on-device processing by default, with no cloud speech transmission unless explicitly configured and authorized.
-4. **Privacy & Zero Audio Retention by Default:** Audio PCM buffers are ephemeral, streamed in memory, and immediately discarded after processing. No raw audio recordings or voice transcripts are persisted to disk unless the user explicitly enables debug logging.
+4. **Privacy & Zero Audio Retention Target (Future Architectural Policy):** As a future architectural policy and default target, audio PCM buffers are designed to be ephemeral, streamed in memory, and discarded immediately after processing, with no raw audio recordings persisted to disk by default. (Note: Specific transcript retention settings, debug capture retention, opt-in recording lifecycle, and cleanup duration remain open future implementation designs; the architectural invariant is privacy-first default with no unconsented raw audio retention).
 5. **Multilingual Parity:** The pipeline explicitly measures and reports speech capability across English, Filipino / Tagalog, Japanese, and conversational code-switching.
 
 ---
@@ -315,14 +315,14 @@ Opus Audio Encoder (Android Client)
        │ Encrypted Streaming Transport via Tailscale
        │ (UDP / WebSocket — PROPOSED / TO BE VALIDATED)
        ▼
-Opus Audio Decoder (FastAPI Core Gateway)
+Opus Audio Decoder (FastAPI / Local AI Runtime Gateway)
        │
        ▼
 AudioDeviceManager (Virtual Network Stream)
        │
        ▼ Core Pipeline: VAD → STT → LLM → TTS
        │
-Opus Audio Encoder (FastAPI Core Gateway)
+Opus Audio Encoder (FastAPI / Local AI Runtime Gateway)
        │ Encrypted Return Stream
        ▼
 Android Companion Audio Sinks (Phone Speaker / Earbud)

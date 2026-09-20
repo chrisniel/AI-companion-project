@@ -74,7 +74,7 @@ AI Companion **V1** is defined as the first complete, stable, **PC-hosted releas
                                    └───────────────────────┘
 ```
 
-- **Windows Host Process (D2):** The Local AI Runtime runs as an independent Windows host process decoupled from browser tab lifetime. Closing the React Web tab never terminates backend inference, database transactions, or tasks. React Web is the primary V1 UI; native desktop shells (e.g., Tauri) are deferred post-V1.
+- **Windows Host Process (D2):** The Local AI Runtime runs as an independent Windows host process decoupled from browser tab lifetime; closing the browser does not define or terminate the backend host process. (Note: Decision D2 guarantees independent host process lifetime; it does not guarantee that a specific active in-flight HTTP/SSE request survives client disconnection, and the exact Windows background launch mechanism remains an open future implementation design). React Web is the primary V1 UI; native desktop shells (e.g., Tauri) are deferred post-V1.
 - **Remote Access Trust Boundary (D5):** Network access is restricted to `localhost`, trusted LAN bindings, and Tailscale private mesh networks. Public internet exposure and port forwarding are not supported for V1. Details: [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md).
 
 ---

@@ -18,12 +18,12 @@ Configure project-specific paths and boundaries in the Project Profile below. If
 - Changelog File: CHANGELOG.md
 - Documentation Map: docs/06_Guides/DOCUMENTATION_MAP.md
 - Canonical Architecture Document: docs/04_Architecture/SYSTEM_BASELINE.md
-- Master Reference Plan: docs/07_Archive/reference/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md
+- Historical Reference Plan (Non-Authoritative): docs/07_Archive/reference/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md
 - Primary Tech Stack: React 19, TypeScript 5.8, Vite 6, Tailwind CSS 4; Kotlin, Jetpack Compose for Android; Python, FastAPI, SQLAlchemy 2, Alembic, SQLite/FTS5; llama.cpp / ONNX Runtime
 - Execution Mode: Read-only by default; inspect and report unless the user explicitly authorizes the specific edit or other state-changing action
 - Major Change Commit Policy: Every completed major change must be committed as one coherent user-owned Git commit; the AI supplies a proposed commit message, while the user manually reviews, commits, and pushes
 - Manual Verification Areas: Responsive desktop UI, themes and accessibility, Windows runtime behavior, RX 580 model benchmarks, microphone/Bluetooth audio, Android physical-device behavior, alarms, Health Connect, and remote authentication
-- Protected Boundaries: Preserve uncommitted user work; never expose secrets; do not alter Git/LFS policy, external services, dependencies, remotes, or source code without an approved task-specific plan. Creating dedicated feature/fix branches for task isolation is explicitly permitted.
+- Protected Boundaries: Preserve uncommitted user work; never expose secrets; do not alter Git/LFS policy, external services, dependencies, remotes, or source code without an approved task-specific plan. SYSTEM_BASELINE.md, ROADMAP.md, and domain architecture own canonical technical truth.
 
 ---
 
@@ -45,6 +45,7 @@ Configure project-specific paths and boundaries in the Project Profile below. If
 
 - `docs/00_Drafts/` is strictly ignored by default: Never read, scan, or load files in `docs/00_Drafts/` into context unless the user explicitly prompts to inspect a specific draft.
 - `docs/07_Archive/` and the `docs/01_Tracking/archive/` directory are strictly ignored: Never load historical archives into context unless explicitly asked to perform a retrospective.
+- `docs/03_Walkthroughs/` is historical evidence and ignored during normal startup context: Walkthroughs record point-in-time delivery evidence and should only be consulted for regression investigation, delivery provenance, historical implementation reasoning, or explicit retrospective requests. The reusable walkthrough template may be consulted when authoring a new walkthrough.
 - `CHANGELOG.md` is append-only: Never read the full changelog history into context. Read only the top 15 lines if needed to match entry formatting.
 - Technical specs in `docs/04_Architecture/` and design specs in `docs/05_Design/` remain accessible on demand when relevant to the active task.
 - If `.aiignore`, `.cursorignore`, or `.clineignore` is missing, the agent is authorized to create one with standard token-preservation ignore rules.
@@ -68,7 +69,7 @@ Configure project-specific paths and boundaries in the Project Profile below. If
 
 - Multi-Developer Concurrency: When working concurrently across a team, active tasks must be maintained on dedicated feature branches (e.g., `feature/[feature-name]`).
 - Each feature branch owns its active `task.md`. When a feature is completed and merged to main via pull request, its verified tasks are archived into `docs/01_Tracking/archive/`, leaving the `task.md` on main clean for the next sprint.
-- Autonomous Branch Creation: The AI agent is authorized to create and switch to a new dedicated feature or fix branch (e.g., `feature/[feature-name]` or `fix/[fix-name]`) whenever applicable to isolate task work, without needing separate user permission before creating the branch.
+- User-Owned Git Operations: Chris performs all Git branch and checkout operations manually. The AI agent may suggest branch names and checkout commands for task isolation, but must never execute branch creation, deletion, or switching commands autonomously.
 
 ## 6. Append-Only Changelog (CHANGELOG.md)
 
@@ -92,7 +93,9 @@ Configure project-specific paths and boundaries in the Project Profile below. If
 
 ## 8. Single Source of Truth & Documentation Alignment
 
-- Canonical entry-point sequence: Start with [AGENTS.md](AGENTS.md) -> [DOCUMENTATION_MAP.md](docs/06_Guides/DOCUMENTATION_MAP.md) -> [SYSTEM_BASELINE.md](docs/04_Architecture/SYSTEM_BASELINE.md) -> domain architecture / ADRs -> active [task.md](docs/01_Tracking/task.md).
+- Canonical entry-point sequence: Start with [AGENTS.md](AGENTS.md) -> [DOCUMENTATION_MAP.md](docs/06_Guides/DOCUMENTATION_MAP.md) -> [SYSTEM_BASELINE.md](docs/04_Architecture/SYSTEM_BASELINE.md) -> [ROADMAP.md](docs/02_Planning/ROADMAP.md) (only when sequencing / release scope / milestone ownership matters) -> relevant domain architecture and accepted ADR(s) -> active [task.md](docs/01_Tracking/task.md) -> relevant ACTIVE implementation plan.
+- Implemented Reality: Source code and automated test suites remain authoritative for implemented reality.
+- Context Discipline: Historical walkthroughs, archives, completed tasks, drafts, and the historical Master Implementation Plan are NOT normal startup context. Do not require loading every domain architecture document; load only the specific domain relevant to the task.
 - When contracts, APIs, configurations, or behaviors change, update the closest canonical document in the same delivery.
 - Prefer linking or referring to canonical documents over duplicating content across multiple markdown files.
 - Treat drafts, legacy notes, and attached documents as reference material unless explicitly approved as current requirements.
@@ -125,7 +128,7 @@ Configure project-specific paths and boundaries in the Project Profile below. If
 
 ## 13. Git & External Boundary Protections
 
-- Do not execute git add, git commit, git push, tag creation, or pull request commands unless the user explicitly authorizes that specific command. Branch creation and checkout for task isolation (e.g., `git checkout -b feature/...` or `git switch -c fix/...`) are explicitly authorized when starting new tasks or features.
+- User-Owned Git Authority: Do not execute git add, git commit, git push, git merge, git rebase, git branch, git checkout, git switch, git tag, git stash, git reset, git restore, or pull request operations. Chris performs all Git operations manually. The AI agent may inspect Git state, inspect diffs/history, suggest branch names, suggest commands, and supply proposed Conventional Commit messages.
 - Stop after verification and provide the user with a concise Conventional Commit-style message describing the delivered scope. The user manually reviews, commits, and pushes.
 - Treat external repositories, package caches, and system paths outside the workspace as strictly read-only.
 - Resolve exact target paths before executing any file deletion or overwrite.

@@ -1,7 +1,7 @@
 # Development Setup & Local Environment Guide
 
-> **Document Role:** Canonical developer setup and environment configuration guide.  
-> **Status:** Active Canonical Guide  
+> **Document Role:** Canonical developer setup and environment configuration guide.
+> **Status:** Active Canonical Guide
 > **Last Updated:** 2026-09-21 (Reconciliation Pass R4)
 
 ---
@@ -100,14 +100,14 @@ python -m venv .venv
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 
-# 4. Run database migrations to current schema head
-alembic upgrade head
-
-# 5. Start the FastAPI development server
+# 4. Start the FastAPI development server (lifespan automatically prepares database schema)
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-- **Interactive API Documentation:** `http://127.0.0.1:8000/docs` (Swagger UI)
+> [!NOTE]
+> **Automatic Schema Preparation:** The FastAPI application lifespan automatically runs storage preflight and executes schema preparation to ensure the canonical database is at the current Alembic revision head upon server startup. Explicitly running `alembic upgrade head` is an optional developer command useful when authoring or verifying new migrations.
+
+- **Interactive API Documentation:** `http://127.0.0.1:8000/docs` (Swagger UI; available when `ENVIRONMENT=development`)
 - **OpenAPI JSON Specification:** `http://127.0.0.1:8000/openapi.json`
 - **Public Health Endpoint:** `http://127.0.0.1:8000/api/v1/health` (unauthenticated liveness probe)
 - **Protected System Status:** `http://127.0.0.1:8000/api/v1/system/status` (requires `COMPANION_API_KEY`)
@@ -166,8 +166,8 @@ For benchmarking or verifying GPU layers without starting the full FastAPI backe
 The Android companion client is maintained in `android/`:
 
 > [!NOTE]
-> **Android Package Identity Reality:**  
-> The current mobile prototype code still uses legacy/template identifiers (`namespace = "com.example"`, `applicationId = "com.aistudio.localcore.swbjtu"` in `android/app/build.gradle.kts`).  
+> **Android Package Identity Reality:**
+> The current mobile prototype code still uses legacy/template identifiers (`namespace = "com.example"`, `applicationId = "com.aistudio.localcore.swbjtu"` in `android/app/build.gradle.kts`).
 > The locked production target under Decision D3 is `com.cnl.aicompanion`. This package rename refactor is planned and must occur before production Android data persistence, Keystore signing, Health Connect permissions, or app distribution depend on the package identity.
 
 1. Open `android/` in Android Studio Ladybug or later.
@@ -179,7 +179,11 @@ The Android companion client is maintained in `android/`:
    .\gradlew.bat :app:testDebugUnitTest
    ```
 
-*Note: Android connected and offline synchronization are strategic post-V1 roadmap capabilities. In V1, the primary client is the PC React Web application.*
+> [!IMPORTANT]
+> **Implementation vs. Target Reality:**
+> - **Prototype Connection (Implemented):** The current Android app includes a functional prototype connection layer (`LocalAiRuntimeClient`) supporting health probes, token verification, and live two-way personal task synchronization (`HttpTasksRepository`) over local Wi-Fi or Tailscale.
+> - **Production Synchronization (Post-V1):** Production-hardened multi-device sync, secure Keystore credentials (Decision D4), full state sync (conversations/memory/profile), and durable Room offline queuing are strategic post-V1 roadmap capabilities.
+> - **Offline Mobile Inference (Post-V1):** Local on-device GGUF inference and autonomous offline routines are post-V1 capabilities. In V1, the primary client is the PC React Web application.
 
 ---
 

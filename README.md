@@ -50,7 +50,7 @@ Replaceable infrastructure
 ```text
                   React Web Control Center
                             │
-                            │ HTTP / WebSocket
+                            │ HTTP / SSE
                             ▼
 ┌─────────────────────────────────────────────────────┐
 │                  Local AI Runtime                   │
@@ -70,7 +70,7 @@ Replaceable infrastructure
                 Android Companion App
 ```
 
-The **Local AI Runtime** is the persistent source of truth for assistant logic, memory, tools, tasks, scheduling, provider orchestration, and synchronization.
+The **Local AI Runtime** is the persistent backend host for implemented assistant logic, conversations, personal tasks, lexical memory, and local model orchestration, as well as the canonical target source of truth for future autonomous tools, scheduling, provider orchestration, and cross-device synchronization.
 
 The clients remain clients:
 
