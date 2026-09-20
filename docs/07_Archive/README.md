@@ -20,7 +20,7 @@
 
 | Subdirectory | Category Role | Representative Contents |
 | :--- | :--- | :--- |
-| [`plans/`](./plans/) | Completed Historical Plans | Implemented and verified feature plans from earlier phases (cross-cutting root plans, `backend/`, and `android/` UI prototype plans). |
+| [`plans/`](./plans/) | Completed Historical Plans | Implemented and verified feature plans from earlier phases (cross-cutting root plans, `backend/`, and `android/` prototype plans). |
 | [`reference/`](./reference/) | Superseded Reference Specs | Decomposed monolithic reference documents (e.g., `AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md`). |
 | [`reviews/`](./reviews/) | Point-in-Time Reviews | Historical reviews and point-in-time hardening audits (e.g., `BACKEND_SECURITY_REVIEW_AND_ROADMAP.md`). |
 | [`drafts/`](./drafts/) | Reconciled Early Drafts | Early feature inventories, runtime drafts, and exploratory notes reconciled in Pass R0–R4. |

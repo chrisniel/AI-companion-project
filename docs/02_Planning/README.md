@@ -42,14 +42,12 @@ Exploratory architectural specifications and feature designs deferred beyond the
 | Document Path | Title / Domain | Current Classification | Roadmap Track |
 | :--- | :--- | :--- | :--- |
 | [`post-v1/PROACTIVE_COMPANION_ROUTINES.md`](./post-v1/PROACTIVE_COMPANION_ROUTINES.md) | Proactive Companion Routines | **`POST-V1 PLANNING SOURCE`** | Post-V1 Routine Track |
-| [`post-v1/android/plan-android-backend-connection-and-tasks.md`](./post-v1/android/plan-android-backend-connection-and-tasks.md) | Android Backend Connection & Task Sync | **`POST-V1 PLANNING SOURCE`** | Track M-Android-Connected |
-| [`post-v1/android/plan-android-sync-resilience-and-task-controls.md`](./post-v1/android/plan-android-sync-resilience-and-task-controls.md) | Android Sync Resilience & Task Controls | **`POST-V1 PLANNING SOURCE`** | Track M-Android-Offline |
 
 ---
 
 ## 5. Completed Historical Plans (Archived)
 
-Historical planning files from completed engineering tracks (8 cross-cutting root plans, 5 backend plans, and 9 Android UI prototype plans) have been archived to keep this directory focused on active work:
+Historical planning files from completed engineering tracks (8 cross-cutting root plans, 5 backend plans, and 11 Android prototype plans) have been archived to keep this directory focused on active work:
 
 - **Archive Catalog & Policy:** See [`docs/07_Archive/README.md`](../07_Archive/README.md) and [`docs/07_Archive/plans/`](../07_Archive/plans/).
 - **Non-Authoritative Status:** Archived plans represent point-in-time implementation history and are superseded by active source code and canonical domain architecture in [`docs/04_Architecture/`](../04_Architecture/).

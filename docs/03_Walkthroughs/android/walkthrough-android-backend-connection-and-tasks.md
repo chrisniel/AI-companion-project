@@ -1,5 +1,12 @@
 # Walkthrough: Android Backend Connection & Live Tasks Integration
 
+
+> [!NOTE]
+> **Historical Delivery Evidence**  
+> This walkthrough records repository state and verification at the time of delivery. It is non-authoritative for current architecture or product scope. Verify current implementation against source code and automated tests, and consult [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) and canonical domain specifications for active architectural truth.
+
+---
+
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 Branch: `feature/android-backend-connection-and-tasks`
 
@@ -21,23 +28,23 @@ This delivery establishes the first live vertical slice connecting the Android C
 
 | File | Change Type | Purpose |
 | :--- | :--- | :--- |
-| [`android/app/src/main/AndroidManifest.xml`](../../android/app/src/main/AndroidManifest.xml) | Modify | Added INTERNET permissions and linked `network_security_config`. |
-| [`android/app/src/main/res/xml/network_security_config.xml`](../../android/app/src/main/res/xml/network_security_config.xml) | New | Security policy allowing cleartext HTTP on local private LAN subnets and user certs. |
-| [`android/gradle/libs.versions.toml`](../../android/gradle/libs.versions.toml) | Modify | Added OkHttp 4.12.0 catalog entries. |
-| [`android/app/build.gradle.kts`](../../android/app/build.gradle.kts) | Modify | Included `libs.okhttp` dependency. |
-| [`android/app/src/main/java/com/example/domain/model/ConnectionStatus.kt`](../../android/app/src/main/java/com/example/domain/model/ConnectionStatus.kt) | Modify | Added optional `token` field to `ConnectionInfo`. |
-| [`android/app/src/main/java/com/example/domain/repository/ConnectionRepository.kt`](../../android/app/src/main/java/com/example/domain/repository/ConnectionRepository.kt) | New | Domain repository interface for connection settings and reachability state. |
-| [`android/app/src/main/java/com/example/data/repository/SharedPreferencesConnectionRepository.kt`](../../android/app/src/main/java/com/example/data/repository/SharedPreferencesConnectionRepository.kt) | New | Production persistent storage for host IP, port, and pairing key. |
-| [`android/app/src/main/java/com/example/data/network/dto/NetworkDtos.kt`](../../android/app/src/main/java/com/example/data/network/dto/NetworkDtos.kt) | New | DTOs matching OpenAPI schemas for health telemetry and remote tasks. |
-| [`android/app/src/main/java/com/example/data/network/LocalAiRuntimeClient.kt`](../../android/app/src/main/java/com/example/data/network/LocalAiRuntimeClient.kt) | New | OkHttp client executing health probes, pairing verification, and tasks CRUD. |
-| [`android/app/src/main/java/com/example/data/repository/HttpTasksRepository.kt`](../../android/app/src/main/java/com/example/data/repository/HttpTasksRepository.kt) | New | Synchronizes mobile tasks with PC SQLite database with local cache fallback. |
-| [`android/app/src/main/java/com/example/di/AppContainer.kt`](../../android/app/src/main/java/com/example/di/AppContainer.kt) | Modify | Exposed `connectionRepository` and wired `HttpTasksRepository` as authoritative tasks repository. |
-| [`android/app/src/main/java/com/example/ui/AppViewModelProvider.kt`](../../android/app/src/main/java/com/example/ui/AppViewModelProvider.kt) | Modify | Injected `connectionRepository` into `AppViewModel`. |
-| [`android/app/src/main/java/com/example/ui/shell/AppViewModel.kt`](../../android/app/src/main/java/com/example/ui/shell/AppViewModel.kt) | Modify | Added `saveHostConfig` and `testConnectionReachability` methods. |
-| [`android/app/src/main/java/com/example/ui/screens/connection/ConnectionScreen.kt`](../../android/app/src/main/java/com/example/ui/screens/connection/ConnectionScreen.kt) | Modify | Connected `HostConfigurationCard` to live save and reachability testing callback. |
-| [`android/app/src/main/java/com/example/ui/shell/AppShell.kt`](../../android/app/src/main/java/com/example/ui/shell/AppShell.kt) | Modify | Wired navigation route for `ConnectionScreen` to `AppViewModel.saveHostConfig`. |
-| [`android/app/src/test/java/com/example/NetworkIntegrationUnitTest.kt`](../../android/app/src/test/java/com/example/NetworkIntegrationUnitTest.kt) | New | Automated unit tests for configuration persistence, reachability, and optimistic mutations. |
-| [`docs/01_Tracking/task.md`](../01_Tracking/task.md) | Modify | Updated active tracking checklist to completed status. |
+| [`android/app/src/main/AndroidManifest.xml`](../../../android/app/src/main/AndroidManifest.xml) | Modify | Added INTERNET permissions and linked `network_security_config`. |
+| [`android/app/src/main/res/xml/network_security_config.xml`](../../../android/app/src/main/res/xml/network_security_config.xml) | New | Security policy allowing cleartext HTTP on local private LAN subnets and user certs. |
+| [`android/gradle/libs.versions.toml`](../../../android/gradle/libs.versions.toml) | Modify | Added OkHttp 4.12.0 catalog entries. |
+| [`android/app/build.gradle.kts`](../../../android/app/build.gradle.kts) | Modify | Included `libs.okhttp` dependency. |
+| [`android/app/src/main/java/com/example/domain/model/ConnectionStatus.kt`](../../../android/app/src/main/java/com/example/domain/model/ConnectionStatus.kt) | Modify | Added optional `token` field to `ConnectionInfo`. |
+| [`android/app/src/main/java/com/example/domain/repository/ConnectionRepository.kt`](../../../android/app/src/main/java/com/example/domain/repository/ConnectionRepository.kt) | New | Domain repository interface for connection settings and reachability state. |
+| [`android/app/src/main/java/com/example/data/repository/SharedPreferencesConnectionRepository.kt`](../../../android/app/src/main/java/com/example/data/repository/SharedPreferencesConnectionRepository.kt) | New | Production persistent storage for host IP, port, and pairing key. |
+| [`android/app/src/main/java/com/example/data/network/dto/NetworkDtos.kt`](../../../android/app/src/main/java/com/example/data/network/dto/NetworkDtos.kt) | New | DTOs matching OpenAPI schemas for health telemetry and remote tasks. |
+| [`android/app/src/main/java/com/example/data/network/LocalAiRuntimeClient.kt`](../../../android/app/src/main/java/com/example/data/network/LocalAiRuntimeClient.kt) | New | OkHttp client executing health probes, pairing verification, and tasks CRUD. |
+| [`android/app/src/main/java/com/example/data/repository/HttpTasksRepository.kt`](../../../android/app/src/main/java/com/example/data/repository/HttpTasksRepository.kt) | New | Synchronizes mobile tasks with PC SQLite database with local cache fallback. |
+| [`android/app/src/main/java/com/example/di/AppContainer.kt`](../../../android/app/src/main/java/com/example/di/AppContainer.kt) | Modify | Exposed `connectionRepository` and wired `HttpTasksRepository` as authoritative tasks repository. |
+| [`android/app/src/main/java/com/example/ui/AppViewModelProvider.kt`](../../../android/app/src/main/java/com/example/ui/AppViewModelProvider.kt) | Modify | Injected `connectionRepository` into `AppViewModel`. |
+| [`android/app/src/main/java/com/example/ui/shell/AppViewModel.kt`](../../../android/app/src/main/java/com/example/ui/shell/AppViewModel.kt) | Modify | Added `saveHostConfig` and `testConnectionReachability` methods. |
+| [`android/app/src/main/java/com/example/ui/screens/connection/ConnectionScreen.kt`](../../../android/app/src/main/java/com/example/ui/screens/connection/ConnectionScreen.kt) | Modify | Connected `HostConfigurationCard` to live save and reachability testing callback. |
+| [`android/app/src/main/java/com/example/ui/shell/AppShell.kt`](../../../android/app/src/main/java/com/example/ui/shell/AppShell.kt) | Modify | Wired navigation route for `ConnectionScreen` to `AppViewModel.saveHostConfig`. |
+| [`android/app/src/test/java/com/example/NetworkIntegrationUnitTest.kt`](../../../android/app/src/test/java/com/example/NetworkIntegrationUnitTest.kt) | New | Automated unit tests for configuration persistence, reachability, and optimistic mutations. |
+| [`docs/01_Tracking/task.md`](../../01_Tracking/task.md) | Modify | Updated active tracking checklist to completed status. |
 
 ---
 

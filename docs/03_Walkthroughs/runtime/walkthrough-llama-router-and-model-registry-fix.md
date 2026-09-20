@@ -1,5 +1,12 @@
 # Walkthrough: llama.cpp Router Discovery, Port 8085 Migration & Model Registry Fix
 
+
+> [!NOTE]
+> **Historical Delivery Evidence**  
+> This walkthrough records repository state and verification at the time of delivery. It is non-authoritative for current architecture or product scope. Verify current implementation against source code and automated tests, and consult [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) and canonical domain specifications for active architectural truth.
+
+---
+
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 ## 1. What Was Delivered

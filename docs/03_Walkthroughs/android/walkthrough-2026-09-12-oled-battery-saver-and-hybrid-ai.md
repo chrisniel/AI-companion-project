@@ -1,5 +1,12 @@
 # Walkthrough: OLED Battery Saver Theme, Persistent Storage, Fluid Navigation & Hybrid AI Architecture
 
+
+> [!NOTE]
+> **Historical Delivery Evidence**  
+> This walkthrough records repository state and verification at the time of delivery. It is non-authoritative for current architecture or product scope. Verify current implementation against source code and automated tests, and consult [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) and canonical domain specifications for active architectural truth.
+
+---
+
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - Purpose: Implement AMOLED-tailored OLED Battery Saver theme, contrast calibration, SharedPreferences persistent storage, fluid momentum overscroll physics, More screen navigation jump elimination, Local AI Core Host configuration, and On-Device Hybrid Failover UI.

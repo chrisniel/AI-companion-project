@@ -1,5 +1,12 @@
 # Walkthrough: Android Sync Resilience, Calendar/Time Picker Controls, and Pull-to-Refresh
 
+
+> [!NOTE]
+> **Historical Delivery Evidence**  
+> This walkthrough records repository state and verification at the time of delivery. It is non-authoritative for current architecture or product scope. Verify current implementation against source code and automated tests, and consult [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) and canonical domain specifications for active architectural truth.
+
+---
+
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - Purpose: Resolve Connection & Sync form state resets and button freeze, fix live SQLite database task completion synchronization, redesign task creation form for senior readability and accessibility (14-16sp typography, 3 large quick options + dedicated pickers), and unblock swipe pull-to-refresh on Home and Tasks screens.

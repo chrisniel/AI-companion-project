@@ -20,27 +20,22 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | **Pass R2 / R2.1: Canonical Entry** | `COMPLETE / VERIFIED` | Authority model, documentation map, and system baseline (`6c5bf7a`, `597b77d`). |
 | **Pass R3 / R3.1 / R3.2: Domain Architecture** | `COMPLETE / VERIFIED` | Domain specifications created, baseline slimmed, precision reconciled (`ecca717`, `361e6e9`, `3abd91a`). |
 | **Pass R4 / R4.1 / R4.2: Planning & Guides** | `COMPLETE / VERIFIED` | Canonical ROADMAP, master plan decomposition, dev/test guides, and active-state truthfulness sweep (`7eabc5f`). |
-| **Pass R5: Archival & File Moves** | `COMPLETE / VERIFIED` | Filesystem moves to `docs/07_Archive/`, post-v1 planning, historical link repair. |
-| **Pass R6–R8: Data & Signoff** | `NEXT` | Legacy local DB audit, final verification, Phase 8B unblocking sign-off. |
+| **Pass R5 / R5.1: Archival & Walkthroughs** | `COMPLETE / VERIFIED` | Archived historical plans, walkthrough indexing/subfolders, Android reality reconciled. |
+| **Pass R6: Local DB & Legacy Audit** | `NEXT` | Local dev database health, schema inspection, legacy cleanup. |
+| **Pass R7–R8: Verification & Signoff** | `QUEUED` | Final link and consistency sweeps, Phase 8B unblocking sign-off. |
 | **Phase 8B: Multimodal Vision** | `BLOCKED` | Next engineering milestone upon reconciliation sign-off. |
 
 ---
 
-## Active Checklist — Pass R5 (Archival, File Relocation & Active-Tree Cleanup)
+## Active Checklist — Pass R5.1 (Walkthrough Evidence & Android Current-Reality Reconciliation)
 
-- [x] Deliverable 1: Create archive hierarchy (`plans/`, `plans/backend/`, `plans/android/`, `reference/`, `reviews/`, `drafts/`, `audits/`) under `docs/07_Archive/`.
-- [x] Deliverable 2: Create post-V1 hierarchy (`post-v1/`, `post-v1/android/`) and author [`docs/02_Planning/post-v1/README.md`](../02_Planning/post-v1/README.md).
-- [x] Deliverable 3: Move 22 completed plans (8 root, 5 backend, 9 android) to `docs/07_Archive/plans/`.
-- [x] Deliverable 4: Relocate 2 post-V1 Android plans to `docs/02_Planning/post-v1/android/`.
-- [x] Deliverable 5: Relocate historical master implementation plan to [`docs/07_Archive/reference/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md`](../07_Archive/reference/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md).
-- [x] Deliverable 6: Relocate backend security review to [`docs/07_Archive/reviews/BACKEND_SECURITY_REVIEW_AND_ROADMAP.md`](../07_Archive/reviews/BACKEND_SECURITY_REVIEW_AND_ROADMAP.md).
-- [x] Deliverable 7: Relocate and normalize [`docs/02_Planning/post-v1/PROACTIVE_COMPANION_ROUTINES.md`](../02_Planning/post-v1/PROACTIVE_COMPANION_ROUTINES.md) with updated authority notice.
-- [x] Deliverable 8: Relocate 4 reconciled non-protected drafts to `docs/07_Archive/drafts/` and audit to `docs/07_Archive/audits/`.
-- [x] Deliverable 9: Author concise [`docs/07_Archive/README.md`](../07_Archive/README.md).
-- [x] Deliverable 10: Slim planning index [`docs/02_Planning/README.md`](../02_Planning/README.md) (remove 22-row completed table, link to archive).
-- [x] Deliverable 11: Update [`docs/06_Guides/DOCUMENTATION_MAP.md`](../06_Guides/DOCUMENTATION_MAP.md) and [`AGENTS.md`](../../AGENTS.md) with archived paths.
-- [x] Deliverable 12: Perform repository-wide link validation and relative link repairs.
-- [x] Validation: Zero source/runtime/CI changes, protected files untouched, git status verified.
+- [x] Deliverable 1: Source verification of Android connectivity (`LocalAiRuntimeClient`, `HttpTasksRepository`, `SharedPreferencesConnectionRepository`, `AppContainer` wiring).
+- [x] Deliverable 2: Reclassify and move 2 completed prototype Android plans from `docs/02_Planning/post-v1/android/` to `docs/07_Archive/plans/android/`.
+- [x] Deliverable 3: Reorganize `docs/03_Walkthroughs/` into genuine subfolder families (`android/`, `backend/`, `runtime/`, root standalone) and author [`docs/03_Walkthroughs/README.md`](../03_Walkthroughs/README.md).
+- [x] Deliverable 4: Inject standard historical delivery notice into all 20 historical walkthroughs.
+- [x] Deliverable 5: Reconcile canonical docs ([`ANDROID_COMPANION_ARCHITECTURE.md`](../04_Architecture/ANDROID_COMPANION_ARCHITECTURE.md), [`SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md), root [`README.md`](../../README.md), [`ROADMAP.md`](../02_Planning/ROADMAP.md)) to reflect prototype connection vs post-V1 production scope.
+- [x] Deliverable 6: Update planning catalogs ([`docs/02_Planning/post-v1/README.md`](../02_Planning/post-v1/README.md), [`docs/02_Planning/README.md`](../02_Planning/README.md)) and [`docs/06_Guides/DOCUMENTATION_MAP.md`](../06_Guides/DOCUMENTATION_MAP.md).
+- [x] Deliverable 7: Validate repository links (0 broken walkthrough links) and confirm protected boundaries untouched.
 
 ---
 

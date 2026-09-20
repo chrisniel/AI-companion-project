@@ -117,7 +117,7 @@ The tracks below represent approved product directions deferred beyond V1. Order
 
 | Milestone Track | Scope & Capability Target | Canonical Architecture Owner |
 | :--- | :--- | :--- |
-| **Track M-Android-Connected** | Real HTTP/SSE client in `android/`, device pairing exchange, remote state synchronization, Tailscale private mesh connectivity. | [`ANDROID_COMPANION_ARCHITECTURE.md`](../04_Architecture/ANDROID_COMPANION_ARCHITECTURE.md) |
+| **Track M-Android-Connected** | Productionize and expand prototype connection layer: D3 package migration (`com.cnl.aicompanion`), D4 per-device trusted credentials with Android Keystore, pairing UX, full remote sync (conversations, memory, profiles), Tailscale production validation, and background lifecycle hardening. | [`ANDROID_COMPANION_ARCHITECTURE.md`](../04_Architecture/ANDROID_COMPANION_ARCHITECTURE.md) |
 | **Track M-Android-Offline** | On-device GGUF execution (~0.27B–1.24B models), local cache, offline/online two-way reconciliation against PC host authority. | [`ANDROID_COMPANION_ARCHITECTURE.md`](../04_Architecture/ANDROID_COMPANION_ARCHITECTURE.md) |
 | **Track M-Voice** | CPU-first speech execution: local VAD, STT, and TTS provider abstractions; candidate technologies include Silero VAD, Whisper STT, Kokoro/Piper TTS (no universal default locked pending formal voice benchmarking); wake word detection. | [`VOICE_AND_AUDIO_ARCHITECTURE.md`](../04_Architecture/VOICE_AND_AUDIO_ARCHITECTURE.md) |
 | **Track M-Tools** | Deterministic DEFAULT DENY tool execution engine, 4-tier risk matrix (Risk 0–3), public web search/fetch, candidate browser automation provider (e.g., local Playwright). | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](../04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md) |

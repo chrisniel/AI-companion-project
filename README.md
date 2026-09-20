@@ -175,19 +175,18 @@ Current state:
 
 ### Android Companion
 
-Planned stack:
+Stack:
 
 ```text
 Kotlin
 Jetpack Compose
 Material 3 foundations
 Navigation Compose
-ViewModel
-StateFlow
-Coroutines
+ViewModel / StateFlow / Coroutines
+OkHttp 4
 ```
 
-During the UI phase:
+Architecture:
 
 ```text
 Compose UI
@@ -196,10 +195,10 @@ ViewModel
     ↓
 Repository Interface
     ↓
-Fake Repository
+HttpTasksRepository (Tasks) / SharedPreferences (Connection) / In-Memory Repositories (Chat, Memory, Profile)
 ```
 
-Current Android UI/UX implementation is repository-verified in `android/`:
+Current Android implementation in `android/`:
 
 ```text
 17 Jetpack Compose screens            ✅ Repository-verified
@@ -207,13 +206,14 @@ SoftGlass neumorphic design engine    ✅ Repository-verified
 OLED pitch-black battery-saver theme  ✅ Repository-verified
 High-refresh rate display adaptation  ✅ Repository-verified (up to 165Hz)
 Two-phase spring bounce overscroll    ✅ Repository-verified
-Persistent SharedPreferences storage  ✅ Repository-verified
-Real host IP/port connection card     ✅ Repository-verified
+Persistent SharedPreferences storage  ✅ Repository-verified (host/port/token)
+OkHttp LocalAiRuntimeClient           ✅ Repository-verified (health, auth verify, task sync)
 On-device hybrid failover controls    ✅ Repository-verified
-110 Robolectric/unit tests passing    ✅ 110 passed (0 failures)
+Automated unit test suite             ✅ Repository-verified
 ```
 
-Real companion integrations (FastAPI client connection, Room persistence, DataStore, Health Connect, AlarmManager, offline model inference, and authentication) are strategic post-V1 roadmap capabilities (Decision D1).
+- **Implemented Prototype Connection:** Local AI Runtime HTTP client (`LocalAiRuntimeClient`), host/port/token configuration (`SharedPreferencesConnectionRepository`), reachability and authentication verification, and live task synchronization (`HttpTasksRepository`).
+- **Post-V1 Production Work:** Hardened trusted-device pairing, secure Keystore-backed credentials (Decision D4), complete state synchronization (conversations, memory, profiles), durable Room offline persistence and mutation queue, offline model inference, and Health Connect / voice / system device integrations (Decision D1).
 
 ### Backend / Local AI Runtime
 

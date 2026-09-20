@@ -1,5 +1,12 @@
 # Walkthrough: Task Reminders, Categories, and Soft Deletion
 
+
+> [!NOTE]
+> **Historical Delivery Evidence**  
+> This walkthrough records repository state and verification at the time of delivery. It is non-authoritative for current architecture or product scope. Verify current implementation against source code and automated tests, and consult [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) and canonical domain specifications for active architectural truth.
+
+---
+
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - Purpose: Delivery of Task Categories, Reminder offsets/timestamps (Track B6), and Soft Deletion with user-scoping and 15–30 day automated retention purge (Section 16.1).

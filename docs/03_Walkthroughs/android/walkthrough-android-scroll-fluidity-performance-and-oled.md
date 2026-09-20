@@ -1,5 +1,12 @@
 # Walkthrough: Android Scroll Fluidity, Direction-Aware Transitions, Neumorphic Depth, OLED Parity & Vault Popover
 
+
+> [!NOTE]
+> **Historical Delivery Evidence**  
+> This walkthrough records repository state and verification at the time of delivery. It is non-authoritative for current architecture or product scope. Verify current implementation against source code and automated tests, and consult [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) and canonical domain specifications for active architectural truth.
+
+---
+
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - Purpose: Implement direction-aware spring slide transitions on bottom navigation tabs matching Settings, rename and tune Neumorphic Visual Effects, enforce OLED Battery Saver and Reduced mode parity on buttons/pills, make Mobile Background options horizontally scrollable, decouple background layer from Scaffold to prevent scroll resets, fix custom gallery image decoding, clip overscroll motion strictly within viewports, and wire the floating animated Vault popover overlay across all screens.

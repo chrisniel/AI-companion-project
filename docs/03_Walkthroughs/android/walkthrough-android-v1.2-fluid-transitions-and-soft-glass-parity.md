@@ -1,8 +1,15 @@
 # Walkthrough: Android V1.2 Fluid Transitions, Swipe Navigation & Soft Glass Parity
 
+
+> [!NOTE]
+> **Historical Delivery Evidence**  
+> This walkthrough records repository state and verification at the time of delivery. It is non-authoritative for current architecture or product scope. Verify current implementation against source code and automated tests, and consult [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) and canonical domain specifications for active architectural truth.
+
+---
+
 **Status**: Complete & Verified on Physical Device (Infinix X6820 / Android 13)
-**Approved Plan**: [plan-android-v1.2-fluid-transitions-and-pure-neumorphism.md](../07_Archive/plans/android/plan-android-v1.2-fluid-transitions-and-pure-neumorphism.md)
-**Tracking Archive**: [task-2026-09-11-android-v1.2-fluid-transitions-and-soft-glass-parity.md](../01_Tracking/archive/task-2026-09-11-android-v1.2-fluid-transitions-and-soft-glass-parity.md)
+**Approved Plan**: [plan-android-v1.2-fluid-transitions-and-pure-neumorphism.md](../../07_Archive/plans/android/plan-android-v1.2-fluid-transitions-and-pure-neumorphism.md)
+**Tracking Archive**: [task-2026-09-11-android-v1.2-fluid-transitions-and-soft-glass-parity.md](../../01_Tracking/archive/task-2026-09-11-android-v1.2-fluid-transitions-and-soft-glass-parity.md)
 
 ---
 

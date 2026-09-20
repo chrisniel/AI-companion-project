@@ -1,5 +1,12 @@
 # Walkthrough: Track R2-lite — Runtime Folder Separation & Dynamic Model Registry
 
+
+> [!NOTE]
+> **Historical Delivery Evidence**  
+> This walkthrough records repository state and verification at the time of delivery. It is non-authoritative for current architecture or product scope. Verify current implementation against source code and automated tests, and consult [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) and canonical domain specifications for active architectural truth.
+
+---
+
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - Purpose: Document the architectural separation of runtime engine binaries into `runtime/`, the reorganization of models into per-model subdirectories, and the hybrid dynamic Model Registry service and UI.

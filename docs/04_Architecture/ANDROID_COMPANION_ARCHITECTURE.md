@@ -14,7 +14,7 @@ The **Android Companion** is the mobile client for the AI Companion ecosystem.
 > **Release Boundary Notice (Decision D1):**
 > - Production Android backend synchronization is **strictly POST-V1**.
 > - Android offline on-device inference is **strictly POST-V1**.
-> - Neither capability is part of the AI Companion V1 release, and neither is currently implemented in the repository.
+> - An initial prototype HTTP client and Task synchronization foundation is implemented in `android/`, but production-grade connected hardening, Keystore credential security (D4), durable offline queuing, and offline inference are deferred beyond V1.
 > - This document defines the canonical architecture for future mobile development without creating delivery blockers for V1.
 
 ---
@@ -112,11 +112,13 @@ To ground future mobile local-inference planning in physical evidence rather tha
 
 ## 5. Current Implementation Reality
 
-The active repository contains a well-tested, high-fidelity mobile UI prototype in `android/`:
+The active repository contains a well-tested mobile UI and connectivity prototype in `android/`:
 
-| Subsystem | Implemented & Verified Reality | Known Non-Implemented Boundary |
+| Subsystem | Implemented & Verified Reality (Prototype) | Known Non-Implemented Boundary (Post-V1) |
 | :--- | :--- | :--- |
-| **Mobile UI** | 17 Jetpack Compose screens, SoftGlass Neumorphic design engine, OLED battery-saver theme. | Real HTTP/SSE network client connecting to FastAPI backend not implemented. |
-| **Local State** | UI state management, Compose view models, SharedPreferences storage. | Room database and persistent sync queue not implemented. |
-| **Automated Tests** | 110 passing unit tests in Gradle test suite. | Physical device integration and automated UI instrumentation tests not in CI. |
-| **Inference Engine** | Architecture benchmarks recorded (Section 4). | On-device GGUF / `llama.cpp` inference engine not integrated into Android codebase. |
+| **Mobile UI** | 17 Jetpack Compose screens, SoftGlass Neumorphic design engine, OLED battery-saver theme. Wired via `DefaultAppContainer`. | Production package namespace migration (D3 `com.example` -> `com.cnl.aicompanion`) deferred to post-V1 milestone. |
+| **Connected Client** | OkHttp `LocalAiRuntimeClient` for Local AI Runtime REST API; `/api/v1/health` and `/api/v1/auth/verify` reachability; `HttpTasksRepository` with optimistic updates and live task synchronization. | SSE streaming for chat responses, full profile/conversation/memory sync, and production connected-mode resilience hardening not implemented. |
+| **Credential & Local State** | `SharedPreferencesConnectionRepository` stores host, port, and token in standard Android SharedPreferences (`allowBackup="true"`). In-memory optimistic task state. | Secure Keystore-backed credential storage (D4), durable Room persistence, durable offline mutation queue, and formal conflict reconciliation not implemented. |
+| **Network Security** | `network_security_config.xml` permits cleartext HTTP on private RFC 1918 LAN (`192.168.x.x`) and Tailscale (`100.x.x.x`) subnets for developer prototype convenience. | Production security architecture (D5 / TLS verification / pinned certs / hardened pairing) not implemented for mobile. |
+| **Automated Tests** | Comprehensive unit test suite (historically 110–122 passing tests across development passes; 124 `@Test` methods in active test tree). | Physical device integration, automated UI instrumentation tests, and CI test runner not configured. |
+| **Inference Engine** | Reference hardware mobile inference envelope benchmarks recorded on Infinix ZERO ULTRA (Section 4). | On-device GGUF / `llama.cpp` mobile inference engine not integrated into Android codebase. |

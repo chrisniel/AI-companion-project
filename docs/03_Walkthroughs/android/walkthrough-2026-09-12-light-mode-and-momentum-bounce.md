@@ -1,5 +1,12 @@
 # Walkthrough: Android 120Hz Refresh Rate, Light Theme Calibration & Momentum Elastic Overscroll
 
+
+> [!NOTE]
+> **Historical Delivery Evidence**  
+> This walkthrough records repository state and verification at the time of delivery. It is non-authoritative for current architecture or product scope. Verify current implementation against source code and automated tests, and consult [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) and canonical domain specifications for active architectural truth.
+
+---
+
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - Purpose: Calibrate high-velocity fling physics, suppress Android 12+ stretch distortion, implement universal momentum spring overscroll, tune Light Mode bottom navigation contrast, and ensure high-refresh-rate display fluidity.

@@ -1,5 +1,12 @@
 # Walkthrough: Backend Security V1.1.1 Corrective Pass
 
+
+> [!NOTE]
+> **Historical Delivery Evidence**  
+> This walkthrough records repository state and verification at the time of delivery. It is non-authoritative for current architecture or product scope. Verify current implementation against source code and automated tests, and consult [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) and canonical domain specifications for active architectural truth.
+
+---
+
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - Purpose: Delivery of the 7 security hygiene and hardening items completing the Phase 1.1 security baseline for the Local AI Core backend.

@@ -1,5 +1,12 @@
 # Walkthrough: Android V1.1 Corrective Pass
 
+
+> [!NOTE]
+> **Historical Delivery Evidence**  
+> This walkthrough records repository state and verification at the time of delivery. It is non-authoritative for current architecture or product scope. Verify current implementation against source code and automated tests, and consult [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) and canonical domain specifications for active architectural truth.
+
+---
+
 - Purpose: Document the verification and corrective changes addressing the root gitignore source tracking, clean-checkout reproducibility, theme authority purification, background preset alignment, appearance control audit, safe hex parsing, and false mock claim neutralization.
 - Audience: Developer, Maintainer, User
 - Status: Verified
@@ -60,26 +67,26 @@
 ## 2. Key Code Artifacts Changed
 
 - **Ignore Policy**:
-  - [`.gitignore`](../../.gitignore) (surgical `data/` -> `/data/`)
+  - [`.gitignore`](../../../.gitignore) (surgical `data/` -> `/data/`)
 - **Domain Models & Repositories**:
-  - [`AppearanceModels.kt`](../../android/app/src/main/java/com/example/domain/model/AppearanceModels.kt)
-  - [`AppearanceRepository.kt`](../../android/app/src/main/java/com/example/domain/repository/AppearanceRepository.kt)
-  - [`FakeAppearanceRepository.kt`](../../android/app/src/main/java/com/example/data/fake/FakeAppearanceRepository.kt)
-  - [`SettingsModels.kt`](../../android/app/src/main/java/com/example/domain/model/SettingsModels.kt)
-  - [`ConnectionStatus.kt`](../../android/app/src/main/java/com/example/domain/model/ConnectionStatus.kt)
+  - [`AppearanceModels.kt`](../../../android/app/src/main/java/com/example/domain/model/AppearanceModels.kt)
+  - [`AppearanceRepository.kt`](../../../android/app/src/main/java/com/example/domain/repository/AppearanceRepository.kt)
+  - [`FakeAppearanceRepository.kt`](../../../android/app/src/main/java/com/example/data/fake/FakeAppearanceRepository.kt)
+  - [`SettingsModels.kt`](../../../android/app/src/main/java/com/example/domain/model/SettingsModels.kt)
+  - [`ConnectionStatus.kt`](../../../android/app/src/main/java/com/example/domain/model/ConnectionStatus.kt)
 - **UI Shell & Themes**:
-  - [`Theme.kt`](../../android/app/src/main/java/com/example/ui/theme/Theme.kt)
-  - [`AppShell.kt`](../../android/app/src/main/java/com/example/ui/shell/AppShell.kt)
-  - [`AppTopBar.kt`](../../android/app/src/main/java/com/example/navigation/AppTopBar.kt)
-  - [`AppViewModel.kt`](../../android/app/src/main/java/com/example/ui/shell/AppViewModel.kt)
+  - [`Theme.kt`](../../../android/app/src/main/java/com/example/ui/theme/Theme.kt)
+  - [`AppShell.kt`](../../../android/app/src/main/java/com/example/ui/shell/AppShell.kt)
+  - [`AppTopBar.kt`](../../../android/app/src/main/java/com/example/navigation/AppTopBar.kt)
+  - [`AppViewModel.kt`](../../../android/app/src/main/java/com/example/ui/shell/AppViewModel.kt)
 - **Screens**:
-  - [`AssistantScreen.kt`](../../android/app/src/main/java/com/example/ui/screens/AssistantScreen.kt)
-  - [`AssistantHeader.kt`](../../android/app/src/main/java/com/example/ui/screens/assistant/AssistantHeader.kt)
-  - [`SettingsViewModel.kt`](../../android/app/src/main/java/com/example/ui/screens/settings/SettingsViewModel.kt)
-  - [`SettingsScreen.kt`](../../android/app/src/main/java/com/example/ui/screens/settings/SettingsScreen.kt)
-  - [`DesignSystemPreviewScreen.kt`](../../android/app/src/main/java/com/example/ui/preview/DesignSystemPreviewScreen.kt)
+  - [`AssistantScreen.kt`](../../../android/app/src/main/java/com/example/ui/screens/AssistantScreen.kt)
+  - [`AssistantHeader.kt`](../../../android/app/src/main/java/com/example/ui/screens/assistant/AssistantHeader.kt)
+  - [`SettingsViewModel.kt`](../../../android/app/src/main/java/com/example/ui/screens/settings/SettingsViewModel.kt)
+  - [`SettingsScreen.kt`](../../../android/app/src/main/java/com/example/ui/screens/settings/SettingsScreen.kt)
+  - [`DesignSystemPreviewScreen.kt`](../../../android/app/src/main/java/com/example/ui/preview/DesignSystemPreviewScreen.kt)
 - **Tests**:
-  - [`SettingsUnitTest.kt`](../../android/app/src/test/java/com/example/SettingsUnitTest.kt)
+  - [`SettingsUnitTest.kt`](../../../android/app/src/test/java/com/example/SettingsUnitTest.kt)
 
 ---
 

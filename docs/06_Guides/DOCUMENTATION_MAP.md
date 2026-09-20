@@ -66,7 +66,7 @@ When seeking the authoritative answer to a question, consult documents in the fo
 2. Active approved implementation plan (`docs/02_Planning/plan-[feature].md`)
 
 ### F. Historical Evidence (Non-Normative)
-1. Delivery walkthroughs (`docs/03_Walkthroughs/`)
+1. Delivery walkthroughs and evidence catalog ([`docs/03_Walkthroughs/README.md`](../03_Walkthroughs/README.md))
 2. Completed and archived sprint tasks (`docs/01_Tracking/archive/`)
 3. Archived historical drafts (`docs/07_Archive/`)
 
@@ -99,7 +99,7 @@ Per `AGENTS.md`, all documentation directories adhere to a zero-padded two-digit
 | `docs/00_Drafts/` | **Non-Canonical** | Raw ideas, scratchpads, unreviewed notes, forensic audits. | **Strictly ignored** unless explicitly requested by user. |
 | `docs/01_Tracking/` | **Canonical (Execution)** | Active `task.md` (target < 80 lines) and per-feature `archive/`. | Active `task.md` read on resume; `archive/` ignored. |
 | `docs/02_Planning/` | **Canonical (Planning)** | Canonical `ROADMAP.md`, planning catalog, feature plans (`plan-[feature].md`), and post-V1 sources (`post-v1/`). | Active plan read during planning; ignored during execution. |
-| `docs/03_Walkthroughs/` | **Historical Evidence** | Verified delivery explanations and developer handoffs (7-section format). | Ignored unless investigating PR implementation history. |
+| `docs/03_Walkthroughs/` | **Historical Evidence** | Verified delivery explanations and developer handoffs (7-section format); indexed in [`README.md`](../03_Walkthroughs/README.md). | Ignored unless investigating PR implementation history. |
 | `docs/04_Architecture/` | **Canonical (Normative)** | System baseline, core contracts, API schemas, ADRs (`decisions/`). | Read on demand when relevant to active domain. |
 | `docs/05_Design/` | **Canonical (Design)** | Product UI/UX, wireframes, character visual specs, narrative guides. | Read on demand when building frontend/mobile UI. |
 | `docs/06_Guides/` | **Canonical (Guides)** | Contributor guides, setup instructions, documentation map, testing standards. | Read on demand for repository process guidance. |
@@ -121,7 +121,7 @@ The following documents exist for historical, forensic, or template purposes and
 3. **`docs/07_Archive/reference/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md`**  
    Historical reference master plan. Decomposed in Pass R4 into canonical architecture and `docs/02_Planning/ROADMAP.md`; archived in Pass R5 as historical reference material.
 4. **Historical Walkthroughs (`docs/03_Walkthroughs/*`)**  
-   Walkthroughs are point-in-time snapshots explaining specific past PR deliveries. They do not reflect subsequent refactors or active system architecture.
+   Walkthroughs are point-in-time snapshots explaining specific past PR deliveries. They do not reflect subsequent refactors or active system architecture. See the historical navigation index in [`docs/03_Walkthroughs/README.md`](../03_Walkthroughs/README.md).
 5. **Archived Task Files (`docs/01_Tracking/archive/*`)**  
    Completed sprint checklists preserved for tracking continuity only.
 6. **Starter Reference (`docs/ProjectWorkflowStarterKit/*`)**  

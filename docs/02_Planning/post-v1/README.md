@@ -14,8 +14,9 @@
 Documents in this directory represent future product planning inputs, **not** active V1 implementation plans and **not** historical archives:
 
 - **Non-Authoritative for V1:** Nothing in this directory may be used to expand or alter the active V1 release scope or immediate sprint tasks.
-- **Milestone Sequencing:** All work documented here is mapped to post-V1 roadmap tracks (e.g., Track M-Android-Connected, Track M-Android-Offline, Track R-Proactive).
-- **Mandatory Revalidation:** Because these documents were drafted during earlier prototyping phases, they may contain older implementation assumptions (e.g., direct SQLite access, mock payloads, or unhardened transport). They must be formally revalidated against current canonical architecture and active contracts before their respective milestones begin execution.
+- **Milestone Sequencing:** All work documented here is mapped to post-V1 roadmap tracks (e.g., Track M-Proactive, Track M-Android-Connected, Track M-Android-Offline).
+- **Mandatory Revalidation:** Because these documents represent exploratory designs, they must be formally revalidated against current canonical architecture and active contracts before their respective milestones begin execution.
+- **Completed Prototype Work:** Historical prototype plans for earlier Android connectivity work reside in [`docs/07_Archive/plans/android/`](../../07_Archive/plans/android/). Future connected/offline work will receive fresh implementation plans when Track M-Android-Connected / Offline begins.
 
 ---
 
@@ -23,9 +24,7 @@ Documents in this directory represent future product planning inputs, **not** ac
 
 | Document Path | Title / Domain | Roadmap Milestone | Scope Description |
 | :--- | :--- | :--- | :--- |
-| [`PROACTIVE_COMPANION_ROUTINES.md`](./PROACTIVE_COMPANION_ROUTINES.md) | Proactive Companion Routines | Post-V1 Routine Track | Configurable recurring routines (hydration, sleep, check-ins) and companion-initiated messaging. |
-| [`android/plan-android-backend-connection-and-tasks.md`](./android/plan-android-backend-connection-and-tasks.md) | Android Backend Connection & Task Sync | Track M-Android-Connected | Android HTTP/SSE client, pairing handshake, and Task API integration. |
-| [`android/plan-android-sync-resilience-and-task-controls.md`](./android/plan-android-sync-resilience-and-task-controls.md) | Android Sync Resilience & Task Controls | Track M-Android-Offline | Offline action queue, network transition resilience, and sync conflict resolution. |
+| [`PROACTIVE_COMPANION_ROUTINES.md`](./PROACTIVE_COMPANION_ROUTINES.md) | Proactive Companion Routines | Track M-Proactive | Configurable recurring routines (hydration, sleep, check-ins) and companion-initiated messaging. |
 
 ---
 

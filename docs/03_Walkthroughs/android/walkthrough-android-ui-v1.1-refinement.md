@@ -1,5 +1,12 @@
 # Walkthrough: Android UI V1.1 Refinement
 
+
+> [!NOTE]
+> **Historical Delivery Evidence**  
+> This walkthrough records repository state and verification at the time of delivery. It is non-authoritative for current architecture or product scope. Verify current implementation against source code and automated tests, and consult [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) and canonical domain specifications for active architectural truth.
+
+---
+
 - Purpose: Document the architectural realignment, visual calibration, state unification, and verification of the Android companion client prototype.
 - Audience: Developer, Maintainer, User
 - Status: Verified
@@ -44,19 +51,19 @@
 ## 2. Key Code Artifacts
 
 - **Application & DI Container**:
-  - [`CompanionApplication.kt`](../../android/app/src/main/java/com/example/CompanionApplication.kt)
-  - [`AppContainer.kt`](../../android/app/src/main/java/com/example/di/AppContainer.kt)
+  - [`CompanionApplication.kt`](../../../android/app/src/main/java/com/example/CompanionApplication.kt)
+  - [`AppContainer.kt`](../../../android/app/src/main/java/com/example/di/AppContainer.kt)
 - **ViewModel Factory**:
-  - [`AppViewModelProvider.kt`](../../android/app/src/main/java/com/example/ui/AppViewModelProvider.kt)
+  - [`AppViewModelProvider.kt`](../../../android/app/src/main/java/com/example/ui/AppViewModelProvider.kt)
 - **Shared Domain Repositories**:
-  - [`TasksRepository.kt`](../../android/app/src/main/java/com/example/domain/repository/TasksRepository.kt) / [`FakeTasksRepository.kt`](../../android/app/src/main/java/com/example/data/fake/FakeTasksRepository.kt)
-  - [`ScheduleRepository.kt`](../../android/app/src/main/java/com/example/domain/repository/ScheduleRepository.kt) / [`FakeScheduleRepository.kt`](../../android/app/src/main/java/com/example/data/fake/FakeScheduleRepository.kt)
-  - [`AlarmsRepository.kt`](../../android/app/src/main/java/com/example/domain/repository/AlarmsRepository.kt) / [`FakeAlarmsRepository.kt`](../../android/app/src/main/java/com/example/data/fake/FakeAlarmsRepository.kt)
-  - [`AppearanceRepository.kt`](../../android/app/src/main/java/com/example/domain/repository/AppearanceRepository.kt) / [`FakeAppearanceRepository.kt`](../../android/app/src/main/java/com/example/data/fake/FakeAppearanceRepository.kt)
+  - [`TasksRepository.kt`](../../../android/app/src/main/java/com/example/domain/repository/TasksRepository.kt) / [`FakeTasksRepository.kt`](../../../android/app/src/main/java/com/example/data/fake/FakeTasksRepository.kt)
+  - [`ScheduleRepository.kt`](../../../android/app/src/main/java/com/example/domain/repository/ScheduleRepository.kt) / [`FakeScheduleRepository.kt`](../../../android/app/src/main/java/com/example/data/fake/FakeScheduleRepository.kt)
+  - [`AlarmsRepository.kt`](../../../android/app/src/main/java/com/example/domain/repository/AlarmsRepository.kt) / [`FakeAlarmsRepository.kt`](../../../android/app/src/main/java/com/example/data/fake/FakeAlarmsRepository.kt)
+  - [`AppearanceRepository.kt`](../../../android/app/src/main/java/com/example/domain/repository/AppearanceRepository.kt) / [`FakeAppearanceRepository.kt`](../../../android/app/src/main/java/com/example/data/fake/FakeAppearanceRepository.kt)
 - **Theme & Shell**:
-  - [`Color.kt`](../../android/app/src/main/java/com/example/ui/theme/Color.kt)
-  - [`Theme.kt`](../../android/app/src/main/java/com/example/ui/theme/Theme.kt)
-  - [`AppShell.kt`](../../android/app/src/main/java/com/example/ui/shell/AppShell.kt)
+  - [`Color.kt`](../../../android/app/src/main/java/com/example/ui/theme/Color.kt)
+  - [`Theme.kt`](../../../android/app/src/main/java/com/example/ui/theme/Theme.kt)
+  - [`AppShell.kt`](../../../android/app/src/main/java/com/example/ui/shell/AppShell.kt)
 
 ---
 

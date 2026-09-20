@@ -1,5 +1,12 @@
 # Walkthrough: Track C2 — React Web Dashboard & Local AI Admin Controls
 
+
+> [!NOTE]
+> **Historical Delivery Evidence**  
+> This walkthrough records repository state and verification at the time of delivery. It is non-authoritative for current architecture or product scope. Verify current implementation against source code and automated tests, and consult [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md) and canonical domain specifications for active architectural truth.
+
+---
+
 ## 1. What Was Delivered
 
 1. **Web Admin Runtime Controls (Instant VRAM Release)**:
