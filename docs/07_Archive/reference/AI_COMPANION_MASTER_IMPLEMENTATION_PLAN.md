@@ -1,13 +1,13 @@
 # AI Companion Project — Master Implementation Plan (Historical Reference)
 
 > [!WARNING]
-> **HISTORICAL / NON-AUTHORITATIVE REFERENCE DOCUMENT — PASS R5 ARCHIVAL CANDIDATE**  
+> **HISTORICAL / NON-AUTHORITATIVE REFERENCE DOCUMENT — ARCHIVED IN PASS R5**  
 > This document is a **historical master architecture and reference sequencing plan** reflecting mid-September 2026 project drafting. It is **non-authoritative** for active system architecture, product sequencing, or execution tracking:
-> - **Normative System Architecture:** Owned strictly by [`SYSTEM_BASELINE.md`](./SYSTEM_BASELINE.md) and focused domain architecture specifications in `docs/04_Architecture/`.
-> - **Canonical Product & Milestone Roadmap:** Owned strictly by [`docs/02_Planning/ROADMAP.md`](../02_Planning/ROADMAP.md).
-> - **Active Sprint Execution State:** Tracked strictly in [`docs/01_Tracking/task.md`](../01_Tracking/task.md).
-> - **Feature Implementation Details:** Owned by feature-named plans under [`docs/02_Planning/`](../02_Planning/).
-> - **Disposition:** Candidate for archival relocation to `docs/07_Archive/` in Reconciliation Pass R5.
+> - **Normative System Architecture:** Owned strictly by [`SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) and focused domain architecture specifications in `docs/04_Architecture/`.
+> - **Canonical Product & Milestone Roadmap:** Owned strictly by [`docs/02_Planning/ROADMAP.md`](../../02_Planning/ROADMAP.md).
+> - **Active Sprint Execution State:** Tracked strictly in [`docs/01_Tracking/task.md`](../../01_Tracking/task.md).
+> - **Feature Implementation Details:** Owned by feature-named plans under [`docs/02_Planning/`](../../02_Planning/).
+> - **Disposition:** Relocated to `docs/07_Archive/reference/` in Reconciliation Pass R5 as non-authoritative historical reference material.
 
 ---
 
@@ -17,11 +17,11 @@ To prevent competing sources of truth, this document's contents have been decomp
 
 | Category | Description | Authoritative Destination / Current Owner |
 | :--- | :--- | :--- |
-| **A. Core System Baseline** | Vision, hardware targets, ecosystem subsystems, V1 scope boundary, acceptance criteria. | [`docs/04_Architecture/SYSTEM_BASELINE.md`](./SYSTEM_BASELINE.md) |
+| **A. Core System Baseline** | Vision, hardware targets, ecosystem subsystems, V1 scope boundary, acceptance criteria. | [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) |
 | **B. Domain Architecture** | Local AI Runtime, model lifecycle, VRAM offload profiles, routing, database schema, storage paths, security model, profile-first memory, voice pipeline, mobile inference evidence. | Focused domain specifications in `docs/04_Architecture/` (`LLAMA_CPP_...`, `AI_COMPANION_RUNTIME_...`, `SECURITY_...`, `MEMORY_...`, `ANDROID_...`, `VOICE_...`). |
-| **C. Product Roadmap** | Delivery milestones, V1 remaining gates, post-V1 tracks, open designs, audit hardening recommendations. | [`docs/02_Planning/ROADMAP.md`](../02_Planning/ROADMAP.md) |
-| **D. Developer & Setup Guidance** | Repository prerequisites, backend/web startup, llama-server relationship, environment configuration. | [`docs/06_Guides/DEVELOPMENT_SETUP.md`](../06_Guides/DEVELOPMENT_SETUP.md) |
-| **E. Testing & CI Guidance** | Backend pytest, frontend vitest, Android gradle tests, OpenAPI verification, CI gate governance. | [`docs/06_Guides/TESTING_AND_CI.md`](../06_Guides/TESTING_AND_CI.md) |
+| **C. Product Roadmap** | Delivery milestones, V1 remaining gates, post-V1 tracks, open designs, audit hardening recommendations. | [`docs/02_Planning/ROADMAP.md`](../../02_Planning/ROADMAP.md) |
+| **D. Developer & Setup Guidance** | Repository prerequisites, backend/web startup, llama-server relationship, environment configuration. | [`docs/06_Guides/DEVELOPMENT_SETUP.md`](../../06_Guides/DEVELOPMENT_SETUP.md) |
+| **E. Testing & CI Guidance** | Backend pytest, frontend vitest, Android gradle tests, OpenAPI verification, CI gate governance. | [`docs/06_Guides/TESTING_AND_CI.md`](../../06_Guides/TESTING_AND_CI.md) |
 | **F. Historical Delivery Evidence** | Mid-September UI states, Android UI batches 1–4, point-in-time test numbers. | Preserved in place in this document as historical record. |
 | **G. Unique Unresolved Details** | Exploratory health data schemas, decision test rubric. | Mapped to post-V1 consideration and PR review guidance. |
 | **H. Stale / Superseded Content** | Stale port 8081 manual examples, pre-Phase 8A mock descriptions, Health as V1 path. | Superseded by canonical architecture and locked Decisions D1–D9. |

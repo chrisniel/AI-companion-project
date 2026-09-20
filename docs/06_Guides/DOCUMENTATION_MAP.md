@@ -2,7 +2,7 @@
 
 > **Document Role:** Canonical entry-point guide for all human contributors and AI agents.  
 > **Status:** Active Canonical  
-> **Last Updated:** 2026-09-21 (Reconciliation Pass R4)
+> **Last Updated:** 2026-09-21 (Reconciliation Pass R5)
 
 ---
 
@@ -59,7 +59,7 @@ When seeking the authoritative answer to a question, consult documents in the fo
 ### D. Product Intent & Scope
 1. **Canonical System Baseline** (`docs/04_Architecture/SYSTEM_BASELINE.md` — defines locked V1 boundary)
 2. **Canonical Product Roadmap** (`docs/02_Planning/ROADMAP.md` — defines milestone delivery sequence and post-V1 roadmap)
-3. Master reference plan (`docs/04_Architecture/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md` — historical reference candidate for R5 archive)
+3. Historical reference master plan (`docs/07_Archive/reference/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md` — decomposed in Pass R4, archived in Pass R5)
 
 ### E. Current Execution
 1. **`docs/01_Tracking/task.md`** (Active sprint, immediate blockers, current state)
@@ -98,7 +98,7 @@ Per `AGENTS.md`, all documentation directories adhere to a zero-padded two-digit
 | :--- | :--- | :--- | :--- |
 | `docs/00_Drafts/` | **Non-Canonical** | Raw ideas, scratchpads, unreviewed notes, forensic audits. | **Strictly ignored** unless explicitly requested by user. |
 | `docs/01_Tracking/` | **Canonical (Execution)** | Active `task.md` (target < 80 lines) and per-feature `archive/`. | Active `task.md` read on resume; `archive/` ignored. |
-| `docs/02_Planning/` | **Canonical (Planning)** | Canonical `ROADMAP.md`, planning catalog, feature plans (`plan-[feature].md`). | Active plan read during planning; ignored during execution. |
+| `docs/02_Planning/` | **Canonical (Planning)** | Canonical `ROADMAP.md`, planning catalog, feature plans (`plan-[feature].md`), and post-V1 sources (`post-v1/`). | Active plan read during planning; ignored during execution. |
 | `docs/03_Walkthroughs/` | **Historical Evidence** | Verified delivery explanations and developer handoffs (7-section format). | Ignored unless investigating PR implementation history. |
 | `docs/04_Architecture/` | **Canonical (Normative)** | System baseline, core contracts, API schemas, ADRs (`decisions/`). | Read on demand when relevant to active domain. |
 | `docs/05_Design/` | **Canonical (Design)** | Product UI/UX, wireframes, character visual specs, narrative guides. | Read on demand when building frontend/mobile UI. |
@@ -116,10 +116,10 @@ The following documents exist for historical, forensic, or template purposes and
 
 1. **`docs/00_Drafts/09-16-2026-roadmap.md`**  
    An old user-authored working draft. It contains historical brainstorms and table status markers, but is non-normative and superseded by `docs/04_Architecture/SYSTEM_BASELINE.md` and `docs/02_Planning/ROADMAP.md`.
-2. **`docs/00_Drafts/REPOSITORY_DOCUMENTATION_RECONCILIATION_AUDIT.md`**  
+2. **`docs/07_Archive/audits/REPOSITORY_DOCUMENTATION_RECONCILIATION_AUDIT.md`**  
    A forensic reconciliation audit document (Pass R0–R1). It records diagnostic evidence and reconciliation history, but the resulting decisions are codified in `SYSTEM_BASELINE.md`.
-3. **`docs/04_Architecture/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md`**  
-   Historical reference master plan. Decomposed in Pass R4 into canonical architecture and `docs/02_Planning/ROADMAP.md`; non-authoritative archival candidate for Pass R5.
+3. **`docs/07_Archive/reference/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md`**  
+   Historical reference master plan. Decomposed in Pass R4 into canonical architecture and `docs/02_Planning/ROADMAP.md`; archived in Pass R5 as historical reference material.
 4. **Historical Walkthroughs (`docs/03_Walkthroughs/*`)**  
    Walkthroughs are point-in-time snapshots explaining specific past PR deliveries. They do not reflect subsequent refactors or active system architecture.
 5. **Archived Task Files (`docs/01_Tracking/archive/*`)**  

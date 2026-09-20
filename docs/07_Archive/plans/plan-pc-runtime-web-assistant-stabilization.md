@@ -5,7 +5,7 @@
 - **Author:** Antigravity AI
 - **Date:** 2026-09-14
 - **Branch:** `feature/assistant-orchestration-and-memory`
-- **Canonical Architecture:** [AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md](file:///d:/OtherProjects/AI-companion-project/docs/04_Architecture/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md), [LLAMA_CPP_RUNTIME_ARCHITECTURE.md](file:///d:/OtherProjects/AI-companion-project/docs/04_Architecture/LLAMA_CPP_RUNTIME_ARCHITECTURE.md)
+- **Canonical Architecture:** [AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md](../reference/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md), [LLAMA_CPP_RUNTIME_ARCHITECTURE.md](../../04_Architecture/LLAMA_CPP_RUNTIME_ARCHITECTURE.md)
 - **Status:** Proposed — Revised Per User Directives — Awaiting Approval
 
 ---

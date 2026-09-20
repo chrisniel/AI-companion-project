@@ -18,7 +18,7 @@ Configure project-specific paths and boundaries in the Project Profile below. If
 - Changelog File: CHANGELOG.md
 - Documentation Map: docs/06_Guides/DOCUMENTATION_MAP.md
 - Canonical Architecture Document: docs/04_Architecture/SYSTEM_BASELINE.md
-- Master Reference Plan: docs/04_Architecture/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md
+- Master Reference Plan: docs/07_Archive/reference/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md
 - Primary Tech Stack: React 19, TypeScript 5.8, Vite 6, Tailwind CSS 4; Kotlin, Jetpack Compose for Android; Python, FastAPI, SQLAlchemy 2, Alembic, SQLite/FTS5; llama.cpp / ONNX Runtime
 - Execution Mode: Read-only by default; inspect and report unless the user explicitly authorizes the specific edit or other state-changing action
 - Major Change Commit Policy: Every completed major change must be committed as one coherent user-owned Git commit; the AI supplies a proposed commit message, while the user manually reviews, commits, and pushes

@@ -1,7 +1,7 @@
 # Walkthrough: Android V1.1B UX & Visual Refinement
 
 **Status**: Complete & Verified on Physical Device (Infinix X6820 / Android 13)
-**Approved Plan**: [plan-android-v1.1b-ux-and-visual-refinement.md](../02_Planning/android/plan-android-v1.1b-ux-and-visual-refinement.md)
+**Approved Plan**: [plan-android-v1.1b-ux-and-visual-refinement.md](../07_Archive/plans/android/plan-android-v1.1b-ux-and-visual-refinement.md)
 **Tracking**: [task.md](../01_Tracking/task.md)
 
 ---

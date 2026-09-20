@@ -139,6 +139,6 @@ For detailed architectural contracts, refer to the authoritative domain specific
 
 ---
 
-*Forensic reconciliation history, diagnostics, and working notes remain documented in [`REPOSITORY_DOCUMENTATION_RECONCILIATION_AUDIT.md`](../00_Drafts/REPOSITORY_DOCUMENTATION_RECONCILIATION_AUDIT.md).*
+*Forensic reconciliation history, diagnostics, and working notes remain documented in [`REPOSITORY_DOCUMENTATION_RECONCILIATION_AUDIT.md`](../07_Archive/audits/REPOSITORY_DOCUMENTATION_RECONCILIATION_AUDIT.md).*
 
 

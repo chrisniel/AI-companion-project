@@ -1,7 +1,8 @@
-### Future — Proactive Companion Routines / Scheduled Check-ins
+# Proactive Companion Routines / Scheduled Check-ins
 
-> **Status:** Future Architecture / Post-V1 Milestone  
-> **Authority Notice:** Proactive companion routines are explicitly excluded from AI Companion V1 (Decision D1). This specification is preserved for post-V1 milestone planning; candidate for relocation or archival in Pass R5.
+> **Classification:** POST-V1 PLANNING SOURCE  
+> **Status:** Future Product Planning / Post-V1 Milestone  
+> **Authority Notice:** Non-authoritative for V1. Proactive companion routines are explicitly excluded from the AI Companion V1 release boundary per Decision D1. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) owns the locked V1 scope boundary; [`docs/02_Planning/ROADMAP.md`](../ROADMAP.md) owns product milestone sequencing; canonical domain architecture owns normative technical boundaries. Exact proactive-routine implementation and scheduling interfaces must be revalidated before this future milestone begins execution.
 
 AI Companion should support configurable recurring personal routines that
 trigger proactive character messages or notifications without representing

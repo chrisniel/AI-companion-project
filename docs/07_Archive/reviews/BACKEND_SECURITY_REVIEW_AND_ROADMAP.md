@@ -7,9 +7,9 @@
 > [!IMPORTANT]
 > **Documentation Authority Notice:**
 > - This document records **historical review evidence and post-hardening roadmap notes** from past security passes.
-> - Active, normative security and trust architecture canonically lives in [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md).
+> - Active, normative security and trust architecture canonically lives in [`SECURITY_AND_TRUST_ARCHITECTURE.md`](../../04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md).
 > - Implementation reality must be verified against current source code (`backend/app/core/security.py`, `backend/app/api/v1/router.py`) and automated test suites.
-> - This document is scheduled as a candidate for archival to `docs/07_Archive/` during Reconciliation Pass R5.
+> - This document was relocated to `docs/07_Archive/reviews/` in Reconciliation Pass R5 as historical review material.
 
 ---
 

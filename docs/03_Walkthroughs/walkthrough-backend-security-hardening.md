@@ -27,7 +27,7 @@ In response to the team architectural security review in `LOCAL_AI_CORE_BACKEND_
 | [`backend/tests/test_security_hardening.py`](../../backend/tests/test_security_hardening.py) | New | Automated test coverage for payload limits, default-deny, CORS headers, secret redaction, and docs gating. |
 | [`contracts/openapi/openapi.json`](../../contracts/openapi/openapi.json) | Modify | Re-exported canonical OpenAPI specification. |
 | [`docs/01_Tracking/task.md`](../01_Tracking/task.md) | Modify | Updated sprint state to completed security hardening. |
-| [`docs/02_Planning/backend/plan-backend-security-hardening.md`](../02_Planning/backend/plan-backend-security-hardening.md) | New | Implementation plan for security hardening sprint. |
+| [`docs/07_Archive/plans/backend/plan-backend-security-hardening.md`](../07_Archive/plans/backend/plan-backend-security-hardening.md) | New | Implementation plan for security hardening sprint. |
 
 ---
 

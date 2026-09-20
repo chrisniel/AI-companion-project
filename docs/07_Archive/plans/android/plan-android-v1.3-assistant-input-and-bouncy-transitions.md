@@ -146,7 +146,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 ## 4. Master Plan Roadmap: What Comes After This?
 
-According to [`docs/04_Architecture/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md`](file:///d:/OtherProjects/AI-companion-project/docs/04_Architecture/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md), the upcoming project phases are:
+According to [`AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md`](../../reference/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md), the upcoming project phases are:
 
 1. **Next Track (Backend Foundation - Tracks B1 & B2)**:
    - Plan and build the **FastAPI host application** (`backend/`) on Windows.
