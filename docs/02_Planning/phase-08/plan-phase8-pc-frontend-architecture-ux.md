@@ -27,8 +27,8 @@ develop (baseline: 88 backend pytest, 132 frontend vitest, 0 tsc, migration head
 - No STT/TTS. No video. No PDF. No arbitrary file types.
 - No CUDA (boundary documented in 8P only).
 - No new state management library.
-- No import UI, auto-downloads, quantization, benchmarking.
-- No MODEL_LIBRARY_AND_REGISTRY_ARCHITECTURE.md -- deferred until Import Manager phase.
+- No import UI, auto-downloads, quantization, benchmarking (local model import capability is a locked V1 requirement under Decision D6, but execution service and import UI are out of scope for Phase 8B/8C; managed online downloads remain post-V1).
+- No MODEL_LIBRARY_AND_REGISTRY_ARCHITECTURE.md -- deferred until dedicated Import Manager planning.
 - No .gitattributes / .lfsconfig / LFS remote changes without explicit user authorization.
 
 ---
@@ -39,7 +39,7 @@ develop (baseline: 88 backend pytest, 132 frontend vitest, 0 tsc, migration head
 |----------|-----------|
 | OD1: Default Windows data-root | %LOCALAPPDATA%\AI Companion\Data |
 | OD2: Bootstrap locator | %LOCALAPPDATA%\AI Companion\bootstrap.json |
-| OD3: Dev vs installed models | Dev/bootstrap models stay under Git/LFS. Installed/user-imported models use COMPANION_DATA_ROOT/library/models/ |
+| OD3: Dev vs installed models | Dev/bootstrap models stay under Git/LFS. Installed/user-imported models use COMPANION_DATA_ROOT/library/models/llm/ |
 
 ---
 
@@ -1265,9 +1265,9 @@ Backend regression:
 
 ### 8C.5 -- Documentation Completion
 
-[MODIFY] AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md
-  - Test totals: 100+ pytest, 50+ vitest
-  - Mark Phase 8 complete
+[MODIFY] docs/02_Planning/ROADMAP.md
+  - Mark Phase 8C complete / verified
+  - Reconcile active delivery gates
 
 [CREATE] docs/03_Walkthroughs/walkthrough-phase8-multimodal-attachments.md
   - Follow walkthrough-template.md (7-section format)
@@ -1285,7 +1285,7 @@ feat(8c): integration polish -- mock cleanup, bundle, a11y, final tests, docs
 - Accessibility: aria-labels, role=article, focus management, keyboard
 - phase8Integration.test.tsx: reload/cancel/vision gate/mmproj-absent/limits
 - walkthrough-phase8-multimodal-attachments.md (7-section)
-- AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md: 100+/50+ counts; Phase 8 complete
+- ROADMAP.md: Phase 8 complete / verified
 - task.md: sprint archived
 
 ---
@@ -1296,9 +1296,9 @@ feat(8c): integration polish -- mock cleanup, bundle, a11y, final tests, docs
   Video/audio/PDF       -- out of scope
   Android multimodal    -- deferred
   CUDA implementation   -- out of scope; boundary documented only
-  Model Import Manager  -- deferred (separate planning phase)
-  MODEL_LIBRARY_AND_REGISTRY_ARCHITECTURE.md -- deferred until Import Manager planned
-  Auto HuggingFace downloads / quantization  -- deferred
+  Model Import Manager  -- execution service & UI out of scope for Phase 8B/8C (controlled local import is a locked V1 requirement under Decision D6; managed online downloads remain post-V1)
+  MODEL_LIBRARY_AND_REGISTRY_ARCHITECTURE.md -- deferred until dedicated Import Manager planning
+  Auto HuggingFace downloads / quantization  -- deferred post-V1
   Benchmarking wizard   -- deferred
   Attachment retention purge job -- deferred to Phase 9
   OS-backed secret storage (DPAPI) -- deferred

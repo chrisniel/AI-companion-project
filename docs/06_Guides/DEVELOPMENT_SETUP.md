@@ -46,17 +46,23 @@ For canonical system boundaries, host topology, and locked architectural decisio
 The Local AI Runtime separates repository code from mutable user data and model weights using a canonical storage root:
 
 ### Resolution Precedence
-1. **Environment Variable:** `COMPANION_DATA_ROOT` (highest precedence, used in CI and isolated testing)
-2. **Bootstrap Pointer:** `<repo_root>/bootstrap.json` (`{"data_root": "..."}`)
-3. **OS Default:** `%LOCALAPPDATA%\AICompanion` (standard Windows default)
+1. **Environment Variable Override:** `COMPANION_DATA_ROOT` (highest precedence, used in CI and isolated testing)
+2. **Bootstrap Locator File:** `%LOCALAPPDATA%\AI Companion\bootstrap.json` on Windows (`~/.local/share/AI Companion/bootstrap.json` on Linux/macOS) containing `{"data_root": "..."}`
+3. **Approved OS Default:** `%LOCALAPPDATA%\AI Companion\Data` on Windows (`~/.local/share/AI Companion/Data` on Linux/macOS)
 
-### Canonical Storage Subdirectories
-When initialized, `COMPANION_DATA_ROOT` provides:
-- `database/companion.db` — SQLite persistent database (WAL mode, foreign keys enabled)
-- `models/library/` — Installed GGUF model library and active `registry.json`
-- `models/inbox/` & `models/staging/` — Model import staging areas (Decision D6)
-- `attachments/` — Persisted multimodal image attachments (Phase 8B)
-- `voices/` — Local voice models and synthesis profiles (post-V1)
+### Canonical Storage Paths
+All persistent asset paths derive deterministically from the resolved `COMPANION_DATA_ROOT` (directory creation is lazy where appropriate):
+- `DATABASE_PATH`: `<COMPANION_DATA_ROOT>/database/companion.db` — SQLite persistent database (WAL mode, foreign keys enabled)
+- `LIBRARY_DIR`: `<COMPANION_DATA_ROOT>/library` — Base user library directory
+- `MODEL_LIBRARY_DIR`: `<COMPANION_DATA_ROOT>/library/models/llm` — Installed persistent GGUF models
+- `INSTALLED_REGISTRY_PATH`: `<COMPANION_DATA_ROOT>/library/registry/models.json` — Authoritative Model Registry Schema v3
+- `VOICE_LIBRARY_DIR`: `<COMPANION_DATA_ROOT>/library/voices` — Voice models and synthesis profiles (post-V1)
+- `ATTACHMENT_DIR`: `<COMPANION_DATA_ROOT>/attachments` — Persisted multimodal image attachments (Phase 8B)
+- `IMPORT_INBOX_DIR`: `<COMPANION_DATA_ROOT>/imports/inbox` — Model import drop inbox (Decision D6)
+- `IMPORT_STAGING_DIR`: `<COMPANION_DATA_ROOT>/imports/staging` — Preflight validation and quarantine staging (Decision D6)
+- `CHARACTER_DIR`: `<COMPANION_DATA_ROOT>/characters` — Character cards and persona definitions
+- `MEMORY_DIR`: `<COMPANION_DATA_ROOT>/memory` — Profile and memory exports
+- `BACKUP_DIR`: `<COMPANION_DATA_ROOT>/backups` — Pre-upgrade database snapshots and backups
 
 ### Key Environment Variables
 Create a `backend/.env` file or export environment variables as needed:
@@ -65,7 +71,7 @@ Create a `backend/.env` file or export environment variables as needed:
 # Security: Master API key for administrative routes (fail-closed if unset in production)
 COMPANION_API_KEY=your-local-dev-api-key
 
-# Storage override (optional; defaults to %LOCALAPPDATA%\AICompanion)
+# Storage override (optional; defaults to %LOCALAPPDATA%\AI Companion\Data)
 COMPANION_DATA_ROOT=D:\AICompanionData
 
 # Hardware offload settings (defaults to vulkan on RX 580)
@@ -102,8 +108,9 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 - **Interactive API Documentation:** `http://127.0.0.1:8000/docs` (Swagger UI)
-- **Alternative OpenAPI Specification:** `http://127.0.0.1:8000/api/v1/openapi.json`
-- **Health Endpoint:** `http://127.0.0.1:8000/health`
+- **OpenAPI JSON Specification:** `http://127.0.0.1:8000/openapi.json`
+- **Public Health Endpoint:** `http://127.0.0.1:8000/api/v1/health` (unauthenticated liveness probe)
+- **Protected System Status:** `http://127.0.0.1:8000/api/v1/system/status` (requires `COMPANION_API_KEY`)
 
 ---
 
@@ -137,7 +144,10 @@ The backend manages an independent `llama-server.exe` instance in multi-model ro
 - **Managed Port:** `8085` (reserved for FastAPI backend router daemon)
 - **Binary Path:** `runtime/llama.cpp/llama-server.exe`
 - **GPU Acceleration:** Vulkan offload on AMD Radeon RX 580
-- **Profiles:** `eco` (16 layers, 2048 ctx), `balanced` (28 layers, 4096 ctx), `max` (33 layers, 8192 ctx)
+- **Profiles (Configured in `backend/app/core/config.py`):**
+  - `eco`: context = 2048, GPU layers = 0, threads = 4, mmproj offload = false
+  - `balanced`: context = 4096, GPU layers = 28, threads = 6, mmproj offload = true
+  - `maximum`: context = 8192, GPU layers = 33, threads = 8, mmproj offload = true
 
 For full runtime details, see [LLAMA_CPP_RUNTIME_ARCHITECTURE.md](../04_Architecture/LLAMA_CPP_RUNTIME_ARCHITECTURE.md).
 
@@ -153,7 +163,12 @@ For benchmarking or verifying GPU layers without starting the full FastAPI backe
 
 ## 7. Android Mobile Client Development (Post-V1)
 
-The Android companion client (`com.cnl.aicompanion`) is maintained in `android/`:
+The Android companion client is maintained in `android/`:
+
+> [!NOTE]
+> **Android Package Identity Reality:**  
+> The current mobile prototype code still uses legacy/template identifiers (`namespace = "com.example"`, `applicationId = "com.aistudio.localcore.swbjtu"` in `android/app/build.gradle.kts`).  
+> The locked production target under Decision D3 is `com.cnl.aicompanion`. This package rename refactor is planned and must occur before production Android data persistence, Keystore signing, Health Connect permissions, or app distribution depend on the package identity.
 
 1. Open `android/` in Android Studio Ladybug or later.
 2. Allow Gradle sync to complete using the bundled Gradle wrapper (`gradlew`).

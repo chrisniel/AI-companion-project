@@ -647,12 +647,12 @@ V1 is operational when:
 - Eco / Balanced / Maximum performance profiles switch runtime parameters
 - Conversation threads persist and restore accurately
 - SQLite migrations (Alembic) execute safely without data loss
-- Task and reminder lifecycle works (create, complete, soft-delete, automated retention purge)
+- Task lifecycle works (create, complete, soft-delete, and retention period calculation implemented; automatic background scheduling and reminder notification delivery are remaining V1 lifecycle wiring concerns)
 - SQLite FTS5 lexical memory retrieval accurately returns relevant context
-- Background scheduler operates independently of browser tab lifetime
+- Background scheduler operating independently of browser tab lifetime (required V1 release capability)
 - Phase 8B multimodal image/vision attachments can be uploaded, resolved, and inferred
 - Phase 8C accessibility, UI polish, and responsive web adaptations are complete
-- Remote access over Tailscale/private mesh is authenticated with revocable credentials
+- Remote access over Tailscale/private mesh is authenticated (using shared application credential in current implementation, with revocable per-device credentials planned under Decision D4/D5)
 - Master secrets remain outside clients, logs, and normal Git content
 
 *(Note: Production Android backend sync, Android offline inference, voice/audio pipeline, and Health Connect are strategic post-V1 roadmap capabilities; see [SYSTEM_BASELINE.md](docs/04_Architecture/SYSTEM_BASELINE.md)).*

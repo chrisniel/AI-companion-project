@@ -31,12 +31,12 @@ AI Companion **V1** is defined as the first complete, stable, **PC-hosted releas
 - **Local text LLM inference** via `llama.cpp` (GGUF, Vulkan offload on AMD RX 580)
 - **Multi-turn conversation management** with live SSE streaming completions
 - **Memory persistence & retrieval** (SQLite with FTS5 lexical search)
-- **Task and reminder lifecycle** (CRUD, soft-delete, automated retention purge)
+- **Task and reminder lifecycle** (CRUD, soft-delete, retention threshold calculation; automated periodic lifecycle scheduling and reminder execution are remaining V1 wiring concerns)
 - **Model library & runtime management** (Schema v3 registry, GGUF metadata parsing, runtime profiles)
 - **Controlled local model import pipeline** (inbox → preflight → staging → atomic install → library; execution service is an active V1 implementation gap)
 - **Phase 8B Multimodal Vision** (image attachment API, client composer, and vision-model inference)
 - **Phase 8C Integration & Polish** (accessibility, bundle optimization, UI consistency, responsive web cleanup)
-- **Release Hardening** (automated SQLite backup, migration safety preflight, secure configuration)
+- **Release Hardening** (migration safety preflight, secure configuration defaults, and release hardening as approved through dedicated implementation plans)
 
 ### Explicitly Excluded from V1 (Post-V1 Milestones)
 - Production Android backend synchronization
@@ -99,7 +99,7 @@ As of active reconciliation on branch `chore/repository-documentation-reconcilia
 | Subsystem | Implemented & Verified Reality | Known Non-Implemented Boundary |
 | :--- | :--- | :--- |
 | **Backend Core** | FastAPI application, CORS origin validation, request streaming body limiter (HTTP 413), fail-closed auth (`verify_token`), logging. | Tool execution engine and provider adapters not implemented. |
-| **Persistence** | SQLite WAL mode, Alembic migrations 001–005 (`005_scope_message_constraints`), Task CRUD, soft-delete, automated retention purge. Canonical paths derived via `storage.py` (`MODEL_LIBRARY_DIR` = `library/models/llm`, `INSTALLED_REGISTRY_PATH` = `library/registry/models.json`). | Attachment table (006) and backend character persistence table not implemented. |
+| **Persistence** | SQLite WAL mode, Alembic migrations 001–005 (`005_scope_message_constraints`), Task CRUD, soft-delete, retention period calculation, and standalone purge runner. Canonical paths derived via `storage.py` (`MODEL_LIBRARY_DIR` = `library/models/llm`, `INSTALLED_REGISTRY_PATH` = `library/registry/models.json`). | Attachment table (006), backend character persistence table, and automatic periodic lifecycle scheduling of retention purge not implemented. |
 | **Local LLM Engine** | `llama.cpp` Vulkan x64 (b10936), AMD RX 580 VRAM offload profiles (Eco/Balanced/Maximum), subprocess management, router log (`database/llama_server.log`). | Multiple concurrent active models not supported. Managed router receives `LLAMA_MODELS_DIR`. |
 | **Model Registry** | Schema v3 bridge, dual factory/installed discovery, GGUF binary header parser for metadata, contract drift checks. | Controlled local importer execution service is an active V1 implementation gap; automated online download manager is post-V1. |
 | **Frontend Web** | React 19, TypeScript 5.8, Vite 6, Tailwind CSS 4, live SSE streaming chat, tactile VRAM controls, decomposed Assistant components, truthful registry. | Full attachment uploading (Phase 8B) and responsive mobile web layout hardening (Phase 8C) not implemented. |

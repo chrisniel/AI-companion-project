@@ -10,14 +10,17 @@
 
 The AI Companion project maintains a strict test-first verification discipline. Changes across backend routes, database models, frontend UI, or mobile components must be accompanied by automated verification before merging or release.
 
-### Active Test Suites & Baseline Counts
+### Verified Test Suites & Last Verified Baselines
 
-| Subsystem | Test Framework | Test Location | Passing Baseline | Primary Scope |
+> [!NOTE]
+> **Baseline Attribution:** The passing test counts below represent the last formally executed and verified repository baselines (established during Phase 8 / 8P deliveries). Documentation reconciliation passes (R0–R8) operate under read-only mode and do not freshly execute complete test suites.
+
+| Subsystem | Test Framework | Test Location | Last Verified Baseline | Primary Scope |
 | :--- | :--- | :--- | :--- | :--- |
-| **Backend** | `pytest` + `httpx` + `pytest-asyncio` | `backend/tests/` | **88 passed** | Fast REST/SSE endpoints, memory, tasks, scheduler, storage, models, auth |
-| **Frontend** | `vitest` + React Testing Library | `frontend/web/src/` | **132 passed** | Components, hooks, state, navigation, controls, soft-glass rendering |
-| **Android** | `JUnit4` + `Robolectric` + `MockK` | `android/app/src/test/` | **110 passed** | ViewModels, repository contracts, MVI state flow, room schemas |
-| **Contract** | Python drift detection script | `contracts/openapi/` | **Deterministic** | OpenAPI 3.1 schema equality between FastAPI routes and committed spec |
+| **Backend** | `pytest` + `httpx` + `pytest-asyncio` | `backend/tests/` | **88 passed** (Phase 8P) | Fast REST/SSE endpoints, memory, tasks, storage, models, auth |
+| **Frontend** | `vitest` + React Testing Library | `frontend/web/src/` | **132 passed** (Phase 8A) | Components, hooks, state, navigation, controls, soft-glass rendering |
+| **Android** | `JUnit4` + `Robolectric` + `Roborazzi` + `kotlinx-coroutines-test` | `android/app/src/test/` | **110 passed** (Phase 8 UI) | ViewModels, repository contracts, MVI state flow, Compose UI components, screenshot regression |
+| **Contract** | Python drift detection script | `contracts/openapi/` | **Deterministic** (CI Verified) | OpenAPI 3.1 schema equality between FastAPI routes and committed spec |
 
 ---
 
