@@ -2,32 +2,28 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Current State: Repository Documentation Reconciliation (Passes R0–R8) = **COMPLETE / VERIFIED**
-- Current Branch: `chore/repository-documentation-reconciliation`
-- Next Engineering Milestone: **Phase 8B — Multimodal Image Attachment Foundation**
-- Phase 8B Status: **READY / UNBLOCKED / NOT STARTED**
+- Current State: Phase 8B — Multimodal Image Attachment Foundation = **IN PROGRESS**
+- Current Branch: `feature/multimodal-image-attachments`
+- Current Slice: **8B.0 — Readiness Reconciliation** (`COMPLETE / VERIFIED`)
+- Next Slice: **8B.1 — Persistence Foundation**
 - Commit Owner: Chris manually reviews, commits, merges, and branches all changes.
 
 ---
 
 ## Current Execution State
 
-| Milestone / Gate | Status | Primary Focus |
+| Milestone / Slice | Status | Primary Focus |
 | :--- | :--- | :--- |
-| **Passes R0–R8 Reconciliation** | `COMPLETE / VERIFIED` | Full audit, baseline lock, routing, and fresh test verification. |
-| **Phase 8B: Multimodal Vision** | `READY / NOT STARTED` | Next milestone; unblocked upon manual branch transition. |
-| **Phase 8C: Integration & Polish** | `PLANNED` | Polish, accessibility, and bundle optimization after 8B. |
-
----
-
-## Required User-Owned Transition to Phase 8B
-
-1. **Review R8 Deliverables:** Chris inspects git status and diff for Pass R8 verification.
-2. **Commit & Push R8:** Commit on `chore/repository-documentation-reconciliation`:
-   `docs(reconciliation): lock final verified baseline`
-3. **Merge to Develop:** Chris manually merges `chore/repository-documentation-reconciliation` into `develop`.
-4. **Create Feature Branch:** Chris creates and switches to `feature/multimodal-image-attachments`.
-5. **Begin Phase 8B:** Implementation starts strictly on `feature/multimodal-image-attachments`.
+| **8B.0: Readiness Reconciliation** | `COMPLETE / VERIFIED` | Source & plan verification, four questions resolved, slice map locked. |
+| **8B.1: Persistence Foundation** | `NEXT / UNBLOCKED` | Migration 006, Attachment ORM, db/base.py metadata registration, parity tests. |
+| **8B.2: Contracts & Validation** | `PLANNED` | Attachment schemas, multimodal types, Pillow validator, validation tests. |
+| **8B.3: Secure Attachment API** | `PLANNED` | Route-specific upload limit, upload endpoint, preview, soft-delete, BOLA. |
+| **8B.4: Message Binding & Lifecycle** | `PLANNED` | Atomic claim, send binding, cascade soft-delete on conversation delete. |
+| **8B.5: Vision Provider Integration** | `PLANNED` | Media resolver, available_capabilities vision gate, wire translation. |
+| **8B.6: Web Attachment Composer** | `PLANNED` | AttachmentApi.ts, file picker, staged cards, Blob preview, send payload. |
+| **8B.7: History Image Rendering** | `PLANNED` | History attachments, Blob fetch, reload persistence, URL cleanup. |
+| **8B.8: Full Integration & Closure** | `PLANNED` | Full test suites, typecheck, build, openapi drift check, report. |
+| **Phase 8C: Integration & Polish** | `PLANNED / BLOCKED` | Blocked by completion and merge of Phase 8B. |
 
 ---
 
@@ -35,7 +31,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 1. **User-Owned Git Operations:** AI agents must never execute git commit, push, merge, checkout, or branch creation.
 2. **Data Safety:** Never execute tests or mutations against `%LOCALAPPDATA%\AI Companion\Data`. Use isolated ephemeral roots.
-3. **Feature-Named Planning:** Phase 8B execution follows the approved plan in `plan-phase8-pc-frontend-architecture-ux.md`.
+3. **Surgical Implementation:** Implement one approved slice at a time; do not jump ahead to subsequent slices.
 
 ---
 
