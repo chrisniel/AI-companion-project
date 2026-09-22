@@ -856,7 +856,7 @@ Frontend Removal: Removing a staged attachment must call the DELETE endpoint —
 
 ### Granular Execution Slices (8B.0 – 8B.8)
 
-#### 8B.0 — Readiness Reconciliation
+#### 8B.0 — Readiness Reconciliation (COMPLETE / VERIFIED)
 - Planning and repository source reconciliation only (no application code or dependency modifications).
 - Starting state verification on `feature/multimodal-image-attachments` against `develop` commit `7458881f`.
 - Reconcile four known readiness questions:
@@ -866,7 +866,7 @@ Frontend Removal: Removing a staged attachment must call the DELETE endpoint —
   4. SQLAlchemy/Alembic model registration (`backend/app/db/base.py` metadata registration correction assigned to 8B.1).
 - Lock granular 8B.0–8B.8 execution slices in implementation plan and update `docs/01_Tracking/task.md`.
 
-#### 8B.1 — Persistence Foundation
+#### 8B.1 — Persistence Foundation (COMPLETE / VERIFIED)
 - [CREATE] `backend/migrations/versions/006_add_attachments.py`
   - revision: `006_add_attachments`
   - down_revision: `005_scope_message_constraints`

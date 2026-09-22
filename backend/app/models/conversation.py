@@ -1,11 +1,12 @@
 from typing import List, TYPE_CHECKING
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base import Base
+from app.db.session import Base
 from app.models.base import UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, SoftDeleteMixin
 
 if TYPE_CHECKING:
     from app.models.message import Message
+    from app.models.attachment import Attachment
 
 
 class Conversation(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, SoftDeleteMixin):
@@ -19,4 +20,9 @@ class Conversation(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, SoftDe
         back_populates="conversation",
         cascade="all, delete-orphan",
         order_by="Message.sequence_no",
+    )
+    attachments: Mapped[List["Attachment"]] = relationship(
+        "Attachment",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
     )
