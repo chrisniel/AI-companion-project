@@ -178,7 +178,7 @@ async def upload_attachment(
     except ImageTooLargeError as exc:
         raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=exc.message)
     except AttachmentValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.message)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.message)
 
     # 5. Storage paths preflight
     canonical_ext = ".png" if validated_meta.mime_type == "image/png" else ".jpg"

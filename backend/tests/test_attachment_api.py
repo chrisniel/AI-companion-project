@@ -133,6 +133,60 @@ async def test_middleware_attachment_upload_rejects_envelope_over_12mb(
 
 
 @pytest.mark.asyncio
+async def test_middleware_attachment_upload_streaming_chunked_exceeds_route_limit_413(
+    client: AsyncClient, auth_headers: dict, test_session: AsyncSession, monkeypatch
+):
+    """Chunked streaming upload exceeding route-specific limit returns 413 PAYLOAD_TOO_LARGE without persisting row or file."""
+    conv = await _create_test_conversation(test_session)
+    conv_id = conv.id
+    target_dir = settings.ATTACHMENT_DIR / "local_user" / conv_id
+
+    # Monkeypatch route-specific attachment limit to a lightweight test value (8 KiB)
+    test_limit = 8 * 1024
+    monkeypatch.setattr(settings, "MAX_ATTACHMENT_REQUEST_BODY_BYTES", test_limit)
+
+    # Stream chunks totaling more than test_limit (e.g. 3 chunks of 4 KiB = 12 KiB)
+    chunk_size = 4 * 1024
+    total_chunks = (test_limit // chunk_size) + 1  # 3 chunks = 12 KiB > 8 KiB
+
+    async def streaming_multipart():
+        yield b"--boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"test.png\"\r\nContent-Type: image/png\r\n\r\n"
+        for _ in range(total_chunks):
+            yield b"x" * chunk_size
+        yield b"\r\n--boundary--\r\n"
+
+    headers = {
+        **auth_headers,
+        "Content-Type": "multipart/form-data; boundary=boundary",
+    }
+    # Ensure Content-Length is NOT in headers
+    assert "Content-Length" not in headers
+
+    response = await client.post(
+        f"/api/v1/conversations/{conv_id}/attachments",
+        content=streaming_multipart(),
+        headers=headers,
+    )
+
+    # Assertions
+    assert response.status_code == 413
+    error_data = response.json()["error"]
+    assert error_data["code"] == "PAYLOAD_TOO_LARGE"
+    # Prove the route-specific attachment limit was used, not the ordinary 2 MiB limit (2097152)
+    assert str(test_limit) in error_data["message"]
+    assert str(settings.MAX_REQUEST_BODY_BYTES) not in error_data["message"]
+
+    # Verify no Attachment row was persisted
+    stmt = select(Attachment).where(Attachment.conversation_id == conv_id)
+    records = (await test_session.execute(stmt)).scalars().all()
+    assert len(records) == 0
+
+    # Verify no physical file was created
+    if target_dir.exists():
+        assert len(list(target_dir.iterdir())) == 0
+
+
+@pytest.mark.asyncio
 async def test_middleware_other_conversation_routes_remain_2mb_limit(
     client: AsyncClient, auth_headers: dict
 ):
