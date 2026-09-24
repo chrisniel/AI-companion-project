@@ -4,8 +4,8 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - Current State: Phase 8B — Multimodal Image Attachment Foundation = **IN PROGRESS**
 - Current Branch: `feature/multimodal-image-attachments`
-- Current Slice: **8B.2 — Contracts & Image Validation** (`COMPLETE / VERIFIED`)
-- Next Slice: **8B.3 — Secure Attachment API**
+- Current Slice: **8B.3 — Secure Attachment API** (`COMPLETE / VERIFIED`)
+- Next Slice: **8B.4 — Transactional Message Binding & Pre-Stream Preparation** (`NEXT / UNBLOCKED`)
 - Commit Owner: Chris manually reviews, commits, merges, and branches all changes.
 
 ---
@@ -17,8 +17,8 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | **8B.0: Readiness Reconciliation** | `COMPLETE / VERIFIED` | Source & plan verification, four questions resolved, slice map locked. |
 | **8B.1: Persistence Foundation** | `COMPLETE / VERIFIED` | Migration 006, Attachment ORM, db/base.py metadata registration, parity tests. |
 | **8B.2: Contracts & Validation** | `COMPLETE / VERIFIED` | Attachment schemas, multimodal types, Pillow validator, validation tests, OpenAPI contract sync. |
-| **8B.3: Secure Attachment API** | `NEXT / UNBLOCKED` | Route-specific upload limit, upload endpoint, preview, soft-delete, BOLA. |
-| **8B.4: Message Binding & Lifecycle** | `PLANNED` | Atomic claim, send binding, cascade soft-delete on conversation delete. |
+| **8B.3: Secure Attachment API** | `COMPLETE / VERIFIED` | Route-specific upload limit, upload endpoint, exclusive temp creation, collision no-clobber, preview, soft-delete, BOLA. |
+| **8B.4: Message Binding & Lifecycle** | `NEXT / UNBLOCKED` | Atomic claim, send binding, cascade soft-delete on conversation delete. |
 | **8B.5: Vision Provider Integration** | `PLANNED` | Media resolver, available_capabilities vision gate, wire translation. |
 | **8B.6: Web Attachment Composer** | `PLANNED` | AttachmentApi.ts, file picker, staged cards, Blob preview, send payload. |
 | **8B.7: History Image Rendering** | `PLANNED` | History attachments, Blob fetch, reload persistence, URL cleanup. |

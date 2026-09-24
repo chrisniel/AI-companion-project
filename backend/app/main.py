@@ -22,6 +22,7 @@ from app.core.logging import logger, setup_logging
 from app.db.session import dispose_database_runtime, initialize_database_runtime
 
 REQUEST_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
+ATTACHMENT_UPLOAD_PATH_RE = re.compile(r"^/api/v1/conversations/[^/]+/attachments/?$")
 
 
 class SecurityAndTracingMiddleware(BaseHTTPMiddleware):
@@ -59,16 +60,24 @@ class PayloadLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.max_bytes = max_bytes
 
+    def _resolve_max_bytes(self, request: Request) -> int:
+        if request.method == "POST" and ATTACHMENT_UPLOAD_PATH_RE.match(request.url.path):
+            return settings.MAX_ATTACHMENT_REQUEST_BODY_BYTES
+        return self.max_bytes
+
     async def dispatch(self, request: Request, call_next) -> Response:
+        effective_max = self._resolve_max_bytes(request)
+        request.state.effective_max_bytes = effective_max
+
         # 1. Fast path check on Content-Length header
         content_length = request.headers.get("content-length")
         if content_length:
             try:
-                if int(content_length) > self.max_bytes:
+                if int(content_length) > effective_max:
                     request_id = getattr(request.state, "request_id", None) or f"req_{uuid.uuid4().hex[:12]}"
                     return format_error_response(
                         code="PAYLOAD_TOO_LARGE",
-                        message=f"Request payload exceeds maximum allowed size of {self.max_bytes} bytes.",
+                        message=f"Request payload exceeds maximum allowed size of {effective_max} bytes.",
                         details=None,
                         request_id=request_id,
                         status_code=status.HTTP_413_CONTENT_TOO_LARGE,
@@ -86,10 +95,10 @@ class PayloadLimitMiddleware(BaseHTTPMiddleware):
             if message.get("type") == "http.request":
                 body_bytes = message.get("body", b"")
                 total_received += len(body_bytes)
-                if total_received > self.max_bytes:
+                if total_received > effective_max:
                     request.state.stream_bytes_exceeded = True
                     raise CompanionPayloadTooLargeError(
-                        message=f"Request stream exceeded maximum allowed size of {self.max_bytes} bytes."
+                        message=f"Request stream exceeded maximum allowed size of {effective_max} bytes."
                     )
             return message
 
@@ -101,7 +110,7 @@ class PayloadLimitMiddleware(BaseHTTPMiddleware):
                 request_id = getattr(request.state, "request_id", None) or f"req_{uuid.uuid4().hex[:12]}"
                 return format_error_response(
                     code="PAYLOAD_TOO_LARGE",
-                    message=f"Request payload exceeds maximum allowed size of {self.max_bytes} bytes.",
+                    message=f"Request payload exceeds maximum allowed size of {effective_max} bytes.",
                     details=None,
                     request_id=request_id,
                     status_code=status.HTTP_413_CONTENT_TOO_LARGE,
@@ -111,7 +120,7 @@ class PayloadLimitMiddleware(BaseHTTPMiddleware):
             request_id = getattr(request.state, "request_id", None) or f"req_{uuid.uuid4().hex[:12]}"
             return format_error_response(
                 code="PAYLOAD_TOO_LARGE",
-                message=f"Request payload exceeds maximum allowed size of {self.max_bytes} bytes.",
+                message=f"Request payload exceeds maximum allowed size of {effective_max} bytes.",
                 details=None,
                 request_id=request_id,
                 status_code=status.HTTP_413_CONTENT_TOO_LARGE,
@@ -232,9 +241,10 @@ def create_app() -> FastAPI:
     async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         request_id = getattr(request.state, "request_id", None)
         if getattr(request.state, "stream_bytes_exceeded", False):
+            limit = getattr(request.state, "effective_max_bytes", settings.MAX_REQUEST_BODY_BYTES)
             return format_error_response(
                 code="PAYLOAD_TOO_LARGE",
-                message=f"Request payload exceeds maximum allowed size of {settings.MAX_REQUEST_BODY_BYTES} bytes.",
+                message=f"Request payload exceeds maximum allowed size of {limit} bytes.",
                 details=None,
                 request_id=request_id,
                 status_code=status.HTTP_413_CONTENT_TOO_LARGE,

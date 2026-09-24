@@ -944,7 +944,7 @@ Frontend Removal: Removing a staged attachment must call the DELETE endpoint —
 - Dependencies: Declare explicit `Pillow` runtime dependency in `backend/pyproject.toml` and `backend/requirements.txt`.
 - Tests: Validation unit tests for byte size limits (10 MiB), magic byte validation vs. spoofed headers, dimension checks, megapixel caps, corrupted byte sequences, and decompression bomb vectors.
 
-#### 8B.3 — Secure Attachment API
+#### 8B.3 — Secure Attachment API (COMPLETE / VERIFIED)
 - Route-specific request size policy:
   - In `backend/app/core/config.py`, introduce a named configuration setting:
     `MAX_ATTACHMENT_REQUEST_BODY_BYTES: int = 12 * 1024 * 1024  # 12 MB max multipart upload envelope`
@@ -953,30 +953,45 @@ Frontend Removal: Removing a staged attachment must call the DELETE endpoint —
   - Narrow scope: The path/method exception is narrowly scoped strictly to `POST /api/v1/conversations/{conversation_id}/attachments`. No other API endpoint receives the enlarged ceiling.
 - Transport & Dependencies:
   - Transport: `multipart/form-data` with FastAPI `UploadFile = File(...)`.
-  - Dependencies: Declare explicit `python-multipart` runtime dependency in `backend/pyproject.toml` and `backend/requirements.txt`.
+  - Dependencies: Declare explicit `python-multipart>=0.0.31` runtime dependency in `backend/pyproject.toml` and `backend/requirements.txt`.
 - Canonical Storage Path Contract:
   - `Attachment.storage_path` is strictly relative to `COMPANION_DATA_ROOT` (e.g., `attachments/{owner_id}/{conversation_id}/{storage_filename}`).
   - It is NOT relative to `ATTACHMENT_DIR`.
   - `storage_path` is NEVER exposed through any public API schema or response.
+- Failure-Recovery & Storage Consistency Contract:
+
+  | Failure Point | DB State | Filesystem State | Recovery Action |
+  | :--- | :--- | :--- | :--- |
+  | Validation error (MIME, size, dimension) | No DB row written | 0 files created | Request rejected with 413/422; clean return. |
+  | Pre-promotion temp file collision | Unchanged | Foreign temp file preserved | Mode `"xb"` fails exclusively; retry with fresh UUID without touching existing temp file. |
+  | Initial DB flush failure | Transaction rolled back | 0 files created on disk | `await db.rollback()`; raise 500; no orphaned rows or files. |
+  | Disk promotion / write failure | Transaction rolled back | Own temp file unlinked | Clean own temp; `await db.rollback()`; raise 500; no orphaned rows or files. |
+  | Second DB flush failure (rare race rename) | Transaction rolled back | Newly promoted file unlinked | `await db.rollback()`; unlink `final_target_path`; preserve collision file; raise 500. |
+  | DB commit failure | Transaction rolled back | Newly promoted file unlinked | `await db.rollback()`; unlink `final_target_path`; raise 500; no orphaned rows or files. |
+  | Post-commit response construction failure | Transaction committed | Promoted file preserved | DB row and physical file remain committed and consistent. |
+
 - [CREATE] `backend/app/api/v1/endpoints/attachments.py`:
   - `POST /api/v1/conversations/{conversation_id}/attachments`:
     - Auth: Bearer token required. Validate conversation ownership (`owner_id`) and active existence (`deleted_at is None`).
-    - Stream file bytes and validate with `attachment_validator` (reject > 10 MiB with HTTP 413; invalid MIME/dimensions with HTTP 422).
-    - Generate unique UUID storage filename: `{uuid}.{ext}` (never user-supplied filename).
-    - Storage location: relative `attachments/{owner_id}/{conversation_id}/{storage_filename}`.
-    - Path containment guard: resolve canonical path via `(settings.COMPANION_DATA_ROOT / storage_path).resolve()` and assert it remains strictly contained inside `settings.ATTACHMENT_DIR.resolve()`.
-    - Persist staged `Attachment` record (`message_id = None`).
+    - Stream file bytes with 64 KiB chunks and validate with `attachment_validator` (reject > 10 MiB with HTTP 413; invalid MIME/dimensions with HTTP 422).
+    - Pre-resolve collision-free candidate storage filename before initial flush.
+    - Persist staged `Attachment` record (`message_id = None`) and execute initial `await db.flush()`.
+    - Write temp file using exclusive create mode `"xb"`; promote to target filename using `os.rename`.
+    - If race rename occurred, update attachment storage fields and execute second `await db.flush()`.
+    - Exception handler guarantees `db.rollback()` and unlinks `final_target_path` on any flush/commit error without touching existing collision files.
     - Return `AttachmentOut` (status 201; `storage_path` excluded).
   - `GET /api/v1/conversations/{conversation_id}/attachments/{attachment_id}/preview`:
     - Auth: Bearer token required. Validate ownership (`owner_id`), conversation match, and `is_deleted is False`.
     - Canonical path resolution: `(settings.COMPANION_DATA_ROOT / attachment.storage_path).resolve()`.
     - Verify file path containment inside `settings.ATTACHMENT_DIR.resolve()` and existence on disk.
-    - Return raw image bytes with correct `Content-Type` header (`image/png` or `image/jpeg`).
+    - Return raw image bytes via `FileResponse` with correct `Content-Type` header (`image/png` or `image/jpeg`).
   - `DELETE /api/v1/conversations/{conversation_id}/attachments/{attachment_id}`:
     - Auth: Bearer token required. Soft-delete attachment (`is_deleted=True, deleted_at=utc_now()`).
     - Physical file deletion is deferred to the retention lifecycle job (Phase 9), not delete time.
     - Subsequent DELETE on already-deleted attachment returns 404.
-- Tests: Upload PNG/JPEG -> 201; upload WebP -> 422; file > 10MB -> 413; BOLA (cross-conversation / cross-owner) -> 404/403; preview auth -> 200 vs 403; explicit DELETE -> 204 then 404 on repeat.
+- Tests (`backend/tests/test_attachment_api.py`):
+  - 35 automated tests covering route limits, auth, validation, storage no-clobber, exclusive temp creation, failure rollback/cleanup, preview streaming, and soft-delete.
+  - OpenAPI contract synchronized (`scripts/check_openapi_contract.py` passes with 0 drift across 22 routes).
 
 #### 8B.4 — Transactional Message Binding
 - Pre-Stream Turn Preparation Transaction Architecture:
