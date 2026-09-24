@@ -57,6 +57,7 @@ Configure project-specific paths and boundaries in the Project Profile below. If
 - Update In-Place: During the planning phase, update existing sections (affected files, acceptance criteria, steps) directly in place. Never prepend duplicate plans or drafts above existing content.
 - Obtain explicit user approval on the plan before implementing code.
 - Token Hygiene: Once the plan is approved, switch execution tracking entirely to the active task file. Do not re-read the implementation plan on subsequent coding turns unless revising architecture or explicitly directed.
+- New Plan Creation: If no active implementation plan already covers a non-trivial feature, refactor, or bug fix, copy docs/02_Planning/templates/implementation-plan-template.md (or the Starter Kit equivalent when bootstrapping a new project) into an appropriately feature-named path under docs/02_Planning/ or the relevant phase directory, complete it in place, and obtain user approval before implementation. If an applicable active plan already exists, update that plan instead of creating a duplicate.
 
 ## 4. In-Place Task Continuity & Per-File Archiving (task.md)
 

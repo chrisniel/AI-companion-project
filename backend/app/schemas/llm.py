@@ -1,15 +1,16 @@
 """Pydantic schemas for LLM chat completions, streaming chunks, and model status."""
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 from pydantic import Field
 from app.schemas.common import BaseSchema
+from app.schemas.multimodal import ContentBlock
 from app.services.llm.runtime_state import LLMRuntimeState
 
 
 class ChatMessage(BaseSchema):
     """Chat message in OpenAI-compatible format."""
     role: Literal["system", "user", "assistant"]
-    content: str
+    content: Union[str, List[ContentBlock]]
 
 
 class ChatCompletionRequest(BaseSchema):

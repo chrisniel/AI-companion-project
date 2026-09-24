@@ -1,6 +1,6 @@
 # Phase 8 Implementation Plan — PC Frontend Architecture, Runtime Config, Multimodal & Polish
 
-> **Status:** 8A and 8P COMPLETE / VERIFIED. Repository Documentation Reconciliation (Passes R0–R8) is COMPLETE / VERIFIED. Phase 8B is IN PROGRESS (Slice 8B.0 COMPLETE / VERIFIED; Slice 8B.1 NEXT). 8C is PLANNED AFTER 8B.
+> **Status:** 8A and 8P COMPLETE / VERIFIED. Repository Documentation Reconciliation (Passes R0–R8) is COMPLETE / VERIFIED. Phase 8B is IN PROGRESS (Slice 8B.2 COMPLETE / VERIFIED; Slice 8B.3 NEXT). 8C is PLANNED AFTER 8B.
 > **Authority Precedence:** Normative architecture is owned by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md). Canonical product sequencing is owned by [`docs/02_Planning/ROADMAP.md`](../ROADMAP.md). Runtime config architecture is owned by [`docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../../04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md).  
 > **This is the single authoritative feature implementation plan for Phase 8.**
 
@@ -912,7 +912,7 @@ Frontend Removal: Removing a staged attachment must call the DELETE endpoint —
   - ORM parity test: Deterministically compares the intended ORM and migration column definitions, FKs, nullabilities, server defaults, and indexes without relying on incidental import order or implicit SQLite behavior.
   - Verify all 4 mixins: `UUIDPrimaryKeyMixin`, `TimestampMixin` (`created_at` + `updated_at`), `OwnerMixin`, `SoftDeleteMixin` (`is_deleted` default False).
 
-#### 8B.2 — Contracts & Image Validation
+#### 8B.2 — Contracts & Image Validation (COMPLETE / VERIFIED)
 - [CREATE] `backend/app/schemas/attachment.py`:
   - Constants:
     - `ALLOWED_MIME_TYPES = frozenset({"image/png", "image/jpeg"})` (WebP deferred).

@@ -1881,6 +1881,36 @@
   },
   "components": {
     "schemas": {
+      "AttachmentRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "filename_display": {
+            "type": "string",
+            "title": "Filename Display"
+          },
+          "mime_type": {
+            "type": "string",
+            "title": "Mime Type"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "filename_display",
+          "mime_type",
+          "size_bytes"
+        ],
+        "title": "AttachmentRef",
+        "description": "Lightweight reference embedded in message payloads."
+      },
       "AuthVerifyResponse": {
         "properties": {
           "authenticated": {
@@ -2125,7 +2155,31 @@
             "title": "Role"
           },
           "content": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/TextContent"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ResolvedImageContent"
+                    }
+                  ],
+                  "discriminator": {
+                    "propertyName": "type",
+                    "mapping": {
+                      "image_bytes": "#/components/schemas/ResolvedImageContent",
+                      "text": "#/components/schemas/TextContent"
+                    }
+                  }
+                },
+                "type": "array"
+              }
+            ],
             "title": "Content"
           }
         },
@@ -2679,6 +2733,13 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/AttachmentRef"
+            },
+            "type": "array",
+            "title": "Attachments"
           }
         },
         "additionalProperties": false,
@@ -2713,6 +2774,13 @@
               }
             ],
             "title": "Client Message Id"
+          },
+          "attachment_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Attachment Ids"
           }
         },
         "additionalProperties": false,
@@ -3295,6 +3363,34 @@
         ],
         "title": "ReasoningMode"
       },
+      "ResolvedImageContent": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "image_bytes",
+            "title": "Type",
+            "default": "image_bytes"
+          },
+          "mime_type": {
+            "type": "string",
+            "title": "Mime Type"
+          },
+          "data": {
+            "type": "string",
+            "minLength": 1,
+            "contentMediaType": "application/octet-stream",
+            "title": "Data"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "mime_type",
+          "data"
+        ],
+        "title": "ResolvedImageContent",
+        "description": "Resolved raw image bytes passed to provider translation layer."
+      },
       "SystemStatusResponse": {
         "properties": {
           "status": {
@@ -3720,6 +3816,28 @@
         "type": "object",
         "title": "TaskUpdate",
         "description": "Payload to update an existing task. Fields omitted remain unchanged."
+      },
+      "TextContent": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "text",
+            "title": "Type",
+            "default": "text"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "TextContent",
+        "description": "Standard text block within a multimodal message."
       },
       "TrashListResponse": {
         "properties": {
