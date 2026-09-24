@@ -272,6 +272,36 @@ def test_validate_decompression_bomb_rejected_locally():
     assert Image.MAX_IMAGE_PIXELS == original_max
 
 
+def test_validate_unexpected_exception_propagates_unchanged(monkeypatch):
+    """Unexpected runtime/programming errors during Pillow processing propagate unchanged rather than being mislabeled as CorruptedImageDataError."""
+    data = _create_test_image("PNG", size=(32, 32))
+
+    def fake_open(*args, **kwargs):
+        raise RuntimeError("Simulated unexpected internal runtime crash")
+
+    monkeypatch.setattr(Image, "open", fake_open)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        validate_image_bytes(data, filename="sample.png")
+
+    assert "Simulated unexpected internal runtime crash" in str(exc_info.value)
+
+
+def test_validate_memory_error_propagates_unchanged(monkeypatch):
+    """Resource/memory failures propagate directly and are not converted to AttachmentValidationError."""
+    data = _create_test_image("PNG", size=(32, 32))
+
+    def fake_load(*args, **kwargs):
+        raise MemoryError("Out of memory during decompression")
+
+    monkeypatch.setattr(Image.Image, "load", fake_load)
+
+    with pytest.raises(MemoryError) as exc_info:
+        validate_image_bytes(data, filename="sample.png")
+
+    assert "Out of memory" in str(exc_info.value)
+
+
 # ===========================================================================
 # 5. Schema Contract Tests
 # ===========================================================================

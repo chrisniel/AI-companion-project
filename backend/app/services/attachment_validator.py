@@ -227,7 +227,5 @@ def validate_image_bytes(data: bytes, filename: Optional[str] = None) -> Validat
             raise
         except (Image.DecompressionBombError, Image.DecompressionBombWarning) as e:
             raise DecompressionBombDetectedError(f"Decompression bomb detected: {e}") from e
-        except (SyntaxError, ValueError, OSError) as e:
+        except (SyntaxError, ValueError, OSError, EOFError) as e:
             raise CorruptedImageDataError(f"Corrupted or invalid image data: {e}") from e
-        except Exception as e:
-            raise CorruptedImageDataError(f"Failed to decode image data: {e}") from e
