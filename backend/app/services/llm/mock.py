@@ -2,13 +2,26 @@
 
 import asyncio
 from datetime import datetime, timezone
-from typing import AsyncGenerator, List, Optional
+from typing import Any, AsyncGenerator, List, Optional, Union
 
 from app.core.config import settings
 from app.schemas.llm import ChatMessage, ModelStatusResponse
 from app.services.llm.base import BaseLLMProvider
 from app.services.llm.runtime_state import LLMRuntimeState
 from app.services.model_registry import build_model_list
+
+
+def _extract_text_content(content: Union[str, List[Any]]) -> str:
+    """Extract plain text from string or structured ContentBlock list."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        for block in content:
+            if getattr(block, "type", None) == "text":
+                return getattr(block, "text", "")
+            if isinstance(block, dict) and block.get("type") == "text":
+                return block.get("text", "")
+    return ""
 
 
 class MockLLMProvider(BaseLLMProvider):
@@ -106,7 +119,8 @@ class MockLLMProvider(BaseLLMProvider):
         **kwargs
     ) -> str:
         self._last_active_at = datetime.now(timezone.utc)
-        last_user_msg = next((m.content for m in reversed(messages) if m.role == "user"), "Hello!")
+        raw_user_msg = next((m.content for m in reversed(messages) if m.role == "user"), "Hello!")
+        last_user_msg = _extract_text_content(raw_user_msg) if raw_user_msg != "Hello!" else "Hello!"
         return f"[Mock AI Companion]: I received your message: '{last_user_msg}'. Local AI Runtime is operational."
 
     async def generate_stream(
@@ -117,7 +131,8 @@ class MockLLMProvider(BaseLLMProvider):
         **kwargs
     ) -> AsyncGenerator[str, None]:
         self._last_active_at = datetime.now(timezone.utc)
-        last_user_msg = next((m.content for m in reversed(messages) if m.role == "user"), "Hello!")
+        raw_user_msg = next((m.content for m in reversed(messages) if m.role == "user"), "Hello!")
+        last_user_msg = _extract_text_content(raw_user_msg) if raw_user_msg != "Hello!" else "Hello!"
         response_text = f"I received your message: '{last_user_msg}'. Local AI Runtime is operational."
         tokens = response_text.split(" ")
 

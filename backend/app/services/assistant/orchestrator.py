@@ -9,7 +9,7 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass
-from typing import AsyncGenerator, List, Optional
+from typing import Any, AsyncGenerator, List, Optional, Union
 import uuid
 
 from fastapi import HTTPException, status
@@ -18,16 +18,20 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.models.attachment import Attachment
 from app.models.conversation import Conversation
 from app.models.memory import Memory
 from app.models.message import Message
-from app.schemas.llm import ChatMessage
+from app.schemas.llm import ChatMessage, ContentBlock, TextContent
+from app.schemas.model_registry import ModelCapability
+from app.services.assistant.media_resolver import resolve_image_content
 from app.services.attachment_service import (
     claim_attachments_for_message,
     validate_attachment_ids_syntax,
 )
 from app.services.llm.manager import get_llm_provider
 from app.services.memory.retriever import search_relevant_memories
+from app.services.model_registry import find_model_registry_entry
 
 logger = logging.getLogger("app.services.assistant.orchestrator")
 
@@ -56,11 +60,27 @@ def _get_lock(conversation_id: str) -> asyncio.Lock:
     return _conversation_locks[conversation_id]
 
 
-def _estimate_tokens(text: str) -> int:
-    """Estimate token count: 4 chars ~ 1 token, minimum 1."""
-    if not text:
+def _estimate_tokens(content: Union[str, List[Any]]) -> int:
+    """Estimate token count: 4 chars ~ 1 token, minimum 1. Only counts textual content."""
+    if not content:
         return 0
-    return max(1, len(text) // 4)
+    if isinstance(content, str):
+        return max(1, len(content) // 4)
+    if isinstance(content, list):
+        total_len = 0
+        for block in content:
+            if getattr(block, "type", None) == "text":
+                text = getattr(block, "text", "")
+                if text:
+                    total_len += len(text)
+            elif isinstance(block, dict) and block.get("type") == "text":
+                text = block.get("text", "")
+                if text:
+                    total_len += len(text)
+        if total_len == 0:
+            return 0
+        return max(1, total_len // 4)
+    return 0
 
 
 def _build_context(
@@ -277,6 +297,42 @@ async def orchestrate_chat_stream(
             generation_reserve=settings.GENERATION_RESERVE_TOKENS,
             memory_budget=settings.MEMORY_BUDGET_TOKENS,
         )
+
+        # Query committed attachments bound to this user turn
+        att_query = (
+            select(Attachment)
+            .where(
+                Attachment.message_id == prepared_turn.user_message.id,
+                Attachment.owner_id == owner_id,
+                Attachment.conversation_id == conversation_id,
+                Attachment.is_deleted.is_(False),
+            )
+            .order_by(Attachment.created_at.asc(), Attachment.id.asc())
+        )
+        att_result = await db.execute(att_query)
+        bound_attachments = list(att_result.scalars().all())
+
+        # Multimodal capability gate: active model must exist in registry with vision in library_state
+        has_vision = False
+        if bound_attachments and status_resp.active_model:
+            active_entry = await asyncio.to_thread(find_model_registry_entry, status_resp.active_model)
+            if active_entry and ModelCapability.vision in active_entry.library_state.available_capabilities:
+                has_vision = True
+
+        if has_vision and bound_attachments:
+            resolved_images: List[ContentBlock] = []
+            for att in bound_attachments:
+                resolved = await resolve_image_content(
+                    session=db,
+                    ref=att,
+                    owner_id=owner_id,
+                    conversation_id=conversation_id,
+                    message_id=prepared_turn.user_message.id,
+                )
+                resolved_images.append(resolved)
+
+            user_blocks: List[ContentBlock] = [*resolved_images, TextContent(type="text", text=user_text)]
+            prompt_messages[-1] = ChatMessage(role="user", content=user_blocks)
 
         provider._generation_active = True
         prompt_tokens = sum(_estimate_tokens(m.content) for m in prompt_messages)

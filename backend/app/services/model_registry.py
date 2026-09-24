@@ -682,13 +682,16 @@ def build_model_list() -> List[ModelRegistryEntry]:
     return result
 
 
-def resolve_runtime_model_id(identifier: Optional[str]) -> str:
-    """Resolve an incoming identifier (id, primary_file, or filename) to the router runtime_model_id."""
+def find_model_registry_entry(
+    identifier: Optional[str],
+    entries: Optional[List[ModelRegistryEntry]] = None,
+) -> Optional[ModelRegistryEntry]:
+    """Canonical model matcher: finds a ModelRegistryEntry across manifest.id, runtime_model_id, primary_file, or filename/stem."""
     if not identifier:
-        return ""
+        return None
     clean_id = identifier.replace("\\", "/").strip()
-    entries = build_model_list()
-    for entry in entries:
+    model_entries = entries if entries is not None else build_model_list()
+    for entry in model_entries:
         candidate_matches = {
             entry.manifest.id,
             entry.runtime_model_id,
@@ -696,8 +699,22 @@ def resolve_runtime_model_id(identifier: Optional[str]) -> str:
             Path(entry.manifest.primary_file).name,
             Path(entry.manifest.primary_file).stem,
         }
-        if clean_id in candidate_matches:
-            return entry.runtime_model_id or entry.manifest.id
+        if clean_id in {c for c in candidate_matches if c}:
+            return entry
+    return None
+
+
+def resolve_runtime_model_id(
+    identifier: Optional[str],
+    entries: Optional[List[ModelRegistryEntry]] = None,
+) -> str:
+    """Resolve an incoming identifier to the router runtime_model_id, sharing canonical registry matching."""
+    if not identifier:
+        return ""
+    clean_id = identifier.replace("\\", "/").strip()
+    matched_entry = find_model_registry_entry(clean_id, entries=entries)
+    if matched_entry:
+        return matched_entry.runtime_model_id or matched_entry.manifest.id
 
     p = Path(clean_id)
     if p.parent and p.parent.name and p.parent.name not in (".", "vision", "models"):

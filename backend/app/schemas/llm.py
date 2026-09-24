@@ -3,19 +3,30 @@
 from typing import Any, Dict, List, Literal, Optional, Union
 from pydantic import Field
 from app.schemas.common import BaseSchema
-from app.schemas.multimodal import ContentBlock
+from app.schemas.multimodal import (
+    ContentBlock,
+    ImageAttachmentRef,
+    ResolvedImageContent,
+    TextContent,
+)
 from app.services.llm.runtime_state import LLMRuntimeState
 
 
 class ChatMessage(BaseSchema):
-    """Chat message in OpenAI-compatible format."""
+    """Internal chat message used by orchestrator and provider layers."""
     role: Literal["system", "user", "assistant"]
     content: Union[str, List[ContentBlock]]
 
 
+class ChatCompletionMessage(BaseSchema):
+    """Public text-only chat message in OpenAI-compatible format."""
+    role: Literal["system", "user", "assistant"]
+    content: str
+
+
 class ChatCompletionRequest(BaseSchema):
     """Request payload for /api/v1/chat/completions."""
-    messages: List[ChatMessage] = Field(..., min_length=1)
+    messages: List[ChatCompletionMessage] = Field(..., min_length=1)
     model: Optional[str] = None
     stream: bool = False
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
@@ -27,7 +38,7 @@ class ChatCompletionRequest(BaseSchema):
 class ChatCompletionChoice(BaseSchema):
     """Individual completion choice."""
     index: int = 0
-    message: ChatMessage
+    message: ChatCompletionMessage
     finish_reason: Optional[str] = "stop"
 
 

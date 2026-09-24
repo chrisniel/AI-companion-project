@@ -1,6 +1,6 @@
 # Phase 8 Implementation Plan — PC Frontend Architecture, Runtime Config, Multimodal & Polish
 
-> **Status:** 8A and 8P COMPLETE / VERIFIED. Repository Documentation Reconciliation (Passes R0–R8) is COMPLETE / VERIFIED. Phase 8B is IN PROGRESS (Slice 8B.4 COMPLETE / VERIFIED; Slice 8B.5 NEXT / UNBLOCKED). 8C is PLANNED AFTER 8B.
+> **Status:** 8A and 8P COMPLETE / VERIFIED. Repository Documentation Reconciliation (Passes R0–R8) is COMPLETE / VERIFIED. Phase 8B is IN PROGRESS (Slice 8B.5 COMPLETE / VERIFIED; Slice 8B.6 NEXT / UNBLOCKED). 8C is PLANNED AFTER 8B.
 > **Authority Precedence:** Normative architecture is owned by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md). Canonical product sequencing is owned by [`docs/02_Planning/ROADMAP.md`](../ROADMAP.md). Runtime config architecture is owned by [`docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../../04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md).  
 > **This is the single authoritative feature implementation plan for Phase 8.**
 
@@ -1082,6 +1082,24 @@ Frontend Removal: Removing a staged attachment must call the DELETE endpoint —
   - Base64 encode image bytes and format into standard llama.cpp chat completion `image_url` wire format (`data:{mime_type};base64,{b64}`).
   - Architectural Invariant: `LlamaCppProvider` MUST NOT access the filesystem, construct attachment paths, or query the database directly. All filesystem IO is handled upstream by `media_resolver`.
 - Tests: Vision-capable model with attachments translates to `image_url` wire payloads; vision-disabled model falls back to text-only without errors; media_resolver path traversal rejection tests; text-only regression tests.
+- Delivery Status: **COMPLETE / VERIFIED**
+  - Implemented `backend/app/services/assistant/media_resolver.py` with domain exception hierarchy, BOLA enforcement, canonical storage containment without `assert`, physical size/signature verification, bounded reads offloaded to worker threads.
+  - Implemented `_translate_messages()` in `backend/app/services/llm/llama_cpp.py` mapping `ResolvedImageContent` to OpenAI-compatible `image_url` data URIs, with fail-closed lifecycle ensuring `_generation_active` is never leaked.
+  - Updated `backend/app/schemas/llm.py` separating public `ChatCompletionMessage` (text-only) from internal `ChatMessage` (`Union[str, List[ContentBlock]]`), eliminating raw binary/`image_bytes` exposure.
+  - Canonicalized model registry matching via `find_model_registry_entry()` and refactored `resolve_runtime_model_id()` to reuse it.
+  - Integrated multimodal assembly in `orchestrate_chat_stream()` gating vision on `available_capabilities`, deterministically querying bound attachments, handling post-stream SSE failure lifecycle (`MODEL_GENERATION_FAILED`), and counting only text tokens in `_estimate_tokens()`.
+  - Updated `MockLLMProvider` to extract text only and perform no fake vision.
+  - Test suites:
+    - 22 tests in `backend/tests/test_media_resolver.py`.
+    - 13 tests in `backend/tests/test_llama_translator.py`.
+    - 13 tests in `backend/tests/test_assistant_orchestrator.py`.
+    - 53 tests in `backend/tests/test_model_registry.py`.
+    - 10 tests in `backend/tests/test_llm.py`.
+    - Full backend test suite passing: 321 tests (0 regressions).
+    - Full frontend vitest suite passing: 147 tests (0 regressions).
+    - Frontend TypeScript check passing (`tsc --noEmit`).
+    - Frontend build passing (`vite build`).
+    - OpenAPI synchronized: 22 routes, 0 drift.
 
 #### 8B.6 — Web Attachment Composer
 - [CREATE] `frontend/web/src/services/api/attachmentApi.ts`:

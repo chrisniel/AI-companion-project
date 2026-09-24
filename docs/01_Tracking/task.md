@@ -4,8 +4,8 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - Current State: Phase 8B — Multimodal Image Attachment Foundation = **IN PROGRESS**
 - Current Branch: `feature/multimodal-image-attachments`
-- Current Slice: **8B.4 — Transactional Message Binding & Pre-Stream Preparation** (`COMPLETE / VERIFIED`)
-- Next Slice: **8B.5 — Vision Provider Integration** (`NEXT / UNBLOCKED`)
+- Current Slice: **8B.5 — Vision Provider Integration** (`COMPLETE / VERIFIED`)
+- Next Slice: **8B.6 — Web Attachment Composer** (`NEXT / UNBLOCKED`)
 - Commit Owner: Chris manually reviews, commits, merges, and branches all changes.
 
 ---
@@ -19,8 +19,8 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | **8B.2: Contracts & Validation** | `COMPLETE / VERIFIED` | Attachment schemas, multimodal types, Pillow validator, validation tests, OpenAPI contract sync. |
 | **8B.3: Secure Attachment API** | `COMPLETE / VERIFIED` | Route-specific upload limit, upload endpoint, exclusive temp creation, collision no-clobber, preview, soft-delete, BOLA. |
 | **8B.4: Message Binding & Lifecycle** | `COMPLETE / VERIFIED` | Pre-stream turn preparation transaction, atomic conditional update claim, cascade soft-delete on conversation delete, truthful SQLite concurrency verification. |
-| **8B.5: Vision Provider Integration** | `NEXT / UNBLOCKED` | Media resolver, available_capabilities vision gate, wire translation. |
-| **8B.6: Web Attachment Composer** | `PLANNED` | AttachmentApi.ts, file picker, staged cards, Blob preview, send payload. |
+| **8B.5: Vision Provider Integration** | `COMPLETE / VERIFIED` | Media resolver, available_capabilities vision gate, wire translation, fail-closed lifecycle. |
+| **8B.6: Web Attachment Composer** | `NEXT / UNBLOCKED` | AttachmentApi.ts, file picker, staged cards, Blob preview, send payload. |
 | **8B.7: History Image Rendering** | `PLANNED` | History attachments, Blob fetch, reload persistence, URL cleanup. |
 | **8B.8: Full Integration & Closure** | `PLANNED` | Full test suites, typecheck, build, openapi drift check, report. |
 | **Phase 8C: Integration & Polish** | `PLANNED / BLOCKED` | Blocked by completion and merge of Phase 8B. |

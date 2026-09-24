@@ -2275,7 +2275,7 @@
             "default": 0
           },
           "message": {
-            "$ref": "#/components/schemas/ChatMessage"
+            "$ref": "#/components/schemas/ChatCompletionMessage"
           },
           "finish_reason": {
             "anyOf": [
@@ -2298,11 +2298,36 @@
         "title": "ChatCompletionChoice",
         "description": "Individual completion choice."
       },
+      "ChatCompletionMessage": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "system",
+              "user",
+              "assistant"
+            ],
+            "title": "Role"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "ChatCompletionMessage",
+        "description": "Public text-only chat message in OpenAI-compatible format."
+      },
       "ChatCompletionRequest": {
         "properties": {
           "messages": {
             "items": {
-              "$ref": "#/components/schemas/ChatMessage"
+              "$ref": "#/components/schemas/ChatCompletionMessage"
             },
             "type": "array",
             "minItems": 1,
@@ -2440,55 +2465,6 @@
         "type": "object",
         "title": "ChatCompletionUsage",
         "description": "Token usage counters."
-      },
-      "ChatMessage": {
-        "properties": {
-          "role": {
-            "type": "string",
-            "enum": [
-              "system",
-              "user",
-              "assistant"
-            ],
-            "title": "Role"
-          },
-          "content": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "items": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/TextContent"
-                    },
-                    {
-                      "$ref": "#/components/schemas/ResolvedImageContent"
-                    }
-                  ],
-                  "discriminator": {
-                    "propertyName": "type",
-                    "mapping": {
-                      "image_bytes": "#/components/schemas/ResolvedImageContent",
-                      "text": "#/components/schemas/TextContent"
-                    }
-                  }
-                },
-                "type": "array"
-              }
-            ],
-            "title": "Content"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "role",
-          "content"
-        ],
-        "title": "ChatMessage",
-        "description": "Chat message in OpenAI-compatible format."
       },
       "CompanionArtifactStatus": {
         "properties": {
@@ -3661,34 +3637,6 @@
         ],
         "title": "ReasoningMode"
       },
-      "ResolvedImageContent": {
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "image_bytes",
-            "title": "Type",
-            "default": "image_bytes"
-          },
-          "mime_type": {
-            "type": "string",
-            "title": "Mime Type"
-          },
-          "data": {
-            "type": "string",
-            "minLength": 1,
-            "contentMediaType": "application/octet-stream",
-            "title": "Data"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "mime_type",
-          "data"
-        ],
-        "title": "ResolvedImageContent",
-        "description": "Resolved raw image bytes passed to provider translation layer."
-      },
       "SystemStatusResponse": {
         "properties": {
           "status": {
@@ -4114,28 +4062,6 @@
         "type": "object",
         "title": "TaskUpdate",
         "description": "Payload to update an existing task. Fields omitted remain unchanged."
-      },
-      "TextContent": {
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "text",
-            "title": "Type",
-            "default": "text"
-          },
-          "text": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Text"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "text"
-        ],
-        "title": "TextContent",
-        "description": "Standard text block within a multimodal message."
       },
       "TrashListResponse": {
         "properties": {

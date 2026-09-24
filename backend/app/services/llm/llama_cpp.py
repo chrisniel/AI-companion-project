@@ -1,6 +1,7 @@
 """Llama.cpp / GGUF local model execution provider with VRAM lifecycle management."""
 
 import asyncio
+import base64
 from datetime import datetime, timezone
 import gc
 import importlib
@@ -14,11 +15,46 @@ import httpx
 
 from app.core.config import settings
 from app.schemas.llm import ChatMessage, ModelStatusResponse
+from app.schemas.multimodal import ContentBlock, ResolvedImageContent, TextContent
 from app.services.llm.base import BaseLLMProvider
 from app.services.llm.runtime_state import LLMRuntimeState
 from app.services.model_registry import build_model_list, resolve_runtime_model_id
 
 logger = logging.getLogger("app.services.llm.llama_cpp")
+
+
+def _translate_messages(messages: List[ChatMessage]) -> list[dict[str, Any]]:
+    """Translate internal ChatMessage objects to llama.cpp OpenAI-compatible wire payload.
+
+    Fails closed on unexpected content types or unsupported MIME types.
+    Pure translator: no DB access, no filesystem access, no attachment IDs or paths.
+    """
+    wire_messages = []
+    for m in messages:
+        if isinstance(m.content, str):
+            wire_messages.append({"role": m.role, "content": m.content})
+        elif isinstance(m.content, list):
+            wire_parts = []
+            for block in m.content:
+                block_type = getattr(block, "type", None)
+                if block_type == "text":
+                    wire_parts.append({"type": "text", "text": block.text})
+                elif block_type == "image_bytes":
+                    if block.mime_type not in ("image/png", "image/jpeg"):
+                        raise ValueError(f"Unsupported image MIME type for wire translation: {block.mime_type}")
+                    b64_str = base64.b64encode(block.data).decode("ascii")
+                    wire_parts.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{block.mime_type};base64,{b64_str}",
+                        },
+                    })
+                else:
+                    raise TypeError(f"Unsupported content block type: {type(block)}")
+            wire_messages.append({"role": m.role, "content": wire_parts})
+        else:
+            raise TypeError(f"Unsupported message content type: {type(m.content)}")
+    return wire_messages
 
 
 class LlamaCppProvider(BaseLLMProvider):
@@ -715,10 +751,10 @@ class LlamaCppProvider(BaseLLMProvider):
         max_tokens: int = 1024,
         **kwargs
     ) -> str:
+        formatted_messages = _translate_messages(messages)
         await self._ensure_loaded()
         self._last_active_at = datetime.now(timezone.utc)
         self._generation_active = True
-        formatted_messages = [{"role": m.role, "content": m.content} for m in messages]
 
         try:
             # Route A: Standalone llama-server via HTTP
@@ -757,10 +793,10 @@ class LlamaCppProvider(BaseLLMProvider):
         max_tokens: int = 1024,
         **kwargs
     ) -> AsyncGenerator[str, None]:
+        formatted_messages = _translate_messages(messages)
         await self._ensure_loaded()
         self._last_active_at = datetime.now(timezone.utc)
         self._generation_active = True
-        formatted_messages = [{"role": m.role, "content": m.content} for m in messages]
 
         try:
             # Route A: Standalone llama-server streaming
