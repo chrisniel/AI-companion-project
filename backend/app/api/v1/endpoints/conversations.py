@@ -7,13 +7,16 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_owner, get_db
 from app.core.config import settings
+from app.models.attachment import Attachment
+from app.models.base import utc_now
 from app.models.conversation import Conversation
 from app.models.message import Message
+from app.schemas.attachment import AttachmentRef
 from app.schemas.conversation import (
     ConversationCreate,
     ConversationListOut,
@@ -21,7 +24,12 @@ from app.schemas.conversation import (
     ConversationUpdate,
 )
 from app.schemas.message import MessageListOut, MessageOut, MessageSend
-from app.services.assistant.orchestrator import _get_lock, orchestrate_chat_stream
+from app.services.assistant.orchestrator import (
+    _get_lock,
+    orchestrate_chat_stream,
+    prepare_turn,
+)
+from app.services.attachment_service import validate_attachment_ids_syntax
 from app.services.llm.manager import get_llm_provider
 from app.services.llm.runtime_state import LLMRuntimeState
 
@@ -146,7 +154,7 @@ async def delete_conversation(
     owner_id: str = Depends(get_current_owner),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """Soft-delete a conversation."""
+    """Soft-delete a conversation and cascade soft-delete to all its active child attachments."""
     query = select(Conversation).where(
         Conversation.id == conversation_id,
         Conversation.owner_id == owner_id,
@@ -157,9 +165,31 @@ async def delete_conversation(
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
+    now = utc_now()
+
+    # 1. Bulk soft-delete ALL active attachments belonging to this conversation
+    # Note: No owner_id filter here; all child attachments of this conversation must soft-delete
+    cascade_stmt = (
+        update(Attachment)
+        .where(
+            Attachment.conversation_id == conversation_id,
+            Attachment.is_deleted.is_(False),
+        )
+        .values(
+            is_deleted=True,
+            deleted_at=now,
+        )
+    )
+    await db.execute(cascade_stmt)
+
+    # 2. Soft-delete parent conversation
     conversation.is_deleted = True
-    conversation.deleted_at = datetime.now(timezone.utc)
-    await db.commit()
+    conversation.deleted_at = now
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
 
 @router.get(
@@ -196,7 +226,36 @@ async def list_messages(
     items_query = query.order_by(Message.sequence_no.asc()).offset(skip).limit(limit)
     items = list((await db.execute(items_query)).scalars().all())
 
-    return MessageListOut(items=items, total=total)
+    output_items: list[MessageOut] = []
+    for msg in items:
+        active_refs = [
+            AttachmentRef(
+                id=att.id,
+                filename_display=att.filename_display,
+                mime_type=att.mime_type,
+                size_bytes=att.size_bytes,
+            )
+            for att in msg.attachments
+            if not att.is_deleted and att.message_id == msg.id
+        ]
+        output_items.append(
+            MessageOut(
+                id=msg.id,
+                conversation_id=msg.conversation_id,
+                sender=msg.sender,
+                content=msg.content,
+                status=msg.status,
+                sequence_no=msg.sequence_no,
+                client_message_id=msg.client_message_id,
+                model_name=msg.model_name,
+                prompt_tokens=msg.prompt_tokens,
+                completion_tokens=msg.completion_tokens,
+                created_at=msg.created_at,
+                attachments=active_refs,
+            )
+        )
+
+    return MessageListOut(items=output_items, total=total)
 
 
 @router.post(
@@ -204,8 +263,11 @@ async def list_messages(
     summary="Send Message & Stream Response",
     responses={
         200: {"content": {"text/event-stream": {}}, "description": "SSE Token Stream"},
-        404: {"description": "Conversation not found"},
+        400: {"description": "Bad Request"},
+        403: {"description": "ATTACHMENT_FORBIDDEN"},
+        404: {"description": "Conversation or Attachment not found"},
         409: {"description": "CONVERSATION_BUSY or DUPLICATE_MESSAGE"},
+        422: {"description": "ATTACHMENT_NOT_AVAILABLE or ATTACHMENT_ALREADY_CLAIMED"},
         503: {"description": "LLM_UNAVAILABLE"},
     },
 )
@@ -226,7 +288,10 @@ async def send_message_stream(
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    # Pre-flight 2: Idempotency check (scoped to conversation)
+    # Pre-flight 2: Attachment input validation (pure validation before DB lock)
+    validate_attachment_ids_syntax(payload.attachment_ids)
+
+    # Pre-flight 3: Idempotency check (scoped to conversation)
     if payload.client_message_id:
         dup_query = select(Message).where(
             Message.conversation_id == conversation_id,
@@ -236,37 +301,56 @@ async def send_message_stream(
         if (await db.execute(dup_query)).scalar_one_or_none():
             raise HTTPException(status_code=409, detail="DUPLICATE_MESSAGE")
 
-    # Pre-flight 3: Conversation concurrency lock
+    # Pre-flight 4: Conversation concurrency lock
     lock = _get_lock(conversation_id)
     if lock.locked():
         raise HTTPException(status_code=409, detail="CONVERSATION_BUSY")
+    await lock.acquire()
 
-    # Pre-flight 4: Check LLM provider availability
-    provider = get_llm_provider()
-    status_resp = await provider.get_status()
-    if status_resp.runtime_state not in (
-        LLMRuntimeState.MODEL_READY,
-        LLMRuntimeState.MODEL_SLEEPING,
-    ):
-        # In mock or auto, try loading
-        loaded = await provider.load_model()
-        if not loaded:
-            raise HTTPException(status_code=503, detail="LLM_UNAVAILABLE")
+    lock_transferred = False
+    try:
+        # Pre-flight 5: Check LLM provider availability
+        provider = get_llm_provider()
+        status_resp = await provider.get_status()
+        if status_resp.runtime_state not in (
+            LLMRuntimeState.MODEL_READY,
+            LLMRuntimeState.MODEL_SLEEPING,
+        ):
+            loaded = await provider.load_model()
+            if not loaded:
+                raise HTTPException(status_code=503, detail="LLM_UNAVAILABLE")
 
-    stream = orchestrate_chat_stream(
-        db=db,
-        conversation_id=conversation_id,
-        user_text=payload.user_text,
-        owner_id=owner_id,
-        client_message_id=payload.client_message_id,
-    )
+        # Execute atomic pre-stream preparation transaction
+        prepared_turn = await prepare_turn(
+            db=db,
+            conversation_id=conversation_id,
+            owner_id=owner_id,
+            user_text=payload.user_text,
+            client_message_id=payload.client_message_id,
+            attachment_ids=payload.attachment_ids,
+        )
 
-    return StreamingResponse(
-        stream,
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
+        stream = orchestrate_chat_stream(
+            db=db,
+            conversation_id=conversation_id,
+            user_text=payload.user_text,
+            owner_id=owner_id,
+            prepared_turn=prepared_turn,
+            conversation_lock=lock,
+        )
+
+        response = StreamingResponse(
+            stream,
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+        lock_transferred = True
+        return response
+    except Exception:
+        if not lock_transferred and lock.locked():
+            lock.release()
+        raise

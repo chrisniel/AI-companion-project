@@ -1,6 +1,6 @@
 # Phase 8 Implementation Plan — PC Frontend Architecture, Runtime Config, Multimodal & Polish
 
-> **Status:** 8A and 8P COMPLETE / VERIFIED. Repository Documentation Reconciliation (Passes R0–R8) is COMPLETE / VERIFIED. Phase 8B is IN PROGRESS (Slice 8B.2 COMPLETE / VERIFIED; Slice 8B.3 NEXT). 8C is PLANNED AFTER 8B.
+> **Status:** 8A and 8P COMPLETE / VERIFIED. Repository Documentation Reconciliation (Passes R0–R8) is COMPLETE / VERIFIED. Phase 8B is IN PROGRESS (Slice 8B.4 COMPLETE / VERIFIED; Slice 8B.5 NEXT / UNBLOCKED). 8C is PLANNED AFTER 8B.
 > **Authority Precedence:** Normative architecture is owned by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md). Canonical product sequencing is owned by [`docs/02_Planning/ROADMAP.md`](../ROADMAP.md). Runtime config architecture is owned by [`docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../../04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md).  
 > **This is the single authoritative feature implementation plan for Phase 8.**
 
@@ -993,37 +993,44 @@ Frontend Removal: Removing a staged attachment must call the DELETE endpoint —
   - 35 automated tests covering route limits, auth, validation, storage no-clobber, exclusive temp creation, failure rollback/cleanup, preview streaming, and soft-delete.
   - OpenAPI contract synchronized (`scripts/check_openapi_contract.py` passes with 0 drift across 22 routes).
 
-#### 8B.4 — Transactional Message Binding
+#### 8B.4 — Transactional Message Binding (COMPLETE / VERIFIED)
 - Pre-Stream Turn Preparation Transaction Architecture:
-  - Source Reality: `send_message_stream()` currently performs HTTP preflight and immediately returns a `StreamingResponse` executing `orchestrate_chat_stream()`. If attachment validation/claiming occurs only after the `StreamingResponse` begins, the application can no longer reliably return the documented HTTP 400/403/404/422 status codes for attachment claim failures.
+  - Source Reality: `send_message_stream()` previously performed HTTP preflight and immediately returned a `StreamingResponse` executing `orchestrate_chat_stream()`. If attachment validation/claiming occurred only after the `StreamingResponse` began, the application could not reliably return the documented HTTP 400/403/404/422 status codes for attachment claim failures.
   - Required Semantic Contract: Turn preparation is separated from token streaming into an atomic pre-stream transaction:
     1. Before `StreamingResponse` begins:
        - Validate conversation exists, is not deleted, and caller is authorized owner.
+       - Validate attachment list invariants (`MAX_ATTACHMENTS_PER_MESSAGE = 4`, no duplicate IDs, non-empty IDs).
        - Preserve idempotency (`client_message_id`) and sequence numbering semantics.
-       - Create the user `Message`.
-       - Create the assistant placeholder `Message`.
-       - Flush pending message rows as necessary.
-       - Atomically claim all staged `attachment_ids` for the new user message via conditional `UPDATE` in `claim_attachments_for_message()`.
-       - Commit the turn preparation transaction exactly once.
+       - Acquire the conversation lock (`await lock.acquire()`).
+       - Check LLM provider availability (HTTP 503 if unavailable, releasing lock before DB writes).
+       - Execute atomic pre-stream preparation transaction in `prepare_turn()`:
+         - Create the user `Message`.
+         - Create the assistant placeholder `Message`.
+         - Flush pending message rows.
+         - Atomically claim all staged `attachment_ids` for the user message via conditional `UPDATE` in `claim_attachments_for_message()`.
+         - Commit the turn preparation transaction exactly once.
+         - Return `PreparedTurn` carrying instantiated `user_message` and `assistant_message` ORM instances.
     2. If any attachment claim fails:
-       - Roll back the complete preparation transaction.
+       - Roll back the complete preparation transaction (`await db.rollback()`).
+       - Release conversation lock.
        - No partial user message survives.
        - No partial assistant placeholder survives.
-       - No partial attachment binding survives.
+       - Previously updated attachments revert to staged state.
        - Return the appropriate HTTP error (400 / 403 / 404 / 422) BEFORE SSE headers/response start.
-    3. Only after successful preparation:
-       - Start `StreamingResponse`.
-       - Stream model generation against the already-prepared turn.
-    4. Cancellation after successful preparation:
-       - User message remains committed.
-       - Bound attachments remain committed.
-       - Assistant response follows existing cancellation semantics.
-    5. Concurrency Locking:
-       - Preserve conversation concurrency locking (`_get_lock(conversation_id)`) across both preparation and generation.
-       - Do not weaken the existing one-generation-per-conversation invariant.
-- [CREATE] `backend/app/services/attachment_service.py`:
-  - Concurrency-safe atomic conditional `UPDATE` within the pre-stream transaction:
-    ```python
+    3. Explicit Lock Ownership Transfer:
+       - Endpoint acquires the exact `asyncio.Lock` instance and passes it directly to `orchestrate_chat_stream()`.
+       - `lock_transferred = True` is set only after `StreamingResponse` is successfully constructed.
+       - If construction raises, endpoint releases the lock in `except:`.
+       - Stream generator releases the exact transferred lock in `finally:`.
+    4. Generation Stream Execution:
+       - `orchestrate_chat_stream()` consumes `prepared_turn.assistant_message` directly before its first await, eliminating redundant queries and preventing race hazards.
+       - History queries filter `sequence_no < prepared_turn.user_sequence_no` to prevent turn duplication.
+       - Stream catches `(asyncio.CancelledError, GeneratorExit)`: preserves committed user message + attachment claims, updates assistant placeholder to `"cancelled"`, commits, and releases lock.
+       - Stream catches unhandled `Exception`: preserves committed user message + attachment claims, updates assistant placeholder to `"failed"`, emits typed error frame, commits, and releases lock.
+- [CREATED] `backend/app/services/attachment_service.py`:
+  - List validation: `validate_attachment_ids_syntax(attachment_ids: list[str])`.
+  - Atomic claim: `claim_attachments_for_message()` executing conditional update:
+    ```sql
     UPDATE attachments
     SET message_id = :message_id
     WHERE id = :attachment_id
@@ -1033,22 +1040,24 @@ Frontend Removal: Removing a staged attachment must call the DELETE endpoint —
       AND is_deleted = FALSE
     RETURNING id;
     ```
-  - If affected rows != 1, distinguish failure reason (not found, wrong owner, wrong conversation, already committed, or deleted) and raise 422/404/403. Entire transaction rolls back if any claim fails.
-  - Enforce `MAX_ATTACHMENTS_PER_MESSAGE = 4`.
-- [MODIFY] `backend/app/api/v1/endpoints/conversations.py`:
-  - In `send_message_stream`: execute pre-stream turn preparation transaction before returning `StreamingResponse`.
-  - In `list_messages` (`GET /{conversation_id}/messages`): ensure `MessageOut.attachments` is populated with `AttachmentRef` objects.
-  - Parent soft-delete cascade responsibility:
-    - In `delete_conversation` (`DELETE /{conversation_id}`): execute a bulk soft-delete of all active conversation attachments:
-      `UPDATE attachments SET is_deleted=True, deleted_at=:now WHERE conversation_id=:cid AND is_deleted=False`.
-    - (Note: No individual message deletion endpoint currently exists in the repository. If a message DELETE route is created in the future, it must soft-delete its child attachments).
-- Tests:
-  - Send message with valid `attachment_ids` -> 200 with `MessageOut.attachments` populated.
-  - Invalid attachment claims (deleted, wrong owner, wrong conversation, already committed, exceeded > 4) MUST be explicitly verified as pre-stream HTTP failures (400/403/404/422), NEVER as SSE error events.
-  - Rollback verification: failed attachment claim rolls back user message and assistant placeholder (zero orphan rows survive).
-  - Concurrent duplicate send race test: exactly one succeeds, second receives pre-stream HTTP 422.
-  - Soft-delete conversation cascade verification: attachments soft-deleted when conversation deleted.
-  - Stream cancellation mid-generation: user message + attachments remain committed in history.
+  - Zero-row failure classification query distinguishing:
+    - 404 `ATTACHMENT_NOT_FOUND` (nonexistent or wrong conversation ID, preventing cross-conversation enumeration)
+    - 403 `ATTACHMENT_FORBIDDEN` (foreign owner under authorized conversation, BOLA guard)
+    - 422 `ATTACHMENT_NOT_AVAILABLE` (soft-deleted)
+    - 422 `ATTACHMENT_ALREADY_CLAIMED` (already bound to a message)
+- [MODIFIED] `backend/app/api/v1/endpoints/conversations.py`:
+  - `send_message_stream`: Pre-stream preparation transaction, lock ownership transfer, 400/403/404/409/422/503 responses.
+  - `list_messages` (`GET /{conversation_id}/messages`): Explicitly maps active `AttachmentRef`s, excluding staged/deleted attachments and storage internals.
+  - `delete_conversation` (`DELETE /{conversation_id}`): Single atomic transaction soft-deleting conversation and all active child attachments (`Attachment.conversation_id == cid and Attachment.is_deleted.is_(False)`) without owner filter, preserving physical files on disk for Phase 9 retention.
+- [MODIFIED] `backend/app/services/assistant/orchestrator.py`:
+  - Defined `PreparedTurn` dataclass carrying ORM instances.
+  - Extracted `prepare_turn()` transactional helper.
+  - Refactored `orchestrate_chat_stream()` to consume `PreparedTurn` and transferred `conversation_lock`.
+- Tests (`backend/tests/test_attachment_binding.py`, `test_conversations.py`, `test_assistant_orchestrator.py`):
+  - 27 automated tests in `test_attachment_binding.py` covering list limits, syntax, claim classification pre-SSE, atomic rollback, idempotency, sequence retry, history privacy, conversation cascade, physical file preservation, provider 503, generation failure lock release, and truthful file-backed SQLite concurrency contention.
+  - Full backend test suite passing: 275 tests (0 regressions).
+  - Full frontend vitest suite passing: 147 tests (0 regressions).
+  - OpenAPI synchronized: 22 routes, 0 drift.
 
 #### 8B.5 — Vision Provider Integration
 - [CREATE] `backend/app/services/assistant/media_resolver.py`:

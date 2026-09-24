@@ -1372,7 +1372,7 @@
           "Conversations"
         ],
         "summary": "Delete Conversation",
-        "description": "Soft-delete a conversation.",
+        "description": "Soft-delete a conversation and cascade soft-delete to all its active child attachments.",
         "operationId": "delete_conversation_api_v1_conversations__conversation_id__delete",
         "security": [
           {
@@ -1568,24 +1568,23 @@
               "text/event-stream": {}
             }
           },
+          "400": {
+            "description": "Bad Request"
+          },
+          "403": {
+            "description": "ATTACHMENT_FORBIDDEN"
+          },
           "404": {
-            "description": "Conversation not found"
+            "description": "Conversation or Attachment not found"
           },
           "409": {
             "description": "CONVERSATION_BUSY or DUPLICATE_MESSAGE"
           },
+          "422": {
+            "description": "ATTACHMENT_NOT_AVAILABLE or ATTACHMENT_ALREADY_CLAIMED"
+          },
           "503": {
             "description": "LLM_UNAVAILABLE"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
         }
       }
