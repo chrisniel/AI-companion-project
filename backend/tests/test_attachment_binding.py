@@ -17,7 +17,11 @@ from app.models.base import utc_now
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.schemas.attachment import AttachmentRef
-from app.services.assistant.orchestrator import _get_lock, prepare_turn
+from app.services.assistant.orchestrator import (
+    _get_lock,
+    orchestrate_chat_stream,
+    prepare_turn,
+)
 from app.services.attachment_service import (
     AttachmentAlreadyClaimedError,
     AttachmentForbiddenError,
@@ -939,3 +943,110 @@ async def test_generation_failure_lock_released_and_retry_allowed(client: AsyncC
     assert resp2.status_code == 200
     assert "[DONE]" in resp2.text
     assert lock.locked() is False
+
+
+@pytest.mark.anyio
+async def test_stream_task_cancellation_with_staged_attachment_preserves_state(
+    test_session: AsyncSession,
+):
+    """Verify real asyncio.Task cancellation during streaming preserves committed user message and bound attachment."""
+    # 1. Create an active conversation
+    conv = await _create_test_conversation(test_session)
+    conv_id = conv.id
+
+    # 2. Create one staged active attachment for that conversation
+    att = await _create_test_attachment(
+        test_session,
+        conversation_id=conv_id,
+        filename_display="staged_cancel.png",
+    )
+    att_id = att.id
+    assert att.message_id is None
+    assert att.is_deleted is False
+
+    # 3. Acquire the conversation lock
+    lock = _get_lock(conv_id)
+    await lock.acquire()
+
+    # 4. Call prepare_turn() using that attachment ID
+    prepared = await prepare_turn(
+        db=test_session,
+        conversation_id=conv_id,
+        owner_id="local_user",
+        user_text="User prompt with staged attachment",
+        attachment_ids=[att_id],
+    )
+
+    # 5. Verify the attachment is bound to prepared_turn.user_message.id after preparation commit
+    res_att_check = await test_session.execute(select(Attachment).where(Attachment.id == att_id))
+    bound_att = res_att_check.scalar_one()
+    assert bound_att.message_id == prepared.user_message.id
+
+    provider = get_llm_provider()
+
+    # 6. Start orchestrate_chat_stream() inside a real asyncio.Task
+    stream_gen = orchestrate_chat_stream(
+        db=test_session,
+        conversation_id=conv_id,
+        user_text="User prompt with staged attachment",
+        owner_id="local_user",
+        prepared_turn=prepared,
+        conversation_lock=lock,
+    )
+
+    received_tokens = []
+    token_received = asyncio.Event()
+
+    async def consume_stream():
+        try:
+            async for chunk in stream_gen:
+                received_tokens.append(chunk)
+                token_received.set()
+        finally:
+            await stream_gen.aclose()
+
+    task = asyncio.create_task(consume_stream())
+
+    # 7. Ensure at least one token/stream chunk has been produced
+    await asyncio.wait_for(token_received.wait(), timeout=2.0)
+    assert len(received_tokens) >= 1
+
+    # 8. Cancel the task so the actual asyncio.CancelledError handler executes
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    # 9. Verify after cancellation:
+    # - conversation lock is released
+    assert lock.locked() is False
+
+    # - provider _generation_active is false
+    assert provider._generation_active is False
+
+    # - user message still exists and is completed
+    res_user = await test_session.execute(
+        select(Message).where(Message.id == prepared.user_message.id)
+    )
+    user_msg = res_user.scalar_one()
+    assert user_msg.sender == "user"
+    assert user_msg.status == "completed"
+
+    # - attachment still has message_id == prepared_turn.user_message.id
+    # - attachment is not soft-deleted
+    res_att = await test_session.execute(
+        select(Attachment).where(Attachment.id == att_id)
+    )
+    final_att = res_att.scalar_one()
+    assert final_att.message_id == prepared.user_message.id
+    assert final_att.is_deleted is False
+
+    # - assistant message is cancelled
+    # - any generated partial assistant content is preserved if present
+    res_asst = await test_session.execute(
+        select(Message).where(Message.id == prepared.assistant_message.id)
+    )
+    asst_msg = res_asst.scalar_one()
+    assert asst_msg.sender == "assistant"
+    assert asst_msg.status == "cancelled"
+    assert asst_msg.content is not None
+    assert len(asst_msg.content) > 0
