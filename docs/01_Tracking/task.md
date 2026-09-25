@@ -19,10 +19,10 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | Pass | Focus Area | Status | Primary Scope |
 | :--- | :--- | :--- | :--- |
 | **R9** | **Implemented Reality Refresh** | `IN PROGRESS` | Refresh factual baseline, migration 006, 8B.0–8B.6 foundation, CI #23 test counts across canonical docs. |
-| **R10** | **Strategic Product & Release Scope Realignment** | `PLANNED` | Reconcile V1 PC-hosted boundary, post-V1 milestone tracks, and core decision framework. |
-| **R11** | **Domain Architecture Harmonization** | `PLANNED` | Reconcile security, runtime configuration, LLM engine, and memory specifications. |
-| **R12** | **Planning & Roadmap Canonicalization** | `PLANNED` | Reconcile roadmap milestones, planning hubs, and archive obsolete working drafts. |
-| **R13** | **Final Consistency Sweep & Baseline Relock** | `PLANNED` | Verify documentation map, authority links, and lock fresh canonical documentation baseline. |
+| **R10** | **Product Boundary & Decision Relock** | `PLANNED` | Release/product boundary and decision framework relock. |
+| **R11** | **Domain Architecture Alignment** | `PLANNED` | Domain architecture alignment. |
+| **R12** | **Roadmap / Planning / CI Alignment** | `PLANNED` | Roadmap/planning alignment including target CI governance and Golden Journey. |
+| **R13** | **Documentation Map, Cross-links & Closure** | `PLANNED` | Documentation routing/map/cross-links, task closure, and reconciliation baseline closure. |
 
 ---
 

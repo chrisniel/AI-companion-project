@@ -39,7 +39,7 @@ Following the completion and verification of Phase 8P:
 #### Planned / Not Yet Implemented:
 - **Controlled Local Importer Service (V1 Implementation Gap):** The managed local model import pipeline (inbox → preflight → staging → atomic install → library → registry; Decision D6) is an architectural **requirement for V1**. While storage paths and registry schemas are implemented, the active execution service is not yet built.
 - **Managed Online Download Manager (Post-V1):** In-app network downloading, background acquisition, and online model hub integrations (e.g., Hugging Face browsing) are deferred post-V1.
-- **Future Asset Persistence:** Persistent voice assets and backend character persistence tables remain to be implemented. Multimodal image attachment persistence (Migration 006, Attachment ORM, secure APIs, transactional message binding, media resolver, and composer upload staging) is implemented and verified in Phase 8B.0–8B.6; persistent history message image rendering (Slice 8B.7) and full phase closure (Slice 8B.8) remain in progress.
+- **Future Asset Persistence:** Persistent voice assets and backend character persistence tables remain to be implemented. Multimodal image attachment persistence (Migration 006, Attachment ORM, secure APIs, transactional message binding, media resolver, and composer upload staging) is implemented and verified in Phase 8B.0–8B.6; persistent history message image rendering (Slice 8B.7) is NEXT / UNBLOCKED, while full integration and phase closure (Slice 8B.8) remains PLANNED.
 
 The Phase 8 sequence is:
 
@@ -1707,7 +1707,7 @@ configuration
 registered assets
 ```
 
-Phase 8B.0–8B.6 implements the persistence foundation, validation, and staging APIs; Slice 8B.7 and 8B.8 will complete this acceptance path with persistent conversation-history image restoration and full lifecycle closure.
+Phase 8B.0–8B.6 implements the persistence foundation, validation, and staging APIs; Slice 8B.7 (NEXT / UNBLOCKED) and Slice 8B.8 (PLANNED) will complete this acceptance path with persistent conversation-history image restoration and full lifecycle closure.
 
 ---
 
