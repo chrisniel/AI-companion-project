@@ -1,8 +1,8 @@
 # AI Companion — Canonical System Baseline & Architecture Core
 
-> **Document Role:** High-level normative architecture and product baseline for AI Companion V1 and future capabilities.  
-> **Status:** Active Canonical (Decisions D1–D9 Locked)  
-> **Last Updated:** 2026-09-21 (Reconciliation Pass R8 Baseline Lock)
+> **Document Role:** High-level normative architecture and product baseline for AI Companion PC V1, Android V1, and future capabilities.
+> **Status:** Active Canonical (Decisions D1–D11 Locked)
+> **Last Updated:** 2026-09-26 (Reconciliation Pass R10 Decision Relock)
 
 ---
 
@@ -23,31 +23,73 @@
 
 ## 2. Release Boundary (Decision D1)
 
-AI Companion **V1** is defined as the first complete, stable, **PC-hosted release**.
+AI Companion formalizes platform-specific release vocabulary to ensure unambiguous delivery boundaries:
 
-### In Scope for V1
-- **Local AI Runtime** independent Windows host process
-- **React Web** primary desktop interface
-- **Local text LLM inference** via `llama.cpp` (GGUF, Vulkan offload on AMD RX 580)
-- **Multi-turn conversation management** with live SSE streaming completions
-- **Memory persistence & retrieval** (SQLite with FTS5 lexical search)
-- **Task and reminder lifecycle** (CRUD, soft-delete, retention threshold calculation; automated periodic lifecycle scheduling and reminder execution are remaining V1 wiring concerns)
-- **Model library & runtime management** (Schema v3 registry, GGUF metadata parsing, runtime profiles)
-- **Controlled local model import pipeline** (inbox → preflight → staging → atomic install → library; execution service is an active V1 implementation gap)
-- **Phase 8B Multimodal Vision** (image attachment API, client composer, and vision-model inference)
-- **Phase 8C Integration & Polish** (accessibility, bundle optimization, UI consistency, responsive web cleanup)
-- **Release Hardening** (migration safety preflight, secure configuration defaults, and release hardening as approved through dedicated implementation plans)
+- **AI Companion V1 (unqualified):** Refers strictly to **PC V1** (the PC-hosted release).
+- **PC V1:** The first complete, stable ecosystem release. PC-hosted, Local AI Runtime, React Web primary interface.
+- **Android V1:** The follow-on production mobile companion release (`com.cnl.aicompanion`). Independent milestone; does **not** block PC V1.
+- **PC LATER:** Approved PC capabilities scheduled for milestones following PC V1.
+- **ANDROID LATER:** Approved Android capabilities scheduled after Android V1.
+- **FUTURE / UNSCHEDULED:** Evaluated or experimental capabilities without committed release scheduling.
 
-### Explicitly Excluded from V1 (Post-V1 Milestones)
-- Production Android backend synchronization
-- Android offline on-device inference
-- Voice & audio pipeline (VAD, Whisper STT, Kokoro TTS, wake word)
-- Health Connect and wearable device synchronization
-- Proactive companion routines / scheduled autonomous check-ins
-- Autonomous external tools and general web-action agents
-- Direct public internet exposure or port forwarding
-- Managed online model downloading (in-app Hugging Face browsing / remote downloaders)
-- Vector / semantic embedding database
+### 2.1 In Scope for PC V1
+- **Local AI Runtime:** Independent Windows host process (Decision D2).
+- **React Web Primary Client:** Desktop control center, model management, and streaming conversation.
+- **Local Text LLM Inference:** Provider- and hardware-portable local text generation through the Local AI Runtime (`llama.cpp` Vulkan on AMD RX 580 represents the current verified baseline implementation, not a hardware-locked release constraint).
+- **Multi-Turn Conversation Management:** Live SSE streaming token completions and transactional pre-stream turn binding.
+- **Memory Persistence & Retrieval:** Profile-first ownership, SQLite persistence, and FTS5 lexical keyword search (Decision D7).
+- **Task & Reminder Lifecycle Foundation:** CRUD operations, soft deletion, retention period calculation, and scheduled execution (Decision D10).
+- **Model Library & Runtime Management:** Schema v3 registry, GGUF binary header parsing, runtime offload profiles (Eco/Balanced/Maximum).
+- **Controlled Local Model Import Pipeline:** Deterministic import flow: `inbox` → `preflight` → `staging` → `atomic install` → `library` → `registry` (Decision D6).
+- **Multimodal Vision Understanding:** Phase 8B image attachment API, validated upload guards, and vision-model inference.
+- **Phase 8C Integration & Polish:** ARIA keyboard accessibility, bundle optimization, UI consistency, and responsive desktop web cleanup.
+- **Conversational Voice (without Wake Word):** Local audio capture, provider-independent STT, provider-independent TTS, and VAD / turn detection where required.
+- **Tasks, Reminders, Alarms & Bounded Routines:** Distinct entity semantics, bounded scheduler proactivity, and native Windows notification delivery (Decision D10).
+- **Character Persistence & Persona Separation:** Persistent Character configuration under PC host authority (Decision D11; exact database schema remains open design).
+- **Separate Personality Configuration:** Behavioral traits and communication style decoupled from character lore (Decision D11).
+- **Lightweight Conceptual Emotion State:** Transient mood modulation without clinical or psychological claims (Decision D11; exact state dimensions remain open design).
+- **Safe Low-Risk Conversational Actions:** Low-risk personal reads, creates, and updates (Risk 0 and approved Risk 1 personal items like creating personal tasks/reminders) auto-executable under deterministic policy (Decision D9).
+- **Read-Only Public Current Information:** Provider-independent `WebSearch`, `Fetch`, and weather/public-information capabilities.
+- **Optional Cloud LLM Fallback:** Strictly opt-in with explicit user credentials and egress transparency; local inference remains default and primary.
+- **Windows Host Autostart at Login:** Local AI Runtime configured to start automatically on Windows user login (exact launch mechanism remains open design; Decision D2).
+- **Native Windows Notification Delivery:** Direct OS notification delivery decoupled from open browser tabs (Decisions D2 and D10; exact adapter remains open design).
+- **Gaming / Low-Impact Resource Mode:** Resource throttling policy during active gaming or heavy foreground workloads.
+- **Practical Backup & Recovery:** Database snapshot and asset recovery capability (exact mechanism remains open design).
+- **Health-Context Ready Architecture:** Conceptual data contracts prepared for future health synchronization.
+- **Release Hardening & Verification:** Secure configuration defaults, migration safety preflight, and CI gate stability.
+- **Integrated Golden Journey Acceptance:** End-to-end companion verification path proving seamless operation across all PC V1 capabilities.
+
+### 2.2 Approved for PC LATER (Post-PC-V1 Milestones)
+- **Wake Word Detection:** Background wake phrase listening (`WakeWordProvider`, openWakeWord).
+- **Relationship State:** Separate, opt-in, and hidden by default; strictly decoupled from Emotion and Personality (Decision D11).
+- **Richer Emotion Models:** Advanced multi-dimensional emotional state dynamics.
+- **Advanced Presence:** Live2D / VRM / contextual presentation state.
+- **Interactive Browser Automation:** Automated form filling, authenticated navigation, and web interaction.
+- **Native Desktop Shell:** Container packaging (e.g., Tauri, Electron) and system tray integration.
+- **Semantic / Vector Memory Database:** Vector embeddings and hybrid retrieval (Intent: `APPROVED`; Delivery: `NOT STARTED`; Release: `PC LATER`; FTS5 remains the verified PC baseline).
+- **Narrow, Typed Privileged Actions:** Separately designed, bounded, explicitly authorized, and auditable high-risk tools (if ever evaluated; distinct from generic shell).
+
+### 2.3 Follow-On Mobile Release (Android V1)
+- **Production Application Identity:** Package namespace and application ID: `com.cnl.aicompanion` (Decision D3).
+- **Trusted Device Credentials:** Secure Android Keystore storage and per-device revocable credentials (Decision D4).
+- **Authenticated Connected Synchronization:** Two-way sync with PC Local AI Runtime as the canonical persistent authority over trusted LAN / Tailscale.
+- **Durable Mobile Persistence:** Local Room database with offline outbox queuing.
+- **Practical Compact Offline Local LLM:** Roaming local text inference via a practical compact model. Model family, format (GGUF or alternative runtime), parameter size, and quantization remain **OPEN DESIGN**; reference hardware benchmarks are evidence only.
+- **Mobile Scheduling:** Local Tasks, Reminders, and platform-appropriate notifications and alarms.
+- **Persona Continuity:** Character and Personality continuity synchronized from the PC host.
+- **Health Connect Integration:** Android Health Connect integration for wearable and biometric context summaries.
+- **Reconnection & State Reconciliation:** Deterministic state reconciliation against PC host database upon reconnecting.
+- *Boundary Note:* Device-local TTS is **not** a locked hard requirement for Android V1 (historical phrasing "where feasible" remains open/optional). Android V1 does **not** block PC V1.
+
+### 2.4 Explicitly Prohibited / Outside Supported Trust Model
+- **Generic Command Shell Execution:** Arbitrary command shell / PowerShell / unrestricted filesystem or operating system administration is **PROHIBITED** as a generic assistant tool under Risk Tier 3 (DEFAULT DENY) and is permanently **REJECTED** as an ordinary capability (Decision D9).
+- **Direct Public Internet Exposure / Port Forwarding:** Direct public exposure and router port forwarding are outside the supported trust model (Decision D5).
+- **Unbounded Autonomous Looping:** Unconstrained recursive agent execution is prohibited.
+- **Managed Online Model Downloading:** In-app public model hub browsing and remote download managers are excluded.
+
+### 2.5 Evaluated / Experimental (FUTURE / UNSCHEDULED)
+- **Stable Diffusion Presence Renderer:** Intent: `EXPERIMENTAL`; Delivery: `NOT STARTED`; Release: `FUTURE / UNSCHEDULED`. Evaluated as an exploratory visual option; distinct from advanced Presence.
+- **Multi-Profile Architecture:** Multiple human user accounts on a single host.
 
 ---
 
@@ -74,21 +116,30 @@ AI Companion **V1** is defined as the first complete, stable, **PC-hosted releas
                                    └───────────────────────┘
 ```
 
-- **Windows Host Process (D2):** The Local AI Runtime runs as an independent Windows host process decoupled from browser tab lifetime; closing the browser does not define or terminate the backend host process. (Note: Decision D2 guarantees independent host process lifetime; it does not guarantee that a specific active in-flight HTTP/SSE request survives client disconnection, and the exact Windows background launch mechanism remains an open future implementation design). React Web is the primary V1 UI; native desktop shells (e.g., Tauri) are deferred post-V1.
-- **Remote Access Trust Boundary (D5):** Network access is restricted to `localhost`, trusted LAN bindings, and Tailscale private mesh networks. Public internet exposure and port forwarding are not supported for V1. Details: [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md).
+- **Windows Host Process (D2):** The Local AI Runtime runs as an independent Windows host process decoupled from browser tab lifetime; closing the browser does not define or terminate the backend host process. For PC V1, the host process must support automatic background startup at Windows user login (exact launch mechanism remains open design) and native Windows notification delivery (so reminders, alarms, and routines alert the user even when the browser client is closed; exact notification adapter remains open design). React Web is the primary V1 UI; native desktop shells (e.g., Tauri) are deferred post-PC-V1.
+- **Remote Access Trust Boundary (D5):** Network access is restricted to `localhost`, trusted LAN bindings, and Tailscale private mesh networks. Direct public internet exposure and router port forwarding are outside the supported trust model for V1. Details: [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md).
 
 ---
 
 ## 4. Locked Architectural Invariants Summary
 
-The following major architectural invariants are locked across the ecosystem. Detailed domain specifications reside in their respective canonical documents:
+The following major architectural invariants are locked across the ecosystem:
 
-- **Profiles & Trusted Devices (D4 & D8):** AI Companion V1 operates as a single-primary-user system. The **Profile** owns all personal data (`owner_id`). Currently implemented using a single shared application credential; future architecture introduces per-device revocable credentials. Master secrets are never distributed to client devices. Details: [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md).
-- **Memory & Character Scoping (D7):** Memory adheres to a strict Profile-First model. Memories belong to the Profile (default `PROFILE` scope, optional `CHARACTER` scope). Characters define persona presentation (system prompt, avatar, voice profile) and never own the user's canonical identity. Persona switching alters perspective, never user data. Details: [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](MEMORY_AND_CHARACTER_ARCHITECTURE.md).
-- **Model Acquisition & Installation Pipeline (D6):** Managed local model imports follow a deterministic pipeline: `inbox` → `preflight` → `staging` → `atomic install` → `library` → `registry`. Controlled local import is a V1 requirement (the execution service is currently an active implementation gap). `MODEL_LIBRARY_DIR` (`<COMPANION_DATA_ROOT>/library/models/llm`, resolving by default on Windows to `%LOCALAPPDATA%\AI Companion\Data\library\models\llm`) is the canonical storage location. Direct placement may remain available as an advanced/developer fallback. Details: [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md).
-- **Tool & Autonomy Security Model (D9):** Tool execution enforces an immutable **DEFAULT DENY** posture and a 4-tier risk matrix (Risk 0–3). Generative models possess zero self-elevation authority. Prompt injection cannot elevate permissions, and fetched web content is isolated as untrusted data. Deterministic emergency stop controls are reserved. Details: [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md).
-- **Android Product Identity & Mobile Inference (D3):** Locked production application ID and package namespace: `com.cnl.aicompanion` (current prototype source in `android/` still uses legacy/template identifiers `com.example` / `com.aistudio.localcore.swbjtu`; package rename refactor is planned before production data, Keystore, or distribution). Connected Mode uses PC Local AI Runtime as the canonical authority; future Offline Mode targets local compact quantized models (tested envelope of ~0.27B–1.24B produced ~11.75–25.56 tok/s on reference hardware). Android sync and offline inference are strictly post-V1. Details: [`ANDROID_COMPANION_ARCHITECTURE.md`](ANDROID_COMPANION_ARCHITECTURE.md).
-- **Voice & Audio Pipeline:** CPU-first speech execution; vendor-independent `TTSProvider` abstraction (candidate engines: Kokoro, Piper, KittenTTS, Android System TTS; no universal default locked). Voice capabilities are strictly post-V1. Details: [`VOICE_AND_AUDIO_ARCHITECTURE.md`](VOICE_AND_AUDIO_ARCHITECTURE.md).
+- **Profiles & Trusted Devices (D4 & D8):** AI Companion V1 operates as a single-primary-user system. The **Profile** owns all personal data (`owner_id`). Currently implemented using a single shared application credential; target architecture introduces per-device revocable credentials. Master secrets are never distributed to client devices. Details: [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md).
+- **Memory & Personal Data Ownership (D7):** Memory adheres to a strict Profile-First model. The Profile owns user identity, memories, preferences, and personal data. Memories belong to the Profile (default `PROFILE` scope, optional `CHARACTER` scope). Conversation history belongs to the Profile but remains Character-bound as recorded. Characters define persona presentation and never own user data. Details: [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](MEMORY_AND_CHARACTER_ARCHITECTURE.md).
+- **Model Acquisition & Installation Pipeline (D6):** Managed local model imports follow a deterministic pipeline: `inbox` → `preflight` → `staging` → `atomic install` → `library` → `registry`. Controlled local import is a V1 requirement (the execution service is currently an active implementation gap). `MODEL_LIBRARY_DIR` is the canonical storage location. Details: [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md).
+- **Tool & Autonomy Security Model (D9):** Tool execution enforces an immutable **DEFAULT DENY** posture and a 4-tier risk matrix (Risk 0–3). Generative models possess zero self-elevation authority. Low-risk personal reads, creates, and updates (Risk 0 and approved Risk 1 personal items like creating personal tasks/reminders) may auto-execute under deterministic policy. Significant state changes (Risk 2 deletes, external transmissions) require explicit confirmation. Generic arbitrary shell / PowerShell / OS admin authority (Risk 3) is strictly prohibited by default. Details: [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md).
+- **Android Product Identity & Mobile Inference (D3):** Locked production application ID and package namespace: `com.cnl.aicompanion`. Connected Mode uses PC Local AI Runtime as the canonical persistent authority; Offline Mode targets a practical compact offline local LLM. Android V1 is an independent follow-on release and does not block PC V1. Details: [`ANDROID_COMPANION_ARCHITECTURE.md`](ANDROID_COMPANION_ARCHITECTURE.md).
+- **Scheduling & Notification Semantics (D10):** Task, Reminder, Alarm, and Routine are distinct product entities with distinct semantics, triggers, and lifecycles. Scheduler execution is deterministic, rule-based, and bounded. Native Windows notification delivery is a mandatory delivery target for PC V1. Quiet hours suppress applicable non-urgent notifications; per-item overrides exist. Reminders catch up after sleep/offline where appropriate. An Alarm is a time-critical scheduled alert with stronger delivery semantics than an ordinary Reminder; wake support is best-effort with no impossible universal ACPI/firmware wake guarantees. Detailed schemas and lifecycles remain open design.
+- **Companion Persona & State Separation (D11):** Clean architectural separation across companion entities:
+  - **Profile:** Owns user identity, user data, preferences, tasks, and persistent memories.
+  - **Conversation:** Belongs to Profile and references Character; history remains Character-bound as recorded.
+  - **Character:** Defines persona identity, lore, avatar, and presentation; may reference preferred Personality and Voice; does not own Profile data.
+  - **Personality:** Separate behavioral style, traits, and communication configuration.
+  - **Emotion:** Lightweight, transient conceptual state modulating tone; does not make clinical/psychological claims (exact model remains open design).
+  - **Voice:** Acoustic and speech synthesis configuration (TTS provider, voice ID, pitch, speed, prosody).
+  - **Presence:** Bounded contextual and presentation state (exact signals and privacy remain open design).
+  - **Relationship State:** Separate, opt-in, and hidden by default; scheduled for PC LATER.
 
 ---
 
@@ -110,35 +161,35 @@ As of current verified repository baseline:
 
 ## 6. Canonical Domain Architecture Index
 
-For detailed architectural contracts, refer to the authoritative domain specifications:
+For detailed architectural contracts, refer to the authoritative domain specifications. *(Note: During Pass R11, these specifications will be systematically aligned and extracted into focused staged domain directories under `docs/04_Architecture/`)*:
 
-| Domain | Canonical Specification Document | Primary Questions Answered |
-| :--- | :--- | :--- |
-| **Runtime Config & Storage** | [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) | Where do data, models, and configs live? How does the D6 import pipeline work? How are migrations handled? |
-| **LLM Inference Engine** | [`LLAMA_CPP_RUNTIME_ARCHITECTURE.md`](LLAMA_CPP_RUNTIME_ARCHITECTURE.md) | How does `llama-server.exe` execute? How do VRAM offload profiles, idle sleep, and process lifecycle operate? |
-| **Security & Trust** | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md) | How does authentication work? How are devices paired? What is the D9 tool risk policy and SSRF defense model? |
-| **Memory & Characters** | [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](MEMORY_AND_CHARACTER_ARCHITECTURE.md) | Who owns user data? How does profile-first scoping operate? What are the character persona boundaries? |
-| **Android Mobile Client** | [`ANDROID_COMPANION_ARCHITECTURE.md`](ANDROID_COMPANION_ARCHITECTURE.md) | What is the mobile identity? How do Connected and Offline modes operate? What are the reference mobile benchmarks? |
-| **Voice & Speech Processing** | [`VOICE_AND_AUDIO_ARCHITECTURE.md`](VOICE_AND_AUDIO_ARCHITECTURE.md) | How is speech processing architected? Which TTS/STT providers are planned? Why is speech CPU-first? |
+| Domain | Canonical Specification Document | Primary Questions Answered | Staged Target Destination (Pass R11) |
+| :--- | :--- | :--- | :--- |
+| **Runtime Config & Storage** | [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) | Where do data, models, and configs live? How does the D6 import pipeline work? How are migrations handled? | `04_Infrastructure/storage-and-assets.md` |
+| **LLM Inference Engine** | [`LLAMA_CPP_RUNTIME_ARCHITECTURE.md`](LLAMA_CPP_RUNTIME_ARCHITECTURE.md) | How does `llama-server.exe` execute? How do VRAM offload profiles, idle sleep, and process lifecycle operate? | `04_Infrastructure/runtime-and-models.md` |
+| **Security & Trust** | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md) | How does authentication work? How are devices paired? What is the D9 tool risk policy and SSRF defense model? | `02_Data_and_Security/tool-permissions-and-actions.md` |
+| **Memory & Characters** | [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](MEMORY_AND_CHARACTER_ARCHITECTURE.md) | Who owns user data? How does profile-first scoping operate? What are the character persona boundaries? | `01_Domains/memory-and-personalization.md` |
+| **Android Mobile Client** | [`ANDROID_COMPANION_ARCHITECTURE.md`](ANDROID_COMPANION_ARCHITECTURE.md) | What is the mobile identity? How do Connected and Offline modes operate? What are the reference mobile benchmarks? | `01_Domains/android-companion.md` |
+| **Voice & Speech Processing** | [`VOICE_AND_AUDIO_ARCHITECTURE.md`](VOICE_AND_AUDIO_ARCHITECTURE.md) | How is speech processing architected? Which TTS/STT providers are planned? Why is speech CPU-first? | `01_Domains/voice-and-audio.md` |
 
 ---
 
-## 7. R2/R3 Decision Traceability Matrix (D1–D9)
+## 7. Decision Traceability Matrix (D1–D11)
 
-| Decision ID | Area | Resolution Summary | Canonical Owner |
-| :--- | :--- | :--- | :--- |
-| **D1** | **V1 Release Boundary** | AI Companion V1 is defined strictly as the PC-hosted release. Android sync and voice are deferred post-V1. "PC Core" retired. | `SYSTEM_BASELINE.md` §2 |
-| **D2** | **Windows Host Model** | Independent long-running Windows host process; decoupled from browser lifetime; native desktop shell deferred post-V1. | `SYSTEM_BASELINE.md` §3, `LLAMA_CPP_RUNTIME_ARCHITECTURE.md` |
-| **D3** | **Android Identity** | Application ID & package: `com.cnl.aicompanion`; product-oriented, character-independent. | `ANDROID_COMPANION_ARCHITECTURE.md` |
-| **D4** | **Profiles & Devices** | Profile represents user identity; Device represents trusted client endpoint. Independent revocable credentials per device. | `SECURITY_AND_TRUST_ARCHITECTURE.md` |
-| **D5** | **Remote Access Trust** | Localhost, trusted LAN, and Tailscale private mesh supported for V1. Public exposure not required. Multi-tier trust model. | `SECURITY_AND_TRUST_ARCHITECTURE.md` |
-| **D6** | **Model Acquisition** | Controlled local import pipeline (V1 requirement): inbox → preflight → staging → atomic install → library. `MODEL_LIBRARY_DIR` is canonical. | `AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md` |
-| **D7** | **Memory Scoping** | Profile-first ownership. Memories belong to profile (default `PROFILE` scope, optional `CHARACTER` scope). Characters do not own data. | `MEMORY_AND_CHARACTER_ARCHITECTURE.md` |
-| **D8** | **Single-User Baseline** | Single-primary-user for V1; schema uses `owner_id` representing profile boundary. Preserved in place. | `SECURITY_AND_TRUST_ARCHITECTURE.md`, `MEMORY_AND_CHARACTER_ARCHITECTURE.md` |
-| **D9** | **Security & Permissions** | DEFAULT DENY. 4-tier risk matrix (Risk 0–3). Typed requests through deterministic policy engine. Emergency stop controls. | `SECURITY_AND_TRUST_ARCHITECTURE.md` |
+| Decision ID | Area | Status in R10 | Resolution Summary | Canonical Owner |
+| :--- | :--- | :--- | :--- | :--- |
+| **D1** | **V1 Release Boundary** | **Refined** | PC V1 is the first complete ecosystem release (incorporates conversational voice without wake word, bounded routines, read-only web info, optional cloud fallback, autostart, and native notifications). Android V1 is an independent follow-on production release. | `SYSTEM_BASELINE.md` §2, `docs/02_Planning/ROADMAP.md` |
+| **D2** | **Windows Host Model** | **Refined** | Independent long-running Windows host process; decoupled from browser lifetime; autostart at login required; native Windows notification delivery required; native desktop shells deferred post-PC-V1. | `SYSTEM_BASELINE.md` §3, `04_Infrastructure/windows-host-and-notifications.md` |
+| **D3** | **Android Identity** | **Unchanged** | Application ID & package: `com.cnl.aicompanion`; product-oriented, character-independent, model-independent. | `ANDROID_COMPANION_ARCHITECTURE.md`, `01_Domains/android-companion.md` |
+| **D4** | **Profiles & Devices** | **Unchanged** | Profile represents user identity; Device represents trusted client endpoint. Independent revocable credentials per device; master secrets never distributed. | `SECURITY_AND_TRUST_ARCHITECTURE.md`, `02_Data_and_Security/profiles-and-devices.md` |
+| **D5** | **Remote Access Trust** | **Unchanged** | Localhost, trusted LAN, and Tailscale private mesh supported for V1. Direct public internet exposure / port forwarding is outside the supported trust model. | `SECURITY_AND_TRUST_ARCHITECTURE.md`, `02_Data_and_Security/authentication-and-secrets.md` |
+| **D6** | **Model Acquisition** | **Unchanged** | Controlled local import pipeline (PC V1 requirement): inbox → preflight → staging → atomic install → library. `MODEL_LIBRARY_DIR` is canonical. | `AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`, `04_Infrastructure/runtime-and-models.md` |
+| **D7** | **Memory Scoping** | **Refined** | Profile-first ownership. Profile owns user identity, memories, preferences, and personal data. Memories belong to Profile (default `PROFILE` scope, optional `CHARACTER` scope). Conversation history belongs to Profile but is Character-bound as recorded. Characters do not own data. | `MEMORY_AND_CHARACTER_ARCHITECTURE.md`, `01_Domains/memory-and-personalization.md` |
+| **D8** | **Single-User Baseline** | **Unchanged** | Single-primary-user for V1; schema uses `owner_id` representing profile boundary. Preserved in place. | `SYSTEM_BASELINE.md` §4, `SECURITY_AND_TRUST_ARCHITECTURE.md` |
+| **D9** | **Security & Permissions** | **Refined** | DEFAULT DENY. 4-tier risk matrix (Risk 0–3). Low-risk personal reads, creates, and updates auto-executable under policy. Significant state changes require confirmation. Generic arbitrary shell / OS admin is strictly prohibited by default. | `SECURITY_AND_TRUST_ARCHITECTURE.md`, `02_Data_and_Security/tool-permissions-and-actions.md` |
+| **D10** | **Scheduling & Notifications** | **New** | Task, Reminder, Alarm, and Routine are distinct. Bounded deterministic scheduler proactivity. Native Windows notification delivery target. Quiet hours with per-item overrides. Reminder catch-up recovery. Alarm has stronger delivery semantics than an ordinary Reminder; wake support is best-effort (no universal ACPI/firmware wake guarantee). | `SYSTEM_BASELINE.md` §4, `01_Domains/tasks-reminders-alarms-and-routines.md` |
+| **D11** | **Persona & State Separation** | **New** | Clear separation: Profile (owns personal data/memories/tasks), Conversation (belongs to Profile, Character-bound history), Character (persona identity/lore/avatar/presentation), Personality (behavioral style/traits), Emotion (lightweight transient mood), Voice (acoustic/TTS configuration), Presence (contextual/presentation state), and Relationship State (separate, opt-in, PC LATER). | `SYSTEM_BASELINE.md` §4, `01_Domains/characters-personality-and-emotion.md` |
 
 ---
 
 *Forensic reconciliation history, diagnostics, and working notes remain documented in [`REPOSITORY_DOCUMENTATION_RECONCILIATION_AUDIT.md`](../07_Archive/audits/REPOSITORY_DOCUMENTATION_RECONCILIATION_AUDIT.md).*
-
-

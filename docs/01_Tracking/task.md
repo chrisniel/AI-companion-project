@@ -2,7 +2,7 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Current State: Canonical Feature Reconciliation — R9 Implemented Reality Refresh = **IN PROGRESS**
+- Current State: Canonical Feature Reconciliation — R10 Product Boundary & Decision Relock = **COMPLETE / VERIFIED**
 - Current Branch: `docs/canonical-feature-reconciliation`
 - Base Lineage: `4b2f5fe3aa2a302b825408073d1b135bf2ff92e1` (merged PR #13 / CI Run #23 verified)
 - Phase 8 Delivery State:
@@ -18,9 +18,9 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 | Pass | Focus Area | Status | Primary Scope |
 | :--- | :--- | :--- | :--- |
-| **R9** | **Implemented Reality Refresh** | `IN PROGRESS` | Refresh factual baseline, migration 006, 8B.0–8B.6 foundation, CI #23 test counts across canonical docs. |
-| **R10** | **Product Boundary & Decision Relock** | `PLANNED` | Product/release boundary and decision-framework relock. |
-| **R11** | **Domain Architecture Alignment** | `PLANNED` | Domain architecture alignment around approved decisions. |
+| **R9** | **Implemented Reality Refresh** | `COMPLETE / VERIFIED` | Refreshed factual baseline, migration 006, 8B.0–8B.6 foundation, CI #23 test counts across canonical docs. |
+| **R10** | **Product Boundary & Decision Relock** | `COMPLETE / VERIFIED` | Relocked D1–D11; established PC V1 and Android V1 boundaries; created `FEATURE_PROMOTION_MAP.md`. |
+| **R11** | **Domain Architecture Alignment** | `PLANNED` | Domain architecture alignment around approved decisions and staged domain extraction. |
 | **R12** | **Roadmap / Planning / CI Alignment** | `PLANNED` | Roadmap and planning alignment, including target CI governance and Golden Journey alignment. |
 | **R13** | **Documentation Map, Cross-links & Closure** | `PLANNED` | Documentation map/routing/cross-links, task closure, consistency sweep, and reconciliation closure. |
 
@@ -31,12 +31,13 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 1. **User-Owned Git Operations:** AI agents must never execute git commit, push, merge, checkout, or branch creation.
 2. **Documentation-Only Scope:** Do not modify application source code, tests, contracts, or `.github/workflows/ci.yml`.
 3. **Factual Implemented Reality:** Document only verified repository reality; distinguish repository migration head (006) from individual workstation state.
-4. **No Premature Scope Expansion:** Do not add Decisions D10/D11 or alter product boundaries during Pass R9.
+4. **Staged Domain Strategy:** Pass R10 established platform release vocabulary (PC V1 vs. Android V1), relocked decisions D1–D11, and created the `FEATURE_PROMOTION_MAP.md` control manifest. Domain specifications will be aligned in Pass R11; roadmap realignment occurs in Pass R12; documentation routing and task closure occur in Pass R13.
 
 ---
 
 ## Authoritative Reference Pointers
 
+- **Feature Promotion Map:** [`docs/02_Planning/FEATURE_PROMOTION_MAP.md`](../02_Planning/FEATURE_PROMOTION_MAP.md)
 - **Documentation Map:** [`docs/06_Guides/DOCUMENTATION_MAP.md`](../06_Guides/DOCUMENTATION_MAP.md)
 - **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md)
 - **Canonical Product Roadmap:** [`docs/02_Planning/ROADMAP.md`](../02_Planning/ROADMAP.md)
