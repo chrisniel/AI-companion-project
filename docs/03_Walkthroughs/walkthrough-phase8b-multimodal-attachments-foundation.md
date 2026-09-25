@@ -69,7 +69,7 @@ This walkthrough documents the verified foundation spanning slices **8B.0 throug
     ```
   - Zero-row classification: Any failure to claim (foreign owner, wrong conversation, already committed, or soft-deleted) aborts the transaction, rolls back user and assistant placeholder messages, and returns HTTP 400/403/404/422 **before** the `StreamingResponse` begins.
   - Explicit lock ownership transfer: `send_message_stream` acquires `asyncio.Lock` and transfers it to `orchestrate_chat_stream()`, guaranteeing release in `finally:` on success, client disconnect, cancellation, or error.
-  - Conversation soft-deletion cascades soft-deletion to all active child attachments in a single transaction while preserving physical files on disk for Phase 9 retention cleanup.
+  - Conversation soft-deletion cascades soft-deletion to all active child attachments in a single transaction while preserving physical files on disk. (Physical deletion / retention cleanup for soft-deleted attachment files is deferred and not implemented in slices 8B.0–8B.6; its owning milestone must be established by future planning).
 
 - **8B.5 — Vision Provider Integration:**
   - Implemented `backend/app/services/assistant/media_resolver.py` providing sandboxed disk reads, ownership verification, canonical storage path containment (`COMPANION_DATA_ROOT / storage_path` inside `ATTACHMENT_DIR`), MIME/size/signature revalidation, and threadpool-offloaded asynchronous reads.
@@ -80,7 +80,7 @@ This walkthrough documents the verified foundation spanning slices **8B.0 throug
   - Preserved strict provider decoupling: `LlamaCppProvider` and `MockLLMProvider` never access the filesystem or database directly.
 
 - **8B.6 — Web Attachment Composer:**
-  - Implemented `frontend/web/src/services/api/attachmentApi.ts`: `uploadAttachment`, `deleteAttachment`, and `fetchAttachmentBlobUrl` using `apiFetch` with Bearer auth and `URL.createObjectURL()`.
+  - Implemented `frontend/web/src/services/api/attachmentApi.ts`: `uploadAttachment` (`apiFetch` + `FormData`), `deleteAttachment` (`apiFetch`), and `fetchAttachmentBlobUrl` using raw authenticated `fetch()` -> `response.blob()` -> `URL.createObjectURL()` (raw fetch is used to receive binary Blobs without triggering `apiFetch`'s JSON decoding).
   - Updated `AssistantComposer.tsx`:
     - Capability-gated paperclip button: active only when `currentModel` has `vision` in `available_capabilities`, an active conversation exists, and `attachments.length < 4`.
     - Hidden file input accepting `image/png,image/jpeg` with client-side 10 MiB checks.
@@ -90,14 +90,14 @@ This walkthrough documents the verified foundation spanning slices **8B.0 throug
     - Explicit staged removal calling `deleteAttachment` API; preserves card on network failure.
     - Fail-closed conversation transition lock (`conversationTransitionRef`) preventing concurrent actions during conversation creation/switching.
     - `outcome_unknown` handling on ambiguous transport failures before HTTP acceptance.
-    - Component unmount cleanup invoking `URL.revokeObjectURL()` for all active object URLs without firing remote DELETE requests.
+    - Component unmount cleanup: always revokes in-memory Blob object URLs (`URL.revokeObjectURL()`); if composer lifecycle state is definitely safe and idle, performs best-effort remote `DELETE` on definitely-staged attachment rows; if any send, upload, removal, or conversation-transition action is in-flight or uncertain, strictly refrains from issuing destructive remote `DELETE` requests to preserve user data.
 
 ### Deferred Boundaries (Explicitly Out of Scope)
-- **8B.7 — Persistent / History Image Rendering:** Fetching and displaying attachments on historical conversation message bubbles (`MessageOut.attachments`), message reload persistence, and message bubble object URL lifecycle. (NEXT / UNBLOCKED).
+- **8B.7 — Persistent / History Image Rendering:** Fetching and displaying attachments on historical conversation message bubbles (`MessageOut.attachments`), message reload persistence, and message bubble object URL lifecycle (NEXT / UNBLOCKED). Under this explicit boundary, attachments appearing staged in the composer and binding transactionally upon send, but not yet rendering inside persisted message history bubbles, is expected incremental milestone behavior and not an 8B.6 defect.
 - **8B.8 — Full Integration & Phase Closure:** Cross-stack integration verification, full regression suite execution, and formal Phase 8B closure report. (PLANNED).
 - **Phase 8C:** Accessibility polish, mock file deletion, bundle optimization, and final PR closure. (PLANNED / BLOCKED).
 - **WebP Support:** Deferred; requires verified compatibility with pinned `llama.cpp` Vulkan builds and Qwen3-VL vision projectors.
-- **Physical Retention Purge:** Physical disk deletion of soft-deleted attachments deferred to Phase 9.
+- **Physical Retention Purge:** Physical deletion / retention cleanup for soft-deleted attachment files is deferred and not implemented in slices 8B.0–8B.6. Its owning milestone must be established by future planning.
 
 ---
 
@@ -134,7 +134,7 @@ This walkthrough documents the verified foundation spanning slices **8B.0 throug
 - `backend/app/services/model_registry.py` — Canonicalized model matching helper `find_model_registry_entry()`.
 
 ### 2.5 Frontend Web Client & UI
-- `frontend/web/src/services/api/attachmentApi.ts` — TypeScript API client: `uploadAttachment`, `deleteAttachment`, `fetchAttachmentBlobUrl` with Blob URL lifecycle.
+- `frontend/web/src/services/api/attachmentApi.ts` — TypeScript API client: `uploadAttachment` (`apiFetch` + `FormData`), `deleteAttachment` (`apiFetch`), and `fetchAttachmentBlobUrl` (raw authenticated `fetch()` -> binary `Blob` -> `URL.createObjectURL()`).
 - `frontend/web/src/services/api/conversationApi.ts` — Added `attachment_ids` to `StreamMessageOptions`.
 - `frontend/web/src/components/workspace/assistant/AssistantComposer.tsx` — Capability-gated paperclip button, hidden file input, staged attachment preview chips with metadata, and removal action.
 - `frontend/web/src/components/workspace/AssistantView.tsx` — Synchronous attachment lifecycle state machine, preview rollback, explicit removal semantics, conversation transition locks, and unmount object URL revocation.
@@ -146,7 +146,8 @@ This walkthrough documents the verified foundation spanning slices **8B.0 throug
 - `backend/tests/test_attachment_binding.py` — 27 tests for atomic binding transaction, pre-stream rejection, rollback, and concurrency.
 - `backend/tests/test_media_resolver.py` — 22 tests for path containment, disk reads, and traversal defense.
 - `backend/tests/test_llama_translator.py` — 13 tests for multimodal data URI formatting and fail-closed locks.
-- `backend/tests/test_conversations.py` & `test_assistant_orchestrator.py` — Regressions tests for cascade soft-delete and streaming lifecycle.
+- `backend/tests/test_assistant_orchestrator.py` — Regression tests for streaming lifecycle, prompt translation, and multimodal content delivery.
+  *(Note: `backend/tests/test_conversations.py` was not modified in Phase 8B; pre-existing test coverage confirms conversation cascade soft-delete behavior).*
 - `frontend/web/src/test/attachmentApi.test.ts` — 18 unit tests for frontend attachment API client.
 - `frontend/web/src/test/attachmentComposer.test.tsx` — 20 integration tests for composer capability gating, staging, previews, removal, and send payloads.
 
@@ -256,20 +257,20 @@ sequenceDiagram
 | **Pre-Acceptance Transport Drop** | Frontend Client | If the network drops before HTTP response headers are received (`sendPhase === 'accepting'`), the frontend marks state as `outcome_unknown`. Composer retains draft text and staged attachments so user does not lose work. |
 | **Mid-Stream Cancellation** | Backend Stream | If user clicks "Stop" or closes socket mid-stream (`asyncio.CancelledError`), the stream catches cancellation in `finally:`. The committed user message and bound attachments **remain preserved** in history. Assistant placeholder status is set to `"cancelled"`. `asyncio.Lock` is released immediately. |
 | **Post-Acceptance Inference Failure** | Backend Stream | If llama.cpp crashes or throws an exception during generation, the stream emits a typed error frame (`{"type": "error"}`), updates assistant placeholder status to `"failed"`, commits the DB, and releases `asyncio.Lock`. Bound attachments remain safely committed to the user message. |
-| **Conversation Departure / Unmount** | Frontend Lifecycle | When user navigates away or switches conversations, `AssistantView` cleanup revokes all active Blob object URLs via `URL.revokeObjectURL()` to prevent browser memory leaks. It does **not** call remote DELETE, preserving staged state on the backend. |
+| **Conversation Departure / Unmount** | Frontend Lifecycle | When user navigates away or switches conversations, `AssistantView` cleanup always revokes all active in-memory Blob object URLs (`URL.revokeObjectURL()`). If composer lifecycle is definitely safe and idle, it performs best-effort remote `DELETE` on definitely-staged attachments; if any upload, removal, send, or transition is in-flight or in an uncertain state, it strictly refrains from destructive remote `DELETE` to prevent data loss. |
 
 ---
 
 ## 4. Key Concepts
 
 ### 1. Staged Attachment
-An uploaded attachment file that has been validated and persisted in the database with `message_id = NULL`. It represents an image prepared by the user in the composer that is ready to be sent with the next chat turn. Staged attachments can be previewed or explicitly removed by the user. If left uncommitted, they remain staged until claimed by a send turn or purged by the Phase 9 retention lifecycle.
+An uploaded attachment file that has been validated and persisted in the database with `message_id = NULL`. It represents an image prepared by the user in the composer that is ready to be sent with the next chat turn. Staged attachments can be previewed or explicitly removed by the user. If left uncommitted, they remain staged until claimed by a send turn or purged by future retention cleanup.
 
 ### 2. Transactional Binding
 The atomic database operation occurring during `prepare_turn()` where one or more staged attachment IDs are formally linked to a user `Message` record by setting `message_id = user_message.id`. This update is conditional (`message_id IS NULL`, `owner_id = user`, `conversation_id = conv`, `is_deleted = FALSE`). If any attachment in the request cannot be claimed, the entire turn preparation transaction rolls back, preventing partial messages or half-bound attachments.
 
 ### 3. Authenticated Blob URL
-An in-memory browser URL (`blob:http://localhost:5173/...`) generated by calling `URL.createObjectURL(blob)` on binary image data retrieved via `apiFetch`. Because standard browser `<img src="/api/...">` tags cannot pass HTTP `Authorization: Bearer <token>` headers, authenticated endpoints require fetching the image as a binary `Blob` with explicit auth headers and transforming it into an object URL for display.
+An in-memory browser URL (`blob:http://localhost:5173/...`) generated by calling `URL.createObjectURL(blob)` on binary image data retrieved via raw authenticated `fetch()` (since the shared `apiFetch` client JSON-decodes responses). Because standard browser `<img src="/api/...">` tags cannot pass HTTP `Authorization: Bearer <token>` headers, authenticated endpoints require fetching the image as a binary `Blob` with explicit auth headers and transforming it into an object URL for display.
 
 ### 4. Vision Capability Gate
 The multi-layer gating mechanism determining whether multimodal features are active. The frontend checks `ModelCapability.vision in activeModel.library_state.available_capabilities` (which requires both a vision-capable GGUF and a verified companion `mmproj` projector). The backend orchestrator independently verifies this capability before resolving image bytes. If vision is absent, the UI disables attachment inputs, and the backend degrades gracefully to text-only inference.
@@ -287,21 +288,21 @@ An architectural safety principle where any ambiguity, transport drop, or valida
 
 ### 5.1 Automated Checks
 
-All automated checks were executed and verified against the implementation baseline and documentation closure:
+All automated checks were executed and verified against the implementation baseline and pushed delivery commits:
 
-- **Implementation Delivery Baseline:**
-  - Verified Commit SHA: `58af6f282b5533409ce4794235422504cbd80a7c`
-  - GitHub Actions CI Run: **#18 (SUCCESS)**
-- **Documentation Closure Baseline:**
-  - Verified Commit SHA: `6ba0628b80a0607593d524cf248cf93d2948e3c8`
-  - GitHub Actions CI Run: **#19 (SUCCESS)**
+- **Walkthrough Delivery Baseline:**
+  - Verified Commit SHA: `7693640f9961ad695be69ddaab945fd4f8b9a7ad`
+  - GitHub Actions CI Run: **#20 (SUCCESS)**
+- **Historical Delivery Milestones:**
+  - Implementation Baseline SHA: `58af6f282b5533409ce4794235422504cbd80a7c` (CI Run #18: SUCCESS)
+  - Documentation Closure SHA: `6ba0628b80a0607593d524cf248cf93d2948e3c8` (CI Run #19: SUCCESS)
 
 | Verification Suite | Target | Observed Result | Status |
 | :--- | :--- | :--- | :--- |
 | **Backend Test Suite** | `pytest backend/tests/` | **321 passed** (0 failures, 0 regressions) | `PASS` |
-| **Frontend Test Suite** | `npm --prefix frontend/web run test:run` | **185 passed** across 9 test files | `PASS` |
+| **Frontend Test Suite** | `npm --prefix frontend/web test -- --run` | **185 passed** across 9 test files | `PASS` |
 | **TypeScript Typecheck** | `npx --prefix frontend/web tsc --noEmit` | **0 errors** | `PASS` |
-| **Frontend Production Build** | `npm --prefix frontend/web run build` | Clean Vite build in 4.98s | `PASS` |
+| **Frontend Production Build** | `npm --prefix frontend/web run build` | Vite production build passed | `PASS` |
 | **OpenAPI Contract Parity** | `python scripts/check_openapi_contract.py` | **22 routes**, zero drift detected | `PASS` |
 | **Attachment Migration Chain** | Alembic `005 -> 006 -> 005 -> 006` | Clean upgrade, downgrade, and re-upgrade | `PASS` |
 | **ORM & DDL Schema Parity** | `test_attachments.py::test_attachment_orm_parity` | Exact match on columns, types, defaults, indexes | `PASS` |
@@ -312,7 +313,8 @@ The following step-by-step checklist confirms visual, experiential, and hardware
 
 - [ ] **Step 1: Verify Capability Gating on Model Without Vision**
   - Launch Web UI (`npm run dev`) and Backend (`uvicorn app.main:app`).
-  - Configure pairing API key in Settings -> Network.
+  - Ensure the Web client already has the valid local pairing credential configured for the current development session before testing protected model/attachment endpoints.
+    *(Known UI limitation at delivery: pairing-key onboarding/error presentation is not fully wired in the current Settings UI and is outside the 8B.0–8B.6 multimodal scope).*
   - In Models view, ensure a text-only model or no model is loaded.
   - Navigate to Assistant chat view.
   - **Expected Result:** Paperclip icon in composer is disabled; hovering shows tooltip indicating vision capability is unavailable.
@@ -337,7 +339,7 @@ The following step-by-step checklist confirms visual, experiential, and hardware
   - Click Send.
   - **Expected Result:** Staged preview cards clear from composer; turn is accepted; user bubble renders; assistant streams response describing image content.
 
-*(Note: Comprehensive end-to-end hardware inference benchmarking and live visual accuracy profiling on the AMD Radeon RX 580 Vulkan backend is formally scheduled for slice **8B.8**).*
+*(Note: Slice 8B.8 covers full test suite execution, TypeScript check, production build, OpenAPI contract synchronization, migration chain verification, ephemeral data-root isolation, active documentation updates, and Phase 8B completion reporting. Live hardware/model smoke on the RX 580 Vulkan runtime may be conducted as available, but is not currently a locked 8B.8 requirement).*
 
 ---
 
@@ -380,6 +382,7 @@ The following parameters are centrally defined in backend configuration and sche
 | **Staged removal fails / chip remains** | Network drop or backend failure during `DELETE /api/v1/conversations/{id}/attachments/{id}`. | Frontend preserves the chip to prevent state desynchronization. Retry deletion when backend connectivity is restored. |
 | **Send request freezes in "outcome_unknown"** | HTTP connection dropped before backend accepted turn headers. | Draft text and staged attachments are preserved in composer. Check backend server logs and retry send once connection is restored. |
 | **Backend error: "ATTACHMENT_NOT_FOUND" or "ATTACHMENT_FORBIDDEN"** | Turn payload attempted to claim an attachment belonging to another user, another conversation, or an already-claimed attachment. | Staged attachments can only be sent once within their original conversation. Re-upload image if attempting to send in a different conversation. |
-| **Database locked error during concurrent upload** | SQLite contention during heavy concurrent operations. | Ensure SQLite WAL mode is active (`PRAGMA journal_mode=WAL`). SQLite transactions are handled with automatic backoff. |
+| **Images visible in composer but missing from chat history bubbles after send** | Historical message attachment rendering is assigned to slice 8B.7 (`MessageOut.attachments` rendering). | Expected incremental milestone behavior. Slice 8B.6 delivers composer staging and transactional turn binding; persistent history rendering is scheduled next in 8B.7. |
+| **Database locked / contention error** | Unexpected concurrent SQLite write contention. | Inspect active runtime processes and server logs, ensure SQLite WAL mode is active (`PRAGMA journal_mode=WAL`), and retry once contention clears. (Source does not implement automatic retry/backoff). |
 
 ---
