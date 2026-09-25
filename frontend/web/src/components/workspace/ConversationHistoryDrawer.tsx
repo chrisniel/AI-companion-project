@@ -22,6 +22,8 @@ export interface ConversationHistoryDrawerProps {
   onSelectConversation: (id: string) => void;
   onNewConversation: () => void;
   conversations?: ConversationHistoryItem[];
+  conversationActionsDisabled?: boolean;
+  isConversationSwitchingDisabled?: boolean;
 }
 
 export const ConversationHistoryDrawer: React.FC<ConversationHistoryDrawerProps> = ({
@@ -31,6 +33,8 @@ export const ConversationHistoryDrawer: React.FC<ConversationHistoryDrawerProps>
   onSelectConversation,
   onNewConversation,
   conversations = [],
+  conversationActionsDisabled = false,
+  isConversationSwitchingDisabled,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -87,9 +91,11 @@ export const ConversationHistoryDrawer: React.FC<ConversationHistoryDrawerProps>
             size="sm"
             icon={<Plus className="w-4 h-4 text-white" />}
             onClick={() => {
+              if (conversationActionsDisabled) return;
               onNewConversation();
               onClose();
             }}
+            disabled={conversationActionsDisabled}
             className="w-full justify-center"
           >
             New Conversation
@@ -114,23 +120,31 @@ export const ConversationHistoryDrawer: React.FC<ConversationHistoryDrawerProps>
           ) : (
             filteredConversations.map((conv) => {
               const isActive = conv.id === activeConversationId;
+              const switchingDisabled = isConversationSwitchingDisabled ?? conversationActionsDisabled;
               return (
                 <div
                   key={conv.id}
                   onClick={() => {
+                    if (switchingDisabled) return;
                     onSelectConversation(conv.id);
                     onClose();
                   }}
                   role="button"
-                  tabIndex={0}
+                  tabIndex={switchingDisabled ? -1 : 0}
+                  aria-disabled={switchingDisabled}
                   onKeyDown={(e) => {
+                    if (switchingDisabled) return;
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
                       onSelectConversation(conv.id);
                       onClose();
                     }
                   }}
-                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all text-left space-y-2 ${
+                  className={`p-3.5 rounded-2xl border transition-all text-left space-y-2 ${
+                    switchingDisabled
+                      ? 'opacity-50 cursor-not-allowed pointer-events-none'
+                      : 'cursor-pointer'
+                  } ${
                     isActive
                       ? 'surface-raised border-[var(--color-accent)] shadow-sm'
                       : 'surface-recessed border-[var(--color-border-subtle)] hover:border-[var(--color-accent)]/30'

@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     PORT: int = 8000
     DEBUG: bool = False
     MAX_REQUEST_BODY_BYTES: int = 2 * 1024 * 1024  # 2 MB max payload
+    MAX_ATTACHMENT_REQUEST_BODY_BYTES: int = 12 * 1024 * 1024  # 12 MiB max multipart envelope ceiling for attachments
 
     # Security & Pairing Token
     COMPANION_API_KEY: str = Field(default="")

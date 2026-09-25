@@ -12,6 +12,7 @@ from app.api.deps import verify_token
 from app.schemas.llm import (
     ChatCompletionChoice,
     ChatCompletionDelta,
+    ChatCompletionMessage,
     ChatCompletionRequest,
     ChatCompletionResponse,
     ChatCompletionStreamChoice,
@@ -138,6 +139,10 @@ async def create_chat_completion(
     completion_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
     created_ts = int(time.time())
     model_name = request.model or (await provider.get_status()).active_model or "default"
+    internal_messages = [
+        ChatMessage(role=m.role, content=m.content)
+        for m in request.messages
+    ]
 
     # Streaming mode (SSE)
     if request.stream:
@@ -159,7 +164,7 @@ async def create_chat_completion(
             # Content token deltas
             try:
                 async for token in provider.generate_stream(
-                    messages=request.messages,
+                    messages=internal_messages,
                     temperature=request.temperature,
                     max_tokens=request.max_tokens or 1024,
                 ):
@@ -208,7 +213,7 @@ async def create_chat_completion(
     # Synchronous mode (JSON)
     try:
         content = await provider.generate(
-            messages=request.messages,
+            messages=internal_messages,
             temperature=request.temperature,
             max_tokens=request.max_tokens or 1024,
         )
@@ -230,7 +235,7 @@ async def create_chat_completion(
         choices=[
             ChatCompletionChoice(
                 index=0,
-                message=ChatMessage(role="assistant", content=content),
+                message=ChatCompletionMessage(role="assistant", content=content),
                 finish_reason="stop",
             )
         ],

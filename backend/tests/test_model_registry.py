@@ -1222,3 +1222,97 @@ def test_openapi_schema_regression_and_model_routes():
     ]
     for field in retired_flat_fields:
         assert field not in mre_props, f"Retired flat alias '{field}' found in OpenAPI ModelRegistryEntry schema"
+
+
+def test_find_model_registry_entry_and_resolve_consistency():
+    """Verify find_model_registry_entry matches across all forms and resolve_runtime_model_id shares matching."""
+    from app.schemas.model_registry import (
+        ModelAssetType,
+        ModelCapability,
+        ModelDiscoveryState,
+        ModelLibraryState,
+        ModelManifest,
+        ModelRegistryEntry,
+        ModelRuntimeHints,
+        ModelVariant,
+        ReasoningMode,
+        ValidationStatus,
+    )
+    from app.services.model_registry import find_model_registry_entry, resolve_runtime_model_id
+
+    manifest = ModelManifest(
+        id="qwen3-vl-4b-instruct",
+        display_name="Qwen3-VL 4B Instruct",
+        asset_type=ModelAssetType.gguf,
+        family="Qwen",
+        architecture="qwen2vl",
+        variant=ModelVariant.instruct,
+        parameters="4B",
+        quantization="Q4_K_M",
+        reasoning_mode=ReasoningMode.unsupported,
+        capabilities=[ModelCapability.chat, ModelCapability.vision],  # Manifest declares vision
+        input_modalities=[],
+        model_max_context=8192,
+        runtime_compatibility=[],
+        primary_file="vision/Qwen3-VL-4B-Instruct-Q4_K_M.gguf",
+        companion_files=[],
+    )
+    # But library_state only has chat (e.g. companion mmproj missing)
+    library_state = ModelLibraryState(
+        discovery_state=ModelDiscoveryState.registered,
+        validation_status=ValidationStatus.missing_companion,
+        primary_file_exists=True,
+        size_gb=2.5,
+        companion_artifact_statuses=[],
+        available_capabilities=[ModelCapability.chat],  # available_capabilities excludes vision!
+        capability_provenance=[],
+    )
+    hints = ModelRuntimeHints(recommended_profiles=["balanced"])
+    entry = ModelRegistryEntry(
+        manifest=manifest,
+        library_state=library_state,
+        hints=hints,
+        runtime_model_id="qwen3-vl-router-id",
+        registry_source="factory",
+    )
+    entries = [entry]
+
+    # 1. Match by manifest.id
+    found = find_model_registry_entry("qwen3-vl-4b-instruct", entries=entries)
+    assert found is not None
+    assert found.manifest.id == "qwen3-vl-4b-instruct"
+    # Proves available_capabilities is preserved and not reconstructed from manifest.capabilities
+    assert ModelCapability.vision not in found.library_state.available_capabilities
+    assert ModelCapability.chat in found.library_state.available_capabilities
+
+    # 2. Match by runtime_model_id
+    found_runtime = find_model_registry_entry("qwen3-vl-router-id", entries=entries)
+    assert found_runtime is not None
+    assert found_runtime.manifest.id == "qwen3-vl-4b-instruct"
+
+    # 3. Match by full primary_file path
+    found_primary = find_model_registry_entry("vision/Qwen3-VL-4B-Instruct-Q4_K_M.gguf", entries=entries)
+    assert found_primary is not None
+    assert found_primary.manifest.id == "qwen3-vl-4b-instruct"
+
+    # 4. Match by primary filename
+    found_filename = find_model_registry_entry("Qwen3-VL-4B-Instruct-Q4_K_M.gguf", entries=entries)
+    assert found_filename is not None
+    assert found_filename.manifest.id == "qwen3-vl-4b-instruct"
+
+    # 5. Match by primary filename stem
+    found_stem = find_model_registry_entry("Qwen3-VL-4B-Instruct-Q4_K_M", entries=entries)
+    assert found_stem is not None
+    assert found_stem.manifest.id == "qwen3-vl-4b-instruct"
+
+    # 6. Unknown identifier returns None
+    assert find_model_registry_entry("totally-unknown-model", entries=entries) is None
+
+    # 7. resolve_runtime_model_id shares matching semantics
+    assert resolve_runtime_model_id("qwen3-vl-4b-instruct", entries=entries) == "qwen3-vl-router-id"
+    assert resolve_runtime_model_id("Qwen3-VL-4B-Instruct-Q4_K_M.gguf", entries=entries) == "qwen3-vl-router-id"
+    assert resolve_runtime_model_id("vision/Qwen3-VL-4B-Instruct-Q4_K_M.gguf", entries=entries) == "qwen3-vl-router-id"
+    assert resolve_runtime_model_id("Qwen3-VL-4B-Instruct-Q4_K_M", entries=entries) == "qwen3-vl-router-id"
+
+    # 8. Unresolved identifier fallback in resolve_runtime_model_id preserved
+    assert resolve_runtime_model_id("unregistered-stem.gguf", entries=entries) == "unregistered-stem"

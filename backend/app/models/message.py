@@ -1,11 +1,12 @@
-from typing import Optional, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING
 from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base import Base
+from app.db.session import Base
 from app.models.base import UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, SoftDeleteMixin
 
 if TYPE_CHECKING:
     from app.models.conversation import Conversation
+    from app.models.attachment import Attachment
 
 
 class Message(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, SoftDeleteMixin):
@@ -35,3 +36,8 @@ class Message(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, SoftDeleteM
     completion_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     conversation: Mapped["Conversation"] = relationship("Conversation", back_populates="messages")
+    attachments: Mapped[List["Attachment"]] = relationship(
+        "Attachment",
+        back_populates="message",
+        lazy="selectin",
+    )

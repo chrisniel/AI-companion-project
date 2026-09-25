@@ -41,9 +41,11 @@ export interface StreamMessageOptions {
   conversationId: string;
   userText: string;
   clientMessageId?: string;
+  attachmentIds?: string[];
   signal?: AbortSignal;
+  onAccepted?: () => void;
   onToken: (token: string) => void;
-  onDone: () => void;
+  onDone: (fullText?: string) => void;
   onError: (error: Error, partialText?: string) => void;
 }
 
@@ -89,7 +91,9 @@ export async function streamSendMessage({
   conversationId,
   userText,
   clientMessageId,
+  attachmentIds,
   signal,
+  onAccepted,
   onToken,
   onDone,
   onError,
@@ -116,6 +120,7 @@ export async function streamSendMessage({
       body: JSON.stringify({
         user_text: userText,
         client_message_id: clientMessageId || null,
+        attachment_ids: attachmentIds && attachmentIds.length > 0 ? attachmentIds : undefined,
       }),
       signal,
     });
@@ -138,6 +143,8 @@ export async function streamSendMessage({
         status: response.status,
       });
     }
+
+    onAccepted?.();
 
     if (!response.body) {
       throw new Error('ReadableStream not supported by browser response.');
@@ -163,7 +170,7 @@ export async function streamSendMessage({
           const payload = trimmed.slice(5).trim();
           if (payload === '[DONE]') {
             receivedTerminalEvent = true;
-            onDone();
+            onDone(accumulatedText);
             return;
           }
 
@@ -171,7 +178,7 @@ export async function streamSendMessage({
             const parsed = JSON.parse(payload);
             if (parsed.type === 'done') {
               receivedTerminalEvent = true;
-              onDone();
+              onDone(accumulatedText);
               return;
             }
             if (parsed.type === 'error') {
@@ -202,7 +209,7 @@ export async function streamSendMessage({
 
     if (!receivedTerminalEvent) {
       if (signal?.aborted) {
-        onDone();
+        onDone(accumulatedText);
         return;
       }
       const eofErr = new ApiError({
@@ -214,7 +221,7 @@ export async function streamSendMessage({
       return;
     }
 
-    onDone();
+    onDone(accumulatedText);
   } catch (err: unknown) {
     if (signal?.aborted) {
       onDone();

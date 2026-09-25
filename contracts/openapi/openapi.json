@@ -1372,7 +1372,7 @@
           "Conversations"
         ],
         "summary": "Delete Conversation",
-        "description": "Soft-delete a conversation.",
+        "description": "Soft-delete a conversation and cascade soft-delete to all its active child attachments.",
         "operationId": "delete_conversation_api_v1_conversations__conversation_id__delete",
         "security": [
           {
@@ -1568,14 +1568,224 @@
               "text/event-stream": {}
             }
           },
+          "400": {
+            "description": "Bad Request"
+          },
+          "403": {
+            "description": "ATTACHMENT_FORBIDDEN"
+          },
           "404": {
-            "description": "Conversation not found"
+            "description": "Conversation or Attachment not found"
           },
           "409": {
             "description": "CONVERSATION_BUSY or DUPLICATE_MESSAGE"
           },
+          "422": {
+            "description": "ATTACHMENT_NOT_AVAILABLE or ATTACHMENT_ALREADY_CLAIMED"
+          },
           "503": {
             "description": "LLM_UNAVAILABLE"
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversation_id}/attachments": {
+      "post": {
+        "tags": [
+          "Attachments"
+        ],
+        "summary": "Upload Attachment",
+        "description": "Upload a new staged image attachment associated with an active conversation.",
+        "operationId": "upload_attachment_api_v1_conversations__conversation_id__attachments_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_attachment_api_v1_conversations__conversation_id__attachments_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttachmentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversation_id}/attachments/{attachment_id}/preview": {
+      "get": {
+        "tags": [
+          "Attachments"
+        ],
+        "summary": "Preview Attachment",
+        "description": "Stream attachment image content if parent conversation and attachment are active and owned.",
+        "operationId": "preview_attachment_api_v1_conversations__conversation_id__attachments__attachment_id__preview_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "name": "attachment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Attachment Id"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversation_id}/attachments/{attachment_id}": {
+      "delete": {
+        "tags": [
+          "Attachments"
+        ],
+        "summary": "Delete Attachment",
+        "description": "Soft-delete an attachment. Retains physical file on disk for retention lifecycle.",
+        "operationId": "delete_attachment_api_v1_conversations__conversation_id__attachments__attachment_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "name": "attachment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Attachment Id"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -1881,6 +2091,110 @@
   },
   "components": {
     "schemas": {
+      "AttachmentOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "conversation_id": {
+            "type": "string",
+            "title": "Conversation Id"
+          },
+          "message_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Id"
+          },
+          "filename_display": {
+            "type": "string",
+            "title": "Filename Display"
+          },
+          "mime_type": {
+            "type": "string",
+            "title": "Mime Type"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          },
+          "image_width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Width"
+          },
+          "image_height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Height"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "conversation_id",
+          "filename_display",
+          "mime_type",
+          "size_bytes",
+          "created_at"
+        ],
+        "title": "AttachmentOut",
+        "description": "Public detail schema for an attachment record.\n\nCRITICAL INVARIANT: storage_path MUST NEVER appear in public API schemas."
+      },
+      "AttachmentRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "filename_display": {
+            "type": "string",
+            "title": "Filename Display"
+          },
+          "mime_type": {
+            "type": "string",
+            "title": "Mime Type"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "filename_display",
+          "mime_type",
+          "size_bytes"
+        ],
+        "title": "AttachmentRef",
+        "description": "Lightweight reference embedded in message payloads."
+      },
       "AuthVerifyResponse": {
         "properties": {
           "authenticated": {
@@ -1906,6 +2220,20 @@
         "type": "object",
         "title": "AuthVerifyResponse",
         "description": "Result returned on token verification check."
+      },
+      "Body_upload_attachment_api_v1_conversations__conversation_id__attachments_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_attachment_api_v1_conversations__conversation_id__attachments_post"
       },
       "CapabilityEntry": {
         "properties": {
@@ -1947,7 +2275,7 @@
             "default": 0
           },
           "message": {
-            "$ref": "#/components/schemas/ChatMessage"
+            "$ref": "#/components/schemas/ChatCompletionMessage"
           },
           "finish_reason": {
             "anyOf": [
@@ -1970,11 +2298,36 @@
         "title": "ChatCompletionChoice",
         "description": "Individual completion choice."
       },
+      "ChatCompletionMessage": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "system",
+              "user",
+              "assistant"
+            ],
+            "title": "Role"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "ChatCompletionMessage",
+        "description": "Public text-only chat message in OpenAI-compatible format."
+      },
       "ChatCompletionRequest": {
         "properties": {
           "messages": {
             "items": {
-              "$ref": "#/components/schemas/ChatMessage"
+              "$ref": "#/components/schemas/ChatCompletionMessage"
             },
             "type": "array",
             "minItems": 1,
@@ -2112,31 +2465,6 @@
         "type": "object",
         "title": "ChatCompletionUsage",
         "description": "Token usage counters."
-      },
-      "ChatMessage": {
-        "properties": {
-          "role": {
-            "type": "string",
-            "enum": [
-              "system",
-              "user",
-              "assistant"
-            ],
-            "title": "Role"
-          },
-          "content": {
-            "type": "string",
-            "title": "Content"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "role",
-          "content"
-        ],
-        "title": "ChatMessage",
-        "description": "Chat message in OpenAI-compatible format."
       },
       "CompanionArtifactStatus": {
         "properties": {
@@ -2679,6 +3007,13 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/AttachmentRef"
+            },
+            "type": "array",
+            "title": "Attachments"
           }
         },
         "additionalProperties": false,
@@ -2713,6 +3048,13 @@
               }
             ],
             "title": "Client Message Id"
+          },
+          "attachment_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Attachment Ids"
           }
         },
         "additionalProperties": false,

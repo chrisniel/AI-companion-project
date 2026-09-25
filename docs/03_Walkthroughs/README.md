@@ -62,6 +62,7 @@ Cross-cutting system verification, Web dashboard, and process handovers:
 
 | Walkthrough Document | Delivery Date | Scope & Verified Deliverables | Related Archived Plan |
 | :--- | :--- | :--- | :--- |
+| [`walkthrough-phase8b-multimodal-attachments-foundation.md`](./walkthrough-phase8b-multimodal-attachments-foundation.md) | 2026-09-25 | Phase 8B multimodal image attachment foundation (Slices 8B.0–8B.6: migration 006, contracts, secure API, transactional binding, vision provider, web composer). | [`plan-phase8-pc-frontend-architecture-ux.md`](../02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md) |
 | [`walkthrough-phase7-pc-integration-verification.md`](./walkthrough-phase7-pc-integration-verification.md) | 2026-09-14 | Phase 7 end-to-end PC integration, hardware benchmarks, full-stack test suite. | [`plan-pc-runtime-web-assistant-stabilization.md`](../07_Archive/plans/plan-pc-runtime-web-assistant-stabilization.md) |
 | [`walkthrough-web-dashboard-and-admin-controls.md`](./walkthrough-web-dashboard-and-admin-controls.md) | 2026-09-13 | React Web admin controls, tactile VRAM controls, model registry dashboard (Track C2). | [`plan-web-dashboard-and-admin-controls.md`](../07_Archive/plans/plan-web-dashboard-and-admin-controls.md) |
 | [`walkthrough-documentation-workflow-and-master-plan.md`](./walkthrough-documentation-workflow-and-master-plan.md) | 2026-09-10 | Documentation StarterKit adoption, 7-section walkthrough template baseline. | [`plan-master-plan-reconciliation.md`](../07_Archive/plans/plan-master-plan-reconciliation.md) |

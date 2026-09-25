@@ -29,6 +29,7 @@ export interface AssistantStatusBarProps {
   registry: RegistryEntry[];
   onNewConversation: () => void;
   assistantState: AssistantState;
+  isNewConversationDisabled?: boolean;
 }
 
 export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
@@ -42,6 +43,7 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
   registry,
   onNewConversation,
   assistantState,
+  isNewConversationDisabled = false,
 }) => {
   // Authoritative runtime model identity from backend
   const activeModelId = modelStatus?.active_model || null;
@@ -226,7 +228,11 @@ export const AssistantStatusBar: React.FC<AssistantStatusBarProps> = ({
             size="sm"
             variant="primary"
             icon={<Plus className="w-3.5 h-3.5 text-white" />}
-            onClick={onNewConversation}
+            onClick={() => {
+              if (isNewConversationDisabled) return;
+              onNewConversation();
+            }}
+            disabled={isNewConversationDisabled}
           >
             New Chat
           </NeumorphicButton>

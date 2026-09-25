@@ -143,3 +143,54 @@ async def test_update_model_profile_endpoint(client: AsyncClient, auth_headers: 
     )
     assert resp_invalid.status_code == 422
 
+
+@pytest.mark.asyncio
+async def test_chat_completions_rejects_image_bytes_content_block_422(client: AsyncClient, auth_headers: dict):
+    """Security: Public /chat/completions must reject internal ContentBlock / image_bytes payloads with 422."""
+    payload = {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_bytes", "mime_type": "image/png", "data": "aGVsbG8="}
+                ]
+            }
+        ],
+        "stream": False,
+    }
+    response = await client.post("/api/v1/chat/completions", json=payload, headers=auth_headers)
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_chat_completions_rejects_raw_binary_payloads_422(client: AsyncClient, auth_headers: dict):
+    """Security: Public /chat/completions must reject raw binary or non-string content with 422."""
+    payload = {
+        "messages": [
+            {
+                "role": "user",
+                "content": {"data": "raw_binary_dict"}
+            }
+        ],
+        "stream": False,
+    }
+    response = await client.post("/api/v1/chat/completions", json=payload, headers=auth_headers)
+    assert response.status_code == 422
+
+
+def test_internal_chat_message_still_accepts_content_blocks():
+    """Internal ChatMessage still accepts List[ContentBlock] for orchestrator/provider layers."""
+    from app.schemas.llm import ChatMessage
+    from app.schemas.multimodal import ResolvedImageContent, TextContent
+
+    msg = ChatMessage(
+        role="user",
+        content=[
+            ResolvedImageContent(type="image_bytes", mime_type="image/png", data=b"\x89PNG\r\n\x1a\n"),
+            TextContent(type="text", text="Look at this image"),
+        ]
+    )
+    assert len(msg.content) == 2
+    assert msg.content[0].type == "image_bytes"
+    assert msg.content[1].type == "text"
+

@@ -8,21 +8,30 @@ SSE token streaming, idempotency, and concurrency controls.
 import asyncio
 import json
 import logging
-from typing import AsyncGenerator, List, Optional
+from dataclasses import dataclass
+from typing import Any, AsyncGenerator, List, Optional, Union
 import uuid
 
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.models.attachment import Attachment
 from app.models.conversation import Conversation
 from app.models.memory import Memory
 from app.models.message import Message
-from app.schemas.llm import ChatMessage
+from app.schemas.llm import ChatMessage, ContentBlock, TextContent
+from app.schemas.model_registry import ModelCapability
+from app.services.assistant.media_resolver import resolve_image_content
+from app.services.attachment_service import (
+    claim_attachments_for_message,
+    validate_attachment_ids_syntax,
+)
 from app.services.llm.manager import get_llm_provider
 from app.services.memory.retriever import search_relevant_memories
+from app.services.model_registry import find_model_registry_entry
 
 logger = logging.getLogger("app.services.assistant.orchestrator")
 
@@ -51,11 +60,27 @@ def _get_lock(conversation_id: str) -> asyncio.Lock:
     return _conversation_locks[conversation_id]
 
 
-def _estimate_tokens(text: str) -> int:
-    """Estimate token count: 4 chars ~ 1 token, minimum 1."""
-    if not text:
+def _estimate_tokens(content: Union[str, List[Any]]) -> int:
+    """Estimate token count: 4 chars ~ 1 token, minimum 1. Only counts textual content."""
+    if not content:
         return 0
-    return max(1, len(text) // 4)
+    if isinstance(content, str):
+        return max(1, len(content) // 4)
+    if isinstance(content, list):
+        total_len = 0
+        for block in content:
+            if getattr(block, "type", None) == "text":
+                text = getattr(block, "text", "")
+                if text:
+                    total_len += len(text)
+            elif isinstance(block, dict) and block.get("type") == "text":
+                text = block.get("text", "")
+                if text:
+                    total_len += len(text)
+        if total_len == 0:
+            return 0
+        return max(1, total_len // 4)
+    return 0
 
 
 def _build_context(
@@ -110,108 +135,134 @@ def _build_context(
     ]
 
 
+@dataclass
+class PreparedTurn:
+    """Pre-stream prepared message state and sequence numbers."""
+
+    user_message: Message
+    assistant_message: Message
+    user_sequence_no: int
+    assistant_sequence_no: int
+
+
+async def prepare_turn(
+    db: AsyncSession,
+    *,
+    conversation_id: str,
+    owner_id: str,
+    user_text: str,
+    client_message_id: Optional[str] = None,
+    attachment_ids: Optional[list[str]] = None,
+    max_seq_retries: int = 3,
+) -> PreparedTurn:
+    """
+    Executes the atomic pre-stream turn preparation transaction:
+    1. Validates attachment IDs syntax/limits (service invariant).
+    2. Allocates sequence numbers with bounded retry for collisions.
+    3. Inserts user message and assistant placeholder.
+    4. Flushes message rows.
+    5. Atomically claims all requested attachments for the user message.
+    6. Commits the transaction exactly once.
+    On failure: rolls back session and re-raises domain/HTTP exception.
+    """
+    # 1. Defend attachment-list invariants inside prepare_turn
+    validate_attachment_ids_syntax(attachment_ids)
+
+    # 2. Sequence allocation & message persistence with bounded retry
+    for attempt in range(max_seq_retries):
+        try:
+            seq_query = select(func.max(Message.sequence_no)).where(
+                Message.conversation_id == conversation_id
+            )
+            seq_result = await db.execute(seq_query)
+            max_seq = seq_result.scalar() or 0
+            user_seq = max_seq + 1
+            asst_seq = max_seq + 2
+
+            user_msg = Message(
+                id=str(uuid.uuid4()),
+                conversation_id=conversation_id,
+                owner_id=owner_id,
+                sender="user",
+                content=user_text,
+                status="completed",
+                sequence_no=user_seq,
+                client_message_id=client_message_id,
+            )
+            asst_msg = Message(
+                id=str(uuid.uuid4()),
+                conversation_id=conversation_id,
+                owner_id=owner_id,
+                sender="assistant",
+                content="",
+                status="streaming",
+                sequence_no=asst_seq,
+            )
+            db.add(user_msg)
+            db.add(asst_msg)
+            await db.flush()
+
+            # Claim all attachments atomically within this transaction
+            if attachment_ids:
+                await claim_attachments_for_message(
+                    db=db,
+                    attachment_ids=attachment_ids,
+                    message_id=user_msg.id,
+                    owner_id=owner_id,
+                    conversation_id=conversation_id,
+                )
+
+            # Single atomic commit for messages + claims
+            await db.commit()
+
+            return PreparedTurn(
+                user_message=user_msg,
+                assistant_message=asst_msg,
+                user_sequence_no=user_seq,
+                assistant_sequence_no=asst_seq,
+            )
+        except IntegrityError as exc:
+            await db.rollback()
+            err_str = str(exc).lower()
+            if "client_message_id" in err_str:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="DUPLICATE_MESSAGE")
+            if "sequence" in err_str and attempt < max_seq_retries - 1:
+                logger.warning(
+                    f"Sequence collision in conversation {conversation_id} on attempt {attempt + 1}, retrying with fresh entities..."
+                )
+                continue
+            raise
+        except Exception:
+            await db.rollback()
+            raise
+
+    raise RuntimeError(f"Failed to allocate message sequence after {max_seq_retries} attempts")
+
+
 async def orchestrate_chat_stream(
     db: AsyncSession,
     conversation_id: str,
     user_text: str,
     owner_id: str,
-    client_message_id: Optional[str] = None,
+    prepared_turn: PreparedTurn,
+    conversation_lock: asyncio.Lock,
     persona: Optional[str] = None,
 ) -> AsyncGenerator[str, None]:
     """
-    Orchestrate full chat lifecycle:
-    1. Validate ownership & existence.
-    2. Check idempotency (client_message_id).
-    3. Acquire non-blocking conversation lock (409 CONVERSATION_BUSY).
-    4. Persist user message and assistant placeholder.
-    5. Retrieve relevant memories with FTS5.
-    6. Build context within token budget.
-    7. Stream LLM tokens via SSE format.
-    8. Update assistant message with token usage and completion status.
-    9. Guaranteed generation_active release in finally block.
+    Stream tokens for an already-prepared turn:
+    1. Consumes prepared_turn.assistant_message and initializes state before first await.
+    2. Retrieves memories via FTS5.
+    3. Loads history messages where sequence_no < prepared_turn.user_sequence_no.
+    4. Builds token context.
+    5. Streams tokens, updating assistant placeholder in-place.
+    6. Releases transferred conversation_lock and generation active flag in finally block.
     """
-    # 1. Validate conversation ownership
-    conv_query = select(Conversation).where(
-        Conversation.id == conversation_id,
-        Conversation.owner_id == owner_id,
-        Conversation.deleted_at.is_(None),
-    )
-    conv_result = await db.execute(conv_query)
-    conversation = conv_result.scalar_one_or_none()
-    if not conversation:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-
-    # 2. Idempotency check (scoped to conversation)
-    if client_message_id:
-        dup_query = select(Message).where(
-            Message.conversation_id == conversation_id,
-            Message.client_message_id == client_message_id,
-            Message.owner_id == owner_id,
-        )
-        dup_result = await db.execute(dup_query)
-        if dup_result.scalar_one_or_none():
-            raise HTTPException(status_code=409, detail="DUPLICATE_MESSAGE")
-
-    # 3. Acquire conversation lock
-    lock = _get_lock(conversation_id)
-    if lock.locked():
-        raise HTTPException(status_code=409, detail="CONVERSATION_BUSY")
-    await lock.acquire()
-
+    asst_msg = prepared_turn.assistant_message
+    full_response_text: str = ""
     provider = get_llm_provider()
-    asst_msg: Optional[Message] = None
 
     try:
-        # 4. Sequence number allocation & message persistence with bounded retry for sequence collisions
-        max_seq_retries = 3
-        user_msg: Optional[Message] = None
-
-        for attempt in range(max_seq_retries):
-            try:
-                seq_query = select(func.max(Message.sequence_no)).where(
-                    Message.conversation_id == conversation_id
-                )
-                seq_result = await db.execute(seq_query)
-                max_seq = seq_result.scalar() or 0
-                user_seq = max_seq + 1
-                asst_seq = max_seq + 2
-
-                user_msg = Message(
-                    id=str(uuid.uuid4()),
-                    conversation_id=conversation_id,
-                    owner_id=owner_id,
-                    sender="user",
-                    content=user_text,
-                    status="completed",
-                    sequence_no=user_seq,
-                    client_message_id=client_message_id,
-                )
-                asst_msg = Message(
-                    id=str(uuid.uuid4()),
-                    conversation_id=conversation_id,
-                    owner_id=owner_id,
-                    sender="assistant",
-                    content="",
-                    status="streaming",
-                    sequence_no=asst_seq,
-                )
-                db.add(user_msg)
-                db.add(asst_msg)
-                await db.commit()
-                break
-            except IntegrityError as exc:
-                await db.rollback()
-                err_str = str(exc).lower()
-                if "client_message_id" in err_str:
-                    raise HTTPException(status_code=409, detail="DUPLICATE_MESSAGE")
-                if "sequence" in err_str and attempt < max_seq_retries - 1:
-                    logger.warning(
-                        f"Sequence collision in conversation {conversation_id} on attempt {attempt + 1}, retrying..."
-                    )
-                    continue
-                raise
-
-        # 6. Retrieve relevant memories via FTS5
+        # Retrieve relevant memories via FTS5
         memories = await search_relevant_memories(
             db=db,
             query=user_text,
@@ -219,12 +270,12 @@ async def orchestrate_chat_stream(
             limit=settings.MEMORY_SEARCH_LIMIT,
         )
 
-        # 7. Fetch recent conversation history
+        # Fetch recent conversation history strictly before this turn's user message
         hist_query = (
             select(Message)
             .where(
                 Message.conversation_id == conversation_id,
-                Message.sequence_no < user_seq,
+                Message.sequence_no < prepared_turn.user_sequence_no,
                 Message.deleted_at.is_(None),
             )
             .order_by(Message.sequence_no.desc())
@@ -233,11 +284,10 @@ async def orchestrate_chat_stream(
         hist_result = await db.execute(hist_query)
         history = list(hist_result.scalars().all())
 
-        # 8. Determine context limits
-        status = await provider.get_status()
-        context_capacity = status.context_size or 4096
-
+        status_resp = await provider.get_status()
+        context_capacity = status_resp.context_size or 4096
         active_persona = persona or DEFAULT_PERSONA
+
         prompt_messages = _build_context(
             history=history,
             system_prompt=active_persona,
@@ -248,9 +298,43 @@ async def orchestrate_chat_stream(
             memory_budget=settings.MEMORY_BUDGET_TOKENS,
         )
 
-        # 9. Set generation active flag and stream tokens
+        # Query committed attachments bound to this user turn
+        att_query = (
+            select(Attachment)
+            .where(
+                Attachment.message_id == prepared_turn.user_message.id,
+                Attachment.owner_id == owner_id,
+                Attachment.conversation_id == conversation_id,
+                Attachment.is_deleted.is_(False),
+            )
+            .order_by(Attachment.created_at.asc(), Attachment.id.asc())
+        )
+        att_result = await db.execute(att_query)
+        bound_attachments = list(att_result.scalars().all())
+
+        # Multimodal capability gate: active model must exist in registry with vision in library_state
+        has_vision = False
+        if bound_attachments and status_resp.active_model:
+            active_entry = await asyncio.to_thread(find_model_registry_entry, status_resp.active_model)
+            if active_entry and ModelCapability.vision in active_entry.library_state.available_capabilities:
+                has_vision = True
+
+        if has_vision and bound_attachments:
+            resolved_images: List[ContentBlock] = []
+            for att in bound_attachments:
+                resolved = await resolve_image_content(
+                    session=db,
+                    ref=att,
+                    owner_id=owner_id,
+                    conversation_id=conversation_id,
+                    message_id=prepared_turn.user_message.id,
+                )
+                resolved_images.append(resolved)
+
+            user_blocks: List[ContentBlock] = [*resolved_images, TextContent(type="text", text=user_text)]
+            prompt_messages[-1] = ChatMessage(role="user", content=user_blocks)
+
         provider._generation_active = True
-        full_response_text = ""
         prompt_tokens = sum(_estimate_tokens(m.content) for m in prompt_messages)
 
         async for token in provider.generate_stream(prompt_messages):
@@ -267,13 +351,13 @@ async def orchestrate_chat_stream(
             })
             yield f"data: {chunk_data}\n\n"
 
-        # 10. Update assistant message upon completion
+        # Update assistant placeholder upon completion
         completion_tokens = _estimate_tokens(full_response_text)
         asst_msg.content = full_response_text
         asst_msg.status = "completed"
         asst_msg.prompt_tokens = prompt_tokens
         asst_msg.completion_tokens = completion_tokens
-        asst_msg.model_name = status.active_model
+        asst_msg.model_name = status_resp.active_model
         await db.commit()
 
         done_data = json.dumps({
@@ -283,29 +367,27 @@ async def orchestrate_chat_stream(
         yield f"data: {done_data}\n\n"
         yield "data: [DONE]\n\n"
 
-    except asyncio.CancelledError:
+    except (asyncio.CancelledError, GeneratorExit):
         logger.info(f"Generation cancelled for conversation {conversation_id}")
-        if asst_msg:
-            asst_msg.status = "cancelled"
-            if full_response_text:
-                asst_msg.content = full_response_text
-            try:
-                await db.commit()
-            except Exception as db_err:
-                logger.warning(f"Failed to commit cancellation status: {db_err}")
-                await db.rollback()
+        asst_msg.status = "cancelled"
+        if full_response_text:
+            asst_msg.content = full_response_text
+        try:
+            await db.commit()
+        except Exception as db_err:
+            logger.warning(f"Failed to commit cancellation status: {db_err}")
+            await db.rollback()
         raise
     except Exception as exc:
         logger.error(f"Error during assistant orchestration stream: {exc}")
-        if asst_msg:
-            asst_msg.status = "failed"
-            if full_response_text:
-                asst_msg.content = full_response_text
-            try:
-                await db.commit()
-            except Exception as db_err:
-                logger.warning(f"Failed to commit failure status: {db_err}")
-                await db.rollback()
+        asst_msg.status = "failed"
+        if full_response_text:
+            asst_msg.content = full_response_text
+        try:
+            await db.commit()
+        except Exception as db_err:
+            logger.warning(f"Failed to commit failure status: {db_err}")
+            await db.rollback()
         error_payload = json.dumps({
             "type": "error",
             "code": "MODEL_GENERATION_FAILED",
@@ -315,5 +397,5 @@ async def orchestrate_chat_stream(
         return
     finally:
         provider._generation_active = False
-        if lock.locked():
-            lock.release()
+        if conversation_lock.locked():
+            conversation_lock.release()

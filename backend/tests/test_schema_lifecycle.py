@@ -52,7 +52,7 @@ def test_fresh_install_runs_alembic_upgrade_to_head(tmp_path):
 
     # Prepare schema upgrades to head
     head_rev = prepare_database_schema(canonical_db)
-    assert head_rev == "005_scope_message_constraints"
+    assert head_rev == "006_add_attachments"
 
     # Verify tables exist
     conn = sqlite3.connect(canonical_db)
@@ -63,6 +63,7 @@ def test_fresh_install_runs_alembic_upgrade_to_head(tmp_path):
     assert "messages" in tables
     assert "tasks" in tables
     assert "memories" in tables
+    assert "attachments" in tables
     assert "alembic_version" in tables
 
 
@@ -87,13 +88,13 @@ def test_migrated_older_db_upgraded_on_canonical_copy_while_source_remains_at_ol
 
     # Run schema preparation on canonical copy
     head_rev = prepare_database_schema(canonical_db)
-    assert head_rev == "005_scope_message_constraints"
+    assert head_rev == "006_add_attachments"
 
-    # Canonical copy has revision 005
+    # Canonical copy has revision 006
     conn_canon = sqlite3.connect(canonical_db)
     canon_rev = conn_canon.execute("SELECT version_num FROM alembic_version;").fetchone()[0]
     conn_canon.close()
-    assert canon_rev == "005_scope_message_constraints"
+    assert canon_rev == "006_add_attachments"
 
     # Legacy source MUST remain at 004
     conn_source = sqlite3.connect(legacy_db)
@@ -115,9 +116,9 @@ def test_existing_canonical_db_safely_upgraded_if_behind(tmp_path):
     assert decision.action == "CANONICAL_EXISTS"
 
     head_rev = prepare_database_schema(canonical_db)
-    assert head_rev == "005_scope_message_constraints"
+    assert head_rev == "006_add_attachments"
 
     conn = sqlite3.connect(canonical_db)
     rev = conn.execute("SELECT version_num FROM alembic_version;").fetchone()[0]
     conn.close()
-    assert rev == "005_scope_message_constraints"
+    assert rev == "006_add_attachments"

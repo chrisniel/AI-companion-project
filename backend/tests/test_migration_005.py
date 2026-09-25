@@ -17,7 +17,7 @@ def test_fresh_database_upgrade_base_through_005():
         cfg.set_main_option("script_location", str(BACKEND_DIR / "migrations"))
         cfg.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{db_path.as_posix()}")
 
-        command.upgrade(cfg, "head")
+        command.upgrade(cfg, "005_scope_message_constraints")
 
         conn = sqlite3.connect(db_path)
         cur = conn.cursor()
@@ -52,7 +52,7 @@ def test_existing_004_database_upgrade_to_005_and_schema_parity():
         cfg_a = Config(str(BACKEND_DIR / "alembic.ini"))
         cfg_a.set_main_option("script_location", str(BACKEND_DIR / "migrations"))
         cfg_a.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{db_path_a.as_posix()}")
-        command.upgrade(cfg_a, "head")
+        command.upgrade(cfg_a, "005_scope_message_constraints")
 
         db_path_b = Path(tmpdir) / "upgraded_005.db"
         cfg_b = Config(str(BACKEND_DIR / "alembic.ini"))
@@ -143,7 +143,7 @@ def test_scoped_message_constraints_enforcement():
         cfg = Config(str(BACKEND_DIR / "alembic.ini"))
         cfg.set_main_option("script_location", str(BACKEND_DIR / "migrations"))
         cfg.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{db_path.as_posix()}")
-        command.upgrade(cfg, "head")
+        command.upgrade(cfg, "005_scope_message_constraints")
 
         conn = sqlite3.connect(db_path)
         conn.execute("PRAGMA foreign_keys = ON;")

@@ -1,7 +1,7 @@
 from typing import Optional
 from sqlalchemy import Boolean, Float, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
-from app.db.base import Base
+from app.db.session import Base
 from app.models.base import UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, SoftDeleteMixin
 
 

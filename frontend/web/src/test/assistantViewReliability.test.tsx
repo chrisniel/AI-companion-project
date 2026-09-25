@@ -3,7 +3,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { AssistantView, classifyStreamError } from '../components/workspace/AssistantView';
-import { BackendProvider } from '../context/BackendContext';
+import { BackendProvider, useBackend } from '../context/BackendContext';
 import * as api from '../services/api';
 import { ModelStatusResponse } from '../services/api/modelApi';
 import { streamSendMessage } from '../services/api/conversationApi';
@@ -618,8 +618,8 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
     });
 
     it('transport failure when Core is offline reports CORE_OFFLINE error', async () => {
-      vi.mocked(api.checkHealth).mockRejectedValue(new Error('Core unreachable'));
-      vi.mocked(api.getModelStatus).mockRejectedValue(new Error('Core unreachable'));
+      vi.mocked(api.checkHealth).mockResolvedValue({ status: 'healthy' });
+      vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus());
 
       global.fetch = vi.fn().mockImplementation((url: string) => {
         if (typeof url === 'string' && url.includes('/messages') && !url.includes('skip=')) {
@@ -628,11 +628,32 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
         return Promise.reject(new Error('Connection refused'));
       });
 
+      let triggerOffline!: () => Promise<void>;
+      function TestWrapper() {
+        const { refreshStatus } = useBackend();
+        triggerOffline = refreshStatus;
+        return <AssistantView />;
+      }
+
       render(
         <BackendProvider>
-          <AssistantView />
+          <TestWrapper />
         </BackendProvider>
       );
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole('heading', { level: 1, name: 'Daily Briefing & Local System Orchestration' })
+        ).toBeInTheDocument();
+      });
+
+      // Now Core goes offline
+      vi.mocked(api.checkHealth).mockRejectedValue(new Error('Core unreachable'));
+      vi.mocked(api.getModelStatus).mockRejectedValue(new Error('Core unreachable'));
+
+      await act(async () => {
+        await triggerOffline();
+      });
 
       // In offline mode, wait for composer input to be ready
       const input = await screen.findByPlaceholderText(/Message Aura/i);
@@ -946,7 +967,7 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
         expect(screen.queryByText(/No messages/i)).not.toBeInTheDocument();
       });
 
-      it('New Chat pending -> user selects B -> B messages resolve -> New Chat resolves (B remains active with messages)', async () => {
+      it('New Chat pending disables conversation switching; resolving New Chat activates new conversation', async () => {
         vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus());
 
         let resolveNewChat!: (val: any) => void;
@@ -989,19 +1010,17 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
         const newChatBtn = screen.getByRole('button', { name: /New Chat/i });
         fireEvent.click(newChatBtn);
 
-        // 2. While New Chat is pending, user opens history and selects Conversation B (Deep Work Session)
+        // 2. While New Chat is pending, conversation switching is disabled
         const historyBtn = screen.getByTitle('Open Conversation History');
         fireEvent.click(historyBtn);
         const conv2Item = await screen.findByText('Deep Work Session');
+        expect(conv2Item.closest('[role="button"]')).toHaveAttribute('aria-disabled', 'true');
         fireEvent.click(conv2Item);
 
-        // 3. B messages resolve
-        await waitFor(() => {
-          expect(screen.getByText('Deep Work Session')).toBeInTheDocument();
-          expect(screen.getByText('Message from Session B')).toBeInTheDocument();
-        });
+        // Conv 1 remains active; B was not selected
+        expect(screen.getByRole('heading', { level: 1, name: 'Daily Briefing & Local System Orchestration' })).toBeInTheDocument();
 
-        // 4. Now New Chat resolves later
+        // 3. Now New Chat resolves later
         await act(async () => {
           resolveNewChat({
             id: 'conv-new-created',
@@ -1013,17 +1032,13 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
           });
         });
 
-        // Expected:
-        // - B remains active
-        // - B title remains visible
-        // - B messages remain visible
-        // - newly created conversation must NOT override B as active
-        expect(screen.getByText('Deep Work Session')).toBeInTheDocument();
-        expect(screen.getByText('Message from Session B')).toBeInTheDocument();
-        expect(screen.queryByText('New Conversation Created Late')).not.toBeInTheDocument();
+        // New conversation becomes active
+        await waitFor(() => {
+          expect(screen.getByRole('heading', { level: 1, name: 'New Conversation Created Late' })).toBeInTheDocument();
+        });
       });
 
-      it('New Chat pending -> user selects B -> New Chat resolves -> B messages resolve (B remains active with messages)', async () => {
+      it('New Chat pending disables conversation switching; then user can switch after resolution', async () => {
         vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus());
 
         let resolveNewChat!: (val: any) => void;
@@ -1053,16 +1068,13 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
         const newChatBtn = screen.getByRole('button', { name: /New Chat/i });
         fireEvent.click(newChatBtn);
 
-        // 2. While New Chat is pending, user selects B (Deep Work Session)
+        // 2. While New Chat is pending, B is disabled
         const historyBtn = screen.getByTitle('Open Conversation History');
         fireEvent.click(historyBtn);
         const conv2Item = await screen.findByText('Deep Work Session');
-        fireEvent.click(conv2Item);
+        expect(conv2Item.closest('[role="button"]')).toHaveAttribute('aria-disabled', 'true');
 
-        // Title immediately switches to Deep Work Session
-        expect(screen.getByText('Deep Work Session')).toBeInTheDocument();
-
-        // 3. New Chat resolves before B's messages resolve
+        // 3. New Chat resolves before user selection
         await act(async () => {
           resolveNewChat({
             id: 'conv-new-created',
@@ -1074,11 +1086,13 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
           });
         });
 
-        // B must still remain the active title (not overridden by new chat)
-        expect(screen.getByText('Deep Work Session')).toBeInTheDocument();
-        expect(screen.queryByText('New Conversation Created Late')).not.toBeInTheDocument();
+        await waitFor(() => {
+          expect(screen.getByRole('heading', { level: 1, name: 'New Conversation Created Late' })).toBeInTheDocument();
+        });
 
-        // 4. Now B messages resolve
+        // 4. Now transition is complete: user selects B
+        fireEvent.click(conv2Item);
+
         await act(async () => {
           resolveB({
             items: [
@@ -1096,37 +1110,18 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
           });
         });
 
-        // B messages appear under B; no cross-conversation leakage
-        expect(screen.getByText('Deep Work Session')).toBeInTheDocument();
-        expect(screen.getByText('Message from Session B')).toBeInTheDocument();
+        await waitFor(() => {
+          expect(screen.getByText('Deep Work Session')).toBeInTheDocument();
+          expect(screen.getByText('Message from Session B')).toBeInTheDocument();
+        });
       });
 
-      it('New Chat pending -> user selects B -> New Chat fails (B remains active without clearing title or messages)', async () => {
+      it('New Chat pending -> New Chat fails (previous conversation remains active without clearing title or messages)', async () => {
         vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus());
 
         let rejectNewChat!: (err: any) => void;
         const newChatPromise = new Promise((_, reject) => { rejectNewChat = reject; });
         vi.mocked(api.createConversation).mockImplementation(() => newChatPromise as any);
-
-        vi.mocked(api.getMessages).mockImplementation(async (id) => {
-          if (id === 'conv-2') {
-            return {
-              items: [
-                {
-                  id: 'msg-b1',
-                  conversation_id: 'conv-2',
-                  sender: 'assistant',
-                  content: 'Message from Session B',
-                  status: 'completed',
-                  sequence_no: 1,
-                  created_at: '2026-09-14T01:05:00Z',
-                },
-              ],
-              total: 1,
-            };
-          }
-          return { items: [], total: 0 };
-        });
 
         render(
           <BackendProvider>
@@ -1144,16 +1139,12 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
         const newChatBtn = screen.getByRole('button', { name: /New Chat/i });
         fireEvent.click(newChatBtn);
 
-        // 2. User selects B (Deep Work Session)
+        // 2. While New Chat is pending, conversation switching is disabled
         const historyBtn = screen.getByTitle('Open Conversation History');
         fireEvent.click(historyBtn);
         const conv2Item = await screen.findByText('Deep Work Session');
+        expect(conv2Item.closest('[role="button"]')).toHaveAttribute('aria-disabled', 'true');
         fireEvent.click(conv2Item);
-
-        await waitFor(() => {
-          expect(screen.getByText('Deep Work Session')).toBeInTheDocument();
-          expect(screen.getByText('Message from Session B')).toBeInTheDocument();
-        });
 
         // 3. New Chat fails
         await act(async () => {
@@ -1161,10 +1152,9 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
         });
 
         // Expected:
-        // - B remains active
-        // - B messages/title are not cleared or replaced with "No Conversation"
-        expect(screen.getByText('Deep Work Session')).toBeInTheDocument();
-        expect(screen.getByText('Message from Session B')).toBeInTheDocument();
+        // - Previous conversation remains active
+        // - Messages/title are not cleared or replaced with "No Conversation"
+        expect(screen.getByRole('heading', { level: 1, name: 'Daily Briefing & Local System Orchestration' })).toBeInTheDocument();
         expect(screen.queryByText('No Conversation')).not.toBeInTheDocument();
       });
     });

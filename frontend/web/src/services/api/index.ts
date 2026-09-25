@@ -6,3 +6,4 @@ export * from './conversationApi';
 export * from './memoryApi';
 export * from './registryApi';
 export * from './taskApi';
+export * from './attachmentApi';

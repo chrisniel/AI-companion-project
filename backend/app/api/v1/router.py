@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends
 
 from app.api.deps import verify_token
+from app.api.v1.endpoints.attachments import router as attachments_router
 from app.api.v1.endpoints.auth import router as auth_router
 from app.api.v1.endpoints.conversations import router as conversations_router
 from app.api.v1.endpoints.health import public_health_router, system_router
@@ -23,6 +24,7 @@ protected_router.include_router(auth_router)
 protected_router.include_router(tasks_router)
 protected_router.include_router(llm_router)
 protected_router.include_router(conversations_router, prefix="/conversations", tags=["Conversations"])
+protected_router.include_router(attachments_router, prefix="/conversations", tags=["Attachments"])
 protected_router.include_router(memories_router, prefix="/memories", tags=["Memories"])
 
 # Mount both routers under V1 prefix
