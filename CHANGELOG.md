@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added & Verified (2026-09-25 - Phase 8B: Multimodal Image Attachment Foundation - Slices 8B.0–8B.6)
+
+- Multimodal Attachment Architecture: Established end-to-end image attachment pipeline across persistence, validation, API security, transactional binding, vision provider translation, and React Web composer UI.
+- Persistence & Security Foundation: Added Alembic migration `006_add_attachments` with UUID primary key, timestamp, owner, and soft-delete mixins; implemented Pillow fail-fast image validation (10 MiB limit, PNG/JPEG magic bytes, 8192 px max dimension, 32 MP cap, decompression bomb guard); configured route-specific 12 MiB upload ceiling preserving 2 MiB global API envelope; enforced BOLA and path traversal isolation inside `ATTACHMENT_DIR`.
+- Pre-Stream Transactional Binding: Introduced atomic pre-stream turn preparation transaction (`prepare_turn`) claiming staged attachments via conditional update before SSE streaming begins, ensuring clean HTTP 400/403/404/422 rejections and complete rollback without orphaned records or leaked locks on claim failures.
+- Vision Provider Integration: Gated vision inference on active model `available_capabilities` (requiring companion `mmproj` projector); implemented sandboxed `media_resolver` handling asynchronous disk IO; translated pre-loaded image bytes into OpenAI-compatible `image_url` data URIs in `llama.cpp` provider while keeping public LLM API contracts string-only.
+- Web Composer UI & Lifecycle: Built capability-gated paperclip button, client-side format/size validation, authenticated Blob preview rendering (`createObjectURL`), staged attachment removal with remote DELETE, fail-closed `outcome_unknown` handling on pre-acceptance network drops, conversation transition locking, and component unmount object URL revocation. Automated verification: 321 backend pytest tests passed, 185 frontend vitest tests across 9 files passed, 0 TypeScript compile errors, clean Vite production build, and 0 drift across 22 OpenAPI routes.
+
 ### Verified & Benchmarked (2026-09-14 - Phase 7: Full PC Integration Verification & Benchmarking)
 
 - Cold-Boot & Database Integrity: Verified cold-boot baseline (0 llama processes, ports 8000/8085/3000 free, branch `feature/assistant-orchestration-and-memory`, migration head `005_scope_message_constraints`). Confirmed composite unique constraints `uq_messages_conversation_sequence` and `uq_messages_conversation_client_message_id`, verified removal of global uniqueness on `client_message_id`, soft-delete columns intact, and demonstrated expected downgrade limitation.
