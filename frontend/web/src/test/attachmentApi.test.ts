@@ -4,6 +4,9 @@ import {
   fetchAttachmentBlobUrl,
   deleteAttachment,
   AttachmentOut,
+  ALLOWED_MIME_TYPES,
+  MAX_SIZE_BYTES,
+  MAX_ATTACHMENTS_PER_MESSAGE,
 } from '../services/api/attachmentApi';
 import {
   registryEntryMatchesIdentifier,
@@ -32,10 +35,30 @@ describe('Phase 8B.6 Attachment API & Registry Tests', () => {
     vi.restoreAllMocks();
   });
 
+  describe('canonical constraints', () => {
+    it('exports canonical attachment constants aligned with backend', () => {
+      expect(ALLOWED_MIME_TYPES).toEqual(['image/png', 'image/jpeg']);
+      expect(MAX_SIZE_BYTES).toBe(10 * 1024 * 1024);
+      expect(MAX_ATTACHMENTS_PER_MESSAGE).toBe(4);
+    });
+  });
+
   describe('uploadAttachment', () => {
-    it('sends multipart/form-data with Authorization header and does not set manual Content-Type', async () => {
+    it('sends multipart/form-data via apiFetch and parses exact AttachmentOut schema', async () => {
       let capturedUrl = '';
       let capturedInit: RequestInit | undefined;
+
+      const backendResponse: AttachmentOut = {
+        id: 'att-123',
+        conversation_id: 'conv-1',
+        message_id: null,
+        filename_display: 'photo.png',
+        mime_type: 'image/png',
+        size_bytes: 2048,
+        image_width: 800,
+        image_height: 600,
+        created_at: '2026-09-25T00:00:00Z',
+      };
 
       globalThis.fetch = vi.fn().mockImplementation(async (url, init) => {
         capturedUrl = String(url);
@@ -43,31 +66,33 @@ describe('Phase 8B.6 Attachment API & Registry Tests', () => {
         return {
           ok: true,
           status: 201,
-          json: async () => ({
-            id: 'att-123',
-            conversation_id: 'conv-1',
-            message_id: null,
-            file_name: 'test.png',
-            content_type: 'image/png',
-            byte_size: 1024,
-            sha256: 'abc123hash',
-            created_at: '2026-09-25T00:00:00Z',
-          }),
+          json: async () => backendResponse,
         };
       });
 
-      const file = new File(['dummy binary content'], 'test.png', { type: 'image/png' });
+      const file = new File(['dummy binary content'], 'photo.png', { type: 'image/png' });
       const result = await uploadAttachment('conv-1', file);
 
       expect(capturedUrl).toBe('http://127.0.0.1:8000/api/v1/conversations/conv-1/attachments');
       expect(capturedInit?.method).toBe('POST');
-      const headers = capturedInit?.headers as Record<string, string>;
-      expect(headers['Authorization']).toBe('Bearer test-pairing-key');
-      // Crucial: Content-Type must NOT be manually set so browser can generate boundary
-      expect(headers['Content-Type']).toBeUndefined();
+      const headers = capturedInit?.headers as Headers;
+      expect(headers.get('Authorization')).toBe('Bearer test-pairing-key');
+      // Crucial: Content-Type must NOT be set manually on FormData requests
+      expect(headers.get('Content-Type')).toBeNull();
       expect(capturedInit?.body).toBeInstanceOf(FormData);
+
+      // Verify exact public schema fields (no file_name, content_type, byte_size, sha256)
       expect(result.id).toBe('att-123');
-      expect(result.file_name).toBe('test.png');
+      expect(result.conversation_id).toBe('conv-1');
+      expect(result.message_id).toBeNull();
+      expect(result.filename_display).toBe('photo.png');
+      expect(result.mime_type).toBe('image/png');
+      expect(result.size_bytes).toBe(2048);
+      expect(result.image_width).toBe(800);
+      expect(result.image_height).toBe(600);
+      expect(result.created_at).toBe('2026-09-25T00:00:00Z');
+      expect((result as any).sha256).toBeUndefined();
+      expect((result as any).file_name).toBeUndefined();
     });
 
     it('throws ApiError with status and server error message on failure', async () => {
@@ -85,14 +110,14 @@ describe('Phase 8B.6 Attachment API & Registry Tests', () => {
   });
 
   describe('fetchAttachmentBlobUrl', () => {
-    it('fetches binary data with Authorization header and returns createObjectURL', async () => {
+    it('fetches binary preview data with exact /preview URL and Authorization header', async () => {
       let capturedUrl = '';
-      let capturedHeaders: Record<string, string> = {};
+      let capturedHeaders: Headers | undefined;
 
       const mockBlob = new Blob(['image-bytes'], { type: 'image/png' });
       globalThis.fetch = vi.fn().mockImplementation(async (url, init) => {
         capturedUrl = String(url);
-        capturedHeaders = (init?.headers as Record<string, string>) || {};
+        capturedHeaders = init?.headers as Headers;
         return {
           ok: true,
           status: 200,
@@ -102,24 +127,25 @@ describe('Phase 8B.6 Attachment API & Registry Tests', () => {
 
       const blobUrl = await fetchAttachmentBlobUrl('conv-1', 'att-123');
 
-      expect(capturedUrl).toBe('http://127.0.0.1:8000/api/v1/conversations/conv-1/attachments/att-123');
-      expect(capturedHeaders['Authorization']).toBe('Bearer test-pairing-key');
+      // Assert EXACT /preview route
+      expect(capturedUrl).toBe('http://127.0.0.1:8000/api/v1/conversations/conv-1/attachments/att-123/preview');
+      expect(capturedHeaders?.get('Authorization')).toBe('Bearer test-pairing-key');
       expect(URL.createObjectURL).toHaveBeenCalledWith(mockBlob);
       expect(blobUrl).toBe('blob:http://localhost/test-blob-uuid');
     });
 
-    it('throws ApiError on HTTP non-2xx', async () => {
+    it('throws ApiError on preview HTTP non-2xx', async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 404,
       });
 
-      await expect(fetchAttachmentBlobUrl('conv-1', 'att-missing')).rejects.toThrow('Failed to fetch attachment binary (404)');
+      await expect(fetchAttachmentBlobUrl('conv-1', 'att-missing')).rejects.toThrow('Failed to fetch attachment preview (404)');
     });
   });
 
   describe('deleteAttachment', () => {
-    it('sends DELETE request with Authorization header and resolves on 200/204', async () => {
+    it('sends DELETE request via apiFetch with Authorization header and resolves on 204', async () => {
       let capturedMethod = '';
       let capturedUrl = '';
 
@@ -138,22 +164,28 @@ describe('Phase 8B.6 Attachment API & Registry Tests', () => {
       expect(capturedMethod).toBe('DELETE');
     });
 
-    it('treats 404 as idempotent success without throwing', async () => {
+    it('throws ApiError on HTTP 404 (explicit removal policy does not swallow 404)', async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 404,
+        json: async () => ({
+          detail: 'Attachment not found',
+        }),
       });
 
-      await expect(deleteAttachment('conv-1', 'att-already-gone')).resolves.toBeUndefined();
+      await expect(deleteAttachment('conv-1', 'att-already-gone')).rejects.toThrow('Attachment not found');
     });
 
-    it('throws ApiError on non-404 failure', async () => {
+    it('throws ApiError on HTTP 500 failure', async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 500,
+        json: async () => ({
+          detail: 'Internal server error',
+        }),
       });
 
-      await expect(deleteAttachment('conv-1', 'att-err')).rejects.toThrow('Failed to delete attachment (500)');
+      await expect(deleteAttachment('conv-1', 'att-err')).rejects.toThrow('Internal server error');
     });
   });
 

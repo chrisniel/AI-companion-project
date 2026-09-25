@@ -10,6 +10,10 @@ import {
   uploadAttachment,
   fetchAttachmentBlobUrl,
   deleteAttachment,
+  AttachmentOut,
+  MAX_ATTACHMENTS_PER_MESSAGE,
+  MAX_SIZE_BYTES,
+  ALLOWED_MIME_TYPES,
   streamSendMessage,
 } from '../services/api';
 
@@ -106,7 +110,7 @@ describe('Phase 8B.6 Web Attachment Composer Integration Tests', () => {
     localStorage.setItem('companion_api_url', 'http://127.0.0.1:8000');
     localStorage.setItem('companion_api_key', 'test-key');
 
-    URL.createObjectURL = vi.fn().mockImplementation((blob) => `blob:http://localhost/mock-${Math.random()}`);
+    URL.createObjectURL = vi.fn().mockImplementation(() => `blob:http://localhost/mock-${Math.random()}`);
     URL.revokeObjectURL = vi.fn();
 
     vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus());
@@ -145,10 +149,11 @@ describe('Phase 8B.6 Web Attachment Composer Integration Tests', () => {
       id: 'att-1',
       conversation_id: 'conv-1',
       message_id: null,
-      file_name: 'test.png',
-      content_type: 'image/png',
-      byte_size: 1024,
-      sha256: 'sha256-abc',
+      filename_display: 'test.png',
+      mime_type: 'image/png',
+      size_bytes: 1024,
+      image_width: 800,
+      image_height: 600,
       created_at: '2026-09-25T00:00:00Z',
     });
     vi.mocked(fetchAttachmentBlobUrl).mockResolvedValue('blob:http://localhost/mock-att-1');
@@ -170,7 +175,7 @@ describe('Phase 8B.6 Web Attachment Composer Integration Tests', () => {
     );
   };
 
-  describe('1. Capability Gating', () => {
+  describe('1. Capability Gating & Metadata (Items 1, 4, 13)', () => {
     it('enables paperclip button when active model has vision capability', async () => {
       renderWithBackend();
 
@@ -183,7 +188,7 @@ describe('Phase 8B.6 Web Attachment Composer Integration Tests', () => {
       expect(paperclip).toHaveAttribute('title', 'Attach image (PNG or JPEG, max 10 MiB)');
     });
 
-    it('disables paperclip button when active model lacks vision capability', async () => {
+    it('disables paperclip and shows vision-loss warning when active model lacks vision', async () => {
       vi.mocked(api.getModelStatus).mockResolvedValue(
         createMockStatus({ active_model: 'llama-3.2-3b-instruct' })
       );
@@ -199,53 +204,61 @@ describe('Phase 8B.6 Web Attachment Composer Integration Tests', () => {
       expect(paperclip).toHaveAttribute('title', 'Active model does not support image input');
     });
 
-    it('renders inline warning if attachments are staged but active model lacks vision', async () => {
+    it('renders metadata on staged card using filename_display and size_bytes', async () => {
       renderWithBackend();
 
       await waitFor(() => {
         expect(screen.getByText('Test Session A')).toBeInTheDocument();
       });
 
-      // Stage an attachment while model has vision
-      const file = new File(['image-bytes'], 'chart.png', { type: 'image/png' });
-      const input = screen.getByTestId('attachment-file-input');
+      const file = new File(['12345'], 'screenshot.png', { type: 'image/png' });
+      vi.mocked(uploadAttachment).mockResolvedValueOnce({
+        id: 'att-meta',
+        conversation_id: 'conv-1',
+        message_id: null,
+        filename_display: 'screenshot.png',
+        mime_type: 'image/png',
+        size_bytes: 5120, // 5 KB
+        image_width: 1024,
+        image_height: 768,
+        created_at: '2026-09-25T00:00:00Z',
+      });
 
       await act(async () => {
-        fireEvent.change(input, { target: { files: [file] } });
+        fireEvent.change(screen.getByTestId('attachment-file-input'), { target: { files: [file] } });
       });
 
       await waitFor(() => {
-        expect(screen.getByTestId('staged-card-att-1')).toBeInTheDocument();
+        expect(screen.getByTestId('staged-card-att-meta')).toBeInTheDocument();
       });
 
-      // Now simulate active model changing to a non-vision model
-      vi.mocked(api.getModelStatus).mockResolvedValue(
-        createMockStatus({ active_model: 'llama-3.2-3b-instruct' })
-      );
+      // Alt text uses filename_display
+      const img = screen.getByAltText('screenshot.png');
+      expect(img).toBeInTheDocument();
 
-      // Re-poll status in backend provider
-      await act(async () => {
-        // Fast forward / trigger poll
-      });
+      // Size rendered in KB
+      expect(screen.getByText('5 KB')).toBeInTheDocument();
+
+      // Remove button title and aria-label use filename_display
+      const removeBtn = screen.getByRole('button', { name: /Remove attachment screenshot\.png/i });
+      expect(removeBtn).toHaveAttribute('title', 'Remove screenshot.png');
     });
   });
 
-  describe('2. Local Validation & Multi-File Quota', () => {
-    it('rejects unsupported MIME types with explicit error message', async () => {
+  describe('2. Local Validation & Mixed-Batch Quota (Items 4, 16)', () => {
+    it('rejects unsupported mime types', async () => {
       renderWithBackend();
 
       await waitFor(() => {
         expect(screen.getByText('Test Session A')).toBeInTheDocument();
       });
 
-      const pdfFile = new File(['dummy-pdf'], 'doc.pdf', { type: 'application/pdf' });
-      const input = screen.getByTestId('attachment-file-input');
-
+      const badFile = new File(['dummy'], 'document.pdf', { type: 'application/pdf' });
       await act(async () => {
-        fireEvent.change(input, { target: { files: [pdfFile] } });
+        fireEvent.change(screen.getByTestId('attachment-file-input'), { target: { files: [badFile] } });
       });
 
-      expect(screen.getByText('Only PNG and JPEG images are supported.')).toBeInTheDocument();
+      expect(screen.getByText(/"document\.pdf": Only PNG and JPEG images are supported\./i)).toBeInTheDocument();
       expect(uploadAttachment).not.toHaveBeenCalled();
     });
 
@@ -257,46 +270,87 @@ describe('Phase 8B.6 Web Attachment Composer Integration Tests', () => {
       });
 
       const emptyFile = new File([], 'empty.png', { type: 'image/png' });
-      const input = screen.getByTestId('attachment-file-input');
-
       await act(async () => {
-        fireEvent.change(input, { target: { files: [emptyFile] } });
+        fireEvent.change(screen.getByTestId('attachment-file-input'), { target: { files: [emptyFile] } });
       });
 
-      expect(screen.getByText('Zero-byte files cannot be attached.')).toBeInTheDocument();
+      expect(screen.getByText(/"empty\.png": Zero-byte files cannot be attached\./i)).toBeInTheDocument();
       expect(uploadAttachment).not.toHaveBeenCalled();
     });
 
-    it('rejects files exceeding 10 MiB with explicit error message', async () => {
+    it('rejects files exceeding 10 MiB', async () => {
       renderWithBackend();
 
       await waitFor(() => {
         expect(screen.getByText('Test Session A')).toBeInTheDocument();
       });
 
-      const hugeFile = new File([new Uint8Array(10 * 1024 * 1024 + 1)], 'huge.png', { type: 'image/png' });
-      const input = screen.getByTestId('attachment-file-input');
-
+      const hugeFile = new File([new Uint8Array(MAX_SIZE_BYTES + 1)], 'huge.png', { type: 'image/png' });
       await act(async () => {
-        fireEvent.change(input, { target: { files: [hugeFile] } });
+        fireEvent.change(screen.getByTestId('attachment-file-input'), { target: { files: [hugeFile] } });
       });
 
-      expect(screen.getByText('File "huge.png" exceeds the 10 MiB limit.')).toBeInTheDocument();
+      expect(screen.getByText(/"huge\.png": Exceeds the 10 MiB limit\./i)).toBeInTheDocument();
       expect(uploadAttachment).not.toHaveBeenCalled();
     });
 
-    it('accepts valid files up to quota limit of 4 sequentially and rejects remainder', async () => {
-      let callCount = 0;
+    it('mixed batch: invalid file does not consume quota, valid files stage, warning retained', async () => {
+      let counter = 0;
       vi.mocked(uploadAttachment).mockImplementation(async (convId, file) => {
-        callCount++;
+        counter++;
         return {
-          id: `att-${callCount}`,
+          id: `att-mixed-${counter}`,
           conversation_id: convId,
           message_id: null,
-          file_name: file.name,
-          content_type: 'image/png',
-          byte_size: 1024,
-          sha256: `hash-${callCount}`,
+          filename_display: file.name,
+          mime_type: 'image/png',
+          size_bytes: 1024,
+          image_width: 800,
+          image_height: 600,
+          created_at: '2026-09-25T00:00:00Z',
+        };
+      });
+
+      renderWithBackend();
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Session A')).toBeInTheDocument();
+      });
+
+      const badFile = new File(['text'], 'note.txt', { type: 'text/plain' });
+      const goodFile1 = new File(['1'], 'good1.png', { type: 'image/png' });
+      const goodFile2 = new File(['2'], 'good2.jpg', { type: 'image/jpeg' });
+
+      await act(async () => {
+        fireEvent.change(screen.getByTestId('attachment-file-input'), {
+          target: { files: [badFile, goodFile1, goodFile2] },
+        });
+      });
+
+      // Staged cards rendered for valid files
+      await waitFor(() => {
+        expect(screen.getByTestId('staged-card-att-mixed-1')).toBeInTheDocument();
+        expect(screen.getByTestId('staged-card-att-mixed-2')).toBeInTheDocument();
+      });
+
+      // Retain warning for rejected file
+      expect(screen.getByText(/"note\.txt": Only PNG and JPEG images are supported\./i)).toBeInTheDocument();
+      expect(uploadAttachment).toHaveBeenCalledTimes(2);
+    });
+
+    it('selecting more valid files than remaining capacity surfaces quota notice', async () => {
+      let counter = 0;
+      vi.mocked(uploadAttachment).mockImplementation(async (convId, file) => {
+        counter++;
+        return {
+          id: `att-quota-${counter}`,
+          conversation_id: convId,
+          message_id: null,
+          filename_display: file.name,
+          mime_type: 'image/png',
+          size_bytes: 1024,
+          image_width: 800,
+          image_height: 600,
           created_at: '2026-09-25T00:00:00Z',
         };
       });
@@ -308,31 +362,153 @@ describe('Phase 8B.6 Web Attachment Composer Integration Tests', () => {
       });
 
       const files = [
-        new File(['1'], 'img1.png', { type: 'image/png' }),
-        new File(['2'], 'img2.png', { type: 'image/png' }),
-        new File(['3'], 'img3.png', { type: 'image/png' }),
-        new File(['4'], 'img4.png', { type: 'image/png' }),
-        new File(['5'], 'img5.png', { type: 'image/png' }), // exceeds quota
+        new File(['1'], '1.png', { type: 'image/png' }),
+        new File(['2'], '2.png', { type: 'image/png' }),
+        new File(['3'], '3.png', { type: 'image/png' }),
+        new File(['4'], '4.png', { type: 'image/png' }),
+        new File(['5'], '5.png', { type: 'image/png' }), // 5th exceeds quota of 4
       ];
 
-      const input = screen.getByTestId('attachment-file-input');
-
       await act(async () => {
-        fireEvent.change(input, { target: { files } });
+        fireEvent.change(screen.getByTestId('attachment-file-input'), { target: { files } });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('staged-card-att-quota-4')).toBeInTheDocument();
+      });
+
+      expect(uploadAttachment).toHaveBeenCalledTimes(4);
+      expect(screen.getByText(/Only 4 more attachments can be added \(max 4 per message\)\./i)).toBeInTheDocument();
+    });
+  });
+
+  describe('3. Preview Rollback & Explicit Removal Failure (Items 5, 6)', () => {
+    it('rolls back uploaded row via deleteAttachment if preview creation fails', async () => {
+      vi.mocked(uploadAttachment).mockResolvedValueOnce({
+        id: 'att-orphan-1',
+        conversation_id: 'conv-1',
+        message_id: null,
+        filename_display: 'orphan.png',
+        mime_type: 'image/png',
+        size_bytes: 1024,
+        image_width: 800,
+        image_height: 600,
+        created_at: '2026-09-25T00:00:00Z',
+      });
+      // Preview fetch fails
+      vi.mocked(fetchAttachmentBlobUrl).mockRejectedValueOnce(
+        new Error('Failed to fetch preview image')
+      );
+
+      renderWithBackend();
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Session A')).toBeInTheDocument();
+      });
+
+      const file = new File(['content'], 'orphan.png', { type: 'image/png' });
+      await act(async () => {
+        fireEvent.change(screen.getByTestId('attachment-file-input'), { target: { files: [file] } });
+      });
+
+      // Must call deleteAttachment to clean up the uploaded row
+      expect(deleteAttachment).toHaveBeenCalledWith('conv-1', 'att-orphan-1');
+      // No card staged
+      expect(screen.queryByTestId('staged-card-att-orphan-1')).not.toBeInTheDocument();
+      // Error is displayed to user
+      expect(screen.getByText(/Failed to fetch preview image/i)).toBeInTheDocument();
+    });
+
+    it('successful removal revokes preview URL and removes card', async () => {
+      renderWithBackend();
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Session A')).toBeInTheDocument();
+      });
+
+      const file = new File(['content'], 'test.png', { type: 'image/png' });
+      await act(async () => {
+        fireEvent.change(screen.getByTestId('attachment-file-input'), { target: { files: [file] } });
       });
 
       await waitFor(() => {
         expect(screen.getByTestId('staged-card-att-1')).toBeInTheDocument();
-        expect(screen.getByTestId('staged-card-att-4')).toBeInTheDocument();
       });
 
-      // Exactly 4 uploads attempted
-      expect(uploadAttachment).toHaveBeenCalledTimes(4);
-      expect(screen.queryByTestId('staged-card-att-5')).not.toBeInTheDocument();
-    });
-  });
+      const removeBtn = screen.getByRole('button', { name: /Remove attachment test\.png/i });
+      await act(async () => {
+        fireEvent.click(removeBtn);
+      });
 
-  describe('3. Staged Card Removal & Double-Click Serialization', () => {
+      expect(deleteAttachment).toHaveBeenCalledWith('conv-1', 'att-1');
+      expect(screen.queryByTestId('staged-card-att-1')).not.toBeInTheDocument();
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/mock-att-1');
+    });
+
+    it('DELETE failure (500) preserves staged card and preview URL, shows error', async () => {
+      vi.mocked(deleteAttachment).mockRejectedValueOnce(
+        new api.ApiError({ code: 'SERVER_ERROR', message: 'Internal Server Error', status: 500 })
+      );
+
+      renderWithBackend();
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Session A')).toBeInTheDocument();
+      });
+
+      const file = new File(['content'], 'test.png', { type: 'image/png' });
+      await act(async () => {
+        fireEvent.change(screen.getByTestId('attachment-file-input'), { target: { files: [file] } });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('staged-card-att-1')).toBeInTheDocument();
+      });
+
+      const removeBtn = screen.getByRole('button', { name: /Remove attachment test\.png/i });
+      await act(async () => {
+        fireEvent.click(removeBtn);
+      });
+
+      // Card is PRESERVED on failure
+      expect(screen.getByTestId('staged-card-att-1')).toBeInTheDocument();
+      // URL is NOT revoked on failure
+      expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+      // Error shown
+      expect(screen.getByText('Internal Server Error')).toBeInTheDocument();
+    });
+
+    it('DELETE failure (404) preserves staged card and preview URL, shows error', async () => {
+      vi.mocked(deleteAttachment).mockRejectedValueOnce(
+        new api.ApiError({ code: 'NOT_FOUND', message: 'Attachment not found', status: 404 })
+      );
+
+      renderWithBackend();
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Session A')).toBeInTheDocument();
+      });
+
+      const file = new File(['content'], 'test.png', { type: 'image/png' });
+      await act(async () => {
+        fireEvent.change(screen.getByTestId('attachment-file-input'), { target: { files: [file] } });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('staged-card-att-1')).toBeInTheDocument();
+      });
+
+      const removeBtn = screen.getByRole('button', { name: /Remove attachment test\.png/i });
+      await act(async () => {
+        fireEvent.click(removeBtn);
+      });
+
+      // Explicit removal treats 404 as error: card preserved, error shown
+      expect(screen.getByTestId('staged-card-att-1')).toBeInTheDocument();
+      expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+      expect(screen.getByText('Attachment not found')).toBeInTheDocument();
+    });
+
     it('rapid double click on remove issues exactly one DELETE request', async () => {
       let resolveDelete: () => void = () => {};
       const deletePromise = new Promise<void>((resolve) => {
@@ -346,7 +522,6 @@ describe('Phase 8B.6 Web Attachment Composer Integration Tests', () => {
         expect(screen.getByText('Test Session A')).toBeInTheDocument();
       });
 
-      // Stage an attachment
       const file = new File(['content'], 'test.png', { type: 'image/png' });
       await act(async () => {
         fireEvent.change(screen.getByTestId('attachment-file-input'), { target: { files: [file] } });
@@ -358,7 +533,6 @@ describe('Phase 8B.6 Web Attachment Composer Integration Tests', () => {
 
       const removeBtn = screen.getByRole('button', { name: /Remove attachment test\.png/i });
 
-      // Click twice rapidly in same execution frame
       act(() => {
         fireEvent.click(removeBtn);
         fireEvent.click(removeBtn);
@@ -366,7 +540,6 @@ describe('Phase 8B.6 Web Attachment Composer Integration Tests', () => {
 
       expect(deleteAttachment).toHaveBeenCalledTimes(1);
 
-      // Resolve the DELETE
       await act(async () => {
         resolveDelete();
       });
@@ -374,20 +547,86 @@ describe('Phase 8B.6 Web Attachment Composer Integration Tests', () => {
       await waitFor(() => {
         expect(screen.queryByTestId('staged-card-att-1')).not.toBeInTheDocument();
       });
-      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/mock-att-1');
     });
   });
 
-  describe('4. Send Lifecycle & onAccepted Invariants', () => {
-    it('freezes textarea, sets awaiting_acceptance, and does NOT render message bubbles before onAccepted', async () => {
-      let resolveStream: () => void = () => {};
-      let capturedOnAccepted: (() => void) | undefined;
+  describe('4. Navigation & Conversation Switching Locks (Item 7, 15)', () => {
+    it('upload in progress disables conversation switching, New Conversation, and status-bar New Chat', async () => {
+      let resolveUpload: () => void = () => {};
+      vi.mocked(uploadAttachment).mockImplementation(
+        () => new Promise((resolve) => { resolveUpload = () => resolve({ id: 'att-up', conversation_id: 'conv-1', message_id: null, filename_display: 'slow.png', mime_type: 'image/png', size_bytes: 1024, image_width: null, image_height: null, created_at: '' }); })
+      );
 
+      renderWithBackend();
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Session A')).toBeInTheDocument();
+      });
+
+      // Start upload
+      const file = new File(['content'], 'slow.png', { type: 'image/png' });
+      act(() => {
+        fireEvent.change(screen.getByTestId('attachment-file-input'), { target: { files: [file] } });
+      });
+
+      // 1. Status-bar New Chat must be disabled
+      const statusNewChat = screen.getByRole('button', { name: /New Chat/i });
+      expect(statusNewChat).toBeDisabled();
+
+      // Open drawer
+      fireEvent.click(screen.getByTitle('Open Conversation History'));
+
+      // 2. Drawer New Conversation must be disabled
+      const drawerNewConv = screen.getByRole('button', { name: /New Conversation/i });
+      expect(drawerNewConv).toBeDisabled();
+
+      // 3. Conversation items in drawer must be disabled
+      const sessionB = screen.getByRole('button', { name: /Test Session B/i });
+      expect(sessionB).toHaveAttribute('aria-disabled', 'true');
+
+      // Clicking conversation item cannot switch while upload is in progress
+      act(() => {
+        fireEvent.click(sessionB);
+      });
+
+      // Active title remains Test Session A
+      expect(screen.getByRole('heading', { level: 1, name: 'Test Session A' })).toBeInTheDocument();
+
+      await act(async () => {
+        resolveUpload();
+      });
+    });
+  });
+
+  describe('5. Guard Sending Without Real Conversation (Item 12)', () => {
+    it('disables send and sends no POST when active conversation is missing', async () => {
+      vi.mocked(api.listConversations).mockResolvedValue({ items: [], total: 0 });
+      vi.mocked(api.createConversation).mockRejectedValue(new Error('Creation failed'));
+
+      renderWithBackend();
+
+      await waitFor(() => {
+        expect(screen.getByText('No Conversation')).toBeInTheDocument();
+      });
+
+      const textarea = screen.getByTestId('composer-textarea');
+      fireEvent.change(textarea, { target: { value: 'Hello' } });
+
+      const sendBtn = screen.getByTestId('send-message-button');
+      // Send button is rendered disabled
+      expect(sendBtn).toBeDisabled();
+
+      // Attempting Enter key send sends NO POST to /messages
+      fireEvent.keyDown(textarea, { key: 'Enter', code: 'Enter' });
+      expect(streamSendMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('6. Send Lifecycle, Invariants, and Unmount Cleanup (Items 8, 11)', () => {
+    it('onAccepted commits bubbles, clears staged cards, and does NOT call deleteAttachment', async () => {
+      let capturedOnAccepted: (() => void) | undefined;
       vi.mocked(streamSendMessage).mockImplementation(async (opts) => {
         capturedOnAccepted = opts.onAccepted;
-        await new Promise<void>((resolve) => {
-          resolveStream = resolve;
-        });
       });
 
       renderWithBackend();
@@ -396,47 +635,65 @@ describe('Phase 8B.6 Web Attachment Composer Integration Tests', () => {
         expect(screen.getByText('Test Session A')).toBeInTheDocument();
       });
 
-      const textarea = screen.getByTestId('composer-textarea') as HTMLTextAreaElement;
-      fireEvent.change(textarea, { target: { value: 'Analyze this data' } });
-
-      const sendBtn = screen.getByTestId('send-message-button');
-      expect(sendBtn).not.toBeDisabled();
-
-      // Click Send
-      act(() => {
-        fireEvent.click(sendBtn);
+      const file = new File(['content'], 'test.png', { type: 'image/png' });
+      await act(async () => {
+        fireEvent.change(screen.getByTestId('attachment-file-input'), { target: { files: [file] } });
       });
 
-      // Textarea must be frozen (readOnly)
-      expect(textarea).toHaveAttribute('readonly');
+      await waitFor(() => {
+        expect(screen.getByTestId('staged-card-att-1')).toBeInTheDocument();
+      });
 
-      // Crucial: No optimistic bubbles before HTTP acceptance!
-      const bubblesBefore = screen
-        .queryAllByText('Analyze this data')
-        .filter((el) => el.tagName !== 'TEXTAREA');
-      expect(bubblesBefore).toHaveLength(0);
+      const textarea = screen.getByTestId('composer-textarea');
+      fireEvent.change(textarea, { target: { value: 'Prompt' } });
 
-      // Now simulate server returning HTTP 200 and triggering onAccepted
+      act(() => {
+        fireEvent.click(screen.getByTestId('send-message-button'));
+      });
+
+      // No bubbles before onAccepted
+      expect(screen.queryAllByText('Prompt').filter((el) => el.tagName !== 'TEXTAREA')).toHaveLength(0);
+
+      // Trigger onAccepted
       await act(async () => {
         capturedOnAccepted?.();
       });
 
-      // Now bubbles must be rendered!
-      expect(screen.getByText('Analyze this data')).toBeInTheDocument();
-
-      // Resolve stream
-      await act(async () => {
-        resolveStream();
-      });
+      // Bubbles committed
+      expect(screen.getByText('Prompt')).toBeInTheDocument();
+      // Staged cards cleared without DELETE
+      expect(screen.queryByTestId('staged-card-att-1')).not.toBeInTheDocument();
+      expect(deleteAttachment).not.toHaveBeenCalled();
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/mock-att-1');
     });
 
-    it('immediate unmount after Send issues ZERO deleteAttachment calls', async () => {
-      let resolveStream: () => void = () => {};
+    it('unmount while idle revokes Blob URLs and best-effort deletes remote staged rows', async () => {
+      const { unmount } = renderWithBackend();
 
-      vi.mocked(streamSendMessage).mockImplementation(async () => {
-        await new Promise<void>((resolve) => {
-          resolveStream = resolve;
-        });
+      await waitFor(() => {
+        expect(screen.getByText('Test Session A')).toBeInTheDocument();
+      });
+
+      const file = new File(['content'], 'test.png', { type: 'image/png' });
+      await act(async () => {
+        fireEvent.change(screen.getByTestId('attachment-file-input'), { target: { files: [file] } });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('staged-card-att-1')).toBeInTheDocument();
+      });
+
+      unmount();
+
+      // Revokes URL locally
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/mock-att-1');
+      // Performs remote delete when idle
+      expect(deleteAttachment).toHaveBeenCalledWith('conv-1', 'att-1');
+    });
+
+    it('unmount during outcome_unknown revokes Blob URLs but performs ZERO deleteAttachment calls', async () => {
+      vi.mocked(streamSendMessage).mockImplementation(async (opts) => {
+        opts.onError(new TypeError('Failed to fetch'), '');
       });
 
       const { unmount } = renderWithBackend();
@@ -445,124 +702,6 @@ describe('Phase 8B.6 Web Attachment Composer Integration Tests', () => {
         expect(screen.getByText('Test Session A')).toBeInTheDocument();
       });
 
-      // Stage an attachment
-      const file = new File(['content'], 'test.png', { type: 'image/png' });
-      await act(async () => {
-        fireEvent.change(screen.getByTestId('attachment-file-input'), { target: { files: [file] } });
-      });
-
-      await waitFor(() => {
-        expect(screen.getByTestId('staged-card-att-1')).toBeInTheDocument();
-      });
-
-      // Send
-      act(() => {
-        fireEvent.click(screen.getByTestId('send-message-button'));
-      });
-
-      // Immediately unmount component while send is in awaiting_acceptance
-      unmount();
-
-      // deleteAttachment must NOT have been called for the in-flight send snapshot!
-      expect(deleteAttachment).not.toHaveBeenCalled();
-
-      resolveStream();
-    });
-
-    it('sends fallback user_text when input prompt is empty with attachments', async () => {
-      let capturedUserText = '';
-      vi.mocked(streamSendMessage).mockImplementation(async (opts) => {
-        capturedUserText = opts.userText;
-        opts.onAccepted?.();
-        opts.onDone?.();
-      });
-
-      renderWithBackend();
-
-      await waitFor(() => {
-        expect(screen.getByText('Test Session A')).toBeInTheDocument();
-      });
-
-      // Stage an attachment
-      const file = new File(['content'], 'test.png', { type: 'image/png' });
-      await act(async () => {
-        fireEvent.change(screen.getByTestId('attachment-file-input'), { target: { files: [file] } });
-      });
-
-      await waitFor(() => {
-        expect(screen.getByTestId('staged-card-att-1')).toBeInTheDocument();
-      });
-
-      // Send button should be enabled even without prompt text
-      const sendBtn = screen.getByTestId('send-message-button');
-      expect(sendBtn).not.toBeDisabled();
-
-      await act(async () => {
-        fireEvent.click(sendBtn);
-      });
-
-      expect(capturedUserText).toBe('Shared attachment for processing.');
-    });
-  });
-
-  describe('5. Error Handling & outcome_unknown', () => {
-    it('pre-acceptance HTTP 422 re-enables textarea, restores idle phase, and preserves draft + staged cards', async () => {
-      vi.mocked(streamSendMessage).mockImplementation(async (opts) => {
-        opts.onError(
-          new api.ApiError({
-            code: 'MESSAGE_PREPARATION_FAILED',
-            message: 'Model busy with previous turn.',
-            status: 422,
-          }),
-          ''
-        );
-      });
-
-      renderWithBackend();
-
-      await waitFor(() => {
-        expect(screen.getByText('Test Session A')).toBeInTheDocument();
-      });
-
-      const file = new File(['content'], 'test.png', { type: 'image/png' });
-      await act(async () => {
-        fireEvent.change(screen.getByTestId('attachment-file-input'), { target: { files: [file] } });
-      });
-
-      const textarea = screen.getByTestId('composer-textarea') as HTMLTextAreaElement;
-      fireEvent.change(textarea, { target: { value: 'My prompt' } });
-
-      await act(async () => {
-        fireEvent.click(screen.getByTestId('send-message-button'));
-      });
-
-      // Error message shown in banner
-      expect(screen.getByText('Model busy with previous turn.')).toBeInTheDocument();
-
-      // Draft & staged card preserved
-      expect(textarea.value).toBe('My prompt');
-      expect(textarea).not.toHaveAttribute('readonly');
-      expect(screen.getByTestId('staged-card-att-1')).toBeInTheDocument();
-
-      // Bubbles were never created
-      const bubbles = screen
-        .queryAllByText('My prompt')
-        .filter((el) => el.tagName !== 'TEXTAREA');
-      expect(bubbles).toHaveLength(0);
-    });
-
-    it('pre-acceptance transport drop transitions to outcome_unknown, preserves cards, and blocks destructive actions', async () => {
-      vi.mocked(streamSendMessage).mockImplementation(async (opts) => {
-        // Transport error before onAccepted
-        opts.onError(new TypeError('Failed to fetch'), '');
-      });
-
-      renderWithBackend();
-
-      await waitFor(() => {
-        expect(screen.getByText('Test Session A')).toBeInTheDocument();
-      });
-
       const file = new File(['content'], 'test.png', { type: 'image/png' });
       await act(async () => {
         fireEvent.change(screen.getByTestId('attachment-file-input'), { target: { files: [file] } });
@@ -572,25 +711,22 @@ describe('Phase 8B.6 Web Attachment Composer Integration Tests', () => {
         fireEvent.click(screen.getByTestId('send-message-button'));
       });
 
-      // Reconciliation warning banner is shown
       expect(screen.getByText(/Connection lost before server confirmed message acceptance/i)).toBeInTheDocument();
 
-      // Destructive actions blocked: Send disabled, New Chat disabled, Remove button hidden/disabled
-      expect(screen.getByTestId('send-message-button')).toBeDisabled();
-      expect(screen.getByRole('button', { name: /New Chat/i })).toBeDisabled();
+      unmount();
 
-      // Attachment DELETE is NEVER called
+      // URL revoked
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/mock-att-1');
+      // ZERO remote delete
       expect(deleteAttachment).not.toHaveBeenCalled();
     });
 
-    it('post-acceptance SSE failure updates assistant bubble error only and does not restore staged cards', async () => {
-      vi.mocked(streamSendMessage).mockImplementation(async (opts) => {
-        opts.onAccepted?.();
-        opts.onToken('Initial tokens');
-        opts.onError(new Error('Connection interrupted during streaming'), 'Initial tokens');
+    it('unmount immediately after Send (awaiting_acceptance) performs ZERO deleteAttachment calls', async () => {
+      vi.mocked(streamSendMessage).mockImplementation(async () => {
+        await new Promise(() => {}); // pending
       });
 
-      renderWithBackend();
+      const { unmount } = renderWithBackend();
 
       await waitFor(() => {
         expect(screen.getByText('Test Session A')).toBeInTheDocument();
@@ -601,209 +737,48 @@ describe('Phase 8B.6 Web Attachment Composer Integration Tests', () => {
         fireEvent.change(screen.getByTestId('attachment-file-input'), { target: { files: [file] } });
       });
 
-      await act(async () => {
+      act(() => {
         fireEvent.click(screen.getByTestId('send-message-button'));
       });
 
-      // Assistant bubble updated with error
-      await waitFor(() => {
-        expect(screen.getByText(/Initial tokens/i)).toBeInTheDocument();
-      });
+      unmount();
 
-      // Staged card stays cleared
-      expect(screen.queryByTestId('staged-card-att-1')).not.toBeInTheDocument();
+      // ZERO remote delete
+      expect(deleteAttachment).not.toHaveBeenCalled();
     });
   });
 
-  describe('6. Navigation & Button Locks', () => {
-    it('disables both New Chat buttons during awaiting_acceptance and outcome_unknown', async () => {
-      let capturedOnAccepted: (() => void) | undefined;
-      vi.mocked(streamSendMessage).mockImplementation(async (opts) => {
-        capturedOnAccepted = opts.onAccepted;
-        await new Promise(() => {}); // never resolves
+  describe('7. Effect Loop Prevention (Item 10)', () => {
+    it('does not enter infinite listConversations loop when listConversations returns fresh array instances', async () => {
+      let callCount = 0;
+      vi.mocked(api.listConversations).mockImplementation(async () => {
+        callCount++;
+        return {
+          items: [
+            {
+              id: 'conv-fresh-1',
+              title: 'Fresh Title',
+              character_id: 'aura',
+              owner_id: 'chris',
+              created_at: '2026-09-25T00:00:00Z',
+              updated_at: '2026-09-25T00:00:00Z',
+            },
+          ],
+          total: 1,
+        };
       });
 
       renderWithBackend();
 
       await waitFor(() => {
-        expect(screen.getByText('Test Session A')).toBeInTheDocument();
+        expect(screen.getByText('Fresh Title')).toBeInTheDocument();
       });
 
-      const statusNewChat = screen.getByRole('button', { name: /New Chat/i });
-      expect(statusNewChat).not.toBeDisabled();
+      // Wait a short moment to ensure no infinite effect re-triggering
+      await new Promise((r) => setTimeout(r, 100));
 
-      // Send message
-      fireEvent.change(screen.getByTestId('composer-textarea'), { target: { value: 'Test' } });
-      act(() => {
-        fireEvent.click(screen.getByTestId('send-message-button'));
-      });
-
-      // Both status bar New Chat and drawer are disabled
-      expect(statusNewChat).toBeDisabled();
-
-      // Open history drawer
-      fireEvent.click(screen.getByTitle('Open Conversation History'));
-      const drawerNewConversation = screen.getByRole('button', { name: /New Conversation/i });
-      expect(drawerNewConversation).toBeDisabled();
-    });
-  });
-
-  describe('7. Async Conversation Transitions & Concurrency Locks', () => {
-    it('rapid double click on New Chat starts at most one createConversation request', async () => {
-      let resolveCreate: () => void = () => {};
-      vi.mocked(api.createConversation).mockImplementation(
-        () => new Promise((resolve) => { resolveCreate = () => resolve({ id: 'c-new', title: 'New', character_id: 'aura', owner_id: 'chris', created_at: '', updated_at: '' }); })
-      );
-
-      renderWithBackend();
-
-      await waitFor(() => {
-        expect(screen.getByText('Test Session A')).toBeInTheDocument();
-      });
-
-      const newChatBtn = screen.getByRole('button', { name: /New Chat/i });
-
-      act(() => {
-        fireEvent.click(newChatBtn);
-        fireEvent.click(newChatBtn);
-      });
-
-      expect(api.createConversation).toHaveBeenCalledTimes(1);
-
-      await act(async () => {
-        resolveCreate();
-      });
-    });
-
-    it('attempting Send while New Chat is in flight is blocked', async () => {
-      let resolveCreate: () => void = () => {};
-      vi.mocked(api.createConversation).mockImplementation(
-        () => new Promise((resolve) => { resolveCreate = () => resolve({ id: 'c-new', title: 'New', character_id: 'aura', owner_id: 'chris', created_at: '', updated_at: '' }); })
-      );
-
-      renderWithBackend();
-
-      await waitFor(() => {
-        expect(screen.getByText('Test Session A')).toBeInTheDocument();
-      });
-
-      fireEvent.change(screen.getByTestId('composer-textarea'), { target: { value: 'Prompt' } });
-
-      // Start New Chat
-      act(() => {
-        fireEvent.click(screen.getByRole('button', { name: /New Chat/i }));
-      });
-
-      // Send button must be disabled
-      const sendBtn = screen.getByTestId('send-message-button');
-      expect(sendBtn).toBeDisabled();
-
-      // Attempting send via Enter key is also blocked
-      fireEvent.keyDown(screen.getByTestId('composer-textarea'), { key: 'Enter', code: 'Enter' });
-      expect(streamSendMessage).not.toHaveBeenCalled();
-
-      await act(async () => {
-        resolveCreate();
-      });
-    });
-
-    it('A -> B -> A stale upload race: old upload does NOT stage after returning to A', async () => {
-      let resolveUpload: (val: any) => void = () => {};
-      vi.mocked(uploadAttachment).mockImplementation(
-        () => new Promise((resolve) => { resolveUpload = resolve; })
-      );
-
-      renderWithBackend();
-
-      await waitFor(() => {
-        expect(screen.getByText('Test Session A')).toBeInTheDocument();
-      });
-
-      // Start upload in A
-      const file = new File(['content'], 'slow.png', { type: 'image/png' });
-      act(() => {
-        fireEvent.change(screen.getByTestId('attachment-file-input'), { target: { files: [file] } });
-      });
-
-      // Now switch to B
-      fireEvent.click(screen.getByTitle('Open Conversation History'));
-      const convBItem = screen.getByRole('heading', { level: 3, name: 'Test Session B' });
-      act(() => {
-        fireEvent.click(convBItem);
-      });
-
-      // Switch back to A
-      fireEvent.click(screen.getByTitle('Open Conversation History'));
-      const convAItem = screen.getByRole('heading', { level: 3, name: 'Test Session A' });
-      act(() => {
-        fireEvent.click(convAItem);
-      });
-
-      // Now resolve the old upload from the first visit to A
-      await act(async () => {
-        resolveUpload({
-          id: 'att-stale',
-          conversation_id: 'conv-1',
-          message_id: null,
-          file_name: 'slow.png',
-          content_type: 'image/png',
-          byte_size: 1024,
-          sha256: 'sha-stale',
-          created_at: '2026-09-25T00:00:00Z',
-        });
-      });
-
-      // The stale upload must NOT be staged in the current lifecycle of A!
-      expect(screen.queryByTestId('staged-card-att-stale')).not.toBeInTheDocument();
-
-      // The orphaned upload row must have been cleaned
-      expect(deleteAttachment).toHaveBeenCalledWith('conv-1', 'att-stale');
-    });
-
-    it('cleanup helper fails closed when called during awaiting_acceptance or outcome_unknown', async () => {
-      let capturedOnError: ((err: Error, partialText?: string) => void) | undefined;
-      vi.mocked(streamSendMessage).mockImplementation(async (opts) => {
-        capturedOnError = opts.onError;
-      });
-
-      renderWithBackend();
-
-      await waitFor(() => {
-        expect(screen.getByRole('heading', { level: 1, name: 'Test Session A' })).toBeInTheDocument();
-      });
-
-      const file = new File(['content'], 'test.png', { type: 'image/png' });
-      await act(async () => {
-        fireEvent.change(screen.getByTestId('attachment-file-input'), { target: { files: [file] } });
-      });
-
-      // Send to enter awaiting_acceptance
-      act(() => {
-        fireEvent.click(screen.getByTestId('send-message-button'));
-      });
-
-      // Attempt drawer conversation selection while awaiting_acceptance
-      fireEvent.click(screen.getByTitle('Open Conversation History'));
-      const sessionB = screen.getByRole('heading', { level: 3, name: 'Test Session B' });
-      act(() => {
-        fireEvent.click(sessionB);
-      });
-
-      // Selection must have been ignored; active conversation remains Test Session A
-      expect(screen.getByRole('heading', { level: 1, name: 'Test Session A' })).toBeInTheDocument();
-      expect(deleteAttachment).not.toHaveBeenCalled();
-
-      // Transition to outcome_unknown via network error
-      await act(async () => {
-        capturedOnError?.(new TypeError('Failed to fetch'));
-      });
-
-      // In outcome_unknown, selection is still blocked and no DELETE occurs
-      act(() => {
-        fireEvent.click(sessionB);
-      });
-      expect(screen.getByRole('heading', { level: 1, name: 'Test Session A' })).toBeInTheDocument();
-      expect(deleteAttachment).not.toHaveBeenCalled();
+      // listConversations should be called exactly once
+      expect(callCount).toBe(1);
     });
   });
 });

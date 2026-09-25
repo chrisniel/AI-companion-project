@@ -1,60 +1,47 @@
 /**
- * Attachment API — upload, binary fetch, and delete for multimodal conversation attachments.
+ * Attachment API — upload, binary preview fetch, and delete for multimodal conversation attachments.
  * Phase 8B.6 — Master Plan §16.4
  */
-import { getApiBaseUrl, getApiKey, ApiError } from './client';
+import { getApiBaseUrl, getApiKey, apiFetch, ApiError } from './client';
+
+// Canonical attachment constraints matching backend schemas
+export const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg'] as const;
+export const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10 MiB raw file ceiling
+export const MAX_ATTACHMENTS_PER_MESSAGE = 4;   // Max staged attachments per turn
 
 export interface AttachmentOut {
   id: string;
   conversation_id: string;
   message_id: string | null;
-  file_name: string;
-  content_type: string;
-  byte_size: number;
-  sha256: string;
+  filename_display: string;
+  mime_type: string;
+  size_bytes: number;
+  image_width: number | null;
+  image_height: number | null;
   created_at: string;
+}
+
+export interface AttachmentRef {
+  id: string;
+  filename_display: string;
+  mime_type: string;
+  size_bytes: number;
 }
 
 export async function uploadAttachment(
   conversationId: string,
   file: File,
 ): Promise<AttachmentOut> {
-  const baseUrl = getApiBaseUrl();
-  const apiKey = getApiKey();
-  const url = `${baseUrl}/api/v1/conversations/${conversationId}/attachments`;
+  const form = new FormData();
+  form.append('file', file);
 
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const headers: Record<string, string> = {};
-  if (apiKey) {
-    headers['Authorization'] = `Bearer ${apiKey}`;
-  }
-  // Note: Never set 'Content-Type': 'multipart/form-data' manually,
-  // allowing the browser to append the required boundary string.
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: formData,
-  });
-
-  if (!response.ok) {
-    let message = `Upload failed with status ${response.status}`;
-    try {
-      const err = await response.json();
-      message = err.detail || err.error?.message || message;
-    } catch {
-      // Use fallback
-    }
-    throw new ApiError({
-      code: 'ATTACHMENT_UPLOAD_FAILED',
-      message,
-      status: response.status,
-    });
-  }
-
-  return response.json();
+  return apiFetch<AttachmentOut>(
+    `/api/v1/conversations/${encodeURIComponent(conversationId)}/attachments`,
+    {
+      method: 'POST',
+      body: form,
+    },
+  );
 }
 
 export async function fetchAttachmentBlobUrl(
@@ -63,11 +50,11 @@ export async function fetchAttachmentBlobUrl(
 ): Promise<string> {
   const baseUrl = getApiBaseUrl();
   const apiKey = getApiKey();
-  const url = `${baseUrl}/api/v1/conversations/${conversationId}/attachments/${attachmentId}`;
+  const url = `${baseUrl}/api/v1/conversations/${encodeURIComponent(conversationId)}/attachments/${encodeURIComponent(attachmentId)}/preview`;
 
-  const headers: Record<string, string> = {};
+  const headers = new Headers();
   if (apiKey) {
-    headers['Authorization'] = `Bearer ${apiKey}`;
+    headers.set('Authorization', `Bearer ${apiKey}`);
   }
 
   const response = await fetch(url, {
@@ -77,8 +64,8 @@ export async function fetchAttachmentBlobUrl(
 
   if (!response.ok) {
     throw new ApiError({
-      code: 'ATTACHMENT_FETCH_FAILED',
-      message: `Failed to fetch attachment binary (${response.status})`,
+      code: 'ATTACHMENT_PREVIEW_FAILED',
+      message: `Failed to fetch attachment preview (${response.status})`,
       status: response.status,
     });
   }
@@ -91,25 +78,10 @@ export async function deleteAttachment(
   conversationId: string,
   attachmentId: string,
 ): Promise<void> {
-  const baseUrl = getApiBaseUrl();
-  const apiKey = getApiKey();
-  const url = `${baseUrl}/api/v1/conversations/${conversationId}/attachments/${attachmentId}`;
-
-  const headers: Record<string, string> = {};
-  if (apiKey) {
-    headers['Authorization'] = `Bearer ${apiKey}`;
-  }
-
-  const response = await fetch(url, {
-    method: 'DELETE',
-    headers,
-  });
-
-  if (!response.ok && response.status !== 404) {
-    throw new ApiError({
-      code: 'ATTACHMENT_DELETE_FAILED',
-      message: `Failed to delete attachment (${response.status})`,
-      status: response.status,
-    });
-  }
+  await apiFetch<void>(
+    `/api/v1/conversations/${encodeURIComponent(conversationId)}/attachments/${encodeURIComponent(attachmentId)}`,
+    {
+      method: 'DELETE',
+    },
+  );
 }

@@ -10,6 +10,10 @@ import {
   deleteAttachment,
   registryEntryMatchesIdentifier,
   ConversationOut,
+  AttachmentOut,
+  ALLOWED_MIME_TYPES,
+  MAX_SIZE_BYTES,
+  MAX_ATTACHMENTS_PER_MESSAGE,
   ApiError,
 } from '../../services/api';
 import {
@@ -59,6 +63,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
   const [internalAssistantState, setInternalAssistantState] = useState<AssistantState>('idle');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [conversations, setConversations] = useState<ConversationOut[]>([]);
+  const conversationsRef = useRef<ConversationOut[]>([]);
   const [activeConversationId, setActiveConversationId] = useState('');
   const [conversationTitle, setConversationTitle] = useState('No Conversation');
   const [inputPrompt, setInputPrompt] = useState('');
@@ -128,7 +133,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     activeModelEntry?.library_state?.available_capabilities?.includes('vision')
   );
 
-  // 8B.6 Action & Navigation Disabled Truth
+  // 8B.6 Action & Navigation Disabled Truth (Item 7: shared authoritative render truth)
   const conversationActionsDisabled =
     sendPhase !== 'idle' ||
     isBusy ||
@@ -136,13 +141,9 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     removingAttachmentIds.size > 0 ||
     isConversationTransitioning;
 
-  const isConversationSwitchingDisabled =
-    sendPhase !== 'idle' ||
-    isBusy ||
-    removingAttachmentIds.size > 0;
-
-  // 8B.6 Send Disabled Truth
+  // 8B.6 Send Disabled Truth (Item 12: disabled when no active conversation exists)
   const sendDisabled =
+    !activeConversationId ||
     sendPhase !== 'idle' ||
     isBusy ||
     isUploadingAttachments ||
@@ -151,12 +152,12 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     (stagedAttachments.length > 0 && !hasVision) ||
     (!inputPrompt.trim() && stagedAttachments.length === 0);
 
-  // 8B.6 Attachment Pick Truth
+  // 8B.6 Attachment Pick Truth (Item 4: canonical MAX_ATTACHMENTS_PER_MESSAGE)
   const canAttach =
     Boolean(activeConversationId) &&
     isOnline &&
     hasVision &&
-    stagedAttachments.length < 4 &&
+    stagedAttachments.length < MAX_ATTACHMENTS_PER_MESSAGE &&
     sendPhase === 'idle' &&
     !isUploadingAttachments &&
     removingAttachmentIds.size === 0 &&
@@ -167,6 +168,11 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
 
   // 8B.6 Composer Freeze Truth
   const isComposerFrozen = sendPhase !== 'idle' || isConversationTransitioning;
+
+  // Keep conversationsRef in sync with state
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
 
   // 8B.6 Fail-Closed Staged Attachment Cleanup
   const cleanupDefinitelyStagedAttachments = useCallback((convId: string): boolean => {
@@ -179,29 +185,33 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     setStagedAttachments([]);
 
     staged.forEach((item) => {
-      URL.revokeObjectURL(item.previewUrl);
+      try {
+        URL.revokeObjectURL(item.previewUrl);
+      } catch {}
       deleteAttachment(convId, item.attachment.id).catch(() => {});
     });
 
     return true;
   }, []);
 
-  // 8B.6 Centralized Conversation Departure Transition
+  // 8B.6 Centralized Conversation Departure Transition (Item 8: fail-closed return boolean)
   const transitionActiveConversation = useCallback((
     nextId: string,
     options?: { cleanupOldStaged?: boolean },
-  ) => {
+  ): boolean => {
     const previousId = activeConversationIdRef.current;
 
-    if (previousId && previousId !== nextId) {
-      if (options?.cleanupOldStaged ?? true) {
-        cleanupDefinitelyStagedAttachments(previousId);
+    if (previousId && previousId !== nextId && (options?.cleanupOldStaged ?? true)) {
+      const safeToLeave = cleanupDefinitelyStagedAttachments(previousId);
+      if (!safeToLeave) {
+        return false;
       }
-      attachmentLifecycleTokenRef.current++;
     }
 
+    attachmentLifecycleTokenRef.current++;
     activeConversationIdRef.current = nextId;
     setActiveConversationId(nextId);
+    return true;
   }, [cleanupDefinitelyStagedAttachments]);
 
   // Load conversation messages
@@ -235,19 +245,40 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     }
   }, [activeCharacterName, userName]);
 
-  // Mount/Unmount Tracking & Cleanup
+  // Mount/Unmount Tracking & Local/Remote Cleanup (Item 11)
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      attachmentLifecycleTokenRef.current++;
+
+      const stagedSnapshot = [...stagedAttachmentsRef.current];
+      stagedAttachmentsRef.current = [];
+
+      // ALWAYS: revoke every staged previewUrl locally to prevent browser memory leaks
+      stagedSnapshot.forEach((item) => {
+        try {
+          URL.revokeObjectURL(item.previewUrl);
+        } catch {}
+      });
+
+      // ONLY if definitely safe: remote DELETE staged rows
       const currentId = activeConversationIdRef.current;
-      if (currentId) {
-        cleanupDefinitelyStagedAttachments(currentId);
+      const isDefinitelySafe =
+        sendPhaseRef.current === 'idle' &&
+        !uploadInProgressRef.current &&
+        removingAttachmentIdsRef.current.size === 0 &&
+        !conversationTransitionRef.current;
+
+      if (currentId && isDefinitelySafe && stagedSnapshot.length > 0) {
+        stagedSnapshot.forEach((item) => {
+          deleteAttachment(currentId, item.attachment.id).catch(() => {});
+        });
       }
     };
-  }, [cleanupDefinitelyStagedAttachments]);
+  }, []);
 
-  // Conversation Initialization & Reconnect Reconciliation
+  // Conversation Initialization & Reconnect Reconciliation (Item 9 & 10)
   useEffect(() => {
     let isMounted = true;
     async function initConversations() {
@@ -258,6 +289,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
         if (!isMounted) return;
 
         if (res.items && res.items.length > 0) {
+          conversationsRef.current = res.items;
           setConversations(res.items);
 
           const currentId = activeConversationIdRef.current;
@@ -269,15 +301,26 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
               loadConversationMessages(matching.id);
             }
           } else {
-            if (sendPhaseRef.current !== 'idle') {
+            // Reconnect reconciliation: respect ALL mutation locks (Item 9)
+            const isLocked =
+              sendPhaseRef.current !== 'idle' ||
+              uploadInProgressRef.current ||
+              removingAttachmentIdsRef.current.size > 0 ||
+              conversationTransitionRef.current;
+
+            if (isLocked) {
               setAttachmentError(
-                'Current conversation was not found on the backend while send outcome is pending or uncertain. Reload the application to reconcile.'
+                'Current conversation was not found on the backend while send outcome is pending or operations are active. Preserving local state. Reload application to reconcile.'
               );
             } else {
               const active = res.items[0];
-              transitionActiveConversation(active.id, { cleanupOldStaged: true });
-              setConversationTitle(active.title);
-              loadConversationMessages(active.id);
+              const success = transitionActiveConversation(active.id, { cleanupOldStaged: true });
+              if (success) {
+                setConversationTitle(active.title);
+                loadConversationMessages(active.id);
+              } else {
+                setAttachmentError('Active conversation could not be safely switched during reconciliation.');
+              }
             }
           }
           hasInitializedRef.current = true;
@@ -285,6 +328,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
           try {
             const created = await createConversation('New Conversation');
             if (!isMounted) return;
+            conversationsRef.current = [created];
             setConversations([created]);
             activeConversationIdRef.current = created.id;
             setActiveConversationId(created.id);
@@ -304,9 +348,10 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
       } catch (err) {
         console.warn('Unable to initialize conversations from backend:', err);
         if (!isMounted) return;
+        // Last-known-state preservation: do NOT clear valid conversation if refresh failed (Item 10)
         const currentId = activeConversationIdRef.current;
-        const hasValid = conversations.some((c) => c.id === currentId);
-        if (!hasValid) {
+        const hasValid = conversationsRef.current.some((c) => c.id === currentId);
+        if (!currentId || !hasValid) {
           activeConversationIdRef.current = '';
           setActiveConversationId('');
           setConversationTitle('No Conversation');
@@ -319,7 +364,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [isOnline, loadConversationMessages, transitionActiveConversation, conversations]);
+  }, [isOnline, loadConversationMessages, transitionActiveConversation]);
 
   const formatStreamErrorMessage = (err: Error): string => {
     const isBusyErr = err.message?.includes('409') || err.message?.includes('BUSY');
@@ -330,7 +375,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     return classifyStreamError(err, isOnline, modelStatus).visibleMessage;
   };
 
-  // 8B.6 Sequential File Selection & Upload Batch
+  // 8B.6 Sequential File Selection & Upload Batch (Items 4, 5, 16)
   const handleFilesSelected = async (files: FileList | File[]) => {
     if (uploadInProgressRef.current) return;
     if (sendPhaseRef.current !== 'idle') return;
@@ -342,37 +387,54 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     const capturedToken = attachmentLifecycleTokenRef.current;
 
     const currentCount = stagedAttachmentsRef.current.length;
-    const availableSlots = 4 - currentCount;
+    const availableSlots = MAX_ATTACHMENTS_PER_MESSAGE - currentCount;
     if (availableSlots <= 0) {
-      setAttachmentError('Maximum of 4 attachments allowed per message.');
+      setAttachmentError(`Maximum of ${MAX_ATTACHMENTS_PER_MESSAGE} attachments allowed per message.`);
       return;
     }
 
     const candidateFiles = Array.from(files);
     const validFiles: File[] = [];
+    const validationErrors: string[] = [];
 
     for (const file of candidateFiles) {
-      if (file.type !== 'image/png' && file.type !== 'image/jpeg') {
-        setAttachmentError('Only PNG and JPEG images are supported.');
+      if (!ALLOWED_MIME_TYPES.includes(file.type as any)) {
+        validationErrors.push(`"${file.name}": Only PNG and JPEG images are supported.`);
         continue;
       }
       if (file.size <= 0) {
-        setAttachmentError('Zero-byte files cannot be attached.');
+        validationErrors.push(`"${file.name}": Zero-byte files cannot be attached.`);
         continue;
       }
-      if (file.size > 10 * 1024 * 1024) {
-        setAttachmentError(`File "${file.name}" exceeds the 10 MiB limit.`);
+      if (file.size > MAX_SIZE_BYTES) {
+        validationErrors.push(`"${file.name}": Exceeds the ${MAX_SIZE_BYTES / (1024 * 1024)} MiB limit.`);
         continue;
       }
       validFiles.push(file);
     }
 
-    const filesToUpload = validFiles.slice(0, availableSlots);
+    let filesToUpload = validFiles;
+    let quotaWarning = '';
+    if (validFiles.length > availableSlots) {
+      filesToUpload = validFiles.slice(0, availableSlots);
+      quotaWarning = `Only ${availableSlots} more attachment${availableSlots === 1 ? '' : 's'} can be added (max ${MAX_ATTACHMENTS_PER_MESSAGE} per message).`;
+    }
+
+    const initialWarning = [
+      validationErrors.length > 0 ? validationErrors[0] : null,
+      quotaWarning || null,
+    ].filter(Boolean).join(' • ');
+
+    if (initialWarning) {
+      setAttachmentError(initialWarning);
+    } else {
+      setAttachmentError(null);
+    }
+
     if (filesToUpload.length === 0) return;
 
     uploadInProgressRef.current = true;
     setIsUploadingAttachments(true);
-    setAttachmentError(null);
 
     try {
       for (const file of filesToUpload) {
@@ -385,19 +447,43 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
           break;
         }
 
-        const uploaded = await uploadAttachment(capturedConvId, file);
-
-        if (
-          !mountedRef.current ||
-          attachmentLifecycleTokenRef.current !== capturedToken ||
-          activeConversationIdRef.current !== capturedConvId ||
-          sendPhaseRef.current !== 'idle'
-        ) {
-          deleteAttachment(capturedConvId, uploaded.id).catch(() => {});
+        let uploaded: AttachmentOut;
+        try {
+          uploaded = await uploadAttachment(capturedConvId, file);
+        } catch (uploadErr: any) {
+          if (mountedRef.current) {
+            setAttachmentError(uploadErr.message || 'Failed to upload attachment.');
+          }
           break;
         }
 
-        const previewUrl = await fetchAttachmentBlobUrl(capturedConvId, uploaded.id);
+        if (
+          !mountedRef.current ||
+          attachmentLifecycleTokenRef.current !== capturedToken ||
+          activeConversationIdRef.current !== capturedConvId ||
+          sendPhaseRef.current !== 'idle'
+        ) {
+          deleteAttachment(capturedConvId, uploaded.id).catch((delErr) => {
+            console.warn('Failed to delete orphaned attachment after departure:', delErr);
+          });
+          break;
+        }
+
+        // Preview fetching with rollback on failure (Item 5)
+        let previewUrl: string;
+        try {
+          previewUrl = await fetchAttachmentBlobUrl(capturedConvId, uploaded.id);
+        } catch (previewErr: any) {
+          try {
+            await deleteAttachment(capturedConvId, uploaded.id);
+          } catch (delErr) {
+            console.warn('Failed to rollback uploaded attachment after preview failure:', delErr);
+          }
+          if (mountedRef.current) {
+            setAttachmentError(previewErr.message || 'Failed to generate preview for uploaded attachment.');
+          }
+          break;
+        }
 
         if (
           !mountedRef.current ||
@@ -405,18 +491,18 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
           activeConversationIdRef.current !== capturedConvId ||
           sendPhaseRef.current !== 'idle'
         ) {
-          URL.revokeObjectURL(previewUrl);
-          deleteAttachment(capturedConvId, uploaded.id).catch(() => {});
+          try {
+            URL.revokeObjectURL(previewUrl);
+          } catch {}
+          deleteAttachment(capturedConvId, uploaded.id).catch((delErr) => {
+            console.warn('Failed to delete orphaned attachment after departure:', delErr);
+          });
           break;
         }
 
         const newItem: StagedAttachmentItem = { attachment: uploaded, previewUrl };
         stagedAttachmentsRef.current = [...stagedAttachmentsRef.current, newItem];
         setStagedAttachments((prev) => [...prev, newItem]);
-      }
-    } catch (err: any) {
-      if (mountedRef.current) {
-        setAttachmentError(err.message || 'Failed to upload attachment.');
       }
     } finally {
       uploadInProgressRef.current = false;
@@ -426,7 +512,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     }
   };
 
-  // 8B.6 Synchronous Removal Serialization
+  // 8B.6 Synchronous Removal Serialization (Item 6: do NOT remove in finally if DELETE fails)
   const handleRemoveAttachment = async (attachmentId: string) => {
     if (removingAttachmentIdsRef.current.has(attachmentId)) return;
     if (sendPhaseRef.current !== 'idle') return;
@@ -444,16 +530,24 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
 
     try {
       await deleteAttachment(convId, attachmentId);
-    } catch (err) {
-      console.warn('Failed to delete attachment on backend:', err);
-    } finally {
-      URL.revokeObjectURL(target.previewUrl);
+
+      // DELETE succeeded: revoke URL and remove staged card
+      try {
+        URL.revokeObjectURL(target.previewUrl);
+      } catch {}
 
       stagedAttachmentsRef.current = stagedAttachmentsRef.current.filter(
         (s) => s.attachment.id !== attachmentId
       );
       setStagedAttachments((prev) => prev.filter((s) => s.attachment.id !== attachmentId));
-
+    } catch (err: any) {
+      console.warn('Failed to delete attachment on backend:', err);
+      // DELETE failed: keep staged card, keep preview URL, show attachment error
+      if (mountedRef.current) {
+        setAttachmentError(err.message || 'Failed to remove attachment.');
+      }
+    } finally {
+      // Release lock ONLY in finally
       removingAttachmentIdsRef.current.delete(attachmentId);
       if (mountedRef.current) {
         setRemovingAttachmentIds(new Set(removingAttachmentIdsRef.current));
@@ -478,7 +572,12 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     const promptText = inputPrompt.trim();
     if (!promptText && stagedSnapshot.length === 0) return;
 
-    const convId = activeConversationIdRef.current || 'default';
+    // Item 12: Guard sending without a real conversation
+    const convId = activeConversationIdRef.current;
+    if (!convId) {
+      setAttachmentError('Select or create a conversation before sending.');
+      return;
+    }
 
     const userText = promptText || 'Shared attachment for processing.';
     const attachmentIds = stagedSnapshot.map((s) => s.attachment.id);
@@ -675,7 +774,11 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
         return;
       }
 
-      transitionActiveConversation(created.id, { cleanupOldStaged: true });
+      const success = transitionActiveConversation(created.id, { cleanupOldStaged: true });
+      if (!success) {
+        setAttachmentError('Cannot switch conversations while attachment operations are in progress.');
+        return;
+      }
       setConversationTitle(created.title);
       setAssistantState('idle');
       setMessages([]);
@@ -689,7 +792,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
       }
 
       const currentId = activeConversationIdRef.current;
-      const hasValidConversation = conversations.some((c) => c.id === currentId);
+      const hasValidConversation = conversationsRef.current.some((c) => c.id === currentId);
       if (!hasValidConversation) {
         activeConversationIdRef.current = '';
         setActiveConversationId('');
@@ -704,17 +807,23 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     }
   };
 
-  // 8B.6 Synchronous Conversation Selection
+  // 8B.6 Synchronous Conversation Selection (Item 7: guard all refs)
   const handleSelectConversation = (id: string) => {
     if (sendPhaseRef.current !== 'idle') return;
+    if (uploadInProgressRef.current) return;
     if (removingAttachmentIdsRef.current.size > 0) return;
+    if (conversationTransitionRef.current) return;
 
-    const found = conversations.find((c) => c.id === id);
+    const success = transitionActiveConversation(id, { cleanupOldStaged: true });
+    if (!success) {
+      setAttachmentError('Cannot switch conversations while attachment operations are in progress.');
+      return;
+    }
+
+    const found = conversationsRef.current.find((c) => c.id === id);
     if (found) {
       setConversationTitle(found.title);
     }
-
-    transitionActiveConversation(id, { cleanupOldStaged: true });
     loadConversationMessages(id);
   };
 
@@ -796,7 +905,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
         onNewConversation={handleNewConversation}
         conversations={drawerConversations}
         conversationActionsDisabled={conversationActionsDisabled}
-        isConversationSwitchingDisabled={isConversationSwitchingDisabled}
+        isConversationSwitchingDisabled={conversationActionsDisabled}
       />
     </div>
   );

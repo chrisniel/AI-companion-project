@@ -9,7 +9,12 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { AssistantState } from '../../../types';
-import { AttachmentOut } from '../../../services/api';
+import {
+  AttachmentOut,
+  ALLOWED_MIME_TYPES,
+  MAX_SIZE_BYTES,
+  MAX_ATTACHMENTS_PER_MESSAGE,
+} from '../../../services/api';
 
 export interface StagedAttachmentItem {
   attachment: AttachmentOut;
@@ -85,7 +90,7 @@ export const AssistantComposer: React.FC<AssistantComposerProps> = ({
       <input
         type="file"
         ref={fileInputRef}
-        accept="image/png,image/jpeg"
+        accept={ALLOWED_MIME_TYPES.join(',')}
         multiple
         disabled={!canAttach}
         onChange={handleFileChange}
@@ -109,6 +114,7 @@ export const AssistantComposer: React.FC<AssistantComposerProps> = ({
         <div className="flex flex-wrap items-center gap-2 px-2 pt-1" data-testid="staged-attachments-strip">
           {stagedAttachments.map((item) => {
             const isRemoving = removingAttachmentIds.has(item.attachment.id);
+            const sizeKb = (item.attachment.size_bytes / 1024).toFixed(0);
             return (
               <div
                 key={item.attachment.id}
@@ -117,9 +123,12 @@ export const AssistantComposer: React.FC<AssistantComposerProps> = ({
               >
                 <img
                   src={item.previewUrl}
-                  alt={item.attachment.file_name}
+                  alt={item.attachment.filename_display}
                   className="w-full h-full object-cover"
                 />
+                <div className="absolute bottom-0 inset-x-0 bg-black/60 px-1 py-0.5 text-[9px] text-white truncate text-center font-mono">
+                  {sizeKb} KB
+                </div>
                 {isRemoving && (
                   <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
                     <span className="text-[10px] font-mono text-white animate-pulse">...</span>
@@ -130,8 +139,8 @@ export const AssistantComposer: React.FC<AssistantComposerProps> = ({
                     type="button"
                     onClick={() => onRemoveAttachment(item.attachment.id)}
                     className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-rose-600 text-white flex items-center justify-center text-xs transition-colors"
-                    aria-label={`Remove attachment ${item.attachment.file_name}`}
-                    title={`Remove ${item.attachment.file_name}`}
+                    aria-label={`Remove attachment ${item.attachment.filename_display}`}
+                    title={`Remove ${item.attachment.filename_display}`}
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -178,9 +187,9 @@ export const AssistantComposer: React.FC<AssistantComposerProps> = ({
               ? 'Active model does not support image input'
               : isUploadingAttachments
               ? 'Uploading attachment...'
-              : stagedAttachments.length >= 4
-              ? 'Maximum 4 attachments reached'
-              : 'Attach image (PNG or JPEG, max 10 MiB)'
+              : stagedAttachments.length >= MAX_ATTACHMENTS_PER_MESSAGE
+              ? `Maximum ${MAX_ATTACHMENTS_PER_MESSAGE} attachments reached`
+              : `Attach image (PNG or JPEG, max ${MAX_SIZE_BYTES / (1024 * 1024)} MiB)`
           }
           aria-label="Attach images"
           data-testid="attachment-paperclip-button"
