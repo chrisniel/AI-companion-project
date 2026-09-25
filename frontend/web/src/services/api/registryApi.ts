@@ -122,7 +122,11 @@ export function registryEntryMatchesIdentifier(
   if (entry.runtime_model_id && entry.runtime_model_id === identifier) return true;
   if (entry.manifest.primary_file === identifier) return true;
   const primaryBasename = entry.manifest.primary_file.split(/[/\\]/).pop();
-  if (primaryBasename && primaryBasename === identifier) return true;
+  if (primaryBasename) {
+    if (primaryBasename === identifier) return true;
+    const stem = primaryBasename.replace(/\.[^/.]+$/, '');
+    if (stem === identifier) return true;
+  }
   return false;
 }
 

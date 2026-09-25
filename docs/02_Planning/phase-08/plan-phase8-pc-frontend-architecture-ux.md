@@ -1,6 +1,6 @@
 # Phase 8 Implementation Plan — PC Frontend Architecture, Runtime Config, Multimodal & Polish
 
-> **Status:** 8A and 8P COMPLETE / VERIFIED. Repository Documentation Reconciliation (Passes R0–R8) is COMPLETE / VERIFIED. Phase 8B is IN PROGRESS (Slice 8B.5 COMPLETE / VERIFIED; Slice 8B.6 NEXT / UNBLOCKED). 8C is PLANNED AFTER 8B.
+> **Status:** 8A and 8P COMPLETE / VERIFIED. Repository Documentation Reconciliation (Passes R0–R8) is COMPLETE / VERIFIED. Phase 8B is IN PROGRESS (Slice 8B.6 COMPLETE / VERIFIED; Slice 8B.7 NEXT / UNBLOCKED). 8C is PLANNED AFTER 8B.
 > **Authority Precedence:** Normative architecture is owned by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md). Canonical product sequencing is owned by [`docs/02_Planning/ROADMAP.md`](../ROADMAP.md). Runtime config architecture is owned by [`docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../../04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md).  
 > **This is the single authoritative feature implementation plan for Phase 8.**
 
@@ -1118,6 +1118,20 @@ Frontend Removal: Removing a staged attachment must call the DELETE endpoint —
   - Removal button calls `deleteAttachment` API and invokes `URL.revokeObjectURL()`.
   - Send message includes staged `attachment_ids`.
 - Tests: Paperclip button disabled when model lacks vision, mmproj is missing, or no conversation selected; upload succeeds and displays Blob preview; removal triggers DELETE and cleans up object URL; 5th image and unsupported formats rejected client-side.
+- Delivery Status: **COMPLETE / VERIFIED**
+  - Implemented `frontend/web/src/services/api/attachmentApi.ts` with authenticated multipart upload, Blob URL creation (`fetchAttachmentBlobUrl`), DELETE endpoint, and file constraints (`ALLOWED_MIME_TYPES`, `MAX_SIZE_BYTES = 10MB`, `MAX_ATTACHMENTS_PER_MESSAGE = 4`).
+  - Updated `frontend/web/src/services/api/conversationApi.ts` supporting `attachment_ids` and `onAccepted` callback ordering ensuring HTTP acceptance commits bubbles before stream body processing.
+  - Aligned stem matching in `frontend/web/src/services/api/registryApi.ts` with backend runtime model resolution parity (`stem === identifier`).
+  - Built `frontend/web/src/components/workspace/assistant/AssistantComposer.tsx` with paperclip button, hidden file input, staged attachment preview cards, vision warning banner, and composer freezing.
+  - Implemented synchronous lifecycle machine in `frontend/web/src/components/workspace/AssistantView.tsx` with `SendPhase` (`idle`, `awaiting_acceptance`, `accepted_streaming`, `outcome_unknown`), synchronous refs closing same-frame races, double-click delete protection, fail-closed staged attachment cleanup, centralized conversation transition lock, and error classification.
+  - Test suites:
+    - 17 unit tests in `frontend/web/src/test/attachmentApi.test.ts`.
+    - 19 integration tests in `frontend/web/src/test/attachmentComposer.test.tsx`.
+    - Full frontend vitest suite passing: 183 tests across 9 test files (0 regressions).
+    - Full backend pytest suite passing: 321 tests (0 regressions).
+    - Frontend TypeScript check passing (`tsc --noEmit`).
+    - Frontend production build passing (`vite build`).
+    - OpenAPI synchronized: 22 routes, 0 drift.
 
 #### 8B.7 — Persistent Message Attachment Rendering
 - [MODIFY] `frontend/web/src/types.ts`:
