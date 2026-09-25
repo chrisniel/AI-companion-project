@@ -1,6 +1,6 @@
 # Phase 8 Implementation Plan — PC Frontend Architecture, Runtime Config, Multimodal & Polish
 
-> **Status:** 8A and 8P COMPLETE / VERIFIED. Repository Documentation Reconciliation (Passes R0–R8) is COMPLETE / VERIFIED. Phase 8B is IN PROGRESS (Slice 8B.6 IMPLEMENTED / LOCAL VERIFICATION PASSING / AWAITING PUSHED CI RE-VERIFICATION; Slice 8B.7 BLOCKED UNTIL 8B.6 CI + REVIEW CLOSE). 8C is PLANNED AFTER 8B.
+> **Status:** 8A and 8P COMPLETE / VERIFIED. Repository Documentation Reconciliation (Passes R0–R8) is COMPLETE / VERIFIED. Phase 8B is IN PROGRESS (Slice 8B.6 COMPLETE / VERIFIED; Slice 8B.7 NEXT / UNBLOCKED). 8C is PLANNED AFTER 8B.
 > **Authority Precedence:** Normative architecture is owned by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md). Canonical product sequencing is owned by [`docs/02_Planning/ROADMAP.md`](../ROADMAP.md). Runtime config architecture is owned by [`docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../../04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md).  
 > **This is the single authoritative feature implementation plan for Phase 8.**
 
@@ -1118,7 +1118,16 @@ Frontend Removal: Removing a staged attachment must call the DELETE endpoint —
   - Removal button calls `deleteAttachment` API and invokes `URL.revokeObjectURL()`.
   - Send message includes staged `attachment_ids`.
 - Tests: Paperclip button disabled when model lacks vision, mmproj is missing, or no conversation selected; upload succeeds and displays Blob preview; removal triggers DELETE and cleans up object URL; 5th image and unsupported formats rejected client-side.
-- Delivery Status: **IMPLEMENTED / LOCAL VERIFICATION PASSING / AWAITING PUSHED CI RE-VERIFICATION** (Slice 8B.7 BLOCKED UNTIL 8B.6 CI + REVIEW CLOSE)
+- Delivery Status: **COMPLETE / VERIFIED** (Slice 8B.7 NEXT / UNBLOCKED)
+  - Pushed verification:
+    - GitHub Actions CI run #18: SUCCESS
+    - Backend: 321 passed
+    - Frontend: 185 passed across 9 files
+    - OpenAPI: 22 routes, zero drift
+    - TypeScript: clean
+    - Vite build: clean
+    - CI Gate: SUCCESS
+    - Verified SHA: 58af6f282b5533409ce4794235422504cbd80a7c
   - Implemented `frontend/web/src/services/api/attachmentApi.ts` matching exact backend schema `AttachmentOut` and `AttachmentRef` (`filename_display`, `mime_type`, `size_bytes`), authenticated multipart upload via `apiFetch`, Blob URL creation (`fetchAttachmentBlobUrl`) using exact route `/preview`, DELETE endpoint via `apiFetch`, and canonical limits (`ALLOWED_MIME_TYPES`, `MAX_SIZE_BYTES = 10MB`, `MAX_ATTACHMENTS_PER_MESSAGE = 4`).
   - Updated `frontend/web/src/components/workspace/assistant/AssistantComposer.tsx` rendering canonical limits, displaying real metadata fields (`filename_display`, `size_bytes`), and disabling/freezing on transition locks.
   - Implemented synchronous lifecycle machine in `frontend/web/src/components/workspace/AssistantView.tsx` with rollback of uploaded rows on preview failure, explicit removal failure semantics (preserving card/URL on error), fail-closed conversation transition locks (`conversationActionsDisabled`), conversation initialization effect loop fix without self-triggering dependencies, unmount local Blob revocation cleanly separated from safe remote DELETE, send prevention without active conversation, and quota error preservation.

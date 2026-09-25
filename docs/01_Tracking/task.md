@@ -4,8 +4,8 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - Current State: Phase 8B — Multimodal Image Attachment Foundation = **IN PROGRESS**
 - Current Branch: `feature/multimodal-image-attachments`
-- Current Slice: **8B.6 — Web Attachment Composer Correction Pass** (`IMPLEMENTED / LOCAL VERIFICATION PASSING / AWAITING PUSHED CI RE-VERIFICATION`)
-- Next Slice: **8B.7 — History Image Rendering** (`BLOCKED UNTIL 8B.6 CI + REVIEW CLOSE`)
+- Current Slice: **8B.6 — Web Attachment Composer** (`COMPLETE / VERIFIED`)
+- Next Slice: **8B.7 — History Image Rendering** (`NEXT / UNBLOCKED`)
 - Commit Owner: Chris manually reviews, commits, merges, and branches all changes.
 
 ---
@@ -20,8 +20,8 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | **8B.3: Secure Attachment API** | `COMPLETE / VERIFIED` | Route-specific upload limit, upload endpoint, exclusive temp creation, collision no-clobber, preview, soft-delete, BOLA. |
 | **8B.4: Message Binding & Lifecycle** | `COMPLETE / VERIFIED` | Pre-stream turn preparation transaction, atomic conditional update claim, cascade soft-delete on conversation delete, truthful SQLite concurrency verification. |
 | **8B.5: Vision Provider Integration** | `COMPLETE / VERIFIED` | Media resolver, available_capabilities vision gate, wire translation, fail-closed lifecycle. |
-| **8B.6: Web Attachment Composer** | `IMPLEMENTED / LOCAL PASSING / AWAITING PUSHED CI RE-VERIFICATION` | Exact backend schema, canonical limits, preview rollback, explicit removal semantics, transition lock, effect loop fix, unmount URL revocation. |
-| **8B.7: History Image Rendering** | `BLOCKED UNTIL 8B.6 CI + REVIEW CLOSE` | History attachments, Blob fetch, reload persistence, URL cleanup. |
+| **8B.6: Web Attachment Composer** | `COMPLETE / VERIFIED` | Exact backend schema, canonical limits, preview rollback, explicit removal semantics, transition lock, effect loop fix, unmount URL revocation. |
+| **8B.7: History Image Rendering** | `NEXT / UNBLOCKED` | History attachments, Blob fetch, reload persistence, URL cleanup. |
 | **8B.8: Full Integration & Closure** | `PLANNED` | Full test suites, typecheck, build, openapi drift check, report. |
 | **Phase 8C: Integration & Polish** | `PLANNED / BLOCKED` | Blocked by completion and merge of Phase 8B. |
 
