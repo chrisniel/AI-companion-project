@@ -1545,8 +1545,8 @@ Implemented and verified in 8B.0–8B.6:
 - React Web composer attachment staging with authenticated Blob previews, staged removal, and limit enforcement
 
 Pending implementation in remaining 8B slices:
-- Slice 8B.7: Persistent message attachment rendering in conversation history with Blob caching and unmount object URL cleanup
-- Slice 8B.8: Full integration verification and phase closure
+- Slice 8B.7: Persistent message attachment rendering in conversation history with Blob caching and unmount object URL cleanup (NEXT / UNBLOCKED)
+- Slice 8B.8: Full integration verification and phase closure (PLANNED)
 
 ## 8C — Integration, Accessibility & Polish
 
