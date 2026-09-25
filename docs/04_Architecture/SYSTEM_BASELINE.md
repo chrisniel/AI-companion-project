@@ -94,17 +94,17 @@ The following major architectural invariants are locked across the ecosystem. De
 
 ## 5. Current Repository Implementation Reality
 
-As of active reconciliation on branch `chore/repository-documentation-reconciliation`:
+As of current verified repository baseline:
 
 | Subsystem | Implemented & Verified Reality | Known Non-Implemented Boundary |
 | :--- | :--- | :--- |
-| **Backend Core** | FastAPI application, CORS origin validation, request streaming body limiter (HTTP 413), fail-closed auth (`verify_token`), logging. | Tool execution engine and provider adapters not implemented. |
-| **Persistence** | SQLite WAL mode, Alembic migrations 001–005 (`005_scope_message_constraints`), Task CRUD, soft-delete, retention period calculation, and standalone purge runner. Canonical paths derived via `storage.py` (`MODEL_LIBRARY_DIR` = `library/models/llm`, `INSTALLED_REGISTRY_PATH` = `library/registry/models.json`). | Attachment table (006), backend character persistence table, and automatic periodic lifecycle scheduling of retention purge not implemented. |
+| **Backend Core** | FastAPI application, CORS origin validation, request streaming body limiter (HTTP 413), fail-closed auth (`verify_token`), logging, and route-specific 12 MiB request body ceiling for attachment uploads. | Tool execution engine and provider adapters not implemented. |
+| **Persistence** | SQLite WAL mode, Alembic migrations 001–006 (repository migration head `006_add_attachments`), Task CRUD, soft-delete, retention period calculation, and standalone purge runner. Canonical paths derived via `storage.py` (`MODEL_LIBRARY_DIR` = `library/models/llm`, `INSTALLED_REGISTRY_PATH` = `library/registry/models.json`, `ATTACHMENT_DIR` = `attachments`). | Backend character persistence table, automatic periodic lifecycle scheduling of retention purge, and automated physical attachment file retention cleanup not implemented. |
 | **Local LLM Engine** | `llama.cpp` Vulkan x64 (b10936), AMD RX 580 VRAM offload profiles (Eco/Balanced/Maximum), subprocess management, router log (`database/llama_server.log`). | Multiple concurrent active models not supported. Managed router receives `LLAMA_MODELS_DIR`. |
 | **Model Registry** | Schema v3 bridge, dual factory/installed discovery, GGUF binary header parser for metadata, contract drift checks. | Controlled local importer execution service is an active V1 implementation gap; automated online download manager is post-V1. |
-| **Frontend Web** | React 19, TypeScript 5.8, Vite 6, Tailwind CSS 4, live SSE streaming chat, tactile VRAM controls, decomposed Assistant components, truthful registry. | Full attachment uploading (Phase 8B) and responsive mobile web layout hardening (Phase 8C) not implemented. |
+| **Frontend Web** | React 19, TypeScript 5.8, Vite 6, Tailwind CSS 4, live SSE streaming chat, tactile VRAM controls, decomposed Assistant components, truthful registry, and Phase 8B.0–8B.6 multimodal composer upload foundation with authenticated Blob previews and staged removal. | Persistent history image rendering (Slice 8B.7), final Phase 8B closure (Slice 8B.8), and responsive mobile web layout hardening (Phase 8C) not implemented. |
 | **Android Prototype** | 17 Jetpack Compose screens, SoftGlass neumorphic theme, OLED theme, OkHttp `LocalAiRuntimeClient` (health/auth/task CRUD sync), SharedPreferences connection storage, unit tests. | Production trusted-device auth, secure Keystore credentials, Room/offline persistence, full sync/reconciliation, offline inference, and D3 package rename not implemented. |
-| **Testing & CI** | Verified baseline: 175 backend pytest, 147 frontend vitest, 124 Android unit/Robolectric tests (Pass R8); GitHub Actions CI workflow on `windows-latest` with automated gates; see `TESTING_AND_CI.md`. | CI gate not yet hardened as an always-running failure aggregator or set as a required branch protection rule on GitHub. |
+| **Testing & CI** | Verified baseline: 321 backend pytest, 185 frontend vitest across 9 files, 22-route OpenAPI parity with zero drift, TypeScript clean, Vite build clean (CI Run #23 on develop SHA `4b2f5fe`); last executed Android baseline remains 124 unit/Robolectric tests from Pass R8; GitHub Actions CI workflow on `windows-latest` with automated gates; see `TESTING_AND_CI.md`. | CI gate not yet hardened as an always-running failure aggregator (`if: always()`) or set as a required branch protection rule on GitHub. |
 
 ---
 
