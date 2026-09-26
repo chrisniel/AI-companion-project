@@ -14,6 +14,7 @@ This specification defines the hardware resource governance, performance profile
 - Independence of resource policy from inference engine internals and companion persona.
 - Preservation of notification delivery under Decision D10 during low-impact modes.
 - Distinguishing current development test hardware (RX 580) from universal performance architecture.
+- Telemetry truthfulness, distinguishing configured, measured, and estimated values, and prohibiting fabricated metrics.
 
 ---
 
@@ -30,6 +31,18 @@ In accordance with Principle P23:
 
 - **Workstation Coexistence:** Resource policy should minimize material contention with foreground workloads while preserving required companion behavior.
 - **Hardware-Agnostic Governance:** The architecture defines policy levels (e.g., maximum performance, balanced, background throttled, paused) rather than locking specific hardware requirements. The companion must scale gracefully from budget systems with integrated graphics to high-end workstations.
+
+### 2.3 Performance & Telemetry Truthfulness
+
+To ensure truthful operational observability and prevent misleading system diagnostics, the architecture enforces the following invariants:
+
+- **Requested vs. Applied Policy Distinction:** The architecture requires that requested policy/profiles (e.g., user-selected profile or dynamic throttling mode) and actually applied policy/profiles (what the runtime has currently loaded or enforced) remain explicitly distinguishable wherever they diverge (e.g., during model reload transitions, engine recycling, or when hardware bounds prevent full application).
+- **Categorical Telemetry Separation:** Reporting interfaces, telemetry APIs, and diagnostic logs must strictly distinguish between:
+  1. *Configured Values:* Parameters declared by configuration or user policy (e.g., target context size, configured offload layers).
+  2. *Measured Telemetry:* Empirical metrics obtained directly from a real supported probe, runtime metric counter, or verified OS/driver query.
+  3. *Estimated Values:* Derived heuristics, theoretical approximations, or synthetic capacity estimates.
+- **Prohibition of Fabricated Telemetry:** UI, API, and runtime reporting must **never** fabricate measured telemetry. When hardware probes or runtime metrics are unavailable, unsupported, uninitialized, or permission-restricted on the host machine, telemetry must be reported truthfully as unavailable or unknown (`null` / `unknown`) rather than replaced with invented, synthetic, or hardcoded values.
+- **Probe & Vendor Independence:** The architecture does not permanently lock a single telemetry probing library, diagnostic utility, or GPU vendor SDK (such as `psutil`, AMD ADL, GPU-Z, NVML, or DirectX-specific hooks). Exact probing mechanisms and monitoring libraries remain open design. Current AMD Radeon RX 580 and Vulkan reference metrics represent development testing evidence only.
 
 ---
 
@@ -75,6 +88,7 @@ The following technical mechanisms remain open design for future implementation 
 - **Profile Transition & Hysteresis:** Smoothing delays and threshold timers preventing rapid thrashing between normal and low-impact modes.
 - **Cloud Fallback Interaction:** Whether and how low-impact mode interacts with optional cloud LLM fallback.
 - **Mode Taxonomy & UI Surface:** Exact mode names, settings switches, and tray menu controls.
+- **Hardware Telemetry Probing Mechanism:** Evaluation of portable, low-overhead hardware and runtime metric probes (e.g., OS performance counters, vendor-neutral query interfaces, or driver APIs) for measuring CPU, RAM, and VRAM utilization without imposing heavy background polling costs.
 
 ---
 

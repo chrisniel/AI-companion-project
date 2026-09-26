@@ -14,6 +14,7 @@ This specification defines the filesystem layout, persistent storage root resolu
 - Database engine invariants (SQLite with Write-Ahead Logging and foreign key enforcement).
 - Preflight migration safety, ambiguity detection, and rollback snapshot guarantees (Phase 8P).
 - Separation of durable storage semantics from machine-specific absolute paths.
+- Canonical configuration layering and persistence boundaries.
 
 ---
 
@@ -41,6 +42,21 @@ The current repository implementation utilizes SQLite operating with:
   - `execute_migration()` creates a logical SQLite backup snapshot while migrating a legacy database into canonical storage, verifies it, atomically promotes it, and attempts to preserve an additional backup copy in `BACKUP_DIR`; failure of that extra copy is logged (while the original legacy source file remains untouched).
   - `prepare_database_schema()` then upgrades the canonical database to Alembic head.
   - Current source does **not** guarantee a fresh backup snapshot immediately before every Alembic schema migration of an already-canonical database.
+
+### 2.4 Configuration Persistence & Layering
+
+The architecture establishes durable separation between configuration classes to avoid semantic conflation across defaults, machine configuration, user preferences, and transient overrides:
+
+- **Distinct Configuration Categories:** The system conceptually distinguishes between:
+  1. *Built-In Defaults:* Static fallback constants packaged with the application distribution.
+  2. *Persistent Machine Configuration:* Local host hardware and environment bindings (e.g., resolved `COMPANION_DATA_ROOT`, hardware profile preferences, local port allocations).
+  3. *Persistent User Configuration:* User-owned companion settings and preferences (e.g., active persona choices, notification preferences, quiet-hours rules, tool confirmation thresholds).
+  4. *Environment & Developer Overrides:* Transient variables set via process environment or local development files.
+  5. *Secrets & Sensitive Credentials:* API keys, device credentials, and access tokens governed strictly by [`02_Data_and_Security/authentication-and-secrets.md`](../02_Data_and_Security/authentication-and-secrets.md).
+  6. *Runtime & Session State:* Transient, in-memory state that does not outlive process or session lifecycles.
+- **Categorical Integrity:** These configuration layers must not be silently conflated. In particular, environment variables and `.env` files are suitable for development overrides, containerized deployment flags, and current compatibility needs, but must **not** serve as the primary persistent datastore for end-user settings.
+- **Secrets Isolation:** Storage and handling of sensitive secrets remain governed by the authentication and secrets architecture; secrets must never be intermingled with plain-text user settings.
+- **Open Design Boundaries:** Exact persistent configuration file formats (e.g., structured JSON/TOML configuration files vs. SQLite settings tables), schema definitions, resolution precedence logic, and settings management UI remain open design unless already established as current verified repository behavior. The architecture does not mandate an unverified bespoke configuration backend.
 
 ---
 
@@ -99,6 +115,7 @@ The following technical mechanisms remain open design for future implementation 
 - **Storage Layout Versioning:** Migration strategies for evolving the physical directory structure (e.g., sharding attachments by date).
 - **Encryption-at-Rest Strategy:** Optional whole-database or sensitive-field encryption (evaluating SQLCipher vs. application-layer AES-GCM envelope encryption).
 - **Asset Deduplication:** Content-addressable storage (CAS) or hash-based deduplication for identical image attachments uploaded across conversations.
+- **Configuration Layering & Precedence Implementation:** Exact file formats, schema definitions, precedence evaluation logic, and UI binding for separating persistent user settings from host machine configuration.
 
 ---
 
@@ -120,3 +137,4 @@ The following technical mechanisms remain open design for future implementation 
 - [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](runtime-and-models.md) — Model library paths and Decision D6 import pipeline.
 - [`docs/04_Architecture/01_Domains/multimodal-and-media.md`](../01_Domains/multimodal-and-media.md) — Attachment binary storage rules.
 - [`docs/04_Architecture/04_Infrastructure/backup-recovery-and-diagnostics.md`](backup-recovery-and-diagnostics.md) — Snapshot engine and disaster recovery.
+- [`docs/04_Architecture/02_Data_and_Security/authentication-and-secrets.md`](../02_Data_and_Security/authentication-and-secrets.md) — Secrets management, token storage, and credential isolation.

@@ -14,6 +14,7 @@ This specification defines the execution governance, deterministic policy gates,
 - Three-valued deterministic policy evaluation: `ALLOW`, `CONFIRM`, `DENY`.
 - Strict rejection of unrestricted generic shell, PowerShell, and OS administration tools.
 - Boundaries for narrow, typed privileged actions and deferred interactive browser automation.
+- Tiered emergency action controls, cancellation boundaries, and global kill-switch capability.
 
 ---
 
@@ -63,6 +64,19 @@ In accordance with the Feature Promotion Map (**Interactive Browser Automation**
 - **Classification:** `APPROVED / NOT STARTED / PC LATER`.
 - **Scope Distinction:** Programmatic browser interaction (e.g., automated form submission, checkout flows, authenticated sessions via Playwright) is classified as a post-PC-V1 capability. It is architecturally separate from read-only search and fetch (PC V1).
 
+### 2.6 Emergency Action Controls & Cancellation Semantics
+
+To ensure user agency and safe runtime intervention during tool execution, the architecture defines a conceptual hierarchy of emergency intervention controls:
+
+- **Conceptual Control Hierarchy:**
+  1. *Stop Generation:* Immediately aborts active LLM token streaming/generation, halting subsequent response processing without triggering downstream tool invocations.
+  2. *Stop Current Action:* Dispatches a cooperative cancellation request to an in-flight tool or external service invocation where cancellation is supported by the transport or adapter.
+  3. *Stop Queued Sequence:* Immediately discards all queued, unexecuted, or pending downstream actions within an active multi-step operation.
+  4. *Global Tool Kill-Switch:* A master administrative toggle enabling the user to immediately disable all autonomous or external tool execution across the entire runtime.
+- **Cancellation vs. Rollback Boundary:** Cancellation halts further execution and terminates pending work. When supported by the adapter, cooperative cancellation signals are dispatched to in-flight tasks. However, the architecture strictly recognizes that **cancellation cannot promise rollback of an already-committed external side effect** (e.g., an external HTTP mutation already processed by a remote server, an external webhook triggered, or an irreversible physical/network transmission).
+- **Implementation Status:** Like the conversational tool engine itself, these emergency control mechanisms represent target governance architecture and are **NOT IMPLEMENTED** in the current runtime.
+- **Open Design Parameters:** Exact API endpoints, cancellation token plumbing, frontend UI controls (such as emergency stop buttons), transport signaling, persistence of global kill-switch state, and user notification/recovery workflows remain open design.
+
 ---
 
 ## 3. Current Verified Implementation
@@ -84,6 +98,7 @@ When implemented for PC V1, the tool permission system establishes durable gover
 3. **Narrow Adapters:** Purpose-built, least-privilege adapters executing permitted capabilities without generic system authority.
 4. **Appropriate Explicit Confirmation:** High-impact or destructive actions (Risk 2) require explicit user confirmation before execution.
 5. **Auditable Security & State-Changing Actions:** State-changing or sensitive actions are auditable where required.
+6. **Emergency Action Intervention:** Tiered intervention hierarchy (Stop Generation, Stop Current Action, Stop Queued Sequence, Global Kill-Switch) ensuring the user retains the ability to halt generation or abort pending tool operations.
 
 ---
 
@@ -97,7 +112,7 @@ The following technical mechanisms remain open design for future technical speci
 - **Resource Bounds & Limiting:** Exact timeout, memory, payload, and concurrency limits are adapter-specific open design.
 - **Policy Persistence Schema:** Database schema for storing user permission grants, tool enable/disable toggles, and auto-execute allowances.
 - **Permission UX:** User interface presentation for confirmation modals (e.g., diff previews, parameter inspection, and "Always allow for this session" toggles).
-- **Tool Cancellation API:** Mechanism allowing users or the orchestrator to cancel an in-flight tool execution cleanly.
+- **Emergency Action Controls & UX:** Concrete API routes, cancellation token protocols, frontend UI emergency buttons, and state recovery flows for aborting multi-step tool execution.
 - **Narrow Privileged Adapter Designs:** Specification of any narrow, typed administrative tools permitted in future releases.
 
 ---
