@@ -18,11 +18,11 @@ This repository maintains a strict boundary between Architecture and Design:
 ### Concrete Boundary Examples
 
 1. **Tasks & Reminders:**
-   - **Architecture:** A standalone Reminder may exist without an associated Task (Decision D10). Tasks own stateful completion lifecycles and schedule associations.
-   - **Design:** How standalone Reminders and Task reminders are grouped, color-coded, prioritized, and displayed in the Schedule / Calendar UI.
+   - **Architecture:** Tasks have a stateful completion lifecycle. A Reminder may exist independently or be associated with a Task (Decision D10).
+   - **Design:** How standalone Reminders and Task-associated reminders are presented in the Schedule UI.
 2. **Companion Emotion & Mood:**
-   - **Architecture:** Emotion is lightweight, transient, conceptual companion state that influences conversational tone without blocking system execution (Decision D11).
-   - **Design:** How companion emotional tone is visually expressed to the user (e.g., subtle avatar portrait expressions, ambient accent lighting, typography nuances, or status indicators).
+   - **Architecture:** Emotion is a lightweight transient conceptual state that may modulate conversation tone/presentation (Decision D11). Exact emotion transitions and dynamics remain open design.
+   - **Design:** How companion emotional tone may be visually expressed to the user (e.g., subtle avatar portrait expressions, ambient accent lighting, typography nuances, or status indicators).
 3. **Tool Execution Confirmation:**
    - **Architecture:** Low-risk personal actions may resolve to `ALLOW`, `CONFIRM`, or `DENY` based on deterministic profile policy; destructive or external actions require confirmation (Decision D9).
    - **Design:** How the confirmation dialogue or inline prompt is presented, visually structured, and dismissed without disrupting conversation flow.

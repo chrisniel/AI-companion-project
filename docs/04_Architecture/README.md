@@ -10,7 +10,7 @@
 
 Architecture in the AI Companion repository is not merely an observational description of currently written code. Instead, architecture owns:
 
-- **Durable Product & Domain Semantics:** What concepts mean, how they relate, and their life cycles.
+- **Durable Product & Domain Semantics:** What concepts mean, how they relate, and their lifecycles.
 - **Data & Ownership Boundaries:** What subsystem owns which records, where mutations are permitted, and how persistence guarantees apply.
 - **Security & Trust Boundaries:** Permission models, tool execution confirmation rules, credential boundaries, and privacy protections.
 - **Provider & Runtime Boundaries:** Abstractions separating business logic from interchangeable third-party engines, hardware drivers, or hosted endpoints.
@@ -45,33 +45,39 @@ docs/04_Architecture/
 ├── README.md                                          # This navigation hub and authoring standard
 ├── SYSTEM_BASELINE.md                                 # Canonical cross-cutting system baseline
 ├── decisions/                                         # Architectural Decision Records (ADRs)
-├── 01_Domains/                                        # Domain models, lifecycles, and business semantics
-├── 02_Data_and_Security/                              # Database, persistence, crypto, and security boundaries
-├── 03_Integrations/                                   # External services, bridges, and provider abstractions
-└── 04_Infrastructure/                                 # Runtime supervisors, inference engines, and recovery
+├── 01_Domains/                                        # Focused product & domain semantics
+├── 02_Data_and_Security/                              # Profiles, authentication, tool permissions, privacy
+├── 03_Integrations/                                   # Web information, health & wearables, external bridges
+└── 04_Infrastructure/                                 # Host runtime, models, storage, platform infrastructure
 ```
 
 ### Functional Group Descriptions
 
-1. **`01_Domains/` (Core Experience Domains):**
-   - Companion character profile, identity, and system prompt composition.
-   - Conversation lifecycle, turns, and context assembly.
-   - Long-term memory, episodic storage, and selective recall.
-   - Tasks, reminders, and schedule lifecycle.
-   - Emotional state, mood dynamics, and non-blocking expressions.
+1. **`01_Domains/` (Focused Product & Domain Semantics):**
+   - **Assistant and conversations:** Turn lifecycle, session context assembly, conversation state, and multilingual interaction.
+   - **Memory and personalization:** Profile-owned persistent memory, selective automatic capture, and retrieval boundaries.
+   - **Characters / personality / emotion:** Persona lore, behavioral style traits, and lightweight conceptual emotion / companion-state semantics (exact emotion transitions and dynamics remain OPEN DESIGN).
+   - **Tasks / reminders / alarms / routines:** Stateful completion lifecycle, independent or task-associated reminders, native scheduling, and routine check-ins.
+   - **Voice and audio:** Provider-independent STT and TTS capabilities, audio buffering, speech turn detection, and conversation cadence.
+   - **Multimodal and media:** Message image attachments, multimodal vision understanding, and media metadata.
+   - **Android Companion:** Connected synchronization protocol, offline LLM execution boundaries, and mobile companion behavior.
 2. **`02_Data_and_Security/` (Data & Security Architecture):**
-   - SQLite database schema, Alembic migration invariants, and transaction boundaries.
-   - Full-text search and vector retrieval architecture.
-   - File attachment storage, deduplication, and lifecycle.
-   - Security model, credential isolation, and tool execution policy.
-3. **`03_Integrations/` (External Services & Bridges):**
-   - Voice and audio pipeline (provider-independent STT, TTS, VAD).
-   - Read-only Web Search and weather integration.
-   - Android Companion Bridge and cross-device communication protocol.
-4. **`04_Infrastructure/` (Host Runtime & Hardware):**
-   - Local LLM inference engine (llama.cpp / ONNX) and model management.
-   - Process supervision, lifecycle management, and background tasks.
-   - Practical Backup & Recovery architecture.
+   - **Profiles and devices:** Identity boundaries, device registration, and single-primary-user baseline.
+   - **Authentication and secrets:** Credential isolation, token handling, and trusted network boundaries.
+   - **Tool permissions and actions:** Risk tiers, deterministic policy evaluation (`ALLOW` / `CONFIRM` / `DENY`), and elevated action restrictions.
+   - **Privacy / retention / audit:** Data minimization, user consent, audit logging, and deletion policies.
+   *(Boundary note: General memory retrieval, attachment lifecycles, and multimodal storage belong to their respective domain and infrastructure specifications, not to this security/governance group.)*
+3. **`03_Integrations/` (External Services & Integrations):**
+   - **Read-only Web / current information:** Provider-independent search, page fetch, and weather context.
+   - **Health / wearables:** Biometric context data contracts for PC V1; physical wearable synchronization for Android V1.
+   - **Future external / device integrations:** Explicitly evaluated and approved future service connections.
+   *(Boundary note: Voice/audio pipelines and the Android Companion are core experience domains owned by `01_Domains/`, not external integrations.)*
+4. **`04_Infrastructure/` (Host Runtime, Hardware & Platform):**
+   - **Runtime and models:** Local LLM inference via llama.cpp / ONNX, hardware offloading profiles, model management, and optional cloud fallback.
+   - **Storage and assets:** Host filesystem paths, application asset storage, and database migration mechanics.
+   - **Windows host and notification infrastructure:** Native OS notification delivery, background autostart at login, and host lifecycle.
+   - **Practical backup / recovery:** Database snapshot and asset recovery mechanisms for PC V1. *(Note: A full Diagnostics / Recovery Center is an exploratory recommendation and is NOT an approved PC V1 capability.)*
+   - **Performance / capacity:** Resource governance, background throttling, and low-impact gaming modes.
 5. **`decisions/` (Architectural Decision Records):**
    - Formal records of architecturally significant decisions, context, trade-offs, and consequences.
 
@@ -109,6 +115,7 @@ Implementation constants must **never** be promoted into permanent architectural
 
 In accordance with Decision D10:
 - **Durable Invariant:** *"A Task has a stateful completion lifecycle."*
+- Tasks have a stateful completion lifecycle. A Reminder may exist independently or be associated with a Task. Schedule associations are not mandatory for all Tasks.
 - Exact status strings and state transitions are implementation details subject to schema evolution.
 
 ### 4.4 Tool Execution Policy & Resolution (Decision D9)
@@ -124,8 +131,8 @@ In accordance with Decision D10:
 ### 4.5 Practical Backup vs. Diagnostics Center
 
 - **Practical Backup & Recovery:** Formally `APPROVED / PC V1` (backup database, assets, and restore verification).
-- **Diagnostics / Recovery Center:** An exploratory audit recommendation; **NOT** automatically approved for PC V1.
-- Future infrastructure documents must maintain strict separation between these items and must not promote a Diagnostics Center to PC V1 without explicit human authorization.
+- **Diagnostics / Recovery Center:** An exploratory audit recommendation; **NOT** an approved PC V1 capability.
+- Future infrastructure documents must maintain strict separation between these items and must not promote a Diagnostics Center to an approved PC V1 capability without explicit human authorization.
 
 ### 4.6 Voice Privacy Invariant
 
@@ -137,10 +144,14 @@ In accordance with Decision D10:
 
 ## 5. Staged Migration Invariant & Authority Transfer Gate
 
-To guarantee continuity, documentation migration follows a two-step transfer pattern:
+To guarantee continuity, documentation migration follows a staged transfer pattern:
 
 1. **Semantics First (Sub-slices R11.0–R11.3):**
-   - Author new focused domain specifications under the target directory structure.
+   - Author new focused domain specifications under the target directory structure:
+     - `R11.0 — Architecture Skeleton & Domain Authoring Rules` (baseline setup)
+     - `R11.1 — Core Experience Domains` (`01_Domains/`: assistant, memory, characters, tasks)
+     - `R11.2 — Integrations, Host Runtime & Client Domains` (`01_Domains/` voice, multimodal, Android; `03_Integrations/`; `04_Infrastructure/` host, performance)
+     - `R11.3 — Security, Data & Infrastructure Domains` (`02_Data_and_Security/`; `04_Infrastructure/` runtime, storage, backup/recovery)
    - Maintain existing legacy canonical documents as authoritative until replacements are complete and verified.
    - Do not delete legacy canonical architecture, do not narrow substantive content, and do not declare new documents the sole authority before review.
 2. **Authority Transfer Gate (Sub-slice R11.4):**
@@ -151,15 +162,15 @@ To guarantee continuity, documentation migration follows a two-step transfer pat
 
 ## 6. Architecture Catalog & Legacy Mapping
 
-Until the R11.4 Authority Transfer Gate is reached, the following documents retain primary canonical authority:
+Until the R11.4 Authority Transfer Gate is reached, legacy canonical documents retain primary canonical authority. The following mapping guides the staged extraction into focused specifications:
 
-| Current Canonical Document | Target Destination Group | Domain Scope |
-| :--- | :--- | :--- |
-| [`SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md) | Shared Baseline | System baseline, platform vocabulary, Decisions D1–D11. |
-| [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](MEMORY_AND_CHARACTER_ARCHITECTURE.md) | `01_Domains/` | Companion personality, memory tiers, and context assembly. |
-| [`VOICE_AND_AUDIO_ARCHITECTURE.md`](VOICE_AND_AUDIO_ARCHITECTURE.md) | `03_Integrations/` | STT, TTS, VAD, audio buffering, and voice conversation. |
-| [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md) | `02_Data_and_Security/` | Threat model, tool execution policy, and credential isolation. |
-| [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) | `04_Infrastructure/` | Runtime supervisor, configuration, assets, and storage paths. |
-| [`LLAMA_CPP_RUNTIME_ARCHITECTURE.md`](LLAMA_CPP_RUNTIME_ARCHITECTURE.md) | `04_Infrastructure/` | Local LLM execution, offloading profiles, and model management. |
-| [`ANDROID_COMPANION_ARCHITECTURE.md`](ANDROID_COMPANION_ARCHITECTURE.md) | `03_Integrations/` | Android Companion architecture, bridge protocol, and sync. |
-| [`decisions/`](decisions/) | `decisions/` | Architectural Decision Records (ADRs). |
+| Current Canonical Document (Retains Primary Authority Until R11.4 Gate) | Target Architecture Group | Future Focused Target(s) | Domain Scope & Extraction Notes |
+| :--- | :--- | :--- | :--- |
+| [`SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md) | Shared Baseline | Retained as top-level baseline | Cross-cutting system baseline, platform vocabulary, Decisions D1–D11. |
+| [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](MEMORY_AND_CHARACTER_ARCHITECTURE.md) | `01_Domains/` | `01_Domains/memory-and-personalization.md`<br>`01_Domains/characters-personality-and-emotion.md` | Splits across persistent memory / personalization and character lore / personality / lightweight emotion. |
+| [`VOICE_AND_AUDIO_ARCHITECTURE.md`](VOICE_AND_AUDIO_ARCHITECTURE.md) | `01_Domains/` | `01_Domains/voice-and-audio.md` | Maps to core domain for provider-independent STT/TTS, audio buffering, and voice conversation. |
+| [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md) | `02_Data_and_Security/`<br>& `03_Integrations/` | `02_Data_and_Security/profiles-and-devices.md`<br>`02_Data_and_Security/authentication-and-secrets.md`<br>`02_Data_and_Security/tool-permissions-and-actions.md`<br>`02_Data_and_Security/privacy-retention-and-audit.md`<br>`03_Integrations/web-current-information.md` | Splits across profile boundaries, credential isolation, tool execution policies, and privacy/audit; read-only web semantics feed web integration. |
+| [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) | `04_Infrastructure/` | `04_Infrastructure/storage-and-assets.md`<br>`04_Infrastructure/windows-host-and-notifications.md`<br>`04_Infrastructure/backup-recovery-and-diagnostics.md`<br>`04_Infrastructure/performance-and-capacity.md` | Splits across filesystem storage, Windows host integration, practical backup/recovery, and performance governance. |
+| [`LLAMA_CPP_RUNTIME_ARCHITECTURE.md`](LLAMA_CPP_RUNTIME_ARCHITECTURE.md) | `04_Infrastructure/` | `04_Infrastructure/runtime-and-models.md` | Maps to local inference runtime, hardware offload parameters, and model management. |
+| [`ANDROID_COMPANION_ARCHITECTURE.md`](ANDROID_COMPANION_ARCHITECTURE.md) | `01_Domains/` | `01_Domains/android-companion.md` | Maps to core domain for Android Companion architecture, sync protocol, and mobile offline LLM boundaries. |
+| [`decisions/`](decisions/) | `decisions/` | `decisions/` | Architectural Decision Records (ADRs). |
