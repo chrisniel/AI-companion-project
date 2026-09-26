@@ -54,30 +54,30 @@ docs/04_Architecture/
 ### Functional Group Descriptions
 
 1. **`01_Domains/` (Focused Product & Domain Semantics):**
-   - **Assistant and conversations:** Turn lifecycle, session context assembly, conversation state, and multilingual interaction.
-   - **Memory and personalization:** Profile-owned persistent memory, selective automatic capture, and retrieval boundaries.
-   - **Characters / personality / emotion:** Persona lore, behavioral style traits, and lightweight conceptual emotion / companion-state semantics (exact emotion transitions and dynamics remain OPEN DESIGN).
-   - **Tasks / reminders / alarms / routines:** Stateful completion lifecycle, independent or task-associated reminders, native scheduling, and routine check-ins.
-   - **Voice and audio:** Provider-independent STT and TTS capabilities, audio buffering, speech turn detection, and conversation cadence.
-   - **Multimodal and media:** Message image attachments, multimodal vision understanding, and media metadata.
-   - **Android Companion:** Connected synchronization protocol, offline LLM execution boundaries, and mobile companion behavior.
+   - **Assistant and conversations:** Turn lifecycle, session context assembly, conversation state, and multilingual interaction ([`01_Domains/assistant-and-conversations.md`](01_Domains/assistant-and-conversations.md)).
+   - **Memory and personalization:** Profile-owned persistent memory, selective automatic capture, and retrieval boundaries ([`01_Domains/memory-and-personalization.md`](01_Domains/memory-and-personalization.md)).
+   - **Characters / personality / emotion:** Persona lore, behavioral style traits, and lightweight conceptual emotion / companion-state semantics ([`01_Domains/characters-personality-and-emotion.md`](01_Domains/characters-personality-and-emotion.md)).
+   - **Tasks / reminders / alarms / routines:** Stateful completion lifecycle, independent or task-associated reminders, native scheduling, and routine check-ins ([`01_Domains/tasks-reminders-alarms-and-routines.md`](01_Domains/tasks-reminders-alarms-and-routines.md)).
+   - **Voice and audio:** Provider-independent STT and TTS capabilities, audio buffering, speech turn detection, and conversation cadence ([`01_Domains/voice-and-audio.md`](01_Domains/voice-and-audio.md)).
+   - **Multimodal and media:** Message image attachments, multimodal vision understanding, and media metadata ([`01_Domains/multimodal-and-media.md`](01_Domains/multimodal-and-media.md)).
+   - **Android Companion:** Connected synchronization protocol, offline LLM execution boundaries, and mobile companion behavior ([`01_Domains/android-companion.md`](01_Domains/android-companion.md)).
 2. **`02_Data_and_Security/` (Data & Security Architecture):**
-   - **Profiles and devices:** Identity boundaries, device registration, and single-primary-user baseline.
-   - **Authentication and secrets:** Credential isolation, token handling, and trusted network boundaries.
-   - **Tool permissions and actions:** Risk tiers, deterministic policy evaluation (`ALLOW` / `CONFIRM` / `DENY`), and elevated action restrictions.
-   - **Privacy / retention / audit:** Data minimization, user consent, audit logging, and deletion policies.
+   - **Profiles and devices:** Identity boundaries, device registration, and single-primary-user baseline *(planned)*.
+   - **Authentication and secrets:** Credential isolation, token handling, and trusted network boundaries *(planned)*.
+   - **Tool permissions and actions:** Risk tiers, deterministic policy evaluation (`ALLOW` / `CONFIRM` / `DENY`), and elevated action restrictions *(planned)*.
+   - **Privacy / retention / audit:** Data minimization, user consent, audit logging, and deletion policies *(planned)*.
    *(Boundary note: General memory retrieval, attachment lifecycles, and multimodal storage belong to their respective domain and infrastructure specifications, not to this security/governance group.)*
 3. **`03_Integrations/` (External Services & Integrations):**
-   - **Read-only Web / current information:** Provider-independent search, page fetch, and weather context.
-   - **Health / wearables:** Biometric context data contracts for PC V1; physical wearable synchronization for Android V1.
-   - **Future external / device integrations:** Explicitly evaluated and approved future service connections.
+   - **Read-only Web / current information:** Provider-independent search, page fetch, and weather context ([`03_Integrations/web-current-information.md`](03_Integrations/web-current-information.md)).
+   - **Health / wearables:** Biometric context data contracts for PC V1; physical wearable synchronization for Android V1 *(planned)*.
+   - **Future external / device integrations:** Explicitly evaluated and approved future service connections *(planned)*.
    *(Boundary note: Voice/audio pipelines and the Android Companion are core experience domains owned by `01_Domains/`, not external integrations.)*
 4. **`04_Infrastructure/` (Host Runtime, Hardware & Platform):**
-   - **Runtime and models:** Local LLM inference via llama.cpp / ONNX, hardware offloading profiles, model management, and optional cloud fallback.
-   - **Storage and assets:** Host filesystem paths, application asset storage, and database migration mechanics.
-   - **Windows host and notification infrastructure:** Native OS notification delivery, background autostart at login, and host lifecycle.
-   - **Practical backup / recovery:** Database snapshot and asset recovery mechanisms for PC V1. *(Note: A full Diagnostics / Recovery Center is an exploratory recommendation and is NOT an approved PC V1 capability.)*
-   - **Performance / capacity:** Resource governance, background throttling, and low-impact gaming modes.
+   - **Runtime and models:** Local LLM inference via llama.cpp / ONNX, hardware offloading profiles, model management, and optional cloud fallback *(planned)*.
+   - **Storage and assets:** Host filesystem paths, application asset storage, and database migration mechanics *(planned)*.
+   - **Windows host and notification infrastructure:** Native OS notification delivery, background autostart at login, and host lifecycle ([`04_Infrastructure/windows-host-and-notifications.md`](04_Infrastructure/windows-host-and-notifications.md)).
+   - **Practical backup / recovery:** Database snapshot and asset recovery mechanisms for PC V1 *(planned)*. *(Note: A full Diagnostics / Recovery Center is an exploratory recommendation and is NOT an approved PC V1 capability.)*
+   - **Performance / capacity:** Resource governance, background throttling, and low-impact gaming modes *(planned)*.
 5. **`decisions/` (Architectural Decision Records):**
    - Formal records of architecturally significant decisions, context, trade-offs, and consequences.
 
