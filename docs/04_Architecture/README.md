@@ -148,10 +148,28 @@ To guarantee continuity, documentation migration follows a staged transfer patte
 
 1. **Semantics First (Sub-slices R11.0–R11.3):**
    - Author new focused domain specifications under the target directory structure:
-     - `R11.0 — Architecture Skeleton & Domain Authoring Rules` (baseline setup)
-     - `R11.1 — Core Experience Domains` (`01_Domains/`: assistant, memory, characters, tasks)
-     - `R11.2 — Integrations, Host Runtime & Client Domains` (`01_Domains/` voice, multimodal, Android; `03_Integrations/`; `04_Infrastructure/` host, performance)
-     - `R11.3 — Security, Data & Infrastructure Domains` (`02_Data_and_Security/`; `04_Infrastructure/` runtime, storage, backup/recovery)
+     - `R11.0 — Architecture Skeleton & Domain Authoring Rules` (baseline setup & navigation standards)
+     - `R11.1 — Core Experience Domains`:
+       - `tasks / reminders / alarms / routines`
+       - `characters / personality / emotion`
+       - `memory / personalization`
+       - `voice / audio`
+     - `R11.2 — Integrations, Host Runtime & Client Domains`:
+       - `assistant / conversations`
+       - `multimodal / media`
+       - `Android Companion`
+       - `web / current information`
+       - `Windows host / notifications`
+     - `R11.3 — Security, Data & Infrastructure Domains`:
+       - `profiles / devices`
+       - `authentication / secrets`
+       - `tool permissions / actions`
+       - `privacy / retention / audit`
+       - `health / wearables`
+       - `runtime / models`
+       - `storage / assets`
+       - `backup / recovery`
+       - `performance / capacity`
    - Maintain existing legacy canonical documents as authoritative until replacements are complete and verified.
    - Do not delete legacy canonical architecture, do not narrow substantive content, and do not declare new documents the sole authority before review.
 2. **Authority Transfer Gate (Sub-slice R11.4):**
