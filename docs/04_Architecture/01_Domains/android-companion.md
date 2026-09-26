@@ -68,18 +68,21 @@ Verified in `android/app/build.gradle.kts`:
 
 Verified in `android/app/src/main/java/com/example/`:
 - **Compose UI Foundation:** Jetpack Compose navigation, home view, conversation chat interface, and task list screens.
-- **Network Client:** Ktor/OkHttp client configured for communication with the FastAPI backend over LAN or Tailscale.
-- **Repository Abstractions:** Task repository, authentication repository, and basic conversation sync stubs.
+- **Network Client:** Uses `OkHttp` directly (configured in `LocalAiRuntimeClient`) for communication with the FastAPI backend over LAN or Tailscale.
+- **Repository Wiring:** Real HTTP repository wiring exists for `SharedPreferencesConnectionRepository`, `HttpTasksRepository`, and `LocalAiRuntimeClient`. Other major domains—including Assistant conversations, Characters, Memory, Schedule, Alarms, and Models/Devices—remain wired to Fake repositories in `DefaultAppContainer`. General conversation synchronization is not implemented.
+- **Credential Storage (Current):** Device pairing token is stored in ordinary, unencrypted `SharedPreferences`.
+- **Health Foundation (Current):** The codebase contains the `HealthDataProvider` abstraction, a `MockHealthDataProvider` stub, and Health UI/view-model structures. No real Health Connect client or platform API integration is implemented (mock/provider contract and UI foundation only).
 - **Test Baseline:** 124 passing unit, repository, and Robolectric UI tests verified during reconciliation Pass R8.
 
 ### 3.3 Explicitly Unimplemented Capabilities
 
 The following target capabilities have zero operational implementation in the current Android prototype:
-- **Hardware Keystore Integration:** `NOT IMPLEMENTED` (credentials currently use basic local preferences).
+- **Hardware Keystore Integration:** `NOT IMPLEMENTED` (credentials currently use basic `SharedPreferences`).
 - **Durable Room Outbox:** `NOT IMPLEMENTED` (no SQLite/Room local persistence database or offline mutation outbox).
+- **General Conversation Synchronization:** `NOT IMPLEMENTED` (conversations use in-memory mock repositories; sync is not implemented).
 - **Offline Local LLM Inference:** `NOT IMPLEMENTED` (zero on-device inference runtime).
 - **Local Alarms & Push Notifications:** `NOT IMPLEMENTED` (no Android notification channels or exact AlarmManager scheduling).
-- **Health Connect Integration:** `NOT IMPLEMENTED` (stubs exist, but no active OS permission workflows or data ingestion).
+- **Real Health Connect Integration:** `NOT IMPLEMENTED` (Android V1 capability remains APPROVED / NOT STARTED; current code provides mock contract and UI foundation only).
 
 ---
 
@@ -89,7 +92,7 @@ The following target capabilities are approved under Decision D1 and scheduled f
 
 1. **Production Identity & Secure Keystore (Android V1):**
    - Migration to `com.cnl.aicompanion`.
-   - Device credentials protected via Android Keystore system and EncryptedSharedPreferences.
+   - Device credentials protected via platform-secure facilities backed by the Android Keystore system (e.g., `EncryptedSharedPreferences` as an implementation candidate; exact mechanism remains open design).
 2. **Durable Room Outbox & Connected Synchronization (Android V1):**
    - Local Room database caching active tasks, memories, and conversations.
    - Offline mutation queue (outbox) synchronizing with PC Local AI Runtime upon reconnect.
@@ -97,7 +100,7 @@ The following target capabilities are approved under Decision D1 and scheduled f
    - On-device local LLM execution for basic conversational continuity when disconnected from the PC host.
    - Model family, format (e.g., GGUF, ONNX), parameter size, and quantization remain OPEN DESIGN. Existing benchmarks on Dimensity / Infinix hardware are historical proof-of-concept evidence, not locked hardware constraints.
 4. **Health Connect Biometric Context (Android V1):**
-   - Reads daily step counts, sleep duration, and resting heart rate summaries from Android Health Connect with explicit user permission, synchronizing aggregated summaries to the PC runtime.
+   - Ingests aggregated biometric summaries from Android Health Connect with explicit user permission, synchronizing approved summaries to the PC Local AI Runtime. (Exact metric list, aggregation formulas, and synchronization cadence remain OPEN DESIGN and belong to `health-and-wearables.md`.)
 
 ---
 
@@ -105,10 +108,11 @@ The following target capabilities are approved under Decision D1 and scheduled f
 
 The following implementation choices are intentionally left open for subsequent technical design:
 
+- **Secure Credential Storage Mechanism:** Choice of Android Keystore wrapper or library (e.g., `EncryptedSharedPreferences`, Jetpack Security, or custom Keystore provider).
 - **Offline LLM Runtime & Format:** Choice of mobile inference engine (e.g., `llama.cpp` Android NDK build, ONNX Runtime Mobile, or MediaPipe), model architecture, and quantization level.
 - **Sync Protocol & Conflict Resolution:** Exact transport (WebSocket streaming vs. gRPC vs. HTTPS REST polling) and conflict resolution rules (e.g., last-write-wins with server timestamp authority).
 - **Background Synchronization Schedule:** WorkManager constraints, battery optimization exemptions, and Wi-Fi-only sync preferences.
-- **Health Connect Aggregation Cadence:** Daily vs. periodic sync frequency, metric windowing, and privacy redaction filters.
+- **Health Connect Metrics & Aggregation:** Initial metric selection, aggregation windows, sync cadence, and privacy filters (governed under `health-and-wearables.md`).
 
 ---
 

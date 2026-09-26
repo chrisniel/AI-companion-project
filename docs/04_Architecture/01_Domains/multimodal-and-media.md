@@ -37,8 +37,8 @@ Multimodal vision understanding is governed by the approved Phase 8B delivery ro
 ### 2.3 Security & Attachment Invariants
 
 - **Ownership & BOLA Isolation:** Attachments are strictly scoped to the authenticated Profile (`owner_id`) and parent `conversation_id`. Cross-conversation attachment binding or cross-user access is prohibited.
-- **Storage Path Containment:** Binary files are written strictly within the configured storage directory (`DATA_DIR/attachments`). All file path resolutions enforce strict canonical path containment to prevent directory traversal attacks.
-- **Strict Pre-Upload Validation:** File size (10 MiB cap), multipart request ceilings (11 MiB fail-closed), magic byte validation, dimensions (max 4096×4096), and megapixel limits (max 16.8 MP) are enforced prior to permanent storage.
+- **Storage Path Containment:** Binary files are written strictly within the configured attachment storage directory (`settings.ATTACHMENT_DIR` under the resolved `COMPANION_DATA_ROOT`). All file path resolutions enforce strict canonical path containment to prevent directory traversal attacks.
+- **Strict Pre-Upload Validation:** File size (10 MiB raw file ceiling), route-specific multipart request envelope (12 MiB via `settings.MAX_ATTACHMENT_REQUEST_BODY_BYTES`), pure byte signature inspection, Pillow verification, maximum pixel dimensions (max 8192×8192 px), maximum total pixels (max 32.0 MP), and maximum attachments per message (ceiling of 4) are enforced prior to permanent storage.
 - **Staging & Atomic Claiming:** Attachments are uploaded in a staged state (`message_id = NULL`) and claimed by a message within an atomic turn preparation transaction. Failed turns execute clean rollback.
 
 ---
@@ -49,11 +49,11 @@ Repository source code and test suites verify the following baseline reality:
 
 ### 3.1 Backend Storage & Validation
 
-Verified in `app.models.attachment.Attachment` (migration 006) and `app.services.attachment_validator`:
-- **Entity Schema:** `id` (UUIDv4), `conversation_id` (FK to `conversations.id`), `message_id` (FK to `messages.id`, nullable until claimed), `owner_id` (String), `filename_original`, `filename_display`, `storage_path`, `mime_type` (`image/png` or `image/jpeg`), `size_bytes` (max 10 MiB), `width_px`, `height_px`, `is_deleted` (Boolean), `deleted_at`, `created_at`, `updated_at`.
-- **Magic Byte Sniffing:** Inspects the first 16 bytes using Python `magic` / pure-Python header signatures; rejects spoofed file extensions.
-- **Decompression Bomb Protection:** Pillow `Image.MAX_IMAGE_PIXELS` set to 17,000,000 to defend against pixel-expansion denial-of-service.
-- **Validation Pipeline:** Enforces MIME whitelist (`image/png`, `image/jpeg`), size limit (`10 * 1024 * 1024` bytes), and dimension limits (`MAX_DIMENSION = 4096`).
+Verified in `app.models.attachment.Attachment` (migration 006), `app.schemas.attachment`, and `app.services.attachment_validator`:
+- **ORM Entity Schema:** `id` (UUIDv4), `conversation_id` (FK to `conversations.id`), `message_id` (FK to `messages.id`, nullable until claimed), `owner_id` (String), `filename_display` (String(255)), `storage_filename` (String(128)), `storage_path` (String(512)), `mime_type` (String(64), restricted to `image/png` or `image/jpeg`), `size_bytes` (Integer, max 10 MiB), `image_width` (Integer, nullable), `image_height` (Integer, nullable), `is_deleted` (Boolean), `deleted_at` (DateTime, optional), `created_at`, `updated_at`.
+- **Pure Byte Signature Inspection:** Pure byte-signature inspection checks the initial byte sequence for PNG (`\x89PNG\r\n\x1a\n`) and JPEG (`\xff\xd8\xff`). WebP signatures (`RIFF`...`WEBP`) are detected solely so validation can reject WebP uploads as deferred. MIME detection is handled purely in application code without external file type inspection libraries, followed by Pillow decoding to verify raster integrity.
+- **Decompression Bomb & Dimension Defenses:** Enforces dimension limits (`MAX_PIXEL_DIMENSION = 8192 px`) and total pixel boundaries (`MAX_MEGAPIXELS = 32.0 MP`) to defend against pixel-expansion denial-of-service without allocating full rasters.
+- **Validation Pipeline:** Enforces MIME whitelist (`ALLOWED_MIME_TYPES = frozenset({"image/png", "image/jpeg"})`), raw size ceiling (`MAX_SIZE_BYTES = 10 * 1024 * 1024`), route multipart envelope (`settings.MAX_ATTACHMENT_REQUEST_BODY_BYTES = 12 * 1024 * 1024`), pixel bounds (`8192 px`, `32.0 MP`), and maximum attachments per message (`MAX_ATTACHMENTS_PER_MESSAGE = 4`).
 
 ### 3.2 Endpoints & Ingestion Pipeline
 
@@ -91,8 +91,10 @@ Verified in `frontend/web/src/components/chat/`:
 The following target capabilities are approved under Phase 8B:
 
 1. **Persistent Message Attachment Rendering (Slice 8B.7 / PC V1):**
-   - The frontend conversation history view renders responsive thumbnail cards for all attachments referenced by historical user messages.
-   - Clicking thumbnails opens a high-resolution preview modal with pan/zoom controls.
+   - Frontend `AttachmentRef` propagation and persistent user-message attachment rendering in conversation history.
+   - Authenticated history Blob fetching with persistence across page reload and conversation switching.
+   - Client-side Blob URL caching and revocation/cleanup.
+   *(Note: High-resolution preview modals, pan/zoom interactions, or exact thumbnail card UI layouts belong to open design / design specification rather than locked architectural gates.)*
 2. **Phase 8B Full Integration Closure (Slice 8B.8 / PC V1):**
    - End-to-end automated testing verifying upload, staging, turn preparation, SSE streaming with vision tokens, and history reload across page refreshes.
 

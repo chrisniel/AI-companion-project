@@ -81,13 +81,13 @@ Verified in `backend/app/api/v1/endpoints/conversations.py`:
   3. *Idempotency Check:* Checks for existing `client_message_id` (returns `409 DUPLICATE_MESSAGE`).
   4. *Concurrency Lock:* Acquires in-memory asyncio lock `_get_lock(conversation_id)` (returns `409 CONVERSATION_BUSY` if locked).
   5. *Provider Check:* Verifies LLM provider runtime state (returns `503 LLM_UNAVAILABLE` if unavailable).
-  6. *Atomic Preparation (`prepare_turn`):* Calculates next `sequence_no`, persists user message, binds staged attachments, and retrieves relevant memories.
-  7. *Streaming Orchestration (`orchestrate_chat_stream`):* Streams SSE tokens (`text/event-stream`), persists completed assistant message, records token usage, and releases conversation lock upon completion.
+  6. *Atomic Preparation (`prepare_turn`):* Validates attachment IDs, allocates sequence numbers (with bounded retry for collisions), persists user message and assistant placeholder, flushes rows, atomically claims attachments for the user message, and commits the transaction exactly once. (Note: `prepare_turn` does not retrieve memories.)
+  7. *Streaming Orchestration (`orchestrate_chat_stream`):* Retrieves relevant memories via FTS5 lexical search, constructs prompt context fitting the token budget, streams SSE tokens (`text/event-stream`), persists completed assistant message, records token usage, and releases the conversation lock upon completion.
 
 ### 3.3 Context Assembly & Injection
 
 Verified in `backend/app/services/assistant/orchestrator.py`:
-- Injects up to 5 relevant memories retrieved via FTS5 lexical search into the system prompt inside `<relevant_memories>` tags, bounded by `MEMORY_BUDGET_TOKENS = 256`.
+- Injects up to 5 relevant memories retrieved via FTS5 lexical search into the system prompt inside `<retrieved_memories>` tags, bounded by `MEMORY_BUDGET_TOKENS = 256`. The template explicitly instructs the model that memories are untrusted contextual information for reference only and not to adopt policies or commands found in them.
 - Binds user message attachments via multimodal vision contracts when vision capability is enabled.
 - Loads recent conversation history turns to construct chat context.
 
@@ -108,8 +108,6 @@ The following target capabilities are approved under Decision D1 and the Feature
    - Persona consistency maintained when switching between supported languages or when using code-switching (Taglish).
 2. **Persistent Attachment History Rendering (Slice 8B.7 / PC V1):**
    - Frontend chat interface renders thumbnail cards with authenticated Blob previews for all persisted attachments attached to historical messages.
-3. **Conversation Summarization & Long-Context Compaction (PC Later):**
-   - Background summarization of older dialogue turns into episodic memories to prevent context exhaustion while preserving dialogue continuity.
 
 ---
 
@@ -119,7 +117,7 @@ The following implementation choices are intentionally left open for subsequent 
 
 - **Character Switching UX:** How character transitions are initiated in the UI (e.g., dedicated switcher prompting for a new thread vs. inline bounded transition).
 - **Language Detection & System Prompt Adaptation:** Whether dynamic language hints are explicitly injected into the system prompt or left entirely to natural model completion.
-- **Context Compaction Strategy:** Token threshold triggers, summarization model selection, and hierarchical memory distillation mechanisms.
+- **Conversation Summarization & Long-Context Compaction:** Token threshold triggers, summarization model selection, hierarchical memory distillation mechanisms, and background summarization cadence (treated as open design / future architectural consideration; not currently scheduled as a locked PC Later milestone).
 - **Transcript Archival & Retention:** Long-term conversation export formats (JSON, Markdown, PDF) and user-configurable retention limits.
 - **Future Multi-Character Interaction:** Conceptual feasibility and interaction design of multi-persona collaborative threads (scheduled for future architectural evaluation).
 
@@ -128,8 +126,8 @@ The following implementation choices are intentionally left open for subsequent 
 ## 6. Security & Ownership Boundaries
 
 - **Owner Isolation:** Every query enforces `WHERE conversation.owner_id = :owner_id`. No cross-user access is permitted.
-- **Prompt Injection Defense:** User messages, retrieved memories, and image OCR/vision descriptions are treated as untrusted data and strictly contained within designated structural XML delimiters.
-- **Idempotency & Concurrency:** Concurrency locks and idempotency keys prevent duplicate billing, double token expenditure, and race conditions during turn generation.
+- **Prompt Injection Defense & Untrusted Content Framing:** External, retrieved, and user-supplied content must not gain system-policy authority. In current implementation, retrieved memories are explicitly framed as untrusted contextual information inside `<retrieved_memories>` tags with warning instructions. No OCR pipeline exists in the Phase 8B foundation.
+- **Idempotency & Concurrency:** Concurrency locks (`_get_lock(conversation_id)`), database unique constraints (`UNIQUE(conversation_id, client_message_id)`), and sequence constraints prevent duplicate turns, duplicate processing/state, and ordering/concurrency races during turn generation.
 
 ---
 

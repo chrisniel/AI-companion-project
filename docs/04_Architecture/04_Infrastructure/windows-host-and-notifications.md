@@ -25,7 +25,7 @@ It governs the host infrastructure that keeps the companion alive, responsive, a
 ### 2.1 Host Runtime & Browser Lifecycle Independence (Decision D2)
 
 In accordance with Decision D2:
-- **Decoupled Lifecycle:** The Local AI Runtime operates as an independent background host service whose lifecycle is strictly decoupled from any web browser tab or client session.
+- **Decoupled Lifecycle:** The Local AI Runtime operates as an independent host runtime process whose lifecycle is strictly decoupled from any web browser tab or client session.
 - **Independent Existence:** Closing the React Web browser tab, refreshing the interface, or terminating the browser application does **not** stop, reset, or terminate the Local AI Runtime or its underlying model processes.
 - **Client Disconnection Semantics:** While background timers, schedulers, and database state persist independently of the client, **active Server-Sent Events (SSE) token streams or HTTP requests terminate upon client disconnection**. A disconnected browser tab forfeits the in-flight display stream; however, backend transaction boundaries ensure committed user messages and background processes remain intact.
 - **Native Desktop Shell Phasing:** A dedicated packaged native desktop shell (e.g., Tauri container) is classified as `APPROVED / PC LATER`. For PC V1, the primary user interface is React Web, accessed via standard browsers while the host runtime executes in the background.
@@ -35,15 +35,15 @@ In accordance with Decision D2:
 In accordance with the Feature Promotion Map (**Windows Host Autostart at Login**):
 - **Approved Capability:** PC V1 includes automatic launch of the companion host runtime upon Windows user login.
 - **Continuous Availability:** Autostart ensures companion scheduling, reminders, routines, and satellite Android sync readiness are immediately active without requiring manual terminal startup or browser launching.
-- **User-Owned Control:** Autostart must remain user-configurable, allowing users to toggle automatic startup on or off via host configuration or desktop settings.
+- **Configuration UX Boundary:** User control over installation and startup configuration is desirable, but the exact control and settings UX remains OPEN DESIGN and design-owned.
 
 ### 2.3 Native Windows Notifications & Offline Catch-up (PC V1)
 
 In accordance with the Feature Promotion Map (**Native Windows Notifications** and **Reminder & Alarm Scheduling Foundation**):
-- **Direct OS Notification Dispatch:** The Local AI Runtime dispatches notifications directly to the Windows notification system (e.g., Action Center / Toast alerts).
+- **Direct OS Notification Dispatch:** The Local AI Runtime dispatches notifications directly to the Windows notification system (e.g., Action Center / Toast alerts as candidate implementations).
 - **Client-Closed Delivery:** Native notifications ensure urgent alerts, scheduled reminders, and proactive companion check-ins reach the user even when the browser client is completely closed.
-- **Offline & Sleep Catch-up:** When the host machine awakens from sleep, hibernation, or an offline period, the scheduling engine evaluates missed reminder triggers. Past-due reminders are presented in an intentional catch-up summary rather than generating an uncoordinated burst of overlapping alert chimes.
-- **Policy Adherence:** Native notification delivery must strictly respect configured companion quiet hours, user mute preferences, and Windows Focus Assist / Do Not Disturb settings.
+- **Offline & Sleep Catch-up:** When the host machine awakens from sleep, hibernation, or an offline period, the scheduling engine evaluates missed reminder triggers where appropriate. Exact catch-up policies (e.g., batching, deduplication, aggregation, suppression, and stale-event expiration) remain OPEN DESIGN.
+- **Policy Adherence:** Native notification delivery is governed by Decision D10, respecting configured companion quiet hours and per-item urgent override settings alongside normal OS notification behavior.
 
 ### 2.4 Best-Effort OS Alarm Wake Invariant
 
@@ -69,10 +69,10 @@ Repository source code establishes the current baseline reality:
 
 When implemented for PC V1, the Windows host infrastructure will provide:
 
-1. **Host Supervisor Process:** A lightweight host supervisor managing Local AI Runtime startup, health monitoring, and graceful teardown during system shutdown.
-2. **Autostart Registration:** A configurable installer/setup routine establishing an autostart hook at user login (e.g., Windows Startup folder entry or Task Scheduler trigger) targeting the host supervisor.
-3. **Native Notification Dispatcher:** A platform-specific notification adapter in the backend or host helper that consumes scheduling events from the Tasks/Reminders domain and dispatches standard Windows Toast notifications with actionable dismiss/snooze controls.
-4. **Resilient Scheduling Engine:** A persistent background clock checking for upcoming reminders, requesting Windows waitable timers (e.g., `CreateWaitableTimer` with resume capability) for alarms, and handling wake catch-up.
+1. **Independent Host Execution:** The runtime executes as a decoupled host process. (The exact hosting/supervision mechanism remains OPEN DESIGN; candidate approaches include a native launcher, Startup entry, Task Scheduler task, or background service wrapper.)
+2. **Autostart at User Login:** An automatic launch hook established during setup/installation launching the host runtime upon Windows login.
+3. **Native Notification Delivery:** Direct platform-appropriate notification delivery for reminders, alarms, and routines when the browser is closed. (The exact notification library, UI adapter, and interaction controls remain OPEN DESIGN.)
+4. **Resilient Scheduling & Wake Catch-up:** A persistent scheduling mechanism that checks upcoming reminders, requests system wake for scheduled alarms on a best-effort basis, and reconciles missed reminders following sleep or downtime.
 
 ---
 
@@ -80,26 +80,25 @@ When implemented for PC V1, the Windows host infrastructure will provide:
 
 The following implementation mechanisms remain open design for future technical specification:
 
-- **Autostart Mechanism Selection:** Specific Windows startup entry mechanism, evaluating alternatives such as:
+- **Hosting & Supervision Mechanism:** Specific Windows process hosting mechanism, evaluating alternatives such as:
   - Windows User Startup folder shortcut (`shell:startup`).
   - Windows Task Scheduler task triggered `At log on`.
   - Windows Background Service wrapper.
   - Dedicated lightweight native launcher utility.
-- **Notification Library / Adapter:** Specific Windows notification dispatch mechanism, evaluating alternatives such as:
-  - Windows Runtime (WinRT) Toast Notification APIs (`Windows.UI.Notifications`).
-  - Native Python/C++ toast notification wrapper library.
-  - Dedicated background system tray helper application mediating toast generation.
-- **Alarm Wake Timer APIs:** Specific Windows kernel timer API binding (e.g., `SetWaitableTimer` with `fResume = TRUE`) and fallback policies across different Windows power plans.
-- **System Tray Presence:** Inclusion and capabilities of a companion system tray icon for quick status, mute toggling, and manual runtime control prior to full native desktop shell adoption.
+- **Notification Library & Interaction Controls:** Specific Windows notification dispatch mechanism (e.g., WinRT `Windows.UI.Notifications`, a toast wrapper library, or a background system tray helper) and notification interaction controls (e.g., dismiss or snooze actions).
+- **Notification Catch-up & Suppression Heuristics:** Specific algorithms for batching, aggregating, or suppressing stale reminder notifications following system wake or prolonged offline periods.
+- **Autostart Configuration UX:** Design-owned user interface controls and configuration options for enabling or disabling automatic startup.
+- **Alarm Wake Timer Strategy:** Specific Windows kernel timer API bindings (e.g., waitable timers with resume capability) and power plan fallback policies.
+- **System Tray Presence:** Inclusion and capabilities of an optional companion system tray icon for quick status, mute toggling, and manual runtime control prior to full native desktop shell adoption.
 
 ---
 
 ## 6. Security & Ownership Boundaries
 
-- **Local Host Boundary (Decision D2):** The host supervisor and runtime bind exclusively to loopback (`127.0.0.1`) by default, preventing unauthenticated remote LAN access to host administration endpoints.
+- **Local Host Boundary (Decision D2):** The host runtime binds exclusively to loopback (`127.0.0.1`) by default, preventing unauthenticated remote LAN access to host administration endpoints.
 - **User Permission Execution:** The runtime executes under the standard privileges of the logged-in Windows user account. It does **not** require elevated Windows Administrator privileges for day-to-day companion conversation or notification dispatch.
 - **Quiet-Hours & Notification Governance:** Native notifications must not bypass user-defined quiet hours or notification preferences. High-frequency automated routines are bounded to avoid notification fatigue.
-- **Credential Storage:** Host runtime secrets, pairing tokens, and API credentials are kept in user-isolated configuration files (`backend/.env`) with restricted filesystem permissions.
+- **Credential Storage:** In current development reality, secrets and pairing tokens are stored in user-isolated local configuration files (`backend/.env`). Durable future credential and secret storage architecture is defined in the planned `docs/04_Architecture/02_Data_and_Security/authentication-and-secrets.md` domain.
 
 ---
 

@@ -71,17 +71,14 @@ Repository source code establishes the current baseline reality:
 
 When implemented for PC V1, the public information integration will supply:
 
-1. **Abstract Tool Interfaces:** Standardized tool definitions exposed to the assistant turn orchestrator:
-   - `WebSearch(query: str, max_results: int = 5) -> SearchResultBundle`
-   - `WebFetch(url: str, max_tokens: int = 2048) -> WebpageContent`
-   - `WeatherLookup(location: Optional[str] = None) -> WeatherSummary`
-2. **Hardened HTTP Fetcher:** Dedicated outbound HTTP client enforcing:
+1. **Typed Tool Contracts:** Standardized, provider-independent tool definitions exposed to the assistant turn orchestrator (e.g., candidate tool signatures such as `WebSearch`, `WebFetch`, and `WeatherLookup`).
+2. **Hardened SSRF-Safe HTTP Fetcher:** Dedicated outbound HTTP client enforcing:
    - DNS resolution pre-flight validation preventing DNS rebinding.
    - Strict IP address verification against private, loopback, and link-local ranges before connection establishment.
-   - Redirect chain interception validating every hop against IP blocklists.
-   - Connection and read timeouts (e.g., 10-second ceiling) and response size limits (e.g., 2 MiB raw ceiling).
-3. **Content Extraction Pipeline:** Clean extraction of readable text from HTML/DOM, stripping scripts, styles, forms, and tracking elements, transforming payloads into clean, bounded Markdown for prompt context insertion.
-4. **Transparent Citation Presentation:** Inclusion of source URLs and titles in assistant responses, enabling user inspection and verification of external claims.
+   - Redirect chain interception revalidating every hop against IP blocklists.
+   - Bounded timeouts and bounded response size limits (e.g., candidate parameters such as 10-second timeout ceiling and 2 MiB raw response ceiling).
+3. **Untrusted-Content Extraction Pipeline:** Clean extraction of readable text from HTML/DOM, stripping executable scripts, styles, forms, and tracking elements, transforming payloads into bounded text or Markdown for prompt context insertion.
+4. **Source Provenance & Transparent Citations:** Inclusion of source URLs and titles in assistant responses, enabling user inspection and verification of external claims.
 
 ---
 
@@ -89,11 +86,13 @@ When implemented for PC V1, the public information integration will supply:
 
 The following functional and technical mechanisms remain open design for future implementation plans:
 
+- **Exact Tool Signatures & Defaults:** Specific interface names, parameter defaults (e.g., `max_results`, `max_tokens`), and token allocation ceilings for search and page retrieval.
+- **Network Boundaries & Timeouts:** Exact connection/read timeout thresholds, retry backoff algorithms, and maximum payload byte ceilings.
+- **Content Extraction Pipeline:** Exact HTML parsing library, DOM cleaning heuristics, and Markdown conversion pipeline.
 - **Provider Selection:** Primary and fallback provider choices for search, fetch, and weather (e.g., evaluating hosted privacy-centric search vs. self-hosted SearXNG).
 - **Result Ranking & Summarization:** Specific relevance scoring, deduplication heuristics, and snippet summarization algorithms before context assembly.
 - **Caching & Freshness:** Response caching strategies, time-to-live (TTL) policies per query type, and cache invalidation triggers.
 - **Citation UX:** Specific UI display conventions for inline citations, footnote references, and preview cards in the desktop client.
-- **Timeout & Retry Policies:** Exact exponential backoff, jitter, and error-messaging behaviors during external network degradation.
 - **News Integration:** Dedicated news-specific provider integrations and scheduled periodic digest generation.
 - **Local Network Integrations:** Separate typed architecture for local smart-home or IoT integrations on private subnets, subject to explicit user authorization.
 
@@ -102,7 +101,7 @@ The following functional and technical mechanisms remain open design for future 
 ## 6. Security & Ownership Boundaries
 
 - **Network Trust Tiers (Decision D5):** Web information retrieval operates across the boundary between the trusted Local AI Runtime and the untrusted Public Internet.
-- **Tool Policy Resolution (Decision D9):** Read-only web queries are low-risk information retrieval operations that evaluate to `ALLOW` under default policy, provided no personal profile data is leaked in query payloads.
+- **Tool Policy Resolution (Decision D9):** Read-only web queries represent Risk 0 (low-risk information access) operations. Under the system's `DEFAULT DENY` capability architecture, read-only web tools **MAY** auto-execute (`ALLOW`) only when the capability is explicitly enabled and deterministic profile/device policy permits it. They do not unconditionally evaluate to `ALLOW` by default.
 - **Credential Isolation:** API keys required for external provider access (e.g., third-party search engine tokens) are stored in secure host configuration, never exposed to client-side code, and never injected into conversational prompt context.
 - **Privacy Minimization:** Search queries generated by the assistant must minimize the transmission of identifying user personal context or sensitive profile lore to external search providers.
 
