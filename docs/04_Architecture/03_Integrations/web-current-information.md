@@ -78,7 +78,7 @@ When implemented for PC V1, the public information integration will supply:
    - Redirect chain interception revalidating every hop against IP blocklists.
    - Bounded timeouts and bounded response size limits (e.g., candidate parameters such as 10-second timeout ceiling and 2 MiB raw response ceiling).
 3. **Untrusted-Content Extraction Pipeline:** Clean extraction of readable text from HTML/DOM, stripping executable scripts, styles, forms, and tracking elements, transforming payloads into bounded text or Markdown for prompt context insertion.
-4. **Source Provenance & Transparent Citations:** Inclusion of source URLs and titles in assistant responses, enabling user inspection and verification of external claims.
+4. **Source Provenance Preservation:** Public information results preserve sufficient source provenance for user inspection and verification (candidate presentation patterns include source URLs, titles, domain attribution, or source cards).
 
 ---
 
@@ -92,7 +92,7 @@ The following functional and technical mechanisms remain open design for future 
 - **Provider Selection:** Primary and fallback provider choices for search, fetch, and weather (e.g., evaluating hosted privacy-centric search vs. self-hosted SearXNG).
 - **Result Ranking & Summarization:** Specific relevance scoring, deduplication heuristics, and snippet summarization algorithms before context assembly.
 - **Caching & Freshness:** Response caching strategies, time-to-live (TTL) policies per query type, and cache invalidation triggers.
-- **Citation UX:** Specific UI display conventions for inline citations, footnote references, and preview cards in the desktop client.
+- **Citation & Provenance Presentation UX:** The exact user interface conventions and presentation format for source provenance (e.g., inline citations, source cards, URLs and titles display, footnotes, or preview UI) remain OPEN DESIGN and design-owned.
 - **News Integration:** Dedicated news-specific provider integrations and scheduled periodic digest generation.
 - **Local Network Integrations:** Separate typed architecture for local smart-home or IoT integrations on private subnets, subject to explicit user authorization.
 
@@ -110,7 +110,7 @@ The following functional and technical mechanisms remain open design for future 
 ## 7. Canonical Relationships & Cross-Links
 
 ### Upstream Baseline & Legacy Architecture
-- [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) — Baseline capabilities, platform vocabulary, Decisions D2, D5, D9.
+- [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) — Baseline capabilities, platform vocabulary, Decisions D1 (PC V1 release boundary includes read-only public current information), D5 (network trust boundary), D9 (deterministic tool permission policy).
 - [`docs/04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md`](../SECURITY_AND_TRUST_ARCHITECTURE.md) — Network boundaries, tool risk tiers, and SSRF threat model.
 
 ### Related Domain & Infrastructure Specifications
