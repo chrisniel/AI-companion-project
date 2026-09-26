@@ -1,0 +1,118 @@
+# Tool Permissions and Actions Architecture
+
+> **Document Role:** Focused staged domain architecture specification (Pass R11.3).  
+> **Status:** Active Working Specification — **AUTHORITY TRANSFER PENDING R11.4**.  
+> **Authority Precedence:** Focused staged specification authored during R11.3. AUTHORITY TRANSFER PENDING R11.4. Current legacy canonical documents remain primary authority until explicit R11.4 human review and authorization. Primary canonical authority remains in [`docs/04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md`](../SECURITY_AND_TRUST_ARCHITECTURE.md) (§5, §6) and [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§2 Core Architecture, Decision D9, Principle P1) until the formal R11.4 Authority Transfer Gate is reviewed and authorized.
+
+---
+
+## 1. Purpose & Scope
+
+This specification defines the execution governance, deterministic policy gates, and safety boundaries for assistant tool invocation:
+- Five-stage execution pipeline decoupling generative models from raw execution authority.
+- `DEFAULT DENY` capability architecture.
+- Three-valued deterministic policy evaluation: `ALLOW`, `CONFIRM`, `DENY`.
+- Strict rejection of unrestricted generic shell, PowerShell, and OS administration tools.
+- Boundaries for narrow, typed privileged actions and deferred interactive browser automation.
+
+---
+
+## 2. Durable Architecture & Invariants
+
+### 2.1 Five-Stage Execution Pipeline (Decision D9, Principle P1)
+
+In accordance with Decision D9 and Principle P1:
+- **Zero Model Self-Elevation:** Generative language models have **zero inherent system authority**. An LLM cannot execute tools, read files, or dispatch network requests directly. It can only emit structured text representing an intent.
+- **Durable Pipeline:** Every tool action follows a strict deterministic pipeline:
+  $$\text{Model} \longrightarrow \text{Typed Request} \longrightarrow \text{Deterministic Policy} \longrightarrow \text{Narrow Adapter} \longrightarrow \text{Capability}$$
+  1. **Model:** Emits an intent payload.
+  2. **Typed Request:** Schema validation converts raw text into a strictly typed, bounded request object.
+  3. **Deterministic Policy:** External security logic outside the LLM evaluates the request against current permissions, profile policy, risk tiers, and quiet hours.
+  4. **Narrow Adapter:** A purpose-built, least-privilege software adapter executes the specific action.
+  5. **Capability:** The underlying resource (database, file, or network endpoint) is accessed.
+
+### 2.2 DEFAULT DENY & Policy Outcomes
+
+- **`DEFAULT DENY` Architecture:** Any unrecognized tool call, invalid schema payload, or action lacking an explicit permission rule is unconditionally rejected (`DENY`).
+- **Deterministic Outcomes:** Policy evaluation produces one of three distinct outcomes:
+  - **`ALLOW`**: The tool may execute automatically without interactive user prompts.
+  - **`CONFIRM`**: The tool requires explicit, out-of-band user approval before execution commences.
+  - **`DENY`**: The tool execution is blocked and rejected back to the orchestrator.
+- **Low-Risk Actions (`ALLOW` Semantics):** Low-risk personal reads, creates, and updates (e.g., retrieving tasks, creating reminders, recording a user memory) **MAY** auto-execute (`ALLOW`) only when the capability is explicitly enabled and deterministic policy permits it. Domain specifications must **not** state that all low-risk operations unconditionally auto-execute.
+- **Destructive & External Actions (`CONFIRM` Semantics):** Irreversible actions, state mutations affecting external services, mass record deletions, or high-risk integrations require explicit user confirmation (`CONFIRM`).
+
+### 2.3 Conceptual Risk Tiers
+
+Risk tiers represent a conceptual architecture for categorizing operations, **not** a promise that runtime tool implementations currently exist for every listed example:
+- **Risk 0 (Read-Only / Ephemeral):** Safe, bounded information reads (e.g., read-only weather context, public search snippets, listing companion tasks).
+- **Risk 1 (Internal Personal Mutations):** User-isolated record creation or updates (e.g., adding a reminder, recording a memory note, updating task status).
+- **Risk 2 (External / State-Changing Mutations):** Non-destructive external calls or significant configuration changes (e.g., sending an outbound notification, modifying companion profile attributes).
+- **Risk 3 (High-Risk / Privileged Operations):** Destructive operations, credential changes, or privileged system actions.
+
+### 2.4 Unrestricted OS Shell Prohibited
+
+In accordance with the Feature Promotion Map (**Generic Shell / OS Administration**):
+- **Classification:** `REJECTED / NOT STARTED / N/A`.
+- **Policy Invariant:** Unrestricted command-line shell execution (e.g., arbitrary `cmd.exe`, PowerShell, Bash, raw OS process spawning, unrestricted filesystem traversal, credential access, or security reconfiguration) is **strictly prohibited** as a generic assistant tool.
+- **No PC Later Promotion:** Generic shell tools must **NOT** be classified as `PC LATER` or scheduled for future delivery.
+- **Narrow Privileged Actions:** Any future system administration capabilities must be designed as separate, narrow, typed adapters with bounded inputs, explicit confirmation gates, and complete audit logging.
+
+### 2.5 Interactive Browser Automation Phasing
+
+In accordance with the Feature Promotion Map (**Interactive Browser Automation**):
+- **Classification:** `APPROVED / NOT STARTED / PC LATER`.
+- **Scope Distinction:** Programmatic browser interaction (e.g., automated form submission, checkout flows, authenticated sessions via Playwright) is classified as a post-PC-V1 capability. It is architecturally separate from read-only search and fetch (PC V1).
+
+---
+
+## 3. Current Verified Implementation
+
+Repository source code establishes the following baseline reality:
+
+- **Conversational Tool Engine Status:** **NOT IMPLEMENTED**. The current backend runtime contains no conversational tool calling engine, no tool dispatcher, and no JSON-schema tool registry.
+- **REST Endpoints vs. Tool Engine:** The existing REST API exposes endpoints for tasks (`/api/v1/tasks`), memories (`/api/v1/memories`), and attachments (`/api/v1/conversations/{id}/attachments`). These are standard HTTP CRUD routes invoked directly by client interfaces. They must **not** be mistaken for an automated conversational tool execution policy engine.
+- **Model Registry Flags:** `app/schemas/model_registry.py` defines `ModelCapability.tool_calling = "tool_calling"`, but this is a metadata capability flag declaring whether a model architecture supports tool call tokens, not an active execution engine.
+
+---
+
+## 4. Approved Target Architecture / Not Yet Implemented (PC V1)
+
+When implemented for PC V1, the tool permission system will provide:
+
+1. **Typed Tool Registry:** A central catalog of strictly typed tool schemas exposed to the assistant turn orchestrator.
+2. **Deterministic Policy Evaluator:** An authorization middleware evaluating tool calls against profile settings, device authority, and risk classifications before invoking adapters.
+3. **Interactive Confirmation Channel:** A mechanism enabling the runtime to pause turn processing, prompt the user via the frontend client with action details, and await an explicit confirmation token before executing `CONFIRM`-tier actions.
+4. **Tool Execution Audit Hook:** Immediate recording of all executed or rejected tool calls into a structured audit log.
+
+---
+
+## 5. OPEN DESIGN
+
+The following technical mechanisms remain open design for future implementation plans:
+
+- **Policy Persistence Schema:** Database schema for storing user permission grants, tool enable/disable toggles, and auto-execute allowances.
+- **Confirmation Token Lifecycle:** Structure and TTL of cryptographic confirmation tokens issued when user approval is requested.
+- **Permission UX:** User interface presentation for confirmation modals (e.g., diff previews, parameter inspection, and "Always allow for this session" toggles).
+- **Tool Cancellation API:** Mechanism allowing users or the orchestrator to cancel an in-flight tool execution cleanly.
+- **Narrow Privileged Adapter Designs:** Specification of any narrow, typed administrative tools permitted in future releases.
+
+---
+
+## 6. Security & Ownership Boundaries
+
+- **Prompt Injection Defense (Decision D9):** The deterministic policy engine executes entirely outside the LLM context. Malicious prompts or prompt injections embedded in external data cannot bypass policy evaluation or grant auto-execute status to tools.
+- **BOLA Enforcement in Tool Adapters:** Every tool adapter modifying personal records must bind operations strictly to the authenticated `owner_id`.
+- **Resource Limits:** Tool executions enforce bounded timeouts and memory caps to prevent denial-of-service or hangs during adapter execution.
+
+---
+
+## 7. Canonical Relationships & Cross-Links
+
+### Upstream Baseline & Legacy Architecture
+- [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) — Decision D9 (Deterministic tool permissions), Principle P1 (Safe personal actions).
+- [`docs/04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md`](../SECURITY_AND_TRUST_ARCHITECTURE.md) — Tool risk tiers, execution guardrails, shell prohibition.
+
+### Related Domain & Security Specifications
+- [`docs/04_Architecture/01_Domains/assistant-and-conversations.md`](../01_Domains/assistant-and-conversations.md) — Orchestration loop and tool response injection.
+- [`docs/04_Architecture/02_Data_and_Security/privacy-retention-and-audit.md`](privacy-retention-and-audit.md) — Auditing of tool execution and state-changing actions.
+- [`docs/04_Architecture/03_Integrations/web-current-information.md`](../03_Integrations/web-current-information.md) — Read-only web query tool boundaries.

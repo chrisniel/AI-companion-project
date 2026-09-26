@@ -62,22 +62,22 @@ docs/04_Architecture/
    - **Multimodal and media:** Message image attachments, multimodal vision understanding, and media metadata ([`01_Domains/multimodal-and-media.md`](01_Domains/multimodal-and-media.md)).
    - **Android Companion:** Connected synchronization protocol, offline LLM execution boundaries, and mobile companion behavior ([`01_Domains/android-companion.md`](01_Domains/android-companion.md)).
 2. **`02_Data_and_Security/` (Data & Security Architecture):**
-   - **Profiles and devices:** Identity boundaries, device registration, and single-primary-user baseline *(planned)*.
-   - **Authentication and secrets:** Credential isolation, token handling, and trusted network boundaries *(planned)*.
-   - **Tool permissions and actions:** Risk tiers, deterministic policy evaluation (`ALLOW` / `CONFIRM` / `DENY`), and elevated action restrictions *(planned)*.
-   - **Privacy / retention / audit:** Data minimization, user consent, audit logging, and deletion policies *(planned)*.
+   - **Profiles and devices:** Identity boundaries, device registration, and single-primary-user baseline ([`02_Data_and_Security/profiles-and-devices.md`](02_Data_and_Security/profiles-and-devices.md)).
+   - **Authentication and secrets:** Credential isolation, token handling, and trusted network boundaries ([`02_Data_and_Security/authentication-and-secrets.md`](02_Data_and_Security/authentication-and-secrets.md)).
+   - **Tool permissions and actions:** Risk tiers, deterministic policy evaluation (`ALLOW` / `CONFIRM` / `DENY`), and elevated action restrictions ([`02_Data_and_Security/tool-permissions-and-actions.md`](02_Data_and_Security/tool-permissions-and-actions.md)).
+   - **Privacy / retention / audit:** Data minimization, user consent, audit logging, and deletion policies ([`02_Data_and_Security/privacy-retention-and-audit.md`](02_Data_and_Security/privacy-retention-and-audit.md)).
    *(Boundary note: General memory retrieval, attachment lifecycles, and multimodal storage belong to their respective domain and infrastructure specifications, not to this security/governance group.)*
 3. **`03_Integrations/` (External Services & Integrations):**
    - **Read-only Web / current information:** Provider-independent search, page fetch, and weather context ([`03_Integrations/web-current-information.md`](03_Integrations/web-current-information.md)).
-   - **Health / wearables:** Biometric context data contracts for PC V1; physical wearable synchronization for Android V1 *(planned)*.
+   - **Health / wearables:** Biometric context data contracts for PC V1; physical wearable synchronization for Android V1 ([`03_Integrations/health-and-wearables.md`](03_Integrations/health-and-wearables.md)).
    - **Future external / device integrations:** Explicitly evaluated and approved future service connections *(planned)*.
    *(Boundary note: Voice/audio pipelines and the Android Companion are core experience domains owned by `01_Domains/`, not external integrations.)*
 4. **`04_Infrastructure/` (Host Runtime, Hardware & Platform):**
-   - **Runtime and models:** Local LLM inference via llama.cpp / ONNX, hardware offloading profiles, model management, and optional cloud fallback *(planned)*.
-   - **Storage and assets:** Host filesystem paths, application asset storage, and database migration mechanics *(planned)*.
+   - **Runtime and models:** Local LLM inference via llama.cpp / ONNX, hardware offloading profiles, model management, and optional cloud fallback ([`04_Infrastructure/runtime-and-models.md`](04_Infrastructure/runtime-and-models.md)).
+   - **Storage and assets:** Host filesystem paths, application asset storage, and database migration mechanics ([`04_Infrastructure/storage-and-assets.md`](04_Infrastructure/storage-and-assets.md)).
    - **Windows host and notification infrastructure:** Native OS notification delivery, background autostart at login, and host lifecycle ([`04_Infrastructure/windows-host-and-notifications.md`](04_Infrastructure/windows-host-and-notifications.md)).
-   - **Practical backup / recovery:** Database snapshot and asset recovery mechanisms for PC V1 *(planned)*. *(Note: A full Diagnostics / Recovery Center is an exploratory recommendation and is NOT an approved PC V1 capability.)*
-   - **Performance / capacity:** Resource governance, background throttling, and low-impact gaming modes *(planned)*.
+   - **Practical backup / recovery:** Database snapshot and asset recovery mechanisms for PC V1 ([`04_Infrastructure/backup-recovery-and-diagnostics.md`](04_Infrastructure/backup-recovery-and-diagnostics.md)). *(Note: A full Diagnostics / Recovery Center is an exploratory recommendation and is NOT an approved PC V1 capability.)*
+   - **Performance / capacity:** Resource governance, background throttling, and low-impact gaming modes ([`04_Infrastructure/performance-and-capacity.md`](04_Infrastructure/performance-and-capacity.md)).
 5. **`decisions/` (Architectural Decision Records):**
    - Formal records of architecturally significant decisions, context, trade-offs, and consequences.
 
