@@ -44,7 +44,7 @@ In accordance with Decision D9 and Principle P1:
 ### 2.3 Conceptual Risk Tiers (Decision D9)
 
 Risk tiers represent a conceptual architecture for categorizing operations, **not** a promise that runtime tool implementations currently exist for every listed example:
-- **Risk 0 (Read-Only / Information):** Safe, bounded information retrieval (e.g., read-only weather context, public search snippets, listing companion tasks). Policy resolves to `ALLOW` when enabled.
+- **Risk 0 (Read-Only / Information):** Safe, bounded information retrieval (e.g., read-only weather context, public search snippets, listing companion tasks). Risk 0 actions MAY resolve to `ALLOW` when enabled and permitted by deterministic policy. Policy architecture retains `ALLOW` / `CONFIRM` / `DENY`.
 - **Risk 1 (Reversible Low-Impact Personal Operations):** Internal personal mutations (e.g., create task, create non-alarm reminder, harmless preference update). Policy may resolve to `ALLOW`, `CONFIRM`, or `DENY`.
 - **Risk 2 (Significant State Change):** Significant personal or external state mutations (e.g., delete task/conversation, external message transmission, web form submission, model uninstall, sensitive configuration change). Explicit confirmation required by default. Ordinary destructive deletes are classified as Risk 2, not Risk 3.
 - **Risk 3 (Privileged / Prohibited Generic Capabilities):** Privileged or unrestricted generic system capabilities (e.g., arbitrary shell / PowerShell, unrestricted filesystem authority, credential access, raw OS/device administration, network/security reconfiguration). Generic Risk 3 capabilities remain strictly **`REJECTED`**.
@@ -55,7 +55,7 @@ In accordance with the Feature Promotion Map (**Generic Shell / OS Administratio
 - **Classification:** `REJECTED / NOT STARTED / N/A`.
 - **Policy Invariant:** Unrestricted command-line shell execution (e.g., arbitrary `cmd.exe`, PowerShell, Bash, raw OS process spawning, unrestricted filesystem traversal, credential access, or security reconfiguration) is **strictly prohibited** as a generic assistant tool.
 - **No PC Later Promotion:** Generic shell tools must **NOT** be classified as `PC LATER` or scheduled for future delivery.
-- **Narrow Privileged Actions:** Any future system administration capabilities must be designed as separate, narrow, typed adapters with bounded inputs, explicit confirmation gates, and complete audit logging.
+- **Narrow Privileged Actions:** Any future system administration capabilities must be designed as separate, narrow, typed adapters with bounded inputs, explicit confirmation gates, and auditable execution appropriate to the action and security policy.
 
 ### 2.5 Interactive Browser Automation Phasing
 
@@ -93,7 +93,8 @@ The following technical mechanisms remain open design for future technical speci
 
 - **Tool Registry Mechanism:** Specific architecture of the tool schema catalog (e.g., centralized registry vs. distributed decorator/adapter registration).
 - **Confirmation Channel & Token Design:** Concrete user interaction mechanism for confirmations (e.g., frontend interactive modal, out-of-band token issuance, temporary cryptographic grant).
-- **Audit Coverage, Schema & Storage:** Specific audit ledger design, including whether audit logs are persisted in a dedicated SQLite table, file append log, or structured event stream, and exact criteria for audit coverage.
+- **Audit Coverage, Schema & Storage:** Specific audit ledger design, including whether audit logs are persisted in a dedicated SQLite table, file append log, or structured event stream, schema fields, and persistence duration.
+- **Resource Bounds & Limiting:** Exact timeout, memory, payload, and concurrency limits are adapter-specific open design.
 - **Policy Persistence Schema:** Database schema for storing user permission grants, tool enable/disable toggles, and auto-execute allowances.
 - **Permission UX:** User interface presentation for confirmation modals (e.g., diff previews, parameter inspection, and "Always allow for this session" toggles).
 - **Tool Cancellation API:** Mechanism allowing users or the orchestrator to cancel an in-flight tool execution cleanly.
@@ -105,7 +106,7 @@ The following technical mechanisms remain open design for future technical speci
 
 - **Prompt Injection Defense (Decision D9):** The deterministic policy engine executes entirely outside the LLM context. Malicious prompts or prompt injections embedded in external data cannot bypass policy evaluation or grant auto-execute status to tools.
 - **BOLA Enforcement in Tool Adapters:** Every tool adapter modifying personal records must bind operations strictly to the authenticated `owner_id`.
-- **Resource Limits:** Tool executions enforce bounded timeouts and memory caps to prevent denial-of-service or hangs during adapter execution.
+- **Resource Limits:** Tool adapters must apply appropriate bounded resource controls for their capability and threat model. Exact timeout, memory, payload, and concurrency limits are adapter-specific open design.
 
 ---
 

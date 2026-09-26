@@ -31,7 +31,7 @@ In accordance with Phase 8P persistent storage architecture:
 The current repository implementation utilizes SQLite operating with:
 - **Write-Ahead Logging (`WAL`):** Concurrency mode allowing concurrent readers without blocking background writers (`PRAGMA journal_mode=WAL;`).
 - **Foreign Key Enforcement:** Strict referential integrity enforcement on every connection (`PRAGMA foreign_keys=ON;`).
-- **Engine-Level Write Serialization & Busy Timeout:** SQLite serializes writes at the database engine level; the current configuration sets `busy_timeout` and `synchronous=NORMAL` to prevent database locks from failing under concurrent operations. There is no custom application-level write-serialization lock in `session.py`.
+- **Engine-Level Write Serialization & Busy Timeout:** SQLite serializes writes at the engine level. The configured `busy_timeout` allows lock contention to wait for a bounded interval rather than failing immediately; it does not provide an application-level single-writer lock.
 - **Implementation Status:** SQLite/WAL represents current verified implementation, not an eternal storage-engine invariant locked across all future phases.
 
 ### 2.3 Migration Safety & Preflight Baseline

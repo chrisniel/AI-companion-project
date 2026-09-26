@@ -22,7 +22,7 @@ This specification defines the integration architecture, data contracts, and pri
 ### 2.1 Phased Delivery Boundaries (PC V1 vs. Android V1)
 
 In accordance with the Feature Promotion Map:
-- **PC V1: Health-Context Ready Architecture:** Classified as `APPROVED / NOT STARTED / PC V1`. PC V1 establishes conceptual data schemas, companion context injection rules, and readiness for receiving summarized wellness data. **PC V1 does NOT directly connect to physical wearables or Bluetooth biometric sensors.**
+- **PC V1: Health-Context Ready Architecture:** Classified as `APPROVED / NOT STARTED / PC V1`. PC V1 establishes health-context/data-contract readiness and the semantic boundaries required to receive appropriately summarized wellness context. **PC V1 does NOT directly connect to physical wearables or Bluetooth biometric sensors.**
 - **Android V1: Android Health Connect Integration:** Classified as `APPROVED / NOT STARTED / ANDROID V1`. Physical collection of biometric context occurs via the Android Companion device leveraging Android's platform-standard Health Connect API.
 
 ### 2.2 Vendor Decoupling & Platform Integration (Android V1)
@@ -45,14 +45,16 @@ Repository source code establishes the following baseline reality:
 ### 3.1 Android Provider Interface & UI Foundation
 
 Verified in `android/app/src/main/java/com/example/`:
-- **Interface Contract (`HealthDataProvider`):** Located at `data/health/HealthDataProvider.kt`, defines an abstract contract with methods:
-  - `getSourceStatus(): HealthSourceStatus`
-  - `getHealthMetrics(timeRange: TimeRange): HealthMetrics`
-  - `getWellnessInsights(timeRange: TimeRange): List<WellnessInsight>`
-  - `observeSourceStatus(): Flow<HealthSourceStatus>`
-  - `observeHealthMetrics(timeRange: TimeRange): Flow<HealthMetrics>`
-  - `observeWellnessInsights(timeRange: TimeRange): Flow<List<WellnessInsight>>`
-  - `triggerSync(): Boolean`
+- **Interface Contract (`HealthDataProvider`):** Located at `data/health/HealthDataProvider.kt`, defines an abstract contract with exact properties and methods:
+  - `val providerId: String`
+  - `val providerDisplayName: String`
+  - `fun getSourceStatus(): HealthSourceStatus`
+  - `fun getHealthMetrics(timeRange: HealthTimeRange): List<HealthMetric>`
+  - `fun getWellnessInsights(timeRange: HealthTimeRange): List<WellnessInsight>`
+  - `fun observeSourceStatus(): Flow<HealthSourceStatus>`
+  - `fun observeHealthMetrics(timeRange: HealthTimeRange): Flow<List<HealthMetric>>`
+  - `fun observeWellnessInsights(timeRange: HealthTimeRange): Flow<List<WellnessInsight>>`
+  - `suspend fun triggerSync()`
 - **Mock Implementation (`MockHealthDataProvider`):** Located at `data/health/MockHealthDataProvider.kt`, supplies synthetic biometric values across selectable availability profiles (`STANDARD_DEFAULT`, `ALL_AVAILABLE`, `STALE_SYNC`, `UNSUPPORTED_SENSOR`, `NOT_SYNCHRONIZED`).
 - **Health UI & ViewModel:** `ui/screens/health/HealthScreen.kt` and `HealthViewModel.kt` render biometric dashboards (heart rate, sleep, steps, SpO2) driven by the provider interface.
 - **Testing Coverage:** Unit tests in `AccessibilityAndDeviceAuditTest.kt` and `HealthAndWellnessUnitTest.kt` verify UI rendering and profile switching against the mock provider.

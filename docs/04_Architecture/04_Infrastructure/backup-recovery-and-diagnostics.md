@@ -21,12 +21,12 @@ This specification defines disaster recovery, database snapshot mechanics, asset
 ### 2.1 Critical Status Distinctions (PC V1 vs. Exploratory)
 
 In accordance with the Feature Promotion Map and README authoring standards:
-- **Practical Backup & Recovery (`APPROVED / NOT STARTED / PC V1`):** A mandatory requirement for PC V1 ensuring users can safely export, backup, and restore their companion database and associated personal assets without data loss.
+- **Practical Backup & Recovery (`APPROVED / NOT STARTED / PC V1`):** PC V1 requires practical backup and recovery of the persistent database and required referenced assets with integrity-preserving restore verification. The archive and export mechanism remains open design.
 - **Full Diagnostics / Recovery Center (`EXPLORATORY / UNAPPROVED / FUTURE`):** An exploratory audit recommendation for a dedicated desktop recovery console, deep log visualizer, or automated self-healing center. **This is NOT an approved PC V1 capability.** The presence of "Diagnostics" in this specification's title must **never** be used to silently promote a Diagnostics Center into PC V1.
 
 ### 2.2 Backup Consistency Invariants (PC V1 Durable Requirement)
 
-- **Practical Recovery Requirement:** PC V1 requires practical recovery of the companion's persistent database and required referenced assets with safe restore verification.
+- **Practical Recovery Requirement:** PC V1 requires practical backup and recovery of the persistent database and required referenced assets with integrity-preserving restore verification.
 - **Database-Asset Referential Coherence:** Backup and recovery mechanisms must preserve referential coherence between database records (conversations, messages, attachments) and required referenced physical assets (such as attachments and character assets).
 - **Safe Restore Verification:** Restoration procedures must perform preflight checks (such as integrity verification and schema compatibility checks) before overwriting active database state to prevent data corruption.
 
@@ -83,7 +83,7 @@ The following implementation choices remain open design for future technical spe
 ## 6. Security & Ownership Boundaries
 
 - **Backup Credential Protection:** Backup archives must **never** package cleartext API keys, third-party credentials, or environment secrets. When restored on a new machine, authentication tokens must be re-established.
-- **Restore Authorization:** Restoring a backup archive replaces active state; restoration requires local host confirmation to prevent unauthorized overwrite.
+- **Restore Authorization:** Restore operations require explicit local authorization/confirmation and must preserve integrity. Exact restoration semantics (full-profile replacement vs. selective merge vs. entity-level restore) remain open design.
 - **Encryption for Offsite Storage:** Passphrase encryption for archives placed in untrusted storage remains an open design candidate.
 
 ---

@@ -23,7 +23,7 @@ This specification defines the privacy preservation principles, data retention l
 
 - **Data Minimization:** The companion collects, retains, and transmits only the minimal data necessary to fulfill conversational and functional duties.
 - **Explicit User Deletion Authority:** Users must have appropriate inspect, correct, delete, and forget controls over Profile-owned personal data across all domain models (conversations, memories, tasks, attachments). Deletion operations do not promise immediate permanent hard deletion across every domain, cache, and backup snapshot; exact soft-delete vs. hard-purge lifecycles remain governed by explicit retention and privacy policy.
-- **Owner Isolation Invariant:** Retention policies, trash purges, and deletion operations must execute strictly within the authenticated `owner_id` boundary. A purge operation initiated by or on behalf of one user can never affect records belonging to another.
+- **Owner Isolation Invariant:** Deletion and purge operations must preserve authenticated ownership boundaries, either through direct owner filtering or through an already owner-authorized parent/resource relationship. A purge operation initiated by or on behalf of one user can never affect records belonging to another. Host-controlled maintenance jobs may operate across the single-primary-user database when explicitly designed as global maintenance.
 
 ### 2.2 Privacy-Safe Auditing Invariants
 
@@ -42,7 +42,7 @@ Verified in `backend/app/models/task.py`, `backend/app/core/config.py`, and `bac
 - **Soft-Delete Support:** `Task` includes `is_deleted: Mapped[bool]` and `deleted_at: Mapped[Optional[datetime]]` via `SoftDeleteMixin`.
 - **Recycle Bin Lifespan:** `settings.DATA_RETENTION_DAYS = 30` configures the default retention window.
 - **Remaining Days Calculation:** `calculate_remaining_days(deleted_at, retention_days)` calculates days remaining before permanent purge.
-- **Automated Purge Service:** `purge_expired_trash(db, retention_days, owner_id)` permanently removes (`DELETE FROM tasks`) soft-deleted tasks older than the retention threshold with strict owner filtering.
+- **Automated Purge Service:** `purge_expired_trash(db, retention_days=None, owner_id=None)` permanently removes (`DELETE FROM tasks`) soft-deleted tasks older than the retention threshold. It supports an optional `owner_id` filter: when `owner_id` is supplied, the purge is owner-scoped; when omitted, the host maintenance runner can sweep expired soft-deleted Tasks globally across the database.
 - **Standalone Purge Runner:** Implemented in `backend/app/services/retention.py` through `run_retention_purge_job()` and its `__main__` CLI runner (`python -m app.services.retention`).
 - **Scope Boundary:** `DATA_RETENTION_DAYS` and `purge_expired_trash` **currently govern only Tasks**. They do **not** automatically apply to or purge memories, conversations, or attachments.
 
@@ -99,7 +99,7 @@ The following technical mechanisms remain open design for future technical speci
 ## 6. Security & Ownership Boundaries
 
 - **Zero Cleartext Credential Logging:** API keys, pairing tokens, session secrets, and passwords must never appear in application logs or audit records.
-- **Owner Scope Isolation:** Deletion and purge routines must always include `owner_id` constraints to prevent accidental multi-user or cross-profile data leakage.
+- **Owner Scope Isolation:** Deletion and purge operations must preserve authenticated ownership boundaries, either through direct owner filtering or through an already owner-authorized parent/resource relationship.
 - **Tamper Resistance:** Where security audit records are maintained, they should be append-only and protected against non-administrative modification.
 
 ---

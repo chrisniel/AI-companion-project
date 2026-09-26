@@ -81,7 +81,7 @@ The following technical mechanisms remain open design for future implementation 
 ## 6. Security & Ownership Boundaries
 
 - **Standard User Privilege:** Process monitoring and resource throttling must operate under standard user permissions without requiring Windows administrative privileges or installing kernel-level filter drivers.
-- **Deterministic Override Precedence:** Explicit user settings take absolute precedence over automated background heuristics.
+- **Deterministic Override Precedence:** User-configured policy preferences participate in deterministic resource governance. Exact precedence between user overrides, resource-safety limits, and automated heuristics remains open design.
 - **Safe State Recovery:** When recovering from throttled or suspended states, the runtime must gracefully resume internal clocks and schedulers without dropping pending alarms or corrupting state.
 
 ---

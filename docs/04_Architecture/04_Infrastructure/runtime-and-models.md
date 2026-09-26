@@ -21,9 +21,7 @@ This specification defines the local inference runtime, hardware execution model
 
 ### 2.1 Local-First & Hardware Independence
 
-### 2.1 Local-First & Hardware Independence
-
-- **Local Inference is Primary & Default:** The AI Companion is architected fundamentally as a private, locally hosted AI system. Core and local companion operation remains fully supported without cloud LLM dependency, and local-only mode remains valid. Naturally network-dependent features (such as web search and current information) require network connectivity.
+- **Local Inference is Primary & Default:** The AI Companion is architected fundamentally as a private, locally hosted AI system. Core/local companion operation remains supported without cloud LLM dependency, and local-only operation remains valid. Naturally network-dependent integrations such as Web Search, Fetch, Weather, or current information require network connectivity.
 - **Provider & Hardware Independence:** The conversational orchestrator interacts with language models through an abstract provider interface. The architecture does not permanently lock a single runtime binary, backend driver, or hardware vendor. While the current implementation utilizes `llama.cpp` over Vulkan, the durable architecture accommodates ONNX Runtime, DirectML, ROCm, CUDA, or alternative execution engines where separately approved.
 - **Bounded Resource Residency:** Resource residency must remain bounded and safe for host capacity. Current implementation uses `LLAMA_ROUTER_MODELS_MAX = 1` as reference resource policy. Future multi-model residency remains open design.
 
@@ -64,16 +62,16 @@ Repository source code establishes the following baseline reality:
 ### 3.1 Provider Abstraction & llama.cpp Driver
 
 Verified in `backend/app/services/llm/`:
-- **Provider Interface (`base.py`):** Defines abstract class `BaseLLMProvider` with methods:
-  - `provider_name` (property)
-  - `load_model(model_name: str, **kwargs) -> bool`
-  - `unload_model() -> bool`
+- **Provider Interface (`base.py`):** Defines abstract class `BaseLLMProvider` with exact contract:
+  - `@property provider_name -> str`
+  - `async load_model(model_name: Optional[str] = None, profile: Optional[str] = None) -> bool`
+  - `async unload_model() -> bool`
   - `is_loaded() -> bool`
-  - `set_profile(profile_name: str) -> bool`
-  - `get_status() -> Dict[str, Any]`
-  - `generate(prompt: str, **kwargs) -> Dict[str, Any]`
-  - `generate_stream(prompt: str, **kwargs) -> AsyncIterator[str]`
-  - `shutdown()`
+  - `async set_profile(profile: str) -> bool`
+  - `async get_status() -> ModelStatusResponse`
+  - `async generate(messages: List[ChatMessage], temperature: float = 0.7, max_tokens: int = 1024, **kwargs) -> str`
+  - `async generate_stream(messages: List[ChatMessage], temperature: float = 0.7, max_tokens: int = 1024, **kwargs) -> AsyncGenerator[str, None]`
+  - `async shutdown() -> None`
 - **Concrete Providers:**
   - `LlamaCppProvider` (`llama_cpp.py`): Connects to a local router or launches standalone `llama-server.exe`, tracks Core-managed process state, loads/unloads models via router API, applies profiles, and idle-unloads models. Supports Server-Sent Events (SSE) token streaming via OpenAI-compatible endpoints (`/v1/chat/completions`).
   - `MockLLMProvider` (`mock.py`): Supplies deterministic synthetic token streams for testing.
@@ -135,7 +133,7 @@ The following technical mechanisms remain open design for future implementation 
 
 ## 6. Security & Ownership Boundaries
 
-- **Local Inference Isolation:** Local inference generates zero outbound network traffic. Prompt tokens, character lore, and conversational history remain entirely on host RAM/VRAM.
+- **Local Inference Isolation:** Local inference requires no external/cloud network egress by default. Current llama.cpp integration may use localhost/loopback HTTP between local processes. Prompt tokens, character lore, and conversational history remain entirely on host RAM/VRAM.
 - **Cloud Egress Sanitization:** If cloud fallback is engaged, system prompts and context assembly must enforce privacy redaction policies, stripping sensitive profile identifiers, and health data must never be egressed without explicit authorization.
 - **Safe Model Format Boundary:** Durable safety rule: Never execute arbitrary untrusted code merely because it is packaged as a model asset. Unsafe executable or deserialization formats (e.g., raw Python pickles) require explicit safe handling or are rejected by the relevant importer. Current llama.cpp provider uses GGUF tensor format; safe runtime-specific formats (e.g., ONNX) may be supported where separately approved.
 

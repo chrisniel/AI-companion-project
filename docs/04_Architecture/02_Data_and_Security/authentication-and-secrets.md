@@ -24,7 +24,7 @@ This specification defines the cryptographic authentication mechanisms, secret s
 
 In accordance with Decision D5:
 - **Fail-Closed by Construction:** All companion endpoints require explicit cryptographic authentication by default. Endpoints are protected unless explicitly assigned to a strictly bounded public whitelist.
-- **Proximity is Not Authentication:** Physical or network-layer proximity (such as sharing the same local Wi-Fi router or subnet) does **not** grant implicit trust or bypass authentication. Network proximity never substitutes for application auth. All client connections—whether originating on loopback, local LAN, or VPN—must present valid authentication credentials.
+- **Proximity is Not Authentication:** Physical or network-layer proximity (such as sharing the same local Wi-Fi router or subnet) does **not** grant implicit trust or bypass authentication. Network proximity never substitutes for application auth. All protected companion API interactions require valid application authentication regardless of network proximity. Explicitly whitelisted, minimal public probes such as `GET /api/v1/health` remain bounded exceptions.
 - **Master Secret Containment:** Master runtime administrative secrets and third-party API credentials are held strictly on the host runtime machine and are **never** transmitted to or stored on client endpoints. Database encryption passphrases do not currently exist and are not a required secret class unless encryption-at-rest is separately approved.
 
 ### 2.2 Supported Trust Topologies
