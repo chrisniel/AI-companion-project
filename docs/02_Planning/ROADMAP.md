@@ -103,7 +103,7 @@ AI Companion **V1** (unqualified) is strictly defined as the first complete, sta
    - Selective automatic and assistant-proposed memory capture under deterministic policy with user visibility, inspection, correction, and deletion controls (sensitive, ambiguous, or transient statements must not silently become permanent facts; extraction model, confidence logic, cadence, and schema remain OPEN DESIGN).
 5. **Tasks, Reminders, Alarms & Bounded Routines:** Distinct entity semantics under Decision D10.
    - Task CRUD, soft-delete, and retention thresholds are implemented and verified in the baseline.
-   - Scheduled reminder execution with catch-up logic, time-critical alarm alerts with best-effort wake, quiet hours with per-item emergency overrides, and bounded companion routines under deterministic scheduler proactivity (character layer controls phrasing; scheduler engine and schemas remain OPEN DESIGN).
+   - Scheduled reminder execution with catch-up logic, time-critical alarm alerts with best-effort wake, quiet hours with per-item overrides (without universal automatic all-alarm bypass; exact default Alarm urgency behavior remains OPEN DESIGN), and bounded companion routines under deterministic scheduler proactivity (character layer controls phrasing; scheduler engine and schemas remain OPEN DESIGN).
 6. **Model Library & Runtime Management:** Schema v3 registry, GGUF binary header parsing, runtime offload profiles (Eco/Balanced/Maximum), logical model vs. artifact separation.
 7. **Controlled Local Model Import Pipeline:** Deterministic import flow: `inbox` → `preflight` → `staging` → `atomic install` → `library` → `registry` (Decision D6). Completing the execution service is an approved PC V1 implementation gap.
 8. **Multimodal Vision Understanding:** Phase 8B image attachment API, upload validation guards (MIME, dimension, megapixel, bomb guards), and vision-model inference.
@@ -117,12 +117,12 @@ AI Companion **V1** (unqualified) is strictly defined as the first complete, sta
 13. **Safe Typed Conversational Actions:**
     - Deterministic DEFAULT DENY action execution engine (Decision D9).
     - Four-tier risk matrix (Risk 0–3): Risk 0 and approved Risk 1 actions (e.g., personal reads, creating personal tasks/reminders) may auto-execute only when policy resolves ALLOW. Retains deterministic ALLOW / CONFIRM / DENY outcomes. Confirmation dialogs, token limits, and audit log persistence remain OPEN DESIGN. Arbitrary command shell / PowerShell is permanently REJECTED.
-14. **Read-Only Public Current Information:** Provider-independent `WebSearch`, `Fetch`, and weather/public-information capabilities with transparent egress. Specific services (e.g., Tavily, Open-Meteo) remain candidate adapters. Interactive browser automation is decoupled and scheduled for PC Later.
+14. **Read-Only Public Current Information:** Provider-independent `WebSearch`, `Fetch`, and weather/public-information capabilities with SSRF/network containment, untrusted external content handling, privacy minimization, source provenance, and credential isolation from client/prompt context. Specific services (e.g., Tavily, Open-Meteo) remain candidate adapters. Interactive browser automation is decoupled and scheduled for PC Later.
 15. **Optional Cloud LLM Fallback:** Strictly opt-in fallback with explicit user credentials and egress transparency; local inference remains default and primary, and full local-only operation remains fully supported.
 16. **Windows Host Autostart at Login:** Local AI Runtime configured to start automatically on Windows user login (Decision D2; exact Windows launch mechanism remains OPEN DESIGN).
 17. **Native Windows Notification Delivery:** Direct OS notification delivery decoupled from open browser tabs (Decisions D2 and D10; ensures reminders, alarms, and routines alert the user even when the browser client is closed; exact notification adapter remains OPEN DESIGN).
-18. **Gaming / Low-Impact Resource Policy:** Capability-level dynamic resource policy to throttle or pause background companion tasks during active gaming or heavy foreground workloads (exact throttling mechanism and detection remain OPEN DESIGN).
-19. **Practical Backup & Recovery:** Practical database snapshot and asset recovery capability (exact mechanism remains OPEN DESIGN; Diagnostics & Recovery Center remains an audit recommendation requiring separate approval, not an automatic PC V1 requirement).
+18. **Gaming / Low-Impact Resource Policy:** Ability to enter a lower-impact resource policy during heavy foreground workloads while preserving required companion behavior and notification integrity (exact detection, throttling, pausing, GPU offload layer adjustments, CPU thread limits, and automatic versus manual activation remain OPEN DESIGN).
+19. **Practical Backup & Recovery:** Practical backup and recovery of persistent database state and required referenced assets, with integrity-preserving restore verification (exact snapshot mechanism, archive format, compression, manifest schema, scheduling, and restore implementation remain OPEN DESIGN; Diagnostics & Recovery Center remains an audit recommendation requiring separate approval, not an automatic PC V1 requirement).
 20. **PC Health-Context Readiness:** Conceptual data contracts and storage readiness for health and wearable context within the Local AI Runtime; physical Health Connect integration belongs to Android V1.
 21. **Release Hardening & Verification:** Secure configuration defaults, migration safety preflight, and CI pipeline stability verified before release.
 22. **Integrated Golden PC V1 Acceptance Journey:** End-to-end companion verification path proving seamless operation across all PC V1 capabilities. (Listed as a mandatory PC V1 capability; detailed acceptance journey design is owned by Pass R12.3).
@@ -156,7 +156,7 @@ The tracks below represent approved PC capabilities scheduled for milestones fol
 - **Richer Emotion Models:** Advanced multi-dimensional emotional state dynamics.
   - *Canonical Owner:* [`docs/04_Architecture/01_Domains/characters-personality-and-emotion.md`](../04_Architecture/01_Domains/characters-personality-and-emotion.md).
 - **Advanced Presence:** Live2D / VRM / contextual presentation state.
-  - *Canonical Owner:* [`docs/04_Architecture/01_Domains/multimodal-and-media.md`](../04_Architecture/01_Domains/multimodal-and-media.md).
+  - *Canonical Owner:* [`docs/04_Architecture/01_Domains/characters-personality-and-emotion.md`](../04_Architecture/01_Domains/characters-personality-and-emotion.md).
 - **Interactive Browser Automation:** Automated form filling, authenticated navigation, and web interaction (e.g., local Playwright provider); decoupled from PC V1 read-only current information.
   - *Canonical Owner:* [`docs/04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md`](../04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md).
 - **Native Desktop Shell:** Dedicated container packaging (e.g., Tauri, Electron) and system tray minification.
@@ -165,7 +165,7 @@ The tracks below represent approved PC capabilities scheduled for milestones fol
   - *Canonical Owner:* [`docs/04_Architecture/01_Domains/memory-and-personalization.md`](../04_Architecture/01_Domains/memory-and-personalization.md).
 - **Managed Online Model Downloading:** In-app browsing and background downloading from public model hubs (e.g., Hugging Face); exact downloader and hub integration remain open design.
   - *Canonical Owner:* [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](../04_Architecture/04_Infrastructure/runtime-and-models.md).
-- **Narrow, Typed Privileged Actions:** Separately designed, bounded, explicitly authorized, and audited high-risk tools (if ever evaluated; strictly distinct from generic command shell).
+- **Narrow, Typed Privileged Actions (Conditional Security Boundary — NOT A COMMITTED DELIVERY MILESTONE):** If future elevated actions are ever separately evaluated and approved, they must be strictly narrow, typed, bounded, explicitly authorized, and auditable. Generic arbitrary shell / PowerShell / unrestricted OS administration remains permanently REJECTED. Speculative privileged tools are not a scheduled release milestone.
   - *Canonical Owner:* [`docs/04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md`](../04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md).
 
 ### 4.3 Evaluated / Experimental: Future / Unscheduled
@@ -193,7 +193,7 @@ The following architectural directions are approved, while their specific techni
 2. **Device Pairing Protocol (`OPEN DESIGN`):** Per-device revocable credentials locked (Decision D4); exact enrollment UX (QR code, numeric phrase, LAN discovery) and cryptographic handshake remain open.
 3. **Windows Host Process Launcher (`OPEN DESIGN`):** Decoupled background runtime locked (Decision D2); exact mechanism (Windows Service, scheduled task, startup shortcut, or native launcher) remains open.
 4. **Mobile Model Selection (`OPEN DESIGN`):** Tested envelope (~0.27B–1.24B) demonstrated viable; permanent model candidate, quantization format, and minimum hardware tier remain open.
-5. **Universal Default TTS Engine (`OPEN DESIGN`):** Provider abstraction locked; universal default engine across PC and mobile remains open pending formal voice benchmarking.
+5. **TTS Provider & Default Selection (`OPEN DESIGN`):** Provider abstraction locked. PC conversational voice provider and default engine selection remain OPEN DESIGN pending formal voice benchmarking. Android device-local TTS remains EXPERIMENTAL / FUTURE / UNSCHEDULED; any on-device mobile TTS provider selection becomes relevant only if that capability is separately evaluated, approved, and scheduled.
 6. **Tool Permission Schema & Confirmation UI (`OPEN DESIGN`):** 4-tier risk matrix locked (Decision D9); exact confirmation UI dialogs, token limits, and audit log persistence schema remain open.
 7. **Llama-Server Crash Recovery Policy (`OPEN DESIGN`):** Need for crash recovery recognized; exact retry limits, exponential backoff, and driver-hang timeouts remain open.
 
