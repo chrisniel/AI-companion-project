@@ -2,7 +2,7 @@
 
 > **Document Role:** Focused staged domain architecture specification (Pass R11.1).  
 > **Status:** Active Working Specification — **AUTHORITY TRANSFER PENDING R11.4**.  
-> **Authority Precedence:** This document is authored as part of the staged documentation reconciliation. Primary canonical authority remains in [`docs/04_Architecture/MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../MEMORY_AND_CHARACTER_ARCHITECTURE.md) and [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) until the formal R11.4 Authority Transfer Gate is reviewed and authorized.
+> **Authority Precedence:** This document is authored as part of the staged documentation reconciliation. Primary canonical authority remains in [`docs/04_Architecture/MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../MEMORY_AND_CHARACTER_ARCHITECTURE.md) and [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§4 / §7, Decision D11) until the formal R11.4 Authority Transfer Gate is reviewed and authorized.
 
 ---
 
@@ -21,37 +21,43 @@ It governs the boundary between stable user profile data and interchangeable com
 
 ## 2. Durable Architecture & Invariants
 
-### 2.1 The Five-Way Entity Decoupling (Decision D11)
+### 2.1 The Complete D11 Entity Separation Model
 
-In accordance with Decision D11, companion character systems enforce strict conceptual and architectural separation across five distinct layers:
+In accordance with Decision D11, companion character systems enforce strict conceptual and architectural separation across distinct entities:
 
 1. **Profile (User Root Authority):**
-   - Owns user identity, credentials, personal preferences, tasks, schedules, and memories.
-   - Remains immutable across character changes. A Character never owns Profile data.
-2. **Character (Lore & Identity Persona):**
-   - Defines persona identity, backstory lore, display name, visual avatar/portrait assets, and system prompt framing.
+   - Owns user identity, user data, personal preferences, tasks, schedules, and memories.
+   - In accordance with Decision D4, device authentication credentials remain separated from profile-owned personal data (Profile does not own client device credentials).
+   - Character switching must never mutate or reassign Profile ownership or Profile-owned personal data. A Character never owns Profile data.
+2. **Conversation:**
+   - Belongs to the user Profile.
+   - References a specific Character persona; conversation history remains permanently bound to that Character as recorded.
+3. **Character (Lore & Identity Persona):**
+   - Defines persona identity, backstory lore, display name, visual avatar/portrait assets, and persona/system-prompt composition.
    - May reference a preferred Personality style and preferred Voice configuration.
    - Characters do not own conversations; conversations reference characters.
-3. **Personality (Behavioral Style & Traits):**
+4. **Personality (Behavioral Style & Traits):**
    - Distinct from lore or visual assets; governs behavioral mannerisms, verbosity, humor, formality, and communication traits.
-   - Configurable independently from the character's backstory (e.g., the same character lore can operate with varying formality levels).
-4. **Emotion (Transient Companion Tone Modulation):**
+   - Configurable independently from character backstory (e.g., the same character lore can operate with varying formality levels).
+5. **Emotion (Transient Companion Tone Modulation):**
    - Lightweight, transient, conceptual companion state (e.g., cheerful, focused, reflective).
    - Serves solely to modulate conversational tone, phrasing nuance, or non-blocking UI expressions.
    - Strictly non-clinical: makes zero psychological, therapeutic, or sentient claims.
    - Operates without blocking assistant execution or tool invocation.
-5. **Voice (Acoustic & Prosodic Configuration):**
+6. **Voice (Acoustic & Prosodic Configuration):**
    - Decoupled speech synthesis configuration (e.g., target voice identifier, speed, pitch, prosody).
    - Interchangeable across TTS providers without modifying character lore or personality schemas.
+7. **Presence (Contextual & Presentation State):**
+   - Distinct, bounded contextual and presentation concept reflecting companion and environment awareness.
+   - Advanced Presence remains scheduled for **PC Later**; exact signals, sensor integrations, persistence models, and privacy boundaries remain OPEN DESIGN.
+   - Existing PC V1 capabilities (such as Gaming / Low-Impact Resource Mode) may expose contextual host signals without implying a full Presence subsystem is implemented.
+8. **Relationship State (Interaction Continuity — PC Later):**
+   - Represents long-term interaction continuity and familiarity depth.
+   - Formally decoupled from Personality and Emotion under Decision D11.
+   - Scheduled for **PC Later** (not a PC V1 milestone requirement).
+   - Strictly opt-in and hidden by default; user controls are required, while the exact reset lifecycle remains OPEN DESIGN.
 
-### 2.2 Relationship State Decoupling (PC Later)
-
-- **Relationship State:** Represents long-term interaction continuity and familiarity depth.
-- Formally decoupled from Personality and Emotion under Decision D11.
-- Scheduled for **PC Later** (not a PC V1 milestone requirement).
-- Strictly opt-in, disabled and hidden by default, and user-resettable at any time.
-
-### 2.3 Character Switching Invariants
+### 2.2 Character Switching Invariants
 
 Switching active companion characters must **never**:
 - Delete, alter, or hide user memories, profile attributes, or task records.
@@ -92,13 +98,11 @@ Repository source code and frontend truthfulness test suites verify the followin
 The following target capabilities are approved under Decision D11:
 
 1. **Persistent Character Configuration (PC V1):**
-   - Host-backed storage for custom and predefined character profiles (name, avatar URI, lore, prompt injection templates).
+   - Host-backed storage for custom and predefined character profiles (e.g., name, avatar reference, lore, persona/system-prompt composition, personality and voice references). Exact schema remains OPEN DESIGN.
 2. **Decoupled Personality Configuration (PC V1):**
-   - Structured style trait settings (e.g., verbosity scale, humor frequency, technical depth) evaluated during system prompt compilation.
+   - Structured style trait settings (e.g., verbosity scale, humor frequency, technical depth) evaluated during persona/system-prompt composition.
 3. **Lightweight Conceptual Emotion State (PC V1):**
    - Ephemeral companion state tracking that subtly influences tone without state-locking the assistant or impairing tool utility.
-4. **Presence Readiness (PC V1):**
-   - Bounded host contextual state (e.g., user active on desktop, idle, gaming mode active) providing non-intrusive awareness.
 
 ---
 
@@ -106,18 +110,19 @@ The following target capabilities are approved under Decision D11:
 
 The following implementation choices remain intentionally open for architectural investigation:
 
-- **Database Schemas:** Exact SQLite relational schema for characters, personality trait profiles, and voice mappings.
+- **Database Schemas:** Exact SQLite relational schema, column definitions, and foreign keys for character profiles, personality traits, and voice associations.
 - **Personality Trait Taxonomy:** The exact dimensions and mathematical/categorical representation of personality sliders.
 - **Emotion Dynamics & Decay:** The state space, trigger sensitivity, decay rate (e.g., returning to baseline mood over time), and prompt framing mechanics.
-- **Presence Signals & Sensors:** Which host OS signals (window focus, input idle timers) feed presence without compromising user privacy.
-- **Relationship State Mechanics (PC Later):** Progression algorithms, safety boundaries, and opt-in user controls.
+- **Presence Architecture:** Signals, host sensors, privacy controls, and presentation models for PC Later.
+- **Relationship State Mechanics (PC Later):** Progression algorithms, safety boundaries, user controls, and lifecycle.
+- **Character Deletion Handling:** Deleting or resetting a Character must never delete Profile-owned data; exact handling of Character-scoped memories during Character deletion remains user-controlled and open design.
 
 ---
 
 ## 6. Security & Ownership Boundaries
 
 - **Profile Primacy:** Character profiles, personality configs, and emotion state are subordinate to the user Profile. A character has zero data authority over the user.
-- **Privacy & Prompt Injection:** Character lore and system prompts must not override hard safety constraints or security policy gates established in `02_Data_and_Security/tool-permissions-and-actions.md`.
+- **Privacy & Prompt Injection:** Character lore and persona prompts must not override hard safety constraints or security policy gates established in `02_Data_and_Security/tool-permissions-and-actions.md`.
 - **User Erasure:** Resetting or deleting a character persona never touches underlying user memories, tasks, or profile identity.
 
 ---
@@ -125,6 +130,6 @@ The following implementation choices remain intentionally open for architectural
 ## 7. Canonical Relationships & Cross-Links
 
 - **Canonical Architecture Source:** [`docs/04_Architecture/MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../MEMORY_AND_CHARACTER_ARCHITECTURE.md) (Retains primary authority until R11.4)
-- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§2 Core Architecture, Decision D11)
-- **Feature Promotion Manifest:** [`docs/02_Planning/FEATURE_PROMOTION_MAP.md`](../../02_Planning/FEATURE_PROMOTION_MAP.md) (Rows 70, 71, 72, 73)
+- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§4 / §7, Decision D11)
+- **Feature Promotion Manifest:** [`docs/02_Planning/FEATURE_PROMOTION_MAP.md`](../../02_Planning/FEATURE_PROMOTION_MAP.md) (Character Configuration Persistence, Separate Personality Configuration, Lightweight Conceptual Emotion, Relationship State)
 - **UI Design Presentation:** [`docs/05_Design/README.md`](../../05_Design/README.md) (Emotion presentation visual boundaries)

@@ -2,7 +2,7 @@
 
 > **Document Role:** Focused staged domain architecture specification (Pass R11.1).  
 > **Status:** Active Working Specification — **AUTHORITY TRANSFER PENDING R11.4**.  
-> **Authority Precedence:** This document is authored as part of the staged documentation reconciliation. Primary canonical authority remains in [`docs/04_Architecture/MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../MEMORY_AND_CHARACTER_ARCHITECTURE.md) and [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) until the formal R11.4 Authority Transfer Gate is reviewed and authorized.
+> **Authority Precedence:** This document is authored as part of the staged documentation reconciliation. Primary canonical authority remains in [`docs/04_Architecture/MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../MEMORY_AND_CHARACTER_ARCHITECTURE.md) and [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§4 / §7, Decision D7) until the formal R11.4 Authority Transfer Gate is reviewed and authorized.
 
 ---
 
@@ -32,7 +32,7 @@ It governs the boundary between ephemeral conversation turns and durable compani
 ### 2.2 User Agency, Transparency & Forgetting
 
 - **Transparency:** All stored memories must be inspectable and reviewable by the user through dedicated management interfaces.
-- **Unrestricted Deletion:** The user retains an absolute right to edit, correct, or permanently delete ("forget") any memory item at any time.
+- **User Control & Deletion:** The user can inspect, correct, delete/forget, and control stored memories. Exact soft-delete, hard-purge, retention, audit, and backup lifecycles are governed by the privacy/retention architecture and remain subject to explicit policy.
 - **Context Injection Security:** Retrieved memories are injected into LLM context as untrusted user-supplied facts. Memories must never override core system prompts, character invariants, or safety policies.
 
 ### 2.3 Retrieval Technology Independence
@@ -62,7 +62,12 @@ Verified in `app.services.memory.retriever`:
   ```python
   MEMORY_BUDGET_TOKENS: int = 256  # app.core.config.Settings (Current Implementation Constant)
   ```
-- **CRUD Endpoints:** Implemented in `app.api.v1.endpoints.memories` (`GET /`, `POST /`, `GET /{id}`, `PATCH /{id}`, `DELETE /{id}`).
+- **Implemented API Endpoints:** Verified in `backend/app/api/v1/endpoints/memories.py`:
+  - `GET /api/v1/memories`: Lists active memories owned by the authenticated user, optionally filtered by category.
+  - `POST /api/v1/memories`: Creates a new manual memory record (synced automatically to FTS5).
+  - `PATCH /api/v1/memories/{memory_id}`: Updates memory content, category, or importance.
+  - `DELETE /api/v1/memories/{memory_id}`: Soft-deletes a memory (`is_deleted = True`, `deleted_at = now()`; triggers remove it from FTS5 index).
+  *(Note: A dedicated single-item `GET /api/v1/memories/{memory_id}` endpoint is NOT implemented in current source.)*
 
 ### 3.3 Explicitly Unimplemented Capabilities
 
@@ -79,11 +84,11 @@ The following target capabilities are approved under Decision D7 and the Feature
 1. **Selective Automatic / Assistant-Proposed Memory (PC V1):**
    - The assistant evaluates conversation turns for clear, stable facts, personal preferences, or explicit corrections.
    - **Quality Guardrails:** Sensitive personal data, ambiguous statements, transient emotional vents, or fleeting topics must **never** be silently persisted as permanent facts.
-   - Captured items are marked with explicit provenance (`source_type="assistant_extracted"`) and remain visible for user confirmation, modification, or dismissal.
-2. **Schema-Level Scope Support (PC V1):**
-   - Migration introducing explicit `scope` (`PROFILE` vs. `CHARACTER`) and optional `character_id` foreign associations to the `memories` table.
+   - Automatically proposed/captured memories retain provenance identifying their origin and verification state, remaining visible for user confirmation, modification, or dismissal. Exact field names, enum values, and schema remain OPEN DESIGN.
+2. **Semantic Scoping Support (PC V1):**
+   - PC V1 persistence must support the approved `PROFILE` / `CHARACTER` semantic scoping model. Exact persistence representation remains OPEN DESIGN.
 3. **Semantic / Vector Memory (PC Later):**
-   - Post-PC-V1 enhancement adding dense vector embeddings and approximate nearest neighbor (ANN) retrieval alongside lexical search for improved conceptual recall.
+   - Post-PC-V1 enhancement adding dense vector embeddings and similarity retrieval alongside lexical search for improved conceptual recall. Exact vector index, embedding model, and hybrid retrieval algorithms remain OPEN DESIGN.
 
 ---
 
@@ -93,9 +98,9 @@ The following implementation choices remain intentionally open for architectural
 
 - **Extraction Model & Prompting:** Whether memory extraction runs inline within the primary chat model turn or asynchronously via a specialized background task.
 - **Extraction Cadence & Thresholds:** Trigger frequency, confidence scoring models, and user verification notification thresholds.
-- **Vector Embedding Provider:** Embedding model family (e.g., local ONNX runtime embeddings vs. CPU-based embedding models) for PC Later.
-- **Hybrid Retrieval Balancing:** Mathematical weighting between lexical FTS5 BM25 scores and vector cosine similarity.
-- **Scope Representation:** Exact Alembic migration schema for supporting `PROFILE` and `CHARACTER` scopes.
+- **Vector Embedding Provider & Index (PC Later):** Embedding model family, execution runtime, and vector search algorithms.
+- **Hybrid Retrieval Balancing:** Mathematical weighting between lexical FTS5 scores and semantic vector similarity.
+- **Persistence Representation:** Exact database schema for supporting `PROFILE` and `CHARACTER` scopes without prematurely constraining implementation to specific column structures.
 
 ---
 
@@ -110,6 +115,6 @@ The following implementation choices remain intentionally open for architectural
 ## 7. Canonical Relationships & Cross-Links
 
 - **Canonical Architecture Source:** [`docs/04_Architecture/MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../MEMORY_AND_CHARACTER_ARCHITECTURE.md) (Retains primary authority until R11.4)
-- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§2 Core Architecture, Decision D7)
-- **Feature Promotion Manifest:** [`docs/02_Planning/FEATURE_PROMOTION_MAP.md`](../../02_Planning/FEATURE_PROMOTION_MAP.md) (Rows 56, 57, 74)
+- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§4 / §7, Decision D7)
+- **Feature Promotion Manifest:** [`docs/02_Planning/FEATURE_PROMOTION_MAP.md`](../../02_Planning/FEATURE_PROMOTION_MAP.md) (Memory Persistence & Retrieval, Selective Automatic Memory, Semantic / Vector Memory)
 - **Character Domain Specification:** [`docs/04_Architecture/01_Domains/characters-personality-and-emotion.md`](characters-personality-and-emotion.md) (Character identity boundaries)
