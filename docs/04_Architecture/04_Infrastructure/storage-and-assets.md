@@ -26,18 +26,21 @@ In accordance with Phase 8P persistent storage architecture:
 - **Single Source of Truth (`COMPANION_DATA_ROOT`):** All persistent application paths derive deterministically from a single root path. Subsystems must never invent independent storage directories outside this canonical hierarchy.
 - **Machine-Agnostic Storage Semantics:** Architecture defines path families, relative structures, and resolution precedence. Concrete absolute paths on specific developer machines are not canonical.
 
-### 2.2 Database Engine & Transaction Invariants
+### 2.2 Database Engine & Storage Configuration (Current Implementation)
 
-- **SQLite Engine Baseline:** The primary database is SQLite, operating with:
-  - **Write-Ahead Logging (`WAL`):** Concurrency mode allowing concurrent readers without blocking background writers (`PRAGMA journal_mode=WAL;`).
-  - **Foreign Key Enforcement:** Strict referential integrity enforcement on every connection (`PRAGMA foreign_keys=ON;`).
-  - **Single Writer Isolation:** Serialized write access prevents database lock contention across concurrent background tasks.
+The current repository implementation utilizes SQLite operating with:
+- **Write-Ahead Logging (`WAL`):** Concurrency mode allowing concurrent readers without blocking background writers (`PRAGMA journal_mode=WAL;`).
+- **Foreign Key Enforcement:** Strict referential integrity enforcement on every connection (`PRAGMA foreign_keys=ON;`).
+- **Engine-Level Write Serialization & Busy Timeout:** SQLite serializes writes at the database engine level; the current configuration sets `busy_timeout` and `synchronous=NORMAL` to prevent database locks from failing under concurrent operations. There is no custom application-level write-serialization lock in `session.py`.
+- **Implementation Status:** SQLite/WAL represents current verified implementation, not an eternal storage-engine invariant locked across all future phases.
 
-### 2.3 Migration Safety & Preflight Invariants
+### 2.3 Migration Safety & Preflight Baseline
 
 - **Non-Destructive Schema Evolution:** Database schema migrations must never execute destructively on unverified data.
-- **Preflight Inspection:** Before applying Alembic migrations or initializing a database, the runtime inspects existing candidates, verifies SQLite integrity (`PRAGMA integrity_check;`), and evaluates migration lineage.
-- **Pre-Migration Safety Snapshot:** Before executing any migration step that alters schema or rewires data, the storage layer creates an atomic copy of the active database into `BACKUP_DIR`.
+- **Migration & Schema Preparation Flow:**
+  - `execute_migration()` creates a logical SQLite backup snapshot while migrating a legacy database into canonical storage, verifies it, atomically promotes it, and preserves a backup copy.
+  - `prepare_database_schema()` then upgrades the canonical database to Alembic head.
+  - Current source does **not** guarantee a fresh backup snapshot immediately before every Alembic schema migration of an already-canonical database.
 
 ---
 
@@ -49,32 +52,34 @@ Repository source code establishes the following baseline reality:
 
 Verified in `backend/app/core/storage.py` (`resolve_data_root()`):
 1. **Environment Variable Override:** `COMPANION_DATA_ROOT` environment variable takes highest precedence (used in testing and custom hosting).
-2. **Bootstrap Locator File:** Reads `.companion_data_root` located in the backend root directory.
-3. **OS-Default User Path:** On Windows, defaults to `%LOCALAPPDATA%\AICompanion\data` (resolved via `os.environ.get("LOCALAPPDATA")`).
+2. **Bootstrap Locator File:** Reads the `data_root` field from `bootstrap.json` located at `%LOCALAPPDATA%\AI Companion\bootstrap.json` on Windows.
+3. **Approved OS Default:** On Windows, defaults to `%LOCALAPPDATA%\AI Companion\Data` (resolved via `LOCALAPPDATA`).
 
 ### 3.2 Canonical Path Taxonomy
 
-Verified in `app.core.storage.CanonicalPaths` and `app.core.config.Settings`:
-- `DATABASE_DIR` / `DATABASE_PATH`: Directory and file for primary SQLite database (`companion.db`).
-- `DATABASE_URL`: SQLAlchemy connection URI (`sqlite+aiosqlite:///...`).
-- `LIBRARY_DIR`: Root for media and asset libraries.
-- `MODEL_LIBRARY_DIR`: Permanent directory for installed GGUF models (`models/`).
-- `INSTALLED_REGISTRY_PATH`: Persistent user model registry (`models/installed_registry.json`).
-- `VOICE_LIBRARY_DIR`: Voice model weights and speaker profiles (`voice/`).
-- `ATTACHMENT_DIR`: Stored image files associated with messages (`attachments/`).
-- `IMPORT_INBOX_DIR`: User drop directory for new GGUF models (`inbox/`).
-- `IMPORT_STAGING_DIR`: Verification scratch directory during D6 model import (`staging/`).
-- `CHARACTER_DIR`: Persistent character lore cards and avatars (`characters/`).
-- `MEMORY_DIR`: Vector/lexical index storage artifacts (`memory/`).
-- `BACKUP_DIR`: Automatic pre-migration database snapshots (`backups/`).
+Verified in `app.core.storage.CanonicalPaths`:
+- `DATABASE_DIR`: `<root>/database`
+- `DATABASE_PATH`: `<root>/database/companion.db`
+- `LIBRARY_DIR`: `<root>/library`
+- `MODEL_LIBRARY_DIR`: `<root>/library/models/llm`
+- `INSTALLED_REGISTRY_PATH`: `<root>/library/registry/models.json`
+- `VOICE_LIBRARY_DIR`: `<root>/library/voices`
+- `ATTACHMENT_DIR`: `<root>/attachments`
+- `IMPORT_INBOX_DIR`: `<root>/imports/inbox`
+- `IMPORT_STAGING_DIR`: `<root>/imports/staging`
+- `CHARACTER_DIR`: `<root>/characters`
+- `MEMORY_DIR`: `<root>/memory`
+- `BACKUP_DIR`: `<root>/backups`
 
 ### 3.3 Database Migrations & Safety Runner
 
 Verified in `backend/app/core/storage.py` and `backend/alembic/`:
 - **Current Migration Head:** `006_add_attachments` is the current repository migration head *(current verified reality, not a permanent identifier)*.
-- **Preflight Verifier:** `inspect_database_candidate(path)` verifies SHA256 checksum, reads `alembic_version`, and executes `PRAGMA integrity_check`.
-- **Ambiguity Guard:** If multiple legacy databases are detected with differing contents, `assess_migration()` raises `MigrationAmbiguityError` requiring manual user resolution, preventing silent data overwrite.
-- **Snapshot Generator:** Copies active database to `pre_migration_backup_<timestamp>.db` before migration execution.
+- **Preflight & Legacy Migration Functions:**
+  - `inspect_legacy_candidate()` verifies candidate SQLite database files, checksums, and schema versions.
+  - `assess_migration_preflight()` inspects potential legacy databases and guards against ambiguous multi-candidate states.
+  - `execute_migration()` copies legacy SQLite data into canonical storage, verifies integrity, promotes it atomically, and preserves a backup copy.
+  - `prepare_database_schema()` executes Alembic upgrades on the canonical database.
 
 ---
 
@@ -82,9 +87,8 @@ Verified in `backend/app/core/storage.py` and `backend/alembic/`:
 
 When implemented for PC V1:
 
-1. **Storage Relocation Utility:** A safe management command or settings action allowing users to move their `COMPANION_DATA_ROOT` to another drive (e.g., secondary SSD) with automatic file relocation and bootstrap pointer update.
-2. **Automated Trash Cleanup Integration:** Storage hooks coordinating with the retention policy to unlink orphaned or permanently deleted attachment files from `ATTACHMENT_DIR`.
-3. **Integrated Asset Verification Tool:** Command-line diagnostic that checks all database attachment records against physical files on disk, reporting missing or unreferenced assets.
+1. **Canonical Data-Root Containment:** Continued strict enforcement that all persistent application data derives deterministically from `COMPANION_DATA_ROOT`.
+2. **Safe Schema Evolution:** Schema migration procedures that preserve data integrity without unverified destructive alterations.
 
 ---
 
@@ -92,8 +96,10 @@ When implemented for PC V1:
 
 The following technical mechanisms remain open design for future implementation plans:
 
-- **Storage Layout Versioning:** Migration strategies for evolving the physical directory structure (e.g., transitioning from flat `attachments/` to sharded `attachments/{year}/{month}/`).
-- **Relocation User Interface:** Frontend visual settings screen for viewing disk space consumption and initiating data-root migration.
+- **Storage Relocation Utility & UX:** Design of management commands or settings UI enabling users to relocate `COMPANION_DATA_ROOT` across drives.
+- **Integrated Asset Verification Tool:** Diagnostic tooling checking database records against physical files on disk.
+- **Attachment Trash-Cleanup System:** Automated trash sweep mechanisms coordinating between retention policy and physical file unlinking.
+- **Storage Layout Versioning:** Migration strategies for evolving the physical directory structure (e.g., sharding attachments by date).
 - **Encryption-at-Rest Strategy:** Optional whole-database or sensitive-field encryption (evaluating SQLCipher vs. application-layer AES-GCM envelope encryption).
 - **Asset Deduplication:** Content-addressable storage (CAS) or hash-based deduplication for identical image attachments uploaded across conversations.
 
@@ -102,8 +108,8 @@ The following technical mechanisms remain open design for future implementation 
 ## 6. Security & Ownership Boundaries
 
 - **Strict Path Containment:** Access to stored files (attachments, models, avatars) strictly enforces path containment checks (`path.is_relative_to(base_dir)`) to prevent directory traversal attacks.
-- **Restricted Directory Permissions:** The persistent data root is initialized with user-private filesystem permissions, preventing other unprivileged local OS accounts from inspecting companion databases.
-- **Atomicity Guarantees:** File writes to configuration and registry files use atomic write-and-rename patterns (`tempfile` $\rightarrow$ `replace`) to prevent file corruption during sudden system crashes or power losses.
+- **Filesystem Permissions:** The current implementation creates required directories using standard OS permissions; bespoke or custom filesystem ACL management is not currently implemented.
+- **Verified Atomic Writers:** `write_bootstrap()` uses a temporary file and `os.replace` for atomic replacement; atomic file replacement is limited to verified writers rather than globally across all files.
 
 ---
 

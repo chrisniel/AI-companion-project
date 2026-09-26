@@ -25,14 +25,14 @@ In accordance with the Feature Promotion Map:
 - **PC V1: Health-Context Ready Architecture:** Classified as `APPROVED / NOT STARTED / PC V1`. PC V1 establishes conceptual data schemas, companion context injection rules, and readiness for receiving summarized wellness data. **PC V1 does NOT directly connect to physical wearables or Bluetooth biometric sensors.**
 - **Android V1: Android Health Connect Integration:** Classified as `APPROVED / NOT STARTED / ANDROID V1`. Physical collection of biometric context occurs via the Android Companion device leveraging Android's platform-standard Health Connect API.
 
-### 2.2 Vendor Decoupling & Health Connect as Standard
+### 2.2 Vendor Decoupling & Platform Integration (Android V1)
 
 - **No Proprietary Vendor Lock-In:** The companion architecture explicitly avoids direct SDK or Bluetooth integration with proprietary wearable manufacturers (e.g., FitCloudPro, Garmin, Fitbit, Xiaomi). Upstream manufacturer apps write to the operating system's health store.
-- **Health Connect as Single Mobile Ingress:** Android V1 integrates exclusively with the native Android Health Connect platform. The companion reads summarized data from Health Connect subject to explicit Android OS permissions, remaining completely independent of specific wearable hardware models or vendor apps.
+- **Approved Android V1 Platform Integration:** Health Connect is the approved Android V1 platform integration and provides a vendor-decoupled path for supported wearable data. Android V1 reads summarized metrics from Health Connect subject to explicit Android OS permissions, remaining independent of specific wearable hardware models or vendor apps. Future additional integrations require separate approval.
 
 ### 2.3 Non-Clinical & Privacy Invariants
 
-- **Informational Companion Context Only:** Health metrics serve solely to provide empathetic, contextual awareness for the companion (e.g., recognizing that the user had poor sleep, high activity, or an elevated heart rate to adjust conversational tone or suggest breaks). The companion makes **no clinical, medical, or diagnostic claims**.
+- **Informational Companion Context Only:** Health metrics serve solely to provide empathetic, contextual awareness for the companion. The companion makes **no clinical, medical, or diagnostic claims**.
 - **Explicit User Authorization:** Ingestion of biometric data requires active, informed user consent. Users may selectively grant or revoke access to individual metric categories at any time.
 - **Data Minimization:** Only coarse-grained, aggregated summaries (e.g., daily resting heart rate, sleep duration and stages, total steps) are ingested into conversational prompt context. High-frequency raw sensor streams (e.g., continuous per-second photoplethysmography rasters) are never requested or retained.
 
@@ -45,7 +45,14 @@ Repository source code establishes the following baseline reality:
 ### 3.1 Android Provider Interface & UI Foundation
 
 Verified in `android/app/src/main/java/com/example/`:
-- **Interface Contract (`HealthDataProvider`):** Located at `data/health/HealthDataProvider.kt`, defines an abstract contract for querying health metrics (`getDailySummary()`, `getSourceStatus()`).
+- **Interface Contract (`HealthDataProvider`):** Located at `data/health/HealthDataProvider.kt`, defines an abstract contract with methods:
+  - `getSourceStatus(): HealthSourceStatus`
+  - `getHealthMetrics(timeRange: TimeRange): HealthMetrics`
+  - `getWellnessInsights(timeRange: TimeRange): List<WellnessInsight>`
+  - `observeSourceStatus(): Flow<HealthSourceStatus>`
+  - `observeHealthMetrics(timeRange: TimeRange): Flow<HealthMetrics>`
+  - `observeWellnessInsights(timeRange: TimeRange): Flow<List<WellnessInsight>>`
+  - `triggerSync(): Boolean`
 - **Mock Implementation (`MockHealthDataProvider`):** Located at `data/health/MockHealthDataProvider.kt`, supplies synthetic biometric values across selectable availability profiles (`STANDARD_DEFAULT`, `ALL_AVAILABLE`, `STALE_SYNC`, `UNSUPPORTED_SENSOR`, `NOT_SYNCHRONIZED`).
 - **Health UI & ViewModel:** `ui/screens/health/HealthScreen.kt` and `HealthViewModel.kt` render biometric dashboards (heart rate, sleep, steps, SpO2) driven by the provider interface.
 - **Testing Coverage:** Unit tests in `AccessibilityAndDeviceAuditTest.kt` and `HealthAndWellnessUnitTest.kt` verify UI rendering and profile switching against the mock provider.
@@ -63,12 +70,11 @@ Verified in `android/app/src/main/java/com/example/`:
 When implemented across target milestones:
 
 1. **PC V1 Backend Readiness:**
-   - Formalized Pydantic schemas and database models for storing ingested daily health summaries associated with a Profile.
-   - Assistant context assembly hook injecting coarse health summaries (e.g., sleep score, activity level) into the prompt context when relevant.
+   - Capability- and data-contract readiness for receiving and injecting summarized wellness context into companion conversational turns.
+   - Decoupled contracts enabling health context ingestion without locking storage schemas prematurely.
 2. **Android V1 Production Integration:**
-   - Real `HealthConnectDataProvider` implementing `HealthDataProvider` using Android's official Health Connect Client API.
-   - Declarative permission requests for reading sleep sessions, heart rate records, and step counts.
-   - Sync service transferring aggregated daily health summaries from Android to the PC Local AI Runtime during connected synchronization sessions.
+   - Platform integration with Android Health Connect to read authorized user health records and transfer summarized health metrics to the PC Local AI Runtime during connected synchronization sessions.
+   - Declarative permission requests for reading supported health records (such as sleep sessions, heart rate records, and step counts).
 
 ---
 
@@ -76,6 +82,8 @@ When implemented across target milestones:
 
 The following functional and technical mechanisms remain open design for future implementation plans:
 
+- **PC V1 Persistence & Injection Mechanisms:** Exact Pydantic persistence models, database tables, storage schema, and prompt-injection hooks on the PC host.
+- **Android V1 Provider & Aggregation Design:** Exact provider class name, metric set, aggregation cadence, and sync protocol details.
 - **Metric Set & Granularity:** Final list of supported metric types (e.g., resting heart rate, sleep duration/stages, step counts, active energy burned, SpO2) and aggregation intervals (hourly averages vs. daily rollups).
 - **Sync Cadence & Thresholds:** Frequency and trigger mechanisms for syncing mobile health data to the PC host (e.g., once daily on morning companion wake, on-demand during companion check-ins, or scheduled background sync).
 - **Health-Memory Interaction:** Policy governing whether notable health events (e.g., "recovered from a cold", "completed a marathon") are selectively converted into persistent memory notes.
@@ -86,9 +94,9 @@ The following functional and technical mechanisms remain open design for future 
 
 ## 6. Security & Ownership Boundaries
 
-- **Local Host Authority:** Health data synchronized to the PC is owned strictly by the authenticated Profile (`owner_id`) and stored in the local encrypted/protected database. It is never transmitted to external cloud services or LLMs without explicit configuration.
-- **Egress Minimization:** When conversational turns invoke cloud LLM fallbacks (if enabled), health context should be excluded or strictly sanitized to prevent medical data egress.
-- **No Diagnostic Liability:** Companion responses mentioning health must maintain a supportive, non-authoritative persona and encourage professional medical advice for symptoms.
+- **Application Trust Boundary:** Health context synchronized to PC remains Profile-owned local data protected by the application trust boundary. Encryption-at-rest remains open design.
+- **Cloud Fallback Privacy Rule:** When optional Cloud LLM fallback is used, health data must not be included in cloud egress without explicit user authorization and applicable privacy policy.
+- **Informational / Non-Clinical Use:** Health metrics serve solely to provide empathetic, contextual awareness for the companion without making medical or diagnostic claims.
 
 ---
 

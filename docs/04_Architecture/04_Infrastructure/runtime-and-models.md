@@ -21,20 +21,22 @@ This specification defines the local inference runtime, hardware execution model
 
 ### 2.1 Local-First & Hardware Independence
 
-- **Local Inference is Primary & Default:** The AI Companion is architected fundamentally as a private, locally hosted AI system. The companion must remain fully functional with zero internet connectivity and zero external cloud dependencies.
-- **Provider & Hardware Independence:** The conversational orchestrator interacts with language models through an abstract provider interface. The architecture does not permanently lock a single runtime binary, backend driver, or hardware vendor. While current implementations utilize `llama.cpp` over Vulkan, the durable architecture accommodates ONNX Runtime, DirectML, ROCm, CUDA, or alternative execution engines.
-- **Controlled Concurrency & Single-Residency Invariant:** On consumer workstations, LLM memory residency is carefully managed to prevent VRAM exhaustion and host freeze. Active model residency defaults to one primary conversational model at a time, governed by an idle timeout and explicit unloading.
+### 2.1 Local-First & Hardware Independence
+
+- **Local Inference is Primary & Default:** The AI Companion is architected fundamentally as a private, locally hosted AI system. Core and local companion operation remains fully supported without cloud LLM dependency, and local-only mode remains valid. Naturally network-dependent features (such as web search and current information) require network connectivity.
+- **Provider & Hardware Independence:** The conversational orchestrator interacts with language models through an abstract provider interface. The architecture does not permanently lock a single runtime binary, backend driver, or hardware vendor. While the current implementation utilizes `llama.cpp` over Vulkan, the durable architecture accommodates ONNX Runtime, DirectML, ROCm, CUDA, or alternative execution engines where separately approved.
+- **Bounded Resource Residency:** Resource residency must remain bounded and safe for host capacity. Current implementation uses `LLAMA_ROUTER_MODELS_MAX = 1` as reference resource policy. Future multi-model residency remains open design.
 
 ### 2.2 Model Import Pipeline (Decision D6)
 
 In accordance with Decision D6, local model acquisition enforces a six-stage controlled pipeline:
 $$\text{Inbox} \longrightarrow \text{Preflight} \longrightarrow \text{Staging} \longrightarrow \text{Atomic Install} \longrightarrow \text{Library} \longrightarrow \text{Registry}$$
-1. **Inbox:** User deposits a `.gguf` file into `IMPORT_INBOX_DIR`.
-2. **Preflight:** Inspects file headers, verifies GGUF magic bytes, reads architecture metadata, and estimates VRAM requirements against host capacity.
-3. **Staging:** Moves valid models to `IMPORT_STAGING_DIR` while calculating SHA256 checksums and verifying tensor integrity.
-4. **Atomic Install:** Atomically moves the verified file into the canonical `MODEL_LIBRARY_DIR`.
+1. **Inbox:** User deposits model files into `IMPORT_INBOX_DIR`.
+2. **Preflight:** Inspects file headers, verifies format metadata, and estimates memory requirements against host capacity.
+3. **Staging:** Moves validated models to `IMPORT_STAGING_DIR` for integrity validation.
+4. **Atomic Install:** Atomically moves the verified file into the canonical `MODEL_LIBRARY_DIR` (`COMPANION_DATA_ROOT/library/models/llm`).
 5. **Library:** The file resides in canonical permanent storage under managed paths.
-6. **Registry:** Updates the active `installed_registry.json`, exposing the model with declared capabilities (context length, vision support, recommended prompt template) to the runtime.
+6. **Registry:** Updates the active model registry at `COMPANION_DATA_ROOT/library/registry/models.json`, exposing the model with declared capabilities (context length, vision support, recommended prompt template) to the runtime.
 
 ### 2.3 Managed Online Model Downloading (PC Later)
 
@@ -51,6 +53,7 @@ In accordance with the Feature Promotion Map (**Optional Cloud LLM Fallback**):
   - **Explicit User Credentials:** The user must explicitly supply their own API keys; the companion distributes no default hosted keys.
   - **Egress Transparency:** Any conversational turn or tool execution routed to an external cloud model must clearly indicate external egress to the user.
   - **Local-Only Preserved:** Disabling cloud fallback leaves the companion fully operational in local-only mode.
+  - **Fallback Routing Open Design:** Fallback activation and routing policy remains open design. There is no automatic cloud egress merely because local inference is constrained.
 
 ---
 
@@ -61,16 +64,27 @@ Repository source code establishes the following baseline reality:
 ### 3.1 Provider Abstraction & llama.cpp Driver
 
 Verified in `backend/app/services/llm/`:
-- **Provider Interface (`base.py`):** Defines `LLMProvider` protocol with async methods `generate()`, `generate_stream()`, `get_state()`, and health probes.
+- **Provider Interface (`base.py`):** Defines abstract class `BaseLLMProvider` with methods:
+  - `provider_name` (property)
+  - `load_model(model_name: str, **kwargs) -> bool`
+  - `unload_model() -> bool`
+  - `is_loaded() -> bool`
+  - `set_profile(profile_name: str) -> bool`
+  - `get_status() -> Dict[str, Any]`
+  - `generate(prompt: str, **kwargs) -> Dict[str, Any]`
+  - `generate_stream(prompt: str, **kwargs) -> AsyncIterator[str]`
+  - `shutdown()`
 - **Concrete Providers:**
-  - `LlamaCppProvider` (`llama_cpp.py`): Connects to a local `llama-server.exe` instance via OpenAI-compatible endpoints (`/v1/chat/completions`). Supports Server-Sent Events (SSE) token streaming.
+  - `LlamaCppProvider` (`llama_cpp.py`): Connects to a local router or launches standalone `llama-server.exe`, tracks Core-managed process state, loads/unloads models via router API, applies profiles, and idle-unloads models. Supports Server-Sent Events (SSE) token streaming via OpenAI-compatible endpoints (`/v1/chat/completions`).
   - `MockLLMProvider` (`mock.py`): Supplies deterministic synthetic token streams for testing.
   - **Cloud Providers:** **NOT IMPLEMENTED**. No OpenAI, Anthropic, or external cloud API client adapter exists in `app/services/llm/`.
-- **Router Process Management:** Diagnostic startup is handled via `scripts/start-model.ps1`. The server runs with configuration:
+- **Process Management & Router Constants:** `scripts/start-model.ps1` exists as a diagnostic/helper script, not the primary runtime launcher. Current implementation constants include:
   - Local loopback host: `127.0.0.1` (never `0.0.0.0`).
   - Diagnostic port: `8085` (`LLAMA_ROUTER_PORT`).
   - Auto-unload timeout: `900s` (`LLAMA_ROUTER_IDLE_TIMEOUT`).
   - Model residency cap: `1` (`LLAMA_ROUTER_MODELS_MAX`).
+  - Reference server build: `b10936`.
+  *(These constants represent current implementation reality, not eternal architectural locks).*
 
 ### 3.2 Hardware Profiles & Reference Baseline
 
@@ -85,12 +99,13 @@ Verified in `backend/app/core/config.py`:
 
 Verified in `backend/app/services/model_registry.py`:
 - **Metadata Reader (`read_gguf_metadata`):** Pure-Python binary reader parsing GGUF magic bytes (`0x46554747`), header fields, and key-value string metadata (architecture, context length, chat templates).
-- **Registry Merging:** Merges factory template models (`models/registry.template.json`) with persistent user-installed models (`installed_registry.json`) to generate the effective runtime catalog.
+- **Registry Merging:** Merges factory template models (`models/registry.template.json`) with persistent user-installed models at `COMPANION_DATA_ROOT/library/registry/models.json` to generate the effective runtime catalog.
+- **Canonical Model & Voice Libraries:** Model weights reside in `COMPANION_DATA_ROOT/library/models/llm`; voices reside in `COMPANION_DATA_ROOT/library/voices`.
 
 ### 3.4 Decision D6 Implementation Status vs. Gaps
 
-- **Implemented Components:** Canonical path definitions for `IMPORT_INBOX_DIR`, `IMPORT_STAGING_DIR`, and `MODEL_LIBRARY_DIR` in `app/core/storage.py`; GGUF header validation and metadata parsing in `model_registry.py`.
-- **Implementation Gaps:** Automated background file watching on the inbox folder, automated staging preflight validation workers, and user-facing import REST endpoints are **NOT YET IMPLEMENTED**.
+- **Implemented Components:** Canonical path definitions for `IMPORT_INBOX_DIR`, `IMPORT_STAGING_DIR`, and `MODEL_LIBRARY_DIR` in `app/core/storage.py`; GGUF file discovery and header metadata parsing in `model_registry.py`.
+- **Implementation Gaps:** An executable D6 controlled import workflow/service is **NOT YET IMPLEMENTED**.
 
 ---
 
@@ -98,9 +113,9 @@ Verified in `backend/app/services/model_registry.py`:
 
 When implemented for PC V1:
 
-1. **Automated D6 Import Worker:** An asynchronous filesystem watcher and validation pipeline that moves dropped `.gguf` files through preflight checks, stages them, copies them to the library, and registers them automatically.
-2. **Dynamic Provider Fallback Router:** An orchestration adapter that evaluates local model readiness and seamlessly routes conversational turns to an approved Cloud LLM provider when local resources are constrained or specialized capabilities are requested.
-3. **Model Unload / Reload Management:** Robust host supervision that unloads the LLM process on host idle and safely re-launches it upon conversational demand.
+1. **Executable Controlled Import Workflow:** An executable workflow implementing the D6 stages (inbox $\rightarrow$ preflight $\rightarrow$ staging $\rightarrow$ atomic install $\rightarrow$ library $\rightarrow$ registry). Exact execution mechanisms (such as watcher vs. on-demand worker) remain implementation design.
+2. **Optional Cloud LLM Fallback Router:** An opt-in provider adapter allowing users to configure cloud LLM access with transparent egress indications and strict local-first defaults. Fallback activation and routing policy remains open design.
+3. **Bounded Model Residency & Process Supervision:** Host runtime process supervision that bounds memory residency safely according to host capacity and unloads/reloads models cleanly.
 
 ---
 
@@ -108,19 +123,21 @@ When implemented for PC V1:
 
 The following technical mechanisms remain open design for future implementation plans:
 
+- **Fallback Activation & Routing Policy:** Exact heuristic rules and user toggles for engaging optional cloud fallback (no automatic cloud egress merely because local resources are constrained).
+- **D6 Import Execution Mechanism:** Concrete worker architecture (e.g., asynchronous filesystem watcher vs. scheduled background worker vs. REST-triggered import endpoint).
+- **Integrity & Checksum Algorithms:** Exact hash and tensor verification algorithms for preflight/staging inspection.
+- **Future Multi-Model Residency:** Evaluation of multi-model concurrency for small specialist models (e.g., dedicated classifier, guardrail model, or embedding model concurrent with primary conversational LLM) subject to host capacity.
 - **Cloud Provider Integrations:** Evaluation and selection of supported external cloud APIs (e.g., Anthropic Claude, OpenAI, Google Gemini, OpenRouter) and credential management interfaces.
-- **Routing & Fallback Thresholds:** Exact heuristic rules for triggering cloud fallback (e.g., local server unresponsive, VRAM exhausted, context exceeds local model limits, or user-toggled "High-Reasoning Mode").
 - **Managed Downloader UI & Hub Integration:** Design for searching, queuing, and downloading GGUF quantization variants from Hugging Face Hub (PC Later).
 - **Model Compatibility & Guardrails:** Automated validation preventing users from loading GGUFs incompatible with their system RAM or compute capabilities.
-- **Future Multi-Model Residency:** Evaluation of multi-model concurrency for small specialist models (e.g., dedicated classifier, guardrail model, or embedding model concurrent with primary conversational LLM).
 
 ---
 
 ## 6. Security & Ownership Boundaries
 
 - **Local Inference Isolation:** Local inference generates zero outbound network traffic. Prompt tokens, character lore, and conversational history remain entirely on host RAM/VRAM.
-- **Cloud Egress Sanitization:** If cloud fallback is engaged, system prompts and context assembly must enforce privacy redaction policies, stripping sensitive profile identifiers.
-- **Executable Binary Safety:** All model weights are loaded exclusively via tensor data formats (`.gguf`). Executing untrusted arbitrary code or loading unsafe Python pickle formats (`.bin`, `.pt`) is strictly prohibited.
+- **Cloud Egress Sanitization:** If cloud fallback is engaged, system prompts and context assembly must enforce privacy redaction policies, stripping sensitive profile identifiers, and health data must never be egressed without explicit authorization.
+- **Safe Model Format Boundary:** Durable safety rule: Never execute arbitrary untrusted code merely because it is packaged as a model asset. Unsafe executable or deserialization formats (e.g., raw Python pickles) require explicit safe handling or are rejected by the relevant importer. Current llama.cpp provider uses GGUF tensor format; safe runtime-specific formats (e.g., ONNX) may be supported where separately approved.
 
 ---
 

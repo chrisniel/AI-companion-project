@@ -58,7 +58,7 @@ When implemented for the target companion architecture:
 
 1. **Independent Device Credentials:** Each client endpoint (browser instance, Android phone) receives an independent, distinct device credential during enrollment, rather than possessing the shared master key.
 2. **Revocable Device Access:** The host runtime maintains a persistent device registry enabling the user to view active client endpoints and revoke a specific lost, compromised, or decommissioned device without resetting master secrets or interrupting other paired devices.
-3. **Master Secret Isolation:** Root host administration secrets, master encryption keys, and external service provider API keys are never distributed to client devices.
+3. **Master Secret Isolation:** Root host administration secrets and external service provider API keys are never distributed to client devices.
 
 ---
 

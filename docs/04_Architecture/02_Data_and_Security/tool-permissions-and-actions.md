@@ -27,7 +27,7 @@ In accordance with Decision D9 and Principle P1:
   $$\text{Model} \longrightarrow \text{Typed Request} \longrightarrow \text{Deterministic Policy} \longrightarrow \text{Narrow Adapter} \longrightarrow \text{Capability}$$
   1. **Model:** Emits an intent payload.
   2. **Typed Request:** Schema validation converts raw text into a strictly typed, bounded request object.
-  3. **Deterministic Policy:** External security logic outside the LLM evaluates the request against current permissions, profile policy, risk tiers, and quiet hours.
+  3. **Deterministic Policy:** External security logic outside the LLM evaluates the request against current permissions, profile policy, risk tiers, and (when the action/delivery domain is scheduling- or notification-related) quiet hours.
   4. **Narrow Adapter:** A purpose-built, least-privilege software adapter executes the specific action.
   5. **Capability:** The underlying resource (database, file, or network endpoint) is accessed.
 
@@ -36,18 +36,18 @@ In accordance with Decision D9 and Principle P1:
 - **`DEFAULT DENY` Architecture:** Any unrecognized tool call, invalid schema payload, or action lacking an explicit permission rule is unconditionally rejected (`DENY`).
 - **Deterministic Outcomes:** Policy evaluation produces one of three distinct outcomes:
   - **`ALLOW`**: The tool may execute automatically without interactive user prompts.
-  - **`CONFIRM`**: The tool requires explicit, out-of-band user approval before execution commences.
+  - **`CONFIRM`**: The tool requires explicit user approval before execution commences.
   - **`DENY`**: The tool execution is blocked and rejected back to the orchestrator.
 - **Low-Risk Actions (`ALLOW` Semantics):** Low-risk personal reads, creates, and updates (e.g., retrieving tasks, creating reminders, recording a user memory) **MAY** auto-execute (`ALLOW`) only when the capability is explicitly enabled and deterministic policy permits it. Domain specifications must **not** state that all low-risk operations unconditionally auto-execute.
-- **Destructive & External Actions (`CONFIRM` Semantics):** Irreversible actions, state mutations affecting external services, mass record deletions, or high-risk integrations require explicit user confirmation (`CONFIRM`).
+- **Destructive & External Actions (`CONFIRM` Semantics):** Irreversible actions, state mutations affecting external services, record deletions, or high-risk integrations require explicit user confirmation (`CONFIRM`).
 
-### 2.3 Conceptual Risk Tiers
+### 2.3 Conceptual Risk Tiers (Decision D9)
 
 Risk tiers represent a conceptual architecture for categorizing operations, **not** a promise that runtime tool implementations currently exist for every listed example:
-- **Risk 0 (Read-Only / Ephemeral):** Safe, bounded information reads (e.g., read-only weather context, public search snippets, listing companion tasks).
-- **Risk 1 (Internal Personal Mutations):** User-isolated record creation or updates (e.g., adding a reminder, recording a memory note, updating task status).
-- **Risk 2 (External / State-Changing Mutations):** Non-destructive external calls or significant configuration changes (e.g., sending an outbound notification, modifying companion profile attributes).
-- **Risk 3 (High-Risk / Privileged Operations):** Destructive operations, credential changes, or privileged system actions.
+- **Risk 0 (Read-Only / Information):** Safe, bounded information retrieval (e.g., read-only weather context, public search snippets, listing companion tasks). Policy resolves to `ALLOW` when enabled.
+- **Risk 1 (Reversible Low-Impact Personal Operations):** Internal personal mutations (e.g., create task, create non-alarm reminder, harmless preference update). Policy may resolve to `ALLOW`, `CONFIRM`, or `DENY`.
+- **Risk 2 (Significant State Change):** Significant personal or external state mutations (e.g., delete task/conversation, external message transmission, web form submission, model uninstall, sensitive configuration change). Explicit confirmation required by default. Ordinary destructive deletes are classified as Risk 2, not Risk 3.
+- **Risk 3 (Privileged / Prohibited Generic Capabilities):** Privileged or unrestricted generic system capabilities (e.g., arbitrary shell / PowerShell, unrestricted filesystem authority, credential access, raw OS/device administration, network/security reconfiguration). Generic Risk 3 capabilities remain strictly **`REJECTED`**.
 
 ### 2.4 Unrestricted OS Shell Prohibited
 
@@ -77,21 +77,24 @@ Repository source code establishes the following baseline reality:
 
 ## 4. Approved Target Architecture / Not Yet Implemented (PC V1)
 
-When implemented for PC V1, the tool permission system will provide:
+When implemented for PC V1, the tool permission system establishes durable governance:
 
-1. **Typed Tool Registry:** A central catalog of strictly typed tool schemas exposed to the assistant turn orchestrator.
-2. **Deterministic Policy Evaluator:** An authorization middleware evaluating tool calls against profile settings, device authority, and risk classifications before invoking adapters.
-3. **Interactive Confirmation Channel:** A mechanism enabling the runtime to pause turn processing, prompt the user via the frontend client with action details, and await an explicit confirmation token before executing `CONFIRM`-tier actions.
-4. **Tool Execution Audit Hook:** Immediate recording of all executed or rejected tool calls into a structured audit log.
+1. **Typed Tool Requests:** Strictly typed, validated request objects decoupling model text generation from tool execution.
+2. **Deterministic Policy Evaluation:** Authorization logic evaluating tool requests against profile permissions, risk tiers, and domain-specific rules (such as quiet hours for notification/scheduling tools) prior to invocation.
+3. **Narrow Adapters:** Purpose-built, least-privilege adapters executing permitted capabilities without generic system authority.
+4. **Appropriate Explicit Confirmation:** High-impact or destructive actions (Risk 2) require explicit user confirmation before execution.
+5. **Auditable Security & State-Changing Actions:** State-changing or sensitive actions are auditable where required.
 
 ---
 
 ## 5. OPEN DESIGN
 
-The following technical mechanisms remain open design for future implementation plans:
+The following technical mechanisms remain open design for future technical specification:
 
+- **Tool Registry Mechanism:** Specific architecture of the tool schema catalog (e.g., centralized registry vs. distributed decorator/adapter registration).
+- **Confirmation Channel & Token Design:** Concrete user interaction mechanism for confirmations (e.g., frontend interactive modal, out-of-band token issuance, temporary cryptographic grant).
+- **Audit Coverage, Schema & Storage:** Specific audit ledger design, including whether audit logs are persisted in a dedicated SQLite table, file append log, or structured event stream, and exact criteria for audit coverage.
 - **Policy Persistence Schema:** Database schema for storing user permission grants, tool enable/disable toggles, and auto-execute allowances.
-- **Confirmation Token Lifecycle:** Structure and TTL of cryptographic confirmation tokens issued when user approval is requested.
 - **Permission UX:** User interface presentation for confirmation modals (e.g., diff previews, parameter inspection, and "Always allow for this session" toggles).
 - **Tool Cancellation API:** Mechanism allowing users or the orchestrator to cancel an in-flight tool execution cleanly.
 - **Narrow Privileged Adapter Designs:** Specification of any narrow, typed administrative tools permitted in future releases.

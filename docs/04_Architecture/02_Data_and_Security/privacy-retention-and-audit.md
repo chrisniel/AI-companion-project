@@ -22,12 +22,12 @@ This specification defines the privacy preservation principles, data retention l
 ### 2.1 Privacy Principles & User Deletion Authority
 
 - **Data Minimization:** The companion collects, retains, and transmits only the minimal data necessary to fulfill conversational and functional duties.
-- **Explicit User Deletion Authority:** The user maintains sovereign authority to inspect, edit, soft-delete, and permanently erase personal records across all domain models (conversations, memories, tasks, attachments).
+- **Explicit User Deletion Authority:** Users must have appropriate inspect, correct, delete, and forget controls over Profile-owned personal data across all domain models (conversations, memories, tasks, attachments). Deletion operations do not promise immediate permanent hard deletion across every domain, cache, and backup snapshot; exact soft-delete vs. hard-purge lifecycles remain governed by explicit retention and privacy policy.
 - **Owner Isolation Invariant:** Retention policies, trash purges, and deletion operations must execute strictly within the authenticated `owner_id` boundary. A purge operation initiated by or on behalf of one user can never affect records belonging to another.
 
 ### 2.2 Privacy-Safe Auditing Invariants
 
-- **Auditable State Mutations:** Tool executions that modify system state, access external networks, or perform elevated actions must be auditable by construction where required by the security policy.
+- **Auditable State Mutations (Principle P1):** Tool executions and companion actions that modify system state, access external networks, or perform elevated operations require deterministic, auditable action governance where required by policy.
 - **Redaction of Sensitive Payloads:** Audit logs and application telemetry must **never** indiscriminately persist raw private message bodies, full memory texts, personal photographs, cleartext credentials, or authentication tokens. Audit entries record structured metadata (actor, timestamp, action type, resource identifier, policy evaluation result) rather than full sensitive content.
 
 ---
@@ -38,19 +38,19 @@ Repository source code establishes the following baseline reality, distinguishin
 
 ### 3.1 Task Retention & Recycle Bin Purge
 
-Verified in `backend/app/models/task.py`, `backend/app/core/config.py`, `backend/app/services/retention.py`, and `scripts/purge_data.py`:
+Verified in `backend/app/models/task.py`, `backend/app/core/config.py`, and `backend/app/services/retention.py`:
 - **Soft-Delete Support:** `Task` includes `is_deleted: Mapped[bool]` and `deleted_at: Mapped[Optional[datetime]]` via `SoftDeleteMixin`.
 - **Recycle Bin Lifespan:** `settings.DATA_RETENTION_DAYS = 30` configures the default retention window.
 - **Remaining Days Calculation:** `calculate_remaining_days(deleted_at, retention_days)` calculates days remaining before permanent purge.
 - **Automated Purge Service:** `purge_expired_trash(db, retention_days, owner_id)` permanently removes (`DELETE FROM tasks`) soft-deleted tasks older than the retention threshold with strict owner filtering.
-- **Standalone Purge Script:** `scripts/purge_data.py` provides a manual command-line runner for trash cleanup.
+- **Standalone Purge Runner:** Implemented in `backend/app/services/retention.py` through `run_retention_purge_job()` and its `__main__` CLI runner (`python -m app.services.retention`).
 - **Scope Boundary:** `DATA_RETENTION_DAYS` and `purge_expired_trash` **currently govern only Tasks**. They do **not** automatically apply to or purge memories, conversations, or attachments.
 
 ### 3.2 Memory Deletion Reality
 
 Verified in `backend/app/models/memory.py` and `backend/app/api/v1/endpoints/memories.py`:
 - **Soft-Delete Flag:** `DELETE /api/v1/memories/{memory_id}` sets `memory.is_deleted = True` and `memory.deleted_at = now()`.
-- **Search Filtering:** The FTS retrieval query joins `Memory` and filters `m.is_deleted = 0`, immediately removing soft-deleted memories from search results.
+- **Search Filtering:** The FTS retrieval query joins `Memory` and defensively filters `m.deleted_at IS NULL`, immediately removing soft-deleted memories from search results.
 - **Purge Status:** Automated background hard-purging of soft-deleted memories is **NOT IMPLEMENTED**. Soft-deleted memory rows remain in the database until manual intervention.
 
 ### 3.3 Attachment Deletion Reality
@@ -63,7 +63,7 @@ Verified in `backend/app/models/attachment.py` and `backend/app/api/v1/endpoints
 ### 3.4 Conversation & Message Deletion Reality
 
 Verified in `backend/app/models/conversation.py` and `backend/app/api/v1/endpoints/conversations.py`:
-- **Soft-Delete Support:** Deleting a conversation sets `deleted_at = now()` and soft-deletes associated messages.
+- **Soft-Delete Support:** Deleting a conversation (`DELETE /api/v1/conversations/{id}`) sets `conversation.deleted_at = now()` and bulk soft-deletes active child `Attachment` records. It does **not** currently soft-delete `Message` rows.
 - **Purge Status:** Automated expiration or permanent deletion sweeps are **NOT IMPLEMENTED**.
 
 ### 3.5 Security Audit Status
@@ -77,22 +77,21 @@ Verified in `backend/app/models/conversation.py` and `backend/app/api/v1/endpoin
 
 When implemented for target milestones:
 
-1. **Unified Retention Governance:** Extension of retention lifecycle management across all personal data domains, with configurable retention windows per data class.
-2. **Physical Attachment Trash Sweeps:** Automated background garbage collection that purges physical attachment files when their associated database records are hard-purged.
-3. **Structured Security Audit Ledger:** A dedicated, queryable audit log recording security-critical events (device pairing, token rotation, tool execution confirmation outcomes, configuration updates) with strict payload redaction.
-4. **Permanent Purge Confirmation:** User-initiated "hard delete" actions that immediately and permanently erase selected items without awaiting retention expiration.
+1. **User Deletion & Forget Controls:** Users have appropriate inspect, correct, delete, and forget controls over Profile-owned personal data.
+2. **Auditable Action Governance (Principle P1):** Deterministic, auditable action governance for security-relevant and state-changing actions. The exact audit persistence mechanism remains open design.
+3. **Data Retention & Lifecycle Policies:** Explicit retention policy definitions governing personal records across domains.
 
 ---
 
 ## 5. OPEN DESIGN
 
-The following technical mechanisms remain open design for future implementation plans:
+The following technical mechanisms remain open design for future technical specification:
 
-- **Audit Event Schema:** Specific fields and format for security audit records (e.g., event UUID, UTC timestamp, actor device ID, action name, target resource ID, outcome enum, signature).
-- **Retention Periods by Data Class:** Granular default retention and auto-trash policies for conversations vs. tasks vs. memories vs. attachments.
-- **Attachment Hard-Purge Cadence:** Scheduling and batching strategy for background physical file unlink sweeps.
-- **Memory Hard-Purge Lifecycle:** Protocol for permanently vacuuming or removing soft-deleted entries from SQLite tables and FTS virtual indexes.
-- **Backup Interaction with Deletion:** Handling of deleted records across existing database backup snapshots (e.g., ensuring restored backups respect subsequent "forget" requests).
+- **Soft Delete vs. Hard Purge Timing:** Granular default retention windows and auto-trash policies for conversations vs. tasks vs. memories vs. attachments.
+- **Audit Coverage, Schema & Storage:** Specific audit ledger design, including whether audit logs are persisted in a dedicated SQLite table, file append log, or structured event stream, and exact criteria for audit coverage.
+- **Physical Asset Cleanup Design:** Architecture and scheduling for attachment physical file garbage collection sweeps following record deletion.
+- **Backup Interaction with Deletion:** Handling of deleted records across existing database backup snapshots, including tombstones and restore/deletion reconciliation (ensuring restored backups respect subsequent "forget" requests).
+- **Unified Retention Scheduling:** Whether retention cleanup runs via a unified scheduled service or domain-specific maintenance hooks.
 - **Data Export & Portability:** Design for single-click user data export (e.g., structured JSON/ZIP archive of conversations, memories, and attachments).
 
 ---

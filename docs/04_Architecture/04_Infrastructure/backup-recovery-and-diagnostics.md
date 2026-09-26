@@ -24,11 +24,11 @@ In accordance with the Feature Promotion Map and README authoring standards:
 - **Practical Backup & Recovery (`APPROVED / NOT STARTED / PC V1`):** A mandatory requirement for PC V1 ensuring users can safely export, backup, and restore their companion database and associated personal assets without data loss.
 - **Full Diagnostics / Recovery Center (`EXPLORATORY / UNAPPROVED / FUTURE`):** An exploratory audit recommendation for a dedicated desktop recovery console, deep log visualizer, or automated self-healing center. **This is NOT an approved PC V1 capability.** The presence of "Diagnostics" in this specification's title must **never** be used to silently promote a Diagnostics Center into PC V1.
 
-### 2.2 Backup Consistency Invariants
+### 2.2 Backup Consistency Invariants (PC V1 Durable Requirement)
 
-- **Atomic Database Snapshotting:** SQLite database backups must be taken using SQLite's online backup API or read-locked snapshots to guarantee transaction consistency without database corruption.
-- **Database-Asset Referential Coherence:** A backup archive must maintain referential coherence between database rows (conversations, messages, attachments) and associated physical binary files on disk (`ATTACHMENT_DIR`, `CHARACTER_DIR`).
-- **Pre-Restoration Verification:** Restoration routines must perform preflight checks (checksum validation, schema version compatibility, SQLite integrity verification) before overwriting an active database.
+- **Practical Recovery Requirement:** PC V1 requires practical recovery of the companion's persistent database and required referenced assets with safe restore verification.
+- **Database-Asset Referential Coherence:** Backup and recovery mechanisms must preserve referential coherence between database records (conversations, messages, attachments) and required referenced physical assets (such as attachments and character assets).
+- **Safe Restore Verification:** Restoration procedures must perform preflight checks (such as integrity verification and schema compatibility checks) before overwriting active database state to prevent data corruption.
 
 ---
 
@@ -38,36 +38,29 @@ Repository source code establishes the following baseline reality:
 
 ### 3.1 Implemented Backup & Diagnostic Mechanisms
 
-Verified in `backend/app/core/storage.py`, `backend/app/core/logging.py`, and `backend/app/api/v1/endpoints/health.py`:
-- **Pre-Migration Snapshot:** During database startup migration assessment, `storage.py` automatically copies the existing database to `settings.BACKUP_DIR / f"pre_migration_backup_{timestamp}.db"` before executing any schema modifications.
-- **Canonical Backup Directory:** `BACKUP_DIR` is derived and created under canonical storage (`%LOCALAPPDATA%\AICompanion\data\backups` by default).
+Verified in `backend/app/core/storage.py`, `backend/app/core/logging.py`, and `backend/app/api/v1/`:
+- **Legacy Migration Backup Snapshot:** In `backend/app/core/storage.py`, `execute_migration()` creates a logical SQLite backup of a legacy source into a temporary canonical file, verifies it, promotes it, and attempts to preserve a backup copy with naming equivalent to `companion.db.backup-<timestamp>`.
+  *(Note: This backup is not automatically performed before every Alembic schema upgrade on an already-canonical database).*
+- **Canonical Backup Directory:** `BACKUP_DIR` is derived and created under canonical storage (`COMPANION_DATA_ROOT/backups`).
 - **Health & Status Endpoints:**
-  - `GET /api/v1/health`: Public probe returning basic service liveness (`{"status": "ok"}`).
-  - `GET /api/v1/system/status`: Authenticated endpoint returning system diagnostic metrics (database connectivity, model state, storage path status).
-- **Diagnostic Logging:** Configured in `backend/app/core/logging.py` emitting structured console logs with log levels.
+  - `GET /api/v1/health`: Public probe returning basic service liveness: `{"status": "healthy"}`.
+  - `GET /api/v1/system/status`: Authenticated endpoint returning system diagnostic telemetry: `status`, `platform`, `python_version`, `hostname`, `cpu_count`, `version`, `database_connected`, and `timestamp`. *(Current `/api/v1/system/status` does NOT report model-state or storage-path telemetry).*
+- **Diagnostic Logging:** Configured in `backend/app/core/logging.py` emitting standard Python console logs.
 
 ### 3.2 Implemented Reality Boundaries
 
 - **User-Facing Backup Status:** **NOT IMPLEMENTED**. The current codebase contains no endpoint, CLI command, or UI control allowing a user to create a comprehensive backup archive, schedule automated backups, or restore from a past snapshot.
-- **Asset Packaging Status:** **NOT IMPLEMENTED**. Pre-migration snapshots copy only the `.db` file; no mechanism currently bundles attachments, character lore cards, or settings into a unified archive.
+- **Asset Packaging Status:** **NOT IMPLEMENTED**. Migration backups copy only the SQLite database file; no mechanism currently bundles attachments, character lore cards, or settings into a unified archive.
 - **Diagnostics Center Status:** **NOT IMPLEMENTED**. No graphical diagnostic dashboard, log viewer UI, or interactive recovery console exists in the application.
 
 ---
 
 ## 4. Approved Target Architecture / Not Yet Implemented (PC V1)
 
-When implemented for PC V1, the backup and recovery capability will provide:
+When implemented for PC V1, the backup and recovery capability provides:
 
-1. **Practical Database & Asset Archiver:** A coordinated backup utility that creates a self-contained archive containing:
-   - Consistent snapshot of `companion.db`.
-   - All referenced physical files in `ATTACHMENT_DIR` and `CHARACTER_DIR`.
-   - Manifest file recording companion version, schema migration head, creation timestamp, and asset checksums.
-2. **Restore Verification Engine:** A recovery routine that:
-   - Takes a safety snapshot of the currently active state.
-   - Inspects the backup archive for checksum and schema compatibility.
-   - Restores database and physical files atomically.
-   - Executes `PRAGMA integrity_check;` to verify post-restore health.
-3. **Backup Management CLI / UI:** User-accessible controls to trigger a backup snapshot, inspect existing backup archives, and restore with confirmation.
+1. **Practical Database & Asset Recovery:** Coordinated backup capability capturing the companion's persistent database along with required referenced assets on disk.
+2. **Safe Restore Verification:** Restoration routine that verifies backup integrity and schema compatibility before safely restoring the database and associated assets.
 
 ---
 
@@ -75,19 +68,23 @@ When implemented for PC V1, the backup and recovery capability will provide:
 
 The following implementation choices remain open design for future technical specification:
 
-- **Archive Format & Compression:** Selection of archive container format (e.g., standard `.zip`, `.tar.gz`, or encrypted container) and compression algorithm.
-- **Snapshot Scheduling:** Cadence and trigger mechanisms for automatic background backups (e.g., weekly background snapshot, pre-update automatic snapshot, or on-demand only).
-- **Retention of Old Backups:** Rotation policy for pruning old automated backups in `BACKUP_DIR` to prevent unbounded disk growth.
-- **Cloud / Offsite Export:** Options for users to easily mirror backup archives to their preferred personal cloud storage (e.g., OneDrive, Google Drive folder export) without the companion possessing direct cloud credentials.
-- **Exploratory Diagnostics Center:** Future conceptual exploration of self-test suites, GPU benchmark viewers, or crash dump analyzers (post-V1).
+- **Backup Snapshot Mechanism:** Choice of snapshot implementation (e.g., SQLite online backup API, read-locked snapshot, or file copy).
+- **Archive Format & Compression:** Selection of archive container format (e.g., standard `.zip`, `.tar.gz`, or directory bundle) and compression algorithms.
+- **Archive Manifest & Checksums:** Exact schema of the backup manifest file, version identifiers, and asset checksum algorithms.
+- **Included Directory Coverage:** Exact list of included asset folders and exclusions (e.g., whether to include ephemeral caches or thumbnail variants).
+- **User Control Surface:** Whether backup and restore are triggered via a dedicated CLI command, a web settings UI, or both.
+- **Snapshot Scheduling & Retention:** Cadence and trigger mechanisms for automatic background backups, along with rotation/pruning policies for old backups in `BACKUP_DIR`.
+- **Passphrase Encryption:** Design and cipher choices for optional passphrase-encrypted archives (e.g., AES-256).
+- **Restoration Semantics:** Full-profile replacement vs. selective entity merge during restore operations.
+- **Exploratory Diagnostics Center:** Future conceptual exploration of self-test suites, GPU benchmark viewers, or crash dump analyzers (post-V1, `EXPLORATORY / UNAPPROVED / FUTURE`).
 
 ---
 
 ## 6. Security & Ownership Boundaries
 
 - **Backup Credential Protection:** Backup archives must **never** package cleartext API keys, third-party credentials, or environment secrets. When restored on a new machine, authentication tokens must be re-established.
-- **Encryption of Backup Archives:** Where requested by the user, backup archives should support passphrase-based encryption (e.g., AES-256) to protect personal memories and photos during storage on external drives.
-- **Owner Scope Validation:** Restoring a backup archive completely replaces the active local profile state; the restoration command requires local host confirmation to prevent unauthorized overwrite.
+- **Restore Authorization:** Restoring a backup archive replaces active state; restoration requires local host confirmation to prevent unauthorized overwrite.
+- **Encryption for Offsite Storage:** Passphrase encryption for archives placed in untrusted storage remains an open design candidate.
 
 ---
 

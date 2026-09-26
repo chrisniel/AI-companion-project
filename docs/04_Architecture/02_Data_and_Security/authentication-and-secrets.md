@@ -24,15 +24,15 @@ This specification defines the cryptographic authentication mechanisms, secret s
 
 In accordance with Decision D5:
 - **Fail-Closed by Construction:** All companion endpoints require explicit cryptographic authentication by default. Endpoints are protected unless explicitly assigned to a strictly bounded public whitelist.
-- **Proximity is Not Authentication:** Physical or network-layer proximity (such as sharing the same local Wi-Fi router or subnet) does **not** grant implicit trust or bypass authentication. All client connections—whether originating on loopback, local LAN, or VPN—must present valid authentication credentials.
-- **Master Secret Containment:** Master runtime administrative secrets, database encryption keys, and third-party API credentials are held strictly on the host runtime machine and are **never** transmitted to or stored on client endpoints.
+- **Proximity is Not Authentication:** Physical or network-layer proximity (such as sharing the same local Wi-Fi router or subnet) does **not** grant implicit trust or bypass authentication. Network proximity never substitutes for application auth. All client connections—whether originating on loopback, local LAN, or VPN—must present valid authentication credentials.
+- **Master Secret Containment:** Master runtime administrative secrets and third-party API credentials are held strictly on the host runtime machine and are **never** transmitted to or stored on client endpoints. Database encryption passphrases do not currently exist and are not a required secret class unless encryption-at-rest is separately approved.
 
 ### 2.2 Supported Trust Topologies
 
-The companion architecture supports three bounded network topologies:
-1. **Localhost Loopback:** Local browser and host processes communicating over `127.0.0.1` / `::1`.
-2. **Explicitly Trusted LAN:** Satellite devices communicating across a private home network with explicit host pairing.
-3. **Encrypted Overlay Mesh (Tailscale / WireGuard):** Remote satellite access routed through an authenticated, encrypted private mesh network without exposing open router ports.
+The companion architecture supports three bounded network topologies under Decision D5:
+1. **Authenticated Localhost Loopback:** Local browser and host processes communicating over `127.0.0.1` / `::1`.
+2. **Explicitly Trusted LAN:** Satellite devices communicating across a private home network with explicit host pairing and application authentication.
+3. **Encrypted Overlay Mesh (Tailscale / Private Mesh):** Remote satellite access routed through an authenticated, encrypted private mesh network without exposing open router ports.
 
 ### 2.3 Direct Public Internet Port Forwarding Rejected
 
@@ -50,10 +50,10 @@ Repository source code establishes the following baseline reality:
 
 Verified in `backend/app/core/security.py`, `backend/app/api/deps.py`, and `backend/app/api/v1/router.py`:
 - **Dual-Header Support:** `verify_token` accepts credentials via either `Authorization: Bearer <token>` or `X-API-Key: <token>`.
-- **Timing-Attack Defense:** Tokens are compared using `constant_time_compare` (`hmac.compare_digest`), preventing timing side-channel discovery.
+- **Timing-Attack Defense:** Tokens are compared using `constant_time_compare()`, which wraps `hmac.compare_digest` to prevent timing side-channel discovery.
 - **Fail-Closed Router Assembly:**
   - `public_router`: Whitelists only `GET /api/v1/health` (`public_health_router`).
-  - `protected_router`: Applies `dependencies=[Depends(verify_token)]` at the root router level across all other endpoints (`/system`, `/auth`, `/tasks`, `/llm`, `/conversations`, `/memories`).
+  - `protected_router`: Applies `dependencies=[Depends(verify_token)]` at the root router level across all other endpoints (`/system`, `/auth`, `/tasks`, `/llm`, `/conversations`, conversation attachment routes, and `/memories`).
 - **Current Token Schema:** Uses a single shared pairing key (`COMPANION_API_KEY`). On initial launch without a configured key, `ensure_pairing_token()` generates a 32-byte URL-safe string (`companion_sec_<token>`).
 
 ### 3.2 Secret Storage Reality
@@ -70,8 +70,7 @@ Verified in `backend/app/core/config.py`:
 When implemented for target milestones:
 
 1. **Independent Per-Device Revocable Credentials:** Transition from a single shared pairing key to per-device credentials (e.g., individual device tokens issued during authenticated pairing), allowing targeted revocation.
-2. **Dedicated Platform Secret Storage:** Migration of sensitive credentials (pairing tokens, third-party provider keys, database encryption passphrases) from plaintext `.env` files into platform-native credential storage.
-3. **Application-Layer Transport Encryption:** End-to-end TLS / HTTPS encryption for all non-loopback network traffic (LAN and remote mesh).
+2. **Dedicated Platform Secret Storage:** Migration of sensitive credentials (pairing tokens, third-party provider keys) from plaintext `.env` files into platform-native credential storage.
 
 ---
 
@@ -81,7 +80,7 @@ The following implementation choices remain open design for future technical spe
 
 - **Host Secret Store Mechanism:** Specific host credential storage mechanism (evaluating alternatives such as Windows Credential Manager, DPAPI wrappers, or encrypted configuration files).
 - **Client Secret Store Mechanism:** Specific mobile credential storage mechanism (evaluating Android Keystore, EncryptedSharedPreferences, or secure hardware-backed storage).
-- **Application-Layer TLS Strategy:** Specific local TLS certificate generation and distribution mechanism (e.g., self-signed root CA generated by host, Let's Encrypt with internal DNS, or Tailscale HTTPS certificates).
+- **Application-Layer TLS & Transport Encryption:** Application-layer TLS / certificate enrollment remains open design where applicable. Tailscale and private mesh networks may already provide encrypted transport. Exact TLS certificate source, local CA generation, Tailscale HTTPS, mutual TLS, and certificate enrollment remain open design and are not locked as an approved implementation requirement.
 - **Enrollment & Handshake Protocol:** Cryptographic handshake for device pairing (e.g., SPAKE2, QR-encoded ephemeral bootstrap tokens, or mutual authentication protocols).
 - **Token Rotation & Expiration:** Policies and automation for periodic credential rotation, inactivity timeouts, and re-authentication handshakes.
 
@@ -91,7 +90,7 @@ The following implementation choices remain open design for future technical spe
 
 - **Constant-Time Verification:** All token comparisons must use constant-time operations to eliminate timing side-channels.
 - **No Client Elevation:** Possession of a client token permits interaction with companion conversational APIs, but does not grant administrative authority to read host filesystem paths or manipulate host process lifecycles.
-- **CORS Containment:** CORS origins in `settings.CORS_ORIGINS` restrict cross-origin browser access to explicitly authorized development and production origins (`localhost:5173`, `localhost:3000`).
+- **CORS Containment:** CORS origins in `settings.CORS_ORIGINS` restrict cross-origin browser access to explicitly authorized development localhost origins (`localhost:5173`, `localhost:3000`). These are development localhost origins, not production origins.
 
 ---
 

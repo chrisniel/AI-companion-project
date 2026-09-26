@@ -7,7 +7,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
     - `R11.0 — Architecture Skeleton & Domain Authoring Rules` (`COMPLETE / VERIFIED`)
     - `R11.1 — Core Experience Domains` (`COMPLETE / VERIFIED`)
     - `R11.2 — Integrations, Host Runtime & Client Domains` (`COMPLETE / VERIFIED`)
-    - `R11.3 — Security, Data & Infrastructure Domains` (`COMPLETE / REVIEW PENDING`)
+    - `R11.3 — Security, Data & Infrastructure Domains` (`COMPLETE / VERIFIED`)
   - Planned Sub-slices:
     - `R11.4 — Authority Transfer & Legacy Narrowing` (`HUMAN REVIEW GATE / NOT YET AUTHORIZED`)
 - Current Branch: `docs/canonical-feature-reconciliation`
@@ -27,7 +27,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | :--- | :--- | :--- | :--- |
 | **R9** | **Implemented Reality Refresh** | `COMPLETE / VERIFIED` | Refreshed factual baseline, migration 006, 8B.0–8B.6 foundation, CI #23 test counts across canonical docs. |
 | **R10** | **Product Boundary & Decision Relock** | `COMPLETE / VERIFIED` | Relocked D1–D11; established PC V1 and Android V1 boundaries; created `FEATURE_PROMOTION_MAP.md`. |
-| **R11** | **Domain Architecture Alignment** | `IN PROGRESS` | Staged domain architecture extraction (R11.0–R11.2 COMPLETE / VERIFIED; R11.3 COMPLETE / REVIEW PENDING; R11.4 HUMAN REVIEW GATE). |
+| **R11** | **Domain Architecture Alignment** | `IN PROGRESS` | Staged domain architecture extraction (R11.0–R11.3 COMPLETE / VERIFIED; R11.4 HUMAN REVIEW GATE / NOT YET AUTHORIZED). |
 | **R12** | **Roadmap / Planning / CI Alignment** | `PLANNED` | Roadmap and planning alignment, including target CI governance and Golden Journey alignment. |
 | **R13** | **Documentation Map, Cross-links & Closure** | `PLANNED` | Documentation map/routing/cross-links, task closure, consistency sweep, and reconciliation closure. |
 
@@ -38,7 +38,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 1. **User-Owned Git Operations:** AI agents must never execute git commit, push, merge, checkout, or branch creation.
 2. **Documentation-Only Scope:** Do not modify application source code, tests, contracts, or `.github/workflows/ci.yml`.
 3. **Factual Implemented Reality:** Document only verified repository reality; distinguish repository migration head (006) from individual workstation state.
-4. **Staged Domain Strategy:** Pass R10 established platform release vocabulary (PC V1 vs. Android V1), relocked decisions D1–D11, and created the `FEATURE_PROMOTION_MAP.md` control manifest. Pass R11 executes sub-slice by sub-slice (R11.0 skeleton & rules [COMPLETE], R11.1 core experience domains [COMPLETE], R11.2 integrations, host runtime & client domains [COMPLETE], R11.3 security, data & infrastructure domains [COMPLETE / REVIEW PENDING], R11.4 authority transfer & legacy narrowing [HUMAN REVIEW GATE / NOT YET AUTHORIZED]). Roadmap realignment occurs in Pass R12; documentation routing and task closure occur in Pass R13.
+4. **Staged Domain Strategy:** Pass R10 established platform release vocabulary (PC V1 vs. Android V1), relocked decisions D1–D11, and created the `FEATURE_PROMOTION_MAP.md` control manifest. Pass R11 executes sub-slice by sub-slice (R11.0 skeleton & rules [COMPLETE], R11.1 core experience domains [COMPLETE], R11.2 integrations, host runtime & client domains [COMPLETE], R11.3 security, data & infrastructure domains [COMPLETE / VERIFIED], R11.4 authority transfer & legacy narrowing [HUMAN REVIEW GATE / NOT YET AUTHORIZED]). Roadmap realignment occurs in Pass R12; documentation routing and task closure occur in Pass R13.
 
 ---
 
