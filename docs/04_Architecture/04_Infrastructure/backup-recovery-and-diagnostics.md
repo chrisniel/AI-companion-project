@@ -10,7 +10,7 @@
 
 This specification defines disaster recovery, database snapshot mechanics, asset restoration, and diagnostic health monitoring for the AI Companion:
 - Phased delivery boundary between **Practical Backup & Recovery** (PC V1) and a **Full Diagnostics Center** (unapproved exploratory recommendation).
-- Coordinated backup of SQLite database records and associated binary media assets.
+- Coordinated backup of persistent database state and required referenced assets.
 - Restore verification and recovery-safety boundaries prior to modifying active state.
 - Diagnostic observability, health probes, and runtime state inspection boundaries.
 
@@ -39,9 +39,9 @@ Repository source code establishes the following baseline reality:
 ### 3.1 Implemented Backup & Diagnostic Mechanisms
 
 Verified in `backend/app/core/storage.py`, `backend/app/core/logging.py`, and `backend/app/api/v1/`:
-- **Legacy Migration Backup Snapshot:** In `backend/app/core/storage.py`, `execute_migration()` creates a logical SQLite backup of a legacy source into a temporary canonical file, verifies it, promotes it, and attempts to preserve a backup copy with naming equivalent to `companion.db.backup-<timestamp>`.
+- **Legacy Migration Backup Snapshot:** In `backend/app/core/storage.py`, `execute_migration()` creates a logical SQLite backup of a legacy source into a temporary canonical file, verifies it, promotes it, and attempts to preserve an additional backup copy in `BACKUP_DIR` with naming equivalent to `companion.db.backup-<timestamp>`; failure of that extra copy is logged (while the original legacy source file remains untouched).
   *(Note: This backup is not automatically performed before every Alembic schema upgrade on an already-canonical database).*
-- **Canonical Backup Directory:** `BACKUP_DIR` is derived and created under canonical storage (`COMPANION_DATA_ROOT/backups`).
+- **Canonical Backup Directory:** `BACKUP_DIR` is canonically derived under `COMPANION_DATA_ROOT/backups` and is created as needed by migration/backup execution paths.
 - **Health & Status Endpoints:**
   - `GET /api/v1/health`: Public probe returning basic service liveness: `{"status": "healthy"}`.
   - `GET /api/v1/system/status`: Authenticated endpoint returning system diagnostic telemetry: `status`, `platform`, `python_version`, `hostname`, `cpu_count`, `version`, `database_connected`, and `timestamp`. *(Current `/api/v1/system/status` does NOT report model-state or storage-path telemetry).*

@@ -113,7 +113,6 @@ When implemented for PC V1:
 
 1. **Executable Controlled Import Workflow:** An executable workflow implementing the D6 stages (inbox $\rightarrow$ preflight $\rightarrow$ staging $\rightarrow$ atomic install $\rightarrow$ library $\rightarrow$ registry). Exact execution mechanisms (such as watcher vs. on-demand worker) remain implementation design.
 2. **Optional Cloud LLM Fallback Router:** An opt-in provider adapter allowing users to configure cloud LLM access with transparent egress indications and strict local-first defaults. Fallback activation and routing policy remains open design.
-3. **Bounded Model Residency & Process Supervision:** Host runtime process supervision that bounds memory residency safely according to host capacity and unloads/reloads models cleanly.
 
 ---
 

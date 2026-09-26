@@ -77,7 +77,7 @@ The following functional and technical mechanisms remain open design for future 
 ## 6. Security & Ownership Boundaries
 
 - **Profile Isolation (Decision D4):** Queries and mutations on Profile-owned personal data must preserve the authenticated ownership boundary, either through direct owner filtering or through an already owner-authorized parent/resource relationship. Broken Object Level Authorization (BOLA) is strictly prohibited.
-- **Device Enrollment Gate:** A new device cannot enroll silently or automatically through network proximity alone. Enrollment requires explicit user confirmation on the trusted Windows host runtime.
+- **Device Enrollment Gate:** A new device must not enroll solely because of network proximity. Enrollment must be explicitly authorized under the trusted-device policy. The exact authorization/confirmation surface, host/client interaction, pairing UX, and exchange protocol remain open design.
 - **Least-Privilege Device Scope:** Enrolled devices are clients of the host runtime; they possess zero authority to alter host OS configuration or inspect master configuration outside their authorized scope.
 
 ---

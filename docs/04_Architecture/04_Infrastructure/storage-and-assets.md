@@ -38,7 +38,7 @@ The current repository implementation utilizes SQLite operating with:
 
 - **Non-Destructive Schema Evolution:** Database schema migrations must never execute destructively on unverified data.
 - **Migration & Schema Preparation Flow:**
-  - `execute_migration()` creates a logical SQLite backup snapshot while migrating a legacy database into canonical storage, verifies it, atomically promotes it, and preserves a backup copy.
+  - `execute_migration()` creates a logical SQLite backup snapshot while migrating a legacy database into canonical storage, verifies it, atomically promotes it, and attempts to preserve an additional backup copy in `BACKUP_DIR`; failure of that extra copy is logged (while the original legacy source file remains untouched).
   - `prepare_database_schema()` then upgrades the canonical database to Alembic head.
   - Current source does **not** guarantee a fresh backup snapshot immediately before every Alembic schema migration of an already-canonical database.
 
@@ -73,22 +73,19 @@ Verified in `app.core.storage.CanonicalPaths`:
 
 ### 3.3 Database Migrations & Safety Runner
 
-Verified in `backend/app/core/storage.py` and `backend/alembic/`:
+Verified in `backend/app/core/storage.py` and `backend/migrations/`:
 - **Current Migration Head:** `006_add_attachments` is the current repository migration head *(current verified reality, not a permanent identifier)*.
 - **Preflight & Legacy Migration Functions:**
   - `inspect_legacy_candidate()` verifies candidate SQLite database files, checksums, and schema versions.
   - `assess_migration_preflight()` inspects potential legacy databases and guards against ambiguous multi-candidate states.
-  - `execute_migration()` copies legacy SQLite data into canonical storage, verifies integrity, promotes it atomically, and preserves a backup copy.
+  - `execute_migration()` copies legacy SQLite data into canonical storage, verifies integrity, promotes it atomically, and attempts to preserve an additional backup copy in `BACKUP_DIR`; failure of that extra copy is logged (while the original legacy source file remains untouched).
   - `prepare_database_schema()` executes Alembic upgrades on the canonical database.
 
 ---
 
 ## 4. Approved Target Architecture / Not Yet Implemented (PC V1)
 
-When implemented for PC V1:
-
-1. **Canonical Data-Root Containment:** Continued strict enforcement that all persistent application data derives deterministically from `COMPANION_DATA_ROOT`.
-2. **Safe Schema Evolution:** Schema migration procedures that preserve data integrity without unverified destructive alterations.
+R11.3 introduces no additional not-yet-implemented PC V1 storage capability beyond preserving the verified Phase 8P canonical data-root and migration safety architecture. Remaining enhancements are tracked under OPEN DESIGN.
 
 ---
 

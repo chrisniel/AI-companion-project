@@ -55,7 +55,7 @@ Verified in `backend/app/core/security.py`, `backend/app/api/deps.py`, and `back
   - `public_router`: Whitelists only `GET /api/v1/health` (`public_health_router`).
   - `protected_router`: Applies `dependencies=[Depends(verify_token)]` at the root router level across all other endpoints (`/system`, `/auth`, `/tasks`, `/llm`, `/conversations`, conversation attachment routes, and `/memories`).
 - **CORS Configuration:** `settings.CORS_ORIGINS` in `backend/app/core/config.py` specifies four development localhost/loopback origins: `http://localhost:5173`, `http://127.0.0.1:5173`, `http://localhost:3000`, and `http://127.0.0.1:3000`. These represent current development localhost/loopback origins, not production origins, and are not promoted into durable architecture.
-- **Current Token Schema:** Uses a single shared pairing key (`COMPANION_API_KEY`). On initial launch without a configured key, `ensure_pairing_token()` generates a 32-byte URL-safe string (`companion_sec_<token>`).
+- **Current Token Schema:** Uses a single shared pairing key (`COMPANION_API_KEY`). On initial launch without a configured key, `ensure_pairing_token()` generates a URL-safe token from 32 random bytes of entropy and prefixes it with `companion_sec_` (`companion_sec_<token>`).
 
 ### 3.2 Secret Storage Reality
 
