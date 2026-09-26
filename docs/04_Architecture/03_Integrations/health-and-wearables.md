@@ -25,16 +25,17 @@ In accordance with the Feature Promotion Map:
 - **PC V1: Health-Context Ready Architecture:** Classified as `APPROVED / NOT STARTED / PC V1`. PC V1 establishes health-context/data-contract readiness and the semantic boundaries required to receive appropriately summarized wellness context. **PC V1 does NOT directly connect to physical wearables or Bluetooth biometric sensors.**
 - **Android V1: Android Health Connect Integration:** Classified as `APPROVED / NOT STARTED / ANDROID V1`. Physical collection of biometric context occurs via the Android Companion device leveraging Android's platform-standard Health Connect API.
 
-### 2.2 Vendor Decoupling & Platform Integration (Android V1)
+### 2.2 Platform Integration & Wearable Decoupling (Android V1)
 
-- **No Proprietary Vendor Lock-In:** The companion architecture explicitly avoids direct SDK or Bluetooth integration with proprietary wearable manufacturers (e.g., FitCloudPro, Garmin, Fitbit, Xiaomi). Upstream manufacturer apps write to the operating system's health store.
-- **Approved Android V1 Platform Integration:** Health Connect is the approved Android V1 platform integration and provides a vendor-decoupled path for supported wearable data. Android V1 reads summarized metrics from Health Connect subject to explicit Android OS permissions, remaining independent of specific wearable hardware models or vendor apps. Future additional integrations require separate approval.
+- **Approved Android V1 Platform Integration:** Android V1 uses Health Connect as its approved platform integration, providing a vendor-decoupled path for supported wearable data. Upstream wearable vendors and companion apps remain replaceable.
+- **No Vendor-Specific Dependency in Android V1:** Android V1 does not require vendor-specific SDKs or direct Bluetooth Low Energy (BLE) integrations with proprietary wearable hardware. Android V1 reads metrics from Health Connect subject to explicit Android OS permissions.
+- **Future Integration Boundary:** Future additional or vendor-specific integrations require separate human review and approval; they are not permanently prohibited, but are not part of Android V1.
 
 ### 2.3 Non-Clinical & Privacy Invariants
 
 - **Informational Companion Context Only:** Health metrics serve solely to provide empathetic, contextual awareness for the companion. The companion makes **no clinical, medical, or diagnostic claims**.
 - **Explicit User Authorization:** Ingestion of biometric data requires active, informed user consent. Users may selectively grant or revoke access to individual metric categories at any time.
-- **Data Minimization:** Only coarse-grained, aggregated summaries (e.g., daily resting heart rate, sleep duration and stages, total steps) are ingested into conversational prompt context. High-frequency raw sensor streams (e.g., continuous per-second photoplethysmography rasters) are never requested or retained.
+- **Data Minimization:** Health-context processing follows data minimization: the companion should request, process, and retain no more health data or granularity than required for the approved companion capability and user authorization. Exact metric granularity, aggregation windows, and persistence representation remain open design. Raw or high-frequency health data must not be silently persisted or used without a separately approved need and explicit user authorization.
 
 ---
 

@@ -10,7 +10,7 @@
 
 This specification defines the local inference runtime, hardware execution model, model registry lifecycle, and cloud fallback boundaries for the AI Companion:
 - Provider-independent LLM orchestration layer.
-- Primary local-first inference architecture ensuring fully offline companion capability.
+- Primary local-first inference architecture supporting offline core/local companion operation without cloud LLM dependency.
 - Decision D6 local model import pipeline (`inbox` $\rightarrow$ `preflight` $\rightarrow$ `staging` $\rightarrow$ `atomic install` $\rightarrow$ `library` $\rightarrow$ `registry`).
 - Phased model acquisition separating PC V1 local import from post-V1 online model hub downloads.
 - Opt-in, transparent Cloud LLM Fallback boundaries.
@@ -50,7 +50,7 @@ In accordance with the Feature Promotion Map (**Optional Cloud LLM Fallback**):
   - **Local Remains Primary:** Local inference is always default; cloud fallback is strictly an opt-in auxiliary.
   - **Explicit User Credentials:** The user must explicitly supply their own API keys; the companion distributes no default hosted keys.
   - **Egress Transparency:** Any conversational turn or tool execution routed to an external cloud model must clearly indicate external egress to the user.
-  - **Local-Only Preserved:** Disabling cloud fallback leaves the companion fully operational in local-only mode.
+  - **Local-Only Preserved:** Disabling cloud fallback preserves supported core/local companion operation in local-only mode. Naturally network-dependent integrations such as Web Search, Fetch, Weather, and current-information retrieval still require network connectivity.
   - **Fallback Routing Open Design:** Fallback activation and routing policy remains open design. There is no automatic cloud egress merely because local inference is constrained.
 
 ---
@@ -78,7 +78,7 @@ Verified in `backend/app/services/llm/`:
   - **Cloud Providers:** **NOT IMPLEMENTED**. No OpenAI, Anthropic, or external cloud API client adapter exists in `app/services/llm/`.
 - **Process Management & Router Constants:** `scripts/start-model.ps1` exists as a diagnostic/helper script, not the primary runtime launcher. Current implementation constants include:
   - Local loopback host: `127.0.0.1` (never `0.0.0.0`).
-  - Diagnostic port: `8085` (`LLAMA_ROUTER_PORT`).
+  - Router port: `8085` (`LLAMA_ROUTER_PORT`).
   - Auto-unload timeout: `900s` (`LLAMA_ROUTER_IDLE_TIMEOUT`).
   - Model residency cap: `1` (`LLAMA_ROUTER_MODELS_MAX`).
   - Reference server build: `b10936`.

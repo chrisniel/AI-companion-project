@@ -61,8 +61,7 @@ When implemented for PC V1, the resource governance capability provides:
 
 1. **Lower-Impact Resource Policy:** Ability for the companion runtime to enter a lower-impact resource policy during heavy foreground activity.
 2. **Bounded Resource Usage:** Bounded resource utilization under foreground system pressure to minimize contention with user applications.
-3. **User-Controllable Policy:** User controls to switch or override performance modes on demand.
-4. **Preserved Notification Integrity:** Ensuring scheduled alarms and notifications are not silently dropped when low-impact mode is engaged.
+3. **Preserved Notification Integrity:** Ensuring scheduled alarms and notifications are not silently dropped when low-impact mode is engaged.
 
 ---
 
@@ -70,6 +69,7 @@ When implemented for PC V1, the resource governance capability provides:
 
 The following technical mechanisms remain open design for future implementation plans:
 
+- **User Controls & Overrides:** Manual user toggles, forced modes, override precedence, automatic vs. manual activation heuristics, and settings/tray controls.
 - **Detection Strategy:** Specific detection heuristics (e.g., Windows Gaming Mode API, foreground fullscreen window queries, GPU load telemetry via DXGI, process whitelists, or purely manual user toggling).
 - **Throttling Mechanisms:** Concrete throttling techniques (e.g., GPU-layer offload adjustments, CPU thread limits, idle timeout adjustments, or deferral of non-critical background batch jobs like database vacuuming).
 - **Profile Transition & Hysteresis:** Smoothing delays and threshold timers preventing rapid thrashing between normal and low-impact modes.

@@ -11,7 +11,7 @@
 This specification defines disaster recovery, database snapshot mechanics, asset restoration, and diagnostic health monitoring for the AI Companion:
 - Phased delivery boundary between **Practical Backup & Recovery** (PC V1) and a **Full Diagnostics Center** (unapproved exploratory recommendation).
 - Coordinated backup of SQLite database records and associated binary media assets.
-- Verification and dry-run testing of backup archives prior to restoration.
+- Restore verification and recovery-safety boundaries prior to modifying active state.
 - Diagnostic observability, health probes, and runtime state inspection boundaries.
 
 ---
