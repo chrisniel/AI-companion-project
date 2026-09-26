@@ -12,6 +12,7 @@ This specification defines the local inference runtime, hardware execution model
 - Provider-independent LLM orchestration layer.
 - Primary local-first inference architecture supporting offline core/local companion operation without cloud LLM dependency.
 - Decision D6 local model import pipeline (`inbox` $\rightarrow$ `preflight` $\rightarrow$ `staging` $\rightarrow$ `atomic install` $\rightarrow$ `library` $\rightarrow$ `registry`).
+- Model registry, artifact identity, capability metadata, and validation lifecycles.
 - Phased model acquisition separating PC V1 local import from post-V1 online model hub downloads.
 - Opt-in, transparent Cloud LLM Fallback boundaries.
 
@@ -52,6 +53,25 @@ In accordance with the Feature Promotion Map (**Optional Cloud LLM Fallback**):
   - **Egress Transparency:** Any conversational turn or tool execution routed to an external cloud model must clearly indicate external egress to the user.
   - **Local-Only Preserved:** Disabling cloud fallback preserves supported core/local companion operation in local-only mode. Naturally network-dependent integrations such as Web Search, Fetch, Weather, and current-information retrieval still require network connectivity.
   - **Fallback Routing Open Design:** Fallback activation and routing policy remains open design. There is no automatic cloud egress merely because local inference is constrained.
+
+### 2.5 Model Registry, Artifact & Capability Semantics
+
+To ensure robust model management and avoid semantic conflation across model identity, file artifacts, and runtime execution, the architecture enforces the following durable invariants:
+
+- **Logical Model vs. Artifact Identity:** A logical model identity (e.g., a base model architecture and training family) must remain distinguishable from individual runtime artifacts and quantizations (e.g., `Q4_K_M`, `Q5_K_M`, `Q8_0`). While current implementation registers individual model files directly, the durable architecture preserves conceptual separation and must not prevent future grouping of multiple quantization artifacts under a common logical model entry. Exact schema grouping remains open design.
+- **Model Metadata vs. Runtime Configuration:** The architecture maintains a strict semantic separation between:
+  1. *Model Metadata:* What an artifact or model intrinsically *is* (e.g., base architecture, parameter count, quantization type, native context limit, declared modalities).
+  2. *Runtime Configuration & State:* How the current host environment *runs* it (e.g., active context window size, GPU offload layers, CPU thread allocation, active performance profile).
+  System components must never collapse or conflate intrinsic model metadata with transient runtime execution configuration (such as conflating `model_context_limit` with `runtime_context_size`, or intrinsic capabilities with active hardware offload profiles).
+- **Explicit Capabilities & Modalities:** Model capabilities and supported modalities must be declared or detected explicitly where relevant rather than inferred solely from heuristic file naming conventions or display labels. Conceptual capability domains may include `chat`, `vision`, `reasoning`, `tool calling`, `structured output`, `multilingual`, and `code`. The registry must not promote unsupported future capabilities merely because the registry schema is capable of representing them.
+- **Companion Artifacts & Partial Capability:** The model architecture supports multi-file companion artifacts where a model requires auxiliary weights (such as an `mmproj` vision projector for multimodal models). The absence of a capability-specific companion artifact must not automatically mark the entire model unusable; for example, a vision-capable primary model whose projector artifact is missing may remain usable for pure text inference while vision capabilities remain disabled until the companion artifact is provided. Exact registry representation remains open design.
+- **Model Identity vs. Runtime Compatibility:** An artifact's identity and format metadata must remain strictly separated from runtime compatibility test results. A model artifact possesses intrinsic metadata (architecture, quantization, file size), and independently possesses empirical compatibility evaluations (tested engine, tested build, tested platform, verified acceleration backend, compatibility status). For example, successfully verifying execution on Vulkan does not make the artifact intrinsically a "Vulkan model."
+- **Validation & Registration Lifecycle:** The registry lifecycle distinguishes conceptually between distinct stages: `discovered`, `registered`, `verified`, and `incompatible`. The durable principle is that *file presence on disk does not imply verified usability*. Exact enum names and schema representations remain open design.
+- **Capability Confidence & Provenance:** The architecture distinguishes between different confidence levels and provenance of model capabilities (e.g., `declared` by manifest, `detected` from tensor metadata, `verified` by runtime preflight test, or `unknown`). Inferred or self-declared capabilities must not silently be treated as equivalent to verified runtime capability. Exact schema fields remain open design.
+- **Chat Template & Tokenizer Integrity:** Where reliable model-provided chat-template or tokenizer metadata is present in artifact headers, runtime template selection must respect and preserve that metadata rather than applying arbitrary prompt templates based solely on generic filename matching. Exact template override mechanisms remain open design.
+- **Generation Recommendations vs. Identity:** Default generation parameters (such as recommended temperature, top-p, or repetition penalty) represent non-binding baseline recommendations. They do not constitute immutable model identity metadata and may be tuned or overridden by runtime configuration, user preferences, or character prompt definitions.
+- **Format & Provider Independence (No Eternal GGUF Lock):** While the current `llama.cpp` implementation exclusively uses the GGUF container format, the durable model registry and acquisition architecture is provider- and format-agnostic. Registry abstractions must accommodate future safe, approved runtime formats (such as ONNX) without requiring all models to permanently conform to GGUF.
+- **Controlled Web / Filesystem Import Boundary:** A browser or web client model-import workflow must never grant unrestricted host filesystem path authority. Any Web-based local model import must enter through the controlled Decision D6 import pipeline (`inbox` $\rightarrow$ `preflight` $\rightarrow$ `staging` $\rightarrow$ `atomic install` $\rightarrow$ `library` $\rightarrow$ `registry`) rather than accepting arbitrary filesystem paths from client input.
 
 ---
 
@@ -127,6 +147,10 @@ The following technical mechanisms remain open design for future implementation 
 - **Cloud Provider Integrations:** Evaluation and selection of supported external cloud APIs (e.g., Anthropic Claude, OpenAI, Google Gemini, OpenRouter) and credential management interfaces.
 - **Managed Downloader UI & Hub Integration:** Design for searching, queuing, and downloading GGUF quantization variants from Hugging Face Hub (PC Later).
 - **Model Compatibility & Guardrails:** Automated validation preventing users from loading GGUFs incompatible with their system RAM or compute capabilities.
+- **Logical Model & Artifact Grouping Schema:** Data structures and migration paths for grouping multiple quantization artifacts under a logical model identity.
+- **Companion Artifact Binding & Discovery:** Schema and discovery mechanics for associating auxiliary artifacts (e.g., `mmproj` vision projectors) with primary model entries.
+- **Status Lifecycle Enums & Capability Provenance:** Concrete schema fields for tracking model lifecycle status (`discovered`, `registered`, `verified`, `incompatible`) and capability confidence provenance (`declared`, `detected`, `verified`).
+- **Web-Based Import UX & D6 Boundary:** Client user experience for guided file import into the controlled D6 inbox directory without exposing unrestricted host filesystem picking.
 
 ---
 
@@ -134,7 +158,8 @@ The following technical mechanisms remain open design for future implementation 
 
 - **Local Inference Isolation:** During local inference, prompt/context data remains on the local host and does not require external/cloud egress by default. Current llama.cpp integration may exchange inference payloads over localhost/loopback HTTP between local processes.
 - **Cloud Egress Sanitization:** If cloud fallback is engaged, system prompts and context assembly must enforce privacy redaction policies, stripping sensitive profile identifiers, and health data must never be egressed without explicit authorization.
-- **Safe Model Format Boundary:** Durable safety rule: Never execute arbitrary untrusted code merely because it is packaged as a model asset. Unsafe executable or deserialization formats (e.g., raw Python pickles) require explicit safe handling or are rejected by the relevant importer. Current llama.cpp provider uses GGUF tensor format; safe runtime-specific formats (e.g., ONNX) may be supported where separately approved.
+- **Safe Model Format Boundary:** Durable safety rule: Never execute arbitrary untrusted code merely because it is packaged as a model asset. Unsafe executable or deserialization formats (e.g., raw Python pickles) require explicit safe handling or are rejected by the relevant importer. Current llama.cpp provider uses GGUF tensor format; safe runtime-specific formats (e.g., ONNX) may be supported where separately approved without permanently locking GGUF as the sole architectural format.
+- **Controlled Import Filesystem Boundary:** A browser or web client model-import workflow must never grant unrestricted host filesystem path authority. Local file imports must enter strictly through the controlled Decision D6 import boundary rather than passing arbitrary host filesystem paths.
 
 ---
 
