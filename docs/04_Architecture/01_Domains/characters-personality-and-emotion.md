@@ -1,8 +1,8 @@
 # Characters, Personality, and Emotion Architecture
 
-> **Document Role:** Focused staged domain architecture specification (Pass R11.1).  
-> **Status:** Active Working Specification — **AUTHORITY TRANSFER PENDING R11.4**.  
-> **Authority Precedence:** This document is authored as part of the staged documentation reconciliation. Primary canonical authority remains in [`docs/04_Architecture/MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../MEMORY_AND_CHARACTER_ARCHITECTURE.md) and [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§4 / §7, Decision D11) until the formal R11.4 Authority Transfer Gate is reviewed and authorized.
+> **Document Role:** Canonical domain architecture specification.
+> **Status:** Active Canonical — authority transferred during R11.4.
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D11. This focused specification owns normative architecture for its domain. Legacy monolithic architecture documents are subordinate compatibility and technical-reference material.
 
 ---
 
@@ -129,7 +129,7 @@ The following implementation choices remain intentionally open for architectural
 
 ## 7. Canonical Relationships & Cross-Links
 
-- **Canonical Architecture Source:** [`docs/04_Architecture/MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../MEMORY_AND_CHARACTER_ARCHITECTURE.md) (Retains primary authority until R11.4)
+- **Legacy Technical Reference:** [`docs/04_Architecture/MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../MEMORY_AND_CHARACTER_ARCHITECTURE.md) (Subordinate memory and character scoping reference)
 - **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§4 / §7, Decision D11)
 - **Feature Promotion Manifest:** [`docs/02_Planning/FEATURE_PROMOTION_MAP.md`](../../02_Planning/FEATURE_PROMOTION_MAP.md) (Character Configuration Persistence, Separate Personality Configuration, Lightweight Conceptual Emotion, Relationship State)
 - **UI Design Presentation:** [`docs/05_Design/README.md`](../../05_Design/README.md) (Emotion presentation visual boundaries)

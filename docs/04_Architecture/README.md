@@ -1,7 +1,7 @@
 # Architecture Navigation & Authoring Guide
 
-> **Document Role:** Canonical architecture navigation hub and domain specification authoring standard.  
-> **Status:** Active Standard (Pass R11.0 Baseline)  
+> **Document Role:** Canonical architecture navigation hub and domain specification authoring standard.
+> **Status:** Active Standard (Pass R11.0 Baseline)
 > **Authority Precedence:** This document governs how architecture specifications are authored, organized, and navigated. Normative system baseline is anchored in [`SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md). Active execution state is tracked in [`docs/01_Tracking/task.md`](../01_Tracking/task.md). Detailed feature promotion dispositions are recorded in [`docs/02_Planning/FEATURE_PROMOTION_MAP.md`](../02_Planning/FEATURE_PROMOTION_MAP.md).
 
 ---
@@ -146,21 +146,21 @@ In accordance with Decision D10:
 
 To guarantee continuity, documentation migration follows a staged transfer pattern:
 
-1. **Semantics First (Sub-slices R11.0–R11.3):**
-   - Author new focused domain specifications under the target directory structure:
-     - `R11.0 — Architecture Skeleton & Domain Authoring Rules` (baseline setup & navigation standards)
-     - `R11.1 — Core Experience Domains`:
+1. **Semantics First (Sub-slices R11.0–R11.3) — `COMPLETE / VERIFIED`:**
+   - New focused domain specifications authored, reviewed, corrected, and verified across four target directories:
+     - `R11.0 — Architecture Skeleton & Domain Authoring Rules` (`COMPLETE / VERIFIED`)
+     - `R11.1 — Core Experience Domains` (`COMPLETE / VERIFIED`):
        - `tasks / reminders / alarms / routines`
        - `characters / personality / emotion`
        - `memory / personalization`
        - `voice / audio`
-     - `R11.2 — Integrations, Host Runtime & Client Domains`:
+     - `R11.2 — Integrations, Host Runtime & Client Domains` (`COMPLETE / VERIFIED`):
        - `assistant / conversations`
        - `multimodal / media`
        - `Android Companion`
        - `web / current information`
        - `Windows host / notifications`
-     - `R11.3 — Security, Data & Infrastructure Domains`:
+     - `R11.3 — Security, Data & Infrastructure Domains` (`COMPLETE / VERIFIED`):
        - `profiles / devices`
        - `authentication / secrets`
        - `tool permissions / actions`
@@ -170,25 +170,38 @@ To guarantee continuity, documentation migration follows a staged transfer patte
        - `storage / assets`
        - `backup / recovery`
        - `performance / capacity`
-   - Maintain existing legacy canonical documents as authoritative until replacements are complete and verified.
-   - Do not delete legacy canonical architecture, do not narrow substantive content, and do not declare new documents the sole authority before review.
-2. **Authority Transfer Gate (Sub-slice R11.4):**
-   - Authority transfer occurs only after explicit human review and authorization following completion of R11.0, R11.1, R11.2, and R11.3.
-   - Once authorized, legacy monolithic documents are safely narrowed or retired, transferring canonical authority to the focused specifications.
+   - During R11.0–R11.3, legacy documents were preserved as authorities while focused specifications were authored and reviewed.
+2. **Authority Transfer Applied (Sub-slice R11.4) — `AUTHORITY TRANSFER APPLIED / INDEPENDENT REVIEW PENDING`:**
+   - Following explicit human authorization, canonical domain authority was formally transferred to the 18 focused domain specifications.
+   - Legacy monolithic documents have been safely narrowed to subordinate compatibility, implementation, and technical reference roles.
+   - The top-level ecosystem baseline remains canonically anchored in [`SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md).
+   - Independent review of the R11.4 authority transfer is pending before final R11 closure.
 
 ---
 
-## 6. Architecture Catalog & Legacy Mapping
+## 6. Architecture Catalog & Post-Transfer Routing
 
-Until the R11.4 Authority Transfer Gate is reached, legacy canonical documents retain primary canonical authority. The following mapping guides the staged extraction into focused specifications:
+Following the Pass R11.4 authority transfer, canonical domain authority resides in the focused domain specifications. Legacy monolithic files remain at their existing paths as subordinate reference material:
 
-| Current Canonical Document (Retains Primary Authority Until R11.4 Gate) | Target Architecture Group | Future Focused Target(s) | Domain Scope & Extraction Notes |
+| Canonical Focused Owner | Domain Scope | Legacy / Specialized Reference | Legacy Disposition |
 | :--- | :--- | :--- | :--- |
-| [`SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md) | Shared Baseline | Retained as top-level baseline | Cross-cutting system baseline, platform vocabulary, Decisions D1–D11. |
-| [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](MEMORY_AND_CHARACTER_ARCHITECTURE.md) | `01_Domains/` | `01_Domains/memory-and-personalization.md`<br>`01_Domains/characters-personality-and-emotion.md` | Splits across persistent memory / personalization and character lore / personality / lightweight emotion. |
-| [`VOICE_AND_AUDIO_ARCHITECTURE.md`](VOICE_AND_AUDIO_ARCHITECTURE.md) | `01_Domains/` | `01_Domains/voice-and-audio.md` | Maps to core domain for provider-independent STT/TTS, audio buffering, and voice conversation. |
-| [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md) | `02_Data_and_Security/`<br>& `03_Integrations/` | `02_Data_and_Security/profiles-and-devices.md`<br>`02_Data_and_Security/authentication-and-secrets.md`<br>`02_Data_and_Security/tool-permissions-and-actions.md`<br>`02_Data_and_Security/privacy-retention-and-audit.md`<br>`03_Integrations/web-current-information.md` | Splits across profile boundaries, credential isolation, tool execution policies, and privacy/audit; read-only web semantics feed web integration. |
-| [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) | `04_Infrastructure/` | `04_Infrastructure/storage-and-assets.md`<br>`04_Infrastructure/windows-host-and-notifications.md`<br>`04_Infrastructure/backup-recovery-and-diagnostics.md`<br>`04_Infrastructure/performance-and-capacity.md` | Splits across filesystem storage, Windows host integration, practical backup/recovery, and performance governance. |
-| [`LLAMA_CPP_RUNTIME_ARCHITECTURE.md`](LLAMA_CPP_RUNTIME_ARCHITECTURE.md) | `04_Infrastructure/` | `04_Infrastructure/runtime-and-models.md` | Maps to local inference runtime, hardware offload parameters, and model management. |
-| [`ANDROID_COMPANION_ARCHITECTURE.md`](ANDROID_COMPANION_ARCHITECTURE.md) | `01_Domains/` | `01_Domains/android-companion.md` | Maps to core domain for Android Companion architecture, sync protocol, and mobile offline LLM boundaries. |
-| [`decisions/`](decisions/) | `decisions/` | `decisions/` | Architectural Decision Records (ADRs). |
+| [`SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md) | Shared Ecosystem Baseline | Retained Top-Level Baseline | Retained canonical baseline; owns cross-cutting decisions D1–D11 and release vocabulary. |
+| [`01_Domains/assistant-and-conversations.md`](01_Domains/assistant-and-conversations.md) | Turn lifecycle, context assembly, token streaming, multilingual interaction | [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](MEMORY_AND_CHARACTER_ARCHITECTURE.md) | Subordinate compatibility / scoping reference. |
+| [`01_Domains/tasks-reminders-alarms-and-routines.md`](01_Domains/tasks-reminders-alarms-and-routines.md) | Distinct scheduling semantics, quiet hours, best-effort wake, notifications | — | New focused canonical domain specification. |
+| [`01_Domains/characters-personality-and-emotion.md`](01_Domains/characters-personality-and-emotion.md) | Persistent Character config, separate Personality traits, lightweight Emotion | [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](MEMORY_AND_CHARACTER_ARCHITECTURE.md) | Subordinate compatibility / persona reference. |
+| [`01_Domains/memory-and-personalization.md`](01_Domains/memory-and-personalization.md) | Profile-first memory persistence/retrieval, FTS5 baseline, selective auto memory | [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](MEMORY_AND_CHARACTER_ARCHITECTURE.md) | Subordinate compatibility / scoping reference. |
+| [`01_Domains/voice-and-audio.md`](01_Domains/voice-and-audio.md) | CPU-first speech execution, provider-independent STT/TTS, PC V1 voice | [`VOICE_AND_AUDIO_ARCHITECTURE.md`](VOICE_AND_AUDIO_ARCHITECTURE.md) | Subordinate design & implementation reference; post-V1 voice wording superseded. |
+| [`01_Domains/multimodal-and-media.md`](01_Domains/multimodal-and-media.md) | Vision model ingestion, upload security ceilings, attachment lifecycle | — | New focused canonical domain specification (Phase 8B). |
+| [`01_Domains/android-companion.md`](01_Domains/android-companion.md) | Android companion identity, connected sync, Keystore credentials, compact offline LLM | [`ANDROID_COMPANION_ARCHITECTURE.md`](ANDROID_COMPANION_ARCHITECTURE.md) | Subordinate technical / benchmark reference; generic post-V1 wording superseded. |
+| [`02_Data_and_Security/profiles-and-devices.md`](02_Data_and_Security/profiles-and-devices.md) | User Profile data boundary (`owner_id`), trusted device enrollment, single-user baseline | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md) | Subordinate security / trust reference. |
+| [`02_Data_and_Security/authentication-and-secrets.md`](02_Data_and_Security/authentication-and-secrets.md) | Token verification, credential hierarchy, network boundaries (localhost/LAN/Tailscale) | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md) | Subordinate security / trust reference. |
+| [`02_Data_and_Security/tool-permissions-and-actions.md`](02_Data_and_Security/tool-permissions-and-actions.md) | DEFAULT DENY 4-tier risk matrix, deterministic policy, generic shell rejection | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md) | Subordinate security / trust reference. |
+| [`02_Data_and_Security/privacy-retention-and-audit.md`](02_Data_and_Security/privacy-retention-and-audit.md) | Data retention schedules, soft-delete lifecycles, physical cleanup, audit logging | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md) | Subordinate security / trust reference. |
+| [`03_Integrations/web-current-information.md`](03_Integrations/web-current-information.md) | Read-only WebSearch, Fetch, and weather context retrieval; SSRF containment | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md) | Subordinate security / trust reference. |
+| [`03_Integrations/health-and-wearables.md`](03_Integrations/health-and-wearables.md) | PC health-context readiness (PC V1) and Android Health Connect (Android V1) | [`ANDROID_COMPANION_ARCHITECTURE.md`](ANDROID_COMPANION_ARCHITECTURE.md) | Subordinate technical / benchmark reference. |
+| [`04_Infrastructure/runtime-and-models.md`](04_Infrastructure/runtime-and-models.md) | Local AI Runtime, model registry, controlled local import, optional cloud LLM fallback | [`LLAMA_CPP_RUNTIME_ARCHITECTURE.md`](LLAMA_CPP_RUNTIME_ARCHITECTURE.md) & [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) | Subordinate implementation specialization (`llama.cpp`) & Phase 8P reference. |
+| [`04_Infrastructure/storage-and-assets.md`](04_Infrastructure/storage-and-assets.md) | Canonical filesystem hierarchy (`COMPANION_DATA_ROOT`), asset registry, Phase 8P storage | [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) | Subordinate Phase 8P technical reference. |
+| [`04_Infrastructure/windows-host-and-notifications.md`](04_Infrastructure/windows-host-and-notifications.md) | Independent Windows host process, autostart at login, native OS notification delivery | [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) | Subordinate host integration reference. |
+| [`04_Infrastructure/backup-recovery-and-diagnostics.md`](04_Infrastructure/backup-recovery-and-diagnostics.md) | Practical backup snapshots, asset recovery verification, local diagnostic logging | [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) | Subordinate technical reference. |
+| [`04_Infrastructure/performance-and-capacity.md`](04_Infrastructure/performance-and-capacity.md) | Resource governance, VRAM offload profiles, idle sleep, Gaming / Low-Impact Mode | [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) & [`LLAMA_CPP_RUNTIME_ARCHITECTURE.md`](LLAMA_CPP_RUNTIME_ARCHITECTURE.md) | Subordinate technical / benchmark reference. |
+| [`decisions/`](decisions/) | Architectural Decision Records (ADRs) | Historical ADRs | Preserved ADR collection. |

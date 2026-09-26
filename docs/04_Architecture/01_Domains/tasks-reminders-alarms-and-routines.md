@@ -1,8 +1,8 @@
 # Tasks, Reminders, Alarms, and Routines Architecture
 
-> **Document Role:** Focused staged domain architecture specification (Pass R11.1).  
-> **Status:** Active Working Specification — **AUTHORITY TRANSFER PENDING R11.4**.  
-> **Authority Precedence:** This document is authored as part of the staged documentation reconciliation. Primary canonical authority remains in [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§4 / §7, Decision D10) until the formal R11.4 Authority Transfer Gate is reviewed and authorized.
+> **Document Role:** Canonical domain architecture specification.
+> **Status:** Active Canonical — authority transferred during R11.4.
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D11. This focused specification owns normative architecture for its domain. Legacy monolithic architecture documents are subordinate compatibility and technical-reference material.
 
 ---
 
@@ -73,7 +73,7 @@ Tasks are persisted in SQLite via SQLAlchemy ORM (`app.models.task.Task`) and ex
   - `pending`
   - `in_progress`
   - `completed`
-  - `cancelled`  
+  - `cancelled`
   *(Implementation fact: These status strings represent current database enum values. Durable architecture requires only a stateful completion lifecycle; these specific strings are not locked as permanent invariants.)*
 - **Current Priority Ratings:** `low`, `medium`, `high`, `urgent`.
 - **Current Categories:** `general`, `work`, `personal`, `dev`, `shopping`, `health`.
@@ -144,5 +144,5 @@ The following implementation choices are intentionally left open for subsequent 
 
 - **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§4 / §7, Decision D10)
 - **Feature Promotion Manifest:** [`docs/02_Planning/FEATURE_PROMOTION_MAP.md`](../../02_Planning/FEATURE_PROMOTION_MAP.md) (Task CRUD & Lifecycle Foundation, Reminder & Alarm Scheduling Foundation, Bounded Companion Routines)
-- **Windows Host Infrastructure:** Planned R11.2 target `docs/04_Architecture/04_Infrastructure/windows-host-and-notifications.md`
+- **Windows Host Infrastructure:** [`docs/04_Architecture/04_Infrastructure/windows-host-and-notifications.md`](../04_Infrastructure/windows-host-and-notifications.md)
 - **UI Presentation Guidance:** [`docs/05_Design/README.md`](../../05_Design/README.md) (Schedule UI rendering rules)

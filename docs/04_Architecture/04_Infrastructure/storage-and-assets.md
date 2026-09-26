@@ -1,8 +1,8 @@
 # Storage and Assets Architecture
 
-> **Document Role:** Focused staged domain architecture specification (Pass R11.3).  
-> **Status:** Active Working Specification — **AUTHORITY TRANSFER PENDING R11.4**.  
-> **Authority Precedence:** Focused staged specification authored during R11.3. AUTHORITY TRANSFER PENDING R11.4. Current legacy canonical documents remain primary authority until explicit R11.4 human review and authorization. Primary canonical authority remains in [`docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) and [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Execution Baseline, Phase 8P) until the formal R11.4 Authority Transfer Gate is reviewed and authorized.
+> **Document Role:** Canonical domain architecture specification.
+> **Status:** Active Canonical — authority transferred during R11.4.
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D11. This focused specification owns normative architecture for its domain. Legacy monolithic architecture documents are subordinate compatibility and technical-reference material.
 
 ---
 

@@ -1,16 +1,21 @@
 # Voice and Audio Architecture Specification
 
-**Project:** AI Companion Project  
-**Architecture Area:** Voice Pipeline, Audio Device Management & Speech Processing  
-**Document Role:** Canonical future-domain architecture specification  
-**Document Status:** Approved Architecture / Planned Post-V1 Implementation (Tracks V0–V6)  
-**Primary Host:** Windows 11 Local AI Runtime  
-**Target Hardware:** AMD Ryzen 5 3600, 16 GB RAM, Aisurix RX 580 8 GB VRAM  
-**Remote Companion Client:** Android Companion App  
+**Project:** AI Companion Project
+**Architecture Area:** Voice Pipeline, Audio Device Management & Speech Processing
+**Document Role:** Legacy voice design and implementation reference (non-normative after R11.4)
+**Document Status:** Subordinate Reference — primary normative authority transferred to `01_Domains/voice-and-audio.md`
+**Primary Host:** Windows 11 Local AI Runtime
+**Target Hardware:** AMD Ryzen 5 3600, 16 GB RAM, Aisurix RX 580 8 GB VRAM
+**Remote Companion Client:** Android Companion App
 
-> [!IMPORTANT]
-> **Release Boundary Notice (Decision D1):**
-> Voice & audio capabilities are strictly **POST-V1**. No voice interfaces, audio pipelines, speech models, or background audio capture services are currently implemented in the repository. This document defines the canonical architecture for future implementation phases without creating blockers for the V1 release.
+> [!WARNING]
+> **Authority Transfer & Legacy Status Notice (Pass R11.4):**
+> This document is no longer the primary normative architecture specification for voice and audio processing. Primary normative authority has transferred to:
+> - [`docs/04_Architecture/01_Domains/voice-and-audio.md`](01_Domains/voice-and-audio.md) (Voice & Audio Domain Architecture)
+>
+> **Release Boundary Notice (Supersession):** Current release allocation is governed exclusively by [`docs/04_Architecture/SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md) and [`docs/04_Architecture/01_Domains/voice-and-audio.md`](01_Domains/voice-and-audio.md). **PC V1 includes conversational voice (STT and TTS) without wake word.** Wake word detection remains **PC Later**. Historical wording in this document stating that voice & audio capabilities are strictly post-V1 is superseded and must not override current canonical specifications.
+>
+> Implemented reality remains authoritative in source code and test suites. The retained content below serves as legacy voice design and implementation reference.
 
 ---
 

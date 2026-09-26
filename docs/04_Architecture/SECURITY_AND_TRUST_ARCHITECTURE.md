@@ -1,8 +1,21 @@
 # AI Companion — Security and Trust Architecture Specification
 
-> **Document Role:** Canonical architecture specification for authentication, device trust, network boundaries, and tool security.
-> **Status:** Active Canonical (Decisions D4, D5, D9 Locked)
-> **Last Updated:** 2026-09-21 (Reconciliation Pass R3.2)
+> **Document Role:** Legacy cross-domain security and trust reference (non-normative after R11.4).
+> **Status:** Subordinate Reference — primary normative authority transferred to `02_Data_and_Security/` and `03_Integrations/web-current-information.md`.
+> **Authority Precedence:** Non-normative reference material. See [`SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md) and focused domain specifications for canonical requirements.
+
+> [!WARNING]
+> **Authority Transfer & Legacy Status Notice (Pass R11.4):**
+> This document is no longer the primary normative architecture specification for security, trust, authentication, device management, or tool execution. Primary normative authority has transferred to focused canonical specifications:
+> - [`docs/04_Architecture/02_Data_and_Security/profiles-and-devices.md`](02_Data_and_Security/profiles-and-devices.md) (Decisions D4, D8)
+> - [`docs/04_Architecture/02_Data_and_Security/authentication-and-secrets.md`](02_Data_and_Security/authentication-and-secrets.md) (Decisions D4, D5)
+> - [`docs/04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md`](02_Data_and_Security/tool-permissions-and-actions.md) (Decision D9)
+> - [`docs/04_Architecture/02_Data_and_Security/privacy-retention-and-audit.md`](02_Data_and_Security/privacy-retention-and-audit.md)
+> - [`docs/04_Architecture/03_Integrations/web-current-information.md`](03_Integrations/web-current-information.md)
+>
+> In accordance with current canonical policy: arbitrary/generic command shell execution remains **REJECTED**; read-only current information retrieval is **PC V1**; interactive browser automation is **PC Later**.
+>
+> Top-level cross-cutting product decisions and release boundaries are governed by [`docs/04_Architecture/SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md). Implemented reality remains authoritative in source code and test suites. The retained content below serves as a cross-domain security reference and historical implementation baseline.
 
 ---
 

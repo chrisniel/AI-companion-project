@@ -1,8 +1,8 @@
 # AI Companion — Android Companion Architecture Specification
 
-> **Document Role:** Canonical architecture specification for Android Companion product identity, connected/offline modes, and mobile inference evidence.  
-> **Status:** Active Canonical Future-Domain Architecture (Decision D3 Locked; Post-V1 Milestone)  
-> **Last Updated:** 2026-09-20 (Reconciliation Pass R3)
+> **Document Role:** Legacy Android technical and benchmark reference (non-normative after R11.4).
+> **Status:** Subordinate Reference — primary normative authority transferred to `01_Domains/android-companion.md` and `03_Integrations/health-and-wearables.md`.
+> **Authority Precedence:** Non-normative reference material. See [`SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md) and focused domain specifications for canonical requirements.
 
 ---
 
@@ -10,12 +10,15 @@
 
 The **Android Companion** is the mobile client for the AI Companion ecosystem.
 
-> [!IMPORTANT]
-> **Release Boundary Notice (Decision D1):**
-> - Production Android backend synchronization is **strictly POST-V1**.
-> - Android offline on-device inference is **strictly POST-V1**.
-> - An initial prototype HTTP client and Task synchronization foundation is implemented in `android/`, but production-grade connected hardening, Keystore credential security (D4), durable offline queuing, and offline inference are deferred beyond V1.
-> - This document defines the canonical architecture for future mobile development without creating delivery blockers for V1.
+> [!WARNING]
+> **Authority Transfer & Legacy Status Notice (Pass R11.4):**
+> This document is no longer the primary normative architecture specification for the Android Companion or mobile integrations. Primary normative authority has transferred to:
+> - [`docs/04_Architecture/01_Domains/android-companion.md`](01_Domains/android-companion.md) (Decisions D1, D3, D4: Mobile Architecture & Sync)
+> - [`docs/04_Architecture/03_Integrations/health-and-wearables.md`](03_Integrations/health-and-wearables.md) (Health Connect & Wearables Integration)
+>
+> **Release Boundary Notice (Supersession):** Current Android release boundary is governed exclusively by [`docs/04_Architecture/SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md) and [`docs/04_Architecture/01_Domains/android-companion.md`](01_Domains/android-companion.md). **Android V1 is an independent follow-on production release that does not block PC V1.** Android V1 includes connected sync, secure device credentials (Keystore), Room/outbox, practical compact offline LLM, Health Connect, scheduling, persona continuity, and bidirectional reconciliation. Exact offline model, format, and quantization remain **Open Design**. Device-local TTS remains **Experimental / Future Unscheduled** (neither Android V1 nor committed Android Later). Historical benchmark data in this document represents point-in-time exploratory evidence only.
+>
+> Implemented reality remains authoritative in source code and test suites. The retained content below serves as legacy Android technical and benchmark reference.
 
 ---
 

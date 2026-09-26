@@ -1,12 +1,23 @@
 # AI Companion — Runtime Configuration, Persistent Data & Asset Library Architecture
 
-> **Project:** AI Companion  
-> **Backend service:** Local AI Runtime  
-> **Document role:** Canonical architecture plan for naming, configuration, persistent data, model/voice assets, runtime modularity, character identity, and Phase 8 prerequisites  
-> **Target repository path:** `docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`  
-> **Status:** Active Canonical Architecture (Phase 8P Implemented; Decisions D1–D9 Locked)  
-> **Current implementation baseline:** Windows + `llama.cpp` b10936 Vulkan; current tested hardware is AMD RX 580 8 GB  
-> **Last updated:** 2026-09-20 (Reconciliation Pass R3)
+> **Project:** AI Companion
+> **Backend service:** Local AI Runtime
+> **Document role:** Phase 8P implementation reference and subordinate technical baseline (non-normative after R11.4)
+> **Target repository path:** `docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`
+> **Status:** Subordinate Reference — primary normative authority transferred to `04_Infrastructure/` specifications
+> **Current implementation baseline:** Windows + `llama.cpp` b10936 Vulkan; current tested hardware is AMD RX 580 8 GB
+> **Authority Precedence:** Non-normative reference material. See [`SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md) and focused infrastructure specifications for canonical requirements.
+
+> [!WARNING]
+> **Authority Transfer & Legacy Status Notice (Pass R11.4):**
+> This document is no longer the primary normative architecture specification for general runtime configuration, models, asset storage, host integration, backup/recovery, or performance. Primary normative authority has transferred to focused canonical specifications:
+> - [`docs/04_Architecture/04_Infrastructure/storage-and-assets.md`](04_Infrastructure/storage-and-assets.md) (Storage Layout, Asset Registry, Phase 8P Contracts)
+> - [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](04_Infrastructure/runtime-and-models.md) (Decision D6: Local AI Runtime & Generative Model Architecture)
+> - [`docs/04_Architecture/04_Infrastructure/windows-host-and-notifications.md`](04_Infrastructure/windows-host-and-notifications.md) (Decision D2: Windows Host Integration)
+> - [`docs/04_Architecture/04_Infrastructure/backup-recovery-and-diagnostics.md`](04_Infrastructure/backup-recovery-and-diagnostics.md) (Backup, Recovery & Diagnostics)
+> - [`docs/04_Architecture/04_Infrastructure/performance-and-capacity.md`](04_Infrastructure/performance-and-capacity.md) (Principle P23: Resource Governance)
+>
+> Top-level cross-cutting product decisions and release boundaries are governed by [`docs/04_Architecture/SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md). Implemented reality remains authoritative in source code and test suites. Detailed Phase 8P technical specifications and asset contracts retained below remain valuable implementation and verification reference material.
 
 ---
 

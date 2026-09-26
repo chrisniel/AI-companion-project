@@ -1,15 +1,21 @@
 # llama.cpp Runtime Architecture Specification
 
-**Project:** AI Companion Project  
-**Architecture Area:** Local LLM Runtime, Persistent Router & Hardware Offload  
-**Document Role:** Canonical runtime architecture and execution specification  
-**Document Status:** Approved Architecture / Active Baseline  
+**Project:** AI Companion Project
+**Architecture Area:** Local LLM Runtime, Persistent Router & Hardware Offload
+**Document Role:** Implementation specialization and technical reference for llama.cpp engine (subordinate to `04_Infrastructure/runtime-and-models.md`)
+**Document Status:** Subordinate Implementation Specialization (Pass R11.4)
 **Pinned Baseline:** `llama.cpp` b10936 (Windows x86_64, Vulkan build in `runtime/llama.cpp/`)
 **Primary Host:** Windows 11 Local AI Runtime
+**Primary GPU Target:** AMD Aisurix RX 580 2048SP (8 GB VRAM)
+**Primary RAM Target:** 16 GB System DDR4 RAM
 
-> **Scope note:** This document owns llama.cpp-specific lifecycle, router architecture, port/profile/sleep/PID behavior, and hardware offload details. General configuration domains, persistent storage layout, `COMPANION_DATA_ROOT`, model-manifest contract, and asset-library rules are defined canonically in `docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`.
-**Primary GPU Target:** AMD Aisurix RX 580 2048SP (8 GB VRAM)  
-**Primary RAM Target:** 16 GB System DDR4 RAM  
+> [!NOTE]
+> **Implementation Specialization & Subordinate Authority Notice (Pass R11.4):**
+> This document is a subordinate implementation specialization detailing the concrete `llama.cpp` engine integration. It is **subordinate** to the canonical domain specifications:
+> - [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](04_Infrastructure/runtime-and-models.md) (Canonical Runtime & Model Architecture, Decision D6)
+> - [`docs/04_Architecture/04_Infrastructure/performance-and-capacity.md`](04_Infrastructure/performance-and-capacity.md) (Generic Resource Governance, Principle P23)
+>
+> General provider-independent product architecture is owned by `04_Infrastructure/runtime-and-models.md`. The details in this document (persistent router lifecycle, flags, PID management, ports, Vulkan / RX 580 specifics) represent concrete `llama.cpp` implementation behavior and reference material. Source code and automated tests remain authoritative for implemented reality.
 
 ---
 

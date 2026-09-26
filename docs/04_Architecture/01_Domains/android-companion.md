@@ -1,7 +1,8 @@
 # Android Companion Architecture
 
-> **Document Role:** Focused staged domain architecture specification (Pass R11.2).  
-> **Authority Precedence:** Focused staged specification authored during R11.2. AUTHORITY TRANSFER PENDING R11.4. Current legacy canonical documents remain primary authority until explicit R11.4 human review and authorization. Primary canonical authority remains in [`docs/04_Architecture/ANDROID_COMPANION_ARCHITECTURE.md`](../ANDROID_COMPANION_ARCHITECTURE.md) and [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§2 Core Architecture, Decisions D1, D3, D4) until the formal R11.4 Authority Transfer Gate is reviewed and authorized.
+> **Document Role:** Canonical domain architecture specification.
+> **Status:** Active Canonical — authority transferred during R11.4.
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D11. This focused specification owns normative architecture for its domain. Legacy monolithic architecture documents are subordinate compatibility and technical-reference material.
 
 ---
 
@@ -126,7 +127,7 @@ The following implementation choices are intentionally left open for subsequent 
 
 ## 7. Canonical Relationships & Cross-Links
 
-- **Canonical Architecture Source:** [`docs/04_Architecture/ANDROID_COMPANION_ARCHITECTURE.md`](../ANDROID_COMPANION_ARCHITECTURE.md) (Retains primary authority until R11.4)
+- **Legacy Technical Reference:** [`docs/04_Architecture/ANDROID_COMPANION_ARCHITECTURE.md`](../ANDROID_COMPANION_ARCHITECTURE.md) (Subordinate mobile technical & benchmark reference)
 - **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§2 Core Architecture, Decisions D1, D3, D4)
 - **Feature Promotion Manifest:** [`docs/02_Planning/FEATURE_PROMOTION_MAP.md`](../../02_Planning/FEATURE_PROMOTION_MAP.md) (Android Connected Sync, Android Practical Offline LLM, Android Device-Local TTS, Android Health Connect)
-- **Health & Wearables Integration:** Planned R11.3 target `docs/04_Architecture/03_Integrations/health-and-wearables.md`
+- **Health & Wearables Integration:** [`docs/04_Architecture/03_Integrations/health-and-wearables.md`](../03_Integrations/health-and-wearables.md)

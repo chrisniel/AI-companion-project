@@ -1,8 +1,18 @@
 # AI Companion — Memory and Character Architecture Specification
 
-> **Document Role:** Canonical architecture specification for profile-first memory, character scoping, and personal data ownership.  
-> **Status:** Active Canonical (Decisions D7, D8 Locked)  
-> **Last Updated:** 2026-09-20 (Reconciliation Pass R3)
+> **Document Role:** Legacy compatibility and technical reference (non-normative after R11.4).
+> **Status:** Subordinate Reference — primary normative authority transferred to `01_Domains/memory-and-personalization.md` and `01_Domains/characters-personality-and-emotion.md`.
+> **Authority Precedence:** Non-normative reference material. See [`SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md) and focused domain specifications for canonical requirements.
+
+> [!WARNING]
+> **Authority Transfer & Legacy Status Notice (Pass R11.4):**
+> This document is no longer the primary normative architecture specification for memory, personal data, or character configuration. Primary normative authority has transferred to the focused canonical domain specifications:
+> - [`docs/04_Architecture/01_Domains/memory-and-personalization.md`](01_Domains/memory-and-personalization.md) (Decision D7: Profile vs. Character Memory Ownership)
+> - [`docs/04_Architecture/01_Domains/characters-personality-and-emotion.md`](01_Domains/characters-personality-and-emotion.md) (Decision D11: Persona Configuration & Boundaries)
+>
+> Top-level cross-cutting product decisions and release boundaries are governed by [`docs/04_Architecture/SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md). Implemented reality remains authoritative in source code and test suites.
+>
+> The retained content below serves as legacy compatibility and technical/historical reference. Any release or status statements in this document that conflict with the focused specifications or SYSTEM_BASELINE.md are superseded.
 
 ---
 
