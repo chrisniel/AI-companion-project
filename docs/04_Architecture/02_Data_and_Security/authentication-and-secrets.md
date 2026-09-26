@@ -54,6 +54,7 @@ Verified in `backend/app/core/security.py`, `backend/app/api/deps.py`, and `back
 - **Fail-Closed Router Assembly:**
   - `public_router`: Whitelists only `GET /api/v1/health` (`public_health_router`).
   - `protected_router`: Applies `dependencies=[Depends(verify_token)]` at the root router level across all other endpoints (`/system`, `/auth`, `/tasks`, `/llm`, `/conversations`, conversation attachment routes, and `/memories`).
+- **CORS Configuration:** `settings.CORS_ORIGINS` in `backend/app/core/config.py` specifies four development localhost/loopback origins: `http://localhost:5173`, `http://127.0.0.1:5173`, `http://localhost:3000`, and `http://127.0.0.1:3000`. These represent current development localhost/loopback origins, not production origins, and are not promoted into durable architecture.
 - **Current Token Schema:** Uses a single shared pairing key (`COMPANION_API_KEY`). On initial launch without a configured key, `ensure_pairing_token()` generates a 32-byte URL-safe string (`companion_sec_<token>`).
 
 ### 3.2 Secret Storage Reality
@@ -90,7 +91,7 @@ The following implementation choices remain open design for future technical spe
 
 - **Constant-Time Verification:** All token comparisons must use constant-time operations to eliminate timing side-channels.
 - **No Client Elevation:** Possession of a client token permits interaction with companion conversational APIs, but does not grant administrative authority to read host filesystem paths or manipulate host process lifecycles.
-- **CORS Containment:** CORS origins in `settings.CORS_ORIGINS` restrict cross-origin browser access to explicitly authorized development localhost origins (`localhost:5173`, `localhost:3000`). These are development localhost origins, not production origins.
+- **CORS Containment:** CORS origins in `settings.CORS_ORIGINS` restrict cross-origin browser access to explicitly authorized development localhost/loopback origins (`http://localhost:5173`, `http://127.0.0.1:5173`, `http://localhost:3000`, `http://127.0.0.1:3000`). These are current development localhost/loopback origins, not production origins, and are not promoted into durable architecture.
 
 ---
 

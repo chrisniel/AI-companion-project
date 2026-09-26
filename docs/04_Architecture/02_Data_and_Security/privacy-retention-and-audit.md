@@ -42,8 +42,8 @@ Verified in `backend/app/models/task.py`, `backend/app/core/config.py`, and `bac
 - **Soft-Delete Support:** `Task` includes `is_deleted: Mapped[bool]` and `deleted_at: Mapped[Optional[datetime]]` via `SoftDeleteMixin`.
 - **Recycle Bin Lifespan:** `settings.DATA_RETENTION_DAYS = 30` configures the default retention window.
 - **Remaining Days Calculation:** `calculate_remaining_days(deleted_at, retention_days)` calculates days remaining before permanent purge.
-- **Automated Purge Service:** `purge_expired_trash(db, retention_days=None, owner_id=None)` permanently removes (`DELETE FROM tasks`) soft-deleted tasks older than the retention threshold. It supports an optional `owner_id` filter: when `owner_id` is supplied, the purge is owner-scoped; when omitted, the host maintenance runner can sweep expired soft-deleted Tasks globally across the database.
-- **Standalone Purge Runner:** Implemented in `backend/app/services/retention.py` through `run_retention_purge_job()` and its `__main__` CLI runner (`python -m app.services.retention`).
+- **Task Purge Service Function:** `purge_expired_trash(db, retention_days=None, owner_id=None)` permanently removes (`DELETE FROM tasks`) soft-deleted tasks older than the retention threshold. It supports an optional `owner_id` filter: when `owner_id` is supplied, the purge is owner-scoped; when omitted, the host maintenance runner can sweep expired soft-deleted Tasks globally across the database.
+- **Standalone Purge Runner:** Implemented in `backend/app/services/retention.py` through `run_retention_purge_job()` and its `__main__` CLI runner (`python -m app.services.retention`). There is NO periodically scheduled runtime retention job currently wired into the application.
 - **Scope Boundary:** `DATA_RETENTION_DAYS` and `purge_expired_trash` **currently govern only Tasks**. They do **not** automatically apply to or purge memories, conversations, or attachments.
 
 ### 3.2 Memory Deletion Reality

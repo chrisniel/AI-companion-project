@@ -133,7 +133,7 @@ The following technical mechanisms remain open design for future implementation 
 
 ## 6. Security & Ownership Boundaries
 
-- **Local Inference Isolation:** Local inference requires no external/cloud network egress by default. Current llama.cpp integration may use localhost/loopback HTTP between local processes. Prompt tokens, character lore, and conversational history remain entirely on host RAM/VRAM.
+- **Local Inference Isolation:** During local inference, prompt/context data remains on the local host and does not require external/cloud egress by default. Current llama.cpp integration may exchange inference payloads over localhost/loopback HTTP between local processes.
 - **Cloud Egress Sanitization:** If cloud fallback is engaged, system prompts and context assembly must enforce privacy redaction policies, stripping sensitive profile identifiers, and health data must never be egressed without explicit authorization.
 - **Safe Model Format Boundary:** Durable safety rule: Never execute arbitrary untrusted code merely because it is packaged as a model asset. Unsafe executable or deserialization formats (e.g., raw Python pickles) require explicit safe handling or are rejected by the relevant importer. Current llama.cpp provider uses GGUF tensor format; safe runtime-specific formats (e.g., ONNX) may be supported where separately approved.
 
