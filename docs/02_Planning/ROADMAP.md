@@ -148,7 +148,7 @@ Android V1 is the follow-on production mobile companion release (`com.cnl.aicomp
 - *Canonical Architecture Owners:* [`docs/04_Architecture/01_Domains/android-companion.md`](../04_Architecture/01_Domains/android-companion.md), [`health-and-wearables.md`](../04_Architecture/03_Integrations/health-and-wearables.md).
 
 ### 4.2 Post-PC-V1 Tracks: PC Later
-The tracks below represent approved PC capabilities scheduled for milestones following PC V1. Execution ordering among tracks is not locked and will be sequenced in subsequent planning:
+The capability tracks below represent approved PC Later features scheduled for milestones following PC V1. Explicitly labeled conditional security or design boundaries in this section are guidance only and do not constitute committed delivery milestones. Execution ordering among committed tracks is not locked and will be sequenced in subsequent planning:
 - **Wake Word Detection:** Background wake phrase listening (`WakeWordProvider`, candidate openWakeWord); decoupled from PC V1 conversational voice.
   - *Canonical Owner:* [`docs/04_Architecture/01_Domains/voice-and-audio.md`](../04_Architecture/01_Domains/voice-and-audio.md).
 - **Relationship State:** Separate, opt-in, and hidden by default; strictly decoupled from Emotion and Personality (Decision D11).
