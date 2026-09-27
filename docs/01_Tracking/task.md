@@ -2,10 +2,10 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Current State: Canonical Feature Reconciliation — Pass R12 Roadmap / Planning / CI Alignment = **IN PROGRESS** (Sub-slice R12.1 = **COMPLETE / REVIEW PENDING**)
+- Current State: Canonical Feature Reconciliation — Pass R12 Roadmap / Planning / CI Alignment = **IN PROGRESS** (Sub-slice R12.1 = **COMPLETE / VERIFIED**; Sub-slice R12.2 = **NEXT / UNBLOCKED**)
   - Sub-slices:
-    - `R12.1 — Release Boundary & Roadmap Taxonomy` (`COMPLETE / REVIEW PENDING`)
-    - `R12.2 — Delivery Sequencing & Planning Alignment` (`PLANNED`)
+    - `R12.1 — Release Boundary & Roadmap Taxonomy` (`COMPLETE / VERIFIED`)
+    - `R12.2 — Delivery Sequencing & Planning Alignment` (`NEXT / UNBLOCKED`)
     - `R12.3 — Golden PC V1 Acceptance Journey` (`PLANNED`)
     - `R12.4 — CI Governance Target Alignment` (`PLANNED`)
     - `R12.5 — Final Consistency Review & R12 Closure` (`PLANNED`)
@@ -27,7 +27,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | **R9** | **Implemented Reality Refresh** | `COMPLETE / VERIFIED` | Refreshed factual baseline, migration 006, 8B.0–8B.6 foundation, CI #23 test counts across canonical docs. |
 | **R10** | **Product Boundary & Decision Relock** | `COMPLETE / VERIFIED` | Relocked D1–D11; established PC V1 and Android V1 boundaries; created `FEATURE_PROMOTION_MAP.md`. |
 | **R11** | **Domain Architecture Alignment** | `COMPLETE / VERIFIED` | Staged domain architecture extraction and authority transfer (R11.0–R11.4 COMPLETE / VERIFIED). |
-| **R12** | **Roadmap / Planning / CI Alignment** | `IN PROGRESS` | Roadmap and planning alignment, including target CI governance and Golden Journey alignment (R12.1 COMPLETE / REVIEW PENDING; R12.2–R12.5 PLANNED). |
+| **R12** | **Roadmap / Planning / CI Alignment** | `IN PROGRESS` | Roadmap and planning alignment, including target CI governance and Golden Journey alignment (R12.1 COMPLETE / VERIFIED; R12.2 NEXT / UNBLOCKED; R12.3–R12.5 PLANNED). |
 | **R13** | **Documentation Map, Cross-links & Closure** | `PLANNED` | Documentation map/routing/cross-links, task closure, consistency sweep, and reconciliation closure. |
 
 ---
@@ -37,7 +37,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 1. **User-Owned Git Operations:** AI agents must never execute git commit, push, merge, checkout, or branch creation.
 2. **Documentation-Only Scope:** Do not modify application source code, tests, contracts, or `.github/workflows/ci.yml`.
 3. **Factual Implemented Reality:** Document only verified repository reality; distinguish repository migration head (006) from individual workstation state.
-4. **Staged Domain Strategy:** Pass R10 established platform release vocabulary (PC V1 vs. Android V1), relocked decisions D1–D11, and created the `FEATURE_PROMOTION_MAP.md` control manifest. Pass R11 executed sub-slice by sub-slice (R11.0–R11.4 COMPLETE / VERIFIED), transferring canonical domain authority to 18 focused domain specifications. Pass R12 Roadmap / Planning / CI Alignment is IN PROGRESS (R12.1 COMPLETE / REVIEW PENDING; R12.2–R12.5 PLANNED); documentation routing and task closure occur in Pass R13 (PLANNED).
+4. **Staged Domain Strategy:** Pass R10 established platform release vocabulary (PC V1 vs. Android V1), relocked decisions D1–D11, and created the `FEATURE_PROMOTION_MAP.md` control manifest. Pass R11 executed sub-slice by sub-slice (R11.0–R11.4 COMPLETE / VERIFIED), transferring canonical domain authority to 18 focused domain specifications. Pass R12 Roadmap / Planning / CI Alignment is IN PROGRESS (R12.1 COMPLETE / VERIFIED; R12.2 NEXT / UNBLOCKED; R12.3–R12.5 PLANNED); documentation routing and task closure occur in Pass R13 (PLANNED).
 
 ---
 
