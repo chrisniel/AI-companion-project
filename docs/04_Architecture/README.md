@@ -1,7 +1,7 @@
 # Architecture Navigation & Authoring Guide
 
 > **Document Role:** Canonical architecture navigation hub and domain specification authoring standard.
-> **Status:** Active Standard (Pass R11.0 Baseline)
+> **Status:** Active Standard (Pass R13 Baseline)
 > **Authority Precedence:** This document governs how architecture specifications are authored, organized, and navigated. Normative system baseline is anchored in [`SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md). Active execution state is tracked in [`docs/01_Tracking/task.md`](../01_Tracking/task.md). Detailed feature promotion dispositions are recorded in [`docs/02_Planning/FEATURE_PROMOTION_MAP.md`](../02_Planning/FEATURE_PROMOTION_MAP.md).
 
 ---
@@ -171,11 +171,11 @@ To guarantee continuity, documentation migration follows a staged transfer patte
        - `backup / recovery`
        - `performance / capacity`
    - During R11.0–R11.3, legacy documents were preserved as authorities while focused specifications were authored and reviewed.
-2. **Authority Transfer Applied (Sub-slice R11.4) — `AUTHORITY TRANSFER APPLIED / INDEPENDENT REVIEW PENDING`:**
-   - Following explicit human authorization, canonical domain authority was formally transferred to the 18 focused domain specifications.
+2. **Authority Transfer Complete (Sub-slice R11.4) — `COMPLETE / VERIFIED`:**
+   - Following explicit human authorization and successful independent review, canonical domain authority was formally transferred to the 18 focused domain specifications.
    - Legacy monolithic documents have been safely narrowed to subordinate compatibility, implementation, and technical reference roles.
    - The top-level ecosystem baseline remains canonically anchored in [`SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md).
-   - Independent review of the R11.4 authority transfer is pending before final R11 closure.
+   - Pass R11 Domain Architecture Alignment is COMPLETE / VERIFIED.
 
 ---
 

@@ -50,14 +50,22 @@ Configure project-specific paths and boundaries in the Project Profile below. If
 - Technical specs in `docs/04_Architecture/` and design specs in `docs/05_Design/` remain accessible on demand when relevant to the active task.
 - If `.aiignore`, `.cursorignore`, or `.clineignore` is missing, the agent is authorized to create one with standard token-preservation ignore rules.
 
-## 3. Feature-Specific Plans & In-Place Plan Updates
+## 3. Delivery Gate Workflow & Feature Planning
 
-- For non-trivial features, refactors, or bug fixes, provide step-by-step logic in plain pseudocode for user review before writing code.
-- Feature-Named Planning: To prevent team merge conflicts, name implementation plans after the specific feature or fix (e.g., `docs/02_Planning/plan-[feature-name].md`) rather than writing to a single shared document.
-- Update In-Place: During the planning phase, update existing sections (affected files, acceptance criteria, steps) directly in place. Never prepend duplicate plans or drafts above existing content.
-- Obtain explicit user approval on the plan before implementing code.
-- Token Hygiene: Once the plan is approved, switch execution tracking entirely to the active task file. Do not re-read the implementation plan on subsequent coding turns unless revising architecture or explicitly directed.
-- New Plan Creation: If no active implementation plan already covers a non-trivial feature, refactor, or bug fix, copy docs/02_Planning/templates/implementation-plan-template.md (or the Starter Kit equivalent when bootstrapping a new project) into an appropriately feature-named path under docs/02_Planning/ or the relevant phase directory, complete it in place, and obtain user approval before implementation. If an applicable active plan already exists, update that plan instead of creating a duplicate.
+- **Delivery Gate Lifecycle:** For non-trivial implementation work, strictly adhere to the explicit delivery lifecycle:
+  ```text
+  PLAN → IMPLEMENT → IMPLEMENTATION GATE → DOCUMENT → DOCUMENTATION GATE → CLOSURE → CLOSURE GATE
+  ```
+- **Proportionality & Trivial Fixes:** Already-approved trivial or surgical fixes do not require performative re-planning; use engineering judgment proportional to risk, uncertainty, and scope. Implementation intent is never documentation evidence.
+- **Task Granularity & Subsystem Batching Principle:** Do not enforce an arbitrary numerical slice limit. Scope tasks and documentation passes to:
+  > *"The largest tightly related task or batch that preserves reliable first-pass accuracy, reviewability, and bounded correction cost."*
+  Prefer cohesive subsystem batches over microscopic ceremony. Reduce batch size when correction cycles or cross-domain ambiguity increase.
+- **Documentation Timing Boundary:** Implementation may update narrowly coupled technical artifacts required for correctness during code changes (e.g., generated OpenAPI contracts, migration notes, prerequisite ADRs, inline docstrings, comments, minimum synchronized technical artifacts required to keep the repository truthful). However, broad canonical feature documentation and delivery closure must follow implementation verification, not precede it as substitute evidence.
+- **Feature-Named Planning:** For non-trivial features, refactors, or bug fixes, provide step-by-step logic in plain pseudocode for user review before writing code. To prevent team merge conflicts, name implementation plans after the specific feature or fix (e.g., `docs/02_Planning/plan-[feature-name].md`) rather than writing to a single shared document.
+- **Update In-Place:** During the planning phase, update existing sections (affected files, acceptance criteria, steps) directly in place. Never prepend duplicate plans or drafts above existing content.
+- **Approval Gate:** Obtain explicit user approval on the plan before implementing code.
+- **Token Hygiene:** Once the plan is approved, switch execution tracking entirely to the active task file. Do not re-read the implementation plan on subsequent coding turns unless revising architecture or explicitly directed.
+- **New Plan Creation:** If no active implementation plan already covers a non-trivial feature, refactor, or bug fix, copy `docs/02_Planning/templates/implementation-plan-template.md` (or the Starter Kit equivalent when bootstrapping a new project) into an appropriately feature-named path under `docs/02_Planning/` or the relevant phase directory, complete it in place, and obtain user approval before implementation. If an applicable active plan already exists, update that plan instead of creating a duplicate.
 
 ## 4. In-Place Task Continuity & Per-File Archiving (task.md)
 
@@ -94,12 +102,18 @@ Configure project-specific paths and boundaries in the Project Profile below. If
 
 ## 8. Single Source of Truth & Documentation Alignment
 
-- Canonical entry-point sequence: Start with [AGENTS.md](AGENTS.md) -> [DOCUMENTATION_MAP.md](docs/06_Guides/DOCUMENTATION_MAP.md) -> [SYSTEM_BASELINE.md](docs/04_Architecture/SYSTEM_BASELINE.md) -> [ROADMAP.md](docs/02_Planning/ROADMAP.md) (only when sequencing / release scope / milestone ownership matters) -> relevant domain architecture and accepted ADR(s) -> active [task.md](docs/01_Tracking/task.md) -> relevant ACTIVE implementation plan.
-- Implemented Reality: Source code and automated test suites remain authoritative for implemented reality.
-- Context Discipline: Historical walkthroughs, archives, completed tasks, drafts, and the historical Master Implementation Plan are NOT normal startup context. Do not require loading every domain architecture document; load only the specific domain relevant to the task.
-- When contracts, APIs, configurations, or behaviors change, update the closest canonical document in the same delivery.
-- Prefer linking or referring to canonical documents over duplicating content across multiple markdown files.
-- Treat drafts, legacy notes, and attached documents as reference material unless explicitly approved as current requirements.
+- **Startup Context Routing:** Canonical entry-point sequence: Start with [AGENTS.md](AGENTS.md) -> [DOCUMENTATION_MAP.md](docs/06_Guides/DOCUMENTATION_MAP.md) -> [SYSTEM_BASELINE.md](docs/04_Architecture/SYSTEM_BASELINE.md) -> [ROADMAP.md](docs/02_Planning/ROADMAP.md) (only when sequencing / release scope / milestone ownership matters) -> relevant focused canonical domain specification / accepted ADR -> active [task.md](docs/01_Tracking/task.md) -> relevant ACTIVE implementation plan. Drafts, archives, walkthroughs, and legacy monoliths are NOT default startup authority.
+- **Canonical Ownership:** Exactly one canonical owner per normative fact or domain. Other documents link to the canonical owner instead of independently redefining or duplicating the rule. Subordinate legacy documents remain historical or technical references only.
+- **Stable Canonical Tense:**
+  - Delivered, verified work must be documented in **past tense**;
+  - Durable architecture, invariants, and policies must be documented in **present tense**;
+  - Genuine target, future, or planned capabilities must be documented in **target/future wording**;
+  - Temporary PR, review, check, or merge statuses belong in GitHub/tracker metadata, **not** in permanent architecture prose.
+- **Implemented Reality:** Source code, automated test suites, and generated schema contracts remain authoritative for implemented reality. Implementation reality must never be inferred or invented from documentation intent.
+- **Context Discipline:** Historical walkthroughs, archives, completed tasks, drafts, and the historical Master Implementation Plan are NOT normal startup context. Do not require loading every domain architecture document; load only the specific domain relevant to the task.
+- **Synchronization:** When contracts, APIs, configurations, or behaviors change, update the closest canonical document in the same delivery.
+- **Reference Integrity:** Prefer linking or referring to canonical documents over duplicating content across multiple markdown files.
+- **Draft Status:** Treat drafts, legacy notes, and attached documents as reference material unless explicitly approved as current requirements.
 
 ## 9. Surgical & Minimal Changes
 
@@ -110,10 +124,12 @@ Configure project-specific paths and boundaries in the Project Profile below. If
 
 ## 10. Truthful Verification & Safety Boundaries
 
-- The AI agent may author test fixtures, run non-destructive automated checks, and provide manual checklists.
-- Never claim tests passed unless executed and confirmed: Never simulate engine execution, fabricate test results, or mark user-assigned checks as passed without explicit confirmation.
-- Clearly separate automated script/command results from pending manual or hardware-dependent user checks.
-- Provide step-by-step reproduction and verification steps for all visual, physical, or experiential checks.
+- **Implementation Gate:** Before canonical delivery documentation claims implemented behavior, explicitly inspect actual source code, automated tests, generated schema contracts, database migrations where applicable, and verified runtime/CI evidence where relevant. A plan or specification stating that something should exist is not proof that it exists.
+- **Documentation Gate / No Self-Verification:** An agent that authors or materially edits canonical documentation **MUST NOT** mark that same documentation `COMPLETE / VERIFIED` without independent review. The authoring agent stops after its own mechanical verification and supplies the exact diff and evidence for independent human review. Tracker closure occurs only in a subsequent pass after independent approval.
+- **Execution Truthfulness:** The AI agent may author test fixtures, run non-destructive automated checks, and provide manual checklists.
+- **Never Claim Tests Passed Without Confirmation:** Never simulate engine execution, fabricate test results, or mark user-assigned checks as passed without explicit confirmation.
+- **Verification Separation:** Clearly separate automated script/command results from pending manual or hardware-dependent user checks.
+- **Reproducibility:** Provide step-by-step reproduction and verification steps for all visual, physical, or experiential checks.
 
 ## 11. Clarify Material Unknowns
 
@@ -129,8 +145,14 @@ Configure project-specific paths and boundaries in the Project Profile below. If
 
 ## 13. Git & External Boundary Protections
 
-- User-Owned Git Authority: Do not execute git add, git commit, git push, git merge, git rebase, git branch, git checkout, git switch, git tag, git stash, git reset, git restore, or pull request operations. Chris performs all Git operations manually. The AI agent may inspect Git state, inspect diffs/history, suggest branch names, suggest commands, and supply proposed Conventional Commit messages.
-- Stop after verification and provide the user with a concise Conventional Commit-style message describing the delivered scope. The user manually reviews, commits, and pushes.
-- Treat external repositories, package caches, and system paths outside the workspace as strictly read-only.
-- Resolve exact target paths before executing any file deletion or overwrite.
-- The accepted model-storage policy keeps Git source and LFS pointers on GitHub while the private Hugging Face dataset stores LFS objects. Do not change `.gitattributes`, `.lfsconfig`, model tracking, either remote, or that policy without explicit authorization.
+- **User-Owned Git Authority:** Chris alone performs all Git write operations. Do NOT execute `git add`, `git commit`, `git push`, `git merge`, `git rebase`, `git branch`, `git checkout`, `git switch`, `git tag`, `git stash`, `git reset`, `git restore`, pull request creation, or pull request merge. The AI agent may inspect Git state, inspect diffs/history/checks, suggest branch names, suggest commands, and supply proposed Conventional Commit messages.
+- **Stop After Verification:** Stop after mechanical verification and provide the user with a concise Conventional Commit-style message describing the delivered scope. The user manually reviews, commits, and pushes.
+- **PR & Merge Handoff Protocol:** When preparing or reviewing Pull Requests and merges, adhere to this durable handoff protocol (the agent inspects and guides, Chris performs the actions):
+  - **Before PR Creation:** Verify exact base branch; verify exact head branch and pushed HEAD SHA; verify delivered scope matches the approved task; verify all required local/CI checks pass; provide an exact, reviewable PR title and structured description.
+  - **After PR Opens:** Inspect and verify the exact pushed head SHA and the reported status of all CI/status checks on the PR.
+  - **Before Squash / Merge:** Verify mergeability, absence of merge conflicts, and that all required status checks have succeeded; provide the exact squash commit title and commit body.
+  - **After Merge:** Verify the merged commit SHA on the target branch (e.g., `develop` or `master`); verify expected post-merge workflow execution and status.
+  Agents do not create or merge the PR.
+- **Read-Only External Environment:** Treat external repositories, package caches, and system paths outside the workspace as strictly read-only.
+- **Destructive Action Safety:** Resolve exact target paths before executing any file deletion or overwrite.
+- **Model Storage Policy:** The accepted model-storage policy keeps Git source and LFS pointers on GitHub while the private Hugging Face dataset stores LFS objects. Do not change `.gitattributes`, `.lfsconfig`, model tracking, either remote, or that policy without explicit authorization.
