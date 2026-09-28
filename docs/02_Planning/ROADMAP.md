@@ -159,14 +159,14 @@ Focuses on operational reliability, data safety, and configuration boundaries:
 - **Database Migration Safety Preflight (`PC V1`):** Preflight verification that validates migration compatibility and blocks unsafe, destructive, or unrecoverable migration conditions on existing user databases.
 - **Secure Configuration & Authentication Boundary Hardening (`PC V1`):** Enforcing secure local credential handling, supported localhost / trusted LAN / Tailscale trust boundaries, and secure defaults.
 - **Final Integrated Regression & Release Verification (`PC V1`):** Full-suite verification across backend, frontend, runtime, and integration tests prior to Golden Acceptance Gate entry.
-- *(Governance Guardrail: Pre-Upgrade Database Snapshot remains in Section 6 as `RECOMMENDED PRE-V1 HARDENING — NOT YET SCHEDULED`; Diagnostics & Recovery Center remains `RECOMMENDED — APPROVAL / IMPLEMENTATION PLAN REQUIRED`. Detailed CI branch and trigger governance is owned by Pass R12.4.)*
+- *(Governance Guardrail: Pre-Upgrade Database Snapshot remains in Section 6 as `RECOMMENDED PRE-V1 HARDENING — NOT YET SCHEDULED`; Diagnostics & Recovery Center remains `RECOMMENDED — APPROVAL / IMPLEMENTATION PLAN REQUIRED`. Target CI branch/event governance and failure-aggregation semantics are reconciled under Pass R12.4 in `docs/06_Guides/TESTING_AND_CI.md`; workflow YAML implementation remains a dedicated infrastructure task.)*
 - *Canonical Architecture Owner:* [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md).
 
 #### 2.3.5 Golden PC V1 Acceptance Gate (`PC V1 FINAL GATE`)
 - **Integrated Golden PC V1 Acceptance Journey (`PC V1 FINAL GATE`):**
-  - *Scope:* The comprehensive, end-to-end acceptance gate proving integrated companion behavior across all mandatory PC V1 capability groups.
-  - *Prerequisites & Governance:* All mandatory PC V1 capability groups must be complete and appropriately verified before final acceptance. Detailed journey narrative, operational steps, verification scenarios, and acceptance criteria are owned by Pass R12.3. Completion of this gate is the final acceptance prerequisite for AI Companion V1 release.
-  - *Canonical Architecture Owner:* [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md).
+  - *Scope:* The comprehensive, end-to-end acceptance gate proving integrated companion behavior across all 17 approved PC V1 capability groups (Startup/Host lifecycle, Controlled Local Model import, Character/Personality separation, Multilingual interaction, Selective Automatic Memory, Multimodal vision, Conversational Personal Actions under D9, Closed-browser native notifications, Time-critical Alarms, Bounded Routines, Conversational Voice with barge-in, Read-only public current info, Gaming/Low-Impact mode, PC Health-Context readiness, Restart persistence, Practical Backup & real restore integrity, and Local-Only core with optional cloud fallback).
+  - *Prerequisites & Governance:* All mandatory PC V1 capability groups across Foundation, Capability, and Resilience bands must be complete and verified before gate entry. Canonical acceptance checkpoints, portability invariants, and pass/fail semantics are defined in [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md) §8. Successful completion of this gate is the mandatory final acceptance prerequisite for cutting the PC V1 release tag.
+  - *Canonical Architecture Owner:* [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md) §8.
 
 ---
 
@@ -248,8 +248,8 @@ AI Companion **V1** (unqualified) is strictly defined as the first complete, sta
 21. **Release Hardening & Verification:** Secure configuration defaults, migration safety preflight, and CI pipeline stability verified before release.
     - *Implementation Status:* Preflight baseline exists; release hardening pending.
     - *Delivery Band:* Resilience & Release Hardening Band.
-22. **Integrated Golden PC V1 Acceptance Journey:** End-to-end companion verification path proving seamless operation across all PC V1 capabilities. Final release gate (detailed journey narrative, steps, and acceptance criteria owned by Pass R12.3).
-    - *Implementation Status:* Mandatory PC V1 release gate; specification owned by Pass R12.3.
+22. **Integrated Golden PC V1 Acceptance Journey:** End-to-end companion verification path proving seamless operation across all 17 approved PC V1 capability groups. Mandatory release gate; normative requirements and pass/fail semantics codified in [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md) §8.
+    - *Implementation Status:* Mandatory PC V1 release gate; normative specification codified in `SYSTEM_BASELINE.md` §8 (delivery status remains `APPROVED` / `NOT STARTED` pending implementation and release execution).
     - *Delivery Band:* Golden PC V1 Acceptance Gate.
 
 > [!NOTE]
@@ -330,7 +330,7 @@ The following items from the technical reconciliation audit represent valuable o
 
 | Recommendation | Classification | Prerequisite / Governance Notes |
 | :--- | :--- | :--- |
-| **CI Gate Failure Aggregation** | `RECOMMENDED PRE-V1 HARDENING — NOT YET SCHEDULED` | Must precede setting CI Gate as a required branch-protection rule on GitHub. Hardens `ci-gate` to aggregate failures reliably. Detailed governance aligned in Pass R12.4. |
+| **CI Gate Failure Aggregation** | `APPROVED PRE-V1 GOVERNANCE TARGET (P25)` | Target governance and failure-aggregation semantics codified in Pass R12.4 ([`docs/06_Guides/TESTING_AND_CI.md`](../06_Guides/TESTING_AND_CI.md)). Workflow YAML implementation remains a dedicated infrastructure task; documented target governance $\ne$ workflow implemented/verified. Must precede enabling CI Gate as a required status check on GitHub. |
 | **Pre-Upgrade Database Snapshot** | `RECOMMENDED PRE-V1 HARDENING — NOT YET SCHEDULED` | Automatic snapshot of `companion.db` prior to running pending Alembic migrations. |
 | **Backup & Restore UI** | `RECOMMENDED — APPROVAL / IMPLEMENTATION PLAN REQUIRED` | Web settings interface to trigger manual snapshots and inspect backup health. |
 | **Diagnostics & Recovery Center** | `RECOMMENDED — APPROVAL / IMPLEMENTATION PLAN REQUIRED` | Web UI panel displaying runtime health, router logs, and crash diagnostic dumps. Evaluated as an exploratory diagnostic aid; not an automatic PC V1 requirement. |

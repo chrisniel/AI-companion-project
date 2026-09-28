@@ -156,7 +156,7 @@ As of current verified repository baseline:
 | **Model Registry** | Schema v3 bridge, dual factory/installed discovery, GGUF binary header parser for metadata, contract drift checks. | Controlled local importer execution service is an active V1 implementation gap; automated online download manager is post-V1. |
 | **Frontend Web** | React 19, TypeScript 5.8, Vite 6, Tailwind CSS 4, live SSE streaming chat, tactile VRAM controls, decomposed Assistant components, truthful registry, and Phase 8B.0–8B.6 multimodal composer upload foundation with authenticated Blob previews and staged removal. | Persistent history image rendering (Slice 8B.7), final Phase 8B closure (Slice 8B.8), and responsive mobile web layout hardening (Phase 8C) not implemented. |
 | **Android Prototype** | 17 Jetpack Compose screens, SoftGlass neumorphic theme, OLED theme, OkHttp `LocalAiRuntimeClient` (health/auth/task CRUD sync), SharedPreferences connection storage, unit tests. | Production trusted-device auth, secure Keystore credentials, Room/offline persistence, full sync/reconciliation, offline inference, and D3 package rename not implemented. |
-| **Testing & CI** | Verified baseline: 321 backend pytest, 185 frontend vitest across 9 files, 22-route OpenAPI parity with zero drift, TypeScript clean, Vite build clean (CI Run #23 on develop SHA `4b2f5fe`); last executed Android baseline remains 124 unit/Robolectric tests from Pass R8; GitHub Actions CI workflow on `windows-latest` with automated gates; see `TESTING_AND_CI.md`. | CI gate not yet hardened as an always-running failure aggregator (`if: always()`) or set as a required branch protection rule on GitHub. |
+| **Testing & CI** | Verified baseline: 321 backend pytest, 185 frontend vitest across 9 files, 22-route OpenAPI parity with zero drift, TypeScript clean, Vite build clean (CI Run #23 on develop SHA `4b2f5fe`); last executed Android baseline remains 124 unit/Robolectric tests from Pass R8; GitHub Actions CI workflow on `windows-latest` with automated gates; see `TESTING_AND_CI.md`. | CI gate not yet hardened as an always-running failure aggregator (`if: always()`) or set as a required branch protection rule on GitHub. Reconciled target CI governance and failure aggregation semantics documented in `TESTING_AND_CI.md`. |
 
 ---
 
@@ -215,6 +215,125 @@ Following the Pass R11.4 authority transfer, the **focused specifications below 
 | **D9** | **Security & Permissions** | **Refined** | DEFAULT DENY. 4-tier risk matrix (Risk 0–3). Low-risk Risk 0 and approved Risk 1 actions may auto-execute when enabled and deterministic policy resolves ALLOW; deterministic policy retains ALLOW, CONFIRM, and DENY. Significant state changes require confirmation. Generic arbitrary shell / OS admin is strictly prohibited by default. | [`02_Data_and_Security/tool-permissions-and-actions.md`](02_Data_and_Security/tool-permissions-and-actions.md) | Transferred in R11.4 |
 | **D10** | **Scheduling & Notifications** | **New** | Task, Reminder, Alarm, and Routine are distinct. Bounded deterministic scheduler proactivity. Native Windows notification delivery target. Quiet hours with per-item overrides. Reminder catch-up recovery. Alarm has stronger delivery semantics than an ordinary Reminder; wake support is best-effort (no universal ACPI/firmware wake guarantee). | [`01_Domains/tasks-reminders-alarms-and-routines.md`](01_Domains/tasks-reminders-alarms-and-routines.md) | Transferred in R11.4 |
 | **D11** | **Persona & State Separation** | **New** | Clear separation: Profile (owns personal data/memories/tasks), Conversation (belongs to Profile, Character-bound history), Character (persona identity/lore/avatar/presentation), Personality (behavioral style/traits), Emotion (lightweight transient mood), Voice (acoustic/TTS configuration), Presence (contextual/presentation state), and Relationship State (separate, opt-in, PC LATER). | [`01_Domains/characters-personality-and-emotion.md`](01_Domains/characters-personality-and-emotion.md) | Transferred in R11.4 |
+
+---
+
+## 8. Golden PC V1 Acceptance & Release Gate
+
+### 8.1 Purpose & Release-Gate Invariant
+The **Integrated Golden PC V1 Acceptance Journey** is the single mandatory, end-to-end release gate for the AI Companion PC V1 product milestone. It verifies that the complete set of delivered subsystems—host runtime, storage, model engine, companion personality, voice, scheduling, multimodal vision, external information, and recovery—operate cohesively under real-world usage on a supported Windows host environment.
+
+Passing the Golden Acceptance Gate is an immutable prerequisite for cutting the PC V1 release tag. No individual automated test suite, mock verification, or component walkthrough substitutes for this integrated release validation.
+
+### 8.2 Entry Prerequisites
+The Golden Acceptance Gate may be formally entered only after all prerequisite PC V1 milestone bands are complete and individually verified:
+1. **Foundation Band Complete:** Host autostart, native notifications, Character/Personality config persistence, selective automatic memory capture policy, and the deterministic Decision D9 action pipeline (Risk 0–3).
+2. **Capability Band Complete:** Multimodal vision attachment persistence (Phase 8B completion: 8B.7 and 8B.8), frontend UI accessibility and polish (Phase 8C completion), conversational voice without wake word, multilingual interaction, read-only public information, scheduling/alarms/routines, health context readiness, and optional cloud fallback.
+3. **Resilience & Release Hardening Band Complete:** Database migration safety preflight, practical backup and restore mechanism, secure configuration defaults, and target CI gate verification.
+
+### 8.3 Required Integrated Acceptance Checkpoints (P24 Behaviors)
+The Golden Acceptance Journey must prove the integrated companion across all 17 approved behavioral capability groups:
+
+1. **Startup & Host Process Lifecycle:**
+   - The Local AI Runtime starts automatically upon Windows user login.
+   - The browser client lifecycle remains independent from the host runtime lifecycle (closing the browser tab does not terminate or interrupt the host runtime).
+   - Runtime startup does not prematurely or unnecessarily force-load the heavy generative model into memory before needed.
+2. **Controlled Local Model Operation:**
+   - The PC V1 controlled local model import and installation flow (`inbox` → `preflight` → `staging` → `atomic install` → `library` → `registry`) is exercised or directly verified through the approved Decision D6 boundary.
+   - Local model operation remains provider- and hardware-portable.
+   - Reference workstation observations are recorded as evidence, not as permanent release constraints.
+3. **Character Lore, Personality & Persona Separation (Decision D11):**
+   - User can select or create/use a persisted Character.
+   - Persisted Character configuration successfully resolves at runtime into prompt context.
+   - Personality traits actually modulate generated conversational tone and communication style.
+   - Conceptual separation across Character lore, Personality traits, Emotion mood, Voice acoustic settings, and Profile data ownership is preserved.
+4. **Multilingual Companion Interaction:**
+   - Companion interaction is verified across English, Tagalog, Japanese, and realistic conversational code-switching.
+   - Response quality is truthfully bounded by the underlying model and speech engine capabilities.
+   - Multilingual companion interaction does not promise full frontend UI localization.
+5. **Selective Automatic Memory & User Governance (Decision D7):**
+   - A stable, eligible user preference or fact is selectively proposed and captured under deterministic policy.
+   - User can inspect, edit/correct, and delete the captured memory.
+   - A subsequent conversation retrieves and appropriately utilizes the persisted memory.
+   - Sensitive, ambiguous, or transient statements do not silently become permanent memory facts.
+6. **Multimodal Vision Understanding:**
+   - User submits a valid image attachment.
+   - MIME validation, dimension bounds, and authenticated media handling succeed.
+   - Vision-capable inference processes the image and answers contextual queries.
+   - Persisted attachment and message history render correctly upon browser reload and conversation revisit.
+7. **Conversational Personal Actions (Deterministic Decision D9 Policy):**
+   - User asks conversationally to create a personal Reminder.
+   - Deterministic 5-stage D9 policy (Model → Typed Request → Deterministic Policy → Narrow Adapter → Capability) evaluates the request under DEFAULT DENY and resolves ALLOW.
+   - Successful action outcome is reported to the user only after backend-confirmed execution.
+   - User conversationally edits the personal Reminder without redundant confirmation dialogs when policy resolves ALLOW.
+   - If an already-supported approved Risk 2 operation is exercised for policy verification, it resolves through explicit user CONFIRM per D9.
+8. **Closed-Browser Reminder & Native Notification Delivery (Decisions D2 & D10):**
+   - The browser client tab can be closed while the Local AI Runtime remains running.
+   - Scheduled Reminder arrives on time via native Windows OS notification and audio alert.
+   - Missed reminder catch-up logic executes upon system wake/reconnect where applicable.
+9. **Time-Critical Alarm Delivery Semantics (Decision D10):**
+   - Alarm alerts execute using stronger delivery semantics distinct from ordinary Reminders.
+   - Best-effort wake behavior is verified where the supported OS/hardware environment permits (without asserting impossible universal ACPI/firmware wake guarantees).
+10. **Bounded Proactive Routines & Quiet Hours (Decision D10):**
+    - At least one bounded companion Routine or scheduled briefing executes.
+    - Quiet-hours policy and per-item override rules are strictly respected.
+    - Character-specific phrasing is applied without granting the generative model scheduling or execution authority.
+11. **Conversational Voice Pipeline:**
+    - Spoken interaction executes the full pipeline: user speech → local STT → companion reasoning → streaming/appropriate TTS playback.
+    - User interruption / barge-in is verified: ongoing speech synthesis stops immediately upon barge-in, and stale audio from the interrupted turn does not continue.
+    - Wake word listening remains PC Later.
+12. **Read-Only Public Current Information:**
+    - User requests current public information (e.g., Weather or public search/lookup).
+    - Approved read-only providers execute through D9 policy.
+    - External content is treated as untrusted and sanitized against injection/SSRF.
+    - Response exposes clear source and provenance information.
+    - Interactive browser automation remains PC Later.
+13. **Gaming / Low-Impact Resource Policy:**
+    - The companion enters the approved Gaming / Low-Impact resource policy via whichever mechanism is implemented.
+    - Generative and background resource consumption reduces appropriately to prioritize foreground performance.
+    - Scheduler, reminder, and notification integrity remain fully operational.
+    - Automatic versus manual activation remains OPEN DESIGN (automatic foreground load detection is not mandated).
+14. **PC Health-Context Readiness:**
+    - Verifies PC health-context contracts and storage readiness within the Local AI Runtime.
+    - Verifies data minimization, stale context handling, and unavailable/disconnected semantics.
+    - Does not require physical Health Connect ingestion (which belongs to Android V1).
+15. **Persistence Across Restarts:**
+    - Following runtime process restart (and Windows session restart where practical), persistent state remains intact: conversations, memories, tasks, reminders, character configuration, user settings, and attachment relationships.
+16. **Practical Backup, Restore & Referential Integrity:**
+    - Creates a practical coordinated backup capturing database state and referenced file assets.
+    - Executes a real restoration into an isolated, safe verification environment (not reduced to a simulated preflight check).
+    - Verifies post-restore database consistency and asset referential integrity.
+17. **Local-Only Core & Optional Cloud Fallback:**
+    - The mandatory core companion must operate without requiring a cloud LLM; local inference remains the default and supported baseline.
+    - No cloud LLM egress occurs unless cloud fallback is explicitly configured and enabled by the user with valid credentials.
+    - Network-dependent approved integrations—such as WebSearch, Fetch, Weather, or current-information retrieval—MAY access the public network through their approved bounded providers under deterministic D9 policy.
+    - Disabling cloud LLM fallback must not disable or impair supported local companion operation.
+    - Naturally network-dependent information integrations remain unavailable when network access is absent, while core local companion capabilities continue uninterrupted.
+    - *Invariant:* Local LLM independence $\ne$ total network isolation. PC V1 does not require zero network traffic; it mandates local LLM autonomy while permitting bounded, user-visible external queries for designated public-information tools.
+
+### 8.4 Environment Portability & Reference Evidence
+The Golden Acceptance Gate must be expressed in provider- and hardware-portable capability terms on a supported Windows host environment.
+- **Portability Invariant:** Acceptance criteria must not hard-code mandatory requirements for specific GPU models (e.g., AMD RX 580), specific acceleration backends (e.g., Vulkan), specific localhost port numbers (`8000`, `3000`), specific LLM parameter families, specific STT/TTS engines, or specific notification adapter libraries.
+- **Reference Evidence Baseline:** Workstation benchmarks on reference hardware (such as AMD RX 580 8GB VRAM with Vulkan offload on Windows) serve as historical verification evidence demonstrating that the software meets performance and stability requirements on representative hardware.
+
+### 8.5 Pass / Fail Acceptance Semantics
+Acceptance must be evaluated against verifiable, measurable criteria rather than undefined absolutes:
+- **Pass Criteria:**
+  - All 17 mandatory acceptance checkpoints execute successfully with documented verification evidence.
+  - Zero unhandled release-blocking exceptions, fatal application crashes, or unrecoverable deadlocks during the acceptance run.
+  - Zero data integrity violations, database corruption, or broken foreign key / asset references after restart or restore.
+  - Zero unauthorized tool or action executions under Decision D9 policy (DEFAULT DENY posture strictly maintained).
+  - Zero silently skipped mandatory capabilities.
+  - No observed unbounded memory or process resource growth under the defined acceptance workload.
+  - Persistent state and configurations survive application, runtime, and host session restarts.
+  - Coordinated backup produces an archive that passes integrity preflight and restores successfully in an isolated test environment.
+- **Fail Criteria:**
+  - Any mandatory checkpoint fails, produces unhandled runtime crashes, corrupts persistent state, executes unauthorized actions, leaks cloud egress without consent, or drops scheduled notification alerts.
+
+### 8.6 Relationship to Automated CI
+- **Automated CI (Level 1 Gatekeeper):** Provides rapid, repeatable, per-commit/PR verification of code quality, unit tests, component tests, type safety, OpenAPI contract drift, and build integrity. Automated CI is necessary supporting evidence before entering the Golden Gate.
+- **Golden PC V1 Acceptance Journey (Level 2 Release Gate):** Provides integrated, system-level validation across real Windows host processes, hardware audio devices, OS notifications, user interactive journeys, and physical restarts that headless CI environments cannot fully simulate.
+- Both verification layers are required; neither substitutes for the other.
 
 ---
 
