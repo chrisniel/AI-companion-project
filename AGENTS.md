@@ -111,7 +111,7 @@ Configure project-specific paths and boundaries in the Project Profile below. If
   - Temporary PR, review, check, or merge statuses belong in GitHub/tracker metadata, **not** in permanent architecture prose.
 - **Implemented Reality:** Source code, automated test suites, and generated schema contracts remain authoritative for implemented reality. Implementation reality must never be inferred or invented from documentation intent.
 - **Context Discipline:** Historical walkthroughs, archives, completed tasks, drafts, and the historical Master Implementation Plan are NOT normal startup context. Do not require loading every domain architecture document; load only the specific domain relevant to the task.
-- **Synchronization:** When contracts, APIs, configurations, or behaviors change, update the closest canonical document in the same delivery.
+- **Gated Documentation Synchronization:** When verified implementation changes require canonical documentation updates, update the closest canonical owner during the DOCUMENT stage after the Implementation Gate and before closure. Narrow generated contracts, migration artifacts, prerequisite ADRs, comments, or minimum synchronized technical artifacts required to keep the repository truthful may be updated during implementation. Implementation intent is never documentation evidence.
 - **Reference Integrity:** Prefer linking or referring to canonical documents over duplicating content across multiple markdown files.
 - **Draft Status:** Treat drafts, legacy notes, and attached documents as reference material unless explicitly approved as current requirements.
 
@@ -126,6 +126,13 @@ Configure project-specific paths and boundaries in the Project Profile below. If
 
 - **Implementation Gate:** Before canonical delivery documentation claims implemented behavior, explicitly inspect actual source code, automated tests, generated schema contracts, database migrations where applicable, and verified runtime/CI evidence where relevant. A plan or specification stating that something should exist is not proof that it exists.
 - **Documentation Gate / No Self-Verification:** An agent that authors or materially edits canonical documentation **MUST NOT** mark that same documentation `COMPLETE / VERIFIED` without independent review. The authoring agent stops after its own mechanical verification and supplies the exact diff and evidence for independent human review. Tracker closure occurs only in a subsequent pass after independent approval.
+- **Closure Gate & Tracker Integrity:** Final task closure (`CLOSURE`) occurs only after independent Documentation Gate approval. An agent performing substantive implementation or canonical documentation must not self-verify final closure. The Closure Gate independently verifies:
+  - Active tracker (`task.md`) state accurately reflects independently verified implementation and documentation;
+  - Delivered scope matches approved requirements with zero unverified claims;
+  - Unresolved blockers, manual verification areas, or hardware checks are truthfully surfaced;
+  - Preserved next-work states and prerequisites remain intact;
+  - Required Git, PR, or CI evidence is confirmed where applicable.
+  Only after the Closure Gate passes may a slice or sprint be treated as `COMPLETE / VERIFIED` and archived where appropriate. (Proportionality applies: trivial or surgical fixes do not require heavyweight ceremony).
 - **Execution Truthfulness:** The AI agent may author test fixtures, run non-destructive automated checks, and provide manual checklists.
 - **Never Claim Tests Passed Without Confirmation:** Never simulate engine execution, fabricate test results, or mark user-assigned checks as passed without explicit confirmation.
 - **Verification Separation:** Clearly separate automated script/command results from pending manual or hardware-dependent user checks.

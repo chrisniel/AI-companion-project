@@ -132,7 +132,7 @@ When investigating specific questions or subsystems, consult the dedicated canon
 | If your question is... | Consult this Canonical Document | Core Topics Owned |
 | :--- | :--- | :--- |
 | **"What is the product identity, V1 boundary, or host process model?"** | [`SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md) | Ecosystem subsystems, V1 scope vs. post-V1, Windows host process, locked D1–D11 decisions. |
-| **"What are the mandatory acceptance requirements for the PC V1 release gate?"** | [`SYSTEM_BASELINE.md` §8](../04_Architecture/SYSTEM_BASELINE.md#8-golden-pc-v1-acceptance-gate) | 17 integrated Golden acceptance checkpoint groups, portability invariants, pass/fail semantics, CI relationship. |
+| **"What are the mandatory acceptance requirements for the PC V1 release gate?"** | [`SYSTEM_BASELINE.md` §8](../04_Architecture/SYSTEM_BASELINE.md) | Golden PC V1 Acceptance & Release Gate (§8: 17 integrated Golden acceptance checkpoint groups, portability invariants, pass/fail semantics, CI relationship). |
 | **"What comes next / which milestone or band owns this feature?"** | [`ROADMAP.md`](../02_Planning/ROADMAP.md) | Canonical delivery sequence, Phase 8B/8C, Foundation/Capability/Resilience bands, post-V1 roadmap tracks. |
 | **"What is being worked on right now / what are the immediate blockers?"** | [`task.md`](../01_Tracking/task.md) | Active execution state, current sprint checklist, execution invariants. |
 | **"How is a specific active feature designed and implemented?"** | Active feature plan in [`docs/02_Planning/`](../02_Planning/README.md) | Detailed feature steps, acceptance criteria, component breakdowns. |
@@ -155,7 +155,7 @@ When investigating specific questions or subsystems, consult the dedicated canon
 | **"How do PC health-context readiness and wearable sync work?"** | [`03_Integrations/health-and-wearables.md`](../04_Architecture/03_Integrations/health-and-wearables.md) | PC health-context readiness (PC V1 data contracts); Android Health Connect wearable sync (Android V1). |
 | **"How do Windows autostart and native OS notifications work?"** | [`04_Infrastructure/windows-host-and-notifications.md`](../04_Architecture/04_Infrastructure/windows-host-and-notifications.md) | Independent Windows host process, autostart at login (D2), native OS notification delivery (D2/D10). |
 | **"How do backup creation, restore verification, and logging work?"** | [`04_Infrastructure/backup-recovery-and-diagnostics.md`](../04_Architecture/04_Infrastructure/backup-recovery-and-diagnostics.md) | Practical coordinated backup, isolated restore verification, referential integrity; diagnostic logging. |
-| **"How do resource throttling and Gaming / Low-Impact mode work?"** | [`04_Infrastructure/performance-and-capacity.md`](../04_Infrastructure/performance-and-capacity.md) | Resource governance, background throttling, Gaming / Low-Impact mode, telemetry truthfulness. |
+| **"How do resource throttling and Gaming / Low-Impact mode work?"** | [`04_Infrastructure/performance-and-capacity.md`](../04_Architecture/04_Infrastructure/performance-and-capacity.md) | Resource governance, background throttling, Gaming / Low-Impact mode, telemetry truthfulness. |
 
 ---
 
