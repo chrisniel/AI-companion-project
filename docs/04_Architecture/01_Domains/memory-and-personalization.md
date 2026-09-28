@@ -114,7 +114,7 @@ The following implementation choices remain intentionally open for architectural
 
 ## 7. Canonical Relationships & Cross-Links
 
-- **Legacy Technical Reference:** [`docs/04_Architecture/MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../MEMORY_AND_CHARACTER_ARCHITECTURE.md) (Subordinate memory and character scoping reference)
+- **Legacy Technical Reference:** [`docs/04_Architecture/MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../../07_Archive/reference/architecture-legacy/MEMORY_AND_CHARACTER_ARCHITECTURE.md) (Subordinate memory and character scoping reference)
 - **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§4 / §7, Decision D7)
 - **Feature Promotion Manifest:** [`docs/02_Planning/FEATURE_PROMOTION_MAP.md`](../../02_Planning/FEATURE_PROMOTION_MAP.md) (Memory Persistence & Retrieval, Selective Automatic Memory, Semantic / Vector Memory)
 - **Character Domain Specification:** [`docs/04_Architecture/01_Domains/characters-personality-and-emotion.md`](characters-personality-and-emotion.md) (Character identity boundaries)

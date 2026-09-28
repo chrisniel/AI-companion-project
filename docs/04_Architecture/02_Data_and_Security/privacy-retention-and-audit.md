@@ -108,7 +108,7 @@ The following technical mechanisms remain open design for future technical speci
 
 ### Upstream Baseline & Legacy Architecture
 - [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) — Baseline architecture, Decisions D4 (Profile vs Device), D8 (Single-primary-user baseline).
-- [`docs/04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md`](../SECURITY_AND_TRUST_ARCHITECTURE.md) — Privacy boundaries, retention policies, audit requirements.
+- [`docs/04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md`](../../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md) — Privacy boundaries, retention policies, audit requirements.
 
 ### Related Domain & Security Specifications
 - [`docs/04_Architecture/01_Domains/memory-and-personalization.md`](../01_Domains/memory-and-personalization.md) — Memory capture, editing, and deletion controls.

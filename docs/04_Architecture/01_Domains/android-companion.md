@@ -127,7 +127,7 @@ The following implementation choices are intentionally left open for subsequent 
 
 ## 7. Canonical Relationships & Cross-Links
 
-- **Legacy Technical Reference:** [`docs/04_Architecture/ANDROID_COMPANION_ARCHITECTURE.md`](../ANDROID_COMPANION_ARCHITECTURE.md) (Subordinate mobile technical & benchmark reference)
+- **Legacy Technical Reference:** [`docs/04_Architecture/ANDROID_COMPANION_ARCHITECTURE.md`](../../07_Archive/reference/architecture-legacy/ANDROID_COMPANION_ARCHITECTURE.md) (Subordinate mobile technical & benchmark reference)
 - **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§2 Core Architecture, Decisions D1, D3, D4)
 - **Feature Promotion Manifest:** [`docs/02_Planning/FEATURE_PROMOTION_MAP.md`](../../02_Planning/FEATURE_PROMOTION_MAP.md) (Android Connected Sync, Android Practical Offline LLM, Android Device-Local TTS, Android Health Connect)
 - **Health & Wearables Integration:** [`docs/04_Architecture/03_Integrations/health-and-wearables.md`](../03_Integrations/health-and-wearables.md)

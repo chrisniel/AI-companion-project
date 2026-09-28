@@ -99,7 +99,7 @@ The following implementation choices remain open design for future technical spe
 
 ### Upstream Baseline & Legacy Architecture
 - [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) — Decisions D4 (Profile vs Device), D5 (Network trust tiers).
-- [`docs/04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md`](../SECURITY_AND_TRUST_ARCHITECTURE.md) — Threat model, network zones, credential classifications.
+- [`docs/04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md`](../../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md) — Threat model, network zones, credential classifications.
 
 ### Related Domain & Security Specifications
 - [`docs/04_Architecture/02_Data_and_Security/profiles-and-devices.md`](profiles-and-devices.md) — Device identity, enrollment state, and client lifecycle.

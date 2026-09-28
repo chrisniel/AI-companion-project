@@ -1,12 +1,16 @@
+> **SUPERSEDED / ARCHIVED**
+> This document has been archived and replaced by focused domain specifications in `docs/04_Architecture/`.
+> See `docs/07_Archive/reference/architecture-legacy/README.md` for the exact superseding canonical paths.
+
 # AI Companion — Runtime Configuration, Persistent Data & Asset Library Architecture
 
 > **Project:** AI Companion
 > **Backend service:** Local AI Runtime
 > **Document role:** Phase 8P implementation reference and subordinate technical baseline (non-normative after R11.4)
-> **Target repository path:** `docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`
+> **Target repository path:** `docs/07_Archive/reference/architecture-legacy/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`
 > **Status:** Subordinate Reference — primary normative authority transferred to `04_Infrastructure/` specifications
 > **Current implementation baseline:** Windows + `llama.cpp` b10936 Vulkan; current tested hardware is AMD RX 580 8 GB
-> **Authority Precedence:** Non-normative reference material. See [`SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md) and focused infrastructure specifications for canonical requirements.
+> **Authority Precedence:** Non-normative reference material. See [`SYSTEM_BASELINE.md`](../../../../04_Architecture/SYSTEM_BASELINE.md) and focused infrastructure specifications for canonical requirements.
 
 > [!WARNING]
 > **Authority Transfer & Legacy Status Notice (Pass R11.4):**
@@ -17,7 +21,7 @@
 > - [`docs/04_Architecture/04_Infrastructure/backup-recovery-and-diagnostics.md`](04_Infrastructure/backup-recovery-and-diagnostics.md) (Backup, Recovery & Diagnostics)
 > - [`docs/04_Architecture/04_Infrastructure/performance-and-capacity.md`](04_Infrastructure/performance-and-capacity.md) (Principle P23: Resource Governance)
 >
-> Top-level cross-cutting product decisions and release boundaries are governed by [`docs/04_Architecture/SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md). Implemented reality remains authoritative in source code and test suites. Detailed Phase 8P technical specifications and asset contracts retained below remain valuable implementation and verification reference material.
+> Top-level cross-cutting product decisions and release boundaries are governed by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../../../04_Architecture/SYSTEM_BASELINE.md). Implemented reality remains authoritative in source code and test suites. Detailed Phase 8P technical specifications and asset contracts retained below remain valuable implementation and verification reference material.
 
 ---
 

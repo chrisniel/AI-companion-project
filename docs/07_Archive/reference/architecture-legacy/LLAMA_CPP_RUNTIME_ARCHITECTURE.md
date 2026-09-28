@@ -1,3 +1,7 @@
+> **SUPERSEDED / ARCHIVED**
+> This document has been archived and replaced by focused domain specifications in `docs/04_Architecture/`.
+> See `docs/07_Archive/reference/architecture-legacy/README.md` for the exact superseding canonical paths.
+
 # llama.cpp Runtime Architecture Specification
 
 **Project:** AI Companion Project

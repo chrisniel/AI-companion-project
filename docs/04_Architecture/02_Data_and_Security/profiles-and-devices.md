@@ -86,7 +86,7 @@ The following functional and technical mechanisms remain open design for future 
 
 ### Upstream Baseline & Legacy Architecture
 - [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) — Baseline architecture, Decisions D4 (Profile vs Device), D8 (Single-primary-user baseline).
-- [`docs/04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md`](../SECURITY_AND_TRUST_ARCHITECTURE.md) — Security boundaries, credential hierarchy, trust levels.
+- [`docs/04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md`](../../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md) — Security boundaries, credential hierarchy, trust levels.
 
 ### Related Domain & Security Specifications
 - [`docs/04_Architecture/02_Data_and_Security/authentication-and-secrets.md`](authentication-and-secrets.md) — Credential storage, token verification, and network topology.

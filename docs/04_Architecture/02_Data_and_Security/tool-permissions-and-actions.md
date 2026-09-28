@@ -129,7 +129,7 @@ The following technical mechanisms remain open design for future technical speci
 
 ### Upstream Baseline & Legacy Architecture
 - [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) — Decision D9 (Deterministic tool permissions), Principle P1 (Safe personal actions).
-- [`docs/04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md`](../SECURITY_AND_TRUST_ARCHITECTURE.md) — Tool risk tiers, execution guardrails, shell prohibition.
+- [`docs/04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md`](../../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md) — Tool risk tiers, execution guardrails, shell prohibition.
 
 ### Related Domain & Security Specifications
 - [`docs/04_Architecture/01_Domains/assistant-and-conversations.md`](../01_Domains/assistant-and-conversations.md) — Orchestration loop and tool response injection.

@@ -115,12 +115,12 @@ The following documents exist for historical, forensic, or template purposes and
    Reusable workflow templates, not active project documentation.
 7. **Legacy Monolithic Architecture Specifications (`docs/04_Architecture/*.md`)**
    The six legacy monolithic architecture documents:
-   - [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md)
-   - [`ANDROID_COMPANION_ARCHITECTURE.md`](../04_Architecture/ANDROID_COMPANION_ARCHITECTURE.md)
-   - [`LLAMA_CPP_RUNTIME_ARCHITECTURE.md`](../04_Architecture/LLAMA_CPP_RUNTIME_ARCHITECTURE.md)
-   - [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../04_Architecture/MEMORY_AND_CHARACTER_ARCHITECTURE.md)
-   - [`SECURITY_AND_TRUST_ARCHITECTURE.md`](../04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md)
-   - [`VOICE_AND_AUDIO_ARCHITECTURE.md`](../04_Architecture/VOICE_AND_AUDIO_ARCHITECTURE.md)
+   - [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md)
+   - [`ANDROID_COMPANION_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/ANDROID_COMPANION_ARCHITECTURE.md)
+   - [`LLAMA_CPP_RUNTIME_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/LLAMA_CPP_RUNTIME_ARCHITECTURE.md)
+   - [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/MEMORY_AND_CHARACTER_ARCHITECTURE.md)
+   - [`SECURITY_AND_TRUST_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md)
+   - [`VOICE_AND_AUDIO_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/VOICE_AND_AUDIO_ARCHITECTURE.md)
    These documents were formally narrowed in Pass R11.4 to subordinate historical, technical, and implementation reference roles with clear supersession notices. Canonical domain authority resides completely in the 18 focused domain specifications and `SYSTEM_BASELINE.md`. Do not route normal canonical questions to legacy monoliths.
 
 ---

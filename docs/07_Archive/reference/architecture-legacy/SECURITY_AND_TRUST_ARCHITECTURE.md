@@ -1,8 +1,12 @@
+> **SUPERSEDED / ARCHIVED**
+> This document has been archived and replaced by focused domain specifications in `docs/04_Architecture/`.
+> See `docs/07_Archive/reference/architecture-legacy/README.md` for the exact superseding canonical paths.
+
 # AI Companion — Security and Trust Architecture Specification
 
 > **Document Role:** Legacy cross-domain security and trust reference (non-normative after R11.4).
 > **Status:** Subordinate Reference — primary normative authority transferred to `02_Data_and_Security/` and `03_Integrations/web-current-information.md`.
-> **Authority Precedence:** Non-normative reference material. See [`SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md) and focused domain specifications for canonical requirements.
+> **Authority Precedence:** Non-normative reference material. See [`SYSTEM_BASELINE.md`](../../../../04_Architecture/SYSTEM_BASELINE.md) and focused domain specifications for canonical requirements.
 
 > [!WARNING]
 > **Authority Transfer & Legacy Status Notice (Pass R11.4):**
@@ -15,7 +19,7 @@
 >
 > In accordance with current canonical policy: arbitrary/generic command shell execution remains **REJECTED**; read-only current information retrieval is **PC V1**; interactive browser automation is **PC Later**.
 >
-> Top-level cross-cutting product decisions and release boundaries are governed by [`docs/04_Architecture/SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md). Implemented reality remains authoritative in source code and test suites. The retained content below serves as a cross-domain security reference and historical implementation baseline.
+> Top-level cross-cutting product decisions and release boundaries are governed by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../../../04_Architecture/SYSTEM_BASELINE.md). Implemented reality remains authoritative in source code and test suites. The retained content below serves as a cross-domain security reference and historical implementation baseline.
 
 ---
 

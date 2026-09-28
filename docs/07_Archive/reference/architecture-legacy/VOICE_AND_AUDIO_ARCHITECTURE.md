@@ -1,3 +1,7 @@
+> **SUPERSEDED / ARCHIVED**
+> This document has been archived and replaced by focused domain specifications in `docs/04_Architecture/`.
+> See `docs/07_Archive/reference/architecture-legacy/README.md` for the exact superseding canonical paths.
+
 # Voice and Audio Architecture Specification
 
 **Project:** AI Companion Project
@@ -13,7 +17,7 @@
 > This document is no longer the primary normative architecture specification for voice and audio processing. Primary normative authority has transferred to:
 > - [`docs/04_Architecture/01_Domains/voice-and-audio.md`](01_Domains/voice-and-audio.md) (Voice & Audio Domain Architecture)
 >
-> **Release Boundary Notice (Supersession):** Current release allocation is governed exclusively by [`docs/04_Architecture/SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md) and [`docs/04_Architecture/01_Domains/voice-and-audio.md`](01_Domains/voice-and-audio.md). **PC V1 includes conversational voice (STT and TTS) without wake word.** Wake word detection remains **PC Later**. Historical wording in this document stating that voice & audio capabilities are strictly post-V1 is superseded and must not override current canonical specifications.
+> **Release Boundary Notice (Supersession):** Current release allocation is governed exclusively by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../../../04_Architecture/SYSTEM_BASELINE.md) and [`docs/04_Architecture/01_Domains/voice-and-audio.md`](01_Domains/voice-and-audio.md). **PC V1 includes conversational voice (STT and TTS) without wake word.** Wake word detection remains **PC Later**. Historical wording in this document stating that voice & audio capabilities are strictly post-V1 is superseded and must not override current canonical specifications.
 >
 > Implemented reality remains authoritative in source code and test suites. The retained content below serves as legacy voice design and implementation reference.
 

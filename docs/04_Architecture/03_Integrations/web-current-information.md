@@ -111,7 +111,7 @@ The following functional and technical mechanisms remain open design for future 
 
 ### Upstream Baseline & Legacy Architecture
 - [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) — Baseline capabilities, platform vocabulary, Decisions D1 (PC V1 release boundary includes read-only public current information), D5 (network trust boundary), D9 (deterministic tool permission policy).
-- [`docs/04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md`](../SECURITY_AND_TRUST_ARCHITECTURE.md) — Network boundaries, tool risk tiers, and SSRF threat model.
+- [`docs/04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md`](../../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md) — Network boundaries, tool risk tiers, and SSRF threat model.
 
 ### Related Domain & Infrastructure Specifications
 - [`docs/04_Architecture/01_Domains/assistant-and-conversations.md`](../01_Domains/assistant-and-conversations.md) — Context assembly and tool execution flow during assistant turns.

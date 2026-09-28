@@ -1,8 +1,12 @@
+> **SUPERSEDED / ARCHIVED**
+> This document has been archived and replaced by focused domain specifications in `docs/04_Architecture/`.
+> See `docs/07_Archive/reference/architecture-legacy/README.md` for the exact superseding canonical paths.
+
 # AI Companion — Memory and Character Architecture Specification
 
 > **Document Role:** Legacy compatibility and technical reference (non-normative after R11.4).
 > **Status:** Subordinate Reference — primary normative authority transferred to `01_Domains/memory-and-personalization.md` and `01_Domains/characters-personality-and-emotion.md`.
-> **Authority Precedence:** Non-normative reference material. See [`SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md) and focused domain specifications for canonical requirements.
+> **Authority Precedence:** Non-normative reference material. See [`SYSTEM_BASELINE.md`](../../../../04_Architecture/SYSTEM_BASELINE.md) and focused domain specifications for canonical requirements.
 
 > [!WARNING]
 > **Authority Transfer & Legacy Status Notice (Pass R11.4):**
@@ -10,7 +14,7 @@
 > - [`docs/04_Architecture/01_Domains/memory-and-personalization.md`](01_Domains/memory-and-personalization.md) (Decision D7: Profile vs. Character Memory Ownership)
 > - [`docs/04_Architecture/01_Domains/characters-personality-and-emotion.md`](01_Domains/characters-personality-and-emotion.md) (Decision D11: Persona Configuration & Boundaries)
 >
-> Top-level cross-cutting product decisions and release boundaries are governed by [`docs/04_Architecture/SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md). Implemented reality remains authoritative in source code and test suites.
+> Top-level cross-cutting product decisions and release boundaries are governed by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../../../04_Architecture/SYSTEM_BASELINE.md). Implemented reality remains authoritative in source code and test suites.
 >
 > The retained content below serves as legacy compatibility and technical/historical reference. Any release or status statements in this document that conflict with the focused specifications or SYSTEM_BASELINE.md are superseded.
 

@@ -107,7 +107,7 @@ The following functional and technical mechanisms remain open design for future 
 
 ### Upstream Baseline & Legacy Architecture
 - [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) — Baseline capabilities, PC Health Context Readiness (PC V1), Android Health Connect (Android V1).
-- [`docs/04_Architecture/ANDROID_COMPANION_ARCHITECTURE.md`](../ANDROID_COMPANION_ARCHITECTURE.md) — Mobile architecture, connected sync protocol.
+- [`docs/04_Architecture/ANDROID_COMPANION_ARCHITECTURE.md`](../../07_Archive/reference/architecture-legacy/ANDROID_COMPANION_ARCHITECTURE.md) — Mobile architecture, connected sync protocol.
 
 ### Related Domain & Integration Specifications
 - [`docs/04_Architecture/01_Domains/android-companion.md`](../01_Domains/android-companion.md) — Mobile companion sync loop and sensor boundaries.

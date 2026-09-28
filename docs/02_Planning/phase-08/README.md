@@ -22,8 +22,8 @@ This directory contains the authoritative implementation planning and navigation
 ### Canonical Roadmap & Architecture References
 - [`docs/02_Planning/ROADMAP.md`](../ROADMAP.md) — Canonical product and milestone delivery roadmap.
 - [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) — Canonical system baseline, release boundary, and locked decisions D1–D9.
-- [`docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../../04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) — Durable architecture for `COMPANION_DATA_ROOT`, bootstrap resolution, and Model Registry schema.
-- [`docs/04_Architecture/LLAMA_CPP_RUNTIME_ARCHITECTURE.md`](../../04_Architecture/LLAMA_CPP_RUNTIME_ARCHITECTURE.md) — Local LLM runtime architecture, hardware offloading profiles, and port allocations.
+- [`docs/04_Architecture/04_Infrastructure/storage-and-assets.md`](../../04_Architecture/04_Infrastructure/storage-and-assets.md) and [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](../../04_Architecture/04_Infrastructure/runtime-and-models.md) — Durable architecture for `COMPANION_DATA_ROOT`, bootstrap resolution, and Model Registry schema.
+- [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](../../04_Architecture/04_Infrastructure/runtime-and-models.md) and [`docs/04_Architecture/04_Infrastructure/performance-and-capacity.md`](../../04_Architecture/04_Infrastructure/performance-and-capacity.md) — Local LLM runtime architecture, hardware offloading profiles, and port allocations.
 
 ### Active Sprint Tracking
 - [`docs/01_Tracking/task.md`](../../01_Tracking/task.md) — Active execution state, checklists, and immediate blockers.

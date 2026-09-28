@@ -2,7 +2,7 @@
 
 > **Document Role:** Operational quickstart and subsystem orientation for the FastAPI Local AI Runtime.
 > **Status:** Active Operational Quickstart
-> **Normative Architecture:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../docs/04_Architecture/SYSTEM_BASELINE.md), [`docs/04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md`](../docs/04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md), and [`docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md).
+> **Normative Architecture:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../docs/04_Architecture/SYSTEM_BASELINE.md), [`docs/04_Architecture/02_Data_and_Security/authentication-and-secrets.md`](../docs/04_Architecture/02_Data_and_Security/authentication-and-secrets.md) and [`docs/04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md`](../docs/04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md), and [`docs/04_Architecture/04_Infrastructure/storage-and-assets.md`](../docs/04_Architecture/04_Infrastructure/storage-and-assets.md) and [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](../docs/04_Architecture/04_Infrastructure/runtime-and-models.md).
 > **Canonical Setup Guide:** [`docs/06_Guides/DEVELOPMENT_SETUP.md`](../docs/06_Guides/DEVELOPMENT_SETUP.md).
 > **Canonical Verification Guide:** [`docs/06_Guides/TESTING_AND_CI.md`](../docs/06_Guides/TESTING_AND_CI.md).
 
@@ -21,7 +21,7 @@ The central host runtime of the **AI Companion Project**, built with **Python 3.
 - **Persistent Storage & Schema Preparation:** Canonical database resolves dynamically to `<COMPANION_DATA_ROOT>/database/companion.db` (defaulting on Windows to `%LOCALAPPDATA%\AI Companion\Data\database\companion.db`). On startup, the FastAPI lifespan automatically performs storage preflight and executes schema preparation to Alembic head.
 - **Local LLM Process Management:** Manages an independent `llama-server.exe` router daemon on port 8085 with Vulkan GPU offload on AMD RX 580.
 
-For comprehensive security contracts and the 4-tier tool risk matrix, see [`docs/04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md`](../docs/04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md).
+For comprehensive security contracts and the 4-tier tool risk matrix, see [`docs/04_Architecture/02_Data_and_Security/authentication-and-secrets.md`](../docs/04_Architecture/02_Data_and_Security/authentication-and-secrets.md) and [`docs/04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md`](../docs/04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md).
 
 ---
 

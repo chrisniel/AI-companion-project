@@ -103,7 +103,7 @@ The following implementation choices remain intentionally open for architectural
 
 ## 7. Canonical Relationships & Cross-Links
 
-- **Legacy Technical Reference:** [`docs/04_Architecture/VOICE_AND_AUDIO_ARCHITECTURE.md`](../VOICE_AND_AUDIO_ARCHITECTURE.md) (Subordinate voice design & implementation reference)
+- **Legacy Technical Reference:** [`docs/04_Architecture/VOICE_AND_AUDIO_ARCHITECTURE.md`](../../07_Archive/reference/architecture-legacy/VOICE_AND_AUDIO_ARCHITECTURE.md) (Subordinate voice design & implementation reference)
 - **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§2 Core Architecture, Decisions D1 & D11; §3 Windows Host Context, Decision D2)
 - **Feature Promotion Manifest:** [`docs/02_Planning/FEATURE_PROMOTION_MAP.md`](../../02_Planning/FEATURE_PROMOTION_MAP.md) (Conversational Voice (STT / TTS), Wake Word Detection)
 - **Character Domain Specification:** [`docs/04_Architecture/01_Domains/characters-personality-and-emotion.md`](characters-personality-and-emotion.md) (Voice profile associations)

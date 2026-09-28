@@ -349,7 +349,7 @@ STT: Whisper-family / whisper.cpp-style runtime
 TTS: Piper / Kokoro
 ```
 
-No universal provider is locked. For full voice architecture specifications, see [`docs/04_Architecture/VOICE_AND_AUDIO_ARCHITECTURE.md`](docs/04_Architecture/VOICE_AND_AUDIO_ARCHITECTURE.md).
+No universal provider is locked. For full voice architecture specifications, see [`docs/04_Architecture/01_Domains/voice-and-audio.md`](docs/04_Architecture/01_Domains/voice-and-audio.md).
 
 ---
 
@@ -533,7 +533,7 @@ Balanced
 Maximum
 ```
 
-The backend currently maps Eco / Balanced / Maximum profiles to configuration-driven context, GPU layer, thread, and multimodal offload parameters (see [docs/04_Architecture/LLAMA_CPP_RUNTIME_ARCHITECTURE.md](docs/04_Architecture/LLAMA_CPP_RUNTIME_ARCHITECTURE.md)).
+The backend currently maps Eco / Balanced / Maximum profiles to configuration-driven context, GPU layer, thread, and multimodal offload parameters (see [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](docs/04_Architecture/04_Infrastructure/runtime-and-models.md) and [`docs/04_Architecture/04_Infrastructure/performance-and-capacity.md`](docs/04_Architecture/04_Infrastructure/performance-and-capacity.md)).
 
 ---
 
