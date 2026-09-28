@@ -663,7 +663,7 @@ New contributors and AI agents navigate the project starting from the canonical 
 docs/06_Guides/DOCUMENTATION_MAP.md
 ```
 
-Canonical system baseline, locked architectural decisions (D1–D9), and current boundaries are defined in:
+Canonical system baseline, locked architectural decisions (D1–D11), and current boundaries are defined in:
 
 ```text
 docs/04_Architecture/SYSTEM_BASELINE.md
@@ -682,7 +682,7 @@ docs/04_Architecture/decisions/
 For a new development session:
 
 1. Follow the canonical documentation hierarchy starting with `AGENTS.md` and `docs/06_Guides/DOCUMENTATION_MAP.md`.
-2. Consult `docs/04_Architecture/SYSTEM_BASELINE.md` for current system baseline and locked decisions D1–D9.
+2. Consult `docs/04_Architecture/SYSTEM_BASELINE.md` for current system baseline and locked decisions D1–D11.
 3. Check `docs/01_Tracking/task.md` for current execution state and immediate blockers.
 4. Do not assume planned features are already implemented; verify via source code and tests.
 
@@ -693,7 +693,7 @@ I am resuming work on AI Companion.
 
 Please inspect:
 1. AGENTS.md and docs/06_Guides/DOCUMENTATION_MAP.md for process and documentation authority.
-2. docs/04_Architecture/SYSTEM_BASELINE.md for system baseline and locked decisions D1-D9.
+2. docs/04_Architecture/SYSTEM_BASELINE.md for system baseline and locked decisions D1-D11.
 3. docs/01_Tracking/task.md for active sprint status and immediate blockers.
 
 Do not assume planned features are already implemented. Verify with source code and tests.

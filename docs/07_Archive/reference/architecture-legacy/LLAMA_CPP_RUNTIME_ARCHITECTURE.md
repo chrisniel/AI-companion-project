@@ -16,8 +16,8 @@
 > [!NOTE]
 > **Implementation Specialization & Subordinate Authority Notice (Pass R11.4):**
 > This document is a subordinate implementation specialization detailing the concrete `llama.cpp` engine integration. It is **subordinate** to the canonical domain specifications:
-> - [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](04_Infrastructure/runtime-and-models.md) (Canonical Runtime & Model Architecture, Decision D6)
-> - [`docs/04_Architecture/04_Infrastructure/performance-and-capacity.md`](04_Infrastructure/performance-and-capacity.md) (Generic Resource Governance, Principle P23)
+> - [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](../../../04_Architecture/04_Infrastructure/runtime-and-models.md) (Canonical Runtime & Model Architecture, Decision D6)
+> - [`docs/04_Architecture/04_Infrastructure/performance-and-capacity.md`](../../../04_Architecture/04_Infrastructure/performance-and-capacity.md) (Generic Resource Governance, Principle P23)
 >
 > General provider-independent product architecture is owned by `04_Infrastructure/runtime-and-models.md`. The details in this document (persistent router lifecycle, flags, PID management, ports, Vulkan / RX 580 specifics) represent concrete `llama.cpp` implementation behavior and reference material. Source code and automated tests remain authoritative for implemented reality.
 

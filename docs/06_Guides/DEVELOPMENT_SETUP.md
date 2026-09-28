@@ -37,7 +37,7 @@ AI-companion-project/
 └── docs/               # Canonical architecture, roadmap, tracking, guides
 ```
 
-For canonical system boundaries, host topology, and locked architectural decisions D1–D9, refer to [SYSTEM_BASELINE.md](../04_Architecture/SYSTEM_BASELINE.md).
+For canonical system boundaries, host topology, and locked architectural decisions D1–D11, refer to [SYSTEM_BASELINE.md](../04_Architecture/SYSTEM_BASELINE.md).
 
 ---
 

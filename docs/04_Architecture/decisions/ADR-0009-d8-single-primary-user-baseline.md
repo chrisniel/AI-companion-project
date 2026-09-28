@@ -1,32 +1,31 @@
-﻿# Single Primary User Baseline
+# Single Primary User Baseline
 
 **Status:** Accepted
 **Decision ID:** D8
 **Codification Date:** 2026-09-29
 **Original Decision Date:** Not separately recorded
-**Primary Canonical Owner:** docs/04_Architecture/02_Data_and_Security/profiles-and-devices.md
-**Related Specifications:** SYSTEM_BASELINE Â§7 traceability; storage-and-assets.md only for applicable persistence/schema boundaries
+**Primary Canonical Owner:** [`profiles-and-devices.md`](../02_Data_and_Security/profiles-and-devices.md)
+**Related Specifications:** [`storage-and-assets.md`](../04_Infrastructure/storage-and-assets.md)
 
 ## Decision History
 - Accepted/relocked during R10.
-- Focused-domain authority transferred during R11.4.
+- Canonical focused-domain authority transferred during R11.4.
 - Codified during R13.1.
-- (R12 mentioned only where it actually refined related sequencing/acceptance/governance).
 
 ## Context
-See primary canonical owner.
+The system requires a defined cardinality for users to scope security and data models.
 
 ## Decision
-Single-primary-user for V1; schema uses owner_id representing profile boundary. Preserved in place.
+Single-primary-user for V1; schema uses `owner_id` representing profile boundary. Preserved in place.
 
 ## Consequences
-See primary canonical owner.
+Simplifies authorization by scoping all data to a single primary user for the V1 baseline.
 
 ## Open Design / Non-Goals
-See primary canonical owner.
+Multi-user role-based access control (RBAC) is explicitly deferred.
 
 ## Canonical Relationships
-See primary canonical owner.
+Primary normative ownership resides in `profiles-and-devices.md`.
 
 ## Change Control
 Superseding an accepted ADR requires explicit human approval and a superseding decision record.

@@ -1,0 +1,877 @@
+diff --git a/README.md b/README.md
+index 717c298..25b47b1 100644
+--- a/README.md
++++ b/README.md
+@@ -663,7 +663,7 @@ New contributors and AI agents navigate the project starting from the canonical
+ docs/06_Guides/DOCUMENTATION_MAP.md
+ ```
+ 
+-Canonical system baseline, locked architectural decisions (D1–D9), and current boundaries are defined in:
++Canonical system baseline, locked architectural decisions (D1–D11), and current boundaries are defined in:
+ 
+ ```text
+ docs/04_Architecture/SYSTEM_BASELINE.md
+@@ -682,7 +682,7 @@ docs/04_Architecture/decisions/
+ For a new development session:
+ 
+ 1. Follow the canonical documentation hierarchy starting with `AGENTS.md` and `docs/06_Guides/DOCUMENTATION_MAP.md`.
+-2. Consult `docs/04_Architecture/SYSTEM_BASELINE.md` for current system baseline and locked decisions D1–D9.
++2. Consult `docs/04_Architecture/SYSTEM_BASELINE.md` for current system baseline and locked decisions D1–D11.
+ 3. Check `docs/01_Tracking/task.md` for current execution state and immediate blockers.
+ 4. Do not assume planned features are already implemented; verify via source code and tests.
+ 
+@@ -693,7 +693,7 @@ I am resuming work on AI Companion.
+ 
+ Please inspect:
+ 1. AGENTS.md and docs/06_Guides/DOCUMENTATION_MAP.md for process and documentation authority.
+-2. docs/04_Architecture/SYSTEM_BASELINE.md for system baseline and locked decisions D1-D9.
++2. docs/04_Architecture/SYSTEM_BASELINE.md for system baseline and locked decisions D1-D11.
+ 3. docs/01_Tracking/task.md for active sprint status and immediate blockers.
+ 
+ Do not assume planned features are already implemented. Verify with source code and tests.
+diff --git a/docs/02_Planning/phase-08/README.md b/docs/02_Planning/phase-08/README.md
+index 8af6dde..6ed6c60 100644
+--- a/docs/02_Planning/phase-08/README.md
++++ b/docs/02_Planning/phase-08/README.md
+@@ -21,7 +21,7 @@ This directory contains the authoritative implementation planning and navigation
+ 
+ ### Canonical Roadmap & Architecture References
+ - [`docs/02_Planning/ROADMAP.md`](../ROADMAP.md) — Canonical product and milestone delivery roadmap.
+-- [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) — Canonical system baseline, release boundary, and locked decisions D1–D9.
++- [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) — Canonical system baseline, release boundary, and locked decisions D1–D11.
+ - [`docs/04_Architecture/04_Infrastructure/storage-and-assets.md`](../../04_Architecture/04_Infrastructure/storage-and-assets.md) and [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](../../04_Architecture/04_Infrastructure/runtime-and-models.md) — Durable architecture for `COMPANION_DATA_ROOT`, bootstrap resolution, and Model Registry schema.
+ - [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](../../04_Architecture/04_Infrastructure/runtime-and-models.md) and [`docs/04_Architecture/04_Infrastructure/performance-and-capacity.md`](../../04_Architecture/04_Infrastructure/performance-and-capacity.md) — Local LLM runtime architecture, hardware offloading profiles, and port allocations.
+ 
+diff --git a/docs/04_Architecture/README.md b/docs/04_Architecture/README.md
+index 7560342..1994011 100644
+--- a/docs/04_Architecture/README.md
++++ b/docs/04_Architecture/README.md
+@@ -186,18 +186,18 @@ Following the Pass R11.4 authority transfer, canonical domain authority resides
+ | Canonical Focused Owner | Domain Scope | Legacy / Specialized Reference | Legacy Disposition |
+ | :--- | :--- | :--- | :--- |
+ | [`SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md) | Shared Ecosystem Baseline | Retained Top-Level Baseline | Retained canonical baseline; owns cross-cutting decisions D1–D11 and release vocabulary. |
+-| [`01_Domains/assistant-and-conversations.md`](01_Domains/assistant-and-conversations.md) | Turn lifecycle, context assembly, token streaming, multilingual interaction | [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](MEMORY_AND_CHARACTER_ARCHITECTURE.md) | Subordinate compatibility / scoping reference. |
++| [`01_Domains/assistant-and-conversations.md`](01_Domains/assistant-and-conversations.md) | Turn lifecycle, context assembly, token streaming, multilingual interaction | [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/MEMORY_AND_CHARACTER_ARCHITECTURE.md) | Subordinate compatibility / scoping reference. |
+ | [`01_Domains/tasks-reminders-alarms-and-routines.md`](01_Domains/tasks-reminders-alarms-and-routines.md) | Distinct scheduling semantics, quiet hours, best-effort wake, notifications | — | New focused canonical domain specification. |
+-| [`01_Domains/characters-personality-and-emotion.md`](01_Domains/characters-personality-and-emotion.md) | Persistent Character config, separate Personality traits, lightweight Emotion | [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](MEMORY_AND_CHARACTER_ARCHITECTURE.md) | Subordinate compatibility / persona reference. |
+-| [`01_Domains/memory-and-personalization.md`](01_Domains/memory-and-personalization.md) | Profile-first memory persistence/retrieval, FTS5 baseline, selective auto memory | [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](MEMORY_AND_CHARACTER_ARCHITECTURE.md) | Subordinate compatibility / scoping reference. |
+-| [`01_Domains/voice-and-audio.md`](01_Domains/voice-and-audio.md) | Provider-independent STT/TTS, voice resource-isolation policy, PC V1 voice | [`VOICE_AND_AUDIO_ARCHITECTURE.md`](VOICE_AND_AUDIO_ARCHITECTURE.md) | Subordinate design & implementation reference; post-V1 voice wording superseded. |
++| [`01_Domains/characters-personality-and-emotion.md`](01_Domains/characters-personality-and-emotion.md) | Persistent Character config, separate Personality traits, lightweight Emotion | [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/MEMORY_AND_CHARACTER_ARCHITECTURE.md) | Subordinate compatibility / persona reference. |
++| [`01_Domains/memory-and-personalization.md`](01_Domains/memory-and-personalization.md) | Profile-first memory persistence/retrieval, FTS5 baseline, selective auto memory | [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/MEMORY_AND_CHARACTER_ARCHITECTURE.md) | Subordinate compatibility / scoping reference. |
++| [`01_Domains/voice-and-audio.md`](01_Domains/voice-and-audio.md) | Provider-independent STT/TTS, voice resource-isolation policy, PC V1 voice | [`VOICE_AND_AUDIO_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/VOICE_AND_AUDIO_ARCHITECTURE.md) | Subordinate design & implementation reference; post-V1 voice wording superseded. |
+ | [`01_Domains/multimodal-and-media.md`](01_Domains/multimodal-and-media.md) | Vision model ingestion, upload security ceilings, attachment lifecycle | — | New focused canonical domain specification (Phase 8B). |
+ | [`01_Domains/android-companion.md`](01_Domains/android-companion.md) | Android companion identity, connected sync, Keystore credentials, compact offline LLM | [`ANDROID_COMPANION_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/ANDROID_COMPANION_ARCHITECTURE.md) | Subordinate technical / benchmark reference; generic post-V1 wording superseded. |
+-| [`02_Data_and_Security/profiles-and-devices.md`](02_Data_and_Security/profiles-and-devices.md) | User Profile data boundary (`owner_id`), trusted device enrollment, single-user baseline | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md) | Subordinate security / trust reference. |
+-| [`02_Data_and_Security/authentication-and-secrets.md`](02_Data_and_Security/authentication-and-secrets.md) | Token verification, credential hierarchy, network boundaries (localhost/LAN/Tailscale) | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md) | Subordinate security / trust reference. |
+-| [`02_Data_and_Security/tool-permissions-and-actions.md`](02_Data_and_Security/tool-permissions-and-actions.md) | DEFAULT DENY, deterministic policy, emergency cancellation controls, generic shell rejection | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md) | Subordinate security / trust reference. |
+-| [`02_Data_and_Security/privacy-retention-and-audit.md`](02_Data_and_Security/privacy-retention-and-audit.md) | Data retention schedules, soft-delete lifecycles, privacy/retention lifecycles, and auditable action governance | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md) | Subordinate security / trust reference. |
+-| [`03_Integrations/web-current-information.md`](03_Integrations/web-current-information.md) | Read-only WebSearch, Fetch, and weather context retrieval; SSRF containment | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md) | Subordinate security / trust reference. |
++| [`02_Data_and_Security/profiles-and-devices.md`](02_Data_and_Security/profiles-and-devices.md) | User Profile data boundary (`owner_id`), trusted device enrollment, single-user baseline | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md) | Subordinate security / trust reference. |
++| [`02_Data_and_Security/authentication-and-secrets.md`](02_Data_and_Security/authentication-and-secrets.md) | Token verification, credential hierarchy, network boundaries (localhost/LAN/Tailscale) | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md) | Subordinate security / trust reference. |
++| [`02_Data_and_Security/tool-permissions-and-actions.md`](02_Data_and_Security/tool-permissions-and-actions.md) | DEFAULT DENY, deterministic policy, emergency cancellation controls, generic shell rejection | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md) | Subordinate security / trust reference. |
++| [`02_Data_and_Security/privacy-retention-and-audit.md`](02_Data_and_Security/privacy-retention-and-audit.md) | Data retention schedules, soft-delete lifecycles, privacy/retention lifecycles, and auditable action governance | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md) | Subordinate security / trust reference. |
++| [`03_Integrations/web-current-information.md`](03_Integrations/web-current-information.md) | Read-only WebSearch, Fetch, and weather context retrieval; SSRF containment | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md) | Subordinate security / trust reference. |
+ | [`03_Integrations/health-and-wearables.md`](03_Integrations/health-and-wearables.md) | PC health-context readiness (PC V1) and Android Health Connect (Android V1) | [`ANDROID_COMPANION_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/ANDROID_COMPANION_ARCHITECTURE.md) | Subordinate technical / benchmark reference. |
+ | [`04_Infrastructure/runtime-and-models.md`](04_Infrastructure/runtime-and-models.md) | Local AI Runtime, model registry/artifact semantics, controlled local import, optional cloud LLM fallback | [`LLAMA_CPP_RUNTIME_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/LLAMA_CPP_RUNTIME_ARCHITECTURE.md) & [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) | Subordinate implementation specialization (`llama.cpp`) & Phase 8P reference. |
+ | [`04_Infrastructure/storage-and-assets.md`](04_Infrastructure/storage-and-assets.md) | Persistent storage, configuration layering, and asset boundaries | [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) | Subordinate Phase 8P technical reference. |
+@@ -205,3 +205,21 @@ Following the Pass R11.4 authority transfer, canonical domain authority resides
+ | [`04_Infrastructure/backup-recovery-and-diagnostics.md`](04_Infrastructure/backup-recovery-and-diagnostics.md) | Practical backup/recovery and restore verification, local diagnostic logging | [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) | Subordinate technical reference. |
+ | [`04_Infrastructure/performance-and-capacity.md`](04_Infrastructure/performance-and-capacity.md) | Resource governance, telemetry truthfulness, performance/capacity policy, Gaming / Low-Impact Mode | [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) & [`LLAMA_CPP_RUNTIME_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/LLAMA_CPP_RUNTIME_ARCHITECTURE.md) | Subordinate technical / benchmark reference. |
+ | [`decisions/`](decisions/) | Architectural Decision Records (ADRs) | Historical ADRs | Preserved ADR collection. |
++
++## Architecture Decision Records (ADR)
++
++ADRs are accepted architectural decision records. Focused specifications remain the primary normative domain owners. ADRs record decision identity, context, consequences, and change control.
++
++- [**ADR Catalog (decisions/README.md)**](decisions/README.md)
++  - [ADR-0001 (Repository/LFS Topology)](decisions/ADR-0001-github-source-hugging-face-lfs.md)
++  - [ADR-0002 (D1: PC V1 Release Boundary)](decisions/ADR-0002-d1-pc-v1-release-boundary.md)
++  - [ADR-0003 (D2: Windows Host Model)](decisions/ADR-0003-d2-windows-host-model.md)
++  - [ADR-0004 (D3: Android Application Identity)](decisions/ADR-0004-d3-android-application-identity.md)
++  - [ADR-0005 (D4: Profile & Device Credential Boundary)](decisions/ADR-0005-d4-profile-device-credential-boundary.md)
++  - [ADR-0006 (D5: Remote Access Trust Boundary)](decisions/ADR-0006-d5-remote-access-trust-boundary.md)
++  - [ADR-0007 (D6: Controlled Model Acquisition)](decisions/ADR-0007-d6-controlled-model-acquisition.md)
++  - [ADR-0008 (D7: Profile-First Memory Ownership)](decisions/ADR-0008-d7-profile-first-memory-ownership.md)
++  - [ADR-0009 (D8: Single Primary User Baseline)](decisions/ADR-0009-d8-single-primary-user-baseline.md)
++  - [ADR-0010 (D9: Typed Tool Security Policy)](decisions/ADR-0010-d9-typed-tool-security-policy.md)
++  - [ADR-0011 (D10: Scheduling and Notification Semantics)](decisions/ADR-0011-d10-scheduling-and-notification-semantics.md)
++  - [ADR-0012 (D11: Persona and State Separation)](decisions/ADR-0012-d11-persona-and-state-separation.md)
+diff --git a/docs/04_Architecture/SYSTEM_BASELINE.md b/docs/04_Architecture/SYSTEM_BASELINE.md
+index 74ae590..52e2065 100644
+--- a/docs/04_Architecture/SYSTEM_BASELINE.md
++++ b/docs/04_Architecture/SYSTEM_BASELINE.md
+@@ -118,7 +118,7 @@ AI Companion formalizes platform-specific release vocabulary to ensure unambiguo
+ ```
+ 
+ - **Windows Host Process (D2):** The Local AI Runtime runs as an independent Windows host process decoupled from browser tab lifetime; closing the browser does not define or terminate the backend host process. For PC V1, the host process must support automatic background startup at Windows user login (exact launch mechanism remains open design) and native Windows notification delivery (so reminders, alarms, and routines alert the user even when the browser client is closed; exact notification adapter remains open design). React Web is the primary V1 UI; native desktop shells (e.g., Tauri) are deferred post-PC-V1.
+-- **Remote Access Trust Boundary (D5):** Network access is restricted to `localhost`, trusted LAN bindings, and Tailscale private mesh networks. Direct public internet exposure and router port forwarding are outside the supported trust model for V1. Details: [`02_Data_and_Security/authentication-and-secrets.md`](02_Data_and_Security/authentication-and-secrets.md) (legacy reference: [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md)).
++- **Remote Access Trust Boundary (D5):** Network access is restricted to `localhost`, trusted LAN bindings, and Tailscale private mesh networks. Direct public internet exposure and router port forwarding are outside the supported trust model for V1. Details: [`02_Data_and_Security/authentication-and-secrets.md`](02_Data_and_Security/authentication-and-secrets.md) (legacy reference: [`SECURITY_AND_TRUST_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md)).
+ 
+ ---
+ 
+@@ -126,10 +126,10 @@ AI Companion formalizes platform-specific release vocabulary to ensure unambiguo
+ 
+ The following major architectural invariants are locked across the ecosystem:
+ 
+-- **Profiles & Trusted Devices (D4 & D8):** AI Companion V1 operates as a single-primary-user system. The **Profile** owns all personal data (`owner_id`). Currently implemented using a single shared application credential; target architecture introduces per-device revocable credentials. Master secrets are never distributed to client devices. Details: [`02_Data_and_Security/profiles-and-devices.md`](02_Data_and_Security/profiles-and-devices.md) (legacy reference: [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md)).
+-- **Memory & Personal Data Ownership (D7):** Memory adheres to a strict Profile-First model. The Profile owns user identity, memories, preferences, and personal data. Memories belong to the Profile (default `PROFILE` scope, optional `CHARACTER` scope). Conversation history belongs to the Profile but remains Character-bound as recorded. Characters define persona presentation and never own user data. Details: [`01_Domains/memory-and-personalization.md`](01_Domains/memory-and-personalization.md) (legacy reference: [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](MEMORY_AND_CHARACTER_ARCHITECTURE.md)).
++- **Profiles & Trusted Devices (D4 & D8):** AI Companion V1 operates as a single-primary-user system. The **Profile** owns all personal data (`owner_id`). Currently implemented using a single shared application credential; target architecture introduces per-device revocable credentials. Master secrets are never distributed to client devices. Details: [`02_Data_and_Security/profiles-and-devices.md`](02_Data_and_Security/profiles-and-devices.md) (legacy reference: [`SECURITY_AND_TRUST_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md)).
++- **Memory & Personal Data Ownership (D7):** Memory adheres to a strict Profile-First model. The Profile owns user identity, memories, preferences, and personal data. Memories belong to the Profile (default `PROFILE` scope, optional `CHARACTER` scope). Conversation history belongs to the Profile but remains Character-bound as recorded. Characters define persona presentation and never own user data. Details: [`01_Domains/memory-and-personalization.md`](01_Domains/memory-and-personalization.md) (legacy reference: [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/MEMORY_AND_CHARACTER_ARCHITECTURE.md)).
+ - **Model Acquisition & Installation Pipeline (D6):** Managed local model imports follow a deterministic pipeline: `inbox` → `preflight` → `staging` → `atomic install` → `library` → `registry`. Controlled local import is a V1 requirement (the execution service is currently an active implementation gap). `MODEL_LIBRARY_DIR` is the canonical storage location. Details: [`04_Infrastructure/runtime-and-models.md`](04_Infrastructure/runtime-and-models.md) and [`04_Infrastructure/storage-and-assets.md`](04_Infrastructure/storage-and-assets.md) (legacy reference: [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md)).
+-- **Tool & Autonomy Security Model (D9):** Tool execution enforces an immutable **DEFAULT DENY** posture and a 4-tier risk matrix (Risk 0–3). Generative models possess zero self-elevation authority. Low-risk Risk 0 and approved Risk 1 actions (e.g., personal reads, creating personal tasks/reminders) may auto-execute when enabled and when deterministic policy resolves ALLOW; deterministic policy evaluates actions across ALLOW, CONFIRM, and DENY without granting generative models self-elevation authority. Significant state changes (Risk 2 deletes, external transmissions) require explicit confirmation. Generic arbitrary shell / PowerShell / OS admin authority (Risk 3) is strictly prohibited by default. Details: [`02_Data_and_Security/tool-permissions-and-actions.md`](02_Data_and_Security/tool-permissions-and-actions.md) (legacy reference: [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md)).
++- **Tool & Autonomy Security Model (D9):** Tool execution enforces an immutable **DEFAULT DENY** posture and a 4-tier risk matrix (Risk 0–3). Generative models possess zero self-elevation authority. Low-risk Risk 0 and approved Risk 1 actions (e.g., personal reads, creating personal tasks/reminders) may auto-execute when enabled and when deterministic policy resolves ALLOW; deterministic policy evaluates actions across ALLOW, CONFIRM, and DENY without granting generative models self-elevation authority. Significant state changes (Risk 2 deletes, external transmissions) require explicit confirmation. Generic arbitrary shell / PowerShell / OS admin authority (Risk 3) is strictly prohibited by default. Details: [`02_Data_and_Security/tool-permissions-and-actions.md`](02_Data_and_Security/tool-permissions-and-actions.md) (legacy reference: [`SECURITY_AND_TRUST_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md)).
+ - **Android Product Identity & Mobile Inference (D3):** Locked production application ID and package namespace: `com.cnl.aicompanion`. Connected Mode uses PC Local AI Runtime as the canonical persistent authority; Offline Mode targets a practical compact offline local LLM. Android V1 is an independent follow-on release and does not block PC V1. Details: [`01_Domains/android-companion.md`](01_Domains/android-companion.md) (legacy reference: [`ANDROID_COMPANION_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/ANDROID_COMPANION_ARCHITECTURE.md)).
+ - **Scheduling & Notification Semantics (D10):** Task, Reminder, Alarm, and Routine are distinct product entities with distinct semantics, triggers, and lifecycles. Scheduler execution is deterministic, rule-based, and bounded. Native Windows notification delivery is a mandatory delivery target for PC V1. Quiet hours suppress applicable non-urgent notifications; per-item overrides exist. Reminders catch up after sleep/offline where appropriate. An Alarm is a time-critical scheduled alert with stronger delivery semantics than an ordinary Reminder; wake support is best-effort with no impossible universal ACPI/firmware wake guarantees. Detailed schemas and lifecycles remain open design. Details: [`01_Domains/tasks-reminders-alarms-and-routines.md`](01_Domains/tasks-reminders-alarms-and-routines.md).
+ - **Companion Persona & State Separation (D11):** Clean architectural separation across companion entities:
+@@ -167,26 +167,26 @@ Following the Pass R11.4 authority transfer, the **focused specifications below
+ ### 6.1 Core Experience & Client Domains (`01_Domains/`)
+ | Focused Domain Specification | Domain Scope | Decision / Policy Alignment | Subordinate Legacy Reference |
+ | :--- | :--- | :--- | :--- |
+-| [`assistant-and-conversations.md`](01_Domains/assistant-and-conversations.md) | Conversational turn lifecycle, session context assembly, streaming SSE, and multilingual interaction. | Decisions D1, D7, D11 | [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](MEMORY_AND_CHARACTER_ARCHITECTURE.md) |
++| [`assistant-and-conversations.md`](01_Domains/assistant-and-conversations.md) | Conversational turn lifecycle, session context assembly, streaming SSE, and multilingual interaction. | Decisions D1, D7, D11 | [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/MEMORY_AND_CHARACTER_ARCHITECTURE.md) |
+ | [`tasks-reminders-alarms-and-routines.md`](01_Domains/tasks-reminders-alarms-and-routines.md) | Distinct Task, Reminder, Alarm, and Routine scheduling semantics, quiet hours, and best-effort wake. | Decision D10 | — |
+-| [`characters-personality-and-emotion.md`](01_Domains/characters-personality-and-emotion.md) | Persistent Character configuration, separate Personality traits, lightweight Emotion mood, and relationship state. | Decision D11 | [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](MEMORY_AND_CHARACTER_ARCHITECTURE.md) |
+-| [`memory-and-personalization.md`](01_Domains/memory-and-personalization.md) | Profile-first memory persistence/retrieval, FTS5 baseline, selective automatic memory, and vector memory. | Decision D7 | [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](MEMORY_AND_CHARACTER_ARCHITECTURE.md) |
+-| [`voice-and-audio.md`](01_Domains/voice-and-audio.md) | Provider-independent STT/TTS, voice resource-isolation policy, conversational voice (PC V1), and wake word (PC Later). | Decisions D1, D2, D11 | [`VOICE_AND_AUDIO_ARCHITECTURE.md`](VOICE_AND_AUDIO_ARCHITECTURE.md) |
++| [`characters-personality-and-emotion.md`](01_Domains/characters-personality-and-emotion.md) | Persistent Character configuration, separate Personality traits, lightweight Emotion mood, and relationship state. | Decision D11 | [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/MEMORY_AND_CHARACTER_ARCHITECTURE.md) |
++| [`memory-and-personalization.md`](01_Domains/memory-and-personalization.md) | Profile-first memory persistence/retrieval, FTS5 baseline, selective automatic memory, and vector memory. | Decision D7 | [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/MEMORY_AND_CHARACTER_ARCHITECTURE.md) |
++| [`voice-and-audio.md`](01_Domains/voice-and-audio.md) | Provider-independent STT/TTS, voice resource-isolation policy, conversational voice (PC V1), and wake word (PC Later). | Decisions D1, D2, D11 | [`VOICE_AND_AUDIO_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/VOICE_AND_AUDIO_ARCHITECTURE.md) |
+ | [`multimodal-and-media.md`](01_Domains/multimodal-and-media.md) | Vision model ingestion, upload security ceilings, and media attachment lifecycle. | Phase 8B / PC V1 | — |
+ | [`android-companion.md`](01_Domains/android-companion.md) | Android companion identity (`com.cnl.aicompanion`), connected sync, Keystore auth, Room outbox, and compact offline LLM. | Decisions D1, D3, D4 | [`ANDROID_COMPANION_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/ANDROID_COMPANION_ARCHITECTURE.md) |
+ 
+ ### 6.2 Data, Security & Trust Domains (`02_Data_and_Security/`)
+ | Focused Domain Specification | Domain Scope | Decision / Policy Alignment | Subordinate Legacy Reference |
+ | :--- | :--- | :--- | :--- |
+-| [`profiles-and-devices.md`](02_Data_and_Security/profiles-and-devices.md) | User Profile data ownership boundary (`owner_id`), trusted device enrollment, and single-primary-user baseline. | Decisions D4, D8 | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md) |
+-| [`authentication-and-secrets.md`](02_Data_and_Security/authentication-and-secrets.md) | Token verification, credential hierarchy, network boundaries (localhost/LAN/Tailscale), and secrets isolation. | Decisions D4, D5 | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md) |
+-| [`tool-permissions-and-actions.md`](02_Data_and_Security/tool-permissions-and-actions.md) | DEFAULT DENY, deterministic policy, emergency cancellation controls, and generic shell rejection. | Decision D9, Principle P1 | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md) |
+-| [`privacy-retention-and-audit.md`](02_Data_and_Security/privacy-retention-and-audit.md) | Data retention schedules, soft-delete lifecycles, privacy/retention lifecycles, and auditable action governance. | Phase 8 / Execution Baseline | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md) |
++| [`profiles-and-devices.md`](02_Data_and_Security/profiles-and-devices.md) | User Profile data ownership boundary (`owner_id`), trusted device enrollment, and single-primary-user baseline. | Decisions D4, D8 | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md) |
++| [`authentication-and-secrets.md`](02_Data_and_Security/authentication-and-secrets.md) | Token verification, credential hierarchy, network boundaries (localhost/LAN/Tailscale), and secrets isolation. | Decisions D4, D5 | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md) |
++| [`tool-permissions-and-actions.md`](02_Data_and_Security/tool-permissions-and-actions.md) | DEFAULT DENY, deterministic policy, emergency cancellation controls, and generic shell rejection. | Decision D9, Principle P1 | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md) |
++| [`privacy-retention-and-audit.md`](02_Data_and_Security/privacy-retention-and-audit.md) | Data retention schedules, soft-delete lifecycles, privacy/retention lifecycles, and auditable action governance. | Phase 8 / Execution Baseline | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md) |
+ 
+ ### 6.3 External Integrations (`03_Integrations/`)
+ | Focused Domain Specification | Domain Scope | Decision / Policy Alignment | Subordinate Legacy Reference |
+ | :--- | :--- | :--- | :--- |
+-| [`web-current-information.md`](03_Integrations/web-current-information.md) | Provider-independent read-only WebSearch, Fetch, and weather context retrieval; SSRF containment. | PC V1 Integration | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](SECURITY_AND_TRUST_ARCHITECTURE.md) |
++| [`web-current-information.md`](03_Integrations/web-current-information.md) | Provider-independent read-only WebSearch, Fetch, and weather context retrieval; SSRF containment. | PC V1 Integration | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md) |
+ | [`health-and-wearables.md`](03_Integrations/health-and-wearables.md) | PC health-context readiness (PC V1) and Android Health Connect integration (Android V1). | PC V1 & Android V1 | [`ANDROID_COMPANION_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/ANDROID_COMPANION_ARCHITECTURE.md) |
+ 
+ ### 6.4 Host & Infrastructure Domains (`04_Infrastructure/`)
+diff --git a/docs/04_Architecture/decisions/ADR-0002-d1-pc-v1-release-boundary.md b/docs/04_Architecture/decisions/ADR-0002-d1-pc-v1-release-boundary.md
+index f61a260..e9a4787 100644
+--- a/docs/04_Architecture/decisions/ADR-0002-d1-pc-v1-release-boundary.md
++++ b/docs/04_Architecture/decisions/ADR-0002-d1-pc-v1-release-boundary.md
+@@ -1,32 +1,32 @@
+-﻿# V1 Release Boundary
++# V1 Release Boundary
+ 
+ **Status:** Accepted
+ **Decision ID:** D1
+ **Codification Date:** 2026-09-29
+ **Original Decision Date:** Not separately recorded
+-**Primary Canonical Owner:** docs/04_Architecture/SYSTEM_BASELINE.md Â§2
+-**Related Specifications:** docs/02_Planning/ROADMAP.md
++**Primary Canonical Owner:** [`SYSTEM_BASELINE.md §2`](../SYSTEM_BASELINE.md)
++**Related Specifications:** [`ROADMAP.md`](../../02_Planning/ROADMAP.md)
+ 
+ ## Decision History
+ - Accepted/relocked during R10.
+-- Focused-domain authority transferred during R11.4.
++- Canonical focused-domain authority transferred during R11.4.
++- Delivery sequencing reconciled during R12.
+ - Codified during R13.1.
+-- (R12 mentioned only where it actually refined related sequencing/acceptance/governance).
+ 
+ ## Context
+-See primary canonical owner.
++PC V1 forms the primary ecosystem capability baseline. Android V1 is a subsequent mobile-specific release.
+ 
+ ## Decision
+-PC V1 is the first complete ecosystem release (incorporates conversational voice without wake word, bounded routines, read-only web info, selective automatic memory, multilingual interaction, optional cloud fallback, autostart, and native notifications). Android V1 is an independent follow-on production release.
++PC V1 is established as the first complete ecosystem release (incorporates conversational voice without wake word, bounded routines, read-only web info, selective automatic memory, multilingual interaction, optional cloud fallback, autostart, and native notifications). Android V1 is an independent follow-on production release.
+ 
+ ## Consequences
+-See primary canonical owner.
++Establishes the release scope and scheduling milestones for PC V1 and Android V1.
+ 
+ ## Open Design / Non-Goals
+-See primary canonical owner.
++Capabilities beyond PC V1 and Android V1 remain open design or are deferred to later milestones.
+ 
+ ## Canonical Relationships
+-See primary canonical owner.
++Primary normative ownership resides in the canonical SYSTEM_BASELINE and ROADMAP.
+ 
+ ## Change Control
+ Superseding an accepted ADR requires explicit human approval and a superseding decision record.
+diff --git a/docs/04_Architecture/decisions/ADR-0003-d2-windows-host-model.md b/docs/04_Architecture/decisions/ADR-0003-d2-windows-host-model.md
+index 7111d1d..5bf3473 100644
+--- a/docs/04_Architecture/decisions/ADR-0003-d2-windows-host-model.md
++++ b/docs/04_Architecture/decisions/ADR-0003-d2-windows-host-model.md
+@@ -1,32 +1,31 @@
+-﻿# Windows Host Model
++# Windows Host Model
+ 
+ **Status:** Accepted
+ **Decision ID:** D2
+ **Codification Date:** 2026-09-29
+ **Original Decision Date:** Not separately recorded
+-**Primary Canonical Owner:** docs/04_Architecture/04_Infrastructure/windows-host-and-notifications.md
+-**Related Specifications:** docs/04_Architecture/04_Infrastructure/storage-and-assets.md
++**Primary Canonical Owner:** [`windows-host-and-notifications.md`](../04_Infrastructure/windows-host-and-notifications.md)
++**Related Specifications:** [`storage-and-assets.md`](../04_Infrastructure/storage-and-assets.md)
+ 
+ ## Decision History
+ - Accepted/relocked during R10.
+-- Focused-domain authority transferred during R11.4.
++- Canonical focused-domain authority transferred during R11.4.
+ - Codified during R13.1.
+-- (R12 mentioned only where it actually refined related sequencing/acceptance/governance).
+ 
+ ## Context
+-See primary canonical owner.
++The application must run reliably in the background to provide continuous assistant features independent of a visible UI.
+ 
+ ## Decision
+ Independent long-running Windows host process; decoupled from browser lifetime; autostart at login required; native Windows notification delivery required; native desktop shells deferred post-PC-V1.
+ 
+ ## Consequences
+-See primary canonical owner.
++Requires an independent background host and dedicated notification integration rather than relying on browser-based execution.
+ 
+ ## Open Design / Non-Goals
+-See primary canonical owner.
++Native desktop shells (e.g., WPF, WinUI) remain deferred open design.
+ 
+ ## Canonical Relationships
+-See primary canonical owner.
++Primary normative ownership resides in `windows-host-and-notifications.md`.
+ 
+ ## Change Control
+ Superseding an accepted ADR requires explicit human approval and a superseding decision record.
+diff --git a/docs/04_Architecture/decisions/ADR-0004-d3-android-application-identity.md b/docs/04_Architecture/decisions/ADR-0004-d3-android-application-identity.md
+index 158937f..ce0431d 100644
+--- a/docs/04_Architecture/decisions/ADR-0004-d3-android-application-identity.md
++++ b/docs/04_Architecture/decisions/ADR-0004-d3-android-application-identity.md
+@@ -1,32 +1,31 @@
+-﻿# Android Application Identity
++# Android Application Identity
+ 
+ **Status:** Accepted
+ **Decision ID:** D3
+ **Codification Date:** 2026-09-29
+ **Original Decision Date:** Not separately recorded
+-**Primary Canonical Owner:** docs/04_Architecture/01_Domains/android-companion.md
+-**Related Specifications:** SYSTEM_BASELINE Â§2.3 and Â§7 D3
++**Primary Canonical Owner:** [`android-companion.md`](../01_Domains/android-companion.md)
++**Related Specifications:** [`SYSTEM_BASELINE.md §2.3`](../SYSTEM_BASELINE.md)
+ 
+ ## Decision History
+ - Accepted/relocked during R10.
+-- Focused-domain authority transferred during R11.4.
++- Canonical focused-domain authority transferred during R11.4.
+ - Codified during R13.1.
+-- (R12 mentioned only where it actually refined related sequencing/acceptance/governance).
+ 
+ ## Context
+-See primary canonical owner.
++The Android application requires a locked namespace and unified product identity.
+ 
+ ## Decision
+-Application ID & package: com.cnl.aicompanion; product-oriented, character-independent, model-independent.
++Application ID & package: `com.cnl.aicompanion`; product-oriented, character-independent, model-independent.
+ 
+ ## Consequences
+-See primary canonical owner.
++The mobile app acts as a unified platform entry point rather than being branded per-character.
+ 
+ ## Open Design / Non-Goals
+-See primary canonical owner.
++Detailed mobile inference formats (GGUF or otherwise) remain open design.
+ 
+ ## Canonical Relationships
+-See primary canonical owner.
++Primary normative ownership resides in `android-companion.md`.
+ 
+ ## Change Control
+ Superseding an accepted ADR requires explicit human approval and a superseding decision record.
+diff --git a/docs/04_Architecture/decisions/ADR-0005-d4-profile-device-credential-boundary.md b/docs/04_Architecture/decisions/ADR-0005-d4-profile-device-credential-boundary.md
+index 85ef2e0..2ad5016 100644
+--- a/docs/04_Architecture/decisions/ADR-0005-d4-profile-device-credential-boundary.md
++++ b/docs/04_Architecture/decisions/ADR-0005-d4-profile-device-credential-boundary.md
+@@ -1,32 +1,31 @@
+-﻿# Profile & Device Credential Boundary
++# Profile & Device Credential Boundary
+ 
+ **Status:** Accepted
+ **Decision ID:** D4
+ **Codification Date:** 2026-09-29
+ **Original Decision Date:** Not separately recorded
+-**Primary Canonical Owner:** docs/04_Architecture/02_Data_and_Security/profiles-and-devices.md
+-**Related Specifications:** authentication-and-secrets.md
++**Primary Canonical Owner:** [`profiles-and-devices.md`](../02_Data_and_Security/profiles-and-devices.md)
++**Related Specifications:** [`authentication-and-secrets.md`](../02_Data_and_Security/authentication-and-secrets.md)
+ 
+ ## Decision History
+ - Accepted/relocked during R10.
+-- Focused-domain authority transferred during R11.4.
++- Canonical focused-domain authority transferred during R11.4.
+ - Codified during R13.1.
+-- (R12 mentioned only where it actually refined related sequencing/acceptance/governance).
+ 
+ ## Context
+-See primary canonical owner.
++Security boundaries must distinguish between a user's identity (Profile) and the hardware endpoint (Device).
+ 
+ ## Decision
+ Profile represents user identity; Device represents trusted client endpoint. Independent revocable credentials per device; master secrets never distributed.
+ 
+ ## Consequences
+-See primary canonical owner.
++Compromised devices can be independently revoked without resetting the primary Profile identity.
+ 
+ ## Open Design / Non-Goals
+-See primary canonical owner.
++Specific cryptographic storage mechanisms on the host remain implementation details.
+ 
+ ## Canonical Relationships
+-See primary canonical owner.
++Primary normative ownership resides in `profiles-and-devices.md`.
+ 
+ ## Change Control
+ Superseding an accepted ADR requires explicit human approval and a superseding decision record.
+diff --git a/docs/04_Architecture/decisions/ADR-0006-d5-remote-access-trust-boundary.md b/docs/04_Architecture/decisions/ADR-0006-d5-remote-access-trust-boundary.md
+index f3fa56c..86c7e72 100644
+--- a/docs/04_Architecture/decisions/ADR-0006-d5-remote-access-trust-boundary.md
++++ b/docs/04_Architecture/decisions/ADR-0006-d5-remote-access-trust-boundary.md
+@@ -1,32 +1,31 @@
+-﻿# Remote Access Trust Boundary
++# Remote Access Trust Boundary
+ 
+ **Status:** Accepted
+ **Decision ID:** D5
+ **Codification Date:** 2026-09-29
+ **Original Decision Date:** Not separately recorded
+-**Primary Canonical Owner:** docs/04_Architecture/02_Data_and_Security/authentication-and-secrets.md
+-**Related Specifications:** android-companion.md where remote-device behavior matters
++**Primary Canonical Owner:** [`authentication-and-secrets.md`](../02_Data_and_Security/authentication-and-secrets.md)
++**Related Specifications:** [`android-companion.md`](../01_Domains/android-companion.md)
+ 
+ ## Decision History
+ - Accepted/relocked during R10.
+-- Focused-domain authority transferred during R11.4.
++- Canonical focused-domain authority transferred during R11.4.
+ - Codified during R13.1.
+-- (R12 mentioned only where it actually refined related sequencing/acceptance/governance).
+ 
+ ## Context
+-See primary canonical owner.
++Remote connections to the PC host must be secured without exposing the host to the public internet.
+ 
+ ## Decision
+ Localhost, trusted LAN, and Tailscale private mesh supported for V1. Direct public internet exposure / port forwarding is outside the supported trust model.
+ 
+ ## Consequences
+-See primary canonical owner.
++Limits connectivity to secure, private overlay networks or local networks, significantly reducing attack surface.
+ 
+ ## Open Design / Non-Goals
+-See primary canonical owner.
++Cloud relay architectures or public ingress are explicitly non-goals for V1.
+ 
+ ## Canonical Relationships
+-See primary canonical owner.
++Primary normative ownership resides in `authentication-and-secrets.md`.
+ 
+ ## Change Control
+ Superseding an accepted ADR requires explicit human approval and a superseding decision record.
+diff --git a/docs/04_Architecture/decisions/ADR-0007-d6-controlled-model-acquisition.md b/docs/04_Architecture/decisions/ADR-0007-d6-controlled-model-acquisition.md
+index 2929379..d2fc460 100644
+--- a/docs/04_Architecture/decisions/ADR-0007-d6-controlled-model-acquisition.md
++++ b/docs/04_Architecture/decisions/ADR-0007-d6-controlled-model-acquisition.md
+@@ -1,32 +1,31 @@
+-﻿# Controlled Model Acquisition
++# Controlled Model Acquisition
+ 
+ **Status:** Accepted
+ **Decision ID:** D6
+ **Codification Date:** 2026-09-29
+ **Original Decision Date:** Not separately recorded
+-**Primary Canonical Owner:** docs/04_Architecture/04_Infrastructure/runtime-and-models.md
+-**Related Specifications:** storage-and-assets.md
++**Primary Canonical Owner:** [`runtime-and-models.md`](../04_Infrastructure/runtime-and-models.md)
++**Related Specifications:** [`storage-and-assets.md`](../04_Infrastructure/storage-and-assets.md)
+ 
+ ## Decision History
+ - Accepted/relocked during R10.
+-- Focused-domain authority transferred during R11.4.
++- Canonical focused-domain authority transferred during R11.4.
+ - Codified during R13.1.
+-- (R12 mentioned only where it actually refined related sequencing/acceptance/governance).
+ 
+ ## Context
+-See primary canonical owner.
++Model files must be safely verified and staged before being exposed to the runtime.
+ 
+ ## Decision
+ Controlled local import pipeline (PC V1 requirement): inbox -> preflight -> staging -> atomic install -> library -> registry. MODEL_LIBRARY_DIR is canonical.
+ 
+ ## Consequences
+-See primary canonical owner.
++Prevents corruption and unverified execution by ensuring all models pass through a strict staging lifecycle.
+ 
+ ## Open Design / Non-Goals
+-See primary canonical owner.
++Network-based automated model downloading from external hubs remains an open design.
+ 
+ ## Canonical Relationships
+-See primary canonical owner.
++Primary normative ownership resides in `runtime-and-models.md`.
+ 
+ ## Change Control
+ Superseding an accepted ADR requires explicit human approval and a superseding decision record.
+diff --git a/docs/04_Architecture/decisions/ADR-0008-d7-profile-first-memory-ownership.md b/docs/04_Architecture/decisions/ADR-0008-d7-profile-first-memory-ownership.md
+index d55555d..e79146c 100644
+--- a/docs/04_Architecture/decisions/ADR-0008-d7-profile-first-memory-ownership.md
++++ b/docs/04_Architecture/decisions/ADR-0008-d7-profile-first-memory-ownership.md
+@@ -1,32 +1,31 @@
+-﻿# Profile-First Memory Ownership
++# Profile-First Memory Ownership
+ 
+ **Status:** Accepted
+ **Decision ID:** D7
+ **Codification Date:** 2026-09-29
+ **Original Decision Date:** Not separately recorded
+-**Primary Canonical Owner:** docs/04_Architecture/01_Domains/memory-and-personalization.md
+-**Related Specifications:** characters-personality-and-emotion.md
++**Primary Canonical Owner:** [`memory-and-personalization.md`](../01_Domains/memory-and-personalization.md)
++**Related Specifications:** [`characters-personality-and-emotion.md`](../01_Domains/characters-personality-and-emotion.md)
+ 
+ ## Decision History
+ - Accepted/relocked during R10.
+-- Focused-domain authority transferred during R11.4.
++- Canonical focused-domain authority transferred during R11.4.
+ - Codified during R13.1.
+-- (R12 mentioned only where it actually refined related sequencing/acceptance/governance).
+ 
+ ## Context
+-See primary canonical owner.
++A data ownership model is required to separate user data from the AI persona responding to it.
+ 
+ ## Decision
+ Profile-first ownership. Profile owns user identity, memories, preferences, and personal data. Memories belong to Profile (default PROFILE scope, optional CHARACTER scope). Conversation history belongs to Profile but is Character-bound as recorded. Characters do not own data.
+ 
+ ## Consequences
+-See primary canonical owner.
++Deleting or changing a Character does not delete the user's Profile data or memories.
+ 
+ ## Open Design / Non-Goals
+-See primary canonical owner.
++Specific vectorization techniques or database representations of memory remain open design.
+ 
+ ## Canonical Relationships
+-See primary canonical owner.
++Primary normative ownership resides in `memory-and-personalization.md`.
+ 
+ ## Change Control
+ Superseding an accepted ADR requires explicit human approval and a superseding decision record.
+diff --git a/docs/04_Architecture/decisions/ADR-0009-d8-single-primary-user-baseline.md b/docs/04_Architecture/decisions/ADR-0009-d8-single-primary-user-baseline.md
+index 14f2d4f..133fdcc 100644
+--- a/docs/04_Architecture/decisions/ADR-0009-d8-single-primary-user-baseline.md
++++ b/docs/04_Architecture/decisions/ADR-0009-d8-single-primary-user-baseline.md
+@@ -1,32 +1,31 @@
+-﻿# Single Primary User Baseline
++# Single Primary User Baseline
+ 
+ **Status:** Accepted
+ **Decision ID:** D8
+ **Codification Date:** 2026-09-29
+ **Original Decision Date:** Not separately recorded
+-**Primary Canonical Owner:** docs/04_Architecture/02_Data_and_Security/profiles-and-devices.md
+-**Related Specifications:** SYSTEM_BASELINE Â§7 traceability; storage-and-assets.md only for applicable persistence/schema boundaries
++**Primary Canonical Owner:** [`profiles-and-devices.md`](../02_Data_and_Security/profiles-and-devices.md)
++**Related Specifications:** [`storage-and-assets.md`](../04_Infrastructure/storage-and-assets.md)
+ 
+ ## Decision History
+ - Accepted/relocked during R10.
+-- Focused-domain authority transferred during R11.4.
++- Canonical focused-domain authority transferred during R11.4.
+ - Codified during R13.1.
+-- (R12 mentioned only where it actually refined related sequencing/acceptance/governance).
+ 
+ ## Context
+-See primary canonical owner.
++The system requires a defined cardinality for users to scope security and data models.
+ 
+ ## Decision
+-Single-primary-user for V1; schema uses owner_id representing profile boundary. Preserved in place.
++Single-primary-user for V1; schema uses `owner_id` representing profile boundary. Preserved in place.
+ 
+ ## Consequences
+-See primary canonical owner.
++Simplifies authorization by scoping all data to a single primary user for the V1 baseline.
+ 
+ ## Open Design / Non-Goals
+-See primary canonical owner.
++Multi-user role-based access control (RBAC) is explicitly deferred.
+ 
+ ## Canonical Relationships
+-See primary canonical owner.
++Primary normative ownership resides in `profiles-and-devices.md`.
+ 
+ ## Change Control
+ Superseding an accepted ADR requires explicit human approval and a superseding decision record.
+diff --git a/docs/04_Architecture/decisions/ADR-0010-d9-typed-tool-security-policy.md b/docs/04_Architecture/decisions/ADR-0010-d9-typed-tool-security-policy.md
+index ce7b4d9..3cfbad6 100644
+--- a/docs/04_Architecture/decisions/ADR-0010-d9-typed-tool-security-policy.md
++++ b/docs/04_Architecture/decisions/ADR-0010-d9-typed-tool-security-policy.md
+@@ -1,32 +1,31 @@
+-﻿# Typed Tool Security Policy
++# Typed Tool Security Policy
+ 
+ **Status:** Accepted
+ **Decision ID:** D9
+ **Codification Date:** 2026-09-29
+ **Original Decision Date:** Not separately recorded
+-**Primary Canonical Owner:** docs/04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md
+-**Related Specifications:** web-current-information.md
++**Primary Canonical Owner:** [`tool-permissions-and-actions.md`](../02_Data_and_Security/tool-permissions-and-actions.md)
++**Related Specifications:** [`web-current-information.md`](../03_Integrations/web-current-information.md)
+ 
+ ## Decision History
+ - Accepted/relocked during R10.
+-- Focused-domain authority transferred during R11.4.
++- Canonical focused-domain authority transferred during R11.4.
+ - Codified during R13.1.
+-- (R12 mentioned only where it actually refined related sequencing/acceptance/governance).
+ 
+ ## Context
+-See primary canonical owner.
++Agentic tool execution must be strictly bounded to prevent unauthorized system modification.
+ 
+ ## Decision
+ DEFAULT DENY. 4-tier risk matrix (Risk 0-3). Low-risk Risk 0 and approved Risk 1 actions may auto-execute when enabled and deterministic policy resolves ALLOW; deterministic policy retains ALLOW, CONFIRM, and DENY. Significant state changes require confirmation. Generic arbitrary shell / OS admin is strictly prohibited by default.
+ 
+ ## Consequences
+-See primary canonical owner.
++Enforces a strict permission model where the AI cannot execute arbitrary OS commands.
+ 
+ ## Open Design / Non-Goals
+-See primary canonical owner.
++The exact tool catalog and specific action schemas remain extensible.
+ 
+ ## Canonical Relationships
+-See primary canonical owner.
++Primary normative ownership resides in `tool-permissions-and-actions.md`.
+ 
+ ## Change Control
+ Superseding an accepted ADR requires explicit human approval and a superseding decision record.
+diff --git a/docs/04_Architecture/decisions/ADR-0011-d10-scheduling-and-notification-semantics.md b/docs/04_Architecture/decisions/ADR-0011-d10-scheduling-and-notification-semantics.md
+index 2ff15a6..f8fb240 100644
+--- a/docs/04_Architecture/decisions/ADR-0011-d10-scheduling-and-notification-semantics.md
++++ b/docs/04_Architecture/decisions/ADR-0011-d10-scheduling-and-notification-semantics.md
+@@ -1,32 +1,31 @@
+-﻿# Scheduling and Notification Semantics
++# Scheduling and Notification Semantics
+ 
+ **Status:** Accepted
+ **Decision ID:** D10
+ **Codification Date:** 2026-09-29
+ **Original Decision Date:** Not separately recorded
+-**Primary Canonical Owner:** docs/04_Architecture/01_Domains/tasks-reminders-alarms-and-routines.md
+-**Related Specifications:** windows-host-and-notifications.md
++**Primary Canonical Owner:** [`tasks-reminders-alarms-and-routines.md`](../01_Domains/tasks-reminders-alarms-and-routines.md)
++**Related Specifications:** [`windows-host-and-notifications.md`](../04_Infrastructure/windows-host-and-notifications.md)
+ 
+ ## Decision History
+ - Accepted/relocked during R10.
+-- Focused-domain authority transferred during R11.4.
++- Canonical focused-domain authority transferred during R11.4.
+ - Codified during R13.1.
+-- (R12 mentioned only where it actually refined related sequencing/acceptance/governance).
+ 
+ ## Context
+-See primary canonical owner.
++Time-based proactivity must clearly distinguish between low-priority reminders and high-priority alarms.
+ 
+ ## Decision
+ Task, Reminder, Alarm, and Routine are distinct. Bounded deterministic scheduler proactivity. Native Windows notification delivery target. Quiet hours with per-item overrides. Reminder catch-up recovery. Alarm has stronger delivery semantics than an ordinary Reminder; wake support is best-effort (no universal ACPI/firmware wake guarantee).
+ 
+ ## Consequences
+-See primary canonical owner.
++Provides structured delivery guarantees for time-sensitive events while respecting system quiet hours.
+ 
+ ## Open Design / Non-Goals
+-See primary canonical owner.
++Advanced AI-driven proactive conversation initiation remains an open design.
+ 
+ ## Canonical Relationships
+-See primary canonical owner.
++Primary normative ownership resides in `tasks-reminders-alarms-and-routines.md`.
+ 
+ ## Change Control
+ Superseding an accepted ADR requires explicit human approval and a superseding decision record.
+diff --git a/docs/04_Architecture/decisions/ADR-0012-d11-persona-and-state-separation.md b/docs/04_Architecture/decisions/ADR-0012-d11-persona-and-state-separation.md
+index 50e74c5..26b6f89 100644
+--- a/docs/04_Architecture/decisions/ADR-0012-d11-persona-and-state-separation.md
++++ b/docs/04_Architecture/decisions/ADR-0012-d11-persona-and-state-separation.md
+@@ -1,32 +1,31 @@
+-﻿# Persona and State Separation
++# Persona and State Separation
+ 
+ **Status:** Accepted
+ **Decision ID:** D11
+ **Codification Date:** 2026-09-29
+ **Original Decision Date:** Not separately recorded
+-**Primary Canonical Owner:** docs/04_Architecture/01_Domains/characters-personality-and-emotion.md
+-**Related Specifications:** assistant-and-conversations.md
++**Primary Canonical Owner:** [`characters-personality-and-emotion.md`](../01_Domains/characters-personality-and-emotion.md)
++**Related Specifications:** [`SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md)
+ 
+ ## Decision History
+ - Accepted/relocked during R10.
+-- Focused-domain authority transferred during R11.4.
++- Canonical focused-domain authority transferred during R11.4.
+ - Codified during R13.1.
+-- (R12 mentioned only where it actually refined related sequencing/acceptance/governance).
+ 
+ ## Context
+-See primary canonical owner.
++The internal state of the assistant must be clearly separated to allow independent tuning of personality, voice, and mood.
+ 
+ ## Decision
+ Clear separation: Profile (owns personal data/memories/tasks), Conversation (belongs to Profile, Character-bound history), Character (persona identity/lore/avatar/presentation), Personality (behavioral style/traits), Emotion (lightweight transient mood), Voice (acoustic/TTS configuration), Presence (contextual/presentation state), and Relationship State (separate, opt-in, PC LATER).
+ 
+ ## Consequences
+-See primary canonical owner.
++Decouples visual identity from behavioral traits, enabling granular customization.
+ 
+ ## Open Design / Non-Goals
+-See primary canonical owner.
++Specific quantitative implementations of Emotion or Relationship State remain open design.
+ 
+ ## Canonical Relationships
+-See primary canonical owner.
++Primary normative ownership resides in `characters-personality-and-emotion.md`.
+ 
+ ## Change Control
+ Superseding an accepted ADR requires explicit human approval and a superseding decision record.
+diff --git a/docs/04_Architecture/decisions/README.md b/docs/04_Architecture/decisions/README.md
+index 62df65a..e395da0 100644
+--- a/docs/04_Architecture/decisions/README.md
++++ b/docs/04_Architecture/decisions/README.md
+@@ -1,26 +1,19 @@
+-﻿# Architecture Decisions (ADR)
++# Architecture Decisions (ADR)
+ 
+-This directory records accepted product decisions (ADR-0001 through ADR-0012).
++This directory indexes the accepted architectural decision records for the project.
+ 
+-## Numbering and Status Semantics
+-- **ADR-0001:** Repository/LFS topology (Not a D-numbered product decision).
+-- **ADR-0002 through ADR-0012:** Corresponds to decisions D1 through D11.
+-- **Status:** All records here are "Accepted".
++- **[ADR-0001: GitHub Source & Hugging Face LFS](ADR-0001-github-source-hugging-face-lfs.md)** (Repository/LFS topology, not a D-numbered product decision)
++- **[ADR-0002: D1 - PC V1 Release Boundary](ADR-0002-d1-pc-v1-release-boundary.md)**
++- **[ADR-0003: D2 - Windows Host Model](ADR-0003-d2-windows-host-model.md)**
++- **[ADR-0004: D3 - Android Application Identity](ADR-0004-d3-android-application-identity.md)**
++- **[ADR-0005: D4 - Profile & Device Credential Boundary](ADR-0005-d4-profile-device-credential-boundary.md)**
++- **[ADR-0006: D5 - Remote Access Trust Boundary](ADR-0006-d5-remote-access-trust-boundary.md)**
++- **[ADR-0007: D6 - Controlled Model Acquisition](ADR-0007-d6-controlled-model-acquisition.md)**
++- **[ADR-0008: D7 - Profile-First Memory Ownership](ADR-0008-d7-profile-first-memory-ownership.md)**
++- **[ADR-0009: D8 - Single Primary User Baseline](ADR-0009-d8-single-primary-user-baseline.md)**
++- **[ADR-0010: D9 - Typed Tool Security Policy](ADR-0010-d9-typed-tool-security-policy.md)**
++- **[ADR-0011: D10 - Scheduling and Notification Semantics](ADR-0011-d10-scheduling-and-notification-semantics.md)**
++- **[ADR-0012: D11 - Persona and State Separation](ADR-0012-d11-persona-and-state-separation.md)**
+ 
+-## D-Number Mapping
+-- **D1 -> ADR-0002**: V1 Release Boundary
+-- **D2 -> ADR-0003**: Windows Host Model
+-- **D3 -> ADR-0004**: Android Application Identity
+-- **D4 -> ADR-0005**: Profile & Device Credential Boundary
+-- **D5 -> ADR-0006**: Remote Access Trust Boundary
+-- **D6 -> ADR-0007**: Controlled Model Acquisition
+-- **D7 -> ADR-0008**: Profile-First Memory Ownership
+-- **D8 -> ADR-0009**: Single Primary User Baseline
+-- **D9 -> ADR-0010**: Typed Tool Security Policy
+-- **D10 -> ADR-0011**: Scheduling and Notification Semantics
+-- **D11 -> ADR-0012**: Persona and State Separation
+-
+-## Normative Authority
+-- ADRs record accepted decisions, context, consequences, and change control.
+-- **Focused domain specifications remain the primary normative domain owners.** ADRs do not become competing domain owners.
+-- Superseding an accepted ADR requires explicit human approval and a superseding decision record.
++### Authority Statement
++ADRs record accepted decisions, context, consequences, and change control. **Focused specifications remain the primary normative domain owners.** ADRs do not become competing domain owners. Superseding an accepted ADR requires explicit user approval and a superseding decision record.
+diff --git a/docs/06_Guides/DEVELOPMENT_SETUP.md b/docs/06_Guides/DEVELOPMENT_SETUP.md
+index 62a23dd..c4dd550 100644
+--- a/docs/06_Guides/DEVELOPMENT_SETUP.md
++++ b/docs/06_Guides/DEVELOPMENT_SETUP.md
+@@ -37,7 +37,7 @@ AI-companion-project/
+ └── docs/               # Canonical architecture, roadmap, tracking, guides
+ ```
+ 
+-For canonical system boundaries, host topology, and locked architectural decisions D1–D9, refer to [SYSTEM_BASELINE.md](../04_Architecture/SYSTEM_BASELINE.md).
++For canonical system boundaries, host topology, and locked architectural decisions D1–D11, refer to [SYSTEM_BASELINE.md](../04_Architecture/SYSTEM_BASELINE.md).
+ 
+ ---
+ 
+diff --git a/docs/07_Archive/README.md b/docs/07_Archive/README.md
+index 71fbd00..452020e 100644
+--- a/docs/07_Archive/README.md
++++ b/docs/07_Archive/README.md
+@@ -25,3 +25,5 @@
+ | [`reviews/`](./reviews/) | Point-in-Time Reviews | Historical reviews and point-in-time hardening audits (e.g., `BACKEND_SECURITY_REVIEW_AND_ROADMAP.md`). |
+ | [`drafts/`](./drafts/) | Reconciled Early Drafts | Early feature inventories, runtime drafts, and exploratory notes reconciled in Pass R0–R4. |
+ | [`audits/`](./audits/) | Forensic Audits | Comprehensive reconciliation audits and diagnostic inventories (e.g., `REPOSITORY_DOCUMENTATION_RECONCILIATION_AUDIT.md`). |
++
++- **[Legacy Architecture Documents](reference/architecture-legacy/README.md)**: Contains the six superseded monolithic architecture files. They are historical/subordinate technical references and are ignored during normal AI startup. Canonical authority lives in `SYSTEM_BASELINE.md` and the focused domain specifications.
+diff --git a/docs/07_Archive/reference/architecture-legacy/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md b/docs/07_Archive/reference/architecture-legacy/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md
+index 77f61aa..6daeea1 100644
+--- a/docs/07_Archive/reference/architecture-legacy/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md
++++ b/docs/07_Archive/reference/architecture-legacy/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md
+@@ -10,18 +10,18 @@
+ > **Target repository path:** `docs/07_Archive/reference/architecture-legacy/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`
+ > **Status:** Subordinate Reference — primary normative authority transferred to `04_Infrastructure/` specifications
+ > **Current implementation baseline:** Windows + `llama.cpp` b10936 Vulkan; current tested hardware is AMD RX 580 8 GB
+-> **Authority Precedence:** Non-normative reference material. See [`SYSTEM_BASELINE.md`](../../../../04_Architecture/SYSTEM_BASELINE.md) and focused infrastructure specifications for canonical requirements.
++> **Authority Precedence:** Non-normative reference material. See [`SYSTEM_BASELINE.md`](../../../04_Architecture/SYSTEM_BASELINE.md) and focused infrastructure specifications for canonical requirements.
+ 
+ > [!WARNING]
+ > **Authority Transfer & Legacy Status Notice (Pass R11.4):**
+ > This document is no longer the primary normative architecture specification for general runtime configuration, models, asset storage, host integration, backup/recovery, or performance. Primary normative authority has transferred to focused canonical specifications:
+-> - [`docs/04_Architecture/04_Infrastructure/storage-and-assets.md`](04_Infrastructure/storage-and-assets.md) (Storage Layout, Asset Registry, Phase 8P Contracts)
+-> - [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](04_Infrastructure/runtime-and-models.md) (Decision D6: Local AI Runtime & Generative Model Architecture)
+-> - [`docs/04_Architecture/04_Infrastructure/windows-host-and-notifications.md`](04_Infrastructure/windows-host-and-notifications.md) (Decision D2: Windows Host Integration)
+-> - [`docs/04_Architecture/04_Infrastructure/backup-recovery-and-diagnostics.md`](04_Infrastructure/backup-recovery-and-diagnostics.md) (Backup, Recovery & Diagnostics)
+-> - [`docs/04_Architecture/04_Infrastructure/performance-and-capacity.md`](04_Infrastructure/performance-and-capacity.md) (Principle P23: Resource Governance)
++> - [`docs/04_Architecture/04_Infrastructure/storage-and-assets.md`](../../../04_Architecture/04_Infrastructure/storage-and-assets.md) (Storage Layout, Asset Registry, Phase 8P Contracts)
++> - [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](../../../04_Architecture/04_Infrastructure/runtime-and-models.md) (Decision D6: Local AI Runtime & Generative Model Architecture)
++> - [`docs/04_Architecture/04_Infrastructure/windows-host-and-notifications.md`](../../../04_Architecture/04_Infrastructure/windows-host-and-notifications.md) (Decision D2: Windows Host Integration)
++> - [`docs/04_Architecture/04_Infrastructure/backup-recovery-and-diagnostics.md`](../../../04_Architecture/04_Infrastructure/backup-recovery-and-diagnostics.md) (Backup, Recovery & Diagnostics)
++> - [`docs/04_Architecture/04_Infrastructure/performance-and-capacity.md`](../../../04_Architecture/04_Infrastructure/performance-and-capacity.md) (Principle P23: Resource Governance)
+ >
+-> Top-level cross-cutting product decisions and release boundaries are governed by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../../../04_Architecture/SYSTEM_BASELINE.md). Implemented reality remains authoritative in source code and test suites. Detailed Phase 8P technical specifications and asset contracts retained below remain valuable implementation and verification reference material.
++> Top-level cross-cutting product decisions and release boundaries are governed by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../../04_Architecture/SYSTEM_BASELINE.md). Implemented reality remains authoritative in source code and test suites. Detailed Phase 8P technical specifications and asset contracts retained below remain valuable implementation and verification reference material.
+ 
+ ---
+ 
+diff --git a/docs/07_Archive/reference/architecture-legacy/ANDROID_COMPANION_ARCHITECTURE.md b/docs/07_Archive/reference/architecture-legacy/ANDROID_COMPANION_ARCHITECTURE.md
+index 3a81c33..c6afff1 100644
+--- a/docs/07_Archive/reference/architecture-legacy/ANDROID_COMPANION_ARCHITECTURE.md
++++ b/docs/07_Archive/reference/architecture-legacy/ANDROID_COMPANION_ARCHITECTURE.md
+@@ -6,7 +6,7 @@
+ 
+ > **Document Role:** Legacy Android technical and benchmark reference (non-normative after R11.4).
+ > **Status:** Subordinate Reference — primary normative authority transferred to `01_Domains/android-companion.md` and `03_Integrations/health-and-wearables.md`.
+-> **Authority Precedence:** Non-normative reference material. See [`SYSTEM_BASELINE.md`](../../../../04_Architecture/SYSTEM_BASELINE.md) and focused domain specifications for canonical requirements.
++> **Authority Precedence:** Non-normative reference material. See [`SYSTEM_BASELINE.md`](../../../04_Architecture/SYSTEM_BASELINE.md) and focused domain specifications for canonical requirements.
+ 
+ ---
+ 
+@@ -17,10 +17,10 @@ The **Android Companion** is the mobile client for the AI Companion ecosystem.
+ > [!WARNING]
+ > **Authority Transfer & Legacy Status Notice (Pass R11.4):**
+ > This document is no longer the primary normative architecture specification for the Android Companion or mobile integrations. Primary normative authority has transferred to:
+-> - [`docs/04_Architecture/01_Domains/android-companion.md`](01_Domains/android-companion.md) (Decisions D1, D3, D4: Mobile Architecture & Sync)
+-> - [`docs/04_Architecture/03_Integrations/health-and-wearables.md`](03_Integrations/health-and-wearables.md) (Health Connect & Wearables Integration)
++> - [`docs/04_Architecture/01_Domains/android-companion.md`](../../../04_Architecture/01_Domains/android-companion.md) (Decisions D1, D3, D4: Mobile Architecture & Sync)
++> - [`docs/04_Architecture/03_Integrations/health-and-wearables.md`](../../../04_Architecture/03_Integrations/health-and-wearables.md) (Health Connect & Wearables Integration)
+ >
+-> **Release Boundary Notice (Supersession):** Current Android release boundary is governed exclusively by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../../../04_Architecture/SYSTEM_BASELINE.md) and [`docs/04_Architecture/01_Domains/android-companion.md`](01_Domains/android-companion.md). **Android V1 is an independent follow-on production release that does not block PC V1.** Android V1 includes connected sync, secure device credentials (Keystore), Room/outbox, practical compact offline LLM, Health Connect, scheduling, persona continuity, and bidirectional reconciliation. Exact offline model, format, and quantization remain **Open Design**. Device-local TTS remains **Experimental / Future Unscheduled** (neither Android V1 nor committed Android Later). Historical benchmark data in this document represents point-in-time exploratory evidence only.
++> **Release Boundary Notice (Supersession):** Current Android release boundary is governed exclusively by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../../04_Architecture/SYSTEM_BASELINE.md) and [`docs/04_Architecture/01_Domains/android-companion.md`](../../../04_Architecture/01_Domains/android-companion.md). **Android V1 is an independent follow-on production release that does not block PC V1.** Android V1 includes connected sync, secure device credentials (Keystore), Room/outbox, practical compact offline LLM, Health Connect, scheduling, persona continuity, and bidirectional reconciliation. Exact offline model, format, and quantization remain **Open Design**. Device-local TTS remains **Experimental / Future Unscheduled** (neither Android V1 nor committed Android Later). Historical benchmark data in this document represents point-in-time exploratory evidence only.
+ >
+ > Implemented reality remains authoritative in source code and test suites. The retained content below serves as legacy Android technical and benchmark reference.
+ 
+diff --git a/docs/07_Archive/reference/architecture-legacy/LLAMA_CPP_RUNTIME_ARCHITECTURE.md b/docs/07_Archive/reference/architecture-legacy/LLAMA_CPP_RUNTIME_ARCHITECTURE.md
+index 9c2dba0..29e3b4a 100644
+--- a/docs/07_Archive/reference/architecture-legacy/LLAMA_CPP_RUNTIME_ARCHITECTURE.md
++++ b/docs/07_Archive/reference/architecture-legacy/LLAMA_CPP_RUNTIME_ARCHITECTURE.md
+@@ -16,8 +16,8 @@
+ > [!NOTE]
+ > **Implementation Specialization & Subordinate Authority Notice (Pass R11.4):**
+ > This document is a subordinate implementation specialization detailing the concrete `llama.cpp` engine integration. It is **subordinate** to the canonical domain specifications:
+-> - [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](04_Infrastructure/runtime-and-models.md) (Canonical Runtime & Model Architecture, Decision D6)
+-> - [`docs/04_Architecture/04_Infrastructure/performance-and-capacity.md`](04_Infrastructure/performance-and-capacity.md) (Generic Resource Governance, Principle P23)
++> - [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](../../../04_Architecture/04_Infrastructure/runtime-and-models.md) (Canonical Runtime & Model Architecture, Decision D6)
++> - [`docs/04_Architecture/04_Infrastructure/performance-and-capacity.md`](../../../04_Architecture/04_Infrastructure/performance-and-capacity.md) (Generic Resource Governance, Principle P23)
+ >
+ > General provider-independent product architecture is owned by `04_Infrastructure/runtime-and-models.md`. The details in this document (persistent router lifecycle, flags, PID management, ports, Vulkan / RX 580 specifics) represent concrete `llama.cpp` implementation behavior and reference material. Source code and automated tests remain authoritative for implemented reality.
+ 
+diff --git a/docs/07_Archive/reference/architecture-legacy/MEMORY_AND_CHARACTER_ARCHITECTURE.md b/docs/07_Archive/reference/architecture-legacy/MEMORY_AND_CHARACTER_ARCHITECTURE.md
+index c8a2ed5..0065064 100644
+--- a/docs/07_Archive/reference/architecture-legacy/MEMORY_AND_CHARACTER_ARCHITECTURE.md
++++ b/docs/07_Archive/reference/architecture-legacy/MEMORY_AND_CHARACTER_ARCHITECTURE.md
+@@ -6,15 +6,15 @@
+ 
+ > **Document Role:** Legacy compatibility and technical reference (non-normative after R11.4).
+ > **Status:** Subordinate Reference — primary normative authority transferred to `01_Domains/memory-and-personalization.md` and `01_Domains/characters-personality-and-emotion.md`.
+-> **Authority Precedence:** Non-normative reference material. See [`SYSTEM_BASELINE.md`](../../../../04_Architecture/SYSTEM_BASELINE.md) and focused domain specifications for canonical requirements.
++> **Authority Precedence:** Non-normative reference material. See [`SYSTEM_BASELINE.md`](../../../04_Architecture/SYSTEM_BASELINE.md) and focused domain specifications for canonical requirements.
+ 
+ > [!WARNING]
+ > **Authority Transfer & Legacy Status Notice (Pass R11.4):**
+ > This document is no longer the primary normative architecture specification for memory, personal data, or character configuration. Primary normative authority has transferred to the focused canonical domain specifications:
+-> - [`docs/04_Architecture/01_Domains/memory-and-personalization.md`](01_Domains/memory-and-personalization.md) (Decision D7: Profile vs. Character Memory Ownership)
+-> - [`docs/04_Architecture/01_Domains/characters-personality-and-emotion.md`](01_Domains/characters-personality-and-emotion.md) (Decision D11: Persona Configuration & Boundaries)
++> - [`docs/04_Architecture/01_Domains/memory-and-personalization.md`](../../../04_Architecture/01_Domains/memory-and-personalization.md) (Decision D7: Profile vs. Character Memory Ownership)
++> - [`docs/04_Architecture/01_Domains/characters-personality-and-emotion.md`](../../../04_Architecture/01_Domains/characters-personality-and-emotion.md) (Decision D11: Persona Configuration & Boundaries)
+ >
+-> Top-level cross-cutting product decisions and release boundaries are governed by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../../../04_Architecture/SYSTEM_BASELINE.md). Implemented reality remains authoritative in source code and test suites.
++> Top-level cross-cutting product decisions and release boundaries are governed by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../../04_Architecture/SYSTEM_BASELINE.md). Implemented reality remains authoritative in source code and test suites.
+ >
+ > The retained content below serves as legacy compatibility and technical/historical reference. Any release or status statements in this document that conflict with the focused specifications or SYSTEM_BASELINE.md are superseded.
+ 
+diff --git a/docs/07_Archive/reference/architecture-legacy/README.md b/docs/07_Archive/reference/architecture-legacy/README.md
+index 238ceac..829b0e9 100644
+Binary files a/docs/07_Archive/reference/architecture-legacy/README.md and b/docs/07_Archive/reference/architecture-legacy/README.md differ
+diff --git a/docs/07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md b/docs/07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md
+index 7653bab..9f2295e 100644
+--- a/docs/07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md
++++ b/docs/07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md
+@@ -6,20 +6,20 @@
+ 
+ > **Document Role:** Legacy cross-domain security and trust reference (non-normative after R11.4).
+ > **Status:** Subordinate Reference — primary normative authority transferred to `02_Data_and_Security/` and `03_Integrations/web-current-information.md`.
+-> **Authority Precedence:** Non-normative reference material. See [`SYSTEM_BASELINE.md`](../../../../04_Architecture/SYSTEM_BASELINE.md) and focused domain specifications for canonical requirements.
++> **Authority Precedence:** Non-normative reference material. See [`SYSTEM_BASELINE.md`](../../../04_Architecture/SYSTEM_BASELINE.md) and focused domain specifications for canonical requirements.
+ 
+ > [!WARNING]
+ > **Authority Transfer & Legacy Status Notice (Pass R11.4):**
+ > This document is no longer the primary normative architecture specification for security, trust, authentication, device management, or tool execution. Primary normative authority has transferred to focused canonical specifications:
+-> - [`docs/04_Architecture/02_Data_and_Security/profiles-and-devices.md`](02_Data_and_Security/profiles-and-devices.md) (Decisions D4, D8)
+-> - [`docs/04_Architecture/02_Data_and_Security/authentication-and-secrets.md`](02_Data_and_Security/authentication-and-secrets.md) (Decisions D4, D5)
+-> - [`docs/04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md`](02_Data_and_Security/tool-permissions-and-actions.md) (Decision D9)
+-> - [`docs/04_Architecture/02_Data_and_Security/privacy-retention-and-audit.md`](02_Data_and_Security/privacy-retention-and-audit.md)
+-> - [`docs/04_Architecture/03_Integrations/web-current-information.md`](03_Integrations/web-current-information.md)
++> - [`docs/04_Architecture/02_Data_and_Security/profiles-and-devices.md`](../../../04_Architecture/02_Data_and_Security/profiles-and-devices.md) (Decisions D4, D8)
++> - [`docs/04_Architecture/02_Data_and_Security/authentication-and-secrets.md`](../../../04_Architecture/02_Data_and_Security/authentication-and-secrets.md) (Decisions D4, D5)
++> - [`docs/04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md`](../../../04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md) (Decision D9)
++> - [`docs/04_Architecture/02_Data_and_Security/privacy-retention-and-audit.md`](../../../04_Architecture/02_Data_and_Security/privacy-retention-and-audit.md)
++> - [`docs/04_Architecture/03_Integrations/web-current-information.md`](../../../04_Architecture/03_Integrations/web-current-information.md)
+ >
+ > In accordance with current canonical policy: arbitrary/generic command shell execution remains **REJECTED**; read-only current information retrieval is **PC V1**; interactive browser automation is **PC Later**.
+ >
+-> Top-level cross-cutting product decisions and release boundaries are governed by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../../../04_Architecture/SYSTEM_BASELINE.md). Implemented reality remains authoritative in source code and test suites. The retained content below serves as a cross-domain security reference and historical implementation baseline.
++> Top-level cross-cutting product decisions and release boundaries are governed by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../../04_Architecture/SYSTEM_BASELINE.md). Implemented reality remains authoritative in source code and test suites. The retained content below serves as a cross-domain security reference and historical implementation baseline.
+ 
+ ---
+ 
+diff --git a/docs/07_Archive/reference/architecture-legacy/VOICE_AND_AUDIO_ARCHITECTURE.md b/docs/07_Archive/reference/architecture-legacy/VOICE_AND_AUDIO_ARCHITECTURE.md
+index 972503b..7783ee7 100644
+--- a/docs/07_Archive/reference/architecture-legacy/VOICE_AND_AUDIO_ARCHITECTURE.md
++++ b/docs/07_Archive/reference/architecture-legacy/VOICE_AND_AUDIO_ARCHITECTURE.md
+@@ -15,9 +15,9 @@
+ > [!WARNING]
+ > **Authority Transfer & Legacy Status Notice (Pass R11.4):**
+ > This document is no longer the primary normative architecture specification for voice and audio processing. Primary normative authority has transferred to:
+-> - [`docs/04_Architecture/01_Domains/voice-and-audio.md`](01_Domains/voice-and-audio.md) (Voice & Audio Domain Architecture)
++> - [`docs/04_Architecture/01_Domains/voice-and-audio.md`](../../../04_Architecture/01_Domains/voice-and-audio.md) (Voice & Audio Domain Architecture)
+ >
+-> **Release Boundary Notice (Supersession):** Current release allocation is governed exclusively by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../../../04_Architecture/SYSTEM_BASELINE.md) and [`docs/04_Architecture/01_Domains/voice-and-audio.md`](01_Domains/voice-and-audio.md). **PC V1 includes conversational voice (STT and TTS) without wake word.** Wake word detection remains **PC Later**. Historical wording in this document stating that voice & audio capabilities are strictly post-V1 is superseded and must not override current canonical specifications.
++> **Release Boundary Notice (Supersession):** Current release allocation is governed exclusively by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../../04_Architecture/SYSTEM_BASELINE.md) and [`docs/04_Architecture/01_Domains/voice-and-audio.md`](../../../04_Architecture/01_Domains/voice-and-audio.md). **PC V1 includes conversational voice (STT and TTS) without wake word.** Wake word detection remains **PC Later**. Historical wording in this document stating that voice & audio capabilities are strictly post-V1 is superseded and must not override current canonical specifications.
+ >
+ > Implemented reality remains authoritative in source code and test suites. The retained content below serves as legacy voice design and implementation reference.
+ 
