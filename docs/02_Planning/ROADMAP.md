@@ -2,7 +2,7 @@
 
 > **Document Role:** Canonical product and milestone delivery roadmap for the AI Companion ecosystem.
 > **Status:** Active Canonical (Decisions D1–D11 aligned through R10/R11 reconciliation)
-> **Last Updated:** 2026-09-27 (Reconciliation Pass R12.1)
+> **Last Updated:** 2026-09-27 (Reconciliation Pass R12.2)
 > **Authority Precedence:** Normative architecture is owned by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md) and focused domain specifications under [`docs/04_Architecture/`](../04_Architecture/). Active sprint state is tracked in [`docs/01_Tracking/task.md`](../01_Tracking/task.md). Detailed feature implementation steps reside in active plans under [`docs/02_Planning/`](./).
 
 ---
@@ -51,21 +51,32 @@ Roadmap tracking separates **Release Allocation** (which product milestone owns 
               │
 [Phase 8P: Runtime Config] ────────► COMPLETE / VERIFIED
               │
-[Reconciliation Passes R0–R8] ─────► COMPLETE / VERIFIED
+[Reconciliation Passes R0–R11] ────► COMPLETE / VERIFIED
               │
 [Phase 8B: Multimodal Vision] ─────► IN PROGRESS (8B.0–8B.6 VERIFIED; 8B.7 NEXT)
               │
 [Phase 8C: Integration & Polish] ──► PC V1 (BLOCKED BY 8B)
               │
-[PC V1 Delivery Capabilities] ─────► PC V1 (Sequencing Aligned in R12.2)
+┌─────────────┴────────────────────────────────────────────────┐
+│ FOUNDATION BAND (Parallel Lanes)                             │
+│ ┌──────────────────────────┐    ┌──────────────────────────┐ │
+│ │ Lane A: Host & Runtime   │    │ Lane B: Companion/Policy │ │
+│ └──────────────────────────┘    └──────────────────────────┘ │
+└─────────────┬────────────────────────────────────────────────┘
               │
-[AI Companion V1 Release] ─────────► PC V1 MILESTONE (PC-HOSTED RELEASE)
+[CAPABILITY BAND] ─────────────────► PC V1 (Scheduling, Public Info, Voice, Multilingual, Cloud, Health)
+              │
+[RESILIENCE & HARDENING BAND] ─────► PC V1 (Backup/Restore, Migration Preflight, Security Hardening)
+              │
+[GOLDEN PC V1 ACCEPTANCE GATE] ────► PC V1 FINAL GATE (End-to-End Integrated Acceptance Journey)
+              │
+[AI COMPANION V1 RELEASE] ─────────► PC V1 MILESTONE (PC-HOSTED RELEASE)
 ```
 
 ### 2.1 Completed Milestones
 - **Phase 8A — Frontend Architecture & UX Harmonization (`COMPLETE / VERIFIED`):** Decomposed Assistant views into focused components, removed stale mock conversations, implemented time-derived home greetings, added truthful system states, annotated mock files as `@deprecated`.
 - **Phase 8P — Runtime Configuration & Persistent Asset Foundation (`COMPLETE / VERIFIED`):** Unified subsystem terminology to *Local AI Runtime*, resolved `COMPANION_DATA_ROOT` precedence and bootstrap locator, derived atomic storage layout, implemented Model Registry Schema v3, and verified migration safety.
-- **Repository Documentation Reconciliation Passes R0–R8 (`COMPLETE / VERIFIED`):** Conducted full repository forensic audit, locked architectural decisions D1–D9, established canonical documentation routing, purged obsolete terminology, validated Android cleartext/network boundaries, audited and cleaned local legacy database data, verified automated test suites (175 backend pytest, 147 frontend vitest, 124 Android unit/Robolectric), confirmed OpenAPI schema synchronization, and locked the fresh verified baseline.
+- **Repository Documentation Reconciliation Passes R0–R11 (`COMPLETE / VERIFIED`):** Conducted full repository forensic audit, locked architectural decisions D1–D11, established canonical documentation routing, purged obsolete terminology, validated Android cleartext/network boundaries, audited and cleaned local legacy database data, verified automated test suites (175 backend pytest, 147 frontend vitest, 124 Android unit/Robolectric), confirmed OpenAPI schema synchronization, reconciled durable domain architecture specifications, and locked the fresh verified baseline.
 - **Phase 8B Foundation (Slices 8B.0–8B.6) (`COMPLETE / VERIFIED`):** Delivered multimodal attachment foundation via PR #13: database migration `006_add_attachments`, Attachment ORM model with 4 mixins, Pillow image validation (MIME, dimension, megapixel, bomb guards), route-specific upload limit (12 MiB envelope, 10 MiB payload), authenticated Blob preview/delete endpoints, transactional pre-stream turn binding, media resolver, llama.cpp image translation, and Web composer staging with Blob previews. Verified by CI Run #23 on merged `develop` SHA `4b2f5fe` (321 backend pytest, 185 frontend vitest across 9 files, 22-route OpenAPI parity with zero drift).
 
 ### 2.2 Immediate Next Milestone
@@ -75,17 +86,87 @@ Roadmap tracking separates **Release Allocation** (which product milestone owns 
   - *Authoritative Feature Plan:* [`phase-08/plan-phase8-pc-frontend-architecture-ux.md`](./phase-08/plan-phase8-pc-frontend-architecture-ux.md).
 
 ### 2.3 Remaining PC V1 Delivery Milestones
+
+#### 2.3.1 In-Flight Completion & Frontend Hardening
 - **Phase 8C — Integration, Accessibility & Polish (`PC V1` / `BLOCKED BY 8B`):**
+  - *Dependency:* HARD DEPENDENCY on Phase 8B completion (8B.7 and 8B.8). Phase 8C completion is a FINAL ACCEPTANCE DEPENDENCY for PC V1.
   - *Scope:* Elimination of deprecated mock files, bundle analysis and code-splitting, comprehensive keyboard navigation and ARIA accessibility, responsive layout hardening across desktop viewports, end-to-end multimodal regression testing.
+  - *Implementation Reality:* Existing React Web client baseline is verified; Phase 8C delivers remaining UI polish, accessibility, responsive hardening, bundle optimization, and multimodal regression / integration verification (persistent message attachment rendering remains owned by Phase 8B.7).
   - *Authoritative Feature Plan:* [`phase-08/plan-phase8-pc-frontend-architecture-ux.md`](./phase-08/plan-phase8-pc-frontend-architecture-ux.md).
-- **Controlled Local Model Import Service (`PC V1 — D6 GAP`):**
-  - *Scope:* Completing the execution service for the controlled local import pipeline (`inbox` → `preflight` → `staging` → `atomic install` → `library` → `registry`).
-  - *Canonical Architecture Owners:* [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](../04_Architecture/04_Infrastructure/runtime-and-models.md) and [`storage-and-assets.md`](../04_Architecture/04_Infrastructure/storage-and-assets.md).
-- **PC V1 Release Hardening & Verification (`PC V1`):**
-  - *Scope:* Migration preflight safety, secure configuration defaults, CI pipeline stability, and release hardening as approved through dedicated implementation plans.
+
+#### 2.3.2 Foundation Band (`PC V1`)
+The Foundation Band comprises two parallel lanes that proceed concurrently without artificial prerequisite serialization between them:
+
+- **Lane A: Host & Runtime Infrastructure (`PC V1`):**
+  - *Parallelism:* PARALLELIZABLE with Lane B (Companion & Policy Foundation).
+  - *Controlled Local Model Import Service (Decision D6 Execution Gap):* Completing the execution service for the controlled local import flow (`inbox` → `preflight` → `staging` → `atomic install` → `library` → `registry`). Supported model artifact formats and exact import execution mechanisms remain OPEN DESIGN.
+  - *Windows Host Autostart at Login (Decision D2):* Local AI Runtime configured to start automatically on Windows user login. Specific Windows launch mechanism remains OPEN DESIGN.
+  - *Native Windows Notification Delivery (Decisions D2, D10):* Direct OS notification delivery decoupled from open browser tabs. Exact notification adapter remains OPEN DESIGN. *Dependency Edge:* INTEGRATION DEPENDENCY for closed-browser delivery of scheduled reminders, alarms, and routines.
+  - *Gaming / Low-Impact Resource Policy:* Ability to enter a lower-impact resource policy during heavy foreground workloads while preserving required companion behavior and notification integrity. Exact detection, throttling, pausing, GPU offload layer adjustments, and CPU thread limits remain OPEN DESIGN.
+  - *Canonical Architecture Owners:* [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](../04_Architecture/04_Infrastructure/runtime-and-models.md), [`windows-host-and-notifications.md`](../04_Architecture/04_Infrastructure/windows-host-and-notifications.md), [`storage-and-assets.md`](../04_Architecture/04_Infrastructure/storage-and-assets.md), and [`performance-and-capacity.md`](../04_Architecture/04_Infrastructure/performance-and-capacity.md).
+
+- **Lane B: Companion & Policy Foundation (`PC V1`):**
+  - *Parallelism:* PARALLELIZABLE with Lane A (Host & Runtime Infrastructure).
+  - *Persistent Character & Personality Configuration (Decision D11):* Conversations already persist `character_id` in the verified database baseline; this milestone delivers persistent storage, schema, and runtime prompt resolution for distinct Character lore/identity and decoupled Personality behavioral traits. Specific storage schemas remain OPEN DESIGN.
+  - *Lightweight Conceptual Emotion State (Decision D11):* Transient, non-clinical conceptual mood modulation reflecting recent interactions. State dimensions, decay behavior, and transition dynamics remain OPEN DESIGN / later work.
+  - *Memory Scoping & Selective Automatic Memory (Decision D7):* Profile-first persistence and manual memory baseline already exist; this milestone delivers explicit memory scoping and deterministic, user-visible selective automatic capture policies. Extraction models, confidence heuristics, and schema remain OPEN DESIGN.
+  - *Safe Typed Conversational Actions (Decision D9):* 5-stage deterministic policy pipeline (Model → Typed Request → Deterministic Policy → Narrow Adapter → Capability; where Model emits intent, Typed Request validates schema/bounds, Deterministic Policy evaluates permissions/risk/consent, Narrow Adapter performs least-privilege typed operations, and Capability is the bounded resource) operating under DEFAULT DENY with 4-tier risk matrix (Risk 0–3; resolving ALLOW / CONFIRM / DENY). *Dependency Edge:* Deterministic action pipeline is a HARD DEPENDENCY only for exposing tool/action execution to generative/model invocation; it does not block independent implementation of underlying scheduler engines, storage schemas, or read-only provider adapters. Confirmation dialogs, token limits, and audit log persistence remain OPEN DESIGN. Arbitrary command shell / PowerShell is permanently REJECTED.
+  - *Canonical Architecture Owners:* [`docs/04_Architecture/01_Domains/characters-personality-and-emotion.md`](../04_Architecture/01_Domains/characters-personality-and-emotion.md), [`memory-and-personalization.md`](../04_Architecture/01_Domains/memory-and-personalization.md), and [`docs/04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md`](../04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md).
+
+#### 2.3.3 Capability Band (`PC V1`)
+Contains domain capabilities that are internally parallelizable and progress subject only to their explicit dependency edges:
+
+- **Scheduled Reminders, Alarms & Bounded Routines (Decision D10):**
+  - *Scope:* Scheduled reminder execution with catch-up logic, time-critical alarm alerts with best-effort wake and quiet hours with per-item overrides (without universal automatic all-alarm bypass; exact default Alarm urgency behavior remains OPEN DESIGN), and bounded companion routines under deterministic scheduler proactivity. Existing Task CRUD/retention baseline is verified.
+  - *Dependencies:* Scheduler engine, persistence, and evaluation logic are PARALLELIZABLE. Closed-browser alerting has an INTEGRATION DEPENDENCY on Native Windows Notification Delivery. Exposing task/reminder creation or management to conversational model turns has a HARD DEPENDENCY on Safe Typed Conversational Actions (D9). Character-specific routine phrasing integrates with Character & Personality configuration.
+  - *Canonical Architecture Owner:* [`docs/04_Architecture/01_Domains/tasks-reminders-alarms-and-routines.md`](../04_Architecture/01_Domains/tasks-reminders-alarms-and-routines.md).
+
+- **Read-Only Public Current Information (WebSearch, Fetch, Weather):**
+  - *Scope:* Provider-independent `WebSearch`, `Fetch`, and weather/public-information capabilities with SSRF/network containment, untrusted external content handling, privacy minimization, source provenance, and credential isolation from client/prompt context. Specific services (e.g., Tavily, Open-Meteo) remain candidate adapters. Interactive browser automation is decoupled and scheduled for PC Later.
+  - *Dependencies:* Provider adapters and fetch pipelines are PARALLELIZABLE. Exposing external information tools to generative conversational turns has a HARD DEPENDENCY on Safe Typed Conversational Actions (D9).
+  - *Canonical Architecture Owner:* [`docs/04_Architecture/03_Integrations/web-current-information.md`](../04_Architecture/03_Integrations/web-current-information.md).
+
+- **Conversational Voice (without Wake Word):**
+  - *Scope:* Local audio capture, provider-independent speech-to-text (STT), provider-independent text-to-speech (TTS), and voice activity detection (VAD) / turn detection where required. User can conduct an explicitly initiated, consented bidirectional spoken conversation without wake word. Universal default TTS engine, STT adapter, and exact initiation UX remain OPEN DESIGN. Wake word detection is decoupled and scheduled for PC Later.
+  - *Dependencies:* Speech audio pipeline is PARALLELIZABLE with scheduling/web streams. Conversational execution depends on the existing conversation/orchestrator baseline. Preferred Character Voice binding has an INTEGRATION DEPENDENCY on Character Configuration.
+  - *Canonical Architecture Owner:* [`docs/04_Architecture/01_Domains/voice-and-audio.md`](../04_Architecture/01_Domains/voice-and-audio.md).
+
+- **Multilingual Companion Interaction:**
+  - *Scope:* Interaction support across English, Tagalog, Japanese, and conversational code-switching (truthfully bounded by underlying model and speech capabilities; not a promise of full UI localization; language detection/switching logic remains OPEN DESIGN).
+  - *Dependencies:* Depends on Local Text LLM inference baseline and voice pipeline where spoken.
+  - *Canonical Architecture Owner:* [`docs/04_Architecture/01_Domains/assistant-and-conversations.md`](../04_Architecture/01_Domains/assistant-and-conversations.md).
+
+- **Optional Opt-In Cloud LLM Fallback:**
+  - *Scope:* Strictly opt-in fallback with explicit user credentials, egress transparency, and local-first default. Automatic fallback triggers and routing remain OPEN DESIGN.
+  - *Dependencies:* Depends on existing conversation orchestrator baseline; PARALLELIZABLE with other capability streams.
+  - *Canonical Architecture Owner:* [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](../04_Architecture/04_Infrastructure/runtime-and-models.md).
+
+- **PC Health-Context Readiness:**
+  - *Scope:* Conceptual data contracts and storage readiness for health and wearable context within the Local AI Runtime; physical Health Connect integration belongs to Android V1; metric models and schema remain OPEN DESIGN.
+  - *Dependencies:* Data contracts and storage readiness are PARALLELIZABLE.
+  - *Canonical Architecture Owner:* [`docs/04_Architecture/03_Integrations/health-and-wearables.md`](../04_Architecture/03_Integrations/health-and-wearables.md).
+
+#### 2.3.4 Resilience & Release Hardening Band (`PC V1`)
+Focuses on operational reliability, data safety, and configuration boundaries:
+
+- **Practical Backup & Recovery (`PC V1`):**
+  - *Scope:* Practical backup and recovery that captures persistent database state and required referenced assets as a coordinated recoverable backup with verified restore integrity. Exact snapshot mechanism, archive format, compression, manifest schema, scheduling, and restore implementation remain OPEN DESIGN.
+  - *Dependency Distinction:* Implementation of the backup and recovery mechanism MAY begin before every PC V1 persistent schema is finalized; however, final backup/restore compatibility, referential coherence, and integrity verification is a FINAL ACCEPTANCE DEPENDENCY against the complete PC V1 persistent data and referenced asset model.
+  - *Implementation Reality:* Existing limited migration-backup foundation exists; full user-facing and general recovery capability is the remaining PC V1 deliverable.
+  - *Canonical Architecture Owners:* [`docs/04_Architecture/04_Infrastructure/backup-recovery-and-diagnostics.md`](../04_Architecture/04_Infrastructure/backup-recovery-and-diagnostics.md) (primary) and [`storage-and-assets.md`](../04_Architecture/04_Infrastructure/storage-and-assets.md) (related storage layout & migrations).
+
+- **Safe Restore Verification (`PC V1`):** Preflight validation of backup integrity, target environment checks, and referential validation before applying restored state.
+- **Database Migration Safety Preflight (`PC V1`):** Preflight verification that validates migration compatibility and blocks unsafe, destructive, or unrecoverable migration conditions on existing user databases.
+- **Secure Configuration & Authentication Boundary Hardening (`PC V1`):** Enforcing secure local credential handling, supported localhost / trusted LAN / Tailscale trust boundaries, and secure defaults.
+- **Final Integrated Regression & Release Verification (`PC V1`):** Full-suite verification across backend, frontend, runtime, and integration tests prior to Golden Acceptance Gate entry.
+- *(Governance Guardrail: Pre-Upgrade Database Snapshot remains in Section 6 as `RECOMMENDED PRE-V1 HARDENING — NOT YET SCHEDULED`; Diagnostics & Recovery Center remains `RECOMMENDED — APPROVAL / IMPLEMENTATION PLAN REQUIRED`. Detailed CI branch and trigger governance is owned by Pass R12.4.)*
+- *Canonical Architecture Owner:* [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md).
+
+#### 2.3.5 Golden PC V1 Acceptance Gate (`PC V1 FINAL GATE`)
+- **Integrated Golden PC V1 Acceptance Journey (`PC V1 FINAL GATE`):**
+  - *Scope:* The comprehensive, end-to-end acceptance gate proving integrated companion behavior across all mandatory PC V1 capability groups.
+  - *Prerequisites & Governance:* All mandatory PC V1 capability groups must be complete and appropriately verified before final acceptance. Detailed journey narrative, operational steps, verification scenarios, and acceptance criteria are owned by Pass R12.3. Completion of this gate is the final acceptance prerequisite for AI Companion V1 release.
   - *Canonical Architecture Owner:* [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md).
-- **Sequencing of Promoted PC V1 Capabilities:**
-  - *Scope:* Detailed milestone sequencing, dependencies, and delivery packaging for the approved PC V1 capabilities detailed in Section 3 will be formalized in Pass R12.2. They are formally approved PC V1 scope without premature execution ordering during R12.1.
 
 ---
 
@@ -95,37 +176,81 @@ AI Companion **V1** (unqualified) is strictly defined as the first complete, sta
 
 ### 3.1 In Scope for PC V1 (Capability-Level)
 1. **Local AI Runtime:** Independent long-running Windows host process operating locally (Decision D2). The runtime architecture is provider- and hardware-portable; the current `llama.cpp` Vulkan GPU offload on AMD RX 580 represents the verified reference baseline implementation, not an eternal hardware lock.
+   - *Implementation Status:* Implemented Baseline + Foundation Host/Runtime extensions.
+   - *Delivery Band:* Foundation Band (Host & Runtime Lane).
 2. **React Web Primary Client:** Primary desktop control center, runtime configuration, model controls, and streaming chat interface.
+   - *Implementation Status:* Existing Baseline + remaining Phase 8C work.
+   - *Delivery Band:* Phase 8C Integration & Polish.
 3. **Local Text LLM Inference:** Provider- and hardware-portable local text generation through the Local AI Runtime (`llama.cpp` Vulkan on AMD RX 580 represents the verified baseline implementation).
+   - *Implementation Status:* Implemented / Verified Baseline.
+   - *Delivery Band:* Implemented Baseline.
 4. **Conversations & Memory:**
    - Multi-turn conversation management with live SSE token streaming and transactional pre-stream turn binding.
    - Profile-first persistent and retrievable memory under canonical user ownership (Decision D7). SQLite persistence with FTS5 lexical keyword retrieval represents the verified implementation baseline, not an eternal architectural constraint.
    - Selective automatic and assistant-proposed memory capture under deterministic policy with user visibility, inspection, correction, and deletion controls (sensitive, ambiguous, or transient statements must not silently become permanent facts; extraction model, confidence logic, cadence, and schema remain OPEN DESIGN).
+   - *Implementation Status:* Implemented Baseline + Foundation gaps for Memory scoping and selective automatic memory.
+   - *Delivery Band:* Foundation Band (Companion & Policy Lane).
 5. **Tasks, Reminders, Alarms & Bounded Routines:** Distinct entity semantics under Decision D10.
    - Task CRUD, soft-delete, and retention thresholds are implemented and verified in the baseline.
    - Scheduled reminder execution with catch-up logic, time-critical alarm alerts with best-effort wake, quiet hours with per-item overrides (without universal automatic all-alarm bypass; exact default Alarm urgency behavior remains OPEN DESIGN), and bounded companion routines under deterministic scheduler proactivity (character layer controls phrasing; scheduler engine and schemas remain OPEN DESIGN).
+   - *Implementation Status:* Implemented Task CRUD/retention baseline + remaining scheduling, alerting, and routine delivery gaps.
+   - *Delivery Band:* Capability Band (Scheduling & Routines).
 6. **Model Library & Runtime Management:** Schema v3 registry, GGUF binary header parsing, runtime offload profiles (Eco/Balanced/Maximum), logical model vs. artifact separation.
-7. **Controlled Local Model Import Pipeline:** Deterministic import flow: `inbox` → `preflight` → `staging` → `atomic install` → `library` → `registry` (Decision D6). Completing the execution service is an approved PC V1 implementation gap.
+   - *Implementation Status:* Implemented Baseline; D6 import execution gap handled separately.
+   - *Delivery Band:* Implemented Baseline (Host & Runtime Lane for D6 import gap).
+7. **Controlled Local Model Import Pipeline:** Deterministic import flow: `inbox` → `preflight` → `staging` → `atomic install` → `library` → `registry` (Decision D6). Completing the execution service is an approved PC V1 implementation gap. Supported model artifact formats and exact import execution mechanisms remain OPEN DESIGN.
+   - *Implementation Status:* Schema v3 registry and model metadata baseline verified; import execution service is an approved PC V1 gap.
+   - *Delivery Band:* Foundation Band (Host & Runtime Lane).
 8. **Multimodal Vision Understanding:** Phase 8B image attachment API, upload validation guards (MIME, dimension, megapixel, bomb guards), and vision-model inference.
+   - *Implementation Status:* Current In-Flight Phase 8B (8B.0–8B.6 verified, 8B.7 next, 8B.8 planned); completion is a Final Acceptance Dependency for PC V1.
+   - *Delivery Band:* Current In-Flight Phase 8B.
 9. **Phase 8C Integration, Accessibility & Polish:** Comprehensive keyboard navigation, ARIA accessibility, bundle optimization, UI consistency, elimination of deprecated mock files, and responsive desktop web cleanup.
-10. **Conversational Voice (without Wake Word):** Local audio capture, provider-independent speech-to-text (STT), provider-independent text-to-speech (TTS), and voice activity detection (VAD) / turn detection where required. Universal default TTS engine and STT adapter remain OPEN DESIGN. Wake word detection is decoupled and scheduled for PC Later.
-11. **Character Persistence, Personality & Lightweight Emotion:**
-    - Persistent Character configuration target under PC host authority (Decision D11; schema remains OPEN DESIGN).
+   - *Implementation Status:* Planned / hard-depends on Phase 8B; completion is a Final Acceptance Dependency for PC V1.
+   - *Delivery Band:* Phase 8C Integration & Polish.
+10. **Conversational Voice (without Wake Word):** Local audio capture, provider-independent speech-to-text (STT), provider-independent text-to-speech (TTS), and voice activity detection (VAD) / turn detection where required. User can conduct an explicitly initiated, consented bidirectional spoken conversation without wake word. Universal default TTS engine, STT adapter, and exact initiation UX remain OPEN DESIGN. Wake word detection is decoupled and scheduled for PC Later.
+    - *Implementation Status:* Not Started.
+    - *Delivery Band:* Capability Band (Voice).
+11. **Character Persistence, Personality & Lightweight Conceptual Emotion:**
+    - Persistent Character configuration target under PC host authority (conversations already persist `character_id`; persistent Character config schema and runtime prompt resolution remain the PC V1 gap; schema remains OPEN DESIGN; Decision D11).
     - Separate Personality configuration for behavioral style and communication traits decoupled from character lore (Decision D11).
-    - Lightweight conceptual Emotion state providing transient mood modulation without clinical or psychological claims (Decision D11; state dimensions and decay remain OPEN DESIGN).
+    - Lightweight conceptual Emotion state providing transient mood modulation without clinical or psychological claims (state dimensions, decay behavior, and transition dynamics remain OPEN DESIGN / later work; Decision D11).
+    - *Implementation Status:* Existing conversation character binding baseline + remaining persistent config and runtime-resolution capability.
+    - *Delivery Band:* Foundation Band (Companion & Policy Lane).
 12. **Multilingual Companion Interaction:** Interaction support across English, Tagalog, Japanese, and conversational code-switching (truthfully bounded by underlying model and speech capabilities; not a promise of full UI localization; language detection/switching logic remains OPEN DESIGN).
+    - *Implementation Status:* Model-native multilingual interaction exists as baseline behavior; explicit multilingual routing/evaluation and PC V1 verification remain target work.
+    - *Delivery Band:* Capability Band (Multilingual).
 13. **Safe Typed Conversational Actions:**
-    - Deterministic DEFAULT DENY action execution engine (Decision D9).
-    - Four-tier risk matrix (Risk 0–3): Risk 0 and approved Risk 1 actions (e.g., personal reads, creating personal tasks/reminders) may auto-execute only when policy resolves ALLOW. Retains deterministic ALLOW / CONFIRM / DENY outcomes. Confirmation dialogs, token limits, and audit log persistence remain OPEN DESIGN. Arbitrary command shell / PowerShell is permanently REJECTED.
-14. **Read-Only Public Current Information:** Provider-independent `WebSearch`, `Fetch`, and weather/public-information capabilities with SSRF/network containment, untrusted external content handling, privacy minimization, source provenance, and credential isolation from client/prompt context. Specific services (e.g., Tavily, Open-Meteo) remain candidate adapters. Interactive browser automation is decoupled and scheduled for PC Later.
-15. **Optional Cloud LLM Fallback:** Strictly opt-in fallback with explicit user credentials and egress transparency; local inference remains default and primary, and full local-only operation remains fully supported.
+    - Deterministic DEFAULT DENY action execution engine under the canonical 5-stage pipeline: Model → Typed Request → Deterministic Policy → Narrow Adapter → Capability (Decision D9).
+    - Four-tier risk matrix (Risk 0–3): Risk 0 and approved Risk 1 actions (e.g., personal reads, creating personal tasks/reminders) may auto-execute only when policy resolves ALLOW. Retains deterministic ALLOW / CONFIRM / DENY outcomes. Deterministic 5-stage policy pipeline is a HARD DEPENDENCY only for exposing tool/action execution to generative/model invocation; underlying scheduler, persistence, and read-only provider adapters can be developed independently. Confirmation dialogs, token limits, and audit log persistence remain OPEN DESIGN. Arbitrary command shell / PowerShell is permanently REJECTED.
+    - *Implementation Status:* Architecture and policy pipeline locked; engine implementation pending.
+    - *Delivery Band:* Foundation Band (Companion & Policy Lane).
+14. **Read-Only Public Current Information:** Provider-independent `WebSearch`, `Fetch`, and weather/public-information capabilities with SSRF/network containment, untrusted external content handling, privacy minimization, source provenance, and credential isolation from client/prompt context. Specific services (e.g., Tavily, Open-Meteo) remain candidate adapters. Model invocation requires Decision D9 policy. Interactive browser automation is decoupled and scheduled for PC Later.
+    - *Implementation Status:* Not Started.
+    - *Delivery Band:* Capability Band (Public Information).
+15. **Optional Cloud LLM Fallback:** Strictly opt-in fallback with explicit user credentials and egress transparency; local inference remains default and primary, and full local-only operation remains fully supported. Automatic fallback triggers and routing remain OPEN DESIGN.
+    - *Implementation Status:* Architecture locked; implementation pending.
+    - *Delivery Band:* Capability Band (Cloud Fallback).
 16. **Windows Host Autostart at Login:** Local AI Runtime configured to start automatically on Windows user login (Decision D2; exact Windows launch mechanism remains OPEN DESIGN).
-17. **Native Windows Notification Delivery:** Direct OS notification delivery decoupled from open browser tabs (Decisions D2 and D10; ensures reminders, alarms, and routines alert the user even when the browser client is closed; exact notification adapter remains OPEN DESIGN).
+    - *Implementation Status:* Not Started.
+    - *Delivery Band:* Foundation Band (Host & Runtime Lane).
+17. **Native Windows Notification Delivery:** Direct OS notification delivery decoupled from open browser tabs (Decisions D2 and D10; ensures reminders, alarms, and routines alert the user even when the browser client is closed; integration dependency for closed-browser alerting; exact notification adapter remains OPEN DESIGN).
+    - *Implementation Status:* Not Started.
+    - *Delivery Band:* Foundation Band (Host & Runtime Lane).
 18. **Gaming / Low-Impact Resource Policy:** Ability to enter a lower-impact resource policy during heavy foreground workloads while preserving required companion behavior and notification integrity (exact detection, throttling, pausing, GPU offload layer adjustments, CPU thread limits, and automatic versus manual activation remain OPEN DESIGN).
-19. **Practical Backup & Recovery:** Practical backup and recovery of persistent database state and required referenced assets, with integrity-preserving restore verification (exact snapshot mechanism, archive format, compression, manifest schema, scheduling, and restore implementation remain OPEN DESIGN; Diagnostics & Recovery Center remains an audit recommendation requiring separate approval, not an automatic PC V1 requirement).
-20. **PC Health-Context Readiness:** Conceptual data contracts and storage readiness for health and wearable context within the Local AI Runtime; physical Health Connect integration belongs to Android V1.
+    - *Implementation Status:* Existing model/profile foundations + remaining workstation resource-policy capability where supported by current source truth.
+    - *Delivery Band:* Foundation Band (Host & Runtime Lane).
+19. **Practical Backup & Recovery:** Practical backup and recovery that captures persistent database state and required referenced assets as a coordinated recoverable backup with verified restore integrity. Implementation may begin before the complete PC V1 schema is finalized; final backup/restore compatibility, referential coherence, and integrity verification is a FINAL ACCEPTANCE DEPENDENCY against the complete PC V1 persistent data and referenced asset model. Exact snapshot mechanism, archive format, compression, manifest schema, scheduling, and restore implementation remain OPEN DESIGN; Diagnostics & Recovery Center remains an audit recommendation requiring separate approval, not an automatic PC V1 requirement.
+    - *Implementation Status:* Existing limited migration-backup foundation + remaining user-facing/general recovery capability.
+    - *Delivery Band:* Resilience & Release Hardening Band.
+20. **PC Health-Context Readiness:** Conceptual data contracts and storage readiness for health and wearable context within the Local AI Runtime; physical Health Connect integration belongs to Android V1; metric models and schema remain OPEN DESIGN.
+    - *Implementation Status:* Architecture locked; implementation pending.
+    - *Delivery Band:* Capability Band (Health Readiness).
 21. **Release Hardening & Verification:** Secure configuration defaults, migration safety preflight, and CI pipeline stability verified before release.
-22. **Integrated Golden PC V1 Acceptance Journey:** End-to-end companion verification path proving seamless operation across all PC V1 capabilities. (Listed as a mandatory PC V1 capability; detailed acceptance journey design is owned by Pass R12.3).
+    - *Implementation Status:* Preflight baseline exists; release hardening pending.
+    - *Delivery Band:* Resilience & Release Hardening Band.
+22. **Integrated Golden PC V1 Acceptance Journey:** End-to-end companion verification path proving seamless operation across all PC V1 capabilities. Final release gate (detailed journey narrative, steps, and acceptance criteria owned by Pass R12.3).
+    - *Implementation Status:* Mandatory PC V1 release gate; specification owned by Pass R12.3.
+    - *Delivery Band:* Golden PC V1 Acceptance Gate.
 
 > [!NOTE]
 > Follow-on release scopes (Android V1, PC Later, Future / Unscheduled) and rejected capabilities are detailed in Section 4.
