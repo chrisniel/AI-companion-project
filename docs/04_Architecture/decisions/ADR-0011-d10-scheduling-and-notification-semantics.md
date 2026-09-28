@@ -22,7 +22,7 @@ Task, Reminder, Alarm, and Routine are distinct. Bounded deterministic scheduler
 Provides structured delivery guarantees for time-sensitive events while respecting system quiet hours.
 
 ## Open Design / Non-Goals
-Advanced AI-driven proactive conversation initiation remains an open design.
+Exact scheduler engine, schemas, wake integration, and bounded routine phrasing remain open design. Unbounded autonomous proactivity/looping remains rejected.
 
 ## Canonical Relationships
 Primary normative ownership resides in `tasks-reminders-alarms-and-routines.md`.

@@ -5,7 +5,7 @@
 **Codification Date:** 2026-09-29
 **Original Decision Date:** Not separately recorded
 **Primary Canonical Owner:** [`SYSTEM_BASELINE.md §2`](../SYSTEM_BASELINE.md)
-**Related Specifications:** [`ROADMAP.md`](../../02_Planning/ROADMAP.md)
+**Related Specifications:** [`ROADMAP.md`](../../02_Planning/ROADMAP.md) (owns delivery sequencing only)
 
 ## Decision History
 - Accepted/relocked during R10.

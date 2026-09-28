@@ -1,6 +1,6 @@
 # Legacy Architecture Monoliths
 
-> **Historical References Only:** The 6 superseded monolithic architecture files live here. They are ignored during normal AI startup. Canonical authority lives in `SYSTEM_BASELINE.md` and the 15 focused domain specifications.
+> **Historical References Only:** The 6 superseded monolithic architecture files live here. They are ignored during normal AI startup. Canonical authority lives in `SYSTEM_BASELINE.md` and the 18 focused canonical domain specifications.
 
 | Legacy File | Original Path | Archived Path | Primary Canonical Replacement(s) | Reference Role | Authority Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |

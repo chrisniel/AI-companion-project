@@ -22,7 +22,7 @@ Single-primary-user for V1; schema uses `owner_id` representing profile boundary
 Simplifies authorization by scoping all data to a single primary user for the V1 baseline.
 
 ## Open Design / Non-Goals
-Multi-user role-based access control (RBAC) is explicitly deferred.
+Multi-profile capability is Future / Unscheduled. Exact future identity/access model remains open design.
 
 ## Canonical Relationships
 Primary normative ownership resides in `profiles-and-devices.md`.

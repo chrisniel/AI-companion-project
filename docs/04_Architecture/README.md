@@ -181,7 +181,7 @@ To guarantee continuity, documentation migration follows a staged transfer patte
 
 ## 6. Architecture Catalog & Post-Transfer Routing
 
-Following the Pass R11.4 authority transfer, canonical domain authority resides in the focused domain specifications. Legacy monolithic files remain at their existing paths as subordinate reference material:
+Following the Pass R11.4 authority transfer, canonical domain authority resides in the focused domain specifications. Legacy monolithic files are retained under `../07_Archive/reference/architecture-legacy/` as subordinate historical/technical references as subordinate reference material:
 
 | Canonical Focused Owner | Domain Scope | Legacy / Specialized Reference | Legacy Disposition |
 | :--- | :--- | :--- | :--- |

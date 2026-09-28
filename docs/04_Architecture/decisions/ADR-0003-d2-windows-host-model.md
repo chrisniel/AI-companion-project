@@ -22,7 +22,7 @@ Independent long-running Windows host process; decoupled from browser lifetime; 
 Requires an independent background host and dedicated notification integration rather than relying on browser-based execution.
 
 ## Open Design / Non-Goals
-Native desktop shells (e.g., WPF, WinUI) remain deferred open design.
+Native desktop shell is PC Later. Exact shell technology remains open design.
 
 ## Canonical Relationships
 Primary normative ownership resides in `windows-host-and-notifications.md`.

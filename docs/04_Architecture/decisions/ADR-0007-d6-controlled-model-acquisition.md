@@ -22,7 +22,7 @@ Controlled local import pipeline (PC V1 requirement): inbox -> preflight -> stag
 Prevents corruption and unverified execution by ensuring all models pass through a strict staging lifecycle.
 
 ## Open Design / Non-Goals
-Network-based automated model downloading from external hubs remains an open design.
+Managed online model downloading is PC Later. Exact provider/downloader/execution mechanism remains open design.
 
 ## Canonical Relationships
 Primary normative ownership resides in `runtime-and-models.md`.
