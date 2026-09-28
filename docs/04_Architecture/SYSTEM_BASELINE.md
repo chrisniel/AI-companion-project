@@ -227,12 +227,28 @@ Passing the Golden Acceptance Gate is an immutable prerequisite for cutting the 
 
 ### 8.2 Entry Prerequisites
 The Golden Acceptance Gate may be formally entered only after all prerequisite PC V1 milestone bands are complete and individually verified:
-1. **Foundation Band Complete:** Host autostart, native notifications, Character/Personality config persistence, selective automatic memory capture policy, and the deterministic Decision D9 action pipeline (Risk 0–3).
-2. **Capability Band Complete:** Multimodal vision attachment persistence (Phase 8B completion: 8B.7 and 8B.8), frontend UI accessibility and polish (Phase 8C completion), conversational voice without wake word, multilingual interaction, read-only public information, scheduling/alarms/routines, health context readiness, and optional cloud fallback.
-3. **Resilience & Release Hardening Band Complete:** Database migration safety preflight, practical backup and restore mechanism, secure configuration defaults, and target CI gate verification.
+1. **In-Flight Phase 8 Completion:**
+   - Phase 8B (Multimodal Vision Understanding) complete, including persistent history rendering (8B.7) and full lifecycle integration (8B.8).
+   - Phase 8C (Integration, Accessibility & Polish) complete and verified across desktop viewports.
+2. **Foundation Band Complete:**
+   - *Host & Runtime Lane:* Controlled Local Model Import (Decision D6), Windows Host Autostart at login (Decision D2), Native Windows Notification Delivery (Decisions D2, D10), and Gaming / Low-Impact Resource Policy.
+   - *Companion & Policy Lane:* Persistent Character lore and decoupled Personality trait configuration (Decision D11), lightweight conceptual Emotion State (Decision D11), profile-first memory scoping and selective automatic memory (Decision D7), and Safe Typed Conversational Actions under the 5-stage deterministic pipeline (Decision D9).
+3. **Capability Band Complete:**
+   - Scheduled Reminders, Alarms, and bounded Routines under deterministic proactivity (Decision D10).
+   - Read-only public current information (WebSearch, Fetch, Weather) with provenance.
+   - Conversational Voice without wake word (local audio capture, STT, TTS, barge-in).
+   - Multilingual companion interaction (English, Tagalog, Japanese, code-switching).
+   - Optional explicit opt-in cloud LLM fallback.
+   - PC health-context readiness and data contracts.
+4. **Resilience & Release Hardening Band Complete:**
+   - Practical Backup & Recovery and Safe Restore Verification.
+   - Database Migration Safety Preflight.
+   - Secure configuration defaults and authentication boundary hardening.
+   - Final integrated regression and release verification.
+   - Implemented and verified pre-V1 CI hardening required by the approved P25 target where applicable.
 
 ### 8.3 Required Integrated Acceptance Checkpoints (P24 Behaviors)
-The Golden Acceptance Journey must prove the integrated companion across all 17 approved behavioral capability groups:
+The Golden Acceptance Journey must prove the integrated companion across 17 integrated Golden acceptance checkpoint groups covering all mandatory PC V1 capabilities:
 
 1. **Startup & Host Process Lifecycle:**
    - The Local AI Runtime starts automatically upon Windows user login.
@@ -285,7 +301,8 @@ The Golden Acceptance Journey must prove the integrated companion across all 17 
 12. **Read-Only Public Current Information:**
     - User requests current public information (e.g., Weather or public search/lookup).
     - Approved read-only providers execute through D9 policy.
-    - External content is treated as untrusted and sanitized against injection/SSRF.
+    - Outbound public HTTP fetching enforces SSRF and network-containment protections.
+    - Retrieved external content is classified as untrusted data; prompt-injection content cannot override deterministic policy or gain execution authority.
     - Response exposes clear source and provenance information.
     - Interactive browser automation remains PC Later.
 13. **Gaming / Low-Impact Resource Policy:**
@@ -326,12 +343,12 @@ Acceptance must be evaluated against verifiable, measurable criteria rather than
   - Zero silently skipped mandatory capabilities.
   - No observed unbounded memory or process resource growth under the defined acceptance workload.
   - Persistent state and configurations survive application, runtime, and host session restarts.
-  - Coordinated backup produces an archive that passes integrity preflight and restores successfully in an isolated test environment.
+  - Coordinated backup produces a recoverable backup that passes integrity preflight and restores successfully in an isolated verification environment.
 - **Fail Criteria:**
   - Any mandatory checkpoint fails, produces unhandled runtime crashes, corrupts persistent state, executes unauthorized actions, leaks cloud egress without consent, or drops scheduled notification alerts.
 
 ### 8.6 Relationship to Automated CI
-- **Automated CI (Level 1 Gatekeeper):** Provides rapid, repeatable, per-commit/PR verification of code quality, unit tests, component tests, type safety, OpenAPI contract drift, and build integrity. Automated CI is necessary supporting evidence before entering the Golden Gate.
+- **Automated CI (Level 1 Gatekeeper):** Provides repeatable automated verification at the configured P25 integration and release events for code quality, unit tests, component tests, type safety, OpenAPI contract drift, and build integrity. Automated CI is necessary supporting evidence before entering the Golden Gate.
 - **Golden PC V1 Acceptance Journey (Level 2 Release Gate):** Provides integrated, system-level validation across real Windows host processes, hardware audio devices, OS notifications, user interactive journeys, and physical restarts that headless CI environments cannot fully simulate.
 - Both verification layers are required; neither substitutes for the other.
 
