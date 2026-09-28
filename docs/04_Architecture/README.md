@@ -181,7 +181,7 @@ To guarantee continuity, documentation migration follows a staged transfer patte
 
 ## 6. Architecture Catalog & Post-Transfer Routing
 
-Following the Pass R11.4 authority transfer, canonical domain authority resides in the focused domain specifications. Legacy monolithic files are retained under `../07_Archive/reference/architecture-legacy/` as subordinate historical/technical references as subordinate reference material:
+Following the Pass R11.4 authority transfer, canonical domain authority resides in the focused domain specifications. Legacy monolithic files are retained under `../07_Archive/reference/architecture-legacy/` as subordinate historical/technical references:
 
 | Canonical Focused Owner | Domain Scope | Legacy / Specialized Reference | Legacy Disposition |
 | :--- | :--- | :--- | :--- |
@@ -204,7 +204,7 @@ Following the Pass R11.4 authority transfer, canonical domain authority resides 
 | [`04_Infrastructure/windows-host-and-notifications.md`](04_Infrastructure/windows-host-and-notifications.md) | Independent Windows host process, autostart at login, native OS notification delivery | [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) | Subordinate host integration reference. |
 | [`04_Infrastructure/backup-recovery-and-diagnostics.md`](04_Infrastructure/backup-recovery-and-diagnostics.md) | Practical backup/recovery and restore verification, local diagnostic logging | [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) | Subordinate technical reference. |
 | [`04_Infrastructure/performance-and-capacity.md`](04_Infrastructure/performance-and-capacity.md) | Resource governance, telemetry truthfulness, performance/capacity policy, Gaming / Low-Impact Mode | [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) & [`LLAMA_CPP_RUNTIME_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/LLAMA_CPP_RUNTIME_ARCHITECTURE.md) | Subordinate technical / benchmark reference. |
-| [`decisions/`](decisions/) | Architectural Decision Records (ADRs) | Historical ADRs | Preserved ADR collection. |
+| [`decisions/`](decisions/) | Architectural decision records | Accepted ADR set | Active decision index; focused specifications remain primary normative domain owners. |
 
 ## Architecture Decision Records (ADR)
 

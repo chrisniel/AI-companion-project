@@ -26,7 +26,8 @@ Establishes the release scope and scheduling milestones for PC V1 and Android V1
 Capabilities beyond PC V1 and Android V1 remain open design or are deferred to later milestones.
 
 ## Canonical Relationships
-Primary normative ownership resides in the canonical SYSTEM_BASELINE and ROADMAP.
+Primary normative ownership resides in SYSTEM_BASELINE.
+ROADMAP owns delivery sequencing and does not become a competing primary owner.
 
 ## Change Control
 Superseding an accepted ADR requires explicit human approval and a superseding decision record.
