@@ -230,7 +230,7 @@ llama.cpp (multi-model router on port 8085 with Vulkan RX 580 offload)
 Current state:
 
 - **Implemented / Verified:** Persistent FastAPI Local AI Runtime, SQLite database migrations (`006_add_attachments`), conversation & message persistence, live SSE generation, SQLite FTS5 lexical memory retrieval, task CRUD with soft-delete and retention period calculation, task reminder metadata, Model Registry Schema v3, `llama.cpp` Vulkan provider on port 8085, canonical storage root resolution (`storage.py`), fail-closed authentication (`verify_token`), OpenAPI contract drift verification, and multimodal image attachment API & persistence foundation.
-- **Remaining / Known Gaps:** Persistent historical attachment rendering (8B.7) and frontend multimodal integration (8B.8), backend character persistence table, controlled local model importer execution service (Decision D6 V1 gap), automatic periodic retention lifecycle scheduling, scheduled reminder notification delivery, autonomous tool execution engine, and post-V1 voice/health pipelines.
+- **Remaining / Known Gaps:** Persistent historical attachment rendering (8B.7) and full integration / Phase 8B closure (8B.8), backend character persistence table, controlled local model importer execution service (Decision D6 V1 gap), automatic periodic retention lifecycle scheduling, scheduled reminder notification delivery, autonomous tool execution engine, and post-V1 voice/health pipelines.
 
 ---
 
