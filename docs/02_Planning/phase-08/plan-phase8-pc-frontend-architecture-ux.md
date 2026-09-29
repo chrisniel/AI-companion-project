@@ -1,6 +1,6 @@
 # Phase 8 Implementation Plan — PC Frontend Architecture, Runtime Config, Multimodal & Polish
 
-> **Status:** 8A and 8P COMPLETE / VERIFIED. Repository Documentation Reconciliation (Passes R0–R8) is COMPLETE / VERIFIED. Phase 8B is IN PROGRESS (Slice 8B.6 COMPLETE / VERIFIED; Slice 8B.7 NEXT / UNBLOCKED). 8C is PLANNED AFTER 8B.
+> **Status:** 8A and 8P COMPLETE / VERIFIED. Repository Documentation Reconciliation (Passes R0–R13.2) is COMPLETE / VERIFIED. Phase 8B is IN PROGRESS (Slice 8B.6 COMPLETE / VERIFIED; Slice 8B.7 NEXT / UNBLOCKED). 8C is PLANNED AFTER 8B.
 > **Authority Precedence:** Normative architecture is owned by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md). Canonical product sequencing is owned by [`docs/02_Planning/ROADMAP.md`](../ROADMAP.md). Runtime config architecture is owned by [`docs/04_Architecture/04_Infrastructure/storage-and-assets.md`](../../04_Architecture/04_Infrastructure/storage-and-assets.md) and [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](../../04_Architecture/04_Infrastructure/runtime-and-models.md).  
 > **This is the single authoritative feature implementation plan for Phase 8.**
 
@@ -8,10 +8,10 @@
 
 ## Branch Strategy
 
-develop (verified baseline: 175 backend pytest, 147 frontend vitest, 124 Android unit/Robolectric, 0 tsc, migration head 005_scope_message_constraints)
+develop (verified baseline: 321 backend pytest, 185 frontend vitest, 124 Android unit/Robolectric, 0 tsc, migration head 006_add_attachments)
   +-- feature/phase8-ui-foundation           (8A: COMPLETE / VERIFIED — merged to develop)
   +-- feature/phase8-runtime-config          (8P: COMPLETE / VERIFIED — merged to develop)
-  +-- [GATE: Documentation Reconciliation]   (R0–R8: COMPLETE / VERIFIED — Phase 8B unblocked)
+  +-- [GATE: Documentation Reconciliation]   (R0–R13.2: COMPLETE / VERIFIED — Phase 8B unblocked)
   +-- feature/multimodal-image-attachments   (8B: IN PROGRESS — full stack image upload & vision inference)
         based on develop; merge to develop
   +-- feature/phase8-ui-integration-polish   (8C: PLANNED AFTER 8B — polish, a11y, cleanup)
