@@ -14,15 +14,15 @@ The AI Companion project maintains a strict test-first verification discipline. 
 
 > [!NOTE]
 > **Baseline Attribution:**
-> - **PC Baseline (Backend, Frontend, Contract):** Verified on merged `develop` commit `4b2f5fe3aa2a302b825408073d1b135bf2ff92e1` via GitHub Actions CI Run #23 on 2026-09-25 (0 failures, 0 errors, zero OpenAPI drift).
+> - **PC Baseline (Backend, Frontend, Contract):** Verified on merged `develop` commit `7dc15286d77c5bb5ee207351974e05b988f746e5` via GitHub Actions CI Run #25 on 2026-09-29 (0 failures, 0 errors, zero OpenAPI drift).
 > - **Android Baseline:** Last executed and verified from Reconciliation Pass R8 on 2026-09-21 (124 passed; not rerun during Phase 8B).
 
 | Subsystem | Test Framework | Test Location | Last Verified Baseline | Primary Scope |
 | :--- | :--- | :--- | :--- | :--- |
-| **Backend** | `pytest` + `httpx` + `pytest-asyncio` | `backend/tests/` | **321 passed** (Merged `develop` / CI #23, 2026-09-25) | Fast REST/SSE endpoints, memory, tasks, storage, models, auth, attachments, media resolver |
-| **Frontend** | `vitest` + React Testing Library | `frontend/web/src/` | **185 passed across 9 files** (Merged `develop` / CI #23, 2026-09-25) | Components, hooks, state, navigation, controls, soft-glass rendering, composer attachments |
+| **Backend** | `pytest` + `httpx` + `pytest-asyncio` | `backend/tests/` | **321 passed** (Merged `develop` / CI #25, 2026-09-29) | Fast REST/SSE endpoints, memory, tasks, storage, models, auth, attachments, media resolver |
+| **Frontend** | `vitest` + React Testing Library | `frontend/web/src/` | **185 passed across 9 files** (Merged `develop` / CI #25, 2026-09-29) | Components, hooks, state, navigation, controls, soft-glass rendering, composer attachments |
 | **Android** | `JUnit4` + `Robolectric` + `Roborazzi` + `kotlinx-coroutines-test` | `android/app/src/test/` | **124 passed** (Pass R8, 2026-09-21) | ViewModels, repository contracts, MVI state flow, Compose UI components, screenshot regression |
-| **Contract** | Python drift detection script | `contracts/openapi/` | **Synchronized (22 routes, zero drift)** (Merged `develop` / CI #23, 2026-09-25) | OpenAPI 3.1 schema equality between FastAPI routes and committed spec |
+| **Contract** | Python drift detection script | `contracts/openapi/` | **Synchronized (22 routes, zero drift)** (Merged `develop` / CI #25, 2026-09-29) | OpenAPI 3.1 schema equality between FastAPI routes and committed spec |
 
 ### Verification Hierarchy: Automated CI vs. Golden Acceptance Gate
 The project distinguishes two complementary verification tiers:
