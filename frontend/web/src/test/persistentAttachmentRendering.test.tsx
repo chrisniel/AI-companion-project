@@ -89,6 +89,77 @@ describe('Phase 8B.7 Persistent Message Attachment Rendering', () => {
         expect(api.fetchAttachmentBlobUrl).toHaveBeenCalledWith('conv-123', 'att-1');
       });
     });
+
+    it('handles conversation switching cleanly, revoking old URLs and fetching new ones', async () => {
+      vi.mocked(api.listConversations).mockResolvedValue({
+        items: [
+          { id: 'conv-A', title: 'Conv A', character_id: 'char-1', owner_id: 'user-1', created_at: '2023-01-01T00:00:00Z', updated_at: '2023-01-01T00:00:00Z' },
+          { id: 'conv-B', title: 'Conv B', character_id: 'char-1', owner_id: 'user-1', created_at: '2023-01-02T00:00:00Z', updated_at: '2023-01-02T00:00:00Z' },
+        ],
+        total: 2,
+      });
+
+      vi.mocked(api.getMessages).mockImplementation(async (convId) => {
+        if (convId === 'conv-A') {
+          return {
+            items: [{
+              id: 'msg-A', conversation_id: 'conv-A', sender: 'user', content: 'Message A', status: 'sent', sequence_no: 1, created_at: '2023-01-01T00:00:00Z',
+              attachments: [{ id: 'att-A', filename_display: 'A.png', mime_type: 'image/png', size_bytes: 1024 }],
+            }],
+            total: 1,
+          };
+        } else {
+          return {
+            items: [{
+              id: 'msg-B', conversation_id: 'conv-B', sender: 'user', content: 'Message B', status: 'sent', sequence_no: 1, created_at: '2023-01-02T00:00:00Z',
+              attachments: [{ id: 'att-B', filename_display: 'B.png', mime_type: 'image/png', size_bytes: 1024 }],
+            }],
+            total: 1,
+          };
+        }
+      });
+
+      const mockContextValue = {
+        isOnline: true,
+        modelStatus: { model_loaded: true, router_running: true, active_model: 'llama' },
+        registry: [{ id: 'llama', manifest: { id: 'llama' }, library_state: { available_capabilities: ['vision'] } }],
+        loadModel: vi.fn(),
+        isModelLoading: false,
+      };
+
+      const { useBackend } = await import('../context/BackendContext');
+      vi.mocked(useBackend).mockReturnValue(mockContextValue as any);
+
+      render(<AssistantView />);
+
+      // Wait for A to load
+      await waitFor(() => {
+        expect(screen.getByText('Message A')).toBeInTheDocument();
+      });
+
+      expect(api.fetchAttachmentBlobUrl).toHaveBeenCalledWith('conv-A', 'att-A');
+
+      // Click history to switch to B
+      const historyButton = screen.getByTitle('Open Conversation History');
+      act(() => { historyButton.click(); });
+
+      const convBButton = await screen.findByText('Conv B');
+      act(() => { convBButton.click(); });
+
+      // Wait for B to load
+      await waitFor(() => {
+        expect(screen.getByText('Message B')).toBeInTheDocument();
+      });
+
+      // Verify B fetch
+      expect(api.fetchAttachmentBlobUrl).toHaveBeenCalledWith('conv-B', 'att-B');
+
+      // Verify A is not visible
+      expect(screen.queryByText('Message A')).not.toBeInTheDocument();
+
+      // Verify A's blob was revoked (from the mocked 'blob:test-url')
+      expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:test-url');
+    });
   });
 
   describe('ConversationMessageItem Rendering & Lifecycle', () => {
@@ -157,6 +228,19 @@ describe('Phase 8B.7 Persistent Message Attachment Rendering', () => {
         expect(screen.getByTitle('document.pdf')).toBeInTheDocument();
         expect(screen.queryByRole('img')).not.toBeInTheDocument();
       });
+    });
+
+    it('does not fetch or render an img for an unexpected image MIME type like image/webp', async () => {
+      renderMessageItem([
+        { id: 'att-webp', filename_display: 'photo.webp', mime_type: 'image/webp', size_bytes: 5000 }
+      ]);
+
+      await waitFor(() => {
+        expect(screen.getByTitle('photo.webp')).toBeInTheDocument();
+        expect(screen.queryByRole('img')).not.toBeInTheDocument();
+      });
+
+      expect(api.fetchAttachmentBlobUrl).not.toHaveBeenCalled();
     });
 
     it('revokes owned Blob URLs on unmount', async () => {

@@ -701,6 +701,7 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
           created_at: '2026-09-14T00:01:00Z',
           status: 'completed',
           sequence_no: 1,
+          attachments: [],
         },
         {
           id: 'm2',
@@ -710,6 +711,7 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
           created_at: '2026-09-14T00:02:00Z',
           status: 'completed',
           sequence_no: 2,
+          attachments: [],
         },
       ],
       total: 2,

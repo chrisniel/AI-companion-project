@@ -30,7 +30,7 @@ export interface MessageOut {
   model_name?: string | null;
   prompt_tokens?: number | null;
   completion_tokens?: number | null;
-  attachments?: AttachmentRef[];
+  attachments: AttachmentRef[];
   created_at: string;
 }
 

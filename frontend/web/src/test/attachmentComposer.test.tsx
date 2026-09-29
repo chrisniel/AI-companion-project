@@ -154,7 +154,7 @@ describe('Phase 8B.6 Web Attachment Composer Integration Tests', () => {
       size_bytes: 1024,
       image_width: 800,
       image_height: 600,
-      created_at: '2026-09-25T00:00:00Z',
+      created_at: '2026-09-25T00:00:00Z'
     });
     vi.mocked(fetchAttachmentBlobUrl).mockResolvedValue('blob:http://localhost/mock-att-1');
     vi.mocked(deleteAttachment).mockResolvedValue();
@@ -221,7 +221,7 @@ describe('Phase 8B.6 Web Attachment Composer Integration Tests', () => {
         size_bytes: 5120, // 5 KB
         image_width: 1024,
         image_height: 768,
-        created_at: '2026-09-25T00:00:00Z',
+        created_at: '2026-09-25T00:00:00Z'
       });
 
       await act(async () => {
@@ -307,7 +307,7 @@ describe('Phase 8B.6 Web Attachment Composer Integration Tests', () => {
           size_bytes: 1024,
           image_width: 800,
           image_height: 600,
-          created_at: '2026-09-25T00:00:00Z',
+          created_at: '2026-09-25T00:00:00Z'
         };
       });
 
@@ -351,7 +351,7 @@ describe('Phase 8B.6 Web Attachment Composer Integration Tests', () => {
           size_bytes: 1024,
           image_width: 800,
           image_height: 600,
-          created_at: '2026-09-25T00:00:00Z',
+          created_at: '2026-09-25T00:00:00Z'
         };
       });
 
@@ -393,7 +393,7 @@ describe('Phase 8B.6 Web Attachment Composer Integration Tests', () => {
         size_bytes: 1024,
         image_width: 800,
         image_height: 600,
-        created_at: '2026-09-25T00:00:00Z',
+        created_at: '2026-09-25T00:00:00Z'
       });
       // Preview fetch fails
       vi.mocked(fetchAttachmentBlobUrl).mockRejectedValueOnce(

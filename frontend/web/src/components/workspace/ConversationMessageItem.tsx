@@ -19,11 +19,14 @@ import {
   ChevronUp,
   ExternalLink,
   Zap,
+  Image as ImageIcon,
+  FileWarning,
+  Loader2,
 } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { AssistantMessage } from '../../types';
-import { fetchAttachmentBlobUrl, AttachmentRef } from '../../services/api';
-import { Image as ImageIcon, FileWarning, Loader2 } from 'lucide-react';
+import { fetchAttachmentBlobUrl, ALLOWED_MIME_TYPES } from '../../services/api';
+import type { AttachmentRef } from '../../services/api';
 
 interface AttachmentPreviewRendererProps {
   conversationId: string;
@@ -38,9 +41,16 @@ const AttachmentPreviewRenderer: React.FC<AttachmentPreviewRendererProps> = ({
   const [error, setError] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
 
+  const isImage = ALLOWED_MIME_TYPES.includes(attachment.mime_type as any);
+
   useEffect(() => {
     let isMounted = true;
     let localUrl: string | null = null;
+
+    if (!isImage) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     fetchAttachmentBlobUrl(conversationId, attachment.id)
@@ -73,9 +83,7 @@ const AttachmentPreviewRenderer: React.FC<AttachmentPreviewRendererProps> = ({
         } catch {}
       }
     };
-  }, [conversationId, attachment.id]);
-
-  const isImage = attachment.mime_type.startsWith('image/');
+  }, [conversationId, attachment.id, isImage]);
 
   return (
     <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-[var(--color-border-subtle)] bg-[var(--color-surface-recessed)] flex items-center justify-center">
