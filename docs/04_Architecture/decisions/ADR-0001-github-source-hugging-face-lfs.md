@@ -32,9 +32,13 @@ Local model files that do not need repository sharing may remain outside the wor
 
 ## Current Implementation Evidence
 
-- `.gitattributes` routes `*.gguf`, `*.ggml`, `*.safetensors`, `*.onnx`, `*.pt`, `*.pth`, and `*.ckpt` through Git LFS.
-- `.lfsconfig` points LFS transfers to the private Hugging Face dataset endpoint.
-- `models/lfs-test.gguf` is a test pointer and not a production model.
+- At the R13.2 audit on 2026-09-29, `git lfs ls-files` returned no tracked LFS pointer files.
+- `git ls-files models` contained only `models/registry.template.json`.
+- No production or test model weight is currently tracked.
+- `.gitattributes` remains configured so deliberately approved future artifacts in the listed formats will use Git LFS.
+- `.lfsconfig` points LFS transfers to the approved private Hugging Face dataset endpoint.
+
+Local downloaded models remain ignored by default; an artifact must be deliberately approved before being force-added.
 
 ## Change Control
 
