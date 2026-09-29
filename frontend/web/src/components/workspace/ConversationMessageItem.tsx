@@ -41,13 +41,15 @@ const AttachmentPreviewRenderer: React.FC<AttachmentPreviewRendererProps> = ({
   const [error, setError] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
 
-  const isImage = ALLOWED_MIME_TYPES.includes(attachment.mime_type as any);
+  const isSupportedImage = ALLOWED_MIME_TYPES.some(
+    (mimeType) => mimeType === attachment.mime_type
+  );
 
   useEffect(() => {
     let isMounted = true;
     let localUrl: string | null = null;
 
-    if (!isImage) {
+    if (!isSupportedImage) {
       setLoading(false);
       return;
     }
@@ -83,7 +85,7 @@ const AttachmentPreviewRenderer: React.FC<AttachmentPreviewRendererProps> = ({
         } catch {}
       }
     };
-  }, [conversationId, attachment.id, isImage]);
+  }, [conversationId, attachment.id, isSupportedImage]);
 
   return (
     <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-[var(--color-border-subtle)] bg-[var(--color-surface-recessed)] flex items-center justify-center">
@@ -94,7 +96,7 @@ const AttachmentPreviewRenderer: React.FC<AttachmentPreviewRendererProps> = ({
           <FileWarning className="w-5 h-5" />
           <span className="text-[9px] font-mono leading-tight truncate w-full px-1">{attachment.filename_display}</span>
         </div>
-      ) : isImage && blobUrl ? (
+      ) : isSupportedImage && blobUrl ? (
         <img src={blobUrl} alt={attachment.filename_display} className="w-full h-full object-cover" />
       ) : (
         <div className="flex flex-col items-center gap-1 text-[var(--color-text-muted)] p-1 text-center" title={attachment.filename_display}>

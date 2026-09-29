@@ -5,7 +5,6 @@ import { ConversationMessageItem } from '../components/workspace/ConversationMes
 import { AssistantView } from '../components/workspace/AssistantView';
 import { AssistantMessage } from '../types';
 import * as api from '../services/api';
-import { BackendProvider } from '../context/BackendContext';
 
 // Mock API layer
 vi.mock('../services/api', async (importOriginal) => {

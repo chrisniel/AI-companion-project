@@ -3,7 +3,7 @@
  */
 
 import { apiFetch, getApiBaseUrl, getApiKey, ApiError } from './client';
-import { AttachmentRef } from './attachmentApi';
+import type { AttachmentRef } from './attachmentApi';
 
 export interface ConversationOut {
   id: string;

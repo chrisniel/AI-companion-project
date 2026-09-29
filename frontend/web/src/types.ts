@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { AttachmentRef } from './services/api/attachmentApi';
+import type { AttachmentRef } from './services/api/attachmentApi';
 
 export type ThemeMode = 'light' | 'dark';
 export type ThemePreference = 'light' | 'dark' | 'system';
