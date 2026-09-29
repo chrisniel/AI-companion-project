@@ -232,6 +232,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
           sender: m.sender === 'user' ? userName : (m.sender === 'system' ? 'System' : activeCharacterName),
           timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           content: m.content,
+          attachments: m.attachments,
         }));
         setMessages(mapped);
       } else {
@@ -858,6 +859,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
         activeCharacterName={activeCharacterName}
         isBusy={isBusy}
         assistantState={assistantState}
+        activeConversationId={activeConversationId}
       />
 
       {/* 3. DOCKED COMPOSER & STATUS/ERROR NOTICES */}

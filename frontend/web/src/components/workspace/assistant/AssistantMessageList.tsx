@@ -9,6 +9,7 @@ export interface AssistantMessageListProps {
   activeCharacterName: string;
   isBusy: boolean;
   assistantState: AssistantState;
+  activeConversationId?: string;
 }
 
 export const AssistantMessageList: React.FC<AssistantMessageListProps> = ({
@@ -17,6 +18,7 @@ export const AssistantMessageList: React.FC<AssistantMessageListProps> = ({
   activeCharacterName,
   isBusy,
   assistantState,
+  activeConversationId,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -32,6 +34,7 @@ export const AssistantMessageList: React.FC<AssistantMessageListProps> = ({
           message={msg}
           userName={userName}
           activeCharacterName={activeCharacterName}
+          activeConversationId={activeConversationId}
         />
       ))}
 

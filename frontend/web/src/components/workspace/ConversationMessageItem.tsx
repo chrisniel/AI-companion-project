@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Sparkles,
   User,
@@ -22,17 +22,94 @@ import {
 } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { AssistantMessage } from '../../types';
+import { fetchAttachmentBlobUrl, AttachmentRef } from '../../services/api';
+import { Image as ImageIcon, FileWarning, Loader2 } from 'lucide-react';
+
+interface AttachmentPreviewRendererProps {
+  conversationId: string;
+  attachment: AttachmentRef;
+}
+
+const AttachmentPreviewRenderer: React.FC<AttachmentPreviewRendererProps> = ({
+  conversationId,
+  attachment,
+}) => {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [error, setError] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    let localUrl: string | null = null;
+
+    setLoading(true);
+    fetchAttachmentBlobUrl(conversationId, attachment.id)
+      .then((url) => {
+        if (!isMounted) {
+          // Resolved AFTER disposal, immediately revoke.
+          try {
+            URL.revokeObjectURL(url);
+          } catch {}
+          return;
+        }
+        localUrl = url;
+        setBlobUrl(url);
+        setError(false);
+      })
+      .catch((err) => {
+        if (!isMounted) return;
+        console.warn('Failed to fetch attachment preview:', err);
+        setError(true);
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+      if (localUrl) {
+        try {
+          URL.revokeObjectURL(localUrl);
+        } catch {}
+      }
+    };
+  }, [conversationId, attachment.id]);
+
+  const isImage = attachment.mime_type.startsWith('image/');
+
+  return (
+    <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-[var(--color-border-subtle)] bg-[var(--color-surface-recessed)] flex items-center justify-center">
+      {loading ? (
+        <Loader2 className="w-5 h-5 text-[var(--color-text-muted)] animate-spin" />
+      ) : error ? (
+        <div className="flex flex-col items-center gap-1 text-[var(--color-text-muted)] p-1 text-center" title="Preview unavailable">
+          <FileWarning className="w-5 h-5" />
+          <span className="text-[9px] font-mono leading-tight truncate w-full px-1">{attachment.filename_display}</span>
+        </div>
+      ) : isImage && blobUrl ? (
+        <img src={blobUrl} alt={attachment.filename_display} className="w-full h-full object-cover" />
+      ) : (
+        <div className="flex flex-col items-center gap-1 text-[var(--color-text-muted)] p-1 text-center" title={attachment.filename_display}>
+          <ImageIcon className="w-5 h-5" />
+          <span className="text-[9px] font-mono leading-tight truncate w-full px-1">{attachment.filename_display}</span>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export interface ConversationMessageItemProps {
   message: AssistantMessage;
   userName?: string;
   activeCharacterName?: string;
+  activeConversationId?: string;
 }
 
 export const ConversationMessageItem: React.FC<ConversationMessageItemProps> = ({
   message,
   userName = 'Chris',
   activeCharacterName = 'Aura',
+  activeConversationId,
 }) => {
   const [copied, setCopied] = useState(false);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
@@ -291,6 +368,17 @@ export const ConversationMessageItem: React.FC<ConversationMessageItemProps> = (
             <span>{message.timestamp}</span>
           </div>
           <p className="leading-relaxed whitespace-pre-line">{message.content}</p>
+          {message.attachments && message.attachments.length > 0 && activeConversationId && (
+            <div className="flex flex-wrap gap-2 pt-2 mt-2 border-t border-[var(--color-border-subtle)]">
+              {message.attachments.map((att) => (
+                <AttachmentPreviewRenderer
+                  key={att.id}
+                  conversationId={activeConversationId}
+                  attachment={att}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );

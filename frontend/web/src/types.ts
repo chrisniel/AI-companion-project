@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { AttachmentRef } from './services/api/attachmentApi';
 
 export type ThemeMode = 'light' | 'dark';
 export type ThemePreference = 'light' | 'dark' | 'system';
@@ -341,6 +342,7 @@ export interface AssistantMessage {
     resultsCount: number;
     source: string;
   };
+  attachments?: AttachmentRef[];
 }
 
 export interface ConversationHistoryItem {
