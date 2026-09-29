@@ -2,7 +2,7 @@
 
 > **Document Role:** Canonical product and milestone delivery roadmap for the AI Companion ecosystem.
 > **Status:** Active Canonical (Decisions D1–D11 aligned through R10/R11 reconciliation)
-> **Last Updated:** 2026-09-27 (Reconciliation Pass R12.2)
+> **Last Updated:** 2026-09-29 (Reconciliation Closure / R13.2)
 > **Authority Precedence:** Normative architecture is owned by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md) and focused domain specifications under [`docs/04_Architecture/`](../04_Architecture/). Active sprint state is tracked in [`docs/01_Tracking/task.md`](../01_Tracking/task.md). Detailed feature implementation steps reside in active plans under [`docs/02_Planning/`](./).
 
 ---
@@ -51,7 +51,7 @@ Roadmap tracking separates **Release Allocation** (which product milestone owns 
               │
 [Phase 8P: Runtime Config] ────────► COMPLETE / VERIFIED
               │
-[Reconciliation Passes R0–R11] ────► COMPLETE / VERIFIED
+[Reconciliation Passes R0–R13] ────► COMPLETE / VERIFIED
               │
 [Phase 8B: Multimodal Vision] ─────► IN PROGRESS (8B.0–8B.6 VERIFIED; 8B.7 NEXT)
               │
@@ -76,12 +76,12 @@ Roadmap tracking separates **Release Allocation** (which product milestone owns 
 ### 2.1 Completed Milestones
 - **Phase 8A — Frontend Architecture & UX Harmonization (`COMPLETE / VERIFIED`):** Decomposed Assistant views into focused components, removed stale mock conversations, implemented time-derived home greetings, added truthful system states, annotated mock files as `@deprecated`.
 - **Phase 8P — Runtime Configuration & Persistent Asset Foundation (`COMPLETE / VERIFIED`):** Unified subsystem terminology to *Local AI Runtime*, resolved `COMPANION_DATA_ROOT` precedence and bootstrap locator, derived atomic storage layout, implemented Model Registry Schema v3, and verified migration safety.
-- **Repository Documentation Reconciliation Passes R0–R11 (`COMPLETE / VERIFIED`):** Conducted full repository forensic audit, locked architectural decisions D1–D11, established canonical documentation routing, purged obsolete terminology, validated Android cleartext/network boundaries, audited and cleaned local legacy database data, verified automated test suites (175 backend pytest, 147 frontend vitest, 124 Android unit/Robolectric), confirmed OpenAPI schema synchronization, reconciled durable domain architecture specifications, and locked the fresh verified baseline.
+- **Repository Documentation Reconciliation Passes R0–R13 (`COMPLETE / VERIFIED`):** Conducted full repository forensic audit, locked architectural decisions D1–D11, established canonical documentation routing, purged obsolete terminology, validated Android cleartext/network boundaries, audited and cleaned local legacy database data, verified automated test suites (175 backend pytest, 147 frontend vitest, 124 Android unit/Robolectric), confirmed OpenAPI schema synchronization, reconciled durable domain architecture specifications, executed R13.1 physical architecture cleanup/ADR codification, applied R13.2 boundary/hardening policy, and locked the fresh verified baseline.
 - **Phase 8B Foundation (Slices 8B.0–8B.6) (`COMPLETE / VERIFIED`):** Delivered multimodal attachment foundation via PR #13: database migration `006_add_attachments`, Attachment ORM model with 4 mixins, Pillow image validation (MIME, dimension, megapixel, bomb guards), route-specific upload limit (12 MiB envelope, 10 MiB payload), authenticated Blob preview/delete endpoints, transactional pre-stream turn binding, media resolver, llama.cpp image translation, and Web composer staging with Blob previews. Verified by CI Run #23 on merged `develop` SHA `4b2f5fe` (321 backend pytest, 185 frontend vitest across 9 files, 22-route OpenAPI parity with zero drift).
 
 ### 2.2 Immediate Next Milestone
 - **Phase 8B — Multimodal Image Attachment Foundation (`IN PROGRESS`):**
-  - *Current Status:* Slices 8B.0–8B.6 are COMPLETE and VERIFIED. Slice 8B.7 (Persistent Message Attachment Rendering) is NEXT / UNBLOCKED (paused for R9–R13 reconciliation). Slice 8B.8 (Full Integration & Phase Closure) is PLANNED. Phase 8B as a whole is NOT yet complete.
+  - *Current Status:* Slices 8B.0–8B.6 are COMPLETE and VERIFIED. Slice 8B.7 (Persistent Message Attachment Rendering) is NEXT / UNBLOCKED (R9–R13 reconciliation is complete; 8B.7 remains the immediate next engineering slice after branch integration). Slice 8B.8 (Full Integration & Phase Closure) is PLANNED. Phase 8B as a whole is NOT yet complete.
   - *Next Slice Scope (8B.7):* Add `AttachmentRef` to frontend types and `AssistantMessage`, extend `ConversationMessageItem` with authenticated Blob preview fetching and `URL.revokeObjectURL()` cleanup, connect message history loading in `AssistantView`, and verify persistence across reload.
   - *Authoritative Feature Plan:* [`phase-08/plan-phase8-pc-frontend-architecture-ux.md`](./phase-08/plan-phase8-pc-frontend-architecture-ux.md).
 
