@@ -37,7 +37,7 @@ AI-companion-project/
 └── docs/               # Canonical architecture, roadmap, tracking, guides
 ```
 
-For canonical system boundaries, host topology, and locked architectural decisions D1–D9, refer to [SYSTEM_BASELINE.md](../04_Architecture/SYSTEM_BASELINE.md).
+For canonical system boundaries, host topology, and locked architectural decisions D1–D11, refer to [SYSTEM_BASELINE.md](../04_Architecture/SYSTEM_BASELINE.md).
 
 ---
 
@@ -149,7 +149,7 @@ The backend manages an independent `llama-server.exe` instance in multi-model ro
   - `balanced`: context = 4096, GPU layers = 28, threads = 6, mmproj offload = true
   - `maximum`: context = 8192, GPU layers = 33, threads = 8, mmproj offload = true
 
-For full runtime details, see [LLAMA_CPP_RUNTIME_ARCHITECTURE.md](../04_Architecture/LLAMA_CPP_RUNTIME_ARCHITECTURE.md).
+For full runtime details, see [`04_Infrastructure/runtime-and-models.md`](../04_Architecture/04_Infrastructure/runtime-and-models.md) and [`04_Infrastructure/performance-and-capacity.md`](../04_Architecture/04_Infrastructure/performance-and-capacity.md).
 
 ### Standalone Diagnostic Router Probe (Port 8086)
 For benchmarking or verifying GPU layers without starting the full FastAPI backend, run the diagnostic script:

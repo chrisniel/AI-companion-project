@@ -2,7 +2,7 @@
 
 > **Document Role:** Operational quickstart and subsystem orientation for Android mobile client development.
 > **Status:** Active Operational Quickstart
-> **Normative Architecture:** [`docs/04_Architecture/ANDROID_COMPANION_ARCHITECTURE.md`](../docs/04_Architecture/ANDROID_COMPANION_ARCHITECTURE.md) and [`docs/04_Architecture/SYSTEM_BASELINE.md`](../docs/04_Architecture/SYSTEM_BASELINE.md).
+> **Normative Architecture:** [`docs/04_Architecture/01_Domains/android-companion.md`](../docs/04_Architecture/01_Domains/android-companion.md) and [`docs/04_Architecture/SYSTEM_BASELINE.md`](../docs/04_Architecture/SYSTEM_BASELINE.md).
 > **Canonical Setup Guide:** [`docs/06_Guides/DEVELOPMENT_SETUP.md`](../docs/06_Guides/DEVELOPMENT_SETUP.md).
 > **Canonical Verification Guide:** [`docs/06_Guides/TESTING_AND_CI.md`](../docs/06_Guides/TESTING_AND_CI.md).
 

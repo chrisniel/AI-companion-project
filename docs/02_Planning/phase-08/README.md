@@ -9,7 +9,7 @@ This directory contains the authoritative implementation planning and navigation
 | **8A** | Frontend Architecture & UX Harmonization | `feature/phase8-ui-foundation` | **COMPLETE / VERIFIED** (Mock removal, decomposition, truthfulness sweep, deprecation annotations) |
 | **8P** | Runtime Configuration & Persistent Asset Foundation | `feature/phase8-runtime-config` | **COMPLETE / VERIFIED** (Terminology reconciliation, `COMPANION_DATA_ROOT`, bootstrap locator, Model Registry Schema v3, atomic migrations) |
 | **R0–R8** | Repository Documentation Reconciliation | `chore/repository-documentation-reconciliation` | **COMPLETE / VERIFIED** (Full audit, baseline lock, documentation routing, verified test suites) |
-| **8B** | Multimodal Image Attachment Foundation | `feature/multimodal-image-attachments` | **NEXT / UNBLOCKED / NOT STARTED** (Attachment ORM, validation, secure preview endpoints, vision gate; starts upon branch cut) |
+| **8B** | Multimodal Image Attachment Foundation | Foundation merged via PR #13; 8B.7 branch not yet cut | **IN PROGRESS** (8B.0–8B.6 COMPLETE / VERIFIED; 8B.7 NEXT / UNBLOCKED; 8B.8 PLANNED) |
 | **8C** | Integration, Accessibility & Polish | `feature/phase8-ui-integration-polish` | **PLANNED AFTER 8B** (Dead mock deletion, bundle code-splitting, a11y, regression verification) |
 
 ---
@@ -21,9 +21,9 @@ This directory contains the authoritative implementation planning and navigation
 
 ### Canonical Roadmap & Architecture References
 - [`docs/02_Planning/ROADMAP.md`](../ROADMAP.md) — Canonical product and milestone delivery roadmap.
-- [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) — Canonical system baseline, release boundary, and locked decisions D1–D9.
-- [`docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../../04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) — Durable architecture for `COMPANION_DATA_ROOT`, bootstrap resolution, and Model Registry schema.
-- [`docs/04_Architecture/LLAMA_CPP_RUNTIME_ARCHITECTURE.md`](../../04_Architecture/LLAMA_CPP_RUNTIME_ARCHITECTURE.md) — Local LLM runtime architecture, hardware offloading profiles, and port allocations.
+- [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) — Canonical system baseline, release boundary, and locked decisions D1–D11.
+- [`docs/04_Architecture/04_Infrastructure/storage-and-assets.md`](../../04_Architecture/04_Infrastructure/storage-and-assets.md) and [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](../../04_Architecture/04_Infrastructure/runtime-and-models.md) — Durable architecture for `COMPANION_DATA_ROOT`, bootstrap resolution, and Model Registry schema.
+- [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](../../04_Architecture/04_Infrastructure/runtime-and-models.md) and [`docs/04_Architecture/04_Infrastructure/performance-and-capacity.md`](../../04_Architecture/04_Infrastructure/performance-and-capacity.md) — Local LLM runtime architecture, hardware offloading profiles, and port allocations.
 
 ### Active Sprint Tracking
 - [`docs/01_Tracking/task.md`](../../01_Tracking/task.md) — Active execution state, checklists, and immediate blockers.

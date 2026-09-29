@@ -2,7 +2,7 @@
 
 > **Document Role:** Canonical entry-point guide for all human contributors and AI agents.
 > **Status:** Active Canonical
-> **Last Updated:** 2026-09-21 (Reconciliation Pass R5)
+> **Last Updated:** 2026-09-29 (Reconciliation Closure / R13.2)
 
 ---
 
@@ -12,19 +12,19 @@ New contributors and AI agents must navigate the repository through this explici
 
 ```text
 AGENTS.md
-  │  (Process rules, token boundaries, user-owned git constraints)
+  │  (Process rules, token boundaries, delivery gates, user-owned git constraints)
   ▼
 docs/06_Guides/DOCUMENTATION_MAP.md  [YOU ARE HERE]
   │  (Authority model, question-type routing, directory roles)
   ▼
 docs/04_Architecture/SYSTEM_BASELINE.md
-  │  (Product identity, V1 boundary, host topology, locked D1–D9 decisions)
+  │  (Product identity, V1 boundary, host topology, locked D1–D11 decisions, Golden Gate)
   ▼
 docs/02_Planning/ROADMAP.md
   │  (Consulted only when sequencing / release scope / milestone ownership matters)
   ▼
-Relevant Domain Architecture & Accepted ADR(s)
-  │  (Load only the domain relevant to active task, e.g., LLAMA_CPP_*, VOICE_*, SECURITY_*)
+Relevant Focused Canonical Domain Specification & Accepted ADR(s)
+  │  (Load only the domain relevant to active task, e.g., runtime-and-models.md, voice-and-audio.md, tool-permissions-and-actions.md)
   ▼
 docs/01_Tracking/task.md
   │  (Active sprint, current state, immediate blockers)
@@ -35,51 +35,31 @@ Relevant ACTIVE Implementation Plan
 
 > [!IMPORTANT]
 > **Context & Reality Invariants:**
-> - **SOURCE / TESTS** remain authoritative for implemented reality. Implementation reality must never be invented from documentation.
+> - **SOURCE / TESTS / GENERATED CONTRACTS** remain authoritative for implemented reality. Implementation reality must never be invented from documentation.
 > - **Historical Context Discipline:** Historical walkthroughs (`docs/03_Walkthroughs/`), archives (`docs/07_Archive/`), completed task checklists (`docs/01_Tracking/archive/`), working drafts (`docs/00_Drafts/`), and the historical Master Implementation Plan are **NOT** normal startup context.
-> - **Domain Focus:** Do not require an AI agent to load every domain architecture document; load only the specific domain specification relevant to the task.
+> - **Domain Focus:** Do not require an AI agent to load every domain architecture document; load only the specific focused domain specification relevant to the active task.
 
 ---
 
 ## 2. Documentation Authority Hierarchy
 
-When seeking the authoritative answer to a question, consult documents in the following order of precedence:
+When seeking the authoritative answer to a question, consult documents and artifacts according to this explicit authority model:
 
-### A. Process & Agent Behavior
-1. **`AGENTS.md`** instructions and project profile constraints (Highest)
-2. `CONTRIBUTING.md` / repository workflow rules
-3. Approved task-specific implementation plan (`docs/02_Planning/plan-[feature].md`)
-
-### B. Implemented Reality
-1. **Source code** (`backend/`, `frontend/web/`, `android/`)
-2. Generated contracts and schema configuration (`contracts/openapi/openapi.json`, Alembic versions)
-3. Automated test suites (`pytest`, `vitest`, Android unit tests)
-4. CI and runtime verification evidence
+| Authority Tier | Artifact / Document | Role & Authority Scope |
+| :--- | :--- | :--- |
+| **Implemented Reality** | **Source Code, Automated Tests & Generated Contracts** (`backend/`, `frontend/web/`, `android/`, `contracts/openapi/openapi.json`, Alembic migrations) | **Authoritative for what actually exists.** Implementation reality must never be inferred or invented from documentation intent. |
+| **System Architecture & Release Boundary** | **Canonical System Baseline** ([`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md)) | **Authoritative for cross-cutting ecosystem architecture, platform release boundaries, locked decisions D1–D11, and the Golden PC V1 Acceptance Gate (§8).** |
+| **Normative Domain Architecture** | **Focused Canonical Domain Specifications** ([`docs/04_Architecture/`](../04_Architecture/README.md): `01_Domains/`, `02_Data_and_Security/`, `03_Integrations/`, `04_Infrastructure/`) | **Primary normative domain architecture for data ownership, invariants, security policies, and approved target capabilities.** |
+| **Architectural Decisions** | **Accepted ADRs** ([`docs/04_Architecture/decisions/`](../04_Architecture/decisions/README.md)) | **Architectural decision records containing decision identity, context, consequences, and change control. ADRs do NOT become competing normative domain owners.** |
+| **UX & Presentation** | **Design Specifications** ([`docs/05_Design/`](../05_Design/README.md)) | **Authoritative for user experience, interface presentation, visual language, and interaction flows.** Cross-references architecture; cannot redefine system authority. |
+| **Delivery & Release Sequencing** | **Canonical Product Roadmap** ([`docs/02_Planning/ROADMAP.md`](../02_Planning/ROADMAP.md)) | **Authoritative for milestone delivery sequence, phase ordering, delivery bands, and post-V1 release tracks.** |
+| **Active Execution** | **Active Task File** ([`docs/01_Tracking/task.md`](../01_Tracking/task.md)) | **Authoritative for current execution state, active sub-slices, and immediate blockers.** Target under 80 lines. |
+| **Approved Implementation Method** | **Active Implementation Plans** (`docs/02_Planning/plan-[feature].md`, `phase-08/`) | **Authoritative for approved step-by-step logic, technical execution methods, and verification criteria for non-trivial features.** |
+| **Historical Evidence (Non-Normative)** | **Walkthroughs, Task Archives & Legacy References** (`docs/03_Walkthroughs/`, `docs/01_Tracking/archive/`, `docs/07_Archive/`, legacy architecture monoliths) | **Point-in-time delivery evidence, archived sprint checklists, and historical context only.** Ignored during normal startup; never normative. |
+| **Working Scratchpads (Non-Normative)** | **Drafts** (`docs/00_Drafts/`) | **Unreviewed brainstorms and working notes.** Strictly ignored by default. |
 
 > [!IMPORTANT]
 > **Implementation reality must never be invented from documentation.** If documentation describes a feature as working but source code or tests prove it is absent, the source code represents reality.
-
-### C. Normative Architecture & Contracts
-1. **Accepted ADRs** (`docs/04_Architecture/decisions/`)
-2. **Canonical System Baseline** (`docs/04_Architecture/SYSTEM_BASELINE.md`)
-3. Domain technical specifications (`docs/04_Architecture/*.md`)
-
-### D. Product Intent & Scope
-1. **Canonical System Baseline** (`docs/04_Architecture/SYSTEM_BASELINE.md` — defines locked V1 boundary)
-2. **Canonical Product Roadmap** (`docs/02_Planning/ROADMAP.md` — defines milestone delivery sequence and post-V1 roadmap)
-3. Historical reference master plan (`docs/07_Archive/reference/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md` — decomposed in Pass R4, archived in Pass R5)
-
-### E. Current Execution
-1. **`docs/01_Tracking/task.md`** (Active sprint, immediate blockers, current state)
-2. Active approved implementation plan (`docs/02_Planning/plan-[feature].md`)
-
-### F. Historical Evidence (Non-Normative)
-1. Delivery walkthroughs and evidence catalog ([`docs/03_Walkthroughs/README.md`](../03_Walkthroughs/README.md))
-2. Completed and archived sprint tasks (`docs/01_Tracking/archive/`)
-3. Archived historical drafts (`docs/07_Archive/`)
-
-### G. Working & Unapproved Ideas (Non-Normative)
-1. Scratchpads and brainstorms (`docs/00_Drafts/`) — Strictly ignored by default.
 
 ---
 
@@ -108,7 +88,7 @@ Per `AGENTS.md`, all documentation directories adhere to a zero-padded two-digit
 | `docs/01_Tracking/` | **Canonical (Execution)** | Active `task.md` (target < 80 lines) and per-feature `archive/`. | Active `task.md` read on resume; `archive/` ignored. |
 | `docs/02_Planning/` | **Canonical (Planning)** | Canonical `ROADMAP.md`, planning catalog, feature plans (in root or nested hubs like `phase-08/`), and post-V1 sources (`post-v1/`). | Active plan read during planning; ignored during execution. |
 | `docs/03_Walkthroughs/` | **Historical Evidence** | Verified delivery explanations and developer handoffs (7-section format); indexed in [`README.md`](../03_Walkthroughs/README.md). | Ignored unless investigating PR implementation history. |
-| `docs/04_Architecture/` | **Canonical (Normative)** | System baseline, core contracts, API schemas, ADRs (`decisions/`). | Read on demand when relevant to active domain. |
+| `docs/04_Architecture/` | **Canonical (Normative)** | System baseline, core contracts, API schemas, ADRs (`decisions/`), and 18 focused canonical domain specifications. | Read on demand when relevant to active domain. |
 | `docs/05_Design/` | **Canonical (Design)** | Product UI/UX, wireframes, character visual specs, narrative guides. | Read on demand when building frontend/mobile UI. |
 | `docs/06_Guides/` | **Canonical (Guides)** | Contributor guides, setup instructions, documentation map, testing standards. | Read on demand for repository process guidance. |
 | `docs/07_Archive/` | **Historical Reference** | Superseded drafts, old audits, deprecated documentation. | **Strictly ignored** unless performing a retrospective. |
@@ -134,27 +114,49 @@ The following documents exist for historical, forensic, or template purposes and
    Completed sprint checklists preserved for tracking continuity only.
 6. **Starter Reference (`docs/ProjectWorkflowStarterKit/*`)**
    Reusable workflow templates, not active project documentation.
+7. **Legacy Monolithic Architecture Specifications (`docs/07_Archive/reference/architecture-legacy/*.md`)**
+   The six legacy monolithic architecture documents:
+   - [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md)
+   - [`ANDROID_COMPANION_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/ANDROID_COMPANION_ARCHITECTURE.md)
+   - [`LLAMA_CPP_RUNTIME_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/LLAMA_CPP_RUNTIME_ARCHITECTURE.md)
+   - [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/MEMORY_AND_CHARACTER_ARCHITECTURE.md)
+   - [`SECURITY_AND_TRUST_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md)
+   - [`VOICE_AND_AUDIO_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/VOICE_AND_AUDIO_ARCHITECTURE.md)
+   These documents were formally narrowed in Pass R11.4 to subordinate historical, technical, and implementation reference roles with clear supersession notices. Canonical domain authority resides completely in the 18 focused domain specifications and `SYSTEM_BASELINE.md`. Do not route normal canonical questions to legacy monoliths.
 
 ---
 
 ## 6. Canonical Routing Table
 
-When investigating specific questions or subsystems, consult the dedicated canonical document rather than general drafts:
+When investigating specific questions or subsystems, consult the dedicated canonical document rather than general drafts or legacy monoliths:
 
 | If your question is... | Consult this Canonical Document | Core Topics Owned |
 | :--- | :--- | :--- |
-| **"What is the product identity, V1 boundary, or host process model?"** | [`SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md) | Ecosystem subsystems, V1 scope vs. post-V1, Windows host process, D1–D9 matrix. |
-| **"What comes next / which milestone owns this feature?"** | [`ROADMAP.md`](../02_Planning/ROADMAP.md) | Canonical delivery sequence, Phase 8B/8C, V1 gates, post-V1 roadmap tracks. |
+| **"What is the product identity, V1 boundary, or host process model?"** | [`SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md) | Ecosystem subsystems, V1 scope vs. post-V1, Windows host process, locked D1–D11 decisions. |
+| **"What are the mandatory acceptance requirements for the PC V1 release gate?"** | [`SYSTEM_BASELINE.md` §8](../04_Architecture/SYSTEM_BASELINE.md) | Golden PC V1 Acceptance & Release Gate (§8: 17 integrated Golden acceptance checkpoint groups, portability invariants, pass/fail semantics, CI relationship). |
+| **"What comes next / which milestone or band owns this feature?"** | [`ROADMAP.md`](../02_Planning/ROADMAP.md) | Canonical delivery sequence, Phase 8B/8C, Foundation/Capability/Resilience bands, post-V1 roadmap tracks. |
 | **"What is being worked on right now / what are the immediate blockers?"** | [`task.md`](../01_Tracking/task.md) | Active execution state, current sprint checklist, execution invariants. |
 | **"How is a specific active feature designed and implemented?"** | Active feature plan in [`docs/02_Planning/`](../02_Planning/README.md) | Detailed feature steps, acceptance criteria, component breakdowns. |
 | **"How do I set up the environment and run local services?"** | [`DEVELOPMENT_SETUP.md`](DEVELOPMENT_SETUP.md) | Python/Node/Android prerequisites, FastAPI startup, React Web, llama-server. |
-| **"How do I run tests, verify contracts, and check CI?"** | [`TESTING_AND_CI.md`](TESTING_AND_CI.md) | Pytest, Vitest, Android test suites, OpenAPI verification, CI gate governance. |
-| **"Where does data live? How do model imports and config work?"** | [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) | `COMPANION_DATA_ROOT`, bootstrap locator, D6 import pipeline, database migration safety. |
-| **"How does the LLM run? What are the VRAM profiles and router states?"** | [`LLAMA_CPP_RUNTIME_ARCHITECTURE.md`](../04_Architecture/LLAMA_CPP_RUNTIME_ARCHITECTURE.md) | `llama-server.exe` lifecycle, Eco/Balanced/Max profiles, port 8085, RX 580 benchmarks. |
-| **"How do auth, device pairing, network trust, and tool permissions work?"** | [`SECURITY_AND_TRUST_ARCHITECTURE.md`](../04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md) | Fail-closed auth, D4 per-device credentials, D5 Tailscale trust, D9 4-tier risk matrix, SSRF. |
-| **"Who owns memory and character data? How does scoping work?"** | [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../04_Architecture/MEMORY_AND_CHARACTER_ARCHITECTURE.md) | Profile-first memory, `PROFILE` vs `CHARACTER` scopes, SQLite+FTS5, persona boundaries. |
-| **"How will Android connected and offline modes work?"** | [`ANDROID_COMPANION_ARCHITECTURE.md`](../04_Architecture/ANDROID_COMPANION_ARCHITECTURE.md) | `com.cnl.aicompanion`, Connected vs Offline Mode, Dimensity 920 inference evidence. |
-| **"How will voice and audio processing work?"** | [`VOICE_AND_AUDIO_ARCHITECTURE.md`](../04_Architecture/VOICE_AND_AUDIO_ARCHITECTURE.md) | CPU-first speech execution, `TTSProvider` candidates (Kokoro, Piper, KittenTTS), post-V1. |
+| **"How do I run tests, verify contracts, and check CI governance?"** | [`TESTING_AND_CI.md`](TESTING_AND_CI.md) | Pytest, Vitest, Android test suites, OpenAPI verification, P25 cost-conscious CI matrix, target ci-gate aggregation. |
+| **"How does the LLM run? What are runtime profiles and model import rules?"** | [`04_Infrastructure/runtime-and-models.md`](../04_Architecture/04_Infrastructure/runtime-and-models.md) | Local AI Runtime, model registry/artifact semantics, D6 import pipeline, hardware offload profiles, optional cloud fallback. |
+| **"Where does data live? How do storage, assets, and migrations work?"** | [`04_Infrastructure/storage-and-assets.md`](../04_Architecture/04_Infrastructure/storage-and-assets.md) | Persistent storage paths, configuration layering (`COMPANION_DATA_ROOT`), asset boundaries, database migration safety. *(See `runtime-and-models.md` where model artifact lifecycle is relevant).* |
+| **"How do auth tokens, credentials, and network trust boundaries work?"** | [`02_Data_and_Security/authentication-and-secrets.md`](../04_Architecture/02_Data_and_Security/authentication-and-secrets.md) | Credential isolation, token handling, localhost / trusted LAN / Tailscale boundaries, rejection of direct port forwarding. |
+| **"How do user profiles and trusted device enrollment work?"** | [`02_Data_and_Security/profiles-and-devices.md`](../04_Architecture/02_Data_and_Security/profiles-and-devices.md) | User Profile data boundary (`owner_id`), trusted device enrollment, single-primary-user baseline (D8). |
+| **"How do tool permissions, risk tiers, and action policies work?"** | [`02_Data_and_Security/tool-permissions-and-actions.md`](../04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md) | DEFAULT DENY, 5-stage pipeline, 4-tier risk matrix (ALLOW / CONFIRM / DENY), generic shell rejection (D9). |
+| **"How do data retention, soft deletion, and privacy auditing work?"** | [`02_Data_and_Security/privacy-retention-and-audit.md`](../04_Architecture/02_Data_and_Security/privacy-retention-and-audit.md) | Data retention schedules, soft-delete lifecycles, privacy minimization, and auditable action logging. |
+| **"Who owns memory and how does selective automatic memory work?"** | [`01_Domains/memory-and-personalization.md`](../04_Architecture/01_Domains/memory-and-personalization.md) | Profile-first persistent memory, FTS5 lexical search baseline, selective automatic memory capture under D7. |
+| **"How do Character lore, Personality traits, and Emotion work?"** | [`01_Domains/characters-personality-and-emotion.md`](../04_Architecture/01_Domains/characters-personality-and-emotion.md) | Persistent Character config, decoupled Personality style traits, lightweight Emotion state (D11). |
+| **"How does conversational voice and audio processing work?"** | [`01_Domains/voice-and-audio.md`](../04_Architecture/01_Domains/voice-and-audio.md) | Provider-independent STT/TTS, conversation cadence, barge-in cancellation, no wake word in V1. |
+| **"How do turn lifecycles, streaming, and multilingual conversations work?"** | [`01_Domains/assistant-and-conversations.md`](../04_Architecture/01_Domains/assistant-and-conversations.md) | Turn lifecycle, context assembly, token streaming, multilingual interaction (EN/TL/JA/code-switching). |
+| **"How do Tasks, Reminders, Alarms, and Routines work?"** | [`01_Domains/tasks-reminders-alarms-and-routines.md`](../04_Architecture/01_Domains/tasks-reminders-alarms-and-routines.md) | Distinct scheduling semantics, quiet hours, best-effort wake, native notifications, bounded routines (D10). |
+| **"How do image attachments and multimodal vision work?"** | [`01_Domains/multimodal-and-media.md`](../04_Architecture/01_Domains/multimodal-and-media.md) | Message image attachments, validated upload guards, multimodal vision inference, media persistence (Phase 8B). |
+| **"How will the Android Companion connected and offline modes work?"** | [`01_Domains/android-companion.md`](../04_Architecture/01_Domains/android-companion.md) | `com.cnl.aicompanion` (D3), Keystore credentials (D4), connected sync, compact roaming offline LLM. |
+| **"How do read-only public search, fetch, and weather work?"** | [`03_Integrations/web-current-information.md`](../04_Architecture/03_Integrations/web-current-information.md) | Provider-independent search/fetch/weather, outbound SSRF containment, untrusted data handling, source provenance. |
+| **"How do PC health-context readiness and wearable sync work?"** | [`03_Integrations/health-and-wearables.md`](../04_Architecture/03_Integrations/health-and-wearables.md) | PC health-context readiness (PC V1 data contracts); Android Health Connect wearable sync (Android V1). |
+| **"How do Windows autostart and native OS notifications work?"** | [`04_Infrastructure/windows-host-and-notifications.md`](../04_Architecture/04_Infrastructure/windows-host-and-notifications.md) | Independent Windows host process, autostart at login (D2), native OS notification delivery (D2/D10). |
+| **"How do backup creation, restore verification, and logging work?"** | [`04_Infrastructure/backup-recovery-and-diagnostics.md`](../04_Architecture/04_Infrastructure/backup-recovery-and-diagnostics.md) | Practical coordinated backup, isolated restore verification, referential integrity; diagnostic logging. |
+| **"How do resource throttling and Gaming / Low-Impact mode work?"** | [`04_Infrastructure/performance-and-capacity.md`](../04_Architecture/04_Infrastructure/performance-and-capacity.md) | Resource governance, background throttling, Gaming / Low-Impact mode, telemetry truthfulness. |
 
 ---
 
@@ -166,5 +168,3 @@ Component READMEs provide operational quickstarts and local directory orientatio
 - **Backend [`backend/README.md`](../../backend/README.md):** Local AI Runtime FastAPI developer quickstart and local service startup.
 - **Frontend [`frontend/web/README.md`](../../frontend/web/README.md):** React Web desktop control center quickstart, build commands, and local dev server.
 - **Android [`android/README.md`](../../android/README.md):** Android companion prototype quickstart, Gradle verification, and build targets.
-
-

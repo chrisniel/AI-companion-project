@@ -115,19 +115,27 @@ providers/
 
 # ---------------------------------------------------------
 # Local AI model weights
-# Keep model artifacts outside the main source repository.
-# Use a dedicated Hugging Face model repository when needed.
+# Local/downloaded model weights are ignored by default.
+# GitHub remains the canonical Git source repository.
+# Deliberately approved shared large artifacts may be committed
+# as Git LFS pointer files. The corresponding LFS objects are
+# stored at the endpoint configured in .lfsconfig.
+# Model licensing/privacy/repository need must be checked before adding.
 # ---------------------------------------------------------
+*.gguf
+*.ggml
+*.onnx
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+*.bin
+
 models/*
-!models/lfs-test.gguf
 !models/.gitkeep
 !models/registry.template.json
 # Model registry — local instance; never commit
 models/registry.json
-*.gguf
-*.onnx
-*.safetensors
-*.bin
 
 
 # ---------------------------------------------------------

@@ -1,12 +1,27 @@
+> **SUPERSEDED / ARCHIVED**
+> This document has been archived and replaced by focused domain specifications in `docs/04_Architecture/`.
+> See `docs/07_Archive/reference/architecture-legacy/README.md` for the exact superseding canonical paths.
+
 # AI Companion — Runtime Configuration, Persistent Data & Asset Library Architecture
 
-> **Project:** AI Companion  
-> **Backend service:** Local AI Runtime  
-> **Document role:** Canonical architecture plan for naming, configuration, persistent data, model/voice assets, runtime modularity, character identity, and Phase 8 prerequisites  
-> **Target repository path:** `docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`  
-> **Status:** Active Canonical Architecture (Phase 8P Implemented; Decisions D1–D9 Locked)  
-> **Current implementation baseline:** Windows + `llama.cpp` b10936 Vulkan; current tested hardware is AMD RX 580 8 GB  
-> **Last updated:** 2026-09-20 (Reconciliation Pass R3)
+> **Project:** AI Companion
+> **Backend service:** Local AI Runtime
+> **Document role:** Phase 8P implementation reference and subordinate technical baseline (non-normative after R11.4)
+> **Target repository path:** `docs/07_Archive/reference/architecture-legacy/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`
+> **Status:** Subordinate Reference — primary normative authority transferred to `04_Infrastructure/` specifications
+> **Current implementation baseline:** Windows + `llama.cpp` b10936 Vulkan; current tested hardware is AMD RX 580 8 GB
+> **Authority Precedence:** Non-normative reference material. See [`SYSTEM_BASELINE.md`](../../../04_Architecture/SYSTEM_BASELINE.md) and focused infrastructure specifications for canonical requirements.
+
+> [!WARNING]
+> **Authority Transfer & Legacy Status Notice (Pass R11.4):**
+> This document is no longer the primary normative architecture specification for general runtime configuration, models, asset storage, host integration, backup/recovery, or performance. Primary normative authority has transferred to focused canonical specifications:
+> - [`docs/04_Architecture/04_Infrastructure/storage-and-assets.md`](../../../04_Architecture/04_Infrastructure/storage-and-assets.md) (Storage Layout, Asset Registry, Phase 8P Contracts)
+> - [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](../../../04_Architecture/04_Infrastructure/runtime-and-models.md) (Decision D6: Local AI Runtime & Generative Model Architecture)
+> - [`docs/04_Architecture/04_Infrastructure/windows-host-and-notifications.md`](../../../04_Architecture/04_Infrastructure/windows-host-and-notifications.md) (Decision D2: Windows Host Integration)
+> - [`docs/04_Architecture/04_Infrastructure/backup-recovery-and-diagnostics.md`](../../../04_Architecture/04_Infrastructure/backup-recovery-and-diagnostics.md) (Backup, Recovery & Diagnostics)
+> - [`docs/04_Architecture/04_Infrastructure/performance-and-capacity.md`](../../../04_Architecture/04_Infrastructure/performance-and-capacity.md) (Principle P23: Resource Governance)
+>
+> Top-level cross-cutting product decisions and release boundaries are governed by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../../04_Architecture/SYSTEM_BASELINE.md). Implemented reality remains authoritative in source code and test suites. Detailed Phase 8P technical specifications and asset contracts retained below remain valuable implementation and verification reference material.
 
 ---
 
@@ -39,7 +54,7 @@ Following the completion and verification of Phase 8P:
 #### Planned / Not Yet Implemented:
 - **Controlled Local Importer Service (V1 Implementation Gap):** The managed local model import pipeline (inbox → preflight → staging → atomic install → library → registry; Decision D6) is an architectural **requirement for V1**. While storage paths and registry schemas are implemented, the active execution service is not yet built.
 - **Managed Online Download Manager (Post-V1):** In-app network downloading, background acquisition, and online model hub integrations (e.g., Hugging Face browsing) are deferred post-V1.
-- **Future Asset Persistence:** Persistent voice assets, backend character persistence tables, and multimodal image attachment tables (Phase 8B) remain to be implemented.
+- **Future Asset Persistence:** Persistent voice assets and backend character persistence tables remain to be implemented. Multimodal image attachment persistence (Migration 006, Attachment ORM, secure APIs, transactional message binding, media resolver, and composer upload staging) is implemented and verified in Phase 8B.0–8B.6; persistent history message image rendering (Slice 8B.7) is NEXT / UNBLOCKED, while full integration and phase closure (Slice 8B.8) remains PLANNED.
 
 The Phase 8 sequence is:
 
@@ -48,9 +63,9 @@ The Phase 8 sequence is:
         ↓
 8P — Runtime Configuration & Persistent Asset Foundation [COMPLETE / VERIFIED]
         ↓
-8B — Multimodal Image Attachments                     [PLANNED / NEXT AFTER RECONCILIATION]
+8B — Multimodal Image Attachments                   [IN PROGRESS — 8B.0–8B.6 COMPLETE / VERIFIED; 8B.7 NEXT]
         ↓
-8C — Integration, Accessibility & Polish             [PLANNED]
+8C — Integration, Accessibility & Polish             [PLANNED / BLOCKED BY 8B]
 ```
 
 ---
@@ -1528,19 +1543,25 @@ legacy path migration strategy
 
 ## 8B — Multimodal Image Attachments
 
-Builds on 8P:
+Builds on 8P (In Progress — Slices 8B.0–8B.6 Complete / Verified; Slice 8B.7 Next):
 
-```text
-attachment DB migration
-filesystem image persistence
-image validation
-attachment lifecycle
-provider-independent image blocks
-llama.cpp translation
-authenticated previews
-conversation-history restoration
-vision-capability gating
-```
+Implemented and verified in 8B.0–8B.6:
+- Database migration `006_add_attachments` and Attachment ORM model
+- Filesystem image persistence with canonical path containment
+- Pillow-backed fail-fast image validation (PNG/JPEG signatures, dimensions, megapixel budget, decompression bomb protection)
+- Attachment lifecycle (selected → uploading → staged → committed → soft_deleted)
+- Route-specific request body ceiling (12 MiB multipart envelope, 10 MiB payload)
+- Secure API endpoints: `POST /conversations/{id}/attachments`, `GET .../preview`, `DELETE .../{attachment_id}`
+- Atomic pre-stream turn preparation transaction with conditional attachment claiming and automatic rollback
+- Provider-independent multimodal blocks (`TextContent`, `ImageAttachmentRef`, `ResolvedImageContent`)
+- Asynchronous `media_resolver` with BOLA security checks
+- OpenAI-compatible `image_url` data URI translation in `llama_cpp.py`
+- Truthful vision capability gating via `available_capabilities`
+- React Web composer attachment staging with authenticated Blob previews, staged removal, and limit enforcement
+
+Pending implementation in remaining 8B slices:
+- Slice 8B.7: Persistent message attachment rendering in conversation history with Blob caching and unmount object URL cleanup (NEXT / UNBLOCKED)
+- Slice 8B.8: Full integration verification and phase closure (PLANNED)
 
 ## 8C — Integration, Accessibility & Polish
 
@@ -1701,7 +1722,7 @@ configuration
 registered assets
 ```
 
-8B will later extend this acceptance path to image attachments.
+Phase 8B.0–8B.6 implements the persistence foundation, validation, and staging APIs; Slice 8B.7 (NEXT / UNBLOCKED) and Slice 8B.8 (PLANNED) will complete this acceptance path with persistent conversation-history image restoration and full lifecycle closure.
 
 ---
 

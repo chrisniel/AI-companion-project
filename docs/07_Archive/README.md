@@ -25,3 +25,5 @@
 | [`reviews/`](./reviews/) | Point-in-Time Reviews | Historical reviews and point-in-time hardening audits (e.g., `BACKEND_SECURITY_REVIEW_AND_ROADMAP.md`). |
 | [`drafts/`](./drafts/) | Reconciled Early Drafts | Early feature inventories, runtime drafts, and exploratory notes reconciled in Pass R0–R4. |
 | [`audits/`](./audits/) | Forensic Audits | Comprehensive reconciliation audits and diagnostic inventories (e.g., `REPOSITORY_DOCUMENTATION_RECONCILIATION_AUDIT.md`). |
+
+- **[Legacy Architecture Documents](reference/architecture-legacy/README.md)**: Contains the six superseded monolithic architecture files. They are historical/subordinate technical references and are ignored during normal AI startup. Canonical authority lives in `SYSTEM_BASELINE.md` and the focused domain specifications.
