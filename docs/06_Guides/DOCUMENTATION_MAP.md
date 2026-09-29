@@ -114,7 +114,7 @@ The following documents exist for historical, forensic, or template purposes and
    Completed sprint checklists preserved for tracking continuity only.
 6. **Starter Reference (`docs/ProjectWorkflowStarterKit/*`)**
    Reusable workflow templates, not active project documentation.
-7. **Legacy Monolithic Architecture Specifications (`docs/04_Architecture/*.md`)**
+7. **Legacy Monolithic Architecture Specifications (`docs/07_Archive/reference/architecture-legacy/*.md`)**
    The six legacy monolithic architecture documents:
    - [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md)
    - [`ANDROID_COMPANION_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/ANDROID_COMPANION_ARCHITECTURE.md)
