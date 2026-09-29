@@ -12,8 +12,8 @@ develop (verified baseline: 321 backend pytest, 185 frontend vitest, 124 Android
   +-- feature/phase8-ui-foundation           (8A: COMPLETE / VERIFIED — merged to develop)
   +-- feature/phase8-runtime-config          (8P: COMPLETE / VERIFIED — merged to develop)
   +-- [GATE: Documentation Reconciliation]   (R0–R13.2: COMPLETE / VERIFIED — Phase 8B unblocked)
-  +-- feature/multimodal-image-attachments   (8B: IN PROGRESS — full stack image upload & vision inference)
-        based on develop; merge to develop
+  +-- [8B.0–8B.6 Foundation]                 (COMPLETE / VERIFIED — merged via PR #13)
+  +-- [8B.7: Persistent Attachment Rendering] (NEXT / UNBLOCKED — branch not yet created)
   +-- feature/phase8-ui-integration-polish   (8C: PLANNED AFTER 8B — polish, a11y, cleanup)
         based on merged 8B
 

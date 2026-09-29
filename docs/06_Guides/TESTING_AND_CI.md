@@ -22,7 +22,7 @@ The AI Companion project maintains a strict test-first verification discipline. 
 | **Backend** | `pytest` + `httpx` + `pytest-asyncio` | `backend/tests/` | **321 passed** (Merged `develop` / CI #25, 2026-09-29) | Fast REST/SSE endpoints, memory, tasks, storage, models, auth, attachments, media resolver |
 | **Frontend** | `vitest` + React Testing Library | `frontend/web/src/` | **185 passed across 9 files** (Merged `develop` / CI #25, 2026-09-29) | Components, hooks, state, navigation, controls, soft-glass rendering, composer attachments |
 | **Android** | `JUnit4` + `Robolectric` + `Roborazzi` + `kotlinx-coroutines-test` | `android/app/src/test/` | **124 passed** (Pass R8, 2026-09-21) | ViewModels, repository contracts, MVI state flow, Compose UI components, screenshot regression |
-| **Contract** | Python drift detection script | `contracts/openapi/` | **Synchronized (22 routes, zero drift)** (Merged `develop` / CI #23, 2026-09-25) | OpenAPI 3.1 schema equality between FastAPI routes and committed spec |
+| **Contract** | Python drift detection script | `contracts/openapi/` | **Synchronized (22 routes, zero drift)** (Merged `develop` / CI #25, 2026-09-29) | OpenAPI 3.1 schema equality between FastAPI routes and committed spec |
 
 ### Verification Hierarchy: Automated CI vs. Golden Acceptance Gate
 The project distinguishes two complementary verification tiers:
