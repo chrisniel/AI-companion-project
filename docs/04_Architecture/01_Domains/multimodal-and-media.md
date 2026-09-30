@@ -96,7 +96,7 @@ Verified in frontend components and API contracts:
 - **Async Blob Lifecycle Safety:** Blob URLs are owned by the preview renderer and securely revoked on ordinary component unmount/identity change, and immediately if the async fetch resolves after the component has already been disposed.
 - **Conversation Switching:** Switching conversations removes stale attachment UI, revokes the old URL lifecycle, and safely fetches/renders attachments for the newly active conversation.
 
-### 3.6 Explicitly Unimplemented Capabilities
+### 3.6 Non-Gating / Deferred Verification
 
 - **Live Hardware Vision Benchmarks:** Live RX 580 vision inference latency benchmarks are historical reference data, not a gating closure requirement.
 
