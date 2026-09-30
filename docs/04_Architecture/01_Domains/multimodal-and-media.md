@@ -25,8 +25,8 @@ It governs the secure handling of binary visual inputs from user upload to model
 
 Multimodal vision understanding is governed by the approved Phase 8B delivery roadmap:
 - **Slices 8B.0–8B.6:** `COMPLETE / VERIFIED / MERGED` into verified `develop` baseline (`4b2f5fe3aa2a302b825408073d1b135bf2ff92e1`).
-- **Slice 8B.7 (Persistent Message Attachment Rendering):** `IMPLEMENTED / CLOSURE PENDING` (Implementation has passed the independent Implementation Gate; final Documentation Gate / Closure is still pending).
-- **Slice 8B.8 (Full Integration & Phase Closure):** `PLANNED`.
+- **Slice 8B.7 (Persistent Message Attachment Rendering):** `COMPLETE / VERIFIED`.
+- **Slice 8B.8 (Full Integration & Phase Closure):** `NEXT / UNBLOCKED`.
 - **Phase 8B Overall:** `IN PROGRESS`.
 
 ### 2.2 Approved Scope vs. Non-Image Media
