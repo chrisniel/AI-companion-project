@@ -202,7 +202,7 @@ AI Companion **V1** (unqualified) is strictly defined as the first complete, sta
    - *Implementation Status:* Schema v3 registry and model metadata baseline verified; import execution service is an approved PC V1 gap.
    - *Delivery Band:* Foundation Band (Host & Runtime Lane).
 8. **Multimodal Vision Understanding:** Phase 8B image attachment API, upload validation guards (MIME, dimension, megapixel, bomb guards), and vision-model inference.
-   - *Implementation Status:* Current In-Flight Phase 8B (8B.0–8B.7 verified, 8B.8 next/unblocked); completion is a Final Acceptance Dependency for PC V1.
+   - *Implementation Status:* Current In-Flight Phase 8B (8B.0–8B.7 verified, 8B.8 verification passed/pending review); completion is a Final Acceptance Dependency for PC V1.
    - *Delivery Band:* Current In-Flight Phase 8B.
 9. **Phase 8C Integration, Accessibility & Polish:** Comprehensive keyboard navigation, ARIA accessibility, bundle optimization, UI consistency, elimination of deprecated mock files, and responsive desktop web cleanup.
    - *Implementation Status:* Planned / hard-depends on Phase 8B; completion is a Final Acceptance Dependency for PC V1.

@@ -98,7 +98,7 @@ Verified in frontend components and API contracts:
 
 ### 3.6 Explicitly Unimplemented Capabilities
 
-- **Integration Test Closure (Slice 8B.8):** `NEXT / UNBLOCKED`.
+- **Integration Test Closure (Slice 8B.8):** `VERIFICATION PASSED / PENDING CLOSURE REVIEW`.
 - **Live Hardware Vision Benchmarks:** Live RX 580 vision inference latency benchmarks are historical reference data, not a gating closure requirement.
 
 ---
