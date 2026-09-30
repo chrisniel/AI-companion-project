@@ -26,8 +26,8 @@ It governs the secure handling of binary visual inputs from user upload to model
 Multimodal vision understanding is governed by the approved Phase 8B delivery roadmap:
 - **Slices 8B.0–8B.6:** `COMPLETE / VERIFIED / MERGED` into verified `develop` baseline (`4b2f5fe3aa2a302b825408073d1b135bf2ff92e1`).
 - **Slice 8B.7 (Persistent Message Attachment Rendering):** `COMPLETE / VERIFIED`.
-- **Slice 8B.8 (Full Integration & Phase Closure):** `NEXT / UNBLOCKED`.
-- **Phase 8B Overall:** `IN PROGRESS`.
+- **Slice 8B.8 (Full Integration & Phase Closure):** `COMPLETE / VERIFIED`.
+- **Phase 8B Overall:** `COMPLETE / VERIFIED`.
 
 ### 2.2 Approved Scope vs. Non-Image Media
 
@@ -96,16 +96,15 @@ Verified in frontend components and API contracts:
 - **Async Blob Lifecycle Safety:** Blob URLs are owned by the preview renderer and securely revoked on ordinary component unmount/identity change, and immediately if the async fetch resolves after the component has already been disposed.
 - **Conversation Switching:** Switching conversations removes stale attachment UI, revokes the old URL lifecycle, and safely fetches/renders attachments for the newly active conversation.
 
-### 3.6 Explicitly Unimplemented Capabilities
+### 3.6 Non-Gating / Deferred Verification
 
-- **Integration Test Closure (Slice 8B.8):** `NEXT / UNBLOCKED`.
 - **Live Hardware Vision Benchmarks:** Live RX 580 vision inference latency benchmarks are historical reference data, not a gating closure requirement.
 
 ---
 
-## 4. Approved Target Architecture / Not Yet Implemented
+## 4. Phase 8B Closure Requirements
 
-The following target capabilities are approved under Phase 8B:
+The following Phase 8B closure requirements were verified in Slice 8B.8:
 
 1. **Phase 8B Full Integration Closure (Slice 8B.8 / PC V1):**
    - Final Phase 8B integration and closure verification across the repository baseline, including:

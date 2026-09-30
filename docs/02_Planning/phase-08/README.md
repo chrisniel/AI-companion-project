@@ -9,8 +9,8 @@ This directory contains the authoritative implementation planning and navigation
 | **8A** | Frontend Architecture & UX Harmonization | `feature/phase8-ui-foundation` | **COMPLETE / VERIFIED** (Mock removal, decomposition, truthfulness sweep, deprecation annotations) |
 | **8P** | Runtime Configuration & Persistent Asset Foundation | `feature/phase8-runtime-config` | **COMPLETE / VERIFIED** (Terminology reconciliation, `COMPANION_DATA_ROOT`, bootstrap locator, Model Registry Schema v3, atomic migrations) |
 | **R0–R13.2** | Repository Documentation Reconciliation | Multiple passes / final PR #14 integration | **COMPLETE / VERIFIED** (Full audit, baseline lock, documentation routing, verified test suites) |
-| **8B** | Multimodal Image Attachment Foundation | Foundation merged via PR #13; 8B.7 complete | **IN PROGRESS** (8B.0–8B.7 COMPLETE / VERIFIED; 8B.8 NEXT / UNBLOCKED) |
-| **8C** | Integration, Accessibility & Polish | `feature/phase8-ui-integration-polish` | **PLANNED AFTER 8B** (Dead mock deletion, bundle code-splitting, a11y, regression verification) |
+| **8B** | Multimodal Image Attachment Foundation | 8B.8 closure complete | **COMPLETE / VERIFIED** (8B.0–8B.8) |
+| **8C** | Integration, Accessibility & Polish | `feature/phase8-ui-integration-polish` | **NEXT / UNBLOCKED** (Dead mock deletion, bundle code-splitting, a11y, regression verification) |
 
 ---
 
