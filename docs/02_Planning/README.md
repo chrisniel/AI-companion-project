@@ -22,7 +22,7 @@ The plans below represent active engineering hubs and approved implementation pl
 
 | Document Path | Title / Focus Area | Current Classification | Scope & Gate Status | Canonical Authority |
 | :--- | :--- | :--- | :--- | :--- |
-| [`phase-08/README.md`](./phase-08/README.md) | Phase 8 Planning Hub | **`ACTIVE / CURRENT`** | Active hub for Phase 8. 8A & 8P complete; R0–R13.2 reconciliation complete & verified; 8B in progress (8B.0–8B.6 complete/verified, 8B.7 next, 8B.8 planned); 8C planned/blocked. | Authoritative Phase 8 hub. |
+| [`phase-08/README.md`](./phase-08/README.md) | Phase 8 Planning Hub | **`ACTIVE / CURRENT`** | Active hub for Phase 8. 8A & 8P complete; R0–R13.2 reconciliation complete & verified; 8B in progress (8B.0–8B.7 complete/verified, 8B.8 next/unblocked); 8C planned/blocked. | Authoritative Phase 8 hub. |
 | [`phase-08/plan-phase8-pc-frontend-architecture-ux.md`](./phase-08/plan-phase8-pc-frontend-architecture-ux.md) | Phase 8 Architecture & Multimodal Plan | **`ACTIVE / CURRENT`** | 8A, 8P, and 8B.0–8B.6 verified; owns execution steps for remaining 8B slices (8B.7 history rendering, 8B.8 closure) and 8C (Polish). | Authoritative feature plan for 8B and 8C. |
 
 ---

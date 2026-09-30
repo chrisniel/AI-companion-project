@@ -1,6 +1,6 @@
 # Phase 8 Implementation Plan — PC Frontend Architecture, Runtime Config, Multimodal & Polish
 
-> **Status:** 8A and 8P COMPLETE / VERIFIED. Repository Documentation Reconciliation (Passes R0–R13.2) is COMPLETE / VERIFIED. Phase 8B is IN PROGRESS (Slice 8B.6 COMPLETE / VERIFIED; Slice 8B.7 NEXT / UNBLOCKED). 8C is PLANNED AFTER 8B.
+> **Status:** 8A and 8P COMPLETE / VERIFIED. Repository Documentation Reconciliation (Passes R0–R13.2) is COMPLETE / VERIFIED. Phase 8B is IN PROGRESS (Slices 8B.0–8B.7 COMPLETE / VERIFIED; Slice 8B.8 NEXT / UNBLOCKED). 8C is PLANNED AFTER 8B.
 > **Authority Precedence:** Normative architecture is owned by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md). Canonical product sequencing is owned by [`docs/02_Planning/ROADMAP.md`](../ROADMAP.md). Runtime config architecture is owned by [`docs/04_Architecture/04_Infrastructure/storage-and-assets.md`](../../04_Architecture/04_Infrastructure/storage-and-assets.md) and [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](../../04_Architecture/04_Infrastructure/runtime-and-models.md).  
 > **This is the single authoritative feature implementation plan for Phase 8.**
 
@@ -13,7 +13,7 @@ develop (verified baseline: 321 backend pytest, 185 frontend vitest, 124 Android
   +-- feature/phase8-runtime-config          (8P: COMPLETE / VERIFIED — merged to develop)
   +-- [GATE: Documentation Reconciliation]   (R0–R13.2: COMPLETE / VERIFIED — Phase 8B unblocked)
   +-- [8B.0–8B.6 Foundation]                 (COMPLETE / VERIFIED — merged via PR #13)
-  +-- [8B.7: Persistent Attachment Rendering] (NEXT / UNBLOCKED — branch not yet created)
+  +-- [8B.7: Persistent Attachment Rendering] (COMPLETE / VERIFIED)
   +-- feature/phase8-ui-integration-polish   (8C: PLANNED AFTER 8B — polish, a11y, cleanup)
         based on merged 8B
 

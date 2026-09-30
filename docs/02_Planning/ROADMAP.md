@@ -53,7 +53,7 @@ Roadmap tracking separates **Release Allocation** (which product milestone owns 
               │
 [Reconciliation Passes R0–R13] ────► COMPLETE / VERIFIED
               │
-[Phase 8B: Multimodal Vision] ─────► IN PROGRESS (8B.0–8B.6 VERIFIED; 8B.7 NEXT)
+[Phase 8B: Multimodal Vision] ─────► IN PROGRESS (8B.0–8B.7 VERIFIED; 8B.8 NEXT)
               │
 [Phase 8C: Integration & Polish] ──► PC V1 (BLOCKED BY 8B)
               │
@@ -81,8 +81,8 @@ Roadmap tracking separates **Release Allocation** (which product milestone owns 
 
 ### 2.2 Immediate Next Milestone
 - **Phase 8B — Multimodal Image Attachment Foundation (`IN PROGRESS`):**
-  - *Current Status:* Slices 8B.0–8B.6 are COMPLETE and VERIFIED. Slice 8B.7 (Persistent Message Attachment Rendering) is NEXT / UNBLOCKED (R0–R13.2 reconciliation is complete; 8B.7 is the immediate next engineering slice). Slice 8B.8 (Full Integration & Phase Closure) is PLANNED. Phase 8B as a whole is NOT yet complete.
-  - *Next Slice Scope (8B.7):* Add `AttachmentRef` to frontend types and `AssistantMessage`, extend `ConversationMessageItem` with authenticated Blob preview fetching and `URL.revokeObjectURL()` cleanup, connect message history loading in `AssistantView`, and verify persistence across reload.
+  - *Current Status:* Slices 8B.0–8B.7 are COMPLETE and VERIFIED. Slice 8B.8 (Full Integration & Phase Closure) is NEXT / UNBLOCKED. Phase 8B as a whole is NOT yet complete.
+  - *Next Slice Scope (8B.8):* Final Phase 8B integration and closure verification across the repository baseline (backend, frontend, test suites, TypeScript, OpenAPI schema, etc.).
   - *Authoritative Feature Plan:* [`phase-08/plan-phase8-pc-frontend-architecture-ux.md`](./phase-08/plan-phase8-pc-frontend-architecture-ux.md).
 
 ### 2.3 Remaining PC V1 Delivery Milestones
@@ -202,7 +202,7 @@ AI Companion **V1** (unqualified) is strictly defined as the first complete, sta
    - *Implementation Status:* Schema v3 registry and model metadata baseline verified; import execution service is an approved PC V1 gap.
    - *Delivery Band:* Foundation Band (Host & Runtime Lane).
 8. **Multimodal Vision Understanding:** Phase 8B image attachment API, upload validation guards (MIME, dimension, megapixel, bomb guards), and vision-model inference.
-   - *Implementation Status:* Current In-Flight Phase 8B (8B.0–8B.6 verified, 8B.7 next, 8B.8 planned); completion is a Final Acceptance Dependency for PC V1.
+   - *Implementation Status:* Current In-Flight Phase 8B (8B.0–8B.7 verified, 8B.8 next/unblocked); completion is a Final Acceptance Dependency for PC V1.
    - *Delivery Band:* Current In-Flight Phase 8B.
 9. **Phase 8C Integration, Accessibility & Polish:** Comprehensive keyboard navigation, ARIA accessibility, bundle optimization, UI consistency, elimination of deprecated mock files, and responsive desktop web cleanup.
    - *Implementation Status:* Planned / hard-depends on Phase 8B; completion is a Final Acceptance Dependency for PC V1.

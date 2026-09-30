@@ -25,8 +25,8 @@ It governs the secure handling of binary visual inputs from user upload to model
 
 Multimodal vision understanding is governed by the approved Phase 8B delivery roadmap:
 - **Slices 8B.0–8B.6:** `COMPLETE / VERIFIED / MERGED` into verified `develop` baseline (`4b2f5fe3aa2a302b825408073d1b135bf2ff92e1`).
-- **Slice 8B.7 (Persistent Message Attachment Rendering):** `NEXT / UNBLOCKED` (paused strictly during documentation reconciliation).
-- **Slice 8B.8 (Full Integration & Phase Closure):** `PLANNED`.
+- **Slice 8B.7 (Persistent Message Attachment Rendering):** `COMPLETE / VERIFIED`.
+- **Slice 8B.8 (Full Integration & Phase Closure):** `NEXT / UNBLOCKED`.
 - **Phase 8B Overall:** `IN PROGRESS`.
 
 ### 2.2 Approved Scope vs. Non-Image Media
@@ -79,16 +79,26 @@ Verified in `backend/app/services/attachment_service.py` and `app.services.llm`:
 
 ### 3.4 Frontend Composer & Previews
 
-Verified in `frontend/web/src/components/chat/`:
-- **Staging Bar:** `AttachmentStagingBar` renders thumbnails of staged uploads with individual remove buttons.
-- **Authenticated Previews:** Fetches binary data via authenticated API client and generates secure Object URLs (`URL.createObjectURL(blob)`).
+Verified in `frontend/web/src/components/workspace/AssistantView.tsx`, `frontend/web/src/components/workspace/assistant/AssistantComposer.tsx`, and `frontend/web/src/services/api/attachmentApi.ts`:
+- **Staged Attachment Strip:** `AssistantComposer` renders staged attachment preview cards with individual remove controls.
+- **Authenticated Previews:** `AssistantView` obtains authenticated Blob preview URLs through `fetchAttachmentBlobUrl` in `attachmentApi.ts`, and `AssistantComposer` renders those in-memory preview URLs.
 - **Cleanup Guarantees:** Revokes Object URLs on component unmount to prevent browser memory leaks.
 - **Transition Locks:** Disables file input during message streaming or active uploads.
 
-### 3.5 Explicitly Unimplemented Capabilities
+### 3.5 Persistent Message Attachment Rendering
 
-- **Frontend Conversation History Rendering (Slice 8B.7):** `NOT IMPLEMENTED YET`. Historical message bubbles do not yet render attached images; rendering is currently implemented only in the staging composer bar.
-- **Integration Test Closure (Slice 8B.8):** `PLANNED`.
+Verified in frontend components and API contracts:
+- **API Contract:** Frontend `MessageOut` carries the backend-guaranteed `AttachmentRef[]` history contract.
+- **State Mapping:** `AssistantView` maps persisted attachments into the `AssistantMessage` state.
+- **History Rendering:** Persisted user-message attachments render directly within the conversation history.
+- **Authenticated Previews:** Previews use authenticated Blob fetching rather than direct `<img>` requests to protected endpoints.
+- **Fail-Closed MIME Validation:** Preview rendering is fail-closed to the canonical PNG/JPEG MIME allowlist. Unsupported MIME types do not initiate preview fetches.
+- **Async Blob Lifecycle Safety:** Blob URLs are owned by the preview renderer and securely revoked on ordinary component unmount/identity change, and immediately if the async fetch resolves after the component has already been disposed.
+- **Conversation Switching:** Switching conversations removes stale attachment UI, revokes the old URL lifecycle, and safely fetches/renders attachments for the newly active conversation.
+
+### 3.6 Explicitly Unimplemented Capabilities
+
+- **Integration Test Closure (Slice 8B.8):** `NEXT / UNBLOCKED`.
 - **Live Hardware Vision Benchmarks:** Live RX 580 vision inference latency benchmarks are historical reference data, not a gating closure requirement.
 
 ---
@@ -97,12 +107,7 @@ Verified in `frontend/web/src/components/chat/`:
 
 The following target capabilities are approved under Phase 8B:
 
-1. **Persistent Message Attachment Rendering (Slice 8B.7 / PC V1):**
-   - Frontend `AttachmentRef` propagation and persistent user-message attachment rendering in conversation history.
-   - Authenticated history Blob fetching with persistence across page reload and conversation switching.
-   - Client-side Blob URL caching and revocation/cleanup.
-   *(Note: High-resolution preview modals, pan/zoom interactions, or exact thumbnail card UI layouts belong to open design / design specification rather than locked architectural gates.)*
-2. **Phase 8B Full Integration Closure (Slice 8B.8 / PC V1):**
+1. **Phase 8B Full Integration Closure (Slice 8B.8 / PC V1):**
    - Final Phase 8B integration and closure verification across the repository baseline, including:
      - Full backend test suite execution and verification.
      - Full frontend test suite execution and verification.

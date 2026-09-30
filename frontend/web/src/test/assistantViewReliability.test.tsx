@@ -49,7 +49,7 @@ vi.mock('../services/api', async () => {
           content: 'Hello Aura',
           status: 'completed',
           sequence_no: 1,
-          created_at: '2026-09-14T00:01:00Z',
+          created_at: '2026-09-14T00:01:00Z', attachments: []
         },
         {
           id: 'msg-existing-2',
@@ -58,7 +58,7 @@ vi.mock('../services/api', async () => {
           content: 'Good morning Chris, ready to assist.',
           status: 'completed',
           sequence_no: 2,
-          created_at: '2026-09-14T00:01:05Z',
+          created_at: '2026-09-14T00:01:05Z', attachments: []
         },
       ],
       total: 2,
@@ -817,7 +817,7 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
                   content: 'Message from Session Alpha',
                   status: 'completed',
                   sequence_no: 1,
-                  created_at: '2026-09-14T00:01:00Z',
+                  created_at: '2026-09-14T00:01:00Z', attachments: []
                 },
               ],
               total: 1,
@@ -900,7 +900,7 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
                 content: 'Message from Session B',
                 status: 'completed',
                 sequence_no: 1,
-                created_at: '2026-09-14T01:05:00Z',
+                created_at: '2026-09-14T01:05:00Z', attachments: []
               },
             ],
             total: 1,
@@ -922,7 +922,7 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
                 content: 'Message from Session A (STALE)',
                 status: 'completed',
                 sequence_no: 1,
-                created_at: '2026-09-14T00:05:00Z',
+                created_at: '2026-09-14T00:05:00Z', attachments: []
               },
             ],
             total: 1,
@@ -985,7 +985,7 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
                   content: 'Message from Session B',
                   status: 'completed',
                   sequence_no: 1,
-                  created_at: '2026-09-14T01:05:00Z',
+                  created_at: '2026-09-14T01:05:00Z', attachments: []
                 },
               ],
               total: 1,
@@ -1103,7 +1103,7 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
                 content: 'Message from Session B',
                 status: 'completed',
                 sequence_no: 1,
-                created_at: '2026-09-14T01:05:00Z',
+                created_at: '2026-09-14T01:05:00Z', attachments: []
               },
             ],
             total: 1,
