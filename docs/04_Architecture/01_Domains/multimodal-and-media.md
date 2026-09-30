@@ -98,14 +98,13 @@ Verified in frontend components and API contracts:
 
 ### 3.6 Explicitly Unimplemented Capabilities
 
-- **Integration Test Closure (Slice 8B.8):** `COMPLETE / VERIFIED`.
 - **Live Hardware Vision Benchmarks:** Live RX 580 vision inference latency benchmarks are historical reference data, not a gating closure requirement.
 
 ---
 
-## 4. Approved Target Architecture / Not Yet Implemented
+## 4. Phase 8B Closure Requirements
 
-The following target capabilities are approved under Phase 8B:
+The following Phase 8B closure requirements were verified in Slice 8B.8:
 
 1. **Phase 8B Full Integration Closure (Slice 8B.8 / PC V1):**
    - Final Phase 8B integration and closure verification across the repository baseline, including:
