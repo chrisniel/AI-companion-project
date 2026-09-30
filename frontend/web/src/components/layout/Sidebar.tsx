@@ -35,14 +35,12 @@ export const NAV_ITEMS: NavItem[] = [
     id: 'assistant',
     label: 'Assistant',
     icon: <Bot className="w-5 h-5" />,
-    badge: 'Neural',
     category: 'MAIN',
   },
   {
     id: 'tasks',
     label: 'Tasks',
     icon: <CheckSquare className="w-5 h-5" />,
-    badge: '3',
     category: 'MAIN',
   },
   {
@@ -69,7 +67,6 @@ export const NAV_ITEMS: NavItem[] = [
     id: 'models',
     label: 'Models',
     icon: <Cpu className="w-5 h-5" />,
-    badge: 'Loaded',
     category: 'AI',
   },
   {
@@ -90,7 +87,6 @@ export const NAV_ITEMS: NavItem[] = [
     id: 'logs',
     label: 'Logs',
     icon: <Terminal className="w-5 h-5" />,
-    badge: 'Live',
     category: 'SYSTEM',
   },
   {

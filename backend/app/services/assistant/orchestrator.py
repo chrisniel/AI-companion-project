@@ -15,9 +15,10 @@ import uuid
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import settings
+from app.db.session import get_session_factory
 from app.models.attachment import Attachment
 from app.models.conversation import Conversation
 from app.models.memory import Memory
@@ -236,7 +237,35 @@ async def prepare_turn(
             await db.rollback()
             raise
 
-    raise RuntimeError(f"Failed to allocate message sequence after {max_seq_retries} attempts")
+async def _persist_terminal_assistant_status(
+    assistant_msg_id: str,
+    status: str,
+    content: Optional[str] = None,
+    engine: Any = None,
+) -> None:
+    """
+    Safely persist assistant terminal status (cancelled / failed) in an isolated session.
+    Using a dedicated session prevents cancellation of the request stream or disconnection
+    from corrupting the request-scoped session or leaving unhandled connection pool errors.
+    """
+    try:
+        if engine is not None:
+            factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+        else:
+            factory = get_session_factory()
+        async with factory() as session:
+            stmt = select(Message).where(Message.id == assistant_msg_id)
+            res = await session.execute(stmt)
+            msg = res.scalar_one_or_none()
+            if msg:
+                msg.status = status
+                if content is not None:
+                    msg.content = content
+                await session.commit()
+    except Exception as exc:
+        logger.warning(
+            f"Failed to persist terminal status '{status}' for assistant message {assistant_msg_id}: {exc}"
+        )
 
 
 async def orchestrate_chat_stream(
@@ -372,22 +401,56 @@ async def orchestrate_chat_stream(
         asst_msg.status = "cancelled"
         if full_response_text:
             asst_msg.content = full_response_text
+
+        committed = False
         try:
-            await db.commit()
+            if db.is_active:
+                await db.commit()
+                committed = True
         except Exception as db_err:
-            logger.warning(f"Failed to commit cancellation status: {db_err}")
-            await db.rollback()
+            logger.warning(f"Failed to commit cancellation on request session: {db_err}")
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+
+        if not committed:
+            await asyncio.shield(
+                _persist_terminal_assistant_status(
+                    assistant_msg_id=asst_msg.id,
+                    status="cancelled",
+                    content=full_response_text if full_response_text else None,
+                    engine=db.bind,
+                )
+            )
         raise
     except Exception as exc:
         logger.error(f"Error during assistant orchestration stream: {exc}")
         asst_msg.status = "failed"
         if full_response_text:
             asst_msg.content = full_response_text
+
+        committed = False
         try:
-            await db.commit()
+            if db.is_active:
+                await db.commit()
+                committed = True
         except Exception as db_err:
-            logger.warning(f"Failed to commit failure status: {db_err}")
-            await db.rollback()
+            logger.warning(f"Failed to commit failure status on request session: {db_err}")
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+
+        if not committed:
+            await asyncio.shield(
+                _persist_terminal_assistant_status(
+                    assistant_msg_id=asst_msg.id,
+                    status="failed",
+                    content=full_response_text if full_response_text else None,
+                    engine=db.bind,
+                )
+            )
         error_payload = json.dumps({
             "type": "error",
             "code": "MODEL_GENERATION_FAILED",

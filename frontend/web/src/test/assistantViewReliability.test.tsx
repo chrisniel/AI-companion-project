@@ -497,7 +497,7 @@ describe('Phase 5: Assistant Web UI & SSE Stream Reliability', () => {
 
       // The placeholder bubble was not left blank; it was replaced with stopped notice
       await waitFor(() => {
-        expect(screen.getByText(/\*\[Generation stopped by user\]\*/)).toBeInTheDocument();
+        expect(screen.getByText(/\[Generation stopped by user\]/)).toBeInTheDocument();
         expect(screen.getByText(/\[USER_CANCELLED\]/)).toBeInTheDocument();
       });
     });

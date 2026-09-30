@@ -7,12 +7,17 @@ import path from 'path';
 import { ThemeProvider, ACCENT_PRESETS } from '../context/ThemeContext';
 import { BackendProvider } from '../context/BackendContext';
 import { Header } from '../components/layout/Header';
-import { Sidebar } from '../components/layout/Sidebar';
+import { Sidebar, NAV_ITEMS } from '../components/layout/Sidebar';
 import { DevicesView } from '../components/workspace/DevicesView';
 import { AssistantView } from '../components/workspace/AssistantView';
 import { AppearanceSection } from '../components/workspace/settings/AppearanceSection';
 import { SettingsView } from '../components/workspace/SettingsView';
+import { GlobalComposer } from '../components/workspace/GlobalComposer';
+import { ConversationMessageItem } from '../components/workspace/ConversationMessageItem';
+import { AssistantMarkdownRenderer } from '../components/workspace/assistant/AssistantMarkdownRenderer';
+import { getInitialActiveSection, WORKSPACE_STORAGE_KEY } from '../App';
 import * as api from '../services/api';
+import { AssistantMessage } from '../types';
 
 vi.mock('../services/api', async () => {
   const actual = await vi.importActual('../services/api');
@@ -26,6 +31,7 @@ vi.mock('../services/api', async () => {
     createConversation: vi.fn(),
     getMessages: vi.fn(),
     streamSendMessage: vi.fn(),
+    fetchAttachmentBlobUrl: vi.fn(),
     getApiBaseUrl: () => 'http://127.0.0.1:8000',
     getApiKey: () => '',
   };
@@ -304,6 +310,191 @@ describe('Phase 8C UI/UX Polish & Truthfulness Suite', () => {
 
       expect(content).not.toContain('Phase 8A.3b.2');
       expect(content).not.toContain('backend Tasks API');
+    });
+  });
+
+  describe('7. Sidebar Static Badge Removal', () => {
+    it('sidebar NAV_ITEMS contains no static non-authoritative badges for tasks, models, logs, or assistant', () => {
+      const tasksItem = NAV_ITEMS.find((item) => item.id === 'tasks');
+      const modelsItem = NAV_ITEMS.find((item) => item.id === 'models');
+      const logsItem = NAV_ITEMS.find((item) => item.id === 'logs');
+      const assistantItem = NAV_ITEMS.find((item) => item.id === 'assistant');
+
+      expect(tasksItem?.badge).toBeUndefined();
+      expect(modelsItem?.badge).toBeUndefined();
+      expect(logsItem?.badge).toBeUndefined();
+      expect(assistantItem?.badge).toBeUndefined();
+    });
+  });
+
+  describe('8. Global Assistant Launcher Compact & Non-expanding', () => {
+    it('GlobalComposer renders a stable compact launcher without expanding on hover', () => {
+      const onOpenAssistant = vi.fn();
+      render(<GlobalComposer activeCharacterName="Aura" onOpenAssistant={onOpenAssistant} />);
+
+      const button = screen.getByRole('button', { name: /Ask Aura/i });
+      expect(button).toBeInTheDocument();
+
+      fireEvent.click(button);
+      expect(onOpenAssistant).toHaveBeenCalledTimes(1);
+
+      fireEvent.keyDown(window, { key: '/' });
+      expect(onOpenAssistant).toHaveBeenCalledTimes(2);
+
+      // No expanding container with mock buttons
+      expect(screen.queryByTitle(/Image attachments/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('9. Image Lightbox & Modal Preview', () => {
+    it('renders clickable thumbnail that opens Modal lightbox and closes on Escape', async () => {
+      vi.mocked(api.fetchAttachmentBlobUrl).mockResolvedValue('blob:http://localhost/test-image');
+
+      const testAttachment: api.AttachmentRef = {
+        id: 'att-123',
+        filename_display: 'photo.png',
+        mime_type: 'image/png',
+        size_bytes: 4096,
+      };
+
+      const message: AssistantMessage = {
+        id: 'msg-user-1',
+        type: 'user',
+        content: 'Here is my photo',
+        timestamp: '10:00 AM',
+        attachments: [testAttachment],
+      };
+
+      render(
+        <ConversationMessageItem
+          message={message}
+          activeConversationId="conv-active"
+        />
+      );
+
+      const viewButton = await screen.findByRole('button', {
+        name: /View enlarged preview of photo\.png/i,
+      });
+      expect(viewButton).toBeInTheDocument();
+
+      fireEvent.click(viewButton);
+
+      const modal = await screen.findByRole('dialog');
+      expect(modal).toBeInTheDocument();
+      expect(screen.getByTestId('image-lightbox-content')).toBeInTheDocument();
+
+      // Escape closes lightbox
+      fireEvent.keyDown(window, { key: 'Escape' });
+      await waitFor(() => {
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('10. Workspace Navigation Persistence Across Refreshes', () => {
+    it('restores workspace from sessionStorage and falls back to home when missing or invalid', () => {
+      sessionStorage.setItem(WORKSPACE_STORAGE_KEY, 'assistant');
+      expect(getInitialActiveSection()).toBe('assistant');
+
+      sessionStorage.setItem(WORKSPACE_STORAGE_KEY, 'tasks');
+      expect(getInitialActiveSection()).toBe('tasks');
+
+      sessionStorage.setItem(WORKSPACE_STORAGE_KEY, 'models');
+      expect(getInitialActiveSection()).toBe('models');
+
+      sessionStorage.setItem(WORKSPACE_STORAGE_KEY, 'devices');
+      expect(getInitialActiveSection()).toBe('devices');
+
+      sessionStorage.setItem(WORKSPACE_STORAGE_KEY, 'invalid-nonexistent-section');
+      expect(getInitialActiveSection()).toBe('home');
+
+      sessionStorage.removeItem(WORKSPACE_STORAGE_KEY);
+      expect(getInitialActiveSection()).toBe('home');
+    });
+  });
+
+  describe('11. Quick Model Unload Action in Header', () => {
+    it('Header model dropdown provides Unload action when model is loaded', async () => {
+      renderWithProviders(
+        <Header
+          sidebarCollapsed={false}
+          onToggleSidebarCollapse={() => {}}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Qwen3-VL-2B-Instruct')).toBeInTheDocument();
+      });
+
+      const trigger = screen.getByTitle('Current Local Model');
+      fireEvent.click(trigger);
+
+      const unloadOption = screen.getByText('Unload current model');
+      expect(unloadOption).toBeInTheDocument();
+    });
+  });
+
+  describe('12. Assistant Markdown Rendering & Safety', () => {
+    it('renders safe headings, bold, inline code, lists, code blocks and sanitizes javascript: URLs', () => {
+      const markdown = `# Main Title
+## Subtitle
+This is **bold text** and *italic text* and \`const x = 1\`.
+
+> Quoted wisdom
+
+- Bullet one
+- Bullet two
+
+1. Ordered one
+2. Ordered two
+
+\`\`\`python
+print("hello world")
+\`\`\`
+
+[Safe Site](https://example.com)
+[Unsafe Site](javascript:alert(1))`;
+
+      const { container } = render(<AssistantMarkdownRenderer content={markdown} />);
+
+      expect(screen.getByRole('heading', { level: 2, name: 'Main Title' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 3, name: 'Subtitle' })).toBeInTheDocument();
+      expect(screen.getByText('bold text')).toBeInTheDocument();
+      expect(screen.getByText('const x = 1')).toBeInTheDocument();
+      expect(screen.getByText('Quoted wisdom')).toBeInTheDocument();
+      expect(screen.getByText('Bullet one')).toBeInTheDocument();
+      expect(screen.getByText('Ordered one')).toBeInTheDocument();
+      expect(screen.getByText('print("hello world")')).toBeInTheDocument();
+
+      const safeLink = screen.getByRole('link', { name: 'Safe Site' });
+      expect(safeLink).toHaveAttribute('href', 'https://example.com');
+
+      expect(screen.queryByRole('link', { name: 'Unsafe Site' })).not.toBeInTheDocument();
+      expect(screen.getByText('Unsafe Site')).toBeInTheDocument();
+      expect(container.querySelector('script')).toBeNull();
+    });
+  });
+
+  describe('13. Devices View Error Classification & Retry Controls', () => {
+    it('renders compact icon-only refresh button and simple Try again button on error', async () => {
+      const forbiddenError = new api.ApiError({
+        code: 'FORBIDDEN',
+        message: 'Access denied',
+        status: 403,
+      });
+      vi.mocked(api.getSystemStatus).mockRejectedValueOnce(forbiddenError);
+
+      renderWithProviders(<DevicesView />);
+
+      const refreshBtn = screen.getByRole('button', { name: 'Refresh Host Status' });
+      expect(refreshBtn).toBeInTheDocument();
+
+      await waitFor(() => {
+        expect(screen.getByText('Workstation Telemetry Access Denied')).toBeInTheDocument();
+      });
+      expect(screen.getByText('Forbidden')).toBeInTheDocument();
+
+      expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
     });
   });
 });

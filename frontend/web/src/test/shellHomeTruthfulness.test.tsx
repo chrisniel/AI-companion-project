@@ -329,21 +329,22 @@ describe('Phase 8A.3b.1 Shell + Home Truthfulness Sweep', () => {
       />
     );
 
-    // Collapsed button can be clicked to open assistant
+    // Stable compact button can be clicked to open assistant
     const launchBtn = screen.getByRole('button', { name: /Ask Assistant/i });
     fireEvent.click(launchBtn);
     expect(onOpenAssistant).toHaveBeenCalledTimes(1);
 
+    // Keyboard shortcut "/" opens assistant
+    fireEvent.keyDown(window, { key: '/' });
+    expect(onOpenAssistant).toHaveBeenCalledTimes(2);
+
     // Must not contain 0ms claim
     expect(screen.queryByText(/0ms/i)).not.toBeInTheDocument();
 
-    // Hover over container to expand launcher
+    // Hover does not expand or render textboxes/inputs
     fireEvent.mouseEnter(container.firstChild as Element);
-
-    // In expanded mode, paperclip and mic are disabled
-    const buttons = screen.getAllByRole('button');
-    const disabledButtons = buttons.filter((b) => b.hasAttribute('disabled'));
-    expect(disabledButtons.length).toBeGreaterThanOrEqual(2);
+    expect(container.querySelector('input')).toBeNull();
+    expect(container.querySelector('textarea')).toBeNull();
   });
 
   // 8. Home: no hardcoded sample tasks or wellness data

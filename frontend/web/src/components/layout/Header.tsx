@@ -8,6 +8,7 @@ import {
   Gauge,
   Leaf,
   ChevronDown,
+  PowerOff,
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useBackend } from '../../context/BackendContext';
@@ -15,11 +16,7 @@ import {
   AssistantPanelMode,
   PerformanceProfile,
 } from '../../types';
-import { Dropdown } from '../ui/Dropdown';
-import {
-  DesktopSizeSelector,
-  DesktopSimulationPreset,
-} from './DesktopSizeSelector';
+import { Dropdown, DropdownItem } from '../ui/Dropdown';
 import {
   getRegistryEntryId,
   getRegistryEntryDisplayName,
@@ -38,9 +35,6 @@ export interface HeaderProps {
   performanceProfile?: PerformanceProfile;
   onChangePerformanceProfile?: (profile: PerformanceProfile) => void;
   userName?: string;
-  desktopPreset?: DesktopSimulationPreset;
-  onSelectDesktopPreset?: (preset: DesktopSimulationPreset) => void;
-  actualWidth?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -55,12 +49,9 @@ export const Header: React.FC<HeaderProps> = ({
   performanceProfile = 'balanced',
   onChangePerformanceProfile,
   userName = 'Local User',
-  desktopPreset = 'auto',
-  onSelectDesktopPreset,
-  actualWidth = 1440,
 }) => {
   const { mode, toggleTheme, accent, setAccent, currentAccentPreset } = useTheme();
-  const { isOnline, modelStatus, isModelLoading, loadModel, changeProfile, registry } = useBackend();
+  const { isOnline, modelStatus, isModelLoading, loadModel, unloadModel, changeProfile, registry } = useBackend();
   const [switchingModelId, setSwitchingModelId] = useState<string | null>(null);
 
   const isLoaded = Boolean(isOnline && modelStatus?.model_loaded && modelStatus?.active_model);
@@ -132,6 +123,28 @@ export const Header: React.FC<HeaderProps> = ({
       },
     };
   });
+
+  // Construct dropdown items including Unload action when model is loaded/sleeping
+  const modelDropdownItems: (DropdownItem | { divider: true })[] = [];
+  if (isLoaded) {
+    modelDropdownItems.push({
+      id: 'action-unload-model',
+      label: 'Unload current model',
+      badge: 'Unload',
+      danger: true,
+      icon: <PowerOff className="w-3.5 h-3.5 text-rose-500" />,
+      onClick: async () => {
+        if (!isOnline) return;
+        try {
+          await unloadModel();
+        } catch {
+          // Handled in backend context
+        }
+      },
+    });
+    modelDropdownItems.push({ divider: true });
+  }
+  modelDropdownItems.push(...modelOptions);
 
   // Performance Profile options & truthfulness
   const requestedProfile = isOnline ? (modelStatus?.requested_profile as PerformanceProfile | undefined) : undefined;
@@ -252,7 +265,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <ChevronDown className="w-3 h-3 text-[var(--color-text-muted)]" />
               </button>
             }
-            items={modelOptions}
+            items={modelDropdownItems}
             align="left"
           />
 
@@ -308,15 +321,6 @@ export const Header: React.FC<HeaderProps> = ({
               {isOnline ? 'Online' : 'Offline'}
             </span>
           </div>
-
-          {/* Desktop Resolution Simulator Ribbon (Developer Only) */}
-          {import.meta.env.DEV && onSelectDesktopPreset && (
-            <DesktopSizeSelector
-              currentPreset={desktopPreset}
-              onSelectPreset={onSelectDesktopPreset}
-              actualWidth={actualWidth}
-            />
-          )}
 
           {/* Theme Mode Toggle */}
           <button

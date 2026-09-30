@@ -9,6 +9,7 @@ import {
   RotateCcw,
   Loader2,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   Lock,
 } from 'lucide-react';
@@ -60,7 +61,51 @@ export const DevicesView: React.FC = () => {
     fetchHostStatus();
   }, [fetchHostStatus]);
 
-  const isAuthRequired = errorStatus === 401 || (isOnline && errorStatus !== null);
+  interface ErrorClassification {
+    title: string;
+    description: string;
+    badgeText: string;
+    iconType: 'auth' | 'forbidden' | 'server' | 'offline';
+  }
+
+  const classifyHostError = (status: number | null, online: boolean): ErrorClassification => {
+    if (status === 401) {
+      return {
+        title: 'Workstation Telemetry Protected',
+        description:
+          'The local companion runtime is online and reachable, but detailed workstation telemetry requires pairing or an API authorization key. You can configure your pairing key in Settings.',
+        badgeText: 'Pairing Required',
+        iconType: 'auth',
+      };
+    }
+    if (status === 403) {
+      return {
+        title: 'Workstation Telemetry Access Denied',
+        description:
+          'The configured pairing key does not have permission to access workstation telemetry.',
+        badgeText: 'Forbidden',
+        iconType: 'forbidden',
+      };
+    }
+    if (status && status >= 500) {
+      return {
+        title: 'Workstation Telemetry Error',
+        description:
+          'The companion runtime encountered an internal error while querying system telemetry.',
+        badgeText: 'Telemetry Error',
+        iconType: 'server',
+      };
+    }
+    return {
+      title: 'Runtime Host Unavailable',
+      description:
+        'Unable to connect to the local companion runtime service. Please check that the backend service is running and accessible.',
+      badgeText: 'Host Unavailable',
+      iconType: 'offline',
+    };
+  };
+
+  const classified = classifyHostError(errorStatus, isOnline);
 
   return (
     <div id="devices-view" className="space-y-8 pb-12">
@@ -86,17 +131,16 @@ export const DevicesView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 self-start md:self-auto">
-          <NeumorphicButton
-            variant="ghost"
-            size="sm"
+          <button
+            type="button"
             onClick={fetchHostStatus}
             disabled={loading}
-            className="flex items-center gap-1.5 text-xs text-[var(--color-text-secondary)]"
+            aria-label="Refresh Host Status"
             title="Refresh Host Status"
+            className="w-9 h-9 rounded-xl surface-raised border border-[var(--color-border-subtle)] hover:border-[var(--color-accent)]/40 hover:text-[var(--color-accent)] flex items-center justify-center text-[var(--color-text-secondary)] transition-all cursor-pointer disabled:opacity-50"
           >
-            <RotateCcw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
-          </NeumorphicButton>
+            <RotateCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
         </div>
       </div>
 
@@ -118,8 +162,8 @@ export const DevicesView: React.FC = () => {
                   </Badge>
                 )}
                 {!loading && (errorMessage || (!systemStatus && !loading)) && (
-                  <Badge variant="danger" size="sm">
-                    Host Unavailable
+                  <Badge variant={classified.iconType === 'auth' || classified.iconType === 'forbidden' ? 'accent' : 'danger'} size="sm">
+                    {classified.badgeText}
                   </Badge>
                 )}
               </div>
@@ -150,32 +194,31 @@ export const DevicesView: React.FC = () => {
             className="p-6 rounded-2xl bg-surface-subtle border border-[var(--color-border-subtle)] space-y-4"
           >
             <div className="flex items-start gap-3">
-              {isAuthRequired ? (
+              {classified.iconType === 'auth' || classified.iconType === 'forbidden' ? (
                 <Lock className="w-5 h-5 text-[var(--color-accent)] flex-shrink-0 mt-0.5" />
+              ) : classified.iconType === 'server' ? (
+                <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
               ) : (
-                <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                <AlertCircle className="w-5 h-5 text-rose-500 flex-shrink-0 mt-0.5" />
               )}
               <div className="space-y-1">
                 <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">
-                  {isAuthRequired ? 'Workstation Telemetry Protected' : 'Runtime Host Unavailable'}
+                  {classified.title}
                 </h3>
                 <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
-                  {isAuthRequired
-                    ? 'The local companion runtime is online and reachable, but detailed workstation telemetry requires pairing or an API authorization key. You can configure your pairing key in Settings.'
-                    : 'Unable to connect to the local companion runtime service. Please check that the backend service is running and accessible.'}
+                  {classified.description}
                 </p>
               </div>
             </div>
             <div className="flex justify-end">
-              <NeumorphicButton
-                variant="primary"
-                size="sm"
+              <button
+                type="button"
                 onClick={fetchHostStatus}
-                className="flex items-center gap-1.5 text-xs"
+                disabled={loading}
+                className="px-3.5 py-1.5 rounded-xl surface-raised border border-[var(--color-border-subtle)] hover:border-[var(--color-accent)]/40 hover:text-[var(--color-accent)] text-xs font-medium text-[var(--color-text-primary)] transition-all cursor-pointer disabled:opacity-50"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Retry</span>
-              </NeumorphicButton>
+                Try again
+              </button>
             </div>
           </div>
         )}

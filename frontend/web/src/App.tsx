@@ -26,12 +26,47 @@ import { WorkspaceErrorBoundary } from './components/workspace/WorkspaceErrorBou
 // Types
 import { AssistantState, PerformanceProfile } from './types';
 
+const VALID_SECTIONS = [
+  'home',
+  'assistant',
+  'tasks',
+  'schedule',
+  'health',
+  'memory',
+  'models',
+  'characters',
+  'devices',
+  'logs',
+  'settings',
+  ...(import.meta.env.DEV ? ['states'] : []),
+];
+
+export const WORKSPACE_STORAGE_KEY = 'ai_companion_active_section';
+
+export function getInitialActiveSection(): string {
+  try {
+    const stored = sessionStorage.getItem(WORKSPACE_STORAGE_KEY);
+    if (stored && VALID_SECTIONS.includes(stored)) {
+      return stored;
+    }
+  } catch {}
+  return 'home';
+}
+
 function MainApp() {
   const { modelStatus } = useBackend();
-  const [activeSection, setActiveSection] = useState('home');
+  const [activeSection, setActiveSection] = useState<string>(getInitialActiveSection);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [hasHydratedInitialModel, setHasHydratedInitialModel] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (VALID_SECTIONS.includes(activeSection)) {
+        sessionStorage.setItem(WORKSPACE_STORAGE_KEY, activeSection);
+      }
+    } catch {}
+  }, [activeSection]);
 
   // Authoritative backend active model
   const backendActiveModelId = (modelStatus?.model_loaded && modelStatus?.active_model)
@@ -151,7 +186,13 @@ function MainApp() {
           </React.Suspense>
         );
       case 'states':
-        return <ApplicationStatesShowcase />;
+        return (
+          <ApplicationStatesShowcase
+            currentPreset={desktopPreset}
+            onSelectPreset={setDesktopPreset}
+            actualWidth={desktopPreset === 'auto' ? windowWidth : desktopPreset}
+          />
+        );
       default:
         return (
           <HomeView
@@ -214,9 +255,6 @@ function MainApp() {
           performanceProfile={performanceProfile}
           onChangePerformanceProfile={setPerformanceProfile}
           userName="Local User"
-          desktopPreset={desktopPreset}
-          onSelectDesktopPreset={setDesktopPreset}
-          actualWidth={desktopPreset === 'auto' ? windowWidth : desktopPreset}
         />
 
         {/* 2. Workspace Body */}

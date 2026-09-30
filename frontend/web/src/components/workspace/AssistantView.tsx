@@ -11,6 +11,7 @@ import {
   registryEntryMatchesIdentifier,
   ConversationOut,
   AttachmentOut,
+  AttachmentRef,
   ALLOWED_MIME_TYPES,
   MAX_SIZE_BYTES,
   MAX_ATTACHMENTS_PER_MESSAGE,
@@ -611,12 +612,20 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
         transitionSendPhase('accepted_streaming');
         setAssistantState('thinking');
 
-        // 2. Commit bubbles to UI
+        // 2. Commit bubbles to UI with immediate canonical attachment metadata
+        const userAttachments: AttachmentRef[] = stagedSnapshot.map((s) => ({
+          id: s.attachment.id,
+          filename_display: s.attachment.filename_display,
+          mime_type: s.attachment.mime_type,
+          size_bytes: s.attachment.size_bytes,
+        }));
+
         const userMsg: AssistantMessage = {
           id: clientMessageId,
           type: 'user',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           content: userText,
+          attachments: userAttachments.length > 0 ? userAttachments : undefined,
         };
         const initialAssistantMsg: AssistantMessage = {
           id: assistantMsgId,
