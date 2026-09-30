@@ -1,6 +1,6 @@
 # Phase 8 Implementation Plan — PC Frontend Architecture, Runtime Config, Multimodal & Polish
 
-> **Status:** 8A and 8P COMPLETE / VERIFIED. Repository Documentation Reconciliation (Passes R0–R13.2) is COMPLETE / VERIFIED. Phase 8B is COMPLETE / VERIFIED (8B.0–8B.8). 8C is NEXT / UNBLOCKED.
+> **Status:** 8A and 8P COMPLETE / VERIFIED. Repository Documentation Reconciliation (Passes R0–R13.2) is COMPLETE / VERIFIED. Phase 8B is COMPLETE / VERIFIED (8B.0–8B.8). Phase 8C is COMPLETE / VERIFIED. Phase 8 is closed.
 > **Authority Precedence:** Normative architecture is owned by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md). Canonical product sequencing is owned by [`docs/02_Planning/ROADMAP.md`](../ROADMAP.md). Runtime config architecture is owned by [`docs/04_Architecture/04_Infrastructure/storage-and-assets.md`](../../04_Architecture/04_Infrastructure/storage-and-assets.md) and [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](../../04_Architecture/04_Infrastructure/runtime-and-models.md).  
 > **This is the single authoritative feature implementation plan for Phase 8.**
 
@@ -14,7 +14,7 @@ develop (verified baseline: 321 backend pytest, 185 frontend vitest, 124 Android
   +-- [GATE: Documentation Reconciliation]   (R0–R13.2: COMPLETE / VERIFIED — Phase 8B unblocked)
   +-- [8B.0–8B.6 Foundation]                 (COMPLETE / VERIFIED — merged via PR #13)
   +-- [8B.7: Persistent Attachment Rendering] (COMPLETE / VERIFIED)
-  +-- feature/phase8-ui-integration-polish   (8C: NEXT / UNBLOCKED — polish, a11y, cleanup)
+  +-- feature/phase8-ui-integration-polish   (8C: COMPLETE / VERIFIED — polish, a11y, cleanup)
         based on merged 8B
 
 8P established canonical COMPANION_DATA_ROOT/attachments/. 8B activates image uploads to that directory now that documentation reconciliation is complete and verified.

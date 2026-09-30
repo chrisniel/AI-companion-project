@@ -11,14 +11,15 @@ import { GlobalComposer } from './components/workspace/GlobalComposer';
 import { HomeView } from './components/workspace/HomeView';
 import { AssistantView } from './components/workspace/AssistantView';
 import { TasksView } from './components/workspace/TasksView';
-import { ScheduleView } from './components/workspace/ScheduleView';
-import { HealthView } from './components/workspace/HealthView';
-import { MemoryView } from './components/workspace/MemoryView';
+// Lazy Loaded Views
+const ScheduleView = React.lazy(() => import('./components/workspace/ScheduleView').then(module => ({ default: module.ScheduleView })));
+const HealthView = React.lazy(() => import('./components/workspace/HealthView').then(m => ({ default: m.HealthView })));
+const MemoryView = React.lazy(() => import('./components/workspace/MemoryView').then(m => ({ default: m.MemoryView })));
 import { ModelsView } from './components/workspace/ModelsView';
-import { CharactersView } from './components/workspace/CharactersView';
+const CharactersView = React.lazy(() => import('./components/workspace/CharactersView').then(m => ({ default: m.CharactersView })));
 import { DevicesView } from './components/workspace/DevicesView';
 import { LogsView } from './components/workspace/LogsView';
-import { SettingsView } from './components/workspace/SettingsView';
+const SettingsView = React.lazy(() => import('./components/workspace/SettingsView').then(m => ({ default: m.SettingsView })));
 import { ApplicationStatesShowcase } from './components/workspace/states/ApplicationStatesShowcase';
 import { DesktopSimulationPreset } from './components/layout/DesktopSizeSelector';
 import { WorkspaceErrorBoundary } from './components/workspace/WorkspaceErrorBoundary';
@@ -133,11 +134,23 @@ function MainApp() {
       case 'tasks':
         return <TasksView />;
       case 'schedule':
-        return <ScheduleView />;
+        return (
+          <React.Suspense fallback={<div className="flex h-full items-center justify-center p-8 text-neutral-400">Loading schedule...</div>}>
+            <ScheduleView />
+          </React.Suspense>
+        );
       case 'health':
-        return <HealthView />;
+        return (
+          <React.Suspense fallback={<div className="flex h-full items-center justify-center text-neutral-400">Loading health...</div>}>
+            <HealthView />
+          </React.Suspense>
+        );
       case 'memory':
-        return <MemoryView />;
+        return (
+          <React.Suspense fallback={<div className="flex h-full items-center justify-center text-neutral-400">Loading memory...</div>}>
+            <MemoryView />
+          </React.Suspense>
+        );
       case 'models':
         return (
           <ModelsView
@@ -148,13 +161,21 @@ function MainApp() {
           />
         );
       case 'characters':
-        return <CharactersView />;
+        return (
+          <React.Suspense fallback={<div className="flex h-full items-center justify-center text-neutral-400">Loading characters...</div>}>
+            <CharactersView />
+          </React.Suspense>
+        );
       case 'devices':
         return <DevicesView />;
       case 'logs':
         return <LogsView />;
       case 'settings':
-        return <SettingsView />;
+        return (
+          <React.Suspense fallback={<div className="flex h-full items-center justify-center text-neutral-400">Loading settings...</div>}>
+            <SettingsView />
+          </React.Suspense>
+        );
       case 'states':
         return <ApplicationStatesShowcase />;
       default:

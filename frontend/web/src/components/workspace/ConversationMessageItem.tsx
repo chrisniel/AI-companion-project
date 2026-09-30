@@ -372,7 +372,7 @@ export const ConversationMessageItem: React.FC<ConversationMessageItemProps> = (
         </div>
 
         {/* User Message Bubble */}
-        <div className="p-4 rounded-3xl surface-raised border border-[var(--color-border-subtle)] text-sm text-[var(--color-text-primary)] space-y-1 max-w-xl">
+        <div role="article" className="p-4 rounded-3xl surface-raised border border-[var(--color-border-subtle)] text-sm text-[var(--color-text-primary)] space-y-1 max-w-xl">
           <div className="flex items-center justify-between gap-4 text-[11px] text-[var(--color-text-muted)] font-mono">
             <span className="font-semibold text-[var(--color-text-primary)]">{userName}</span>
             <span>{message.timestamp}</span>
@@ -403,7 +403,7 @@ export const ConversationMessageItem: React.FC<ConversationMessageItemProps> = (
       </div>
 
       {/* Assistant Message Bubble */}
-      <div className="p-4 sm:p-5 rounded-3xl glass-panel border border-[var(--color-surface-glass-border)] text-sm text-[var(--color-text-primary)] space-y-2.5 max-w-2xl shadow-sm">
+      <div role="article" className="p-4 sm:p-5 rounded-3xl glass-panel border border-[var(--color-surface-glass-border)] text-sm text-[var(--color-text-primary)] space-y-2.5 max-w-2xl shadow-sm">
         <div className="flex items-center justify-between gap-4 pb-1.5 border-b border-[var(--color-border-subtle)] text-[11px] text-[var(--color-text-muted)] font-mono">
           <div className="flex items-center gap-2">
             <span className="font-bold text-[var(--color-accent)]">{activeCharacterName}</span>

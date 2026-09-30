@@ -161,6 +161,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 type="button"
                 onClick={() => onSelectSection(item.id)}
                 title={collapsed ? item.label : undefined}
+                aria-label={item.label}
                 className={`h-10 flex items-center rounded-xl text-sm font-medium relative group cursor-pointer nav-menu-item select-none ${
                   collapsed
                     ? 'w-10 justify-center p-0 mx-auto'
