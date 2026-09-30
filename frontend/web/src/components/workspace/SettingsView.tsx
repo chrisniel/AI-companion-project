@@ -83,8 +83,7 @@ const SECTIONS: SectionMenuItem[] = [
     icon: <Cpu className="w-4 h-4" />,
     description: 'Persistent runtime configuration',
     category: 'planned',
-    milestoneHint: 'Phase 8P',
-    plannedDetails: 'Persistent runtime configuration is planned for Phase 8P.',
+    plannedDetails: 'Persistent runtime configuration is a planned subsystem.',
   },
   {
     id: 'health',
@@ -127,14 +126,18 @@ const SECTIONS: SectionMenuItem[] = [
     plannedDetails: 'Advanced runtime configuration is not implemented yet.',
   },
 
-  // UI/UX Showcase Section
-  {
-    id: 'states',
-    label: 'Application States',
-    icon: <Layers className="w-4 h-4" />,
-    description: 'UI/UX state showcase',
-    category: 'preview',
-  },
+  // UI/UX Showcase Section (Developer tooling only)
+  ...(import.meta.env.DEV
+    ? [
+        {
+          id: 'states' as SettingsSectionId,
+          label: 'Application States',
+          icon: <Layers className="w-4 h-4" />,
+          description: 'UI/UX state showcase (Developer Tooling)',
+          category: 'preview' as const,
+        },
+      ]
+    : []),
 ];
 
 export const SettingsView: React.FC = () => {

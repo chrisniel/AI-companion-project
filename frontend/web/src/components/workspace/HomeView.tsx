@@ -167,7 +167,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 </div>
               </div>
               <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
-                Task and schedule synchronization will be integrated with the backend Tasks API in Phase 8A.3b.2.
+                Workstation tasks and schedule synchronization will appear here when configured.
               </p>
             </div>
           </div>
@@ -194,81 +194,49 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-xl sm:text-2xl font-extrabold uppercase tracking-wider font-mono text-[var(--color-accent)] select-none">
-                AI Status
+                AI Companion
               </h2>
               <div className="flex items-center gap-1.5">
                 <StatusIndicator status={isOnline ? 'online' : 'offline'} size="sm" showLabel={false} />
                 <span className={`text-xs font-semibold font-mono ${isOnline ? 'text-emerald-500' : 'text-rose-400'}`}>
-                  {isOnline ? 'Online (:8000)' : 'Offline'}
+                  {isOnline ? 'Connected' : 'Offline'}
                 </span>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5 text-xs font-mono">
-              <div className="p-3 rounded-2xl surface-recessed border border-[var(--color-border-subtle)]">
-                <span className="text-[10px] text-[var(--color-text-muted)] uppercase block">
-                  Runtime Status
-                </span>
-                <span className="font-bold text-[var(--color-text-primary)] mt-0.5 block">
-                  {isOnline ? 'Online (Port 8000)' : 'Offline'}
-                </span>
-                <span className={`text-[10px] ${isOnline ? 'text-emerald-500' : 'text-[var(--color-text-muted)]'}`}>
-                  {isOnline ? 'Connected to local runtime' : 'Unavailable'}
-                </span>
+            <div className="p-4 rounded-2xl surface-recessed border border-[var(--color-border-subtle)] space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="space-y-1">
+                  <span className="text-xs font-semibold text-[var(--color-accent)] uppercase tracking-wider font-mono">
+                    Active Model
+                  </span>
+                  <h3 className="text-base font-bold text-[var(--color-text-primary)] truncate">
+                    {activeDisplayName || (isOnline ? 'No Model Loaded' : 'Unavailable')}
+                  </h3>
+                  <p className="text-xs text-[var(--color-text-secondary)]">
+                    {!isOnline
+                      ? 'Local inference engine is offline. Start the local runtime service to begin inference.'
+                      : activeDisplayName
+                      ? `Model resident in memory. Operating in ${profileDisplay.toLowerCase()} profile mode.`
+                      : 'Select and load a resident model from the local model repository to begin.'}
+                  </p>
+                </div>
               </div>
 
-              <div className="p-3 rounded-2xl surface-recessed border border-[var(--color-border-subtle)]">
-                <span className="text-[10px] text-[var(--color-text-muted)] uppercase block">
-                  Active Local Model
+              {/* Provider & Layers */}
+              <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-[var(--color-border-subtle)]/60 text-xs font-mono text-[var(--color-text-secondary)]">
+                <span>
+                  Provider: <strong className="text-[var(--color-text-primary)]">{isOnline && modelStatus?.provider?.trim() ? modelStatus.provider : 'Unavailable'}</strong>
                 </span>
-                <span className="font-bold text-[var(--color-text-primary)] mt-0.5 block truncate">
-                  {activeDisplayName || (isOnline ? 'No Model Loaded' : 'Unavailable')}
-                </span>
-                <span className="text-[10px] text-[var(--color-accent)]">
-                  {modelStatus?.model_resident
-                    ? 'Resident in VRAM'
-                    : isOnline
-                    ? 'Not resident'
-                    : 'Unavailable'}
-                </span>
-              </div>
-
-              <div className="p-3 rounded-2xl surface-recessed border border-[var(--color-border-subtle)]">
-                <span className="text-[10px] text-[var(--color-text-muted)] uppercase block">
-                  Runtime / Provider
-                </span>
-                <span className="font-bold text-[var(--color-text-primary)] mt-0.5 block truncate">
-                  {isOnline && modelStatus?.provider?.trim() ? modelStatus.provider : 'Unavailable'}
-                </span>
-                <span className="text-[10px] text-[var(--color-text-secondary)] truncate block">
-                  {appliedLayers}
-                </span>
-              </div>
-
-              <div className="p-3 rounded-2xl surface-recessed border border-[var(--color-border-subtle)]">
-                <span className="text-[10px] text-[var(--color-text-muted)] uppercase block">
-                  Execution Mode
-                </span>
-                <span className="font-bold text-[var(--color-text-primary)] mt-0.5 block flex items-center gap-1 text-emerald-500">
-                  {isOnline ? (
-                    <>
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      <span>Local Runtime (:8000)</span>
-                    </>
-                  ) : (
-                    <span className="text-[var(--color-text-muted)]">Offline</span>
-                  )}
-                </span>
-                <span className="text-[10px] text-[var(--color-text-secondary)]">
-                  {isOnline ? 'Operating on port 8000' : 'Runtime offline'}
-                </span>
+                <span>•</span>
+                <span>{appliedLayers}</span>
               </div>
             </div>
           </div>
 
           <div className="flex items-center justify-between pt-1 border-t border-[var(--color-border-subtle)] text-xs">
             <span className="text-[var(--color-text-secondary)] font-mono">
-              Profile: <strong className="text-[var(--color-text-primary)]">{profileDisplay}</strong> (Temperature: Unavailable • Token speed: Unavailable)
+              Profile: <strong className="text-[var(--color-text-primary)]">{profileDisplay}</strong>
             </span>
             <button
               type="button"
@@ -297,7 +265,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <span>Daily Agenda</span>
             </div>
             <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
-              No live task data available. Workstation tasks and scheduling will connect to the backend Tasks API in Phase 8A.3b.2.
+              No live agenda items scheduled. Daily reminders and events will appear here when scheduled.
             </p>
           </div>
 

@@ -780,9 +780,14 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
         setAttachmentError('Cannot switch conversations while attachment operations are in progress.');
         return;
       }
+
+      // Synchronously switch to clean new conversation state
+      setMessages([]);
       setConversationTitle(created.title);
       setAssistantState('idle');
-      setMessages([]);
+      setInputPrompt('');
+      setStagedAttachments([]);
+      stagedAttachmentsRef.current = [];
     } catch (err) {
       console.warn('Failed to create remote conversation:', err);
       setAssistantState('idle');
@@ -836,34 +841,38 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
   }));
 
   return (
-    <div className="space-y-6">
-      {/* 1. HEADER & STATUS BAR */}
-      <AssistantStatusBar
-        conversationTitle={conversationTitle}
-        drawerConversationsCount={drawerConversations.length}
-        onOpenHistory={() => setHistoryOpen(true)}
-        activeCharacterName={activeCharacterName}
-        currentModelName={currentModelName}
-        isOnline={isOnline}
-        modelStatus={modelStatus}
-        registry={registry}
-        onNewConversation={handleNewConversation}
-        assistantState={assistantState}
-        isNewConversationDisabled={conversationActionsDisabled}
-      />
+    <div className="flex flex-col h-full min-h-0 relative">
+      {/* 1. HEADER & STATUS BAR - Persistent Toolbar */}
+      <div className="flex-none mb-3">
+        <AssistantStatusBar
+          conversationTitle={conversationTitle}
+          drawerConversationsCount={drawerConversations.length}
+          onOpenHistory={() => setHistoryOpen(true)}
+          activeCharacterName={activeCharacterName}
+          currentModelName={currentModelName}
+          isOnline={isOnline}
+          modelStatus={modelStatus}
+          registry={registry}
+          onNewConversation={handleNewConversation}
+          assistantState={assistantState}
+          isNewConversationDisabled={conversationActionsDisabled}
+        />
+      </div>
 
-      {/* 2. CONVERSATION MESSAGE LIST */}
-      <AssistantMessageList
-        messages={messages}
-        userName={userName}
-        activeCharacterName={activeCharacterName}
-        isBusy={isBusy}
-        assistantState={assistantState}
-        activeConversationId={activeConversationId}
-      />
+      {/* 2. CONVERSATION MESSAGE LIST - Owns Scrolling */}
+      <div className="flex-1 min-h-0 overflow-hidden relative">
+        <AssistantMessageList
+          messages={messages}
+          userName={userName}
+          activeCharacterName={activeCharacterName}
+          isBusy={isBusy}
+          assistantState={assistantState}
+          activeConversationId={activeConversationId}
+        />
+      </div>
 
       {/* 3. DOCKED COMPOSER & STATUS/ERROR NOTICES */}
-      <div className="sticky bottom-4 z-20 max-w-4xl mx-auto space-y-2">
+      <div className="flex-none pt-2 max-w-4xl w-full mx-auto space-y-2">
         <AssistantErrorDisplay
           isOnline={isOnline}
           isModelSleeping={isModelSleeping}

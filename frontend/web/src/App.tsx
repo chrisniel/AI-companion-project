@@ -3,7 +3,6 @@ import { ThemeProvider } from './context/ThemeContext';
 import { BackendProvider, useBackend } from './context/BackendContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
-import { AssistantPanel } from './components/layout/AssistantPanel';
 import { GlobalBackground } from './components/layout/GlobalBackground';
 import { GlobalComposer } from './components/workspace/GlobalComposer';
 
@@ -25,13 +24,12 @@ import { DesktopSimulationPreset } from './components/layout/DesktopSizeSelector
 import { WorkspaceErrorBoundary } from './components/workspace/WorkspaceErrorBoundary';
 
 // Types
-import { AssistantPanelMode, AssistantState, PerformanceProfile } from './types';
+import { AssistantState, PerformanceProfile } from './types';
 
 function MainApp() {
   const { modelStatus } = useBackend();
   const [activeSection, setActiveSection] = useState('home');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [assistantPanelMode, setAssistantPanelMode] = useState<AssistantPanelMode>('expanded');
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [hasHydratedInitialModel, setHasHydratedInitialModel] = useState(false);
 
@@ -54,28 +52,13 @@ function MainApp() {
   const [windowWidth, setWindowWidth] = useState<number>(window.innerWidth);
 
   // Desktop Responsive Space Priority: 1280, 1366, 1440, 1920
-  // When width is limited:
-  // 1. collapse Assistant Panel
-  // 2. collapse sidebar to icons
-  // 3. preserve main workspace
-  // Do not convert the desktop UI into the mobile UI.
+  // When width is <= 1280, collapse sidebar to icon rail to maximize workspace canvas.
+  // Above 1280, sidebar remains comfortably expanded.
   useEffect(() => {
     const applySpacePriority = (effectiveWidth: number) => {
       if (effectiveWidth <= 1280) {
-        // Priority 1: Collapse/hide assistant panel
-        setAssistantPanelMode('hidden');
-        // Priority 2: Collapse sidebar to icons
         setSidebarCollapsed(true);
-        // Priority 3: Main workspace preserves full desktop multi-column layouts
-      } else if (effectiveWidth <= 1366) {
-        // Priority 1: Collapse Assistant Panel to narrow icon rail
-        setAssistantPanelMode('collapsed');
-        // Priority 2: Sidebar remains expanded (or can be user toggled)
-        setSidebarCollapsed(false);
-        // Priority 3: Main workspace preserved
       } else {
-        // 1440, 1920: Full widescreen desktop
-        setAssistantPanelMode('expanded');
         setSidebarCollapsed(false);
       }
     };
@@ -97,15 +80,6 @@ function MainApp() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [desktopPreset]);
-
-  // Clicking the Assistant menu above the panel automatically closes it if open, or opens it if closed
-  const handleToggleAssistantPanel = () => {
-    if (assistantPanelMode !== 'hidden') {
-      setAssistantPanelMode('hidden');
-    } else {
-      setAssistantPanelMode('expanded');
-    }
-  };
 
   const activeCharacterName = 'Assistant';
 
@@ -235,8 +209,6 @@ function MainApp() {
         <Header
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebarCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-          assistantPanelMode={assistantPanelMode}
-          onCycleAssistantPanelMode={handleToggleAssistantPanel}
           currentModelId={selectedModelId ?? undefined}
           onSelectModel={setSelectedModelId}
           performanceProfile={performanceProfile}
@@ -256,9 +228,15 @@ function MainApp() {
             collapsed={sidebarCollapsed}
           />
 
-          {/* Scrollable Main Workspace Canvas */}
-          <main className="flex-1 overflow-y-auto flex flex-col justify-between px-4 sm:px-8 py-6 sm:py-8 space-y-8 min-w-0">
-            <div className="max-w-7xl w-full mx-auto space-y-8 flex-1">
+          {/* Main Workspace Canvas */}
+          <main className={`flex-1 min-w-0 flex flex-col justify-between ${
+            activeSection === 'assistant'
+              ? 'overflow-hidden px-4 sm:px-6 py-4'
+              : 'overflow-y-auto px-4 sm:px-8 py-6 sm:py-8 space-y-8'
+          }`}>
+            <div className={`w-full mx-auto flex-1 ${
+              activeSection === 'assistant' ? 'h-full flex flex-col min-h-0' : 'max-w-7xl space-y-8'
+            }`}>
               <WorkspaceErrorBoundary onReset={() => setActiveSection('home')}>
                 {renderSection()}
               </WorkspaceErrorBoundary>
@@ -272,22 +250,15 @@ function MainApp() {
               />
             )}
 
-            {/* Subdued footer */}
-            <footer className="pt-6 pb-2 text-center text-[11px] text-[var(--color-text-muted)]">
-              <p>
-                Local AI Control Center • Local Inference & Companion Workspace
-              </p>
-            </footer>
+            {/* Subdued footer (only shown on scrollable pages, omitted in assistant) */}
+            {activeSection !== 'assistant' && (
+              <footer className="pt-6 pb-2 text-center text-[11px] text-[var(--color-text-muted)]">
+                <p>
+                  Local AI Control Center • Local Inference & Companion Workspace
+                </p>
+              </footer>
+            )}
           </main>
-
-          {/* Optional Right Assistant Panel (Expanded, Collapsed, or Hidden) */}
-          <AssistantPanel
-            mode={assistantPanelMode}
-            onSetMode={setAssistantPanelMode}
-            onOpenAssistant={() => setActiveSection('assistant')}
-            assistantState={assistantState}
-            onSetAssistantState={setAssistantState}
-          />
         </div>
       </div>
     </div>

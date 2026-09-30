@@ -66,11 +66,11 @@ export const GlobalComposer: React.FC<GlobalComposerProps> = ({
         /* Floating Soft Glass Launcher Card */
         <div className="p-2 sm:p-2.5 rounded-2xl glass-panel-elevated border border-[var(--color-surface-glass-border)] shadow-2xl pointer-events-auto transition-all duration-200">
           <div className="flex items-center gap-2">
-            {/* 1. Attachment Button (Disabled - Planned Phase 8B) */}
+            {/* 1. Attachment Button (Disabled - Planned) */}
             <button
               type="button"
               disabled
-              title="Image attachments — Phase 8B (Planned)"
+              title="Image attachments (Planned)"
               className="w-9 h-9 rounded-xl surface-recessed border border-[var(--color-border-subtle)] opacity-50 flex items-center justify-center text-[var(--color-text-muted)] cursor-not-allowed flex-shrink-0"
             >
               <Paperclip className="w-4 h-4" />

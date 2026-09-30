@@ -243,13 +243,13 @@ export const AssistantComposer: React.FC<AssistantComposerProps> = ({
           }`}
           title={
             assistantState === 'listening'
-              ? 'Stop listening (Preview stub)'
-              : 'Voice input (Stub — audio capture not connected)'
+              ? 'Stop listening'
+              : 'Voice input (Microphone input not connected)'
           }
           aria-label={
             assistantState === 'listening'
-              ? 'Stop listening (Preview stub)'
-              : 'Voice input (Stub — audio capture not connected)'
+              ? 'Stop listening'
+              : 'Voice input (Microphone input not connected)'
           }
         >
           {assistantState === 'listening' ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
