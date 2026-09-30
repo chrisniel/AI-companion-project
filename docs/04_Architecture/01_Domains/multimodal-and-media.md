@@ -79,9 +79,9 @@ Verified in `backend/app/services/attachment_service.py` and `app.services.llm`:
 
 ### 3.4 Frontend Composer & Previews
 
-Verified in `frontend/web/src/components/chat/`:
-- **Staging Bar:** `AttachmentStagingBar` renders thumbnails of staged uploads with individual remove buttons.
-- **Authenticated Previews:** Fetches binary data via authenticated API client and generates secure Object URLs (`URL.createObjectURL(blob)`).
+Verified in `frontend/web/src/components/workspace/AssistantView.tsx`, `frontend/web/src/components/workspace/assistant/AssistantComposer.tsx`, and `frontend/web/src/services/api/attachmentApi.ts`:
+- **Staged Attachment Strip:** `AssistantComposer` renders staged attachment preview cards with individual remove controls.
+- **Authenticated Previews:** `AssistantView` obtains authenticated Blob preview URLs through `fetchAttachmentBlobUrl` in `attachmentApi.ts`, and `AssistantComposer` renders those in-memory preview URLs.
 - **Cleanup Guarantees:** Revokes Object URLs on component unmount to prevent browser memory leaks.
 - **Transition Locks:** Disables file input during message streaming or active uploads.
 
