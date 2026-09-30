@@ -26,8 +26,8 @@ It governs the secure handling of binary visual inputs from user upload to model
 Multimodal vision understanding is governed by the approved Phase 8B delivery roadmap:
 - **Slices 8B.0–8B.6:** `COMPLETE / VERIFIED / MERGED` into verified `develop` baseline (`4b2f5fe3aa2a302b825408073d1b135bf2ff92e1`).
 - **Slice 8B.7 (Persistent Message Attachment Rendering):** `COMPLETE / VERIFIED`.
-- **Slice 8B.8 (Full Integration & Phase Closure):** `NEXT / UNBLOCKED`.
-- **Phase 8B Overall:** `IN PROGRESS`.
+- **Slice 8B.8 (Full Integration & Phase Closure):** `COMPLETE / VERIFIED`.
+- **Phase 8B Overall:** `COMPLETE / VERIFIED`.
 
 ### 2.2 Approved Scope vs. Non-Image Media
 
@@ -98,7 +98,7 @@ Verified in frontend components and API contracts:
 
 ### 3.6 Explicitly Unimplemented Capabilities
 
-- **Integration Test Closure (Slice 8B.8):** `VERIFICATION PASSED / PENDING CLOSURE REVIEW`.
+- **Integration Test Closure (Slice 8B.8):** `COMPLETE / VERIFIED`.
 - **Live Hardware Vision Benchmarks:** Live RX 580 vision inference latency benchmarks are historical reference data, not a gating closure requirement.
 
 ---

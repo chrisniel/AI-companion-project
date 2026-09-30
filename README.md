@@ -2,7 +2,7 @@
 
 A local-first personal AI companion ecosystem centered around a Windows PC running a persistent **Local AI Runtime**, with a React desktop control center and a native Android companion app.
 
-> **Development status:** The PC React web UI (`frontend/web/`), the native Android companion app prototype (`android/`), and the FastAPI **Local AI Runtime** backend are repository-verified. Implemented core foundations include the FastAPI backend, SQLite database with Alembic migrations (head: `006_add_attachments`), conversation persistence, live SSE generation, SQLite FTS5 lexical memory retrieval, task CRUD with soft-delete, Model Registry Schema v3, and local `llama.cpp` Vulkan GPU offload on AMD RX 580 (verified PC reference baselines: 321 backend pytest, 185 frontend vitest; Android prototype R8 baseline: 124 tests; see [`docs/06_Guides/TESTING_AND_CI.md`](docs/06_Guides/TESTING_AND_CI.md)). Phase 8A (UI decomposition & truthfulness), Phase 8P (runtime configuration & asset foundation), and Repository Documentation Reconciliation (Passes R0–R13.2) are complete and verified. Phase 8B (multimodal image attachments) is in progress (slices 8B.0–8B.7 complete). Slice 8B.8 (Full Integration & Phase Closure) is the next unblocked engineering milestone.
+> **Development status:** The PC React web UI (`frontend/web/`), the native Android companion app prototype (`android/`), and the FastAPI **Local AI Runtime** backend are repository-verified. Implemented core foundations include the FastAPI backend, SQLite database with Alembic migrations (head: `006_add_attachments`), conversation persistence, live SSE generation, SQLite FTS5 lexical memory retrieval, task CRUD with soft-delete, Model Registry Schema v3, and local `llama.cpp` Vulkan GPU offload on AMD RX 580 (verified PC reference baselines: 321 backend pytest, 185 frontend vitest; Android prototype R8 baseline: 124 tests; see [`docs/06_Guides/TESTING_AND_CI.md`](docs/06_Guides/TESTING_AND_CI.md)). Phase 8A (UI decomposition & truthfulness), Phase 8P (runtime configuration & asset foundation), and Repository Documentation Reconciliation (Passes R0–R13.2) are complete and verified. Phase 8B (multimodal image attachments) is complete and verified (slices 8B.0–8B.8). Phase 8C (Integration & Polish) is the next unblocked engineering milestone.
 
 ---
 
@@ -170,8 +170,8 @@ Implemented or designed:
 
 Current state:
 
-- **Implemented / Verified:** Soft Glass desktop interface, live FastAPI backend integration, live SSE chat streaming, conversation thread persistence, personal task CRUD, SQLite FTS5 lexical memory management, model and runtime profile controls, and Phase 8A UI decomposition / truthfulness work.
-- **Remaining / Planned:** Multimodal image attachment foundation (Phase 8B), keyboard accessibility, responsive desktop adaptations, and mock-cleanup polish (Phase 8C). Prototype or post-V1 surfaces (such as devices or health) retain placeholder or unavailable states pending dedicated milestone planning.
+- **Implemented / Verified:** Soft Glass desktop interface, live FastAPI backend integration, live SSE chat streaming, conversation thread persistence, personal task CRUD, SQLite FTS5 lexical memory management, model and runtime profile controls, Phase 8A UI decomposition / truthfulness work, and Phase 8B multimodal image attachments.
+- **Remaining / Planned:** Keyboard accessibility, responsive desktop adaptations, and mock-cleanup polish (Phase 8C). Prototype or post-V1 surfaces (such as devices or health) retain placeholder or unavailable states pending dedicated milestone planning.
 
 ### Android Companion
 
@@ -230,7 +230,7 @@ llama.cpp (multi-model router on port 8085 with Vulkan RX 580 offload)
 Current state:
 
 - **Implemented / Verified:** Persistent FastAPI Local AI Runtime, SQLite database migrations (`006_add_attachments`), conversation & message persistence, live SSE generation, SQLite FTS5 lexical memory retrieval, task CRUD with soft-delete and retention period calculation, task reminder metadata, Model Registry Schema v3, `llama.cpp` Vulkan provider on port 8085, canonical storage root resolution (`storage.py`), fail-closed authentication (`verify_token`), OpenAPI contract drift verification, and multimodal image attachment API & persistence foundation.
-- **Remaining / Known Gaps:** Full integration / Phase 8B closure (8B.8), backend character persistence table, controlled local model importer execution service (Decision D6 V1 gap), automatic periodic retention lifecycle scheduling, scheduled reminder notification delivery, autonomous tool execution engine, and post-V1 voice/health pipelines.
+- **Remaining / Known Gaps:** Backend character persistence table, controlled local model importer execution service (Decision D6 V1 gap), automatic periodic retention lifecycle scheduling, scheduled reminder notification delivery, autonomous tool execution engine, and post-V1 voice/health pipelines.
 
 ---
 

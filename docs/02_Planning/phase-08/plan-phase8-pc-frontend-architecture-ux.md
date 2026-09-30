@@ -1,6 +1,6 @@
 # Phase 8 Implementation Plan — PC Frontend Architecture, Runtime Config, Multimodal & Polish
 
-> **Status:** 8A and 8P COMPLETE / VERIFIED. Repository Documentation Reconciliation (Passes R0–R13.2) is COMPLETE / VERIFIED. Phase 8B is IN PROGRESS (Slices 8B.0–8B.7 COMPLETE / VERIFIED; Slice 8B.8 VERIFICATION PASSED / PENDING CLOSURE REVIEW). 8C is PLANNED AFTER 8B.
+> **Status:** 8A and 8P COMPLETE / VERIFIED. Repository Documentation Reconciliation (Passes R0–R13.2) is COMPLETE / VERIFIED. Phase 8B is COMPLETE / VERIFIED (8B.0–8B.8). 8C is NEXT / UNBLOCKED.
 > **Authority Precedence:** Normative architecture is owned by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md). Canonical product sequencing is owned by [`docs/02_Planning/ROADMAP.md`](../ROADMAP.md). Runtime config architecture is owned by [`docs/04_Architecture/04_Infrastructure/storage-and-assets.md`](../../04_Architecture/04_Infrastructure/storage-and-assets.md) and [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](../../04_Architecture/04_Infrastructure/runtime-and-models.md).  
 > **This is the single authoritative feature implementation plan for Phase 8.**
 
@@ -14,7 +14,7 @@ develop (verified baseline: 321 backend pytest, 185 frontend vitest, 124 Android
   +-- [GATE: Documentation Reconciliation]   (R0–R13.2: COMPLETE / VERIFIED — Phase 8B unblocked)
   +-- [8B.0–8B.6 Foundation]                 (COMPLETE / VERIFIED — merged via PR #13)
   +-- [8B.7: Persistent Attachment Rendering] (COMPLETE / VERIFIED)
-  +-- feature/phase8-ui-integration-polish   (8C: PLANNED AFTER 8B — polish, a11y, cleanup)
+  +-- feature/phase8-ui-integration-polish   (8C: NEXT / UNBLOCKED — polish, a11y, cleanup)
         based on merged 8B
 
 8P established canonical COMPANION_DATA_ROOT/attachments/. 8B activates image uploads to that directory now that documentation reconciliation is complete and verified.
@@ -1153,7 +1153,7 @@ Frontend Removal: Removing a staged attachment must call the DELETE endpoint —
   - Verify persistence across browser reload (F5) and conversation switching.
 - Tests: Message attachments rendered in conversation history; authenticated Blob preview fetch verified; unmount revokes object URLs; message reload preserves attachment references.
 
-#### 8B.8 — Full Integration & Phase Closure
+#### 8B.8 — Full Integration & Phase Closure (COMPLETE / VERIFIED)
 - Run full backend test suite (`pytest backend/tests`).
 - Run full frontend test suite (`vitest run`).
 - Run TypeScript static typecheck (`tsc --noEmit`).
