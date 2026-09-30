@@ -12,6 +12,7 @@ export interface ConversationOut {
   owner_id: string;
   created_at: string;
   updated_at: string;
+  message_count?: number;
 }
 
 export interface ConversationListOut {
@@ -51,6 +52,23 @@ export interface StreamMessageOptions {
   onError: (error: Error, partialText?: string) => void;
 }
 
+/**
+ * Derives a clean, concise deterministic fallback title from the initial user query.
+ */
+export function deriveDeterministicTitle(userPrompt: string): string {
+  const cleaned = userPrompt
+    .replace(/[#*`_~[\]()]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return 'New Conversation';
+  const words = cleaned.split(' ');
+  if (words.length <= 6 && cleaned.length <= 40) {
+    return cleaned;
+  }
+  const truncated = words.slice(0, 6).join(' ');
+  return truncated.length > 42 ? `${truncated.slice(0, 42).trim()}…` : `${truncated}…`;
+}
+
 export async function createConversation(title?: string, characterId?: string): Promise<ConversationOut> {
   return apiFetch<ConversationOut>('/api/v1/conversations', {
     method: 'POST',
@@ -74,6 +92,19 @@ export async function renameConversation(conversationId: string, title: string):
   return apiFetch<ConversationOut>(`/api/v1/conversations/${conversationId}`, {
     method: 'PATCH',
     body: JSON.stringify({ title }),
+  });
+}
+
+export async function generateConversationTitle(
+  conversationId: string,
+  options?: { currentTitle?: string; fallbackTitle?: string }
+): Promise<ConversationOut> {
+  return apiFetch<ConversationOut>(`/api/v1/conversations/${conversationId}/generate-title`, {
+    method: 'POST',
+    body: JSON.stringify({
+      current_title: options?.currentTitle,
+      fallback_title: options?.fallbackTitle,
+    }),
   });
 }
 

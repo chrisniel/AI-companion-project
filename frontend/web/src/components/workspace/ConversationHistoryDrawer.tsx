@@ -165,8 +165,12 @@ export const ConversationHistoryDrawer: React.FC<ConversationHistoryDrawerProps>
                       {conv.title}
                     </h3>
                     {conv.messagesCount != null && (
-                      <Badge variant={isActive ? 'accent' : 'glass'} size="sm">
-                        {conv.messagesCount} msgs
+                      <Badge
+                        variant={isActive ? 'accent' : 'glass'}
+                        size="sm"
+                        className="font-semibold text-[11px] px-2 py-0.5 min-w-[50px] justify-center tracking-tight"
+                      >
+                        {conv.messagesCount} {conv.messagesCount === 1 ? 'msg' : 'msgs'}
                       </Badge>
                     )}
                   </div>

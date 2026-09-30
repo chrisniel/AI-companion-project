@@ -1160,7 +1160,7 @@
           "Conversations"
         ],
         "summary": "List Conversations",
-        "description": "List active conversations for the authenticated owner, ordered by updated_at descending.",
+        "description": "List active conversations for the authenticated owner with authoritative message counts.",
         "operationId": "list_conversations_api_v1_conversations_get",
         "security": [
           {
@@ -1238,7 +1238,7 @@
           "Conversations"
         ],
         "summary": "Get Conversation",
-        "description": "Get single conversation by ID.",
+        "description": "Get single conversation by ID with authoritative message count.",
         "operationId": "get_conversation_api_v1_conversations__conversation_id__get",
         "security": [
           {
@@ -1409,6 +1409,87 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversation_id}/generate-title": {
+      "post": {
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Generate Conversation Title",
+        "description": "Generate a concise title for a conversation using the active local model.\n\nAdheres strictly to Phase 8C rules:\n- Never overwrites custom/manually edited titles\n- Uses cheap bounded non-streaming inference (max_tokens=24, temp=0.1)\n- Enforces timeout, sanitization, and fallback\n- Never raises 500 error on model failure or unavailability",
+        "operationId": "generate_conversation_title_api_v1_conversations__conversation_id__generate_title_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/GenerateTitleRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationOut"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -2598,6 +2679,12 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "message_count": {
+            "type": "integer",
+            "title": "Message Count",
+            "description": "Authoritative active message count",
+            "default": 0
           }
         },
         "additionalProperties": false,
@@ -2629,6 +2716,38 @@
         ],
         "title": "ConversationUpdate",
         "description": "Payload to rename/update a conversation."
+      },
+      "GenerateTitleRequest": {
+        "properties": {
+          "current_title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Title"
+          },
+          "fallback_title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallback Title"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "GenerateTitleRequest",
+        "description": "Payload to request model-generated title with optional current and fallback titles."
       },
       "GenerationDefaults": {
         "properties": {

@@ -32,6 +32,8 @@ vi.mock('../services/api', async () => {
     getMessages: vi.fn(),
     streamSendMessage: vi.fn(),
     fetchAttachmentBlobUrl: vi.fn(),
+    renameConversation: vi.fn(),
+    generateConversationTitle: vi.fn(),
     getApiBaseUrl: () => 'http://127.0.0.1:8000',
     getApiKey: () => '',
   };
@@ -495,6 +497,223 @@ print("hello world")
       expect(screen.getByText('Forbidden')).toBeInTheDocument();
 
       expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    });
+  });
+
+  describe('14. Conversation Title Generation & Deterministic Fallback', () => {
+    it('derives concise deterministic fallback title from user prompt', () => {
+      expect(api.deriveDeterministicTitle('Can you help me figure out why my local model unloads after sleep?'))
+        .toBe('Can you help me figure out…');
+      expect(api.deriveDeterministicTitle('Short question?')).toBe('Short question?');
+      expect(api.deriveDeterministicTitle('   ')).toBe('New Conversation');
+    });
+
+    it('sets deterministic title immediately on send and invokes generateConversationTitle after first turn', async () => {
+      vi.mocked(api.checkHealth).mockResolvedValue({ status: 'healthy' });
+      vi.mocked(api.getModelStatus).mockResolvedValue({
+        model_loaded: true,
+        model_awake: true,
+        active_model: 'qwen3-vl-2b-instruct.gguf',
+        runtime_state: 'MODEL_READY',
+        model_resident: true,
+        router_running: true,
+      } as any);
+
+      const conv: api.ConversationOut = {
+        id: 'conv-test-title',
+        title: 'New Conversation',
+        character_id: 'default',
+        owner_id: 'owner-1',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        message_count: 0,
+      };
+
+      vi.mocked(api.listConversations).mockResolvedValue({ items: [conv], total: 1 });
+      vi.mocked(api.getMessages).mockResolvedValue({ items: [], total: 0 });
+      vi.mocked(api.renameConversation).mockResolvedValue({ ...conv, title: 'What is RX 580…' });
+      vi.mocked(api.generateConversationTitle).mockResolvedValue({
+        ...conv,
+        title: 'RX 580 Performance Insights',
+      });
+
+      let onDoneCallback: ((fullText?: string) => void) | undefined;
+      vi.mocked(api.streamSendMessage).mockImplementation(async (options) => {
+        options.onAccepted?.();
+        onDoneCallback = options.onDone;
+      });
+
+      renderWithProviders(<AssistantView />);
+
+      await waitFor(() => {
+        expect(screen.getByText('New Conversation')).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText(/Message Aura/i);
+      fireEvent.change(input, { target: { value: 'What is RX 580 compute capability for local inference?' } });
+      fireEvent.click(screen.getByTitle(/Send prompt to local model/i));
+
+      // Deterministic title appears immediately
+      await waitFor(() => {
+        expect(screen.getByText('What is RX 580 compute capability…')).toBeInTheDocument();
+      });
+      expect(api.renameConversation).toHaveBeenCalledWith('conv-test-title', 'What is RX 580 compute capability…');
+
+      // First turn completes
+      onDoneCallback?.('Here is the compute capability.');
+
+      // Automated model title replaces temporary title once generated
+      await waitFor(() => {
+        expect(api.generateConversationTitle).toHaveBeenCalledWith('conv-test-title', {
+          currentTitle: 'What is RX 580 compute capability…',
+          fallbackTitle: 'What is RX 580 compute capability…',
+        });
+        expect(screen.getByText('RX 580 Performance Insights')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('15. Blank Conversation Spam Prevention via Empty Draft Reuse', () => {
+    it('reuses existing empty draft on repeated New Chat clicks without creating extra rows', async () => {
+      vi.mocked(api.checkHealth).mockResolvedValue({ status: 'healthy' });
+      vi.mocked(api.getModelStatus).mockResolvedValue({
+        model_loaded: true,
+        model_awake: true,
+        active_model: 'qwen3-vl-2b-instruct.gguf',
+        runtime_state: 'MODEL_READY',
+        model_resident: true,
+        router_running: true,
+      } as any);
+
+      const emptyDraft: api.ConversationOut = {
+        id: 'conv-empty-draft',
+        title: 'New Conversation',
+        character_id: 'default',
+        owner_id: 'owner-1',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        message_count: 0,
+      };
+
+      vi.mocked(api.listConversations).mockResolvedValue({ items: [emptyDraft], total: 1 });
+      vi.mocked(api.getMessages).mockResolvedValue({ items: [], total: 0 });
+
+      renderWithProviders(<AssistantView />);
+
+      await waitFor(() => {
+        expect(screen.getByText('New Conversation')).toBeInTheDocument();
+      });
+
+      // Clear call count after initial load
+      vi.mocked(api.createConversation).mockClear();
+
+      const newChatBtn = screen.getByRole('button', { name: /New Chat/i });
+      fireEvent.click(newChatBtn);
+      fireEvent.click(newChatBtn);
+      fireEvent.click(newChatBtn);
+
+      // Reused empty draft, zero additional createConversation calls
+      expect(api.createConversation).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('16. Authoritative History Drawer Counts & Empty Draft Filtering', () => {
+    it('displays authoritative message counts and omits historical empty drafts from drawer', async () => {
+      vi.mocked(api.checkHealth).mockResolvedValue({ status: 'healthy' });
+      vi.mocked(api.getModelStatus).mockResolvedValue({
+        model_loaded: true,
+        model_awake: true,
+        active_model: 'qwen3-vl-2b-instruct.gguf',
+        runtime_state: 'MODEL_READY',
+        model_resident: true,
+        router_running: true,
+      } as any);
+
+      const activeConv: api.ConversationOut = {
+        id: 'conv-active',
+        title: 'Active Research',
+        character_id: 'default',
+        owner_id: 'owner-1',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        message_count: 4,
+      };
+
+      const populatedPastConv: api.ConversationOut = {
+        id: 'conv-past',
+        title: 'Previous Architecture Review',
+        character_id: 'default',
+        owner_id: 'owner-1',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        message_count: 12,
+      };
+
+      const abandonedEmptyConv: api.ConversationOut = {
+        id: 'conv-abandoned-empty',
+        title: 'New Conversation (Old Blank)',
+        character_id: 'default',
+        owner_id: 'owner-1',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        message_count: 0,
+      };
+
+      vi.mocked(api.listConversations).mockResolvedValue({
+        items: [activeConv, populatedPastConv, abandonedEmptyConv],
+        total: 3,
+      });
+      vi.mocked(api.getMessages).mockResolvedValue({
+        items: [
+          {
+            id: 'm-1',
+            conversation_id: 'conv-active',
+            sender: 'user',
+            content: 'Hello',
+            status: 'completed',
+            sequence_no: 1,
+            attachments: [],
+            created_at: new Date().toISOString(),
+          },
+        ],
+        total: 1,
+      });
+
+      renderWithProviders(<AssistantView />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Active Research')).toBeInTheDocument();
+      });
+
+      // Open drawer
+      const historyBtn = screen.getByTitle('Open Conversation History');
+      fireEvent.click(historyBtn);
+
+      await waitFor(() => {
+        expect(screen.getByText('Previous Architecture Review')).toBeInTheDocument();
+      });
+
+      // Authoritative count badge rendered
+      expect(screen.getByText('12 msgs')).toBeInTheDocument();
+
+      // Abandoned empty conversation is omitted from drawer
+      expect(screen.queryByText('New Conversation (Old Blank)')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('17. Light Mode Contrast & Crisp Glass Border Tokens', () => {
+    it('index.css light mode defines crisp non-white glass border and balanced slate palette', () => {
+      const cssPath = path.resolve(__dirname, '../index.css');
+      const cssContent = fs.readFileSync(cssPath, 'utf-8');
+
+      // Confirms slate-border contrast (not white-on-white 255, 255, 255)
+      expect(cssContent).toContain('--color-surface-glass-border: rgba(148, 163, 184, 0.35);');
+      expect(cssContent).toContain('--color-border-subtle: rgba(148, 163, 184, 0.28);');
+      // Confirms balanced neutral slate app background
+      expect(cssContent).toContain('--color-app-bg: #f1f5f9;');
+      // Confirms text hierarchy contrast
+      expect(cssContent).toContain('--color-text-primary: #0f172a;');
+      expect(cssContent).toContain('--color-text-secondary: #334155;');
     });
   });
 });

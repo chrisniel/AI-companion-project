@@ -8,6 +8,9 @@ import {
   uploadAttachment,
   fetchAttachmentBlobUrl,
   deleteAttachment,
+  renameConversation,
+  generateConversationTitle,
+  deriveDeterministicTitle,
   registryEntryMatchesIdentifier,
   ConversationOut,
   AttachmentOut,
@@ -67,6 +70,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
   const conversationsRef = useRef<ConversationOut[]>([]);
   const [activeConversationId, setActiveConversationId] = useState('');
   const [conversationTitle, setConversationTitle] = useState('No Conversation');
+  const userEditedTitleRef = useRef<Record<string, boolean>>({});
   const [inputPrompt, setInputPrompt] = useState('');
 
   // 8B.6 Staged Attachments
@@ -584,6 +588,21 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     const userText = promptText || 'Shared attachment for processing.';
     const attachmentIds = stagedSnapshot.map((s) => s.attachment.id);
 
+    // Phase 8C: First-turn automatic conversation naming with deterministic fallback
+    const isFirstTurn = messages.length === 0;
+    let deterministicTitle: string | null = null;
+    if (isFirstTurn) {
+      deterministicTitle = deriveDeterministicTitle(userText);
+      const isUntouched = conversationTitle === 'New Conversation' || !conversationTitle;
+      if (isUntouched && !userEditedTitleRef.current[convId]) {
+        setConversationTitle(deterministicTitle);
+        setConversations((prev) =>
+          prev.map((c) => (c.id === convId ? { ...c, title: deterministicTitle! } : c))
+        );
+        renameConversation(convId, deterministicTitle).catch(() => {});
+      }
+    }
+
     // Synchronously lock send phase BEFORE awaiting fetch
     transitionSendPhase('awaiting_acceptance');
     setAttachmentError(null);
@@ -668,6 +687,30 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
             }
             return prev;
           });
+        }
+
+        // Phase 8C: Trigger cheap bounded model title generation after first successful assistant turn
+        if (isFirstTurn && deterministicTitle) {
+          generateConversationTitle(convId, {
+            currentTitle: deterministicTitle,
+            fallbackTitle: deterministicTitle,
+          })
+            .then((res) => {
+              if (!mountedRef.current || !res || !res.title) return;
+              if (res.title === 'New Conversation') return;
+              // Preserve user manual edits if made during generation
+              if (userEditedTitleRef.current[convId]) return;
+
+              setConversations((prev) =>
+                prev.map((c) => (c.id === convId ? { ...c, title: res.title } : c))
+              );
+              if (activeConversationIdRef.current === convId) {
+                setConversationTitle(res.title);
+              }
+            })
+            .catch((err) => {
+              console.debug('Background title generation skipped/failed, keeping fallback:', err);
+            });
         }
       },
 
@@ -761,6 +804,19 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     if (uploadInProgressRef.current) return;
     if (removingAttachmentIdsRef.current.size > 0) return;
 
+    // Phase 8C: Prevent blank-conversation spam
+    // If the active conversation is already an empty draft, reuse it rather than POSTing another row
+    const isCurrentEmptyDraft =
+      (conversationTitle === 'New Conversation' || !conversationTitle) &&
+      messages.length === 0 &&
+      stagedAttachments.length === 0;
+    if (isCurrentEmptyDraft && activeConversationIdRef.current) {
+      setInputPrompt('');
+      setAssistantState('idle');
+      setAttachmentError(null);
+      return;
+    }
+
     conversationTransitionRef.current = true;
     setIsConversationTransitioning(true);
 
@@ -842,12 +898,22 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     loadConversationMessages(id);
   };
 
-  const drawerConversations: ConversationHistoryItem[] = conversations.map((c) => ({
-    id: c.id,
-    title: c.title,
-    date: new Date(c.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }),
-    messagesCount: c.id === activeConversationId ? messages.length : undefined,
-  }));
+  // Phase 8C: Authoritative message counts and empty draft visibility filter
+  const drawerConversations: ConversationHistoryItem[] = conversations
+    .filter((c) => {
+      const count = c.id === activeConversationId ? messages.length : (c.message_count ?? 0);
+      const isOldEmptyDraft =
+        (!c.title || c.title === 'New Conversation' || c.title.startsWith('New Conversation')) &&
+        count === 0 &&
+        c.id !== activeConversationId;
+      return !isOldEmptyDraft;
+    })
+    .map((c) => ({
+      id: c.id,
+      title: c.title,
+      date: new Date(c.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }),
+      messagesCount: c.id === activeConversationId ? messages.length : (c.message_count ?? 0),
+    }));
 
   return (
     <div className="flex flex-col h-full min-h-0 relative">

@@ -421,8 +421,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       root.style.setProperty('--color-surface-glass', `rgba(18, 24, 36, ${opacity})`);
       root.style.setProperty('--color-surface-glass-border', `rgba(255, 255, 255, ${Math.max(0.06, opacity * 0.14)})`);
     } else {
-      root.style.setProperty('--color-surface-glass', `rgba(255, 255, 255, ${opacity})`);
-      root.style.setProperty('--color-surface-glass-border', `rgba(255, 255, 255, ${Math.min(1, opacity + 0.15)})`);
+      root.style.setProperty('--color-surface-glass', `rgba(255, 255, 255, ${Math.max(0.75, opacity)})`);
+      root.style.setProperty('--color-surface-glass-border', 'rgba(148, 163, 184, 0.35)');
     }
 
     // Background filter and overlay variables
