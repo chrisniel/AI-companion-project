@@ -10,4 +10,4 @@
 - **8B.0–8B.6:** COMPLETE / VERIFIED
 - **8B.7:** COMPLETE / VERIFIED
 - **8B.8:** VERIFICATION PASSED / PENDING CLOSURE REVIEW
-- **8C:** PLANNED / BLOCKED until 8B completes
+- **8C:** PLANNED / BLOCKED until Phase 8B is independently closed

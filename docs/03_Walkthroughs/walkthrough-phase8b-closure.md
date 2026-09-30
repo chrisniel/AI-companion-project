@@ -18,7 +18,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 ## 2. Files Changed
 
-- `frontend/web/src/components/workspace/ConversationMessageItem.tsx` — Updated to parse `attachments` from messages and render the `AttachmentPreviewList` with authenticated Blob fetching.
+- `frontend/web/src/components/workspace/ConversationMessageItem.tsx` — Updated to parse `attachments` from messages and render the `AttachmentPreviewRenderer` with authenticated Blob fetching.
 - `frontend/web/src/components/workspace/AssistantView.tsx` & `AssistantMessageList.tsx` — Integrated attachment props and state mapping.
 - `frontend/web/src/services/api/conversationApi.ts` & `types.ts` — Updated the frontend domain types and API response models to include `attachments`.
 - `frontend/web/src/test/persistentAttachmentRendering.test.tsx` — New integration test suite asserting persistent attachment rendering behavior, fail-closed validation, and asynchronous URL lifecycle.
@@ -29,7 +29,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 1. Event trigger: The user switches to a conversation or sends a message, which hydrates the frontend with `MessageOut` objects containing an array of `AttachmentRef`.
 2. Validation: `ConversationMessageItem` examines each attachment; only allowed MIME types trigger preview rendering.
-3. Core processing: The `AttachmentPreviewList` maps each valid attachment to an async fetch against `attachmentApi.fetchAttachmentBlobUrl()`, bypassing direct `<img>` fetching to ensure BOLA/Bearer-token protection.
+3. Core processing: The `AttachmentPreviewRenderer` maps each valid attachment to an async fetch against `attachmentApi.fetchAttachmentBlobUrl()`, bypassing direct `<img>` fetching to ensure BOLA/Bearer-token protection.
 4. Completion: The fetched Blob is converted via `URL.createObjectURL` and rendered visually beneath the user message text.
 5. Recovery/cancellation: If the frontend unmounts, or the user switches conversations, the cleanup `useEffect` immediately calls `URL.revokeObjectURL` to reclaim memory.
 
@@ -43,7 +43,8 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 ### Automated Checks
 
-- [x] `python -m pytest tests/test_migration_safety.py` — Passed (15/15 migration tests, verifying downgrade and re-upgrade paths while isolating the data root).
+- [x] `python -m pytest tests/test_migration_safety.py` — Passed (15/15 migration tests, verifying migration/preflight/copy/restart/WAL safety under pytest isolation).
+- [x] Alembic schema-chain verification — Passed (005 → 006 → 005 → head successfully executed against an explicit temporary COMPANION_DATA_ROOT).
 - [x] `python -m pytest backend/tests` — Passed (321 backend tests).
 - [x] `npm --prefix frontend/web run test -- --run` — Passed (193 frontend tests).
 - [x] `npm --prefix frontend/web run lint` — Passed (TypeScript typecheck 0 errors).
@@ -68,4 +69,4 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
   - Resolution: Ensure the user session is active and the correct conversation ID scope is being requested.
 - Symptom: Browser memory usage steadily increases.
   - Likely cause: `URL.revokeObjectURL` is not being called on component unmount.
-  - Resolution: Check the `useEffect` cleanup return inside `AttachmentPreviewList` or `AssistantComposer`.
+  - Resolution: Check the `useEffect` cleanup return inside `AttachmentPreviewRenderer` or `AssistantComposer`.

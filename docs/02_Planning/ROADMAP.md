@@ -53,7 +53,7 @@ Roadmap tracking separates **Release Allocation** (which product milestone owns 
               │
 [Reconciliation Passes R0–R13] ────► COMPLETE / VERIFIED
               │
-[Phase 8B: Multimodal Vision] ─────► IN PROGRESS (8B.0–8B.7 VERIFIED; 8B.8 NEXT)
+[Phase 8B: Multimodal Vision] ─────► IN PROGRESS (8B.0–8B.7 VERIFIED; 8B.8 VERIFICATION PASSED / PENDING CLOSURE REVIEW)
               │
 [Phase 8C: Integration & Polish] ──► PC V1 (BLOCKED BY 8B)
               │
@@ -81,7 +81,7 @@ Roadmap tracking separates **Release Allocation** (which product milestone owns 
 
 ### 2.2 Immediate Next Milestone
 - **Phase 8B — Multimodal Image Attachment Foundation (`IN PROGRESS`):**
-  - *Current Status:* Slices 8B.0–8B.7 are COMPLETE and VERIFIED. Slice 8B.8 (Full Integration & Phase Closure) is NEXT / UNBLOCKED. Phase 8B as a whole is NOT yet complete.
+  - *Current Status:* Slices 8B.0–8B.7 are COMPLETE and VERIFIED. Slice 8B.8 (Full Integration & Phase Closure) is VERIFICATION PASSED / PENDING CLOSURE REVIEW. Phase 8B as a whole is NOT yet complete.
   - *Next Slice Scope (8B.8):* Final Phase 8B integration and closure verification across the repository baseline (backend, frontend, test suites, TypeScript, OpenAPI schema, etc.).
   - *Authoritative Feature Plan:* [`phase-08/plan-phase8-pc-frontend-architecture-ux.md`](./phase-08/plan-phase8-pc-frontend-architecture-ux.md).
 
