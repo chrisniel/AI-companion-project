@@ -3,7 +3,7 @@
 ## Current Execution State
 
 - **Current State:** Phase 8C Correctness & Hardening Review = IMPLEMENTED / FINAL REVIEW PENDING
-- **Archive:** [Task Archive: Phase 8C Integration & Polish](archive/task-2026-09-30-phase8c-integration.md)
+- **Archive:** [Task Archive: Canonical Feature Reconciliation (Passes R9–R13.2)](archive/task-2026-09-29-canonical-feature-reconciliation-r9-r13.md)
 - **Commit Owner:** Chris manually reviews, commits, pushes, opens/merges PRs, and performs branch operations.
 
 ## Phase State

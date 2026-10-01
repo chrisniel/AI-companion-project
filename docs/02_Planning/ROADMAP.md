@@ -173,7 +173,7 @@ AI Companion **V1** (unqualified) is strictly defined as the first complete, sta
    - *Implementation Status:* Implemented Baseline + Foundation Host/Runtime extensions.
    - *Delivery Band:* Foundation Band (Host & Runtime Lane).
 2. **React Web Primary Client:** Primary desktop control center, runtime configuration, model controls, and streaming chat interface.
-   - *Implementation Status:* Existing Baseline + remaining Phase 8C work.
+   - *Implementation Status:* Existing Baseline + Phase 8C polish (implemented pending final review).
    - *Delivery Band:* Phase 8C Integration & Polish.
 3. **Local Text LLM Inference:** Provider- and hardware-portable local text generation through the Local AI Runtime (`llama.cpp` Vulkan on AMD RX 580 represents the verified baseline implementation).
    - *Implementation Status:* Implemented / Verified Baseline.
@@ -198,8 +198,8 @@ AI Companion **V1** (unqualified) is strictly defined as the first complete, sta
 8. **Multimodal Vision Understanding:** Phase 8B image attachment API, upload validation guards (MIME, dimension, megapixel, bomb guards), and vision-model inference.
    - *Implementation Status:* Complete / Verified (8B.0–8B.8).
    - *Delivery Band:* Completed Milestones.
-9. **Phase 8C Integration, Accessibility & Polish:** Comprehensive keyboard navigation, ARIA accessibility, bundle optimization, UI consistency, elimination of deprecated mock files, and responsive desktop web cleanup.
-   - *Implementation Status:* Next / Unblocked; completion is a Final Acceptance Dependency for PC V1.
+9. **Phase 8C Integration, Accessibility & Polish:** Comprehensive keyboard navigation, ARIA accessibility, bundle optimization, UI consistency, elimination of deprecated mock files, title lifecycle hardening, cancellation DB persistence safety, and responsive desktop web cleanup.
+   - *Implementation Status:* IMPLEMENTED / FINAL REVIEW PENDING; independent closure approval is a Final Acceptance Dependency for PC V1.
    - *Delivery Band:* Phase 8C Integration & Polish.
 10. **Conversational Voice (without Wake Word):** Local audio capture, provider-independent speech-to-text (STT), provider-independent text-to-speech (TTS), and voice activity detection (VAD) / turn detection where required. User can conduct an explicitly initiated, consented bidirectional spoken conversation without wake word. Universal default TTS engine, STT adapter, and exact initiation UX remain OPEN DESIGN. Wake word detection is decoupled and scheduled for PC Later.
     - *Implementation Status:* Not Started.

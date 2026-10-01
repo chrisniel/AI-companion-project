@@ -71,6 +71,8 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
   const [activeConversationId, setActiveConversationId] = useState('');
   const [conversationTitle, setConversationTitle] = useState('No Conversation');
   const userEditedTitleRef = useRef<Record<string, boolean>>({});
+  const pendingTitlePromiseRef = useRef<Record<string, Promise<any>>>({});
+  const reconcilingTitleConvIdsRef = useRef<Set<string>>(new Set());
   const [inputPrompt, setInputPrompt] = useState('');
 
   // 8B.6 Staged Attachments
@@ -240,6 +242,41 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
           attachments: m.attachments,
         }));
         setMessages(mapped);
+
+        // Phase 8C: Default-title reconciliation for conversations with persisted messages but default title
+        const currentConv = conversationsRef.current.find((c) => c.id === convId);
+        const isDefaultTitle = !currentConv || currentConv.title === 'New Conversation' || !currentConv.title;
+        const isReconciling = reconcilingTitleConvIdsRef.current.has(convId);
+        const isUserRenamed = userEditedTitleRef.current[convId];
+
+        if (isDefaultTitle && !isReconciling && !isUserRenamed) {
+          const firstUserMsg = res.items.find(
+            (m) => m.sender === 'user' && m.content && m.content.trim()
+          );
+          if (firstUserMsg) {
+            reconcilingTitleConvIdsRef.current.add(convId);
+            const fallbackTitle = deriveDeterministicTitle(firstUserMsg.content);
+            generateConversationTitle(convId, {
+              currentTitle: currentConv?.title || 'New Conversation',
+              fallbackTitle,
+            })
+              .then((result) => {
+                if (!mountedRef.current || !result || !result.title) return;
+                if (result.title === 'New Conversation') return;
+                if (userEditedTitleRef.current[convId]) return;
+
+                setConversations((prev) =>
+                  prev.map((c) => (c.id === convId ? { ...c, title: result.title } : c))
+                );
+                if (activeConversationIdRef.current === convId) {
+                  setConversationTitle(result.title);
+                }
+              })
+              .catch((reconcileErr) => {
+                console.debug('Failed to reconcile default conversation title:', reconcileErr);
+              });
+          }
+        }
       } else {
         setMessages([]);
       }
@@ -662,9 +699,10 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
 
         // 4. Phase 8C: Persist deterministic title on backend once message has been accepted
         if (isFirstTurn && deterministicTitle && isUntouched && !userEditedTitleRef.current[convId]) {
-          renameConversation(convId, deterministicTitle).catch((renameErr) => {
+          const renamePromise = renameConversation(convId, deterministicTitle).catch((renameErr) => {
             console.debug('Failed to persist deterministic title on backend:', renameErr);
           });
+          pendingTitlePromiseRef.current[convId] = renamePromise;
         }
       },
 
@@ -695,16 +733,26 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
           });
         }
 
-        // Phase 8C: Trigger cheap bounded model title generation after first successful assistant turn
+        // Phase 8C: Safely sequence model title generation after pending deterministic rename settles
         if (isFirstTurn && deterministicTitle) {
-          generateConversationTitle(convId, {
-            currentTitle: deterministicTitle,
-            fallbackTitle: deterministicTitle,
-          })
-            .then((res) => {
+          const pendingRename = pendingTitlePromiseRef.current[convId];
+          const runModelTitleGeneration = async () => {
+            if (pendingRename) {
+              try {
+                await pendingRename;
+              } catch (err) {
+                console.debug('Pending deterministic rename settled with error before model title generation:', err);
+              }
+            }
+            if (!mountedRef.current || userEditedTitleRef.current[convId]) return;
+
+            try {
+              const res = await generateConversationTitle(convId, {
+                currentTitle: deterministicTitle,
+                fallbackTitle: deterministicTitle,
+              });
               if (!mountedRef.current || !res || !res.title) return;
               if (res.title === 'New Conversation') return;
-              // Preserve user manual edits if made during generation
               if (userEditedTitleRef.current[convId]) return;
 
               setConversations((prev) =>
@@ -713,10 +761,12 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
               if (activeConversationIdRef.current === convId) {
                 setConversationTitle(res.title);
               }
-            })
-            .catch((err) => {
+            } catch (err) {
               console.debug('Background title generation skipped/failed, keeping fallback:', err);
-            });
+            }
+          };
+
+          pendingTitlePromiseRef.current[convId] = runModelTitleGeneration();
         }
       },
 
@@ -725,6 +775,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
         abortControllerRef.current = null;
 
         if (!hasBeenAccepted) {
+          delete pendingTitlePromiseRef.current[convId];
           // Revert optimistic title if pre-acceptance failure on first turn
           if (isFirstTurn && deterministicTitle && isUntouched && !userEditedTitleRef.current[convId]) {
             if (activeConversationIdRef.current === convId) {

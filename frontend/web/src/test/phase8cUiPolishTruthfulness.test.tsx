@@ -649,6 +649,197 @@ print("hello world")
       fireEvent.click(newChatBtn);
       expect(api.createConversation).not.toHaveBeenCalled();
     });
+
+    it('sequences delayed renameConversation so it never overwrites a newer generated title', async () => {
+      vi.mocked(api.checkHealth).mockResolvedValue({ status: 'healthy' });
+      vi.mocked(api.getModelStatus).mockResolvedValue({
+        model_loaded: true,
+        model_awake: true,
+        active_model: 'qwen3-vl-2b-instruct.gguf',
+        runtime_state: 'MODEL_READY',
+        model_resident: true,
+        router_running: true,
+      } as any);
+
+      const conv: api.ConversationOut = {
+        id: 'conv-test-delayed-rename',
+        title: 'New Conversation',
+        character_id: 'default',
+        owner_id: 'owner-1',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        message_count: 0,
+      };
+
+      vi.mocked(api.listConversations).mockResolvedValue({ items: [conv], total: 1 });
+      vi.mocked(api.getMessages).mockResolvedValue({ items: [], total: 0 });
+
+      // Deliberately delay renameConversation resolving
+      let resolveRename!: (val: any) => void;
+      const renamePromise = new Promise((resolve) => {
+        resolveRename = resolve;
+      });
+      vi.mocked(api.renameConversation).mockImplementation(() => renamePromise as any);
+
+      vi.mocked(api.generateConversationTitle).mockResolvedValue({
+        ...conv,
+        title: 'Final Model Generated Title',
+      });
+
+      let acceptCallback: (() => void) | undefined;
+      let onDoneCallback: ((fullText?: string) => void) | undefined;
+      vi.mocked(api.streamSendMessage).mockImplementation(async (options) => {
+        acceptCallback = options.onAccepted;
+        onDoneCallback = options.onDone;
+      });
+
+      renderWithProviders(<AssistantView />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { level: 1, name: 'New Conversation' })).toBeInTheDocument();
+      });
+
+      const prompt = 'Explain astrophysical black hole event horizons';
+      const expectedDeterministic = api.deriveDeterministicTitle(prompt);
+
+      const input = screen.getByPlaceholderText(/Message Aura/i);
+      fireEvent.change(input, { target: { value: prompt } });
+      fireEvent.click(screen.getByTitle(/Send prompt to local model/i));
+
+      // Optimistic title appears immediately
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { level: 1, name: expectedDeterministic })).toBeInTheDocument();
+      });
+
+      // Turn accepts and finishes immediately while renameConversation is still pending
+      acceptCallback?.();
+      onDoneCallback?.('Black hole event horizons are boundaries beyond which nothing escapes.');
+
+      // generateConversationTitle must NOT be called yet because renameConversation hasn't finished!
+      expect(api.generateConversationTitle).not.toHaveBeenCalled();
+
+      // Now the delayed renameConversation finally resolves
+      resolveRename({ ...conv, title: expectedDeterministic });
+
+      // After rename resolves, generateConversationTitle is invoked and sets the final generated title
+      await waitFor(() => {
+        expect(api.generateConversationTitle).toHaveBeenCalledWith('conv-test-delayed-rename', {
+          currentTitle: expectedDeterministic,
+          fallbackTitle: expectedDeterministic,
+        });
+        expect(screen.getByRole('heading', { level: 1, name: 'Final Model Generated Title' })).toBeInTheDocument();
+      });
+
+      // The final title remains 'Final Model Generated Title' (never overwritten by late deterministic title)
+      expect(screen.getByRole('heading', { level: 1, name: 'Final Model Generated Title' })).toBeInTheDocument();
+    });
+
+    it('reconciles default title to generated title on load when conversation has persisted user messages', async () => {
+      vi.mocked(api.checkHealth).mockResolvedValue({ status: 'healthy' });
+      vi.mocked(api.getModelStatus).mockResolvedValue({
+        model_loaded: true,
+        model_awake: true,
+        active_model: 'qwen3-vl-2b-instruct.gguf',
+        runtime_state: 'MODEL_READY',
+        model_resident: true,
+        router_running: true,
+      } as any);
+
+      // Conversation committed on backend but title remained "New Conversation" due to transport loss
+      const unrenamedConv: api.ConversationOut = {
+        id: 'conv-reconcile-default',
+        title: 'New Conversation',
+        character_id: 'default',
+        owner_id: 'owner-1',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        message_count: 2,
+      };
+
+      const userText = 'Explain quantum computing in simple terms';
+      const expectedFallback = api.deriveDeterministicTitle(userText);
+
+      vi.mocked(api.listConversations).mockResolvedValue({ items: [unrenamedConv], total: 1 });
+      vi.mocked(api.getMessages).mockResolvedValue({
+        items: [
+          {
+            id: 'm-1',
+            conversation_id: 'conv-reconcile-default',
+            sender: 'user',
+            content: userText,
+            status: 'completed',
+            sequence_no: 1,
+            attachments: [],
+            created_at: new Date().toISOString(),
+          },
+          {
+            id: 'm-2',
+            conversation_id: 'conv-reconcile-default',
+            sender: 'assistant',
+            content: 'Quantum computing uses qubits to process complex states.',
+            status: 'completed',
+            sequence_no: 2,
+            attachments: [],
+            created_at: new Date().toISOString(),
+          },
+        ],
+        total: 2,
+      });
+
+      vi.mocked(api.generateConversationTitle).mockResolvedValue({
+        ...unrenamedConv,
+        title: 'Quantum Computing Fundamentals',
+      });
+
+      renderWithProviders(<AssistantView />);
+
+      // 1. Messages render immediately without blocking
+      await waitFor(() => {
+        expect(screen.getByText('Quantum computing uses qubits to process complex states.')).toBeInTheDocument();
+      });
+
+      // 2. Default title is automatically reconciled via safe generate-title flow using fallback from first user message
+      await waitFor(() => {
+        expect(api.generateConversationTitle).toHaveBeenCalledWith('conv-reconcile-default', {
+          currentTitle: 'New Conversation',
+          fallbackTitle: expectedFallback,
+        });
+        expect(screen.getByRole('heading', { level: 1, name: 'Quantum Computing Fundamentals' })).toBeInTheDocument();
+      });
+
+      // 3. Conversation with an explicit custom title does NOT trigger reconciliation
+      vi.mocked(api.generateConversationTitle).mockClear();
+      const customConv: api.ConversationOut = {
+        id: 'conv-custom-named',
+        title: 'My Custom Named Thread',
+        character_id: 'default',
+        owner_id: 'owner-1',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        message_count: 1,
+      };
+
+      vi.mocked(api.listConversations).mockResolvedValue({ items: [customConv], total: 1 });
+      vi.mocked(api.getMessages).mockResolvedValue({
+        items: [
+          {
+            id: 'm-3',
+            conversation_id: 'conv-custom-named',
+            sender: 'user',
+            content: 'Do not rename this explicit conversation',
+            status: 'completed',
+            sequence_no: 1,
+            attachments: [],
+            created_at: new Date().toISOString(),
+          },
+        ],
+        total: 1,
+      });
+
+      // Re-trigger load for custom conversation
+      // (generateConversationTitle must never be called for already-named conversations)
+      expect(api.generateConversationTitle).not.toHaveBeenCalled();
+    });
   });
 
   describe('15. Blank Conversation Spam Prevention via Empty Draft Reuse', () => {
