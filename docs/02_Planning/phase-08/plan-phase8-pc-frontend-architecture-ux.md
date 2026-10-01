@@ -8,13 +8,13 @@
 
 ## Branch Strategy
 
-develop (verified baseline: 321 backend pytest, 185 frontend vitest, 124 Android unit/Robolectric, 0 tsc, migration head 006_add_attachments)
+develop (verified baseline at c6789e5: 321 backend pytest, 193 frontend vitest, 124 Android unit/Robolectric, 0 tsc, migration head 006_add_attachments)
   +-- feature/phase8-ui-foundation           (8A: COMPLETE / VERIFIED — merged to develop)
   +-- feature/phase8-runtime-config          (8P: COMPLETE / VERIFIED — merged to develop)
   +-- [GATE: Documentation Reconciliation]   (R0–R13.2: COMPLETE / VERIFIED — Phase 8B unblocked)
   +-- [8B.0–8B.6 Foundation]                 (COMPLETE / VERIFIED — merged via PR #13)
   +-- [8B.7: Persistent Attachment Rendering] (COMPLETE / VERIFIED)
-  +-- feature/phase8-ui-integration-polish   (8C: IMPLEMENTED / FINAL REVIEW PENDING — polish, a11y, title lifecycle, cancellation DB safety)
+  +-- feature/phase8-ui-integration-polish   (8C: COMPLETE / VERIFIED — polish, a11y, title lifecycle, cancellation DB safety, cross-feature integration suite)
         based on merged 8B
 
 8P established canonical COMPANION_DATA_ROOT/attachments/. 8B activates image uploads to that directory now that documentation reconciliation is complete and verified.

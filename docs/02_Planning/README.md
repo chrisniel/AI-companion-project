@@ -16,14 +16,14 @@
 
 ---
 
-## 2. Active & Upcoming Feature Plans
+## 2. Feature Plans & Planning Hubs
 
-The plans below represent active engineering hubs and approved implementation plans for currently gated and upcoming work:
+The plans below catalog feature planning hubs and authoritative delivery plans for reference. (Execution is currently PAUSED following Phase 8 completion pending development workflow redesign before next sprint selection; zero Foundation implementation started):
 
 | Document Path | Title / Focus Area | Current Classification | Scope & Gate Status | Canonical Authority |
 | :--- | :--- | :--- | :--- | :--- |
-| [`phase-08/README.md`](./phase-08/README.md) | Phase 8 Planning Hub | **`ACTIVE / CURRENT`** | Active hub for Phase 8. 8A & 8P complete; R0–R13.2 reconciliation complete & verified; 8B complete & verified (8B.0–8B.8); 8C implemented pending final review. | Authoritative Phase 8 hub. |
-| [`phase-08/plan-phase8-pc-frontend-architecture-ux.md`](./phase-08/plan-phase8-pc-frontend-architecture-ux.md) | Phase 8 Architecture & Multimodal Plan | **`ACTIVE / CURRENT`** | 8A, 8P, and 8B verified; 8C implemented pending final review (owns polish, a11y, title lifecycle, and stream cancellation DB safety). | Authoritative feature plan for 8B and 8C. |
+| [`phase-08/README.md`](./phase-08/README.md) | Phase 8 Planning Hub | **`COMPLETED / REFERENCE`** | Phase 8 complete & verified (8A, 8P, R0–R13.2, 8B.0–8B.8, and 8C). Completed Phase 8 planning hub. | Authoritative Phase 8 completion hub & reference. |
+| [`phase-08/plan-phase8-pc-frontend-architecture-ux.md`](./phase-08/plan-phase8-pc-frontend-architecture-ux.md) | Phase 8 Architecture & Multimodal Plan | **`COMPLETED / REFERENCE`** | Phase 8 complete & verified (8A, 8P, 8B, 8C). Authoritative delivery record for frontend architecture, multimodal foundation, and polish. | Authoritative Phase 8 plan & delivery record. |
 
 ---
 
