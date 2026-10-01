@@ -1290,9 +1290,11 @@ Full regression suites:
   - Mark Phase 8C complete / verified
   - Reconcile active delivery gates
 
-[CREATE] docs/03_Walkthroughs/walkthrough-phase8-multimodal-attachments.md
-  - Follow walkthrough-template.md (7-section format)
-  - Include: lifecycle, storage security, vision gate, provider translation, test results, WebP deferral
+[SUPERSEDED] docs/03_Walkthroughs/walkthrough-phase8-multimodal-attachments.md
+  - Superseded by existing reviewed 7-section walkthroughs:
+    1. [`walkthrough-phase8b-multimodal-attachments-foundation.md`](../../03_Walkthroughs/walkthrough-phase8b-multimodal-attachments-foundation.md): Exhaustively documents lifecycle (pre-stream transaction isolation, conditional SQL claiming, lock transfer), storage security (sandboxed media resolution, canonical path containment, BOLA, Bearer auth), vision gate (`available_capabilities` inspection requiring active model + `mmproj`), provider translation (`ResolvedImageContent` to OpenAI-compatible data URIs in `LlamaCppProvider`), and explicit WebP deferral boundary rationale under the required 7-section format.
+    2. [`walkthrough-phase8b-closure.md`](../../03_Walkthroughs/walkthrough-phase8b-closure.md): Exhaustively documents history attachment rendering (8B.7), authenticated Blob preview lifecycle, and full verification test evidence under the required 7-section format.
+  - Rationale: Authoring a redundant third multimodal walkthrough would duplicate existing authoritative delivery evidence without adding new architectural facts. Final cross-feature integration test evidence is codified in [`frontend/web/src/test/phase8Integration.test.tsx`](../../../frontend/web/src/test/phase8Integration.test.tsx).
 
 [MODIFY] docs/01_Tracking/task.md
   - Mark all items complete
