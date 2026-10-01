@@ -260,9 +260,16 @@ describe('Phase 8C UI/UX Polish & Truthfulness Suite', () => {
     it('renders persistent compact AssistantStatusBar with title, active persona, and New Chat action', async () => {
       renderWithProviders(<AssistantView />);
 
+      // Await authoritative API invocation to confirm BackendProvider has reached isOnline
+      // and AssistantView has initiated conversation loading
+      await waitFor(() => {
+        expect(api.listConversations).toHaveBeenCalled();
+      }, { timeout: 5000 });
+
+      // Verify authoritative title "Existing Chat" renders in the status bar
       await waitFor(() => {
         expect(screen.getByText('Existing Chat')).toBeInTheDocument();
-      });
+      }, { timeout: 5000 });
 
       expect(screen.getByRole('button', { name: /New Chat/i })).toBeInTheDocument();
       expect(screen.getByText(/Active Persona:/i)).toBeInTheDocument();
@@ -839,6 +846,124 @@ print("hello world")
       // Re-trigger load for custom conversation
       // (generateConversationTitle must never be called for already-named conversations)
       expect(api.generateConversationTitle).not.toHaveBeenCalled();
+    });
+
+    it('allows title reconciliation to retry if an earlier reconciliation attempt failed', async () => {
+      vi.mocked(api.checkHealth).mockResolvedValue({ status: 'healthy' });
+      vi.mocked(api.getModelStatus).mockResolvedValue({
+        model_loaded: true,
+        model_awake: true,
+        active_model: 'qwen3-vl-2b-instruct.gguf',
+        runtime_state: 'MODEL_READY',
+        model_resident: true,
+        router_running: true,
+      } as any);
+
+      const unrenamedConv: api.ConversationOut = {
+        id: 'conv-reconcile-retry',
+        title: 'New Conversation',
+        character_id: 'default',
+        owner_id: 'owner-1',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        message_count: 1,
+      };
+
+      const secondConv: api.ConversationOut = {
+        id: 'conv-second',
+        title: 'Second Active Thread',
+        character_id: 'default',
+        owner_id: 'owner-1',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        message_count: 1,
+      };
+
+      const userText = 'Calculate gravitational lensing effects';
+      const expectedFallback = api.deriveDeterministicTitle(userText);
+
+      vi.mocked(api.listConversations).mockResolvedValue({ items: [unrenamedConv, secondConv], total: 2 });
+      vi.mocked(api.getMessages).mockImplementation(async (convId) => {
+        if (convId === 'conv-reconcile-retry') {
+          return {
+            items: [
+              {
+                id: 'm-retry-1',
+                conversation_id: 'conv-reconcile-retry',
+                sender: 'user',
+                content: userText,
+                status: 'completed',
+                sequence_no: 1,
+                attachments: [],
+                created_at: new Date().toISOString(),
+              },
+            ],
+            total: 1,
+          };
+        }
+        return {
+          items: [
+            {
+              id: 'm-second-1',
+              conversation_id: 'conv-second',
+              sender: 'user',
+              content: 'Second thread prompt',
+              status: 'completed',
+              sequence_no: 1,
+              attachments: [],
+              created_at: new Date().toISOString(),
+            },
+          ],
+          total: 1,
+        };
+      });
+
+      // First attempt fails (transient failure)
+      vi.mocked(api.generateConversationTitle).mockRejectedValueOnce(new Error('Transient failure'));
+
+      renderWithProviders(<AssistantView />);
+
+      // Await first reconciliation attempt which fails gracefully and clears reconcilingTitleConvIdsRef in finally
+      await waitFor(() => {
+        expect(api.generateConversationTitle).toHaveBeenCalledWith('conv-reconcile-retry', {
+          currentTitle: 'New Conversation',
+          fallbackTitle: expectedFallback,
+        });
+      }, { timeout: 5000 });
+
+      // Title remains 'New Conversation' after failure
+      expect(screen.getByRole('heading', { level: 1, name: 'New Conversation' })).toBeInTheDocument();
+
+      // Configure second attempt to succeed
+      vi.mocked(api.generateConversationTitle).mockResolvedValueOnce({
+        ...unrenamedConv,
+        title: 'Gravitational Lensing Effects',
+      });
+
+      // Open history drawer and switch to second conversation
+      const historyBtn = screen.getByTitle(/Open Conversation History/i);
+      fireEvent.click(historyBtn);
+
+      const secondItem = await screen.findByText('Second Active Thread');
+      fireEvent.click(secondItem);
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { level: 1, name: 'Second Active Thread' })).toBeInTheDocument();
+      });
+
+      // Re-open history drawer and switch back to unrenamedConv
+      fireEvent.click(screen.getByTitle(/Open Conversation History/i));
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { level: 3, name: 'New Conversation' })).toBeInTheDocument();
+      });
+      const unrenamedItem = screen.getByRole('heading', { level: 3, name: 'New Conversation' });
+      fireEvent.click(unrenamedItem);
+
+      // Verify reconciliation successfully retried on subsequent load and updated the conversation title
+      await waitFor(() => {
+        expect(api.generateConversationTitle).toHaveBeenCalledTimes(2);
+        expect(screen.getByRole('heading', { level: 1, name: 'Gravitational Lensing Effects' })).toBeInTheDocument();
+      }, { timeout: 5000 });
     });
   });
 

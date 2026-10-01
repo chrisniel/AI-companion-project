@@ -274,6 +274,9 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
               })
               .catch((reconcileErr) => {
                 console.debug('Failed to reconcile default conversation title:', reconcileErr);
+              })
+              .finally(() => {
+                reconcilingTitleConvIdsRef.current.delete(convId);
               });
           }
         }
