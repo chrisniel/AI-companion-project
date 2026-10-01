@@ -24,9 +24,11 @@ import {
   Loader2,
 } from 'lucide-react';
 import { Badge } from '../ui/Badge';
+import { Modal } from '../ui/Modal';
 import { AssistantMessage } from '../../types';
 import { fetchAttachmentBlobUrl, ALLOWED_MIME_TYPES } from '../../services/api';
 import type { AttachmentRef } from '../../services/api';
+import { AssistantMarkdownRenderer } from './assistant/AssistantMarkdownRenderer';
 
 interface AttachmentPreviewRendererProps {
   conversationId: string;
@@ -40,6 +42,7 @@ const AttachmentPreviewRenderer: React.FC<AttachmentPreviewRendererProps> = ({
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [error, setError] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isLightboxOpen, setIsLightboxOpen] = useState<boolean>(false);
 
   const isSupportedImage = ALLOWED_MIME_TYPES.some(
     (mimeType) => mimeType === attachment.mime_type
@@ -88,23 +91,55 @@ const AttachmentPreviewRenderer: React.FC<AttachmentPreviewRendererProps> = ({
   }, [conversationId, attachment.id, isSupportedImage]);
 
   return (
-    <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-[var(--color-border-subtle)] bg-[var(--color-surface-recessed)] flex items-center justify-center">
-      {loading ? (
-        <Loader2 className="w-5 h-5 text-[var(--color-text-muted)] animate-spin" />
-      ) : error ? (
-        <div className="flex flex-col items-center gap-1 text-[var(--color-text-muted)] p-1 text-center" title="Preview unavailable">
-          <FileWarning className="w-5 h-5" />
-          <span className="text-[9px] font-mono leading-tight truncate w-full px-1">{attachment.filename_display}</span>
-        </div>
-      ) : isSupportedImage && blobUrl ? (
-        <img src={blobUrl} alt={attachment.filename_display} className="w-full h-full object-cover" />
-      ) : (
-        <div className="flex flex-col items-center gap-1 text-[var(--color-text-muted)] p-1 text-center" title={attachment.filename_display}>
-          <ImageIcon className="w-5 h-5" />
-          <span className="text-[9px] font-mono leading-tight truncate w-full px-1">{attachment.filename_display}</span>
-        </div>
+    <>
+      <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-[var(--color-border-subtle)] bg-[var(--color-surface-recessed)] flex items-center justify-center group">
+        {loading ? (
+          <Loader2 className="w-5 h-5 text-[var(--color-text-muted)] animate-spin" />
+        ) : error ? (
+          <div className="flex flex-col items-center gap-1 text-[var(--color-text-muted)] p-1 text-center" title="Preview unavailable">
+            <FileWarning className="w-5 h-5" />
+            <span className="text-[9px] font-mono leading-tight truncate w-full px-1">{attachment.filename_display}</span>
+          </div>
+        ) : isSupportedImage && blobUrl ? (
+          <button
+            type="button"
+            onClick={() => setIsLightboxOpen(true)}
+            aria-label={`View enlarged preview of ${attachment.filename_display}`}
+            className="w-full h-full p-0 m-0 border-0 bg-transparent cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] rounded-lg overflow-hidden relative block"
+          >
+            <img src={blobUrl} alt={attachment.filename_display} className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105" />
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+              <span className="text-[10px] font-medium text-white px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm shadow">
+                View
+              </span>
+            </div>
+          </button>
+        ) : (
+          <div className="flex flex-col items-center gap-1 text-[var(--color-text-muted)] p-1 text-center" title={attachment.filename_display}>
+            <ImageIcon className="w-5 h-5" />
+            <span className="text-[9px] font-mono leading-tight truncate w-full px-1">{attachment.filename_display}</span>
+          </div>
+        )}
+      </div>
+
+      {isLightboxOpen && blobUrl && (
+        <Modal
+          isOpen={isLightboxOpen}
+          onClose={() => setIsLightboxOpen(false)}
+          title={attachment.filename_display}
+          description={`${attachment.mime_type} • ${Math.round(attachment.size_bytes / 1024)} KB`}
+          maxWidth="xl"
+        >
+          <div className="flex items-center justify-center overflow-hidden py-2" data-testid="image-lightbox-content">
+            <img
+              src={blobUrl}
+              alt={attachment.filename_display}
+              className="max-h-[70vh] max-w-full w-auto h-auto object-contain rounded-xl shadow-lg border border-[var(--color-border-subtle)]"
+            />
+          </div>
+        </Modal>
       )}
-    </div>
+    </>
   );
 };
 
@@ -372,7 +407,7 @@ export const ConversationMessageItem: React.FC<ConversationMessageItemProps> = (
         </div>
 
         {/* User Message Bubble */}
-        <div className="p-4 rounded-3xl surface-raised border border-[var(--color-border-subtle)] text-sm text-[var(--color-text-primary)] space-y-1 max-w-xl">
+        <div role="article" className="p-4 rounded-3xl surface-raised border border-[var(--color-border-subtle)] text-sm text-[var(--color-text-primary)] space-y-1 max-w-xl">
           <div className="flex items-center justify-between gap-4 text-[11px] text-[var(--color-text-muted)] font-mono">
             <span className="font-semibold text-[var(--color-text-primary)]">{userName}</span>
             <span>{message.timestamp}</span>
@@ -403,7 +438,7 @@ export const ConversationMessageItem: React.FC<ConversationMessageItemProps> = (
       </div>
 
       {/* Assistant Message Bubble */}
-      <div className="p-4 sm:p-5 rounded-3xl glass-panel border border-[var(--color-surface-glass-border)] text-sm text-[var(--color-text-primary)] space-y-2.5 max-w-2xl shadow-sm">
+      <div role="article" className="p-4 sm:p-5 rounded-3xl glass-panel border border-[var(--color-surface-glass-border)] text-sm text-[var(--color-text-primary)] space-y-2.5 max-w-2xl shadow-sm">
         <div className="flex items-center justify-between gap-4 pb-1.5 border-b border-[var(--color-border-subtle)] text-[11px] text-[var(--color-text-muted)] font-mono">
           <div className="flex items-center gap-2">
             <span className="font-bold text-[var(--color-accent)]">{activeCharacterName}</span>
@@ -411,7 +446,7 @@ export const ConversationMessageItem: React.FC<ConversationMessageItemProps> = (
           <span>{message.timestamp}</span>
         </div>
 
-        <p className="leading-relaxed whitespace-pre-line text-sm">{message.content}</p>
+        <AssistantMarkdownRenderer content={message.content} className="text-sm" />
 
         {/* Action Controls */}
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--color-border-subtle)] text-xs text-[var(--color-text-muted)]">

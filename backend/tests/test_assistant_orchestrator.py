@@ -914,6 +914,9 @@ async def test_orchestrator_media_resolver_failure_post_sse_error_lifecycle(
         attachment_ids=[att_id],
     )
 
+    asst_msg_id = prepared.assistant_message.id
+    user_msg_id = prepared.user_message.id
+
     # Physical attachment file is now removed to trigger media resolution failure
     target_file.unlink()
 
@@ -934,14 +937,14 @@ async def test_orchestrator_media_resolver_failure_post_sse_error_lifecycle(
 
     # 2. Assistant message status == failed
     res_asst = await test_session.execute(
-        select(Message).where(Message.id == prepared.assistant_message.id)
+        select(Message).where(Message.id == asst_msg_id)
     )
     asst_in_db = res_asst.scalar_one()
     assert asst_in_db.status == "failed"
 
     # 3. User message remains completed
     res_user = await test_session.execute(
-        select(Message).where(Message.id == prepared.user_message.id)
+        select(Message).where(Message.id == user_msg_id)
     )
     user_in_db = res_user.scalar_one()
     assert user_in_db.status == "completed"
@@ -951,7 +954,7 @@ async def test_orchestrator_media_resolver_failure_post_sse_error_lifecycle(
         select(Attachment).where(Attachment.id == att_id)
     )
     att_in_db = res_att.scalar_one()
-    assert att_in_db.message_id == prepared.user_message.id
+    assert att_in_db.message_id == user_msg_id
 
     # 5. Attachment remains not soft-deleted
     assert att_in_db.is_deleted is False

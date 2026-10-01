@@ -55,10 +55,12 @@ Roadmap tracking separates **Release Allocation** (which product milestone owns 
               │
 [Phase 8B: Multimodal Vision] ─────► COMPLETE / VERIFIED (8B.0–8B.8)
               │
-[Phase 8C: Integration & Polish] ──► NEXT / UNBLOCKED (PC V1)
+[Phase 8C: Integration & Polish] ──► COMPLETE / VERIFIED
+              │
+[Phase 8 Overall] ─────────────────► COMPLETE / VERIFIED
               │
 ┌─────────────┴────────────────────────────────────────────────┐
-│ FOUNDATION BAND (Parallel Lanes)                             │
+│ FOUNDATION BAND (Parallel Lanes - NEXT / UNBLOCKED; PAUSED)  │
 │ ┌──────────────────────────┐    ┌──────────────────────────┐ │
 │ │ Lane A: Host & Runtime   │    │ Lane B: Companion/Policy │ │
 │ └──────────────────────────┘    └──────────────────────────┘ │
@@ -78,16 +80,17 @@ Roadmap tracking separates **Release Allocation** (which product milestone owns 
 - **Phase 8P — Runtime Configuration & Persistent Asset Foundation (`COMPLETE / VERIFIED`):** Unified subsystem terminology to *Local AI Runtime*, resolved `COMPANION_DATA_ROOT` precedence and bootstrap locator, derived atomic storage layout, implemented Model Registry Schema v3, and verified migration safety.
 - **Repository Documentation Reconciliation Passes R0–R13.2 (`COMPLETE / VERIFIED`):** Conducted full repository forensic audit, locked architectural decisions D1–D11, established canonical documentation routing, purged obsolete terminology, validated Android cleartext/network boundaries, audited and cleaned local legacy database data, verified historical R8 test suites (175 backend pytest, 147 frontend vitest, 124 Android unit/Robolectric) leading into the current 321/185 PC reference baseline, confirmed OpenAPI schema synchronization, reconciled durable domain architecture specifications, executed R13.1 physical architecture cleanup/ADR codification, applied R13.2 boundary/hardening policy, and locked the fresh verified baseline.
 - **Phase 8B — Multimodal Image Attachment Foundation (`COMPLETE / VERIFIED`):** Delivered multimodal attachment foundation (Slices 8B.0–8B.6 via PR #13), persistent message history rendering (8B.7), and full integration closure across the repository baseline (8B.8).
+- **Phase 8C — Integration, Accessibility & Polish (`COMPLETE / VERIFIED`):** Delivered elimination of deprecated mock files, bundle analysis and code-splitting (React.lazy implemented), comprehensive keyboard navigation and ARIA accessibility, responsive layout hardening across desktop viewports, end-to-end multimodal regression testing, deterministic/model title lifecycle, stream cancellation persistence safety, and cross-feature integration suite (`phase8Integration.test.tsx`). Independent review approved; remote CI #54 green (closure SHA `b45a89ac5837d6437fafab79ee6d10f4f74aa0a0`).
+- **Phase 8 Overall — Frontend Architecture & Multimodal Media Foundation (`COMPLETE / VERIFIED`):** Completed entire Phase 8 sequence (8A UI architecture, 8P runtime/storage config, 8B multimodal attachment foundation 8B.0–8B.8, and 8C integration polish). Fully verified across unit, component, API, integration, and CI suites.
 
-### 2.2 Immediate Next Milestone
-- **Phase 8C — Integration, Accessibility & Polish (`NEXT / UNBLOCKED`):**
-  - *Current Status:* Phase 8B is COMPLETE and VERIFIED. Phase 8C is NEXT / UNBLOCKED.
-  - *Scope:* Elimination of deprecated mock files, bundle analysis and code-splitting, comprehensive keyboard navigation and ARIA accessibility, responsive layout hardening across desktop viewports, end-to-end multimodal regression testing.
-  - *Authoritative Feature Plan:* [`phase-08/plan-phase8-pc-frontend-architecture-ux.md`](./phase-08/plan-phase8-pc-frontend-architecture-ux.md).
+### 2.2 Active State & Transition
+- **Phase 8 Status:** Phase 8 Overall is `COMPLETE / VERIFIED`.
+- **Next Delivery Milestone:** Foundation Band (`NEXT / UNBLOCKED`).
+- **Execution State:** Intentionally PAUSED pending development workflow redesign before selecting the next active sprint. Zero Foundation Band implementation started.
 
 ### 2.3 Remaining PC V1 Delivery Milestones
 
-#### 2.3.2 Foundation Band (`PC V1`)
+#### 2.3.2 Foundation Band (`PC V1` — `NEXT / UNBLOCKED; PAUSED`)
 The Foundation Band comprises two parallel lanes that proceed concurrently without artificial prerequisite serialization between them:
 
 - **Lane A: Host & Runtime Infrastructure (`PC V1`):**
@@ -172,8 +175,8 @@ AI Companion **V1** (unqualified) is strictly defined as the first complete, sta
    - *Implementation Status:* Implemented Baseline + Foundation Host/Runtime extensions.
    - *Delivery Band:* Foundation Band (Host & Runtime Lane).
 2. **React Web Primary Client:** Primary desktop control center, runtime configuration, model controls, and streaming chat interface.
-   - *Implementation Status:* Existing Baseline + remaining Phase 8C work.
-   - *Delivery Band:* Phase 8C Integration & Polish.
+   - *Implementation Status:* Complete / Verified (Phase 8C).
+   - *Delivery Band:* Completed Milestones.
 3. **Local Text LLM Inference:** Provider- and hardware-portable local text generation through the Local AI Runtime (`llama.cpp` Vulkan on AMD RX 580 represents the verified baseline implementation).
    - *Implementation Status:* Implemented / Verified Baseline.
    - *Delivery Band:* Implemented Baseline.
@@ -197,9 +200,9 @@ AI Companion **V1** (unqualified) is strictly defined as the first complete, sta
 8. **Multimodal Vision Understanding:** Phase 8B image attachment API, upload validation guards (MIME, dimension, megapixel, bomb guards), and vision-model inference.
    - *Implementation Status:* Complete / Verified (8B.0–8B.8).
    - *Delivery Band:* Completed Milestones.
-9. **Phase 8C Integration, Accessibility & Polish:** Comprehensive keyboard navigation, ARIA accessibility, bundle optimization, UI consistency, elimination of deprecated mock files, and responsive desktop web cleanup.
-   - *Implementation Status:* Next / Unblocked; completion is a Final Acceptance Dependency for PC V1.
-   - *Delivery Band:* Phase 8C Integration & Polish.
+9. **Phase 8C Integration, Accessibility & Polish:** Comprehensive keyboard navigation, ARIA accessibility, bundle optimization, UI consistency, elimination of deprecated mock files, title lifecycle hardening, cancellation DB persistence safety, and responsive desktop web cleanup.
+   - *Implementation Status:* Complete / Verified.
+   - *Delivery Band:* Completed Milestones.
 10. **Conversational Voice (without Wake Word):** Local audio capture, provider-independent speech-to-text (STT), provider-independent text-to-speech (TTS), and voice activity detection (VAD) / turn detection where required. User can conduct an explicitly initiated, consented bidirectional spoken conversation without wake word. Universal default TTS engine, STT adapter, and exact initiation UX remain OPEN DESIGN. Wake word detection is decoupled and scheduled for PC Later.
     - *Implementation Status:* Not Started.
     - *Delivery Band:* Capability Band (Voice).

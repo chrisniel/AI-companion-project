@@ -2,36 +2,21 @@ import React, { useState } from 'react';
 import {
   Sun,
   Moon,
-  Palette,
-  Bot,
-  Sparkles,
   Cpu,
-  X,
   PanelLeftClose,
-  PanelLeftOpen,
-  Bell,
-  User,
   Zap,
   Gauge,
   Leaf,
   ChevronDown,
-  Check,
+  PowerOff,
 } from 'lucide-react';
-import { useTheme, ACCENT_PRESETS } from '../../context/ThemeContext';
+import { useTheme } from '../../context/ThemeContext';
 import { useBackend } from '../../context/BackendContext';
 import {
-  AccentPresetId,
   AssistantPanelMode,
   PerformanceProfile,
 } from '../../types';
-import { StatusIndicator } from '../ui/StatusIndicator';
-import { Dropdown } from '../ui/Dropdown';
-import { IconButton } from '../ui/IconButton';
-import { Badge } from '../ui/Badge';
-import {
-  DesktopSizeSelector,
-  DesktopSimulationPreset,
-} from './DesktopSizeSelector';
+import { Dropdown, DropdownItem } from '../ui/Dropdown';
 import {
   getRegistryEntryId,
   getRegistryEntryDisplayName,
@@ -43,16 +28,13 @@ export interface HeaderProps {
   onSearchChange?: (query: string) => void;
   sidebarCollapsed: boolean;
   onToggleSidebarCollapse: () => void;
-  assistantPanelMode: AssistantPanelMode;
-  onCycleAssistantPanelMode: () => void;
+  assistantPanelMode?: AssistantPanelMode;
+  onCycleAssistantPanelMode?: () => void;
   currentModelId?: string;
   onSelectModel?: (modelId: string) => void;
   performanceProfile?: PerformanceProfile;
   onChangePerformanceProfile?: (profile: PerformanceProfile) => void;
   userName?: string;
-  desktopPreset?: DesktopSimulationPreset;
-  onSelectDesktopPreset?: (preset: DesktopSimulationPreset) => void;
-  actualWidth?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -67,12 +49,9 @@ export const Header: React.FC<HeaderProps> = ({
   performanceProfile = 'balanced',
   onChangePerformanceProfile,
   userName = 'Local User',
-  desktopPreset = 'auto',
-  onSelectDesktopPreset,
-  actualWidth = 1440,
 }) => {
   const { mode, toggleTheme, accent, setAccent, currentAccentPreset } = useTheme();
-  const { isOnline, modelStatus, isModelLoading, loadModel, changeProfile, registry } = useBackend();
+  const { isOnline, modelStatus, isModelLoading, loadModel, unloadModel, changeProfile, registry } = useBackend();
   const [switchingModelId, setSwitchingModelId] = useState<string | null>(null);
 
   const isLoaded = Boolean(isOnline && modelStatus?.model_loaded && modelStatus?.active_model);
@@ -144,6 +123,28 @@ export const Header: React.FC<HeaderProps> = ({
       },
     };
   });
+
+  // Construct dropdown items including Unload action when model is loaded/sleeping
+  const modelDropdownItems: (DropdownItem | { divider: true })[] = [];
+  if (isLoaded) {
+    modelDropdownItems.push({
+      id: 'action-unload-model',
+      label: 'Unload current model',
+      badge: 'Unload',
+      danger: true,
+      icon: <PowerOff className="w-3.5 h-3.5 text-rose-500" />,
+      onClick: async () => {
+        if (!isOnline) return;
+        try {
+          await unloadModel();
+        } catch {
+          // Handled in backend context
+        }
+      },
+    });
+    modelDropdownItems.push({ divider: true });
+  }
+  modelDropdownItems.push(...modelOptions);
 
   // Performance Profile options & truthfulness
   const requestedProfile = isOnline ? (modelStatus?.requested_profile as PerformanceProfile | undefined) : undefined;
@@ -264,7 +265,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <ChevronDown className="w-3 h-3 text-[var(--color-text-muted)]" />
               </button>
             }
-            items={modelOptions}
+            items={modelDropdownItems}
             align="left"
           />
 
@@ -312,62 +313,21 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right Tools & User */}
         <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
-          {/* Local AI Runtime & VRAM Status Badges */}
-          <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-xl surface-recessed border border-[var(--color-border-subtle)] text-[11px] font-mono">
+          {/* Single Global Lightweight Runtime Status Pill */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl surface-recessed border border-[var(--color-border-subtle)] text-[11px] font-mono">
             <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
-            <span className="text-[var(--color-text-secondary)] font-medium">Runtime :8000</span>
-            <span className={isOnline ? 'text-emerald-500 font-semibold' : 'text-rose-400'}>
+            <span className="text-[var(--color-text-secondary)] font-medium">Runtime</span>
+            <span className={isOnline ? 'text-emerald-500 font-semibold' : 'text-rose-400 font-semibold'}>
               {isOnline ? 'Online' : 'Offline'}
             </span>
           </div>
-
-          <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-xl surface-recessed border border-[var(--color-border-subtle)] text-[11px] font-mono">
-            <Cpu className="w-3.5 h-3.5 text-[var(--color-accent)]" />
-            <span className="text-[var(--color-text-secondary)]">VRAM:</span>
-            <span className={`font-semibold ${
-              !isOnline || !modelStatus
-                ? 'text-[var(--color-text-muted)]'
-                : modelStatus?.model_resident
-                ? 'text-emerald-400'
-                : isSleeping
-                ? 'text-purple-400'
-                : 'text-[var(--color-text-muted)]'
-            }`}>
-              {!isOnline || !modelStatus
-                ? 'Unavailable'
-                : modelStatus?.model_resident
-                ? 'Active (Loaded)'
-                : isSleeping
-                ? 'Released'
-                : 'Not resident'}
-            </span>
-          </div>
-
-          {/* Notification Bell (Disabled - Planned) */}
-          <button
-            type="button"
-            disabled
-            className="w-8 h-8 rounded-xl surface-recessed border border-[var(--color-border-subtle)] opacity-60 flex items-center justify-center text-[var(--color-text-muted)] cursor-not-allowed"
-            title="Notifications (Planned)"
-          >
-            <Bell className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Desktop Resolution & Space Priority Selector (1280, 1366, 1440, 1920) */}
-          {onSelectDesktopPreset && (
-            <DesktopSizeSelector
-              currentPreset={desktopPreset}
-              onSelectPreset={onSelectDesktopPreset}
-              actualWidth={actualWidth}
-            />
-          )}
 
           {/* Theme Mode Toggle */}
           <button
             type="button"
             onClick={toggleTheme}
             aria-label={`Switch to ${mode === 'light' ? 'dark' : 'light'} theme`}
-            className="w-8 h-8 rounded-xl surface-raised border border-[var(--color-border-subtle)] hover:border-[var(--color-accent)]/40 flex items-center justify-center text-[var(--color-text-primary)] transition-all"
+            className="w-8 h-8 rounded-xl surface-raised border border-[var(--color-border-subtle)] hover:border-[var(--color-accent)]/40 flex items-center justify-center text-[var(--color-text-primary)] transition-all cursor-pointer"
             title={`Switch to ${mode === 'light' ? 'dark' : 'light'} mode`}
           >
             {mode === 'light' ? (
@@ -388,21 +348,6 @@ export const Header: React.FC<HeaderProps> = ({
               {userName}
             </span>
           </div>
-
-          {/* Assistant Panel Toggle Button (Click to open or automatically close) */}
-          <button
-            type="button"
-            onClick={onCycleAssistantPanelMode}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-              assistantPanelMode !== 'hidden'
-                ? 'bg-accent-gradient text-white shadow-md glow-accent-sm'
-                : 'surface-raised border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-accent)]/40'
-            }`}
-            title={assistantPanelMode !== 'hidden' ? 'Close Assistant Panel' : 'Open Assistant Panel'}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Assistant</span>
-          </button>
         </div>
       </div>
     </header>

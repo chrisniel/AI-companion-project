@@ -9,32 +9,49 @@ import {
   RotateCcw,
   Loader2,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
-  Cpu,
-  Clock,
-  Database,
-  Layers,
-  Info,
+  Lock,
 } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { NeumorphicButton } from '../ui/NeumorphicButton';
-import { getSystemStatus, SystemStatusResponse } from '../../services/api';
+import { getSystemStatus, SystemStatusResponse, ApiError } from '../../services/api';
+import { useBackend } from '../../context/BackendContext';
 
 export const DevicesView: React.FC = () => {
+  let isOnline = false;
+  try {
+    const backend = useBackend();
+    isOnline = backend.isOnline;
+  } catch {
+    isOnline = false;
+  }
+
   const [systemStatus, setSystemStatus] = useState<SystemStatusResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const [errorStatus, setErrorStatus] = useState<number | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const fetchHostStatus = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setErrorStatus(null);
+    setErrorMessage(null);
     try {
       const data = await getSystemStatus();
       setSystemStatus(data);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Unable to reach backend runtime status endpoint';
-      setError(msg);
       setSystemStatus(null);
+      if (err instanceof ApiError) {
+        setErrorStatus(err.status);
+        setErrorMessage(err.message);
+      } else if (err instanceof Error) {
+        setErrorMessage(err.message);
+        if (err.message.includes('401')) {
+          setErrorStatus(401);
+        }
+      } else {
+        setErrorMessage('Unable to retrieve workstation telemetry.');
+      }
     } finally {
       setLoading(false);
     }
@@ -43,6 +60,52 @@ export const DevicesView: React.FC = () => {
   useEffect(() => {
     fetchHostStatus();
   }, [fetchHostStatus]);
+
+  interface ErrorClassification {
+    title: string;
+    description: string;
+    badgeText: string;
+    iconType: 'auth' | 'forbidden' | 'server' | 'offline';
+  }
+
+  const classifyHostError = (status: number | null, online: boolean): ErrorClassification => {
+    if (status === 401) {
+      return {
+        title: 'Workstation Telemetry Protected',
+        description:
+          'The local companion runtime is online and reachable, but detailed workstation telemetry requires pairing or an API authorization key. You can configure your pairing key in Settings.',
+        badgeText: 'Pairing Required',
+        iconType: 'auth',
+      };
+    }
+    if (status === 403) {
+      return {
+        title: 'Workstation Telemetry Access Denied',
+        description:
+          'The configured pairing key does not have permission to access workstation telemetry.',
+        badgeText: 'Forbidden',
+        iconType: 'forbidden',
+      };
+    }
+    if (status && status >= 500) {
+      return {
+        title: 'Workstation Telemetry Error',
+        description:
+          'The companion runtime encountered an internal error while querying system telemetry.',
+        badgeText: 'Telemetry Error',
+        iconType: 'server',
+      };
+    }
+    return {
+      title: 'Runtime Host Unavailable',
+      description:
+        'Unable to connect to the local companion runtime service. Please check that the backend service is running and accessible.',
+      badgeText: 'Host Unavailable',
+      iconType: 'offline',
+    };
+  };
+
+  const classified = classifyHostError(errorStatus, isOnline);
 
   return (
     <div id="devices-view" className="space-y-8 pb-12">
@@ -55,37 +118,33 @@ export const DevicesView: React.FC = () => {
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl font-bold text-[var(--color-text-primary)]">
-                Devices & Hardware Infrastructure
+                Devices & Hardware
               </h1>
               <Badge variant="primary" size="sm" className="font-semibold">
                 Host Status
               </Badge>
-              <Badge variant="neutral" size="sm">
-                Hybrid Truthfulness
-              </Badge>
             </div>
             <p className="text-xs text-[var(--color-text-secondary)] mt-0.5 max-w-2xl">
-              Real host workstation telemetry from the local runtime service. Mobile, audio routing, wearable devices, and remote mesh are planned subsystems.
+              Workstation status and hardware telemetry from the companion runtime. Mobile pairing, audio routing, and wearable integrations are planned subsystems.
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 self-start md:self-auto">
-          <NeumorphicButton
-            variant="ghost"
-            size="sm"
+          <button
+            type="button"
             onClick={fetchHostStatus}
             disabled={loading}
-            className="flex items-center gap-1.5 text-xs text-[var(--color-text-secondary)]"
+            aria-label="Refresh Host Status"
             title="Refresh Host Status"
+            className="w-9 h-9 rounded-xl surface-raised border border-[var(--color-border-subtle)] hover:border-[var(--color-accent)]/40 hover:text-[var(--color-accent)] flex items-center justify-center text-[var(--color-text-secondary)] transition-all cursor-pointer disabled:opacity-50"
           >
-            <RotateCcw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
-          </NeumorphicButton>
+            <RotateCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
         </div>
       </div>
 
-      {/* 2. Primary Host Workstation Card (REAL AUTHORITATIVE DATA) */}
+      {/* 2. Primary Host Workstation Card */}
       <div className="p-5 sm:p-6 rounded-3xl surface-raised border border-[var(--color-border-subtle)] space-y-5">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
@@ -102,14 +161,14 @@ export const DevicesView: React.FC = () => {
                     Status Available
                   </Badge>
                 )}
-                {error && (
-                  <Badge variant="danger" size="sm">
-                    Host Unavailable
+                {!loading && (errorMessage || (!systemStatus && !loading)) && (
+                  <Badge variant={classified.iconType === 'auth' || classified.iconType === 'forbidden' ? 'accent' : 'danger'} size="sm">
+                    {classified.badgeText}
                   </Badge>
                 )}
               </div>
               <p className="text-xs text-[var(--color-text-secondary)]">
-                Authoritative runtime telemetry via GET /api/v1/system/status
+                Local host workstation status and hardware telemetry
               </p>
             </div>
           </div>
@@ -123,42 +182,43 @@ export const DevicesView: React.FC = () => {
           >
             <Loader2 className="w-7 h-7 text-[var(--color-accent)] animate-spin" />
             <p className="text-xs text-[var(--color-text-secondary)]">
-              Querying local workstation runtime telemetry...
+              Querying local workstation telemetry...
             </p>
           </div>
         )}
 
         {/* Error / Unavailable State */}
-        {!loading && error && (
+        {!loading && (errorMessage || (!systemStatus && !loading)) && (
           <div
             id="devices-host-error"
-            className="p-6 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-4"
+            className="p-6 rounded-2xl bg-surface-subtle border border-[var(--color-border-subtle)] space-y-4"
           >
             <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+              {classified.iconType === 'auth' || classified.iconType === 'forbidden' ? (
+                <Lock className="w-5 h-5 text-[var(--color-accent)] flex-shrink-0 mt-0.5" />
+              ) : classified.iconType === 'server' ? (
+                <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-rose-500 flex-shrink-0 mt-0.5" />
+              )}
               <div className="space-y-1">
-                <h3 className="text-sm font-semibold text-amber-600 dark:text-amber-400">
-                  Runtime Host Unavailable
+                <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">
+                  {classified.title}
                 </h3>
-                <p className="text-xs text-[var(--color-text-secondary)]">
-                  Could not retrieve authoritative host telemetry from the local companion runtime.
-                  The backend service may be offline or initializing.
-                </p>
-                <p className="text-[11px] font-mono text-[var(--color-text-muted)] mt-1">
-                  {error}
+                <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
+                  {classified.description}
                 </p>
               </div>
             </div>
             <div className="flex justify-end">
-              <NeumorphicButton
-                variant="primary"
-                size="sm"
+              <button
+                type="button"
                 onClick={fetchHostStatus}
-                className="flex items-center gap-1.5 text-xs"
+                disabled={loading}
+                className="px-3.5 py-1.5 rounded-xl surface-raised border border-[var(--color-border-subtle)] hover:border-[var(--color-accent)]/40 hover:text-[var(--color-accent)] text-xs font-medium text-[var(--color-text-primary)] transition-all cursor-pointer disabled:opacity-50"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Retry</span>
-              </NeumorphicButton>
+                Try again
+              </button>
             </div>
           </div>
         )}
@@ -259,14 +319,14 @@ export const DevicesView: React.FC = () => {
         )}
       </div>
 
-      {/* 3. Unsupported Subsystems (Truthfully Labeled Planned) */}
+      {/* 3. Planned Subsystems */}
       <div className="space-y-4">
         <div>
           <h2 className="text-base font-bold text-[var(--color-text-primary)]">
-            Subsystem Infrastructure
+            Connected Subsystems
           </h2>
           <p className="text-xs text-[var(--color-text-secondary)]">
-            External hardware endpoints, audio device routing, and synchronization bridges are planned capabilities.
+            External device endpoints, audio hardware routing, and companion sync bridges are planned capabilities.
           </p>
         </div>
 

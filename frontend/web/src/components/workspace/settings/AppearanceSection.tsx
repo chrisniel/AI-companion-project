@@ -1091,10 +1091,10 @@ export const AppearanceSection: React.FC = () => {
           <div>
             <h3 className="text-xs font-bold uppercase tracking-wider font-mono text-[var(--color-accent)] flex items-center gap-1.5">
               <Sparkles className="w-4 h-4" />
-              Accent Palette Preset (Solid Blue Themes)
+              Accent Color Palette
             </h3>
             <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
-              Pure solid tones with no gradients: Lighter shade in dark mode, darker shade in light mode.
+              Curated high-contrast accent themes: tuned for accessibility in both light and dark modes.
             </p>
           </div>
 
@@ -1137,11 +1137,11 @@ export const AppearanceSection: React.FC = () => {
           </div>
         )}
 
-        {/* Built-in Solid Blue Presets Grid */}
+        {/* Built-in Presets Grid */}
         <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3.5 ${customAccentEnabled ? 'opacity-50 pointer-events-none' : ''}`}>
           {Object.entries(ACCENT_PRESETS).map(([id, preset]) => {
             const isSelected = accent === id && !customAccentEnabled;
-            const displayColor = mode === 'dark' ? '#38bdf8' : (preset.primaryColor || '#1e40af');
+            const displayColor = mode === 'dark' ? (preset.secondaryColor || '#38bdf8') : (preset.primaryColor || '#0284c7');
 
             return (
               <button

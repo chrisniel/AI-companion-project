@@ -982,6 +982,9 @@ async def test_stream_task_cancellation_with_staged_attachment_preserves_state(
     bound_att = res_att_check.scalar_one()
     assert bound_att.message_id == prepared.user_message.id
 
+    user_msg_id = prepared.user_message.id
+    asst_msg_id = prepared.assistant_message.id
+
     provider = get_llm_provider()
 
     # 6. Start orchestrate_chat_stream() inside a real asyncio.Task
@@ -1025,7 +1028,7 @@ async def test_stream_task_cancellation_with_staged_attachment_preserves_state(
 
     # - user message still exists and is completed
     res_user = await test_session.execute(
-        select(Message).where(Message.id == prepared.user_message.id)
+        select(Message).where(Message.id == user_msg_id)
     )
     user_msg = res_user.scalar_one()
     assert user_msg.sender == "user"
@@ -1037,13 +1040,13 @@ async def test_stream_task_cancellation_with_staged_attachment_preserves_state(
         select(Attachment).where(Attachment.id == att_id)
     )
     final_att = res_att.scalar_one()
-    assert final_att.message_id == prepared.user_message.id
+    assert final_att.message_id == user_msg_id
     assert final_att.is_deleted is False
 
     # - assistant message is cancelled
     # - any generated partial assistant content is preserved if present
     res_asst = await test_session.execute(
-        select(Message).where(Message.id == prepared.assistant_message.id)
+        select(Message).where(Message.id == asst_msg_id)
     )
     asst_msg = res_asst.scalar_one()
     assert asst_msg.sender == "assistant"

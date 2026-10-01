@@ -169,7 +169,7 @@ describe('Phase 8A.3b.3 Truthfulness Suite', () => {
         expect(screen.getByText('Host Unavailable')).toBeDefined();
       });
 
-      const retryButton = screen.getByRole('button', { name: /Retry/i });
+      const retryButton = screen.getByRole('button', { name: /Try again|Retry/i });
       fireEvent.click(retryButton);
 
       await waitFor(() => {

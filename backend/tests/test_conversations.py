@@ -3,6 +3,7 @@
 import pytest
 from httpx import AsyncClient
 from app.services.assistant.orchestrator import _get_lock
+from app.services.llm.manager import get_llm_provider
 
 
 @pytest.mark.anyio
@@ -260,3 +261,178 @@ async def test_soft_delete_and_is_deleted_schema_integrity(client: AsyncClient, 
     assert conv_after.is_deleted is True
     assert conv_after.deleted_at is not None
 
+
+@pytest.mark.anyio
+async def test_authoritative_message_counts(client: AsyncClient, auth_headers: dict):
+    """Verify conversations report authoritative active message counts in create, list, and get."""
+    # 1. Create conversation -> 0 messages
+    c_resp = await client.post("/api/v1/conversations", json={"title": "Count Test"}, headers=auth_headers)
+    assert c_resp.status_code == 201
+    conv = c_resp.json()
+    assert conv["message_count"] == 0
+    conv_id = conv["id"]
+
+    # 2. Get before messages -> 0
+    g_resp = await client.get(f"/api/v1/conversations/{conv_id}", headers=auth_headers)
+    assert g_resp.status_code == 200
+    assert g_resp.json()["message_count"] == 0
+
+    # 3. Send one turn (user + assistant) -> 2 messages
+    await client.post(
+        f"/api/v1/conversations/{conv_id}/messages",
+        json={"user_text": "Hello world!"},
+        headers=auth_headers,
+    )
+
+    # 4. Get after turn -> 2 messages
+    g_after = await client.get(f"/api/v1/conversations/{conv_id}", headers=auth_headers)
+    assert g_after.status_code == 200
+    assert g_after.json()["message_count"] == 2
+
+    # 5. List conversations -> matches 2 messages
+    l_resp = await client.get("/api/v1/conversations", headers=auth_headers)
+    assert l_resp.status_code == 200
+    item = next(c for c in l_resp.json()["items"] if c["id"] == conv_id)
+    assert item["message_count"] == 2
+
+
+@pytest.mark.anyio
+async def test_sanitize_conversation_title_rules():
+    """Verify title sanitization strips markdown, bullets, quotes, prefixes, and caps length."""
+    from app.api.v1.endpoints.conversations import sanitize_conversation_title
+
+    # Markdown heading stripped
+    assert sanitize_conversation_title("### Analyzing An Attached Image") == "Analyzing An Attached Image"
+    # Quotes stripped
+    assert sanitize_conversation_title('"Model Unloading After Sleep"') == "Model Unloading After Sleep"
+    assert sanitize_conversation_title("«Fixing Audio Drivers»") == "Fixing Audio Drivers"
+    assert sanitize_conversation_title("“Local Inference Benchmarks”") == "Local Inference Benchmarks"
+    # Prefix stripped
+    assert sanitize_conversation_title("Title: Setting Up llama.cpp") == "Setting Up llama.cpp"
+    assert sanitize_conversation_title("Topic:   FastAPI Webhook Handling") == "FastAPI Webhook Handling"
+    # Bullets and newlines collapsed
+    assert sanitize_conversation_title("- First Point\n  Second Point") == "First Point Second Point"
+    # Excessive words trimmed to concise target
+    long_title = "one two three four five six seven eight nine ten eleven twelve thirteen"
+    sanitized = sanitize_conversation_title(long_title)
+    assert len(sanitized.split()) <= 10
+    # Empty or malformed rejected
+    assert sanitize_conversation_title("") is None
+    assert sanitize_conversation_title("   ") is None
+    assert sanitize_conversation_title("?") is None
+
+
+@pytest.mark.anyio
+async def test_generate_conversation_title_first_turn_and_fallback(client: AsyncClient, auth_headers: dict):
+    """Verify conversation title generation endpoint names conversation and respects fallbacks."""
+    # 1. Create conversation with default title
+    c_resp = await client.post("/api/v1/conversations", json={"title": "New Conversation"}, headers=auth_headers)
+    conv_id = c_resp.json()["id"]
+
+    # 2. Send first message
+    await client.post(
+        f"/api/v1/conversations/{conv_id}/messages",
+        json={"user_text": "How do I configure RX 580 OpenCL for local inference?"},
+        headers=auth_headers,
+    )
+
+    # 3. Call generate-title endpoint
+    gen_resp = await client.post(
+        f"/api/v1/conversations/{conv_id}/generate-title",
+        json={"current_title": "New Conversation", "fallback_title": "Configure RX 580 OpenCL"},
+        headers=auth_headers,
+    )
+    assert gen_resp.status_code == 200
+    data = gen_resp.json()
+    # Generated title or fallback must be set (not left as New Conversation)
+    assert data["title"] != "New Conversation"
+    assert len(data["title"]) > 0
+
+    # 4. Verify title persists upon GET
+    get_resp = await client.get(f"/api/v1/conversations/{conv_id}", headers=auth_headers)
+    assert get_resp.status_code == 200
+    assert get_resp.json()["title"] == data["title"]
+
+
+@pytest.mark.anyio
+async def test_generate_title_preserves_custom_title(client: AsyncClient, auth_headers: dict):
+    """Verify custom/manual title is never overwritten by automated title generation."""
+    # 1. Create conversation
+    c_resp = await client.post("/api/v1/conversations", json={"title": "New Conversation"}, headers=auth_headers)
+    conv_id = c_resp.json()["id"]
+
+    # 2. Send message
+    await client.post(
+        f"/api/v1/conversations/{conv_id}/messages",
+        json={"user_text": "Tell me a joke"},
+        headers=auth_headers,
+    )
+
+    # 3. User manually renames
+    await client.patch(
+        f"/api/v1/conversations/{conv_id}",
+        json={"title": "My Favorite Jokes Collection"},
+        headers=auth_headers,
+    )
+
+    # 4. Call generate-title with outdated current_title="New Conversation"
+    gen_resp = await client.post(
+        f"/api/v1/conversations/{conv_id}/generate-title",
+        json={"current_title": "New Conversation", "fallback_title": "Tell Me A Joke"},
+        headers=auth_headers,
+    )
+    assert gen_resp.status_code == 200
+    # Must preserve the user's manual title!
+    assert gen_resp.json()["title"] == "My Favorite Jokes Collection"
+
+
+@pytest.mark.anyio
+async def test_generate_title_manual_rename_during_generation_wins(
+    client: AsyncClient,
+    auth_headers: dict,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Verify that a manual rename occurring while LLM generation is running is never overwritten."""
+    provider = get_llm_provider()
+    monkeypatch.setattr(provider, "_is_loaded", True)
+    monkeypatch.setattr(provider, "_active_model", "qwen3-vl-2b-instruct.gguf")
+
+    # 1. Create conversation
+    c_resp = await client.post("/api/v1/conversations", json={"title": "New Conversation"}, headers=auth_headers)
+    conv_id = c_resp.json()["id"]
+
+    # 2. Add message
+    await client.post(
+        f"/api/v1/conversations/{conv_id}/messages",
+        json={"user_text": "How do I build a desktop app with React and FastAPI?"},
+        headers=auth_headers,
+    )
+
+    # 3. Mock provider.generate such that during generation, a manual rename occurs
+    async def mock_generate_with_concurrent_rename(*args, **kwargs):
+        # Simulate user manually renaming conversation concurrently
+        patch_resp = await client.patch(
+            f"/api/v1/conversations/{conv_id}",
+            json={"title": "My Explicit Desktop Manual Title"},
+            headers=auth_headers,
+        )
+        assert patch_resp.status_code == 200
+        return "Generated Architecture Guide"
+
+    monkeypatch.setattr(provider, "generate", mock_generate_with_concurrent_rename)
+
+    # 4. Trigger generate-title
+    gen_resp = await client.post(
+        f"/api/v1/conversations/{conv_id}/generate-title",
+        json={"current_title": "New Conversation", "fallback_title": "How do I build a…"},
+        headers=auth_headers,
+    )
+    assert gen_resp.status_code == 200
+
+    # 5. Manual title must win
+    assert gen_resp.json()["title"] == "My Explicit Desktop Manual Title"
+
+    # 6. Verify database row persistently holds the manual title
+    get_resp = await client.get(f"/api/v1/conversations/{conv_id}", headers=auth_headers)
+    assert get_resp.status_code == 200
+    assert get_resp.json()["title"] == "My Explicit Desktop Manual Title"

@@ -8,9 +8,13 @@ import {
   uploadAttachment,
   fetchAttachmentBlobUrl,
   deleteAttachment,
+  renameConversation,
+  generateConversationTitle,
+  deriveDeterministicTitle,
   registryEntryMatchesIdentifier,
   ConversationOut,
   AttachmentOut,
+  AttachmentRef,
   ALLOWED_MIME_TYPES,
   MAX_SIZE_BYTES,
   MAX_ATTACHMENTS_PER_MESSAGE,
@@ -66,6 +70,9 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
   const conversationsRef = useRef<ConversationOut[]>([]);
   const [activeConversationId, setActiveConversationId] = useState('');
   const [conversationTitle, setConversationTitle] = useState('No Conversation');
+  const userEditedTitleRef = useRef<Record<string, boolean>>({});
+  const pendingTitlePromiseRef = useRef<Record<string, Promise<any>>>({});
+  const reconcilingTitleConvIdsRef = useRef<Set<string>>(new Set());
   const [inputPrompt, setInputPrompt] = useState('');
 
   // 8B.6 Staged Attachments
@@ -235,6 +242,44 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
           attachments: m.attachments,
         }));
         setMessages(mapped);
+
+        // Phase 8C: Default-title reconciliation for conversations with persisted messages but default title
+        const currentConv = conversationsRef.current.find((c) => c.id === convId);
+        const isDefaultTitle = !currentConv || currentConv.title === 'New Conversation' || !currentConv.title;
+        const isReconciling = reconcilingTitleConvIdsRef.current.has(convId);
+        const isUserRenamed = userEditedTitleRef.current[convId];
+
+        if (isDefaultTitle && !isReconciling && !isUserRenamed) {
+          const firstUserMsg = res.items.find(
+            (m) => m.sender === 'user' && m.content && m.content.trim()
+          );
+          if (firstUserMsg) {
+            reconcilingTitleConvIdsRef.current.add(convId);
+            const fallbackTitle = deriveDeterministicTitle(firstUserMsg.content);
+            generateConversationTitle(convId, {
+              currentTitle: currentConv?.title || 'New Conversation',
+              fallbackTitle,
+            })
+              .then((result) => {
+                if (!mountedRef.current || !result || !result.title) return;
+                if (result.title === 'New Conversation') return;
+                if (userEditedTitleRef.current[convId]) return;
+
+                setConversations((prev) =>
+                  prev.map((c) => (c.id === convId ? { ...c, title: result.title } : c))
+                );
+                if (activeConversationIdRef.current === convId) {
+                  setConversationTitle(result.title);
+                }
+              })
+              .catch((reconcileErr) => {
+                console.debug('Failed to reconcile default conversation title:', reconcileErr);
+              })
+              .finally(() => {
+                reconcilingTitleConvIdsRef.current.delete(convId);
+              });
+          }
+        }
       } else {
         setMessages([]);
       }
@@ -583,6 +628,20 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     const userText = promptText || 'Shared attachment for processing.';
     const attachmentIds = stagedSnapshot.map((s) => s.attachment.id);
 
+    // Phase 8C: First-turn automatic conversation naming with deterministic fallback
+    const isFirstTurn = messages.length === 0;
+    const previousTitle = conversationTitle || 'New Conversation';
+    const isUntouched = previousTitle === 'New Conversation';
+    let deterministicTitle: string | null = null;
+    if (isFirstTurn && isUntouched && !userEditedTitleRef.current[convId]) {
+      deterministicTitle = deriveDeterministicTitle(userText);
+      // Optimistically display in local UI; defer backend rename until onAccepted
+      setConversationTitle(deterministicTitle);
+      setConversations((prev) =>
+        prev.map((c) => (c.id === convId ? { ...c, title: deterministicTitle! } : c))
+      );
+    }
+
     // Synchronously lock send phase BEFORE awaiting fetch
     transitionSendPhase('awaiting_acceptance');
     setAttachmentError(null);
@@ -611,12 +670,20 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
         transitionSendPhase('accepted_streaming');
         setAssistantState('thinking');
 
-        // 2. Commit bubbles to UI
+        // 2. Commit bubbles to UI with immediate canonical attachment metadata
+        const userAttachments: AttachmentRef[] = stagedSnapshot.map((s) => ({
+          id: s.attachment.id,
+          filename_display: s.attachment.filename_display,
+          mime_type: s.attachment.mime_type,
+          size_bytes: s.attachment.size_bytes,
+        }));
+
         const userMsg: AssistantMessage = {
           id: clientMessageId,
           type: 'user',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           content: userText,
+          attachments: userAttachments.length > 0 ? userAttachments : undefined,
         };
         const initialAssistantMsg: AssistantMessage = {
           id: assistantMsgId,
@@ -632,6 +699,14 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
         stagedSnapshot.forEach((s) => URL.revokeObjectURL(s.previewUrl));
         stagedAttachmentsRef.current = [];
         setStagedAttachments([]);
+
+        // 4. Phase 8C: Persist deterministic title on backend once message has been accepted
+        if (isFirstTurn && deterministicTitle && isUntouched && !userEditedTitleRef.current[convId]) {
+          const renamePromise = renameConversation(convId, deterministicTitle).catch((renameErr) => {
+            console.debug('Failed to persist deterministic title on backend:', renameErr);
+          });
+          pendingTitlePromiseRef.current[convId] = renamePromise;
+        }
       },
 
       onToken: (token: string) => {
@@ -660,6 +735,42 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
             return prev;
           });
         }
+
+        // Phase 8C: Safely sequence model title generation after pending deterministic rename settles
+        if (isFirstTurn && deterministicTitle) {
+          const pendingRename = pendingTitlePromiseRef.current[convId];
+          const runModelTitleGeneration = async () => {
+            if (pendingRename) {
+              try {
+                await pendingRename;
+              } catch (err) {
+                console.debug('Pending deterministic rename settled with error before model title generation:', err);
+              }
+            }
+            if (!mountedRef.current || userEditedTitleRef.current[convId]) return;
+
+            try {
+              const res = await generateConversationTitle(convId, {
+                currentTitle: deterministicTitle,
+                fallbackTitle: deterministicTitle,
+              });
+              if (!mountedRef.current || !res || !res.title) return;
+              if (res.title === 'New Conversation') return;
+              if (userEditedTitleRef.current[convId]) return;
+
+              setConversations((prev) =>
+                prev.map((c) => (c.id === convId ? { ...c, title: res.title } : c))
+              );
+              if (activeConversationIdRef.current === convId) {
+                setConversationTitle(res.title);
+              }
+            } catch (err) {
+              console.debug('Background title generation skipped/failed, keeping fallback:', err);
+            }
+          };
+
+          pendingTitlePromiseRef.current[convId] = runModelTitleGeneration();
+        }
       },
 
       onError: (err: Error, partialText?: string) => {
@@ -667,6 +778,17 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
         abortControllerRef.current = null;
 
         if (!hasBeenAccepted) {
+          delete pendingTitlePromiseRef.current[convId];
+          // Revert optimistic title if pre-acceptance failure on first turn
+          if (isFirstTurn && deterministicTitle && isUntouched && !userEditedTitleRef.current[convId]) {
+            if (activeConversationIdRef.current === convId) {
+              setConversationTitle(previousTitle);
+            }
+            setConversations((prev) =>
+              prev.map((c) => (c.id === convId ? { ...c, title: previousTitle } : c))
+            );
+          }
+
           // PRE-ACCEPTANCE FAILURE
           if (err instanceof ApiError) {
             // Explicit HTTP rejection: preparation did not commit
@@ -752,6 +874,19 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     if (uploadInProgressRef.current) return;
     if (removingAttachmentIdsRef.current.size > 0) return;
 
+    // Phase 8C: Prevent blank-conversation spam
+    // If the active conversation is already an empty draft, reuse it rather than POSTing another row
+    const isCurrentEmptyDraft =
+      (conversationTitle === 'New Conversation' || !conversationTitle) &&
+      messages.length === 0 &&
+      stagedAttachments.length === 0;
+    if (isCurrentEmptyDraft && activeConversationIdRef.current) {
+      setInputPrompt('');
+      setAssistantState('idle');
+      setAttachmentError(null);
+      return;
+    }
+
     conversationTransitionRef.current = true;
     setIsConversationTransitioning(true);
 
@@ -780,9 +915,14 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
         setAttachmentError('Cannot switch conversations while attachment operations are in progress.');
         return;
       }
+
+      // Synchronously switch to clean new conversation state
+      setMessages([]);
       setConversationTitle(created.title);
       setAssistantState('idle');
-      setMessages([]);
+      setInputPrompt('');
+      setStagedAttachments([]);
+      stagedAttachmentsRef.current = [];
     } catch (err) {
       console.warn('Failed to create remote conversation:', err);
       setAssistantState('idle');
@@ -828,42 +968,56 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
     loadConversationMessages(id);
   };
 
-  const drawerConversations: ConversationHistoryItem[] = conversations.map((c) => ({
-    id: c.id,
-    title: c.title,
-    date: new Date(c.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }),
-    messagesCount: c.id === activeConversationId ? messages.length : undefined,
-  }));
+  // Phase 8C: Authoritative message counts and empty draft visibility filter
+  const drawerConversations: ConversationHistoryItem[] = conversations
+    .filter((c) => {
+      const count = c.id === activeConversationId ? messages.length : (c.message_count ?? 0);
+      const isOldEmptyDraft =
+        (!c.title || c.title === 'New Conversation' || c.title.startsWith('New Conversation')) &&
+        count === 0 &&
+        c.id !== activeConversationId;
+      return !isOldEmptyDraft;
+    })
+    .map((c) => ({
+      id: c.id,
+      title: c.title,
+      date: new Date(c.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }),
+      messagesCount: c.id === activeConversationId ? messages.length : (c.message_count ?? 0),
+    }));
 
   return (
-    <div className="space-y-6">
-      {/* 1. HEADER & STATUS BAR */}
-      <AssistantStatusBar
-        conversationTitle={conversationTitle}
-        drawerConversationsCount={drawerConversations.length}
-        onOpenHistory={() => setHistoryOpen(true)}
-        activeCharacterName={activeCharacterName}
-        currentModelName={currentModelName}
-        isOnline={isOnline}
-        modelStatus={modelStatus}
-        registry={registry}
-        onNewConversation={handleNewConversation}
-        assistantState={assistantState}
-        isNewConversationDisabled={conversationActionsDisabled}
-      />
+    <div className="flex flex-col h-full min-h-0 relative">
+      {/* 1. HEADER & STATUS BAR - Persistent Toolbar */}
+      <div className="flex-none mb-3">
+        <AssistantStatusBar
+          conversationTitle={conversationTitle}
+          drawerConversationsCount={drawerConversations.length}
+          onOpenHistory={() => setHistoryOpen(true)}
+          activeCharacterName={activeCharacterName}
+          currentModelName={currentModelName}
+          isOnline={isOnline}
+          modelStatus={modelStatus}
+          registry={registry}
+          onNewConversation={handleNewConversation}
+          assistantState={assistantState}
+          isNewConversationDisabled={conversationActionsDisabled}
+        />
+      </div>
 
-      {/* 2. CONVERSATION MESSAGE LIST */}
-      <AssistantMessageList
-        messages={messages}
-        userName={userName}
-        activeCharacterName={activeCharacterName}
-        isBusy={isBusy}
-        assistantState={assistantState}
-        activeConversationId={activeConversationId}
-      />
+      {/* 2. CONVERSATION MESSAGE LIST - Owns Scrolling */}
+      <div className="flex-1 min-h-0 overflow-hidden relative">
+        <AssistantMessageList
+          messages={messages}
+          userName={userName}
+          activeCharacterName={activeCharacterName}
+          isBusy={isBusy}
+          assistantState={assistantState}
+          activeConversationId={activeConversationId}
+        />
+      </div>
 
       {/* 3. DOCKED COMPOSER & STATUS/ERROR NOTICES */}
-      <div className="sticky bottom-4 z-20 max-w-4xl mx-auto space-y-2">
+      <div className="flex-none pt-2 max-w-4xl w-full mx-auto space-y-2">
         <AssistantErrorDisplay
           isOnline={isOnline}
           isModelSleeping={isModelSleeping}

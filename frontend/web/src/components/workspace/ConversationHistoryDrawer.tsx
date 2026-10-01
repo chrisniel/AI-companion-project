@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   History,
   X,
@@ -37,6 +37,16 @@ export const ConversationHistoryDrawer: React.FC<ConversationHistoryDrawerProps>
   isConversationSwitchingDisabled,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -155,8 +165,12 @@ export const ConversationHistoryDrawer: React.FC<ConversationHistoryDrawerProps>
                       {conv.title}
                     </h3>
                     {conv.messagesCount != null && (
-                      <Badge variant={isActive ? 'accent' : 'glass'} size="sm">
-                        {conv.messagesCount} msgs
+                      <Badge
+                        variant={isActive ? 'accent' : 'glass'}
+                        size="sm"
+                        className="font-semibold text-[11px] px-2 py-0.5 min-w-[50px] justify-center tracking-tight"
+                      >
+                        {conv.messagesCount} {conv.messagesCount === 1 ? 'msg' : 'msgs'}
                       </Badge>
                     )}
                   </div>

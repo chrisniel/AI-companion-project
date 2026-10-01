@@ -1,6 +1,6 @@
 # Phase 8 Implementation Plan — PC Frontend Architecture, Runtime Config, Multimodal & Polish
 
-> **Status:** 8A and 8P COMPLETE / VERIFIED. Repository Documentation Reconciliation (Passes R0–R13.2) is COMPLETE / VERIFIED. Phase 8B is COMPLETE / VERIFIED (8B.0–8B.8). 8C is NEXT / UNBLOCKED.
+> **Status:** Phase 8 (8A, 8P, 8B, 8C) is COMPLETE / VERIFIED. Phase 8 Overall is COMPLETE / VERIFIED. Foundation Band is NEXT / UNBLOCKED (execution paused pending development workflow redesign).
 > **Authority Precedence:** Normative architecture is owned by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md). Canonical product sequencing is owned by [`docs/02_Planning/ROADMAP.md`](../ROADMAP.md). Runtime config architecture is owned by [`docs/04_Architecture/04_Infrastructure/storage-and-assets.md`](../../04_Architecture/04_Infrastructure/storage-and-assets.md) and [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](../../04_Architecture/04_Infrastructure/runtime-and-models.md).  
 > **This is the single authoritative feature implementation plan for Phase 8.**
 
@@ -8,13 +8,13 @@
 
 ## Branch Strategy
 
-develop (verified baseline: 321 backend pytest, 185 frontend vitest, 124 Android unit/Robolectric, 0 tsc, migration head 006_add_attachments)
+develop (verified baseline at c6789e5: 321 backend pytest, 193 frontend vitest, 124 Android unit/Robolectric, 0 tsc, migration head 006_add_attachments)
   +-- feature/phase8-ui-foundation           (8A: COMPLETE / VERIFIED — merged to develop)
   +-- feature/phase8-runtime-config          (8P: COMPLETE / VERIFIED — merged to develop)
   +-- [GATE: Documentation Reconciliation]   (R0–R13.2: COMPLETE / VERIFIED — Phase 8B unblocked)
   +-- [8B.0–8B.6 Foundation]                 (COMPLETE / VERIFIED — merged via PR #13)
   +-- [8B.7: Persistent Attachment Rendering] (COMPLETE / VERIFIED)
-  +-- feature/phase8-ui-integration-polish   (8C: NEXT / UNBLOCKED — polish, a11y, cleanup)
+  +-- feature/phase8-ui-integration-polish   (8C: COMPLETE / VERIFIED — polish, a11y, title lifecycle, cancellation DB safety, cross-feature integration suite)
         based on merged 8B
 
 8P established canonical COMPANION_DATA_ROOT/attachments/. 8B activates image uploads to that directory now that documentation reconciliation is complete and verified.
@@ -1277,7 +1277,7 @@ frontend/web/src/test/phase8Integration.test.tsx:
   - Remove staged: DELETE called, URL revoked, gone from composer
   - 5th image blocked
   - PNG/JPEG succeed; WebP rejected with message
-  - Vision -> text-only model switch: button disables, pending cleared with warning
+  - Vision -> text-only model switch: button disables, attachment remains staged, warning appears, attachment/send controls fail closed, user may explicitly remove attachment or switch back to vision
   - mmproj absent: vision button disabled
 
 Full regression suites:
@@ -1290,9 +1290,11 @@ Full regression suites:
   - Mark Phase 8C complete / verified
   - Reconcile active delivery gates
 
-[CREATE] docs/03_Walkthroughs/walkthrough-phase8-multimodal-attachments.md
-  - Follow walkthrough-template.md (7-section format)
-  - Include: lifecycle, storage security, vision gate, provider translation, test results, WebP deferral
+[SUPERSEDED] docs/03_Walkthroughs/walkthrough-phase8-multimodal-attachments.md
+  - Superseded by existing reviewed 7-section walkthroughs:
+    1. [`walkthrough-phase8b-multimodal-attachments-foundation.md`](../../03_Walkthroughs/walkthrough-phase8b-multimodal-attachments-foundation.md): Exhaustively documents lifecycle (pre-stream transaction isolation, conditional SQL claiming, lock transfer), storage security (sandboxed media resolution, canonical path containment, BOLA, Bearer auth), vision gate (`available_capabilities` inspection requiring active model + `mmproj`), provider translation (`ResolvedImageContent` to OpenAI-compatible data URIs in `LlamaCppProvider`), and explicit WebP deferral boundary rationale under the required 7-section format.
+    2. [`walkthrough-phase8b-closure.md`](../../03_Walkthroughs/walkthrough-phase8b-closure.md): Exhaustively documents history attachment rendering (8B.7), authenticated Blob preview lifecycle, and full verification test evidence under the required 7-section format.
+  - Rationale: Authoring a redundant third multimodal walkthrough would duplicate existing authoritative delivery evidence without adding new architectural facts. Final cross-feature integration test evidence is codified in [`frontend/web/src/test/phase8Integration.test.tsx`](../../../frontend/web/src/test/phase8Integration.test.tsx).
 
 [MODIFY] docs/01_Tracking/task.md
   - Mark all items complete
@@ -1305,7 +1307,7 @@ feat(8c): integration polish -- mock cleanup, bundle, a11y, final tests, docs
 - Bundle analysis; lazy-load if warranted
 - Accessibility: aria-labels, role=article, focus management, keyboard
 - phase8Integration.test.tsx: reload/cancel/vision gate/mmproj-absent/limits
-- walkthrough-phase8-multimodal-attachments.md (7-section)
+- Reconcile walkthrough plan (superseded by reviewed Phase 8B walkthroughs)
 - ROADMAP.md: Phase 8 complete / verified
 - task.md: sprint archived
 

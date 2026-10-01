@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
   Paperclip,
   Mic,
@@ -71,6 +71,14 @@ export const AssistantComposer: React.FC<AssistantComposerProps> = ({
   attachments = [],
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Return focus to composer after generation completes
+  useEffect(() => {
+    if (!isComposerFrozen && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [isComposerFrozen]);
   const lineCount = inputPrompt ? inputPrompt.split('\n').length : 1;
   const textareaRows = Math.min(5, Math.max(1, lineCount));
 
@@ -199,6 +207,7 @@ export const AssistantComposer: React.FC<AssistantComposerProps> = ({
 
         {/* Multiline Composer Textarea */}
         <textarea
+          ref={textareaRef}
           rows={textareaRows}
           value={inputPrompt}
           readOnly={isComposerFrozen}
@@ -234,13 +243,13 @@ export const AssistantComposer: React.FC<AssistantComposerProps> = ({
           }`}
           title={
             assistantState === 'listening'
-              ? 'Stop listening (Preview stub)'
-              : 'Voice input (Stub — audio capture not connected)'
+              ? 'Stop listening'
+              : 'Voice input (Microphone input not connected)'
           }
           aria-label={
             assistantState === 'listening'
-              ? 'Stop listening (Preview stub)'
-              : 'Voice input (Stub — audio capture not connected)'
+              ? 'Stop listening'
+              : 'Voice input (Microphone input not connected)'
           }
         >
           {assistantState === 'listening' ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}

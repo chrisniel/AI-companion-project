@@ -37,6 +37,10 @@ import {
 import { Badge } from '../../ui/Badge';
 import { Card } from '../../ui/Card';
 import { SearchInput } from '../../ui/SearchInput';
+import {
+  DesktopSizeSelector,
+  DesktopSimulationPreset,
+} from '../../layout/DesktopSizeSelector';
 
 export type StateCategory =
   | 'all'
@@ -60,9 +64,19 @@ export interface ApplicationStateExample {
   renderedComponent: React.ReactNode;
 }
 
-export const ApplicationStatesShowcase: React.FC<{
+export interface ApplicationStatesShowcaseProps {
   onSimulateState?: (category: StateCategory, stateId: string) => void;
-}> = ({ onSimulateState }) => {
+  currentPreset?: DesktopSimulationPreset;
+  onSelectPreset?: (preset: DesktopSimulationPreset) => void;
+  actualWidth?: number;
+}
+
+export const ApplicationStatesShowcase: React.FC<ApplicationStatesShowcaseProps> = ({
+  onSimulateState,
+  currentPreset = 'auto',
+  onSelectPreset,
+  actualWidth = 1440,
+}) => {
   const [selectedCategory, setSelectedCategory] = useState<StateCategory>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
@@ -1040,7 +1054,14 @@ export const ApplicationStatesShowcase: React.FC<{
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-start md:self-auto">
+        <div className="flex items-center gap-2 self-start md:self-auto flex-wrap">
+          {onSelectPreset && (
+            <DesktopSizeSelector
+              currentPreset={currentPreset}
+              onSelectPreset={onSelectPreset}
+              actualWidth={actualWidth}
+            />
+          )}
           <Badge variant="glass" size="sm" className="font-mono text-[11px]">
             WCAG AA Compliant
           </Badge>

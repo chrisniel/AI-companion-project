@@ -16,39 +16,39 @@ import {
 export const ACCENT_PRESETS: Record<AccentPresetId, AccentPreset> = {
   aurora: {
     id: 'aurora',
-    name: 'Ocean Blue',
-    description: 'Solid Blue Theme (Light shade in dark mode, darker shade in light mode)',
-    gradient: '#1e40af',
-    glow: 'rgba(30, 64, 175, 0.25)',
-    primaryColor: '#1e40af',
-    secondaryColor: '#2563eb',
+    name: 'Ocean Sky',
+    description: 'Luminous sky blue in dark mode, balanced oceanic blue in light mode',
+    gradient: '#0284c7',
+    glow: 'rgba(56, 189, 248, 0.25)',
+    primaryColor: '#0284c7',
+    secondaryColor: '#38bdf8',
   },
   electric: {
     id: 'electric',
-    name: 'Cobalt Blue',
-    description: 'Solid Cobalt Blue',
+    name: 'Cobalt Indigo',
+    description: 'Electric cobalt in dark mode, deep royal indigo in light mode',
     gradient: '#1d4ed8',
-    glow: 'rgba(29, 78, 216, 0.25)',
+    glow: 'rgba(96, 165, 250, 0.25)',
     primaryColor: '#1d4ed8',
-    secondaryColor: '#3b82f6',
+    secondaryColor: '#60a5fa',
   },
   emerald: {
     id: 'emerald',
-    name: 'Deep Navy',
-    description: 'Solid Deep Navy Blue',
-    gradient: '#1e3a8a',
-    glow: 'rgba(30, 58, 138, 0.25)',
-    primaryColor: '#1e3a8a',
-    secondaryColor: '#1d4ed8',
+    name: 'Emerald Teal',
+    description: 'Vibrant seafoam emerald in dark mode, deep woodland teal in light mode',
+    gradient: '#047857',
+    glow: 'rgba(52, 211, 153, 0.25)',
+    primaryColor: '#047857',
+    secondaryColor: '#34d399',
   },
   amethyst: {
     id: 'amethyst',
-    name: 'Royal Blue',
-    description: 'Solid Royal Blue',
-    gradient: '#2563eb',
-    glow: 'rgba(37, 99, 235, 0.25)',
-    primaryColor: '#2563eb',
-    secondaryColor: '#60a5fa',
+    name: 'Amethyst Violet',
+    description: 'Glowing amethyst purple in dark mode, rich royal violet in light mode',
+    gradient: '#6d28d9',
+    glow: 'rgba(168, 85, 247, 0.25)',
+    primaryColor: '#6d28d9',
+    secondaryColor: '#a855f7',
   },
 };
 
@@ -389,16 +389,17 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       root.style.setProperty('--color-accent-secondary', customAccentColor);
       root.style.setProperty('--accent-glow', `${customAccentColor}40`);
     } else if (mode === 'dark') {
-      root.style.setProperty('--accent-gradient', '#38bdf8');
-      root.style.setProperty('--color-accent', '#38bdf8');
-      root.style.setProperty('--color-accent-secondary', '#60a5fa');
-      root.style.setProperty('--accent-glow', 'rgba(56, 189, 248, 0.25)');
+      const darkColor = preset.secondaryColor || '#38bdf8';
+      root.style.setProperty('--accent-gradient', darkColor);
+      root.style.setProperty('--color-accent', darkColor);
+      root.style.setProperty('--color-accent-secondary', preset.primaryColor || '#0284c7');
+      root.style.setProperty('--accent-glow', preset.glow || 'rgba(56, 189, 248, 0.25)');
     } else {
-      const lightColor = preset.primaryColor || '#1e40af';
+      const lightColor = preset.primaryColor || '#0284c7';
       root.style.setProperty('--accent-gradient', lightColor);
       root.style.setProperty('--accent-glow', preset.glow || 'rgba(30, 64, 175, 0.22)');
       root.style.setProperty('--color-accent', lightColor);
-      root.style.setProperty('--color-accent-secondary', preset.secondaryColor || '#2563eb');
+      root.style.setProperty('--color-accent-secondary', preset.secondaryColor || '#38bdf8');
     }
   }, [accent, mode, customAccentColor]);
 
@@ -420,8 +421,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       root.style.setProperty('--color-surface-glass', `rgba(18, 24, 36, ${opacity})`);
       root.style.setProperty('--color-surface-glass-border', `rgba(255, 255, 255, ${Math.max(0.06, opacity * 0.14)})`);
     } else {
-      root.style.setProperty('--color-surface-glass', `rgba(255, 255, 255, ${opacity})`);
-      root.style.setProperty('--color-surface-glass-border', `rgba(255, 255, 255, ${Math.min(1, opacity + 0.15)})`);
+      root.style.setProperty('--color-surface-glass', `rgba(255, 255, 255, ${Math.max(0.75, opacity)})`);
+      root.style.setProperty('--color-surface-glass-border', 'rgba(148, 163, 184, 0.35)');
     }
 
     // Background filter and overlay variables

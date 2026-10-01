@@ -13,9 +13,7 @@ import {
   Settings,
   Layers,
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
 import { Badge } from '../ui/Badge';
-import { StatusIndicator } from '../ui/StatusIndicator';
 
 export interface NavItem {
   id: string;
@@ -37,14 +35,12 @@ export const NAV_ITEMS: NavItem[] = [
     id: 'assistant',
     label: 'Assistant',
     icon: <Bot className="w-5 h-5" />,
-    badge: 'Neural',
     category: 'MAIN',
   },
   {
     id: 'tasks',
     label: 'Tasks',
     icon: <CheckSquare className="w-5 h-5" />,
-    badge: '3',
     category: 'MAIN',
   },
   {
@@ -71,7 +67,6 @@ export const NAV_ITEMS: NavItem[] = [
     id: 'models',
     label: 'Models',
     icon: <Cpu className="w-5 h-5" />,
-    badge: 'Loaded',
     category: 'AI',
   },
   {
@@ -92,7 +87,6 @@ export const NAV_ITEMS: NavItem[] = [
     id: 'logs',
     label: 'Logs',
     icon: <Terminal className="w-5 h-5" />,
-    badge: 'Live',
     category: 'SYSTEM',
   },
   {
@@ -101,13 +95,17 @@ export const NAV_ITEMS: NavItem[] = [
     icon: <Settings className="w-5 h-5" />,
     category: 'SYSTEM',
   },
-  {
-    id: 'states',
-    label: 'States',
-    icon: <Layers className="w-5 h-5" />,
-    badge: '27',
-    category: 'SYSTEM',
-  },
+  ...(import.meta.env.DEV
+    ? [
+        {
+          id: 'states',
+          label: 'States',
+          icon: <Layers className="w-5 h-5" />,
+          badge: 'Dev',
+          category: 'SYSTEM' as const,
+        },
+      ]
+    : []),
 ];
 
 
@@ -161,6 +159,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 type="button"
                 onClick={() => onSelectSection(item.id)}
                 title={collapsed ? item.label : undefined}
+                aria-label={item.label}
                 className={`h-10 flex items-center rounded-xl text-sm font-medium relative group cursor-pointer nav-menu-item select-none ${
                   collapsed
                     ? 'w-10 justify-center p-0 mx-auto'
@@ -205,51 +204,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </React.Fragment>
           );
         })}
-      </div>
-
-      {/* Bottom Runtime Engine Status */}
-      <div
-        className={`border-t border-[var(--color-surface-glass-border)] ${
-          collapsed ? 'p-2 flex justify-center items-center' : 'p-2.5'
-        }`}
-      >
-        <AnimatePresence mode="wait">
-          {!collapsed ? (
-            <motion.div
-              key="expanded-status"
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 4 }}
-              transition={{ duration: 0.2 }}
-              className="p-2.5 rounded-xl surface-recessed border border-[var(--color-border-subtle)] flex flex-col gap-1.5 overflow-hidden"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] uppercase font-bold tracking-wider text-[var(--color-text-muted)]">
-                  Local Backend
-                </span>
-                <StatusIndicator status="online" size="sm" showLabel={false} />
-              </div>
-              <p className="text-xs font-medium text-[var(--color-text-primary)] truncate">
-                Python FastAPI API Ready
-              </p>
-              <span className="text-[10px] text-[var(--color-text-secondary)] font-mono">
-                Port: 8000 (Loopback)
-              </span>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="collapsed-status"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="flex justify-center py-2 cursor-default"
-              title="Local Backend: Online (Port 8000)"
-            >
-              <StatusIndicator status="online" size="sm" showLabel={false} />
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
     </aside>
   );
