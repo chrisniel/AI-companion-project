@@ -3,6 +3,7 @@
 import pytest
 from httpx import AsyncClient
 from app.services.assistant.orchestrator import _get_lock
+from app.services.llm.manager import get_llm_provider
 
 
 @pytest.mark.anyio
@@ -383,3 +384,55 @@ async def test_generate_title_preserves_custom_title(client: AsyncClient, auth_h
     assert gen_resp.status_code == 200
     # Must preserve the user's manual title!
     assert gen_resp.json()["title"] == "My Favorite Jokes Collection"
+
+
+@pytest.mark.anyio
+async def test_generate_title_manual_rename_during_generation_wins(
+    client: AsyncClient,
+    auth_headers: dict,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Verify that a manual rename occurring while LLM generation is running is never overwritten."""
+    provider = get_llm_provider()
+    monkeypatch.setattr(provider, "_is_loaded", True)
+    monkeypatch.setattr(provider, "_active_model", "qwen3-vl-2b-instruct.gguf")
+
+    # 1. Create conversation
+    c_resp = await client.post("/api/v1/conversations", json={"title": "New Conversation"}, headers=auth_headers)
+    conv_id = c_resp.json()["id"]
+
+    # 2. Add message
+    await client.post(
+        f"/api/v1/conversations/{conv_id}/messages",
+        json={"user_text": "How do I build a desktop app with React and FastAPI?"},
+        headers=auth_headers,
+    )
+
+    # 3. Mock provider.generate such that during generation, a manual rename occurs
+    async def mock_generate_with_concurrent_rename(*args, **kwargs):
+        # Simulate user manually renaming conversation concurrently
+        patch_resp = await client.patch(
+            f"/api/v1/conversations/{conv_id}",
+            json={"title": "My Explicit Desktop Manual Title"},
+            headers=auth_headers,
+        )
+        assert patch_resp.status_code == 200
+        return "Generated Architecture Guide"
+
+    monkeypatch.setattr(provider, "generate", mock_generate_with_concurrent_rename)
+
+    # 4. Trigger generate-title
+    gen_resp = await client.post(
+        f"/api/v1/conversations/{conv_id}/generate-title",
+        json={"current_title": "New Conversation", "fallback_title": "How do I build a…"},
+        headers=auth_headers,
+    )
+    assert gen_resp.status_code == 200
+
+    # 5. Manual title must win
+    assert gen_resp.json()["title"] == "My Explicit Desktop Manual Title"
+
+    # 6. Verify database row persistently holds the manual title
+    get_resp = await client.get(f"/api/v1/conversations/{conv_id}", headers=auth_headers)
+    assert get_resp.status_code == 200
+    assert get_resp.json()["title"] == "My Explicit Desktop Manual Title"

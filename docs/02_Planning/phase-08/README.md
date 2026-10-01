@@ -10,7 +10,7 @@ This directory contains the authoritative implementation planning and navigation
 | **8P** | Runtime Configuration & Persistent Asset Foundation | `feature/phase8-runtime-config` | **COMPLETE / VERIFIED** (Terminology reconciliation, `COMPANION_DATA_ROOT`, bootstrap locator, Model Registry Schema v3, atomic migrations) |
 | **R0–R13.2** | Repository Documentation Reconciliation | Multiple passes / final PR #14 integration | **COMPLETE / VERIFIED** (Full audit, baseline lock, documentation routing, verified test suites) |
 | **8B** | Multimodal Image Attachment Foundation | 8B.8 closure complete | **COMPLETE / VERIFIED** (8B.0–8B.8) |
-| **8C** | Integration, Accessibility & Polish | `feature/phase8-ui-integration-polish` | **COMPLETE / VERIFIED** (Dead mock deletion, bundle code-splitting, a11y, regression verification) |
+| **8C** | Integration, Accessibility & Polish | `feature/phase8-ui-integration-polish` | **IMPLEMENTED / FINAL REVIEW PENDING** (Dead mock deletion, bundle code-splitting, a11y, title lifecycle, cancellation DB safety, regression verification) |
 
 ---
 

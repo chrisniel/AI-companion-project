@@ -287,6 +287,7 @@ async def orchestrate_chat_stream(
     6. Releases transferred conversation_lock and generation active flag in finally block.
     """
     asst_msg = prepared_turn.assistant_message
+    asst_msg_id = asst_msg.id
     full_response_text: str = ""
     provider = get_llm_provider()
 
@@ -398,59 +399,41 @@ async def orchestrate_chat_stream(
 
     except (asyncio.CancelledError, GeneratorExit):
         logger.info(f"Generation cancelled for conversation {conversation_id}")
-        asst_msg.status = "cancelled"
-        if full_response_text:
-            asst_msg.content = full_response_text
 
-        committed = False
-        try:
-            if db.is_active:
-                await db.commit()
-                committed = True
-        except Exception as db_err:
-            logger.warning(f"Failed to commit cancellation on request session: {db_err}")
+        # 1. Safely rollback request session without depending on commit under cancellation
+        if db.is_active:
             try:
                 await db.rollback()
-            except Exception:
+            except BaseException:
                 pass
 
-        if not committed:
-            await asyncio.shield(
-                _persist_terminal_assistant_status(
-                    assistant_msg_id=asst_msg.id,
-                    status="cancelled",
-                    content=full_response_text if full_response_text else None,
-                    engine=db.bind,
-                )
+        # 2. Persist terminal status unconditionally via dedicated, shielded session
+        await asyncio.shield(
+            _persist_terminal_assistant_status(
+                assistant_msg_id=asst_msg_id,
+                status="cancelled",
+                content=full_response_text if full_response_text else None,
+                engine=db.bind,
             )
+        )
         raise
     except Exception as exc:
         logger.error(f"Error during assistant orchestration stream: {exc}")
-        asst_msg.status = "failed"
-        if full_response_text:
-            asst_msg.content = full_response_text
 
-        committed = False
-        try:
-            if db.is_active:
-                await db.commit()
-                committed = True
-        except Exception as db_err:
-            logger.warning(f"Failed to commit failure status on request session: {db_err}")
+        if db.is_active:
             try:
                 await db.rollback()
-            except Exception:
+            except BaseException:
                 pass
 
-        if not committed:
-            await asyncio.shield(
-                _persist_terminal_assistant_status(
-                    assistant_msg_id=asst_msg.id,
-                    status="failed",
-                    content=full_response_text if full_response_text else None,
-                    engine=db.bind,
-                )
+        await asyncio.shield(
+            _persist_terminal_assistant_status(
+                assistant_msg_id=asst_msg_id,
+                status="failed",
+                content=full_response_text if full_response_text else None,
+                engine=db.bind,
             )
+        )
         error_payload = json.dumps({
             "type": "error",
             "code": "MODEL_GENERATION_FAILED",

@@ -508,7 +508,7 @@ print("hello world")
       expect(api.deriveDeterministicTitle('   ')).toBe('New Conversation');
     });
 
-    it('sets deterministic title immediately on send and invokes generateConversationTitle after first turn', async () => {
+    it('shows optimistic deterministic title on send, defers backend persistence until onAccepted, and replaces with generated title on turn completion', async () => {
       vi.mocked(api.checkHealth).mockResolvedValue({ status: 'healthy' });
       vi.mocked(api.getModelStatus).mockResolvedValue({
         model_loaded: true,
@@ -537,9 +537,10 @@ print("hello world")
         title: 'RX 580 Performance Insights',
       });
 
+      let acceptCallback: (() => void) | undefined;
       let onDoneCallback: ((fullText?: string) => void) | undefined;
       vi.mocked(api.streamSendMessage).mockImplementation(async (options) => {
-        options.onAccepted?.();
+        acceptCallback = options.onAccepted;
         onDoneCallback = options.onDone;
       });
 
@@ -553,11 +554,18 @@ print("hello world")
       fireEvent.change(input, { target: { value: 'What is RX 580 compute capability for local inference?' } });
       fireEvent.click(screen.getByTitle(/Send prompt to local model/i));
 
-      // Deterministic title appears immediately
+      // Deterministic title appears optimistically in UI immediately
       await waitFor(() => {
         expect(screen.getByText('What is RX 580 compute capability…')).toBeInTheDocument();
       });
-      expect(api.renameConversation).toHaveBeenCalledWith('conv-test-title', 'What is RX 580 compute capability…');
+      // But renameConversation is NOT called before acceptance!
+      expect(api.renameConversation).not.toHaveBeenCalled();
+
+      // Trigger acceptance: now rename is persisted to backend
+      acceptCallback?.();
+      await waitFor(() => {
+        expect(api.renameConversation).toHaveBeenCalledWith('conv-test-title', 'What is RX 580 compute capability…');
+      });
 
       // First turn completes
       onDoneCallback?.('Here is the compute capability.');
@@ -570,6 +578,76 @@ print("hello world")
         });
         expect(screen.getByText('RX 580 Performance Insights')).toBeInTheDocument();
       });
+    });
+
+    it('reverts optimistic title and preserves reusable empty draft if first send fails before acceptance', async () => {
+      vi.mocked(api.checkHealth).mockResolvedValue({ status: 'healthy' });
+      vi.mocked(api.getModelStatus).mockResolvedValue({
+        model_loaded: true,
+        model_awake: true,
+        active_model: 'qwen3-vl-2b-instruct.gguf',
+        runtime_state: 'MODEL_READY',
+        model_resident: true,
+        router_running: true,
+      } as any);
+
+      const conv: api.ConversationOut = {
+        id: 'conv-test-failure',
+        title: 'New Conversation',
+        character_id: 'default',
+        owner_id: 'owner-1',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        message_count: 0,
+      };
+
+      vi.mocked(api.listConversations).mockResolvedValue({ items: [conv], total: 1 });
+      vi.mocked(api.getMessages).mockResolvedValue({ items: [], total: 0 });
+      vi.mocked(api.createConversation).mockClear();
+      vi.mocked(api.renameConversation).mockClear();
+
+      let errorCallback: ((err: Error, partialText?: string) => void) | undefined;
+      vi.mocked(api.streamSendMessage).mockImplementation(async (options) => {
+        errorCallback = options.onError;
+      });
+
+      renderWithProviders(<AssistantView />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { level: 1, name: 'New Conversation' })).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText(/Message Aura/i);
+      fireEvent.change(input, { target: { value: 'Why does inference stall?' } });
+      fireEvent.click(screen.getByTitle(/Send prompt to local model/i));
+
+      // Title optimistically changed in UI heading
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { level: 1, name: 'Why does inference stall?' })).toBeInTheDocument();
+      });
+      expect(api.renameConversation).not.toHaveBeenCalled();
+
+      // Trigger pre-acceptance rejection (HTTP 503 / ApiError)
+      errorCallback?.(
+        new api.ApiError({
+          code: 'MODEL_BUSY',
+          message: 'Model is currently busy loading weights.',
+          status: 503,
+        })
+      );
+
+      // Reverts to 'New Conversation' so draft is preserved truthfully
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { level: 1, name: 'New Conversation' })).toBeInTheDocument();
+      });
+
+      // No backend rename was ever persisted
+      expect(api.renameConversation).not.toHaveBeenCalled();
+
+      // Empty draft remains reusable: clicking New Chat does NOT create a redundant remote conversation
+      const newChatBtn = screen.getByRole('button', { name: /New Chat/i });
+      fireEvent.click(newChatBtn);
+      expect(api.createConversation).not.toHaveBeenCalled();
     });
   });
 

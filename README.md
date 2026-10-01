@@ -2,7 +2,7 @@
 
 A local-first personal AI companion ecosystem centered around a Windows PC running a persistent **Local AI Runtime**, with a React desktop control center and a native Android companion app.
 
-> **Development status:** The PC React web UI (`frontend/web/`), the native Android companion app prototype (`android/`), and the FastAPI **Local AI Runtime** backend are repository-verified. Implemented core foundations include the FastAPI backend, SQLite database with Alembic migrations (head: `006_add_attachments`), conversation persistence, live SSE generation, SQLite FTS5 lexical memory retrieval, task CRUD with soft-delete, Model Registry Schema v3, and local `llama.cpp` Vulkan GPU offload on AMD RX 580 (verified PC reference baselines: 321 backend pytest, 185 frontend vitest; Android prototype R8 baseline: 124 tests; see [`docs/06_Guides/TESTING_AND_CI.md`](docs/06_Guides/TESTING_AND_CI.md)). Phase 8A (UI decomposition & truthfulness), Phase 8P (runtime configuration & asset foundation), and Repository Documentation Reconciliation (Passes R0–R13.2) are complete and verified. Phase 8B (multimodal image attachments) is complete and verified (slices 8B.0–8B.8). Phase 8C (Integration & Polish) is the next unblocked engineering milestone.
+> **Development status:** The PC React web UI (`frontend/web/`), the native Android companion app prototype (`android/`), and the FastAPI **Local AI Runtime** backend are repository-verified. Implemented core foundations include the FastAPI backend, SQLite database with Alembic migrations (head: `006_add_attachments`), conversation persistence, live SSE generation, SQLite FTS5 lexical memory retrieval, task CRUD with soft-delete, Model Registry Schema v3, and local `llama.cpp` Vulkan GPU offload on AMD RX 580 (verified PC reference baselines: 331 backend pytest, 218 frontend vitest; Android prototype R8 baseline: 124 tests; see [`docs/06_Guides/TESTING_AND_CI.md`](docs/06_Guides/TESTING_AND_CI.md)). Phase 8A (UI decomposition & truthfulness), Phase 8P (runtime configuration & asset foundation), and Repository Documentation Reconciliation (Passes R0–R13.2) are complete and verified. Phase 8B (multimodal image attachments) is complete and verified (slices 8B.0–8B.8). Phase 8C (Integration & Polish) implementation is complete with hardened title lifecycles, race-protected auto-naming, and stream cancellation DB safety, pending final independent review. Phase 8 Overall remains in progress.
 
 ---
 
@@ -170,8 +170,8 @@ Implemented or designed:
 
 Current state:
 
-- **Implemented / Verified:** Soft Glass desktop interface, live FastAPI backend integration, live SSE chat streaming, conversation thread persistence, personal task CRUD, SQLite FTS5 lexical memory management, model and runtime profile controls, Phase 8A UI decomposition / truthfulness work, and Phase 8B multimodal image attachments.
-- **Remaining / Planned:** Keyboard accessibility, responsive desktop adaptations, and mock-cleanup polish (Phase 8C). Prototype or post-V1 surfaces (such as devices or health) retain placeholder or unavailable states pending dedicated milestone planning.
+- **Implemented / Verified:** Soft Glass desktop interface, live FastAPI backend integration, live SSE chat streaming, conversation thread persistence, personal task CRUD, SQLite FTS5 lexical memory management, model and runtime profile controls, Phase 8A UI decomposition / truthfulness work, and Phase 8B multimodal image attachments. Phase 8C accessibility, bundle code-splitting, title lifecycles, and stream cancellation persistence safety are implemented pending final review.
+- **Remaining / Planned:** Prototype or post-V1 surfaces (such as devices or health) retain placeholder or unavailable states pending dedicated milestone planning.
 
 ### Android Companion
 
@@ -647,7 +647,7 @@ V1 is operational when:
 - SQLite FTS5 lexical memory retrieval accurately returns relevant context
 - Background scheduler operating independently of browser tab lifetime (required V1 release capability)
 - Phase 8B multimodal image/vision attachments can be uploaded, resolved, and inferred
-- Phase 8C accessibility, UI polish, and responsive web adaptations are complete
+- Phase 8C accessibility, UI polish, title lifecycle hardening, and cancellation DB persistence safety are implemented and verified
 - Remote access over Tailscale/private mesh is authenticated (using shared application credential in current implementation, with revocable per-device credentials planned under Decision D4/D5)
 - Master secrets remain outside clients, logs, and normal Git content
 
@@ -722,6 +722,6 @@ A license will be added deliberately when the project's distribution and contrib
 
 This is an experimental personal AI companion project under active development.
 
-Implemented domains (chat, conversations, tasks, memory, and model controls) reflect live backend reality. Some prototype or post-V1 surfaces (such as devices or health) may still use placeholder states or legacy mock-support files; final deprecated mock cleanup is scheduled for Phase 8C.
+Implemented domains (chat, conversations, tasks, memory, and model controls) reflect live backend reality. Deprecated mock files have been purged in Phase 8C; remaining prototype or post-V1 surfaces (such as devices or health) maintain truthful placeholder or unavailable states pending dedicated milestone planning.
 
 Many capabilities described across high-level vision documents remain **planned architecture**, not completed functionality. Do not treat prototype status indicators, sample device names, example model values, sample health values, or mock runtime metrics as claims about real connected hardware or implemented services.

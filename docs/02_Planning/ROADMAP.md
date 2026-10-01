@@ -55,10 +55,10 @@ Roadmap tracking separates **Release Allocation** (which product milestone owns 
               │
 [Phase 8B: Multimodal Vision] ─────► COMPLETE / VERIFIED (8B.0–8B.8)
               │
-[Phase 8C: Integration & Polish] ──► COMPLETE / VERIFIED
+[Phase 8C: Integration & Polish] ──► IMPLEMENTED / FINAL REVIEW PENDING
               │
 ┌─────────────┴────────────────────────────────────────────────┐
-│ FOUNDATION BAND (Parallel Lanes)                             │
+│ FOUNDATION BAND (Parallel Lanes - Blocked Pending 8C Review) │
 │ ┌──────────────────────────┐    ┌──────────────────────────┐ │
 │ │ Lane A: Host & Runtime   │    │ Lane B: Companion/Policy │ │
 │ └──────────────────────────┘    └──────────────────────────┘ │
@@ -79,10 +79,11 @@ Roadmap tracking separates **Release Allocation** (which product milestone owns 
 - **Repository Documentation Reconciliation Passes R0–R13.2 (`COMPLETE / VERIFIED`):** Conducted full repository forensic audit, locked architectural decisions D1–D11, established canonical documentation routing, purged obsolete terminology, validated Android cleartext/network boundaries, audited and cleaned local legacy database data, verified historical R8 test suites (175 backend pytest, 147 frontend vitest, 124 Android unit/Robolectric) leading into the current 321/185 PC reference baseline, confirmed OpenAPI schema synchronization, reconciled durable domain architecture specifications, executed R13.1 physical architecture cleanup/ADR codification, applied R13.2 boundary/hardening policy, and locked the fresh verified baseline.
 - **Phase 8B — Multimodal Image Attachment Foundation (`COMPLETE / VERIFIED`):** Delivered multimodal attachment foundation (Slices 8B.0–8B.6 via PR #13), persistent message history rendering (8B.7), and full integration closure across the repository baseline (8B.8).
 
-### 2.2 Immediate Next Milestone
-- **Phase 8C — Integration, Accessibility & Polish (`COMPLETE / VERIFIED`):**
-  - *Current Status:* Phase 8C is COMPLETE and VERIFIED. Phase 8 is entirely closed.
-  - *Scope Delivered:* Elimination of deprecated mock files, bundle analysis and code-splitting (React.lazy implemented), comprehensive keyboard navigation and ARIA accessibility, responsive layout hardening across desktop viewports, end-to-end multimodal regression testing.
+### 2.2 Active Milestone
+- **Phase 8C — Integration, Accessibility & Polish (`IMPLEMENTED / FINAL REVIEW PENDING`):**
+  - *Current Status:* Phase 8C implementation is complete with hardened conversation title lifecycle, race-protected title generation, isolated stream cancellation DB safety, bundle code-splitting, accessible navigation, and comprehensive regression testing. Final independent review and closure approval are pending. Phase 8 Overall remains IN PROGRESS.
+  - *Foundation Band Transition:* Foundation Band (Lanes A & B) remains blocked from becoming active until Phase 8C closure is independently approved.
+  - *Scope Delivered:* Elimination of deprecated mock files, bundle analysis and code-splitting (React.lazy implemented), comprehensive keyboard navigation and ARIA accessibility, responsive layout hardening across desktop viewports, end-to-end multimodal regression testing, deterministic/model title lifecycle, and stream cancellation persistence safety.
   - *Authoritative Feature Plan:* [`phase-08/plan-phase8-pc-frontend-architecture-ux.md`](./phase-08/plan-phase8-pc-frontend-architecture-ux.md).
 
 ### 2.3 Remaining PC V1 Delivery Milestones

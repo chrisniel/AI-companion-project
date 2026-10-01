@@ -371,22 +371,56 @@ async def generate_conversation_title(
     except Exception as e:
         logger.debug("Automatic title generation skipped or failed: %s", e)
 
+    allowed_titles = {"New Conversation"}
+    if payload and payload.current_title:
+        allowed_titles.add(payload.current_title)
+    if payload and payload.fallback_title:
+        allowed_titles.add(payload.fallback_title)
+
     if sanitized_title:
-        conversation.title = sanitized_title
+        # Atomic conditional update: only overwrite if title is still in allowed_titles
+        update_stmt = (
+            update(Conversation)
+            .where(
+                Conversation.id == conversation_id,
+                Conversation.owner_id == owner_id,
+                Conversation.deleted_at.is_(None),
+                Conversation.title.in_(allowed_titles),
+            )
+            .values(title=sanitized_title)
+        )
+        await db.execute(update_stmt)
         await db.commit()
-        await db.refresh(conversation)
-    elif payload and payload.fallback_title and conversation.title == "New Conversation":
-        conversation.title = payload.fallback_title[:255]
+    elif payload and payload.fallback_title:
+        update_stmt = (
+            update(Conversation)
+            .where(
+                Conversation.id == conversation_id,
+                Conversation.owner_id == owner_id,
+                Conversation.deleted_at.is_(None),
+                Conversation.title == "New Conversation",
+            )
+            .values(title=payload.fallback_title[:255])
+        )
+        await db.execute(update_stmt)
         await db.commit()
-        await db.refresh(conversation)
+
+    # Re-fetch authoritative row from DB to return exact title (preserving any concurrent user rename)
+    refresh_stmt = select(Conversation).where(
+        Conversation.id == conversation_id,
+        Conversation.owner_id == owner_id,
+        Conversation.deleted_at.is_(None),
+    )
+    refreshed_res = await db.execute(refresh_stmt)
+    current_conv = refreshed_res.scalar_one_or_none() or conversation
 
     return ConversationOut(
-        id=conversation.id,
-        title=conversation.title,
-        character_id=conversation.character_id,
-        owner_id=conversation.owner_id,
-        created_at=conversation.created_at,
-        updated_at=conversation.updated_at,
+        id=current_conv.id,
+        title=current_conv.title,
+        character_id=current_conv.character_id,
+        owner_id=current_conv.owner_id,
+        created_at=current_conv.created_at,
+        updated_at=current_conv.updated_at,
         message_count=message_count,
     )
 

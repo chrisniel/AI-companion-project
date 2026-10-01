@@ -590,17 +590,16 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
 
     // Phase 8C: First-turn automatic conversation naming with deterministic fallback
     const isFirstTurn = messages.length === 0;
+    const previousTitle = conversationTitle || 'New Conversation';
+    const isUntouched = previousTitle === 'New Conversation';
     let deterministicTitle: string | null = null;
-    if (isFirstTurn) {
+    if (isFirstTurn && isUntouched && !userEditedTitleRef.current[convId]) {
       deterministicTitle = deriveDeterministicTitle(userText);
-      const isUntouched = conversationTitle === 'New Conversation' || !conversationTitle;
-      if (isUntouched && !userEditedTitleRef.current[convId]) {
-        setConversationTitle(deterministicTitle);
-        setConversations((prev) =>
-          prev.map((c) => (c.id === convId ? { ...c, title: deterministicTitle! } : c))
-        );
-        renameConversation(convId, deterministicTitle).catch(() => {});
-      }
+      // Optimistically display in local UI; defer backend rename until onAccepted
+      setConversationTitle(deterministicTitle);
+      setConversations((prev) =>
+        prev.map((c) => (c.id === convId ? { ...c, title: deterministicTitle! } : c))
+      );
     }
 
     // Synchronously lock send phase BEFORE awaiting fetch
@@ -660,6 +659,13 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
         stagedSnapshot.forEach((s) => URL.revokeObjectURL(s.previewUrl));
         stagedAttachmentsRef.current = [];
         setStagedAttachments([]);
+
+        // 4. Phase 8C: Persist deterministic title on backend once message has been accepted
+        if (isFirstTurn && deterministicTitle && isUntouched && !userEditedTitleRef.current[convId]) {
+          renameConversation(convId, deterministicTitle).catch((renameErr) => {
+            console.debug('Failed to persist deterministic title on backend:', renameErr);
+          });
+        }
       },
 
       onToken: (token: string) => {
@@ -719,6 +725,16 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
         abortControllerRef.current = null;
 
         if (!hasBeenAccepted) {
+          // Revert optimistic title if pre-acceptance failure on first turn
+          if (isFirstTurn && deterministicTitle && isUntouched && !userEditedTitleRef.current[convId]) {
+            if (activeConversationIdRef.current === convId) {
+              setConversationTitle(previousTitle);
+            }
+            setConversations((prev) =>
+              prev.map((c) => (c.id === convId ? { ...c, title: previousTitle } : c))
+            );
+          }
+
           // PRE-ACCEPTANCE FAILURE
           if (err instanceof ApiError) {
             // Explicit HTTP rejection: preparation did not commit
