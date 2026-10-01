@@ -1,6 +1,6 @@
 # Phase 8 Implementation Plan — PC Frontend Architecture, Runtime Config, Multimodal & Polish
 
-> **Status:** 8A and 8P COMPLETE / VERIFIED. Repository Documentation Reconciliation (Passes R0–R13.2) is COMPLETE / VERIFIED. Phase 8B is COMPLETE / VERIFIED (8B.0–8B.8). Phase 8C is IMPLEMENTED / FINAL REVIEW PENDING. Phase 8 Overall is IN PROGRESS (Foundation Band blocked pending independent closure approval).
+> **Status:** Phase 8 (8A, 8P, 8B, 8C) is COMPLETE / VERIFIED. Phase 8 Overall is COMPLETE / VERIFIED. Foundation Band is NEXT / UNBLOCKED (execution paused pending development workflow redesign).
 > **Authority Precedence:** Normative architecture is owned by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md). Canonical product sequencing is owned by [`docs/02_Planning/ROADMAP.md`](../ROADMAP.md). Runtime config architecture is owned by [`docs/04_Architecture/04_Infrastructure/storage-and-assets.md`](../../04_Architecture/04_Infrastructure/storage-and-assets.md) and [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](../../04_Architecture/04_Infrastructure/runtime-and-models.md).  
 > **This is the single authoritative feature implementation plan for Phase 8.**
 
@@ -1277,7 +1277,7 @@ frontend/web/src/test/phase8Integration.test.tsx:
   - Remove staged: DELETE called, URL revoked, gone from composer
   - 5th image blocked
   - PNG/JPEG succeed; WebP rejected with message
-  - Vision -> text-only model switch: button disables, pending cleared with warning
+  - Vision -> text-only model switch: button disables, attachment remains staged, warning appears, attachment/send controls fail closed, user may explicitly remove attachment or switch back to vision
   - mmproj absent: vision button disabled
 
 Full regression suites:
@@ -1307,7 +1307,7 @@ feat(8c): integration polish -- mock cleanup, bundle, a11y, final tests, docs
 - Bundle analysis; lazy-load if warranted
 - Accessibility: aria-labels, role=article, focus management, keyboard
 - phase8Integration.test.tsx: reload/cancel/vision gate/mmproj-absent/limits
-- walkthrough-phase8-multimodal-attachments.md (7-section)
+- Reconcile walkthrough plan (superseded by reviewed Phase 8B walkthroughs)
 - ROADMAP.md: Phase 8 complete / verified
 - task.md: sprint archived
 

@@ -178,7 +178,7 @@ describe('Phase 8 Cross-Feature Integration Suite (8C.4 Matrix)', () => {
 
   // 1. Send + reload + authenticated attachment preview
   it('Scenario 1: Send + reload + authenticated attachment preview', async () => {
-    renderWithProviders();
+    const { unmount: unmountOriginal } = renderWithProviders();
 
     await waitFor(() => {
       expect(screen.getByText('Integration Test Conversation')).toBeInTheDocument();
@@ -234,8 +234,11 @@ describe('Phase 8 Cross-Feature Integration Suite (8C.4 Matrix)', () => {
       total: 1,
     });
 
-    // Re-mount / reload
-    const { unmount } = renderWithProviders();
+    // Unmount original app instance before mounting the fresh reload
+    unmountOriginal();
+
+    // Re-mount fresh app instance representing browser reload
+    const { unmount: unmountReloaded } = renderWithProviders();
 
     await waitFor(() => {
       expect(api.getMessages).toHaveBeenCalledWith('conv-integ-1');
@@ -247,7 +250,7 @@ describe('Phase 8 Cross-Feature Integration Suite (8C.4 Matrix)', () => {
       expect(screen.getByAltText('screenshot.png')).toBeInTheDocument();
     }, { timeout: 5000 });
 
-    unmount();
+    unmountReloaded();
   });
 
   // 2. Send + cancel mid-stream -> user message + image remain in history
@@ -451,6 +454,29 @@ describe('Phase 8 Cross-Feature Integration Suite (8C.4 Matrix)', () => {
     // PNG accepted and uploaded
     await waitFor(() => {
       expect(uploadAttachment).toHaveBeenCalledWith('conv-integ-1', pngFile);
+    });
+
+    // Now upload valid JPEG
+    vi.mocked(uploadAttachment).mockResolvedValueOnce({
+      id: 'att-integ-2',
+      conversation_id: 'conv-integ-1',
+      message_id: null,
+      filename_display: 'photo.jpg',
+      mime_type: 'image/jpeg',
+      size_bytes: 4096,
+      image_width: 1024,
+      image_height: 768,
+      created_at: '2026-09-30T00:00:01Z',
+    });
+
+    const jpegFile = new File(['jpeg-binary'], 'photo.jpg', { type: 'image/jpeg' });
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('attachment-file-input'), { target: { files: [jpegFile] } });
+    });
+
+    // JPEG accepted and uploaded
+    await waitFor(() => {
+      expect(uploadAttachment).toHaveBeenCalledWith('conv-integ-1', jpegFile);
     });
   });
 
