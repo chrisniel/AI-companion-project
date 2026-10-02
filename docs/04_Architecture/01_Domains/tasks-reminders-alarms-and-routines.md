@@ -1,7 +1,7 @@
 # Tasks, Reminders, Alarms, and Routines Architecture
 
 > **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0010, ADR-0018)  
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0011, ADR-0018)  
 > **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for tasks, reminders, alarms, and routines.
 
 ---
@@ -20,7 +20,7 @@ It governs the boundary between personal productivity state and autonomous sched
 
 ## 2. Durable Architecture & Invariants
 
-### 2.1 Distinct Conceptual Entities (Decision D10 & ADR-0010)
+### 2.1 Distinct Conceptual Entities (Decision D10 & ADR-0011)
 
 Tasks, Reminders, Alarms, and Routines are architecturally distinct concepts governed by Decision D10:
 
@@ -145,7 +145,7 @@ The normative architecture for D10 is frozen. The following implementation-level
 ## 7. Canonical Relationships & Cross-Links
 
 - **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decision D10)
-- **Productivity & Scheduler ADR:** [`docs/04_Architecture/decisions/ADR-0010-productivity-entity-semantics-and-scheduler-architecture.md`](../decisions/ADR-0010-productivity-entity-semantics-and-scheduler-architecture.md)
+- **Productivity & Scheduler ADR:** [`docs/04_Architecture/decisions/ADR-0011-d10-scheduling-and-notification-semantics.md`](../decisions/ADR-0011-d10-scheduling-and-notification-semantics.md)
 - **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
 - **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Decision D10), [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-SCHED-001`, `PC-SCHED-002`)
 - **Windows Host Infrastructure:** [`docs/04_Architecture/04_Infrastructure/windows-host-and-notifications.md`](../04_Infrastructure/windows-host-and-notifications.md)

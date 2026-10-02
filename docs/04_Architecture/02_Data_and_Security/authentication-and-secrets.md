@@ -1,7 +1,7 @@
 # Authentication and Secrets Architecture
 
 > **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0004, ADR-0005)  
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0005, ADR-0006)  
 > **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for authentication, secrets, and network trust boundaries.
 
 ---
@@ -27,12 +27,12 @@ In accordance with Decision D5:
 - **Proximity is Not Authentication:** Physical or network-layer proximity (sharing local Wi-Fi or subnet) does **not** grant implicit trust or bypass authentication. Network proximity never substitutes for application auth.
 - **Master Secret Containment:** Master runtime administrative secrets and third-party API credentials are held strictly on the host runtime machine and are **never** transmitted to or stored on client endpoints.
 
-### 2.2 Supported Trust Topologies & Remote Access (ADR-0005)
+### 2.2 Supported Trust Topologies & Remote Access (ADR-0006)
 
-The companion architecture supports three bounded network topologies under Decision D5 and `ADR-0005`:
+The companion architecture supports three bounded network topologies under Decision D5 and `ADR-0006`:
 1. **Authenticated Localhost Loopback (Default):** Local desktop clients (Flutter, React Web) and host processes communicating over `127.0.0.1` / `::1`.
 2. **Explicitly Trusted LAN:** Satellite devices communicating across a private home network with explicit host pairing and application authentication.
-3. **Encrypted Overlay Mesh (Tailscale Private Mesh — Preferred):** Remote satellite access routed through an authenticated, encrypted WireGuard-based private mesh network without exposing open router ports (`ADR-0005`). Alternatively, a managed **Cloudflare Tunnel** with Cloudflare Access authentication is supported for controlled web egress.
+3. **Encrypted Overlay Mesh (Tailscale Private Mesh — Preferred):** Remote satellite access routed through an authenticated, encrypted WireGuard-based private mesh network without exposing open router ports (`ADR-0006`). Alternatively, a managed **Cloudflare Tunnel** with Cloudflare Access authentication is supported for controlled web egress.
 
 ### 2.3 Direct Public Internet Port Forwarding Rejected
 
@@ -102,7 +102,7 @@ The normative architecture for D4 and D5 is frozen. The following implementation
 ## 7. Canonical Relationships & Cross-Links
 
 - **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D4, D5)
-- **Tailscale Remote Transport ADR:** [`docs/04_Architecture/decisions/ADR-0005-tailscale-preferred-remote-transport.md`](../decisions/ADR-0005-tailscale-preferred-remote-transport.md)
+- **Tailscale Remote Transport ADR:** [`docs/04_Architecture/decisions/ADR-0006-d5-remote-access-trust-boundary.md`](../decisions/ADR-0006-d5-remote-access-trust-boundary.md)
 - **Device Authentication ADR:** [`docs/04_Architecture/decisions/ADR-0005-d4-profile-device-credential-boundary.md`](../decisions/ADR-0005-d4-profile-device-credential-boundary.md)
 - **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Decision D5), [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-API-002`)
 - **Profiles & Devices Specification:** [`docs/04_Architecture/02_Data_and_Security/profiles-and-devices.md`](profiles-and-devices.md)

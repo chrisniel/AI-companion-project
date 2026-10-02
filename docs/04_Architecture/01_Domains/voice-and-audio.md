@@ -65,7 +65,7 @@ Repository source code and test suites verify the following baseline reality:
 
 ## 4. Approved Target Architecture / Not Yet Implemented
 
-The following target capabilities are approved under Decisions D1, D11, and the Feature Promotion Map:
+The following target capabilities are approved under Decisions D1, D11, and the Master Decision Register:
 
 1. **Conversational Speech Pipeline (PC V1):**
    - Consented conversational voice interaction integrated with the primary conversation view.

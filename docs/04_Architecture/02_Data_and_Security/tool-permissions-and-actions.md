@@ -1,7 +1,7 @@
 # Tool Permissions and Actions Architecture
 
 > **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0009, ADR-0018)  
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0010, ADR-0018)  
 > **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for tool permissions, deterministic policy, and action execution.
 
 ---
@@ -52,7 +52,7 @@ Risk tiers represent a conceptual architecture for categorizing operations, **no
 
 ### 2.4 Unrestricted OS Shell Prohibited
 
-In accordance with the Feature Promotion Map (**Generic Shell / OS Administration**):
+In accordance with Decision D9:
 - **Classification:** `REJECTED / NOT STARTED / N/A`.
 - **Policy Invariant:** Unrestricted command-line shell execution (e.g., arbitrary `cmd.exe`, PowerShell, Bash, raw OS process spawning, unrestricted filesystem traversal, credential access, or security reconfiguration) is **strictly prohibited** as a generic assistant tool.
 - **No PC Later Promotion:** Generic shell tools must **NOT** be classified as `PC LATER` or scheduled for future delivery.
@@ -60,7 +60,7 @@ In accordance with the Feature Promotion Map (**Generic Shell / OS Administratio
 
 ### 2.5 Interactive Browser Automation Phasing
 
-In accordance with the Feature Promotion Map (**Interactive Browser Automation**):
+In accordance with Decision D9:
 - **Classification:** `APPROVED / NOT STARTED / PC LATER`.
 - **Scope Distinction:** Programmatic browser interaction (e.g., automated form submission, checkout flows, authenticated sessions via Playwright) is classified as a post-PC-V1 capability. It is architecturally separate from read-only search and fetch (PC V1).
 

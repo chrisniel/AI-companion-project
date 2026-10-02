@@ -8,7 +8,7 @@
 
 ## 1. Purpose & Scope
 
-This specification defines the host execution model, OS lifecycle integration, background persistence, and native notification dispatch for the AI Companion on Windows:
+This specification defines the host execution model, OS lifecycle integration, background persistence, and native notification presentation for the AI Companion on Windows:
 - Decoupled host runtime lifecycle independent of client window or session lifetime.
 - Primary production client is Flutter Desktop ([`ADR-0017`](../decisions/ADR-0017-flutter-production-windows-client.md)); React Web remains a supported developer harness; Android is prototype/reference.
 - Autostart integration upon Windows user login via Windows Task Scheduler.
@@ -99,7 +99,7 @@ Detailed implementation choices for future planning are tracked in [`docs/02_Pla
 ## 6. Security & Ownership Boundaries
 
 - **Local Host Boundary (Decision D2):** The host runtime binds exclusively to loopback (`127.0.0.1`) by default, preventing unauthenticated remote LAN access to host administration endpoints.
-- **User Permission Execution:** The runtime executes under the standard privileges of the logged-in Windows user account. It does **not** require elevated Windows Administrator privileges for day-to-day companion conversation or notification dispatch.
+- **User Permission Execution:** The runtime executes under the standard privileges of the logged-in Windows user account. It does **not** require elevated Windows Administrator privileges for day-to-day companion conversation or notification presentation.
 - **Quiet-Hours & Notification Governance:** Native notification delivery MUST obey the D10 quiet-hours policy and authorized per-item overrides. High-frequency automated routines are bounded to avoid notification fatigue.
 
 ---

@@ -11,46 +11,46 @@
 | Domain Area | Target Capability | Architecture Spec | Implemented Source / Tests | Automated CI Gate | Golden Release Gate | Overall Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Governance** | Human-only Git write authority | `AGENTS.md`, `DELIVERY_WORKFLOW.md` | Process rules | N/A | Human review | **VERIFIED** |
-| **PC Client** | Flutter Windows Desktop App | `windows-host-and-notifications.md` | `client/pc/` (Pending) | Flutter CI lane | Checkpoint 1 | **NOT STARTED** |
-| **PC Client** | React Web Supported Client | `SYSTEM_BASELINE.md` §1 | `frontend/web/` | Vitest / Build | Checkpoint 14 | **VERIFIED** |
-| **PC Host** | Task Scheduler Autostart at Login | `windows-host-and-notifications.md` | Pending implementation | Host tests | Checkpoint 1 | **NOT STARTED** |
-| **PC Host** | Native Windows Action Center Toasts| `windows-host-and-notifications.md` | Pending implementation | Adapter tests | Checkpoint 8 | **NOT STARTED** |
-| **PC Host** | Storage Roots (`APP`, `DATA`, `LIBRARY`)| `storage-and-assets.md` | `app.core.storage` (Partial)| Pytest storage | Checkpoint 1 | **PARTIAL** |
-| **Contracts** | OpenAPI Schema 3.1 & Drift Check | `DOCUMENTATION_MAP.md` | `contracts/openapi/openapi.json` | Python drift check| Checkpoint 1 | **VERIFIED** |
-| **Contracts** | Durable FIFO Conversation Queues | `assistant-and-conversations.md` | Pending implementation | Queue unit tests | Checkpoint 4 | **NOT STARTED** |
-| **Identity** | Multi-Profile PC V1 Model | `profiles-and-devices.md` | Migration 007 (Pending) | Adversarial test | Checkpoint 2 | **NOT STARTED** |
-| **Identity** | Satellite Device Revocable Token | `profiles-and-devices.md` | Pending implementation | Auth unit tests | Checkpoint 2 | **NOT STARTED** |
-| **Models** | Local `llama.cpp` Vulkan GPU Offload | `runtime-and-models.md` | `llama_cpp.py` (b10936 RX 580) | Pytest mocks | Checkpoint 3 | **VERIFIED** |
-| **Models** | D6 Controlled Manual Import (Bundles)| `runtime-and-models.md` | GGUF parser done; service gap | Import unit tests| Checkpoint 3 | **PARTIAL** |
-| **Models** | Default Single Resident Model | `runtime-and-models.md` | Router `--models-max 1` | Router tests | Checkpoint 3 | **VERIFIED** |
-| **Multimodal**| Image Attachment Ingestion & History | `multimodal-and-media.md` | Phase 8B verified | Attachment tests | Checkpoint 4 | **VERIFIED** |
-| **Persona** | Character Templates & Profile Instances| `characters-personality-and-emotion.md`| Pending DB schema | Model unit tests | Checkpoint 5 | **NOT STARTED** |
-| **Persona** | 8 Continuous Personality Traits | `characters-personality-and-emotion.md`| Pending trait engine | Prompt tests | Checkpoint 5 | **NOT STARTED** |
-| **Persona** | Persistent Bounded Mood & Decay | `characters-personality-and-emotion.md`| Pending mood service | State tests | Checkpoint 5 | **NOT STARTED** |
-| **Persona** | Immutable Neutral Assistant Fallback | `characters-personality-and-emotion.md`| Prompt baseline | Fallback tests | Checkpoint 5 | **VERIFIED** |
-| **Memory** | Profile & Character Scopes | `memory-and-personalization.md` | SQLite+FTS5 baseline exists | FTS5 tests | Checkpoint 6 | **PARTIAL** |
-| **Memory** | Selective Automatic Memory Extraction | `memory-and-personalization.md` | Pending policy engine | Extraction tests | Checkpoint 6 | **NOT STARTED** |
-| **Memory** | Temporary Memory Validity & Expiry | `memory-and-personalization.md` | Pending schema columns | Expiry tests | Checkpoint 6 | **NOT STARTED** |
-| **Actions** | D9 Deterministic 5-Stage Pipeline | `tool-permissions-and-actions.md` | Pending engine | Policy matrix | Checkpoint 7 | **NOT STARTED** |
-| **Actions** | DEFAULT DENY & Parameter Confirmation | `tool-permissions-and-actions.md` | Pending engine | Security tests | Checkpoint 7 | **NOT STARTED** |
-| **Actions** | Persistent Tool Kill Switch | `tool-permissions-and-actions.md` | Pending engine | Safety tests | Checkpoint 7 | **NOT STARTED** |
-| **Actions** | Rejection of Generic OS Shell | `tool-permissions-and-actions.md` | Locked architectural rule | Rejection tests | Checkpoint 7 | **LOCKED / REJECTED**|
-| **Schedule** | Runtime `SchedulerService` Engine | `tasks-reminders-alarms-and-routines.md` | Tasks CRUD done; engine gap | Scheduler tests | Checkpoint 8 | **PARTIAL** |
-| **Schedule** | Distinct Reminder & Alarm Lifecycles | `tasks-reminders-alarms-and-routines.md` | Pending engine | Alert tests | Checkpoints 8, 9| **NOT STARTED** |
-| **Schedule** | Quiet Hours & Late Alarm Grace Window | `tasks-reminders-alarms-and-routines.md` | Pending engine | Policy tests | Checkpoints 8, 9| **NOT STARTED** |
-| **Schedule** | Bounded Companion Routines | `tasks-reminders-alarms-and-routines.md` | Pending engine | Routine tests | Checkpoint 10 | **NOT STARTED** |
-| **Voice** | Local STT (`whisper.cpp`) & Kokoro TTS | `voice-and-audio.md` | Binaries & weights staged | Speech unit tests| Checkpoint 9 | **STAGED (NO CODE)** |
-| **Voice** | Mandatory Real Voice Barge-In | `voice-and-audio.md` | Pending pipeline | Duplex tests | Checkpoint 9 | **NOT STARTED** |
-| **Web Info** | Read-Only WebSearch, Fetch & Weather | `web-current-information.md` | Pending provider adapters | SSRF unit tests | Checkpoint 10 | **NOT STARTED** |
-| **Web Info** | Outbound SSRF & Private IP Containment | `web-current-information.md` | Pending network layer | Containment tests| Checkpoint 10 | **NOT STARTED** |
-| **Cloud** | Optional Cloud Fallback (`LOCAL_FIRST`) | `runtime-and-models.md` | Pending cloud adapters | Egress mock tests| Checkpoint 11 | **NOT STARTED** |
-| **Cloud** | Device-Local Cloud Keys (No sync) | `authentication-and-secrets.md` | Pending secrets manager | Isolation tests | Checkpoint 11 | **NOT STARTED** |
-| **Resource** | Low-Impact Mode (Option B App List) | `performance-and-capacity.md` | Pending resource controller | Throttling tests | Checkpoint 12 | **NOT STARTED** |
-| **Resource** | Low-Impact Lightweight Model Swap | `performance-and-capacity.md` | Pending swap coordinator | Swap tests | Checkpoint 12 | **NOT STARTED** |
-| **Resilience**| Coordinated DB + Profile Asset Backup | `backup-recovery-and-diagnostics.md` | Migration backup exists | Backup tests | Checkpoint 13 | **PARTIAL** |
-| **Resilience**| Staged Restore Verification | `backup-recovery-and-diagnostics.md` | Pending restore validator | Restore tests | Checkpoint 13 | **NOT STARTED** |
-| **Resilience**| Local Admin Factory Reset | `backup-recovery-and-diagnostics.md` | Pending reset service | Reset tests | Checkpoint 13 | **NOT STARTED** |
-| **Remote** | Tailscale Mesh & Cloudflare Tunnel | `authentication-and-secrets.md` | Tailscale installed on host | Remote tests | Checkpoint 14 | **VERIFIED (LOCAL)** |
+| **PC Client** | Flutter Windows Desktop App | `windows-host-and-notifications.md` | Pending Flutter scaffold / target path TBD | Flutter CI lane | G1 | **NOT STARTED** |
+| **PC Client** | React Web Supported Client | `SYSTEM_BASELINE.md` §1 | `frontend/web/` | Vitest / Build | G14 | **VERIFIED** |
+| **PC Host** | Task Scheduler Autostart at Login | `windows-host-and-notifications.md` | Pending implementation | Host tests | G8 | **NOT STARTED** |
+| **PC Host** | Native Windows Action Center Toasts| `windows-host-and-notifications.md` | Pending implementation | Adapter tests | G8 | **NOT STARTED** |
+| **PC Host** | Storage Roots (`APP`, `DATA`, `LIBRARY`)| `storage-and-assets.md` | `app.core.storage` (Partial)| Pytest storage | G1 | **PARTIAL** |
+| **Contracts** | OpenAPI Schema 3.1 & Drift Check | `DOCUMENTATION_MAP.md` | `contracts/openapi/openapi.json` | Python drift check| G1 | **VERIFIED** |
+| **Contracts** | Durable FIFO Conversation Queues | `assistant-and-conversations.md` | Pending implementation | Queue unit tests | G4 | **NOT STARTED** |
+| **Identity** | Multi-Profile PC V1 Model | `profiles-and-devices.md` | Migration 007 (Pending) | Adversarial test | G2 | **NOT STARTED** |
+| **Identity** | Satellite Device Revocable Token | `profiles-and-devices.md` | Pending implementation | Auth unit tests | G2 | **NOT STARTED** |
+| **Models** | Local `llama.cpp` Vulkan GPU Offload | `runtime-and-models.md` | `llama_cpp.py` (b10936 RX 580) | Pytest mocks | G3 | **VERIFIED** |
+| **Models** | D6 Controlled Manual Import (Bundles)| `runtime-and-models.md` | GGUF parser done; service gap | Import unit tests| G3 | **PARTIAL** |
+| **Models** | Default Single Resident Model | `runtime-and-models.md` | Router `--models-max 1` | Router tests | G3 | **VERIFIED** |
+| **Multimodal**| Image Attachment Ingestion & History | `multimodal-and-media.md` | Phase 8B verified | Attachment tests | G4 | **VERIFIED** |
+| **Persona** | Character Templates & Profile Instances| `characters-personality-and-emotion.md`| Pending DB schema | Model unit tests | G5 | **NOT STARTED** |
+| **Persona** | 8 Continuous Personality Traits | `characters-personality-and-emotion.md`| Pending trait engine | Prompt tests | G5 | **NOT STARTED** |
+| **Persona** | Persistent Bounded Mood & Decay | `characters-personality-and-emotion.md`| Pending mood service | State tests | G5 | **NOT STARTED** |
+| **Persona** | Immutable Neutral Assistant Fallback | `characters-personality-and-emotion.md`| Prompt baseline | Fallback tests | G5 | **VERIFIED** |
+| **Memory** | Profile & Character Scopes | `memory-and-personalization.md` | SQLite+FTS5 baseline exists | FTS5 tests | G6 | **PARTIAL** |
+| **Memory** | Selective Automatic Memory Extraction | `memory-and-personalization.md` | Pending policy engine | Extraction tests | G6 | **NOT STARTED** |
+| **Memory** | Temporary Memory Validity & Expiry | `memory-and-personalization.md` | Pending schema columns | Expiry tests | G6 | **NOT STARTED** |
+| **Actions** | D9 Deterministic 5-Stage Pipeline | `tool-permissions-and-actions.md` | Pending engine | Policy matrix | G7 | **NOT STARTED** |
+| **Actions** | DEFAULT DENY & Parameter Confirmation | `tool-permissions-and-actions.md` | Pending engine | Security tests | G7 | **NOT STARTED** |
+| **Actions** | Persistent Tool Kill Switch | `tool-permissions-and-actions.md` | Pending engine | Safety tests | G7 | **NOT STARTED** |
+| **Actions** | Rejection of Generic OS Shell | `tool-permissions-and-actions.md` | Locked architectural rule | Rejection tests | G7 | **LOCKED / REJECTED**|
+| **Schedule** | Runtime `SchedulerService` Engine | `tasks-reminders-alarms-and-routines.md` | Tasks CRUD done; engine gap | Scheduler tests | G8 | **PARTIAL** |
+| **Schedule** | Distinct Reminder & Alarm Lifecycles | `tasks-reminders-alarms-and-routines.md` | Pending engine | Alert tests | G8 | **NOT STARTED** |
+| **Schedule** | Quiet Hours & Late Alarm Grace Window | `tasks-reminders-alarms-and-routines.md` | Pending engine | Policy tests | G8 | **NOT STARTED** |
+| **Schedule** | Bounded Companion Routines | `tasks-reminders-alarms-and-routines.md` | Pending engine | Routine tests | G8 | **NOT STARTED** |
+| **Voice** | Local STT (`whisper.cpp`) & Kokoro TTS | `voice-and-audio.md` | Reference binaries/assets exist; no code pipeline | Speech unit tests| G9 | **PARTIAL (ASSETS ONLY)** |
+| **Voice** | Mandatory Real Voice Barge-In | `voice-and-audio.md` | Pending pipeline | Duplex tests | G9 | **NOT STARTED** |
+| **Web Info** | Read-Only WebSearch, Fetch & Weather | `web-current-information.md` | Pending provider adapters | SSRF unit tests | G10 | **NOT STARTED** |
+| **Web Info** | Outbound SSRF & Private IP Containment | `web-current-information.md` | Pending network layer | Containment tests| G10 | **NOT STARTED** |
+| **Cloud** | Optional Cloud Fallback (`LOCAL_FIRST`) | `runtime-and-models.md` | Pending cloud adapters | Egress mock tests| G11 | **NOT STARTED** |
+| **Cloud** | Device-Local Cloud Keys (No sync) | `authentication-and-secrets.md` | Pending secrets manager | Isolation tests | G11 | **NOT STARTED** |
+| **Resource** | Low-Impact Mode (Option B App List) | `performance-and-capacity.md` | Pending resource controller | Throttling tests | G12 | **NOT STARTED** |
+| **Resource** | Low-Impact Lightweight Model Swap | `performance-and-capacity.md` | Pending swap coordinator | Swap tests | G12 | **NOT STARTED** |
+| **Resilience**| Coordinated DB + Profile Asset Backup | `backup-recovery-and-diagnostics.md` | Migration backup exists | Backup tests | G13 | **PARTIAL** |
+| **Resilience**| Staged Restore Verification | `backup-recovery-and-diagnostics.md` | Pending restore validator | Restore tests | G13 | **NOT STARTED** |
+| **Resilience**| Local Admin Factory Reset | `backup-recovery-and-diagnostics.md` | Pending reset service | Reset tests | G13 | **NOT STARTED** |
+| **Remote** | Tailscale Mesh & Cloudflare Tunnel | `authentication-and-secrets.md` | Tailscale installed on host | Remote tests | G14 | **PARTIAL** |
 | **Golden Gate**| 14-Group End-to-End Release Gate | `SYSTEM_BASELINE.md` §8 | Verification Guide | Release Run | All 14 Groups | **NOT STARTED** |
 
 ---

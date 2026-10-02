@@ -21,7 +21,7 @@ This specification defines the integration architecture, data contracts, and pri
 
 ### 2.1 Phased Delivery Boundaries (PC V1 vs. Android V1)
 
-In accordance with the Feature Promotion Map:
+In accordance with the Master Decision Register:
 - **PC V1: Health-Context Ready Architecture:** Classified as `APPROVED / NOT STARTED / PC V1`. PC V1 establishes health-context/data-contract readiness and the semantic boundaries required to receive appropriately summarized wellness context. **PC V1 does NOT directly connect to physical wearables or Bluetooth biometric sensors.**
 - **Android V1: Android Health Connect Integration:** Classified as `APPROVED / NOT STARTED / ANDROID V1`. Physical collection of biometric context occurs via the Android Companion device leveraging Android's platform-standard Health Connect API.
 

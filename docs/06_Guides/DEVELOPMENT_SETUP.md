@@ -30,7 +30,7 @@ The repository is structured into distinct subsystem trees:
 ```text
 AI-companion-project/
 ├── backend/            # FastAPI Local AI Runtime (Python 3.11, SQLAlchemy 2, Alembic)
-├── frontend/desktop/   # Flutter Windows Desktop Client (Target - Not Yet Scaffolded)
+├── (Flutter desktop client target path TBD pending PC-CLIENT-001 scaffolding)
 ├── frontend/web/       # React 19 Web Client (Supported developer harness and test oracle)
 ├── android/            # Android Mobile Companion Client (Prototype / reference client)
 ├── contracts/openapi/  # Canonical OpenAPI contract (openapi.json)
@@ -108,7 +108,7 @@ In a separate terminal:
 
 ```powershell
 # 1. Navigate to desktop client directory
-cd frontend/desktop
+cd [target_flutter_path] # FUTURE/TARGET: Path TBD during PC-CLIENT-001
 
 # 2. Fetch Flutter packages
 flutter pub get

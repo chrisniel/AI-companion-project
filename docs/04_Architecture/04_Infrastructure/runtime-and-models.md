@@ -1,7 +1,7 @@
 # Runtime and Models Architecture
 
 > **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0006)  
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0007)  
 > **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for the local inference runtime, models, and execution providers.
 
 ---
@@ -31,7 +31,7 @@ This specification defines the local inference runtime, hardware execution model
 
 ### 2.2 Controlled Model Import Pipeline (Decision D6)
 
-In accordance with Decision D6 and `ADR-0006`, local model acquisition enforces a six-stage controlled pipeline:
+In accordance with Decision D6 and `ADR-0007`, local model acquisition enforces a six-stage controlled pipeline:
 $$\text{Inbox} \longrightarrow \text{Preflight} \longrightarrow \text{Staging} \longrightarrow \text{Atomic Install} \longrightarrow \text{Library} \longrightarrow \text{Registry}$$
 1. **Inbox:** User deposits model files into `IMPORT_INBOX_DIR`.
 2. **Preflight (User-Initiated Manual Scan):** Initiated manually by the user from the UI (no automatic filesystem watcher). Inspects file headers, parses GGUF metadata (and other supported format metadata), estimates VRAM/RAM requirements, and verifies format integrity.
@@ -42,13 +42,13 @@ $$\text{Inbox} \longrightarrow \text{Preflight} \longrightarrow \text{Staging} \
 
 ### 2.3 Managed Online Model Downloading (PC Later)
 
-In accordance with the Feature Promotion Map (**Managed Online Model Downloading**):
+In accordance with the Master Decision Register:
 - **Classification:** `APPROVED / NOT STARTED / PC LATER`.
 - **Policy Invariant:** In-app discovery and downloading of models from public hubs (e.g., Hugging Face) is an approved architectural track scheduled for post-PC-V1 delivery. It is **not** prohibited, but it is deliberately sequenced after PC V1 to ensure the local file import foundation (Decision D6) is solid and verified first.
 
 ### 2.4 Optional Cloud LLM Fallback (PC V1)
 
-In accordance with the Feature Promotion Map (**Optional Cloud LLM Fallback**):
+In accordance with the Master Decision Register:
 - **Classification:** `APPROVED / NOT STARTED / PC V1`.
 - **Architectural Rules:**
   - **Local Remains Primary:** Local inference is always default; cloud fallback is strictly an opt-in auxiliary.

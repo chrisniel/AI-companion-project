@@ -563,9 +563,9 @@ docs/
 │   ├── SYSTEM_BASELINE.md                         # Core system contracts, boundaries & runtime topology
 │   ├── decisions/                                 # Architectural Decision Records (ADRs)
 │   │   ├── ADR-0001-github-source-hugging-face-lfs.md
-│   │   ├── ADR-0002-fastapi-system-authority.md
-│   │   ├── ADR-0003-pc-first-local-topology.md
-│   │   ├── ADR-0004-canonical-data-root-strategy.md
+│   │   ├── ADR-0002-d1-pc-v1-release-boundary.md
+│   │   ├── ADR-0003-d2-windows-host-model.md
+│   │   ├── ADR-0004-d3-android-application-identity.md
 │   │   └── ...
 │   └── domains/                                   # Canonical domain technical specifications
 │       ├── backend-architecture.md                # FastAPI, endpoints, middleware, lifecycle

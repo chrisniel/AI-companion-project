@@ -15,7 +15,7 @@ The AI Companion project maintains a strict test-first verification discipline. 
 | Subsystem | Test Framework | Test Location | Primary Scope |
 | :--- | :--- | :--- | :--- |
 | **Backend** | `pytest` + `httpx` + `pytest-asyncio` | `backend/tests/` | REST/SSE endpoints, memory, tasks, storage roots, models, auth, attachments, media resolver |
-| **Flutter Desktop** | `flutter_test` | `frontend/desktop/test/` | (Target - Not Yet Scaffolded) Windows desktop shell, tray lifecycle, navigation rail, widgets, voice audio UI |
+| **Flutter Desktop** | `flutter_test` | `(FUTURE/TARGET path TBD)` | (Target - Not Yet Scaffolded) Windows desktop shell, tray lifecycle, navigation rail, widgets, voice audio UI |
 | **React Web** | `vitest` + React Testing Library | `frontend/web/src/` | Developer test harness, components, state hooks, control panels, soft-glass rendering |
 | **Android** | `JUnit4` + `Robolectric` + `Roborazzi` | `android/app/src/test/` | ViewModels, repository contracts, MVI state flow, Compose UI screenshot regression |
 | **Contract** | Python drift detection script | `contracts/openapi/` | OpenAPI 3.1 schema equality between FastAPI routes and committed specification |
@@ -73,7 +73,7 @@ python scripts/check_openapi_contract.py --write
 ```
 
 ### C. Flutter Desktop Verification (Primary Client)
-From `frontend/desktop/` (once scaffolded):
+From the Flutter target path (FUTURE/TARGET, once scaffolded):
 
 ```powershell
 # 1. Run static analysis

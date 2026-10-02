@@ -27,7 +27,7 @@ The ecosystem separates the long-running host runtime from client presentation i
 │                                                             │
 │   ┌──────────────────────────┐   ┌──────────────────────┐   │
 │   │  Flutter Desktop (Win)   │   │   React Web Client   │   │
-│   │  • Primary PC V1 Target  │   │   • Dev / Test Suite │   │
+│   │  • Primary PC V1 Target  │   │   • Supported Browser/Remote + Dev/Regression │   │
 │   │  • System Tray & Shell   │   │   • Web Dashboard    │   │
 │   │  • Hardware Audio Owner  │   │   • Diagnostic Tools │   │
 │   └────────────┬─────────────┘   └──────────┬───────────┘   │
@@ -69,7 +69,7 @@ The ecosystem separates the long-running host runtime from client presentation i
 
 ### Component Roles
 - **Local AI Runtime (`backend/`):** Long-running FastAPI daemon owning conversation turn queues, SQLite+FTS5 persistence, model execution, deterministic action policies, and speech engines.
-- **Flutter Desktop:** The target primary production client for PC V1 (Not Yet Scaffolded), providing the desktop shell, system tray integration, native notifications, and audio hardware capture/playback.
+- **Flutter Desktop:** The approved PC V1 target primary production client (Not Yet Implemented/Scaffolded), providing the desktop shell, system tray integration, native notifications, and audio hardware capture/playback.
 - **React Web Client (`frontend/web/`):** Supported browser/remote client + dev/regression oracle providing rich inspection dashboards.
 - **Android Companion (`android/`):** Dedicated mobile companion prototype. The Kotlin/Compose repository is reference implementation evidence for V1 boundaries; detailed mobile architecture is a follow-on pass.
 
@@ -97,7 +97,6 @@ AI-companion-project/
 │   ├── alembic/            # SQLite database schema migrations
 │   └── tests/              # Backend test suites (pytest)
 ├── frontend/
-│   ├── (Target: Flutter desktop client to be scaffolded here)
 │   └── web/                # React 19 / Vite / Tailwind web client
 ├── android/                # Native Android companion application (prototype)
 ├── contracts/
@@ -114,6 +113,8 @@ AI-companion-project/
 ├── CHANGELOG.md            # Append-only release changelog
 └── CONTRIBUTING.md         # Git branching and contributor guidelines
 ```
+
+*Target Note:* Flutter Desktop is the approved PC V1 client target; its repository path will be established during PC-CLIENT-001 scaffolding.
 
 ---
 

@@ -23,7 +23,7 @@ It governs the runtime flow between frontend user input and local generative mod
 
 ### 2.1 Profile Ownership & Character Context Binding
 
-In accordance with Decisions D7, D8, and D11 (`ADR-0007`, `ADR-0018`, `ADR-0011`):
+In accordance with Decisions D7, D8, and D11 (`ADR-0008`, `ADR-0018`, `ADR-0012`):
 - **Profile Ownership:** All conversations and message histories are strictly partitioned by the active user Profile (`profile_id`, migrated from legacy `owner_id` per `ADR-0018`). A single Account can host multiple Profiles, but conversations belong strictly to one Profile.
 - **Single Character Context:** Under approved D11 architecture, each conversation references exactly one active Character persona context (`character_id`).
 - **Permanent Turn Attribution:** Conversation history remains permanently bound to the Character under which turns were recorded.
@@ -52,7 +52,7 @@ Per `ADR-0019`, communication between client applications (Flutter Desktop, Reac
 
 ### 2.3 Multilingual Companion Interaction (PC V1)
 
-- **Approved Capability:** In accordance with the Feature Promotion Map (Multilingual Companion Interaction), PC V1 supports companion interaction across:
+- **Approved Capability:** In accordance with the Master Decision Register, PC V1 supports companion interaction across:
   - English
   - Tagalog / Filipino
   - Japanese
@@ -110,7 +110,7 @@ Verified in `backend/app/services/assistant/orchestrator.py`:
 
 ## 4. Approved Target Architecture / Not Yet Implemented
 
-The following target capabilities are approved under Decision D1 and the Feature Promotion Map:
+The following target capabilities are approved under Decision D1 and the Master Decision Register:
 
 1. **Multilingual Interaction Evaluation (PC V1):**
    - Verified interaction stability across English, Tagalog, and Japanese.

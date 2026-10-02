@@ -26,7 +26,7 @@ Documentation in this repository follows a strict hierarchy of authority. Each d
 | **Source Code, Contracts, & Tests** | *What exists right now?* | Authoritative for implemented reality, runtime behavior, and verified test assertions. |
 | **Architecture (`docs/04_Architecture/`)** | *What should be true?* | Authoritative for durable semantics, trust boundaries, persistence invariants, and approved target capabilities. |
 | **Design (`docs/05_Design/`)** | *How do people see and interact with it?* | Defines user experience, interface presentation, visual language, and interaction flows. Cross-references Architecture; cannot redefine system authority. |
-| **Product Roadmap (`docs/02_Planning/ROADMAP.md`)** | *When should capabilities ship?* | Defines release milestones, platform delivery phasing (e.g., PC V1 vs. Android V1), and sequencing. |
+| **Product Roadmap (`docs/02_Planning/00_Master/DELIVERY_INDEX.md`)** | *When should capabilities ship?* | Defines release milestones, platform delivery phasing (e.g., PC V1 vs. Android V1), and sequencing. |
 | **Task Tracker (`docs/01_Tracking/task.md`)** | *What is actively being worked on now?* | Tracks current execution state, active sub-slices, and immediate blockers. |
 | **Implementation Plans (`docs/02_Planning/`)** | *How will approved work be built?* | Feature-specific technical execution plans, step-by-step logic, and verification criteria. |
 | **Walkthroughs (`docs/03_Walkthroughs/`)** | *What was delivered at a point in time?* | Point-in-time delivery records and historical verification evidence. Ignored during normal startup. |

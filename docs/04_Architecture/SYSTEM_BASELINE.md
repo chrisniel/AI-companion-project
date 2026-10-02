@@ -3,7 +3,7 @@
 > **Document Role:** High-level normative system architecture, ecosystem topology, release boundaries, cross-cutting invariants, and decision index for the AI Companion project.  
 > **Status:** Active Canonical (Decisions D1-D11 Aligned)  
 > **Last Updated:** 2026-10-02 (PC V1 Canonicalization Pass)  
-> **Authority Precedence:** Normative cross-cutting anchor. Detailed technical domain standards are owned by the 18 focused specifications under [`docs/04_Architecture/`](./README.md). Milestone delivery tracking is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). Active sprint state is tracked in [`docs/01_Tracking/task.md`](../../01_Tracking/task.md).
+> **Authority Precedence:** Normative cross-cutting anchor. Detailed technical domain standards are owned by the 18 focused specifications under [`docs/04_Architecture/`](./README.md). Milestone delivery tracking is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). Active sprint state is tracked in [`docs/01_Tracking/task.md`](../01_Tracking/task.md).
 
 ---
 
@@ -87,7 +87,7 @@ The historical product decision spine is D1-D11. Additional accepted ADRs refine
 | **D5** | Remote Access | Loopback default + Tailscale private mesh + Cloudflare Tunnel; no port forwarding | [`authentication-and-secrets.md`](02_Data_and_Security/authentication-and-secrets.md), [ADR-0006](decisions/ADR-0006-d5-remote-access-trust-boundary.md) |
 | **D6** | Model Import | Controlled scan import: inbox → preflight → staging → atomic install → registry | [`runtime-and-models.md`](04_Infrastructure/runtime-and-models.md), [ADR-0007](decisions/ADR-0007-d6-controlled-model-acquisition.md) |
 | **D7** | Memory Model | Profile-first, selective extraction, user-visible & correctable, FTS5 lexical baseline | [`memory-and-personalization.md`](01_Domains/memory-and-personalization.md), [ADR-0008](decisions/ADR-0008-d7-profile-first-memory-ownership.md) |
-| **D8** | Multi-Profile | (Historical) Single Account. SUPERSEDED by ADR-0018 | [`profiles-and-devices.md`](02_Data_and_Security/profiles-and-devices.md), [ADR-0009](decisions/ADR-0009-d8-single-primary-user-baseline.md), [ADR-0018](decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md) |
+| **D8** | Single Primary User | (Historical / Superseded) SUPERSEDED by ADR-0018 | [`profiles-and-devices.md`](02_Data_and_Security/profiles-and-devices.md), [ADR-0009](decisions/ADR-0009-d8-single-primary-user-baseline.md), [ADR-0018](decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md) |
 | **D9** | Tool Security | Deterministic policy, DEFAULT DENY; Risk 0/1/2 configurable; Risk 3 shell rejected | [`tool-permissions-and-actions.md`](02_Data_and_Security/tool-permissions-and-actions.md), [ADR-0010](decisions/ADR-0010-d9-typed-tool-security-policy.md) |
 | **D10** | Productivity | Distinct Task / Reminder / Alarm / Routine semantics; native Windows notifications | [`tasks-reminders-alarms-and-routines.md`](01_Domains/tasks-reminders-alarms-and-routines.md), [ADR-0011](decisions/ADR-0011-d10-scheduling-and-notification-semantics.md) |
 | **D11** | Persona/Emotion | Character Template vs. Instance; 8 continuous traits; bounded mood survives restart | [`characters-personality-and-emotion.md`](01_Domains/characters-personality-and-emotion.md), [ADR-0012](decisions/ADR-0012-d11-persona-and-state-separation.md) |

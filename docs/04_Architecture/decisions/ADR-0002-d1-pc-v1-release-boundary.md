@@ -5,7 +5,7 @@
 **Codification Date:** 2026-09-29
 **Original Decision Date:** Not separately recorded
 **Primary Canonical Owner:** [`SYSTEM_BASELINE.md §2`](../SYSTEM_BASELINE.md)
-**Related Specifications:** [`ROADMAP.md`](../../02_Planning/ROADMAP.md) (owns delivery sequencing only), [`ADR-0017`](ADR-0017-flutter-production-windows-client.md)
+**Related Specifications:** [`DELIVERY_INDEX.md`](../../02_Planning/00_Master/DELIVERY_INDEX.md) (owns delivery sequencing only), [`ADR-0017`](ADR-0017-flutter-production-windows-client.md)
 
 ## Decision History
 - Accepted/relocked during R10.
@@ -28,7 +28,7 @@ Capabilities beyond PC V1 and Android V1 remain open design or are deferred to l
 
 ## Canonical Relationships
 Primary normative ownership resides in SYSTEM_BASELINE.
-ROADMAP owns delivery sequencing and does not become a competing primary owner.
+The Master Planning Spine owns delivery sequencing and does not become a competing primary owner.
 
 ## Change Control
 Superseding an accepted ADR requires explicit human approval and a superseding decision record.

@@ -120,5 +120,5 @@ To prevent confusion, the following documents are officially superseded and must
 | :--- | :--- | :--- |
 | `docs/02_Planning/ROADMAP.md` | [`docs/02_Planning/00_Master/SPRINT_ROADMAP.md`](../02_Planning/00_Master/SPRINT_ROADMAP.md) | Superseded / Preserved for Phase 1–8 history |
 | `docs/02_Planning/FEATURE_PROMOTION_MAP.md` | [`docs/02_Planning/00_Master/WBS.md`](../02_Planning/00_Master/WBS.md) | Superseded / Preserved for Phase 1–8 history |
-| `docs/02_Planning/post-v1/PROACTIVE_COMPANION_ROUTINES.md` | [`docs/02_Planning/00_Master/BACKLOG.md`](../02_Planning/00_Master/BACKLOG.md) (`FEAT-BACKLOG-001`) | Superseded / Historical design note |
+| `docs/02_Planning/03_Archive/PROACTIVE_COMPANION_ROUTINES.md` | [`docs/02_Planning/00_Master/BACKLOG.md`](../02_Planning/00_Master/BACKLOG.md) (Routines promoted to PC V1) | Superseded / Historical design note |
 | `docs/07_Archive/reference/AI_COMPANION_MASTER_IMPLEMENTATION_PLAN.md` | [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md) & Master Spine | Superseded / Historical reference |

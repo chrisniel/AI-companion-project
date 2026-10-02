@@ -1,7 +1,7 @@
 # Memory and Personalization Architecture
 
 > **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0007, ADR-0018)  
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0008, ADR-0018)  
 > **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for the memory and personalization domain.
 
 ---
@@ -23,7 +23,7 @@ It governs the boundary between ephemeral conversation turns and durable compani
 
 ### 2.1 Profile Ownership of All Memories (Decisions D7 & D8)
 
-- **Root Authority:** In accordance with Decisions D7 and D8 (`ADR-0007`, `ADR-0018`), all memories are strictly partitioned and owned by the user Profile (`profile_id`, migrated from legacy `owner_id`).
+- **Root Authority:** In accordance with Decisions D7 and D8 (`ADR-0008`, `ADR-0018`), all memories are strictly partitioned and owned by the user Profile (`profile_id`, migrated from legacy `owner_id`).
 - **Conceptual Scoping:** Architecture recognizes two visibility scopes:
   1. **`PROFILE` Scope (Global to Profile):** Facts, preferences, and biographical details applicable across all companion personas for this profile (e.g., user's timezone, dietary preferences, occupation).
   2. **`CHARACTER` Scope (Persona-Bound):** Context, shared experiences, or relationship notes relevant specifically to interactions with a designated character persona.
@@ -85,7 +85,7 @@ Verified in `app.services.memory.retriever`:
 
 ## 4. Approved Target Architecture / Not Yet Implemented
 
-The following target capabilities are approved under Decision D7 and the Feature Promotion Map:
+The following target capabilities are approved under Decision D7 and the Master Decision Register:
 
 1. **Selective Automatic / Assistant-Proposed Memory (PC V1):**
    - The assistant evaluates conversation turns for clear, stable facts, personal preferences, or explicit corrections.
@@ -122,6 +122,6 @@ The normative architecture for D7/D8 is frozen. The following implementation-lev
 
 - **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D7, D8)
 - **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Decisions D7, D8), [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-MEM-001`, `PC-MEM-002`)
-- **Memory ADR:** [`docs/04_Architecture/decisions/ADR-0007-profile-first-memory-and-selective-automatic-persistence.md`](../decisions/ADR-0007-profile-first-memory-and-selective-automatic-persistence.md)
+- **Memory ADR:** [`docs/04_Architecture/decisions/ADR-0008-d7-profile-first-memory-ownership.md`](../decisions/ADR-0008-d7-profile-first-memory-ownership.md)
 - **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
 - **Character Domain Specification:** [`docs/04_Architecture/01_Domains/characters-personality-and-emotion.md`](characters-personality-and-emotion.md)

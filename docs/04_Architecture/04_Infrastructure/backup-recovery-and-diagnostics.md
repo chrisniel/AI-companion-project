@@ -22,7 +22,7 @@ This specification defines disaster recovery, database snapshot mechanics, asset
 
 ### 2.1 Critical Status Distinctions (PC V1 vs. Exploratory)
 
-In accordance with the Feature Promotion Map and Master Decision Register:
+In accordance with the Master Decision Register:
 - **Practical Backup & Recovery (`APPROVED / PARTIAL / PC V1`):** PC V1 requires coordinated backup of the persistent database and referenced profile assets with integrity-preserving restore verification.
 - **Local Admin Factory Reset (`APPROVED / NOT STARTED / PC V1`):** PC V1 requires a local admin-only reset capability to return the companion to first-run state while providing safe controls to preserve or prune large models and past backups.
 - **Full Diagnostics / Recovery Center (`EXPLORATORY / UNAPPROVED / FUTURE`):** An exploratory audit recommendation for a dedicated desktop recovery console, deep log visualizer, or automated self-healing center. **This is NOT an approved PC V1 capability.** The presence of "Diagnostics" in this specification's title must **never** be used to silently promote a Diagnostics Center into PC V1.
