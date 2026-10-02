@@ -53,7 +53,7 @@
 - **Exit Criteria:** All validation gates pass; zero stale React-primary or single-user contradictions; clean fresh-agent review report approved by Chris and GPT.
 
 ### Milestone M1: Flutter Desktop Client Foundation
-- **Primary Objective:** Scaffold the production Flutter Windows Desktop client (`client/pc/`), establish window lifecycle and system tray integration (minimize-to-tray, close-to-tray), build the SoftGlass design system with dark/light theme tokens, and integrate the OpenAPI-derived Dart API client and SSE token streaming consumer.
+- **Primary Objective:** Scaffold the production Flutter Windows Desktop client (`target Flutter path established during PC-CLIENT-001 scaffolding`), establish window lifecycle and system tray integration (minimize-to-tray, close-to-tray), build the SoftGlass design system with dark/light theme tokens, and integrate the OpenAPI-derived Dart API client and SSE token streaming consumer.
 - **Exit Criteria:** Flutter Desktop client runs on Windows, communicates reliably with Local AI Runtime over localhost REST/SSE, displays live streaming text, and maintains visual parity with core desktop requirements. React Web remains fully operational as test oracle.
 
 ### Milestone M2: PC Companion Foundation (Host, Identity & Model Pipeline)
@@ -77,5 +77,13 @@
 - **Exit Criteria:** All 14 Golden acceptance checkpoint groups pass with documented verification evidence; zero unhandled crashes or data integrity violations; formal release evidence recorded.
 
 ### Post-PC-V1: Dedicated Android / Mobile Architecture Pass
-- **Primary Objective:** Formally unfreeze and redesign mobile architecture for production Android Companion (`com.cnl.aicompanion`) leveraging the Flutter foundation, authenticated connected synchronization, local Room/offline outbox persistence, compact on-device LLM inference, and Android Health Connect integration.
+- **Primary Objective:** Formally unfreeze and redesign mobile architecture for production Android Companion. The mobile architecture is DEFERRED to a separate architecture pass. Precommitments to Room/outbox, compact mobile LLMs, or Health Connect are removed from this roadmap.
+
+**Preserved Mobile Inputs Only:**
+- Package: com.cnl.aicompanion.
+- Flutter is the intended production foundation.
+- Android development does not block PC V1 delivery.
+- One satellite device binds to exactly one Profile.
+- Provider/API/device credentials remain device-local.
+- Current Kotlin repository code serves strictly as prototype/reference evidence.
 - **Exit Criteria:** Approved Mobile System Baseline and Mobile WBS ready for implementation. Does not block PC V1.

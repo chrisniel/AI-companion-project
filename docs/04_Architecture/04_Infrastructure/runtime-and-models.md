@@ -55,7 +55,7 @@ In accordance with the Master Decision Register:
   - **Explicit User Credentials:** The user must explicitly supply their own API keys; the companion distributes no default hosted keys.
   - **Egress Transparency:** Any conversational turn or tool execution routed to an external cloud model must clearly indicate external egress to the user.
   - **Local-Only Preserved:** Disabling cloud fallback preserves supported core/local companion operation in local-only mode. Naturally network-dependent integrations such as Web Search, Fetch, Weather, and current-information retrieval still require network connectivity.
-  - **Fallback Routing Open Design:** Fallback activation and routing policy remains open design. There is no automatic cloud egress merely because local inference is constrained.
+   There is no automatic cloud egress merely because local inference is constrained.
 
 ### 2.5 Model Registry, Artifact & Capability Semantics
 
@@ -78,6 +78,29 @@ To ensure robust model management and avoid semantic conflation across model ide
 - **Factory Registry as Bootstrap Catalog (Not a Model Whitelist):** The repository/factory registry template (`models/registry.template.json`) is a bootstrap and example catalog of verified reference models, and must **not** act as a permanent whitelist of every model architecture the system may support. Real-world model compatibility is determined through approved runtime/provider preflight validation, format integrity checks, and hardware capability constraints rather than mere presence in the factory template. This principle does not imply that every arbitrary model file must be accepted; strict safety validation, format checks, and resource preflight remain required.
 
 ---
+
+### 2.5 Cloud LLM Routing Policy
+
+The high-level fallback routing policy for cloud models is frozen:
+
+- **Fresh Install Default:** LOCAL_ONLY.
+- **Cloud Explicitly Enabled:** LOCAL_FIRST.
+- **Advanced/Developer Options:** May expose CLOUD_PREFERRED, CLOUD_ONLY, manual provider/model selection, advanced fallback triggers, and background-cloud controls.
+- **Per-Turn Explicit Overrides:** "Use Local for This Turn", "Use Cloud for This Turn".
+- **LOCAL_FIRST Approved Fallback Triggers:**
+  - Local provider unavailable after bounded recovery.
+  - Required capability unavailable locally (e.g., vision/multimodal if local model lacks it).
+  - Local generation failure.
+  - Explicit user choice.
+  - Approved Profile policy.
+- **Resource Pressure constraint:** Hardware pressure / Gaming / Low-Impact alone NEVER authorizes cloud.
+- **Background Inference:** Background cloud inference = OFF by default. Routine/background paid cloud inference requires separate explicit permission.
+- **D9 Authority:** Cloud providers have zero inherent D9 tool authority.
+- **Data Minimization:** Cloud context builder minimizes egress and does not send the entire Profile, Memory, or history.
+- **Provenance:** Provider/model provenance MUST be persisted with assistant messages.
+- **Credentials:** Device-local credential rules belong with uthentication-and-secrets.md.
+- **Open Design:** The exact provider adapter implementation remains open design.
+
 
 ## 3. Current Verified Implementation
 

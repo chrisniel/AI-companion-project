@@ -49,12 +49,13 @@
 - **`PC-CLIENT-008`**: Schedule, Reminder, Alarm & Routine Management View.
 - **`PC-CLIENT-009`**: Memory Inspection, Correction & Deletion Control Center.
 - **`PC-CLIENT-010`**: Model Management UI (D6 manual scan trigger, bundle install confirmation, VRAM metrics).
-- **`PC-CLIENT-011`**: Settings, Remote Access & Backup/Reset UI.
+- **PC-CLIENT-011**: Settings, Remote Access & Backup/Reset UI.
+- **`PC-CLIENT-012`**: Windows Native Notification Presentation (Toasts/Action Center delivery).
 
 ### Stream: `PC-HOST` — Windows Host Infrastructure
 - **`PC-HOST-001`**: Local AI Runtime Process Supervision & Launch Coordinator.
 - **`PC-HOST-002`**: Windows Task Scheduler Autostart at User Login Registration.
-- **`PC-HOST-003`**: Native Windows Toast Notification Dispatcher Adapter (Action Center delivery).
+- **`PC-HOST-003`**: Runtime Notification-Event & Durable Backlog Responsibility.
 - **`PC-HOST-004`**: Storage Roots Manager (Resolves `APP_INSTALL_ROOT`, `DATA_ROOT`, `LIBRARY_ROOT`, `CACHE_ROOT`, `LOG_ROOT`).
 - **`PC-HOST-005`**: Host Administration Separation (Loopback binding, local admin permission guards).
 

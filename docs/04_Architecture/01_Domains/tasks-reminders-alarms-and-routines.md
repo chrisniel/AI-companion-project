@@ -63,6 +63,16 @@ When productivity tools are invoked via conversational or autonomous flows:
 
 ---
 
+### 2.5 Scheduler & Native Notification Ownership
+
+The separation of scheduling truth and OS presentation is strictly partitioned:
+
+- **Runtime Owns Truth & Backlog:** The background Runtime SchedulerService acts as the exclusive source of time and domain truth. It persists due events and the notification backlog.
+- **Flutter Owns Presentation:** The Flutter client owns native Windows notification presentation (Toasts).
+- **Background Presentation Resilience:** As long as the Flutter tray/presentation client is running, native delivery continues regardless of whether a browser or React dashboard is closed.
+- **Explicit Quit Semantics:** If the Flutter process is explicitly quit by the user, the Runtime remains alive, keeps events durable in the backlog, and presentation pauses until a presentation client returns to deliver catch-up notifications.
+
+
 ## 3. Current Verified Implementation
 
 Repository source code and test suites verify the following baseline reality:

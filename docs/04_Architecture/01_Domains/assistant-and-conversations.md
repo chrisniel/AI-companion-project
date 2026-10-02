@@ -23,7 +23,7 @@ It governs the runtime flow between frontend user input and local generative mod
 
 ### 2.1 Profile Ownership & Character Context Binding
 
-In accordance with Decisions D7, D8, and D11 (`ADR-0008`, `ADR-0018`, `ADR-0012`):
+In accordance with Decision D7, ADR-0018, and D11 (`ADR-0008`, `ADR-0018`, `ADR-0012`):
 - **Profile Ownership:** All conversations and message histories are strictly partitioned by the active user Profile (`profile_id`, migrated from legacy `owner_id` per `ADR-0018`). A single Account can host multiple Profiles, but conversations belong strictly to one Profile.
 - **Single Character Context:** Under approved D11 architecture, each conversation references exactly one active Character persona context (`character_id`).
 - **Permanent Turn Attribution:** Conversation history remains permanently bound to the Character under which turns were recorded.
@@ -142,7 +142,7 @@ The following implementation choices are intentionally left open for subsequent 
 
 ## 7. Canonical Relationships & Cross-Links
 
-- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D1, D7, D8, D11)
+- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D1, D7, ADR-0018, D11)
 - **Client-Runtime Contract ADR:** [`docs/04_Architecture/decisions/ADR-0019-client-runtime-contract-and-work-boundaries.md`](../decisions/ADR-0019-client-runtime-contract-and-work-boundaries.md)
 - **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
 - **Work Breakdown Structure:** [`docs/02_Planning/00_Master/WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-API-001`, `PC-CLIENT-002`)

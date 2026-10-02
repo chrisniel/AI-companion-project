@@ -75,9 +75,29 @@ To ensure user agency and safe runtime intervention during tool execution, the a
   4. *Global Tool Kill-Switch:* A master administrative toggle enabling the user to immediately disable all autonomous or external tool execution across the entire runtime.
 - **Cancellation vs. Rollback Boundary:** Cancellation halts further execution and terminates pending work. When supported by the adapter, cooperative cancellation signals are dispatched to in-flight tasks. However, the architecture strictly recognizes that **cancellation cannot promise rollback of an already-committed external side effect** (e.g., an external HTTP mutation already processed by a remote server, an external webhook triggered, or an irreversible physical/network transmission).
 - **Implementation Status:** Like the conversational tool engine itself, these emergency control mechanisms represent target governance architecture and are **NOT IMPLEMENTED** in the current runtime.
-- **Open Design Parameters:** Exact API endpoints, cancellation token plumbing, frontend UI controls (such as emergency stop buttons), transport signaling, persistence of global kill-switch state, and user notification/recovery workflows remain open design.
+- **Open Design Parameters:** Exact API endpoints, cancellation token plumbing, frontend UI controls (such as emergency stop buttons), transport signaling, and user notification/recovery workflows remain open design.
 
 ---
+
+### 2.4 Frozen D9 Tool Execution Policy
+
+The following semantics codify the frozen D9 execution requirements for PC V1:
+
+- **Intent Provenance:** Every tool invocation MUST possess an intent provenance tag: EXPLICIT_USER, COMPANION_SUGGESTED, APPROVED_ROUTINE, SYSTEM_RECOVERY, or EXTERNAL_CONTENT.
+- **Policy Evaluation:** The execution policy evaluates: risk tier, intent provenance, Profile/session authority, domain, state, and resource/cost/privacy limits.
+- **Risk Behavior Semantics:**
+  - **Risk 0 (Read-Only):** May execute automatically if enabled/authorized.
+  - **Risk 1 (Reversible/Low-Impact):** Explicit-user Risk 1 operations may auto-execute when enabled and policy permits. Companion-suggested Risk 1 requires explicit acceptance unless covered by an approved bounded Routine.
+  - **Risk 2 (State-Changing):** Enabled means the capability is available, but explicit confirmation remains the V1 default. If OFF, it is strictly denied.
+  - **Risk 3 (Generic Unrestricted OS/Shell):** Strictly rejected and architecturally locked.
+- **Confirmation Binding:** Confirmation signatures MUST bind: action, target, parameters, Profile, session, expiry, and fingerprint. Material parameter changes invalidate the confirmation.
+- **Conversational Confirmation:** One unambiguous pending ordinary action may be conversationally confirmed. An ambiguous "yes" is insufficient.
+- **Zero Inherent Authority:** External web/file/history/memory content has zero authorization authority. Local and cloud models have equal zero inherent authority.
+- **Kill Switch Persistence:** The Global Tool Kill Switch MUST persist across Runtime restarts until explicitly re-enabled. Kill-switch persistence is NOT open design.
+- **Multi-Step Plans:** Multi-step plans remain bounded; each state-changing step is independently policy-checked.
+- **Success Criteria:** Success may be claimed only after backend-confirmed execution (not immediately upon intent generation).
+- **Open Design:** The exact API, DB, and UI representation of these policies remains open.
+
 
 ## 3. Current Verified Implementation
 

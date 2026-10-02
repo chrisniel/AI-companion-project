@@ -21,7 +21,7 @@ Commit: `8cea30a`
 
 ### 1. Investigation & Acceptance Criteria
 - [x] Trace symptoms to root causes across navigation, theming, wallpaper, and clipping
-- [x] Define testable acceptance criteria (AC-001 to AC-007 + Polish AC-001 to AC-004)
+- [x] Define testable acceptance criteria (AC-1 to AC-7 + Polish AC-1 to AC-4)
 
 ### 2. Implementation Phase
 - [x] Implement direction-aware slide/fade transitions on bottom navigation tabs in `AppShell.kt`

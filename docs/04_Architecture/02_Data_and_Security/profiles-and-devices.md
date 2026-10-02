@@ -4,9 +4,25 @@
 > **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0005, ADR-0018)  
 > **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for profiles, identity, and client device enrollment.
 
----
+
+
+The frozen identity model relies on four core entities:
+- **Account:** One local installation/admin authority.
+- **Profile:** One human's private companion context.
+- **Device:** Enrolled endpoint.
+- **Session:** Temporary authenticated context.
+
 
 ## 1. Purpose & Scope
+
+### 1.1 Identity Model Glossary
+
+The frozen identity model relies on four core entities:
+- **Account:** One local installation/admin authority.
+- **Profile:** One human's private companion context.
+- **Device:** Enrolled endpoint.
+- **Session:** Temporary authenticated context.
+
 
 This specification defines identity boundaries, data ownership partitions, and client device enrollment for the AI Companion:
 - Structural separation between human identity (Profile) and client endpoints (Device).
@@ -17,7 +33,27 @@ This specification defines identity boundaries, data ownership partitions, and c
 
 ---
 
-## 2. Durable Architecture & Invariants
+## 2. Frozen Identity Constraints
+
+The following constraints are permanently locked for PC V1:
+
+- **Account to Profile:** One local Account → multiple strictly isolated Profiles.
+- **Human to Profile:** One human = one Profile.
+- **Administration:** Local PC Flutter admin is the only V1 surface for Profile create/rename/delete/restore/device assignment/privacy/security administration.
+- **Device Binding:** A normal satellite/mobile device binds to exactly one Profile.
+- **Remote Constraints:** Remote/mobile clients cannot create or switch Profiles.
+- **Session:** Authenticated session determines Profile; payload cannot assert arbitrary profile_id.
+- **Profile Switch Lifecycle:** Profile switch is an auth/session transition and clears Profile-scoped caches/subscriptions.
+- **Scheduler Continuity:** The scheduler continues across all Profiles regardless of the active visible Profile.
+- **Host Ownership:** Runtime, providers, model library, and hardware are host/Account-owned, not Profile-owned.
+- **Security:** Optional Profile PIN/Windows Hello protects shared-PC Profile switching/unlock without requiring constant prompts.
+- **Deletion:** Profile deletion immediately disables access, revokes sessions, stops background work, and hides the Profile.
+- **Recovery:** 7-day recovery window; only local Account admin can restore. Hard purge after recovery period.
+- **Identity:** Stable UUID Profile identity; display name is not identity.
+
+Do not invent exact schema/API fields beyond what is frozen.
+
+## 3. Durable Architecture & Invariants
 
 ### 2.1 Multi-Profile PC V1 Ownership Model (ADR-0018)
 
@@ -81,7 +117,7 @@ The following target capabilities are approved for PC V1:
 
 ## 5. Implementation-Open Details (Decision Debt)
 
-The normative architecture for D4 and D8 is frozen. The following implementation-level details are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
+The normative architecture for D4 and ADR-0018 is frozen. The following implementation-level details are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
 
 - **Pairing & Enrollment UX:** User interaction flow for introducing a new client device (camera-scanned QR code vs. short numeric code entered on PC; `DEBT-V1-013`).
 - **Device Credential Format:** Token structure (cryptographically signed JWT device token vs. high-entropy random token hash).
@@ -99,9 +135,9 @@ The normative architecture for D4 and D8 is frozen. The following implementation
 
 ## 7. Canonical Relationships & Cross-Links
 
-- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D4, D8)
+- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decision D4, ADR-0018)
 - **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
 - **Device Authentication ADR:** [`docs/04_Architecture/decisions/ADR-0005-d4-profile-device-credential-boundary.md`](../decisions/ADR-0005-d4-profile-device-credential-boundary.md)
-- **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Decisions D4, D8), [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-IDENTITY-001`, `PC-IDENTITY-002`)
+- **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Decision D4, ADR-0018), [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-IDENTITY-001`, `PC-IDENTITY-002`)
 - **Authentication & Secrets Spec:** [`docs/04_Architecture/02_Data_and_Security/authentication-and-secrets.md`](authentication-and-secrets.md)
 - **UI Design Presentation:** [`docs/05_Design/02_Profile_Selector_and_Privacy.md`](../../05_Design/02_Profile_Selector_and_Privacy.md)

@@ -30,7 +30,6 @@ The repository is structured into distinct subsystem trees:
 ```text
 AI-companion-project/
 ├── backend/            # FastAPI Local AI Runtime (Python 3.11, SQLAlchemy 2, Alembic)
-├── (Flutter desktop client target path TBD pending PC-CLIENT-001 scaffolding)
 ├── frontend/web/       # React 19 Web Client (Supported developer harness and test oracle)
 ├── android/            # Android Mobile Companion Client (Prototype / reference client)
 ├── contracts/openapi/  # Canonical OpenAPI contract (openapi.json)

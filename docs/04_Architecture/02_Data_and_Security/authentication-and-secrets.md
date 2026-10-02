@@ -25,7 +25,7 @@ This specification defines cryptographic authentication mechanisms, secret stora
 In accordance with Decision D5:
 - **Fail-Closed by Construction:** All companion endpoints require explicit cryptographic authentication by default. Endpoints are protected unless explicitly assigned to a strictly bounded public whitelist (`GET /api/v1/health` only).
 - **Proximity is Not Authentication:** Physical or network-layer proximity (sharing local Wi-Fi or subnet) does **not** grant implicit trust or bypass authentication. Network proximity never substitutes for application auth.
-- **Master Secret Containment:** Master runtime administrative secrets and third-party API credentials are held strictly on the host runtime machine and are **never** transmitted to or stored on client endpoints.
+
 
 ### 2.2 Supported Trust Topologies & Remote Access (ADR-0006)
 
@@ -45,6 +45,18 @@ In accordance with Decision D5:
 - All client-facing HTTP and WebSocket endpoints must enforce rate limiting to defend against brute-force token enumeration and local denial-of-service. Sensitive authentication routes enforce tighter request throttling.
 
 ---
+
+### 2.5 Device-Local Provider Credentials
+
+The handling of third-party provider credentials (e.g. OpenAI, Anthropic, Groq API keys) is governed by the following frozen constraints:
+
+- **Device-Local Secrets:** Provider API credentials are device-local secrets.
+- **No Automatic Sync:** Keys do NOT automatically sync between PC, mobile, or other devices. PC-configured keys stay on the PC.
+- **Future Mobile Scope:** Future mobile companions may configure and store their own provider keys locally on the device.
+- **Profile Policy, Not Secret Storage:** The Profile owns permission and routing policies, not the raw secret itself.
+- **No Remote Exposure:** The Runtime/provider layer never exposes raw keys to remote browser clients.
+- **Backup & Restore Exclusions:** Restore/backup processes do not restore device/provider credentials by default.
+
 
 ## 3. Current Verified Implementation
 

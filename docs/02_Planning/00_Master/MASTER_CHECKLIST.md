@@ -13,7 +13,7 @@
 | **Governance** | Human-only Git write authority | `AGENTS.md`, `DELIVERY_WORKFLOW.md` | Process rules | N/A | Human review | **VERIFIED** |
 | **PC Client** | Flutter Windows Desktop App | `windows-host-and-notifications.md` | Pending Flutter scaffold / target path TBD | Flutter CI lane | G1 | **NOT STARTED** |
 | **PC Client** | React Web Supported Client | `SYSTEM_BASELINE.md` §1 | `frontend/web/` | Vitest / Build | G14 | **VERIFIED** |
-| **PC Host** | Task Scheduler Autostart at Login | `windows-host-and-notifications.md` | Pending implementation | Host tests | G8 | **NOT STARTED** |
+| **PC Host** | Task Scheduler Autostart at Login | `windows-host-and-notifications.md` | Pending implementation | Host tests | G1 | **NOT STARTED** |
 | **PC Host** | Native Windows Action Center Toasts| `windows-host-and-notifications.md` | Pending implementation | Adapter tests | G8 | **NOT STARTED** |
 | **PC Host** | Storage Roots (`APP`, `DATA`, `LIBRARY`)| `storage-and-assets.md` | `app.core.storage` (Partial)| Pytest storage | G1 | **PARTIAL** |
 | **Contracts** | OpenAPI Schema 3.1 & Drift Check | `DOCUMENTATION_MAP.md` | `contracts/openapi/openapi.json` | Python drift check| G1 | **VERIFIED** |
@@ -27,7 +27,7 @@
 | **Persona** | Character Templates & Profile Instances| `characters-personality-and-emotion.md`| Pending DB schema | Model unit tests | G5 | **NOT STARTED** |
 | **Persona** | 8 Continuous Personality Traits | `characters-personality-and-emotion.md`| Pending trait engine | Prompt tests | G5 | **NOT STARTED** |
 | **Persona** | Persistent Bounded Mood & Decay | `characters-personality-and-emotion.md`| Pending mood service | State tests | G5 | **NOT STARTED** |
-| **Persona** | Immutable Neutral Assistant Fallback | `characters-personality-and-emotion.md`| Prompt baseline | Fallback tests | G5 | **VERIFIED** |
+| **Persona** | Immutable Neutral Assistant Fallback | `characters-personality-and-emotion.md`| Prompt baseline | Fallback tests | G5 | **PARTIAL** |
 | **Memory** | Profile & Character Scopes | `memory-and-personalization.md` | SQLite+FTS5 baseline exists | FTS5 tests | G6 | **PARTIAL** |
 | **Memory** | Selective Automatic Memory Extraction | `memory-and-personalization.md` | Pending policy engine | Extraction tests | G6 | **NOT STARTED** |
 | **Memory** | Temporary Memory Validity & Expiry | `memory-and-personalization.md` | Pending schema columns | Expiry tests | G6 | **NOT STARTED** |
@@ -39,7 +39,7 @@
 | **Schedule** | Distinct Reminder & Alarm Lifecycles | `tasks-reminders-alarms-and-routines.md` | Pending engine | Alert tests | G8 | **NOT STARTED** |
 | **Schedule** | Quiet Hours & Late Alarm Grace Window | `tasks-reminders-alarms-and-routines.md` | Pending engine | Policy tests | G8 | **NOT STARTED** |
 | **Schedule** | Bounded Companion Routines | `tasks-reminders-alarms-and-routines.md` | Pending engine | Routine tests | G8 | **NOT STARTED** |
-| **Voice** | Local STT (`whisper.cpp`) & Kokoro TTS | `voice-and-audio.md` | Reference binaries/assets exist; no code pipeline | Speech unit tests| G9 | **PARTIAL (ASSETS ONLY)** |
+| **Voice** | Local STT (`whisper.cpp`) & Kokoro TTS | `voice-and-audio.md` | whisper.cpp runtime candidate exists locally, Kokoro candidate assets exist; no complete STT model/pipeline staged | Speech unit tests| G9 | **PARTIAL (ASSETS ONLY)** |
 | **Voice** | Mandatory Real Voice Barge-In | `voice-and-audio.md` | Pending pipeline | Duplex tests | G9 | **NOT STARTED** |
 | **Web Info** | Read-Only WebSearch, Fetch & Weather | `web-current-information.md` | Pending provider adapters | SSRF unit tests | G10 | **NOT STARTED** |
 | **Web Info** | Outbound SSRF & Private IP Containment | `web-current-information.md` | Pending network layer | Containment tests| G10 | **NOT STARTED** |

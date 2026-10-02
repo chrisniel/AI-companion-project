@@ -563,9 +563,9 @@ docs/
 │   ├── SYSTEM_BASELINE.md                         # Core system contracts, boundaries & runtime topology
 │   ├── decisions/                                 # Architectural Decision Records (ADRs)
 │   │   ├── ADR-0001-github-source-hugging-face-lfs.md
-│   │   ├── ADR-0002-d1-pc-v1-release-boundary.md
-│   │   ├── ADR-0003-d2-windows-host-model.md
-│   │   ├── ADR-0004-d3-android-application-identity.md
+│   │   ├── ADR-0002-fastapi-system-authority.md
+│   │   ├── ADR-0003-pc-first-local-topology.md
+│   │   ├── ADR-0004-canonical-data-root-strategy.md
 │   │   └── ...
 │   └── domains/                                   # Canonical domain technical specifications
 │       ├── backend-architecture.md                # FastAPI, endpoints, middleware, lifecycle
@@ -750,7 +750,7 @@ The 12 user decisions from Pass R0 have been normalized into **9 foundational ar
 
 ---
 
-### [D2] Windows Host Runtime & UI Experience
+### [D2] Local AI Runtime & UI Experience
 - **Decision Question:** How should the runtime host and user interface operate for V1 on Windows? Should the FastAPI runtime run as an independent background process / startup-managed host with the browser as the primary UI, or is a native desktop window/tray packaging (e.g. PyInstaller + webview / Tauri / Electron) required for V1?
 - **Technical Starting Recommendation:** **FastAPI Runtime + Browser Web UI for V1.** Decoupling the runtime process from browser lifetime ensures long-running tasks and API services continue uninterrupted. Native packaging and system tray wrappers can follow after core engine stabilization.
 - **Status:** **UNDECIDED — AWAITING USER REVIEW**

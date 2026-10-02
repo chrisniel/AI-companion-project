@@ -20,15 +20,25 @@ This specification defines the hardware resource governance, performance profile
 
 ## 2. Durable Architecture & Invariants
 
-### 2.1 Low-Impact / Gaming Mode Governance (Decision D2)
+### 2.1 Low-Impact / Gaming Mode Governance
 
-In accordance with Decision D2 and [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Row 44):
+Low-Impact/Gaming is a separately approved PC V1 resource policy with no historical D-number, governed by [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Row 44):
 - **Three Operational Modes:** The companion runtime provides three operational performance policies:
   1. `Normal`: Standard configured hardware profile (`eco`, `balanced`, or `maximum`).
   2. `Low-Impact`: Throttled resource footprint designed to minimize VRAM, GPU compute, and CPU thread contention with foreground workloads.
   3. `Auto`: Dynamically activates `Low-Impact` mode when a detected foreground application matches the configured **Game & Heavy Application List** (Option B); returns to `Normal` when the application closes.
+
+- **V1 Auto Mode Scope:** Auto mode relies exclusively on the user-configured Game & Heavy App list. Generic heuristic load detection is not required for PC V1.
+- **Runtime Preservation:** The core Runtime, scheduler, and security subsystems remain alive regardless of mode.
+- **Foreground Usability:** Explicit foreground chat, voice, web, and import actions remain usable in Low-Impact mode.
+- **Discretionary Deferral:** Background discretionary work is deferred first before impacting foreground capability.
+- **Transition Safety:** Mode transitions must be safe; they do not kill active generation mid-flight.
+- **Visibility:** The requested state versus the actually applied state must remain visible to the user.
+- **Cloud Constraint:** Resource pressure never authorizes cloud egress.
+- **Concurrency Default:** The system defaults to one generative model resident. Advanced scenarios >1 are possible but must include capacity warnings.
+- **Restoration Policy:** Leaving Low-Impact mode restores the primary-model policy but does not force immediate eager loading of the heavy model until needed.
 - **Host-Level Scope:** Performance mode is a machine-wide host policy. It applies globally across all profiles on the PC rather than varying per user profile.
-- **Low-Impact Model Substitution Option:** When entering `Low-Impact` mode, the runtime can optionally unload the primary 7B/8B model and substitute a lightweight 1B–3B text model (or drop GPU offload layers to 0/CPU-only), releasing VRAM for foreground gaming or rendering.
+- **Low-Impact Model Substitution Option:** When entering `Low-Impact` mode, the runtime can optionally unload the primary 7B/8B model and substitute a compatible lightweight local text model (e.g. 1B-3B) (or drop GPU offload layers to 0/CPU-only), releasing VRAM for foreground gaming or rendering.
 - **Deferred Background Inference:** Non-urgent background inference jobs (such as long-term memory extraction or scheduled autonomous routines) are automatically deferred while `Low-Impact` mode is active.
 - **Notification Governance Under Decision D10:** Engaging Gaming or Low-Impact Mode does **not** suppress or drop scheduled alarms or urgent reminders. Critical notifications remain strictly governed by the Decision D10 quiet-hours policy and native toast presentation.
 
@@ -79,7 +89,7 @@ When implemented for PC V1, the resource governance capability provides:
 
 1. **Three-State Performance Policy (`Normal`, `Low-Impact`, `Auto`):** User-selectable performance state accessible via Flutter Settings and the System Tray menu.
 2. **Option B Game & Heavy App Detection:** In `Auto` mode, an OS process monitor checks against a user-configurable list of executable names (e.g. games, 3D software) to engage `Low-Impact` mode automatically.
-3. **Low-Impact Model Substitution:** Optional automatic swap to a lightweight 1B–3B text model to free VRAM for heavy foreground graphics tasks.
+3. **Low-Impact Model Substitution:** Optional automatic swap to a compatible lightweight local text model (e.g. 1B-3B) to free VRAM for heavy foreground graphics tasks.
 4. **Deferred Background Tasks:** Pauses non-critical background jobs during `Low-Impact` mode while preserving alarm and reminder firing.
 
 ---

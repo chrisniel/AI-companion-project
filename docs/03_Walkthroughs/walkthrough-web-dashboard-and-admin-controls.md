@@ -73,7 +73,7 @@ When the user clicks **[ Unload VRAM ]** or **[ Load to VRAM ]** in `ModelsView`
   - AMD RX 580 VRAM usage drops by ~5 GB.
 - **Streaming Chat**:
   - `chatApi.ts` sends a POST request with `stream: true`.
-  - A `ReadableStreamDefaultReader` decodes binary chunks to UTF-008, buffers line breaks, extracts JSON deltas prefixed with `data:`, and invokes `onToken(delta.content)`.
+  - A `ReadableStreamDefaultReader` decodes binary chunks to UTF-8, buffers line breaks, extracts JSON deltas prefixed with `data:`, and invokes `onToken(delta.content)`.
 
 ### Completion
 - When the stream receives `data: [DONE]`, the stream reader closes and the assistant state switches back to `'idle'`.

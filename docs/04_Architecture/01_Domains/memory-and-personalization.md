@@ -21,9 +21,9 @@ It governs the boundary between ephemeral conversation turns and durable compani
 
 ## 2. Durable Architecture & Invariants
 
-### 2.1 Profile Ownership of All Memories (Decisions D7 & D8)
+### 2.1 Profile Ownership of All Memories (Decision D7 & ADR-0018)
 
-- **Root Authority:** In accordance with Decisions D7 and D8 (`ADR-0008`, `ADR-0018`), all memories are strictly partitioned and owned by the user Profile (`profile_id`, migrated from legacy `owner_id`).
+- **Root Authority:** In accordance with Decision D7 and ADR-0018 (superseding historical D8 / ADR-0009), all memories are strictly partitioned and owned by the user Profile (`profile_id`, migrated from legacy `owner_id`).
 - **Conceptual Scoping:** Architecture recognizes two visibility scopes:
   1. **`PROFILE` Scope (Global to Profile):** Facts, preferences, and biographical details applicable across all companion personas for this profile (e.g., user's timezone, dietary preferences, occupation).
   2. **`CHARACTER` Scope (Persona-Bound):** Context, shared experiences, or relationship notes relevant specifically to interactions with a designated character persona.
@@ -38,7 +38,7 @@ It governs the boundary between ephemeral conversation turns and durable compani
 
 ### 2.3 Local-Only Extraction & Temporary Validity
 
-- **Local Extraction Default:** Automatic memory extraction must execute on local models by default. User conversation content is never transmitted to cloud providers for memory distillation unless the user explicitly opts into a cloud model profile.
+
 - **Temporary Memory Validity & Revalidation:** Ephemeral statements (e.g., "I'm sick today", "I'm staying at a hotel this week") must carry expiration metadata or require revalidation before durable long-term persistence. Ambiguous statements or emotional vents must never silently become permanent profile facts.
 
 ### 2.4 Retrieval Technology Independence
@@ -47,6 +47,26 @@ It governs the boundary between ephemeral conversation turns and durable compani
 - Specific search mechanisms (e.g., SQLite FTS5 full-text search, BM25 ranking, or vector embeddings) are implementation strategies, **not** immutable architectural invariants.
 
 ---
+
+### 2.3 Frozen Memory Extraction & Management Policy
+
+The following behavioral invariants dictate how the runtime processes memories:
+
+- **Cloud Permission Boundary:** Cloud conversational inference permission != Cloud automatic Memory processing permission.
+- **Local-Only Extraction:** Automatic Memory extraction remains local-only by default even when cloud chat is enabled.
+- **Future Cloud Processing:** Future cloud Memory processing requires separate explicit permission + visible egress.
+- **Explicit Triggers:** Explicit "remember this" commands are first-class and bypass automatic heuristics.
+- **Extraction Pipeline:** Completed turn → candidate extraction → structured candidate → deterministic Memory policy.
+- **Policy Outcomes:** Candidates result in AUTO-SAVE, PROPOSE, or IGNORE.
+- **Secrets Boundary:** Secrets are never processed as ordinary Memory.
+- **Provenance & Confidence:** Provenance is conceptually mandatory. Confidence represents extraction confidence, not objective truth probability.
+- **Reconciliation:** Related memories must reconcile as NEW, MERGE, UPDATE, or CONFLICT.
+- **Correction Authority:** Explicit user correction has high authority.
+- **Lifecycle & Expiry:** Memories support temporary validity, expiry, and revalidation. Expired Memory is excluded immediately.
+- **Forget Semantics:** "Forget" removes the memory from retrieval and context immediately; physical purge may follow later. Tombstones prevent known resurrection from restore.
+- **Data Partitions:** Conversation History, Memory, and Emotion remain distinct architectural concepts.
+- **Open Design:** Exact schema names remain open.
+
 
 ## 3. Current Verified Implementation
 
@@ -100,7 +120,7 @@ The following target capabilities are approved under Decision D7 and the Master 
 
 ## 5. Implementation-Open Details (Decision Debt)
 
-The normative architecture for D7/D8 is frozen. The following implementation-level details are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
+The normative architecture for D7 and ADR-0018 is frozen. The following implementation-level details are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
 
 - **Extraction Model & Prompting:** Whether memory extraction runs inline within the primary chat model turn or asynchronously via a specialized local background task (`DEBT-V1-008`).
 - **Extraction Cadence & Thresholds:** Trigger frequency, confidence scoring models, and user verification notification thresholds.
@@ -120,8 +140,8 @@ The normative architecture for D7/D8 is frozen. The following implementation-lev
 
 ## 7. Canonical Relationships & Cross-Links
 
-- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D7, D8)
-- **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Decisions D7, D8), [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-MEM-001`, `PC-MEM-002`)
+- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decision D7, ADR-0018)
+- **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Decision D7, ADR-0018), [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-MEM-001`, `PC-MEM-002`)
 - **Memory ADR:** [`docs/04_Architecture/decisions/ADR-0008-d7-profile-first-memory-ownership.md`](../decisions/ADR-0008-d7-profile-first-memory-ownership.md)
 - **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
 - **Character Domain Specification:** [`docs/04_Architecture/01_Domains/characters-personality-and-emotion.md`](characters-personality-and-emotion.md)
