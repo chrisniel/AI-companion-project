@@ -1,8 +1,8 @@
 # Multimodal and Media Architecture
 
-> **Document Role:** Canonical domain architecture specification.
-> **Status:** Active Canonical — authority transferred during R11.4.
-> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D11. This focused specification owns normative architecture for its domain. Legacy monolithic architecture documents are subordinate compatibility and technical-reference material.
+> **Document Role:** Canonical domain architecture specification.  
+> **Status:** Active Canonical (Aligned with Decisions D1–D16, ADR-0006, ADR-0018)  
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D16. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for multimodal vision and media assets.
 
 ---
 
@@ -29,15 +29,19 @@ Multimodal vision understanding is governed by the approved Phase 8B delivery ro
 - **Slice 8B.8 (Full Integration & Phase Closure):** `COMPLETE / VERIFIED`.
 - **Phase 8B Overall:** `COMPLETE / VERIFIED`.
 
-### 2.2 Approved Scope vs. Non-Image Media
+### 2.2 Approved Scope, Multi-File Bundles & Non-Image Media
 
 - **PC V1 Approved Scope:** Strictly **image understanding** (PNG, JPEG) associated with user conversational messages.
+- **Multi-File Bundles & Atomic Installation (Decision D6 & ADR-0006):**
+  - Multimodal vision models in llama.cpp typically require two companion files: the primary LLM GGUF (e.g. `Qwen2-VL-7B-Instruct-Q4_K_M.gguf`) and the matching vision projector weights (`mmproj-*.gguf`).
+  - The controlled model import pipeline mandates that multi-file bundles install atomically: either both files validate and install into `LIBRARY_ROOT`, or the entire bundle is rolled back.
+  - A vision model is never activated without its matching projector.
 - **Unpromoted Media Types:** Non-image attachments (e.g., PDF/OCR document ingestion, video clips, standalone audio recordings, direct camera feeds) are **not** approved PC V1 scope. They remain open for future milestone evaluation.
-- **Generative Image Rendering:** The *Stable Diffusion Presence Renderer* is classified as `EXPERIMENTAL / NOT STARTED / FUTURE / UNSCHEDULED` in the Feature Promotion Map. It is distinct from conversational image understanding and is not a PC V1 requirement.
+- **Generative Image Rendering:** The *Stable Diffusion Presence Renderer* is classified as `EXPERIMENTAL / NOT STARTED / FUTURE / UNSCHEDULED`. It is distinct from conversational image understanding and is not a PC V1 requirement.
 
 ### 2.3 Security & Attachment Invariants
 
-- **Ownership & BOLA Isolation:** Attachments are strictly scoped to the authenticated Profile (`owner_id`) and parent `conversation_id`. Cross-conversation attachment binding or cross-user access is prohibited.
+- **Ownership & BOLA Isolation:** Attachments are strictly scoped to the authenticated Profile (`profile_id`, migrated from `owner_id`) and parent `conversation_id`. Cross-conversation attachment binding or cross-profile access is prohibited.
 - **Storage Path Containment:** Binary files are written strictly within the configured attachment storage directory (`settings.ATTACHMENT_DIR` under the resolved `COMPANION_DATA_ROOT`). All file path resolutions enforce strict canonical path containment to prevent directory traversal attacks.
 - **Upload / File Validation:** File size (10 MiB raw file ceiling), route-specific multipart request envelope (12 MiB via `settings.MAX_ATTACHMENT_REQUEST_BODY_BYTES`), pure byte-signature inspection (PNG and JPEG), Pillow decoding verification, maximum pixel dimensions (max 8192×8192 px), maximum total pixels (max 32.0 MP), and corruption/decompression-bomb protection are enforced prior to permanent file storage. (The ceiling of maximum 4 attachments per message is a message-send validation constraint, not an upload-time storage check.)
 - **Message-Send Validation & Staging Binding:** During message submission, the turn orchestrator validates `attachment_ids` syntax, uniqueness, the ceiling of maximum 4 attachments per message (`MAX_ATTACHMENTS_PER_MESSAGE = 4`), ownership/conversation scope isolation, and active/unclaimed availability.
@@ -140,14 +144,16 @@ The following implementation choices are intentionally left open for subsequent 
   if not resolved_path.is_relative_to(base_storage_dir):
       raise CompanionSecurityError("Path traversal detected")
   ```
-- **Broken Object Level Authorization (BOLA):** Every attachment access verifies `attachment.owner_id == authenticated_user_id` and `attachment.conversation_id == target_conversation_id`.
+- **Broken Object Level Authorization (BOLA):** Every attachment access verifies `attachment.profile_id == authenticated_profile_id` and `attachment.conversation_id == target_conversation_id`.
 - **Pre-Processing DoS Protection:** Decompression bombs, oversized payloads, and spoofed files are rejected before image parsing consumes significant CPU or RAM.
 
 ---
 
 ## 7. Canonical Relationships & Cross-Links
 
-- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§2 Core Architecture, Multimodal Vision Understanding)
-- **Feature Promotion Manifest:** [`docs/02_Planning/FEATURE_PROMOTION_MAP.md`](../../02_Planning/FEATURE_PROMOTION_MAP.md) (Multimodal Vision Understanding, Stable Diffusion Presence Renderer)
-- **Active Implementation Plan:** [`docs/02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md`](../../02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md)
+- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D6, D8)
+- **Model Import Pipeline ADR:** [`docs/04_Architecture/decisions/ADR-0006-controlled-local-model-import-pipeline.md`](../decisions/ADR-0006-controlled-local-model-import-pipeline.md)
+- **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
+- **Storage Roots ADR:** [`docs/04_Architecture/decisions/ADR-0015-storage-roots-and-asset-hierarchy.md`](../decisions/ADR-0015-storage-roots-and-asset-hierarchy.md)
+- **Master Planning Spine:** [`docs/02_Planning/00_Master/WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-API-001`, `PC-MODEL-001`)
 - **Assistant Domain Specification:** [`docs/04_Architecture/01_Domains/assistant-and-conversations.md`](assistant-and-conversations.md)

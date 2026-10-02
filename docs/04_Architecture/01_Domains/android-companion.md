@@ -1,8 +1,8 @@
 # Android Companion Architecture
 
-> **Document Role:** Canonical domain architecture specification.
-> **Status:** Active Canonical — authority transferred during R11.4.
-> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D11. This focused specification owns normative architecture for its domain. Legacy monolithic architecture documents are subordinate compatibility and technical-reference material.
+> **Document Role:** Canonical domain architecture specification.  
+> **Status:** Active Canonical (Aligned with Decisions D1–D16, ADR-0003, ADR-0018)  
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D16. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for the mobile Android companion domain.
 
 ---
 
@@ -27,7 +27,8 @@ It governs the boundary between the desktop host runtime and the satellite mobil
 In accordance with Decision D1:
 - **Independent Follow-on Release:** Android V1 is an independent, follow-on production mobile release.
 - **Non-Blocking Invariant:** Development, verification, or staging of the Android Companion does **not** block the delivery, feature freeze, or release of the PC V1 ecosystem milestone.
-- **Canonical Authority:** The PC Local AI Runtime owns persistent canonical authority over user data, conversation histories, memories, and task state. Android operates as a connected satellite client with offline caching capabilities.
+- **Canonical Authority:** The Windows Host Runtime owns persistent canonical authority over user data, conversation histories, memories, and task state. Android operates as a connected satellite client with offline caching capabilities.
+- **Profile Binding (`ADR-0018`):** A normal mobile satellite device binds to a single user Profile (`profile_id`). The PC desktop administrator manages profiles, while the mobile client operates within its bound profile context.
 
 ### 2.2 Application Identity & Package Target (Decision D3)
 
@@ -73,7 +74,7 @@ Verified in `android/app/src/main/java/com/example/`:
 - **Repository Wiring:** Real HTTP repository wiring exists for `SharedPreferencesConnectionRepository`, `HttpTasksRepository`, and `LocalAiRuntimeClient`. Other major domains—including Assistant conversations, Characters, Memory, Schedule, Alarms, and Models/Devices—remain wired to Fake repositories in `DefaultAppContainer`. General conversation synchronization is not implemented.
 - **Credential Storage (Current):** Device pairing token is stored in ordinary, unencrypted `SharedPreferences`.
 - **Health Foundation (Current):** The codebase contains the `HealthDataProvider` abstraction, a `MockHealthDataProvider` stub, and Health UI/view-model structures. No real Health Connect client or platform API integration is implemented (mock/provider contract and UI foundation only).
-- **Test Baseline:** 124 passing unit, repository, and Robolectric UI tests verified during reconciliation Pass R8.
+- **Test Baseline:** Passing unit, repository, and Robolectric UI test baselines exist in the repository (`android/app/src/test/`).
 
 ### 3.3 Explicitly Unimplemented Capabilities
 
@@ -96,12 +97,12 @@ The following target capabilities are approved under Decision D1 and scheduled f
    - Device credentials protected via platform-secure facilities backed by the Android Keystore system (e.g., `EncryptedSharedPreferences` as an implementation candidate; exact mechanism remains open design).
 2. **Durable Room Outbox & Connected Synchronization (Android V1):**
    - Local Room database caching active tasks, memories, and conversations.
-   - Offline mutation queue (outbox) synchronizing with PC Local AI Runtime upon reconnect.
+   - Offline mutation queue (outbox) synchronizing with PC Windows Host Runtime upon reconnect.
 3. **Practical Compact Offline Local LLM (Android V1):**
    - On-device local LLM execution for basic conversational continuity when disconnected from the PC host.
    - Model family, format (e.g., GGUF, ONNX), parameter size, and quantization remain OPEN DESIGN. Existing benchmarks on Dimensity / Infinix hardware are historical proof-of-concept evidence, not locked hardware constraints.
 4. **Health Connect Biometric Context (Android V1):**
-   - Ingests aggregated biometric summaries from Android Health Connect with explicit user permission, synchronizing approved summaries to the PC Local AI Runtime. (Exact metric list, aggregation formulas, and synchronization cadence remain OPEN DESIGN and belong to `health-and-wearables.md`.)
+   - Ingests aggregated biometric summaries from Android Health Connect with explicit user permission, synchronizing approved summaries to the PC Windows Host Runtime.
 
 ---
 
@@ -119,7 +120,7 @@ The following implementation choices are intentionally left open for subsequent 
 
 ## 6. Security & Ownership Boundaries
 
-- **Subordinate Authority:** The mobile client cannot unilaterally override canonical PC state. All sync operations resolve against the PC Local AI Runtime as the single source of truth.
+- **Subordinate Authority:** The mobile client cannot unilaterally override canonical PC state. All sync operations resolve against the PC Windows Host Runtime as the single source of truth.
 - **Network Boundaries:** Operates over trusted LAN or Tailscale private mesh in accordance with Decision D5. Direct public internet port exposure is outside the supported trust model.
 - **Biometric Privacy:** Raw biometric sensor streams are never collected. Only aggregated, user-approved summaries (e.g., total sleep hours) are processed into context.
 
@@ -127,7 +128,9 @@ The following implementation choices are intentionally left open for subsequent 
 
 ## 7. Canonical Relationships & Cross-Links
 
-- **Legacy Technical Reference:** [`docs/04_Architecture/ANDROID_COMPANION_ARCHITECTURE.md`](../../07_Archive/reference/architecture-legacy/ANDROID_COMPANION_ARCHITECTURE.md) (Subordinate mobile technical & benchmark reference)
-- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§2 Core Architecture, Decisions D1, D3, D4)
-- **Feature Promotion Manifest:** [`docs/02_Planning/FEATURE_PROMOTION_MAP.md`](../../02_Planning/FEATURE_PROMOTION_MAP.md) (Android Connected Sync, Android Practical Offline LLM, Android Device-Local TTS, Android Health Connect)
+- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§2 Release Vocabulary, §3 Cross-Cutting Invariants, Decisions D1, D3, D4, D5)
+- **Application Identity ADR:** [`docs/04_Architecture/decisions/ADR-0003-android-application-identity-and-lifecycle.md`](../decisions/ADR-0003-android-application-identity-and-lifecycle.md)
+- **Device Authentication ADR:** [`docs/04_Architecture/decisions/ADR-0004-device-authentication-and-trust-model.md`](../decisions/ADR-0004-device-authentication-and-trust-model.md)
+- **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
+- **Master Planning Spine:** [`docs/02_Planning/00_Master/SPRINT_ROADMAP.md`](../../02_Planning/00_Master/SPRINT_ROADMAP.md) (Milestone Track M-Android)
 - **Health & Wearables Integration:** [`docs/04_Architecture/03_Integrations/health-and-wearables.md`](../03_Integrations/health-and-wearables.md)

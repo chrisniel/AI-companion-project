@@ -1,20 +1,20 @@
 # Authentication and Secrets Architecture
 
-> **Document Role:** Canonical domain architecture specification.
-> **Status:** Active Canonical — authority transferred during R11.4.
-> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D11. This focused specification owns normative architecture for its domain. Legacy monolithic architecture documents are subordinate compatibility and technical-reference material.
+> **Document Role:** Canonical domain architecture specification.  
+> **Status:** Active Canonical (Aligned with Decisions D1–D16, ADR-0004, ADR-0005)  
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D16. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for authentication, secrets, and network trust boundaries.
 
 ---
 
 ## 1. Purpose & Scope
 
-This specification defines the cryptographic authentication mechanisms, secret storage policies, and transport trust models for the AI Companion:
+This specification defines cryptographic authentication mechanisms, secret storage policies, rate limiting, and transport trust models for the AI Companion:
 - Fail-closed API authentication protecting companion endpoints.
 - Separation of network proximity from identity authentication.
-- Supported network trust topologies (localhost, trusted LAN, private overlay mesh).
+- Supported network trust topologies (loopback default, trusted LAN, Tailscale private mesh, Cloudflare Tunnel).
 - Explicit rejection of direct public internet port forwarding.
 - Evolution path from current file-based secret storage to durable host secret stores.
-- Token validation and timing-attack defense invariants.
+- Token validation, timing-attack defense, and rate-limiting invariants.
 
 ---
 
@@ -23,22 +23,26 @@ This specification defines the cryptographic authentication mechanisms, secret s
 ### 2.1 Fail-Closed Authentication & Network Boundaries (Decision D5)
 
 In accordance with Decision D5:
-- **Fail-Closed by Construction:** All companion endpoints require explicit cryptographic authentication by default. Endpoints are protected unless explicitly assigned to a strictly bounded public whitelist.
-- **Proximity is Not Authentication:** Physical or network-layer proximity (such as sharing the same local Wi-Fi router or subnet) does **not** grant implicit trust or bypass authentication. Network proximity never substitutes for application auth. All protected companion API interactions require valid application authentication regardless of network proximity. Explicitly whitelisted, minimal public probes such as `GET /api/v1/health` remain bounded exceptions.
-- **Master Secret Containment:** Master runtime administrative secrets and third-party API credentials are held strictly on the host runtime machine and are **never** transmitted to or stored on client endpoints. Database encryption passphrases do not currently exist and are not a required secret class unless encryption-at-rest is separately approved.
+- **Fail-Closed by Construction:** All companion endpoints require explicit cryptographic authentication by default. Endpoints are protected unless explicitly assigned to a strictly bounded public whitelist (`GET /api/v1/health` only).
+- **Proximity is Not Authentication:** Physical or network-layer proximity (sharing local Wi-Fi or subnet) does **not** grant implicit trust or bypass authentication. Network proximity never substitutes for application auth.
+- **Master Secret Containment:** Master runtime administrative secrets and third-party API credentials are held strictly on the host runtime machine and are **never** transmitted to or stored on client endpoints.
 
-### 2.2 Supported Trust Topologies
+### 2.2 Supported Trust Topologies & Remote Access (ADR-0005)
 
-The companion architecture supports three bounded network topologies under Decision D5:
-1. **Authenticated Localhost Loopback:** Local browser and host processes communicating over `127.0.0.1` / `::1`.
+The companion architecture supports three bounded network topologies under Decision D5 and `ADR-0005`:
+1. **Authenticated Localhost Loopback (Default):** Local desktop clients (Flutter, React Web) and host processes communicating over `127.0.0.1` / `::1`.
 2. **Explicitly Trusted LAN:** Satellite devices communicating across a private home network with explicit host pairing and application authentication.
-3. **Encrypted Overlay Mesh (Tailscale / Private Mesh):** Remote satellite access routed through an authenticated, encrypted private mesh network without exposing open router ports.
+3. **Encrypted Overlay Mesh (Tailscale Private Mesh — Preferred):** Remote satellite access routed through an authenticated, encrypted WireGuard-based private mesh network without exposing open router ports (`ADR-0005`). Alternatively, a managed **Cloudflare Tunnel** with Cloudflare Access authentication is supported for controlled web egress.
 
 ### 2.3 Direct Public Internet Port Forwarding Rejected
 
-In accordance with the Feature Promotion Map (**Direct Public Internet Port Forwarding**):
-- **Classification:** `REJECTED / NOT STARTED / N/A`.
+In accordance with Decision D5:
+- **Status:** `PERMANENTLY REJECTED`.
 - **Policy Invariant:** Direct port forwarding from the public internet (opening external router ports, dynamic DNS directly to companion port, unauthenticated public ingress) is **strictly excluded** from the supported trust model. The companion runtime is not a multi-tenant public web server and must never be exposed directly to unauthenticated public internet traffic.
+
+### 2.4 Rate Limiting & DoS Protection
+
+- All client-facing HTTP and WebSocket endpoints must enforce rate limiting to defend against brute-force token enumeration and local denial-of-service. Sensitive authentication routes enforce tighter request throttling.
 
 ---
 
@@ -75,15 +79,14 @@ When implemented for target milestones:
 
 ---
 
-## 5. OPEN DESIGN
+## 5. Implementation-Open Details (Decision Debt)
 
-The following implementation choices remain open design for future technical specification:
+The normative architecture for D4 and D5 is frozen. The following implementation-level details are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
 
-- **Host Secret Store Mechanism:** Specific host credential storage mechanism (evaluating alternatives such as Windows Credential Manager, DPAPI wrappers, or encrypted configuration files).
-- **Client Secret Store Mechanism:** Specific mobile credential storage mechanism (evaluating Android Keystore, EncryptedSharedPreferences, or secure hardware-backed storage).
-- **Application-Layer TLS & Transport Encryption:** Application-layer TLS / certificate enrollment remains open design where applicable. Tailscale and private mesh networks may already provide encrypted transport. Exact TLS certificate source, local CA generation, Tailscale HTTPS, mutual TLS, and certificate enrollment remain open design and are not locked as an approved implementation requirement.
-- **Enrollment & Handshake Protocol:** Cryptographic handshake for device pairing (e.g., SPAKE2, QR-encoded ephemeral bootstrap tokens, or mutual authentication protocols).
-- **Token Rotation & Expiration:** Policies and automation for periodic credential rotation, inactivity timeouts, and re-authentication handshakes.
+- **Rate Limiting Parameters:** Request rate thresholds, burst limits, and backoff windows per endpoint tier (`DEBT-V1-014`).
+- **Host Secret Store Mechanism:** Specific host credential storage mechanism (Windows Credential Manager, DPAPI wrappers, or encrypted configuration files).
+- **Client Secret Store Mechanism:** Mobile credential storage mechanism (Android Keystore, EncryptedSharedPreferences).
+- **Token Rotation & Expiration:** Policies and automation for periodic credential rotation and inactivity timeouts.
 
 ---
 
@@ -91,17 +94,16 @@ The following implementation choices remain open design for future technical spe
 
 - **Constant-Time Verification:** All token comparisons must use constant-time operations to eliminate timing side-channels.
 - **No Client Elevation:** Possession of a client token permits interaction with companion conversational APIs, but does not grant administrative authority to read host filesystem paths or manipulate host process lifecycles.
-- **CORS Containment:** CORS origins in `settings.CORS_ORIGINS` restrict cross-origin browser access to explicitly authorized development localhost/loopback origins (`http://localhost:5173`, `http://127.0.0.1:5173`, `http://localhost:3000`, `http://127.0.0.1:3000`). These are current development localhost/loopback origins, not production origins, and are not promoted into durable architecture.
+- **CORS Containment:** CORS origins restrict cross-origin browser access to explicitly authorized development loopback origins.
+- **Rate Limiting Enforced:** Fail-closed rate limiting on all public and protected routes.
 
 ---
 
 ## 7. Canonical Relationships & Cross-Links
 
-### Upstream Baseline & Legacy Architecture
-- [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) — Decisions D4 (Profile vs Device), D5 (Network trust tiers).
-- [`docs/04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md`](../../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md) — Threat model, network zones, credential classifications.
-
-### Related Domain & Security Specifications
-- [`docs/04_Architecture/02_Data_and_Security/profiles-and-devices.md`](profiles-and-devices.md) — Device identity, enrollment state, and client lifecycle.
-- [`docs/04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md`](tool-permissions-and-actions.md) — Permission gates for tool execution.
-- [`docs/04_Architecture/03_Integrations/web-current-information.md`](../03_Integrations/web-current-information.md) — SSRF protection and external egress boundaries.
+- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D4, D5)
+- **Tailscale Remote Transport ADR:** [`docs/04_Architecture/decisions/ADR-0005-tailscale-preferred-remote-transport.md`](../decisions/ADR-0005-tailscale-preferred-remote-transport.md)
+- **Device Authentication ADR:** [`docs/04_Architecture/decisions/ADR-0004-device-authentication-and-trust-model.md`](../decisions/ADR-0004-device-authentication-and-trust-model.md)
+- **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Decision D5), [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-API-002`)
+- **Profiles & Devices Specification:** [`docs/04_Architecture/02_Data_and_Security/profiles-and-devices.md`](profiles-and-devices.md)
+- **Tool Permissions & Actions Spec:** [`docs/04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md`](tool-permissions-and-actions.md)

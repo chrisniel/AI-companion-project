@@ -21,31 +21,32 @@ It governs the boundary between audio hardware/drivers and conversational assist
 
 ## 2. Durable Architecture & Invariants
 
-### 2.1 Provider-Independent Conversational Voice (PC V1)
+### 2.1 Native Client & Runtime Voice Architecture (Decisions D14 & D15)
 
-In accordance with Decision D1 (PC V1 release boundary) and Decision D11 (decoupled voice configuration):
-- **Core Capability:** The PC V1 milestone requires **provider-independent conversational voice capability without wake word**:
-  1. Audio capture from host microphones.
-  2. Explicit, user-consented session initiation and turn-taking.
-  3. Speech-to-Text (STT) transcription.
-  4. Spoken turn detection via Voice Activity Detection (VAD) or explicit user controls where required.
-  5. Text-to-Speech (TTS) synthesis of companion responses.
-  6. Audio output playback to host speakers or headphones.
-- **Provider Independence:** The architecture is decoupled from proprietary or specific third-party engines. Speech subsystems interact through abstract interfaces (e.g., `STTProvider`, `TTSProvider`, `VADDetector`).
-- **Wake Word Phasing:** Always-on wake-word detection is formally decoupled from conversational voice and scheduled for **PC Later**. PC V1 voice interaction relies on explicit, consented user initiation; push-to-talk and click-to-speak represent interaction candidates, while the exact initiation UX remains OPEN DESIGN.
-- **Barge-In Status:** User interruption during companion speech (barge-in) is an approved target capability, but is **not** a hard blocking gate for PC V1 delivery unless explicitly promoted.
+In accordance with Decisions D1, D14, and D15 (`ADR-0014`, `ADR-0017`, `ADR-0019`):
+- **Hardware & Processing Boundary:**
+  - **Flutter Desktop Client:** Owns local audio hardware enumeration, physical microphone capture, speaker/headphone playback, and OS audio focus.
+  - **Windows Host Runtime:** Owns the speech pipeline engines (`STTProvider` and `TTSProvider`) and conversational turn coordination.
+- **WebSocket Full-Duplex Transport (`ADR-0019`):** Audio frames and speech control events stream over a dedicated persistent WebSocket connection between the desktop client and runtime.
+- **Approved PC V1 Local Speech Engines:**
+  - **Speech-to-Text (STT):** Local `whisper.cpp` (executing on CPU/RAM to preserve GPU VRAM).
+  - **Text-to-Speech (TTS):** Local `Kokoro-82M` (executing on CPU/RAM for fast, high-quality local voice synthesis).
+  - **Voice Activity Detection (VAD):** In-stream turn detection via Silero VAD or equivalent lightweight model.
+- **Mandatory Voice Barge-In (PC V1):**
+  - Companion voice playback must support real-time user interruption.
+  - When user speech is detected during assistant TTS output, the client immediately mutes audio output, sends a `barge_in` cancellation frame over the WebSocket, and the runtime cancels downstream LLM/TTS generation.
+- **Wake Word Phasing:** Always-on wake-word detection is formally decoupled from conversational voice and scheduled for **PC Later**. PC V1 voice interaction relies on explicit, consented user initiation (push-to-talk, click-to-speak, or active voice session mode).
 
 ### 2.2 Hardware Resource Isolation Principle
 
 - **Durable Principle:** Speech processing **SHOULD** avoid unnecessary contention with the active generative model on constrained target hardware.
-- **Reference Strategy (CPU/RAM-First):** To safeguard precious GPU VRAM for the primary text/multimodal LLM on reference hardware (e.g., 8 GB RX 580 baseline), speech transcription and synthesis are designed reference-first to execute comfortably on CPU and system RAM.
-- **Implementation Flexibility:** The architecture does **not** permanently lock speech to CPU forever. On higher-end hardware with abundant compute or dedicated NPUs, providers may utilize hardware acceleration if resource contention policies permit. (Decision D2 provides cross-cutting context for long-running host process lifecycle).
+- **Reference Strategy (CPU/RAM-First):** To safeguard precious GPU VRAM for the primary text/multimodal LLM on reference hardware (8 GB RX 580 baseline), speech transcription (`whisper.cpp`) and synthesis (`Kokoro-82M`) are designed reference-first to execute comfortably on CPU and system RAM.
+- **Implementation Flexibility:** The architecture does not permanently lock speech to CPU forever. On higher-end hardware with abundant compute or dedicated NPUs, providers may utilize hardware acceleration if resource contention policies permit.
 
 ### 2.3 Voice Privacy Invariant
 
 - **Durable Privacy Invariant:** *"Raw user audio is not persistently retained by default without explicit user consent."*
-- **No Implementation Lock:** Architecture establishes the privacy guarantee without permanently locking a single specific buffering mechanism (e.g., it does not dictate that all PCM audio must strictly reside in RAM and be instantly wiped).
-- Buffering duration, debug audio capture, transcript logging, opt-in audio recording, and temporary disk cleanup intervals remain implementation details and open design.
+- Buffering is kept strictly in transient memory during active turns. User-approved transcripts are persisted as conversation messages; raw audio chunks are discarded after turn completion.
 
 ---
 
@@ -80,30 +81,29 @@ The following target capabilities are approved under Decisions D1, D11, and the 
 
 ---
 
-## 5. OPEN DESIGN
+## 5. Implementation-Open Details (Decision Debt)
 
-The following implementation choices remain intentionally open for architectural investigation:
+The normative architecture for D14/D15 is frozen. The following implementation-level details are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
 
-- **Session Initiation & Turn Control UX:** Exact UI/UX mechanisms for initiating, holding, and closing voice turns (push-to-talk, click-to-speak, visual voice toggle, or hands-free conversational loop).
-- **Audio Streaming Transport:** Choice between WebSocket binary frames, WebRTC data channels, or multipart HTTP chunk uploads between frontend and backend.
-- **Buffer Management & Retention:** Specific memory ring-buffer vs. temporary disk spooling architecture and cleanup timeouts.
-- **Debug Capture & Diagnostics:** Opt-in debug recording mechanics, retention quotas, and troubleshooting log schemas.
-- **Barge-In Implementation:** Exact echo-cancellation, acoustic playback suppression, and model generation cancellation mechanisms.
-- **Audio Routing & Hotplugging:** Host audio device enumeration, default sink switching, and Bluetooth headset disconnect handling on Windows.
+- **Turn-Taking & VAD Tuning:** VAD threshold parameters, silence detection window length, and speaking cadence tuning (`DEBT-V1-011`).
+- **Audio Device Hotplugging:** Host audio device enumeration, default sink switching, and Bluetooth headset disconnect recovery in Flutter (`DEBT-V1-012`).
+- **Wake Word Detection (PC Later):** Background listening for low-power activation phrases (`openWakeWord`). Deferred beyond PC V1.
 
 ---
 
 ## 6. Security & Ownership Boundaries
 
 - **Consent Boundaries:** The microphone must never open or record without clear user action or explicit, visible UI state.
-- **Transcript Authority:** Generated text transcripts become user messages within conversations, inheriting standard profile data ownership and retention rules.
-- **Network Boundaries:** Local speech processing occurs entirely on-device under Local AI Runtime authority; audio data is never transmitted to external cloud endpoints without explicit opt-in configuration.
+- **Transcript Authority:** Generated text transcripts become user messages within conversations, inheriting standard profile data ownership and retention rules (`profile_id`).
+- **Network Boundaries:** Local speech processing occurs entirely on-device under Windows Host Runtime authority; audio data is never transmitted to external cloud endpoints without explicit opt-in configuration.
 
 ---
 
 ## 7. Canonical Relationships & Cross-Links
 
-- **Legacy Technical Reference:** [`docs/04_Architecture/VOICE_AND_AUDIO_ARCHITECTURE.md`](../../07_Archive/reference/architecture-legacy/VOICE_AND_AUDIO_ARCHITECTURE.md) (Subordinate voice design & implementation reference)
-- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§2 Core Architecture, Decisions D1 & D11; §3 Windows Host Context, Decision D2)
-- **Feature Promotion Manifest:** [`docs/02_Planning/FEATURE_PROMOTION_MAP.md`](../../02_Planning/FEATURE_PROMOTION_MAP.md) (Conversational Voice (STT / TTS), Wake Word Detection)
-- **Character Domain Specification:** [`docs/04_Architecture/01_Domains/characters-personality-and-emotion.md`](characters-personality-and-emotion.md) (Voice profile associations)
+- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D14, D15)
+- **Voice Subsystem ADR:** [`docs/04_Architecture/decisions/ADR-0014-voice-and-audio-subsystem-architecture.md`](../decisions/ADR-0014-voice-and-audio-subsystem-architecture.md)
+- **Client Target ADR:** [`docs/04_Architecture/decisions/ADR-0017-flutter-production-windows-client.md`](../decisions/ADR-0017-flutter-production-windows-client.md)
+- **Client-Runtime Contract ADR:** [`docs/04_Architecture/decisions/ADR-0019-client-runtime-contract-and-work-boundaries.md`](../decisions/ADR-0019-client-runtime-contract-and-work-boundaries.md)
+- **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Decision D15), [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-VOICE-001`)
+- **UI Design Presentation:** [`docs/05_Design/05_Voice_Mode_and_Audio_Controls.md`](../../05_Design/05_Voice_Mode_and_Audio_Controls.md)

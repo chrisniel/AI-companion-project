@@ -1,8 +1,17 @@
-# Proactive Companion Routines / Scheduled Check-ins
+# Proactive Companion Routines / Scheduled Check-ins (Post-V1 Design Note)
 
-> **Classification:** POST-V1 PLANNING SOURCE  
-> **Status:** Future Product Planning / Post-V1 Milestone  
-> **Authority Notice:** Non-authoritative for V1. Proactive companion routines are explicitly excluded from the AI Companion V1 release boundary per Decision D1. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) owns the locked V1 scope boundary; [`docs/02_Planning/ROADMAP.md`](../ROADMAP.md) owns product milestone sequencing; canonical domain architecture owns normative technical boundaries. Exact proactive-routine implementation and scheduling interfaces must be revalidated before this future milestone begins execution.
+> [!NOTE]
+> **SUPERSEDED PLANNING NOTE — REFER TO MASTER PLANNING SPINE & CANONICAL DOMAIN SPEC**  
+> Proactive routines are formally categorized as **PC Later** in the Master Planning Spine:
+> - **Backlog Entry:** [`docs/02_Planning/00_Master/BACKLOG.md`](../00_Master/BACKLOG.md#2-pc-later-backlog-approved-post-v1) (`FEAT-BACKLOG-001`)
+> - **Normative Domain Architecture:** [`docs/04_Architecture/01_Domains/tasks-reminders-alarms-and-routines.md`](../../04_Architecture/01_Domains/tasks-reminders-alarms-and-routines.md)
+> - **Decision Register:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../00_Master/DECISION_REGISTER.md) (Decision D10)
+>
+> Preserved as historical design notes.
+
+> **Classification:** POST-V1 PLANNING SOURCE (Legacy Note)  
+> **Status:** Superseded / Historical Design Note  
+> **Authority Notice:** Non-authoritative for PC V1. Proactive routines are excluded from PC V1 delivery boundary. Normative scheduling rules reside in `docs/04_Architecture/01_Domains/tasks-reminders-alarms-and-routines.md`.
 
 AI Companion should support configurable recurring personal routines that
 trigger proactive character messages or notifications without representing

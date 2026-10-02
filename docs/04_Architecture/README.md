@@ -1,8 +1,6 @@
-# Architecture Navigation & Authoring Guide
-
-> **Document Role:** Canonical architecture navigation hub and domain specification authoring standard.
-> **Status:** Active Standard (Pass R13 Baseline)
-> **Authority Precedence:** This document governs how architecture specifications are authored, organized, and navigated. Normative system baseline is anchored in [`SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md). Active execution state is tracked in [`docs/01_Tracking/task.md`](../01_Tracking/task.md). Detailed feature promotion dispositions are recorded in [`docs/02_Planning/FEATURE_PROMOTION_MAP.md`](../02_Planning/FEATURE_PROMOTION_MAP.md).
+> **Document Role:** Canonical architecture navigation hub and domain specification authoring standard.  
+> **Status:** Active Standard (PC V1 Canonicalization Pass)  
+> **Authority Precedence:** This document governs how architecture specifications are authored, organized, and navigated. Normative cross-cutting baseline is anchored in [`SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md). Master release planning is owned by [`docs/02_Planning/00_Master/`](../02_Planning/00_Master/). Active execution state is tracked in [`docs/01_Tracking/task.md`](../01_Tracking/task.md).
 
 ---
 

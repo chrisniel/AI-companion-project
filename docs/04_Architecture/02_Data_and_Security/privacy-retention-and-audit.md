@@ -1,8 +1,8 @@
 # Privacy, Retention, and Audit Architecture
 
-> **Document Role:** Canonical domain architecture specification.
-> **Status:** Active Canonical — authority transferred during R11.4.
-> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D11. This focused specification owns normative architecture for its domain. Legacy monolithic architecture documents are subordinate compatibility and technical-reference material.
+> **Document Role:** Canonical domain architecture specification.  
+> **Status:** Active Canonical (Aligned with Decisions D1–D16, ADR-0018)  
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D16. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for privacy, retention lifecycles, and auditing.
 
 ---
 
@@ -99,19 +99,18 @@ The following technical mechanisms remain open design for future technical speci
 ## 6. Security & Ownership Boundaries
 
 - **Zero Cleartext Credential Logging:** API keys, pairing tokens, session secrets, and passwords must never appear in application logs or audit records.
-- **Owner Scope Isolation:** Deletion and purge operations must preserve authenticated ownership boundaries, either through direct owner filtering or through an already owner-authorized parent/resource relationship.
+- **Profile Scope Isolation:** Deletion and purge operations must preserve authenticated ownership boundaries, strictly enforcing `entity.profile_id == authenticated_profile_id`. Cross-profile deletion or purge is strictly prohibited.
 - **Tamper Resistance:** Where security audit records are maintained, they should be append-only and protected against non-administrative modification.
 
 ---
 
 ## 7. Canonical Relationships & Cross-Links
 
-### Upstream Baseline & Legacy Architecture
-- [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) — Baseline architecture, Decisions D4 (Profile vs Device), D8 (Single-primary-user baseline).
-- [`docs/04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md`](../../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md) — Privacy boundaries, retention policies, audit requirements.
-
-### Related Domain & Security Specifications
-- [`docs/04_Architecture/01_Domains/memory-and-personalization.md`](../01_Domains/memory-and-personalization.md) — Memory capture, editing, and deletion controls.
-- [`docs/04_Architecture/01_Domains/multimodal-and-media.md`](../01_Domains/multimodal-and-media.md) — Attachment storage and lifecycle.
-- [`docs/04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md`](tool-permissions-and-actions.md) — Tool execution auditing and confirmation gates.
-- [`docs/04_Architecture/04_Infrastructure/storage-and-assets.md`](../04_Infrastructure/storage-and-assets.md) — Physical storage paths and database file management.
+- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D8, D9)
+- **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
+- **Tool Security & Deterministic Policy ADR:** [`docs/04_Architecture/decisions/ADR-0009-tool-security-and-deterministic-policy.md`](../decisions/ADR-0009-tool-security-and-deterministic-policy.md)
+- **Master Planning Spine:** [`docs/02_Planning/00_Master/WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-IDENTITY-001`, `PC-ACTION-001`)
+- **Memory Domain Specification:** [`docs/04_Architecture/01_Domains/memory-and-personalization.md`](../01_Domains/memory-and-personalization.md)
+- **Multimodal Domain Specification:** [`docs/04_Architecture/01_Domains/multimodal-and-media.md`](../01_Domains/multimodal-and-media.md)
+- **Tool Permissions & Actions Spec:** [`docs/04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md`](tool-permissions-and-actions.md)
+- **Storage & Assets Specification:** [`docs/04_Architecture/04_Infrastructure/storage-and-assets.md`](../04_Infrastructure/storage-and-assets.md)

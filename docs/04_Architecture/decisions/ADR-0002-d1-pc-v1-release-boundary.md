@@ -1,17 +1,18 @@
 # V1 Release Boundary
 
-**Status:** Accepted
+**Status:** Accepted (Refined by [`ADR-0017`](ADR-0017-flutter-production-windows-client.md))
 **Decision ID:** D1
 **Codification Date:** 2026-09-29
 **Original Decision Date:** Not separately recorded
 **Primary Canonical Owner:** [`SYSTEM_BASELINE.md §2`](../SYSTEM_BASELINE.md)
-**Related Specifications:** [`ROADMAP.md`](../../02_Planning/ROADMAP.md) (owns delivery sequencing only)
+**Related Specifications:** [`ROADMAP.md`](../../02_Planning/ROADMAP.md) (owns delivery sequencing only), [`ADR-0017`](ADR-0017-flutter-production-windows-client.md)
 
 ## Decision History
 - Accepted/relocked during R10.
 - Canonical focused-domain authority transferred during R11.4.
 - Delivery sequencing reconciled during R12.
 - Codified during R13.1.
+- Refined by `ADR-0017` (2026-10-03): Flutter Desktop approved as primary production Windows client for PC V1; React Web is retained as supported dev harness.
 
 ## Context
 PC V1 forms the primary ecosystem capability baseline. Android V1 is a subsequent mobile-specific release.

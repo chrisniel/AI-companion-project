@@ -1,11 +1,15 @@
-# AI Companion — Feature Promotion Map & Migration Manifest
+# AI Companion — Feature Promotion Map & Migration Manifest (RETIRED / ARCHIVED)
 
-> **Document Role:** Temporary reconciliation control manifest (Passes R10–R13).
-> **Status:** Active Working Manifest (Pass R10 Refinement)
-> **Authority Precedence:** Normative architectural baseline is owned by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md). Active execution state is tracked in [`docs/01_Tracking/task.md`](../01_Tracking/task.md). Detailed domain specifications reside in [`docs/04_Architecture/`](../04_Architecture/).
-> **Purpose:** Prevents informal, unreviewed, or deprecated ideas from drafts, historical archives, or recovery notes from silently becoming canonical architecture without explicit review, attribution, release allocation, and single canonical destination.
+> [!WARNING]
+> **RETIRED RECONCILIATION MANIFEST — NON-NORMATIVE HISTORICAL ARTIFACT**  
+> This document was a temporary reconciliation control manifest used during Passes R10–R13. It is **FROZEN, RETIRED, and SUPERSEDED**.  
+> - For active approved decisions and status, consult [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](00_Master/DECISION_REGISTER.md).  
+> - For active delivery milestones and backlog, consult [`docs/02_Planning/00_Master/DELIVERY_INDEX.md`](00_Master/DELIVERY_INDEX.md) and [`BACKLOG.md`](00_Master/BACKLOG.md).  
+> - For normative technical architecture, consult [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md) and focused domain specifications under [`docs/04_Architecture/`](../04_Architecture/).  
+> Do not use this document as active architectural or delivery authority.
 
 ---
+
 
 ## 1. Governance & Taxonomy
 

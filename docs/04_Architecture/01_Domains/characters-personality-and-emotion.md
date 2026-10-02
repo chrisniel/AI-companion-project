@@ -26,32 +26,43 @@ It governs the boundary between stable user profile data and interchangeable com
 In accordance with Decision D11, companion character systems enforce strict conceptual and architectural separation across distinct entities:
 
 1. **Profile (User Root Authority):**
-   - Owns user identity, user data, personal preferences, tasks, schedules, and memories.
+   - Owns user identity, user data, personal preferences, tasks, schedules, and memories (`ADR-0018`).
    - In accordance with Decision D4, device authentication credentials remain separated from profile-owned personal data (Profile does not own client device credentials).
    - Character switching must never mutate or reassign Profile ownership or Profile-owned personal data. A Character never owns Profile data.
-2. **Conversation:**
+2. **Character Template vs. Character Instance:**
+   - **Character Template (App-Owned):** Shipped with the application or imported; defines base immutable persona lore, archetype backstory, default display name, and avatar artwork.
+   - **Character Instance (Profile-Owned):** Instantiated within a specific user Profile (`profile_id`); binds to a Template, stores user-customized overrides (display name, avatar, trait values, prompt additions), and tracks the current active emotional state.
+3. **Conversation:**
    - Belongs to the user Profile.
    - References a specific Character persona; conversation history remains permanently bound to that Character as recorded.
-3. **Character (Lore & Identity Persona):**
-   - Defines persona identity, backstory lore, display name, visual avatar/portrait assets, and persona/system-prompt composition.
-   - May reference a preferred Personality style and preferred Voice configuration.
-   - Characters do not own conversations; conversations reference characters.
-4. **Personality (Behavioral Style & Traits):**
-   - Distinct from lore or visual assets; governs behavioral mannerisms, verbosity, humor, formality, and communication traits.
-   - Configurable independently from character backstory (e.g., the same character lore can operate with varying formality levels).
-5. **Emotion (Transient Companion Tone Modulation):**
-   - Lightweight, transient, conceptual companion state (e.g., cheerful, focused, reflective).
-   - Serves solely to modulate conversational tone, phrasing nuance, or non-blocking UI expressions.
+4. **Personality (8 Continuous Traits):**
+   - Distinct from lore or visual assets; governs behavioral mannerisms, communication style, and phrasing tone.
+   - Evaluated on a continuous **0–100 scale** across 8 core dimensions:
+     1. **Warmth:** Reserved / Cool (0) ◄────────► Warm / Affectionate (100)
+     2. **Directness:** Indirect / Gentle (0) ◄────────► Direct / Blunt (100)
+     3. **Verbosity:** Concise / Terse (0) ◄────────► Elaborate / Expressive (100)
+     4. **Playfulness:** Serious / Practical (0) ◄────────► Playful / Whimsical (100)
+     5. **Empathy:** Analytical / Detached (0) ◄────────► Highly Empathetic / Validating (100)
+     6. **Formality:** Casual / Colloquial (0) ◄────────► Formal / Professional (100)
+     7. **Curiosity:** Reactive (0) ◄────────► Inquisitive / Proactive (100)
+     8. **Humor:** Deadpan / Dry (0) ◄────────► Witty / Joking (100)
+   - **Presets as Starting Templates:** Predefined presets (e.g., "Professional Assistant", "Playful Companion", "Quiet Scribe") copy baseline values into the 8 sliders; all values remain fully customizable.
+5. **Emotion & Mood Dynamics (Persistent & Bounded):**
+   - Lightweight, conceptual companion state tracking (e.g., cheerful, focused, reflective, flustered).
+   - **Persistence:** Current mood survives runtime and application restarts (persisted in SQLite).
+   - **Decay:** Mood decays exponentially over time back toward the personality baseline.
+   - **CRITICAL INVARIANT:** Mood modulates conversational phrasing and emotional tone ONLY. **Mood NEVER alters system correctness, security policy evaluation, tool permissions, safety boundaries, or truthfulness.**
    - Strictly non-clinical: makes zero psychological, therapeutic, or sentient claims.
-   - Operates without blocking assistant execution or tool invocation.
-6. **Voice (Acoustic & Prosodic Configuration):**
+6. **Neutral Assistant (Immutable Fallback):**
+   - An immutable, baseline assistant persona with neutral traits (50 across all sliders) and zero emotional bias. Always available as an uncorrupted fallback.
+7. **Voice (Acoustic & Prosodic Configuration):**
    - Decoupled speech synthesis configuration (e.g., target voice identifier, speed, pitch, prosody).
    - Interchangeable across TTS providers without modifying character lore or personality schemas.
-7. **Presence (Contextual & Presentation State):**
+8. **Presence (Contextual & Presentation State):**
    - Distinct, bounded contextual and presentation concept reflecting companion and environment awareness.
    - Advanced Presence remains scheduled for **PC Later**; exact signals, sensor integrations, persistence models, and privacy boundaries remain OPEN DESIGN.
    - Existing PC V1 capabilities (such as Gaming / Low-Impact Resource Mode) may expose contextual host signals without implying a full Presence subsystem is implemented.
-8. **Relationship State (Interaction Continuity — PC Later):**
+9. **Relationship State (Interaction Continuity — PC Later):**
    - Represents long-term interaction continuity and familiarity depth.
    - Formally decoupled from Personality and Emotion under Decision D11.
    - Scheduled for **PC Later** (not a PC V1 milestone requirement).
@@ -106,22 +117,21 @@ The following target capabilities are approved under Decision D11:
 
 ---
 
-## 5. OPEN DESIGN
+## 5. Implementation-Open Details (Decision Debt)
 
-The following implementation choices remain intentionally open for architectural investigation:
+The normative architecture for D11 is frozen. The following implementation-level details are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
 
-- **Database Schemas:** Exact SQLite relational schema, column definitions, and foreign keys for character profiles, personality traits, and voice associations.
-- **Personality Trait Taxonomy:** The exact dimensions and mathematical/categorical representation of personality sliders.
-- **Emotion Dynamics & Decay:** The state space, trigger sensitivity, decay rate (e.g., returning to baseline mood over time), and prompt framing mechanics.
-- **Presence Architecture:** Signals, host sensors, privacy controls, and presentation models for PC Later.
+- **Database Schemas:** Exact SQLite column types, constraints, and foreign keys for character instances, presets, and mood persistence (`DEBT-V1-006`).
+- **Mood Decay Half-Life Formula:** Mathematical formula for exponential time decay back to baseline mood (`DEBT-V1-007`).
+- **Presence Architecture (PC Later):** Host sensors, privacy controls, and presentation models for PC Later.
 - **Relationship State Mechanics (PC Later):** Progression algorithms, safety boundaries, user controls, and lifecycle.
-- **Character Deletion Handling:** Deleting or resetting a Character must never delete Profile-owned data; exact handling of Character-scoped memories during Character deletion remains user-controlled and open design.
 
 ---
 
 ## 6. Security & Ownership Boundaries
 
 - **Profile Primacy:** Character profiles, personality configs, and emotion state are subordinate to the user Profile. A character has zero data authority over the user.
+- **Safety Invariant:** Mood dynamics must **never** influence security policy, tool confirmation gates, or safety boundaries. A character in a playful or grumpy mood must never execute an unauthorized tool or bypass confirmation.
 - **Privacy & Prompt Injection:** Character lore and persona prompts must not override hard safety constraints or security policy gates established in `02_Data_and_Security/tool-permissions-and-actions.md`.
 - **User Erasure:** Resetting or deleting a character persona never touches underlying user memories, tasks, or profile identity.
 
@@ -129,7 +139,7 @@ The following implementation choices remain intentionally open for architectural
 
 ## 7. Canonical Relationships & Cross-Links
 
-- **Legacy Technical Reference:** [`docs/04_Architecture/MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../../07_Archive/reference/architecture-legacy/MEMORY_AND_CHARACTER_ARCHITECTURE.md) (Subordinate memory and character scoping reference)
-- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§4 / §7, Decision D11)
-- **Feature Promotion Manifest:** [`docs/02_Planning/FEATURE_PROMOTION_MAP.md`](../../02_Planning/FEATURE_PROMOTION_MAP.md) (Character Configuration Persistence, Separate Personality Configuration, Lightweight Conceptual Emotion, Relationship State)
-- **UI Design Presentation:** [`docs/05_Design/README.md`](../../05_Design/README.md) (Emotion presentation visual boundaries)
+- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D8, D11)
+- **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Decision D11), [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-CHAR-001`, `PC-CHAR-002`)
+- **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
+- **UI Design Presentation:** [`docs/05_Design/03_Character_Studio_and_Personality.md`](../../05_Design/03_Character_Studio_and_Personality.md), [`04_Emotion_and_Visual_Presence.md`](../../05_Design/04_Emotion_and_Visual_Presence.md)

@@ -20,11 +20,16 @@ This specification defines the filesystem layout, persistent storage root resolu
 
 ## 2. Durable Architecture & Invariants
 
-### 2.1 Persistent Storage Decoupling (Phase 8P)
+### 2.1 Persistent Storage Decoupling & The Five Storage Roots
 
-In accordance with Phase 8P persistent storage architecture:
+In accordance with Phase 8P persistent storage architecture and Decision D15:
 - **Code vs. Data Separation:** Application code (Git repository, virtual environment, temporary builds) is strictly decoupled from persistent user data. Updating, moving, or reinstalling the codebase must never mutate, corrupt, or orphan user databases, model weights, or personal attachments.
-- **Single Source of Truth (`COMPANION_DATA_ROOT`):** All persistent application paths derive deterministically from a single root path. Subsystems must never invent independent storage directories outside this canonical hierarchy.
+- **Repository Paths vs. Runtime Paths:** The repository directories `runtime/` and `models/` are **development sources and templates only**. They must never serve as active runtime storage for end users. Active runtime storage is strictly partitioned into five canonical storage roots:
+  1. `APP_INSTALL_ROOT`: Read-only application distribution binaries, bundled engines (`llama.cpp`, `whisper.cpp`), and static assets.
+  2. `DATA_ROOT`: Persistent, profile-isolated SQLite database (`companion.db`), user settings, character avatars, and personal attachments. Defaults to `%LOCALAPPDATA%\AI Companion\Data`.
+  3. `LIBRARY_ROOT`: Large, relocatable, host-shared assets (GGUF LLM weights, voice models, vision projectors). May be relocated to a secondary drive (e.g., dedicated SSD/HDD) via `bootstrap.json` without moving `DATA_ROOT`.
+  4. `CACHE_ROOT`: Ephemeral working scratchpads, temporary audio buffers, and staging directories. Safe to purge on reboot without data loss.
+  5. `LOG_ROOT`: Structured application logs, crash diagnostics, and rotation archives.
 - **Machine-Agnostic Storage Semantics:** Architecture defines path families, relative structures, and resolution precedence. Concrete absolute paths on specific developer machines are not canonical.
 
 ### 2.2 Database Engine & Storage Configuration (Current Implementation)
@@ -41,7 +46,7 @@ The current repository implementation utilizes SQLite operating with:
 - **Migration & Schema Preparation Flow:**
   - `execute_migration()` creates a logical SQLite backup snapshot while migrating a legacy database into canonical storage, verifies it, atomically promotes it, and attempts to preserve an additional backup copy in `BACKUP_DIR`; failure of that extra copy is logged (while the original legacy source file remains untouched).
   - `prepare_database_schema()` then upgrades the canonical database to Alembic head.
-  - Current source does **not** guarantee a fresh backup snapshot immediately before every Alembic schema migration of an already-canonical database.
+  - A fresh backup snapshot must precede every destructive or schema-altering migration of an already-canonical database.
 
 ### 2.4 Configuration Persistence & Layering
 
@@ -49,14 +54,13 @@ The architecture establishes durable separation between configuration classes to
 
 - **Distinct Configuration Categories:** The system conceptually distinguishes between:
   1. *Built-In Defaults:* Static fallback constants packaged with the application distribution.
-  2. *Persistent Machine Configuration:* Local host hardware and environment bindings (e.g., resolved `COMPANION_DATA_ROOT`, hardware profile preferences, local port allocations).
-  3. *Persistent User Configuration:* User-owned companion settings and preferences (e.g., active persona choices, notification preferences, quiet-hours rules, tool confirmation thresholds).
+  2. *Persistent Machine Configuration:* Local host hardware and environment bindings (e.g., resolved `COMPANION_DATA_ROOT`, `LIBRARY_ROOT` relocation pointer, hardware profile preferences, local port allocations).
+  3. *Persistent User Configuration:* Profile-owned companion settings and preferences (e.g., active persona choices, notification preferences, quiet-hours rules, tool confirmation thresholds).
   4. *Environment & Developer Overrides:* Transient variables set via process environment or local development files.
   5. *Secrets & Sensitive Credentials:* API keys, device credentials, and access tokens governed strictly by [`02_Data_and_Security/authentication-and-secrets.md`](../02_Data_and_Security/authentication-and-secrets.md).
   6. *Runtime & Session State:* Transient, in-memory state that does not outlive process or session lifecycles.
 - **Categorical Integrity:** These configuration layers must not be silently conflated. In particular, environment variables and `.env` files are suitable for development overrides, containerized deployment flags, and current compatibility needs, but must **not** serve as the primary persistent datastore for end-user settings.
 - **Secrets Isolation:** Storage and handling of sensitive secrets remain governed by the authentication and secrets architecture; secrets must never be intermingled with plain-text user settings.
-- **Open Design Boundaries:** Exact persistent configuration file formats (e.g., structured JSON/TOML configuration files vs. SQLite settings tables), schema definitions, resolution precedence logic, and settings management UI remain open design unless already established as current verified repository behavior. The architecture does not mandate an unverified bespoke configuration backend.
 
 ---
 
@@ -101,21 +105,22 @@ Verified in `backend/app/core/storage.py` and `backend/migrations/`:
 
 ## 4. Approved Target Architecture / Not Yet Implemented (PC V1)
 
-R11.3 introduces no additional not-yet-implemented PC V1 storage capability beyond preserving the verified Phase 8P canonical data-root and migration safety architecture. Remaining enhancements are tracked under OPEN DESIGN.
+When implemented for PC V1:
+
+1. **Relocatable `LIBRARY_ROOT`:** Support configuring `LIBRARY_ROOT` to an alternate drive or volume (e.g. `D:\AI-Models`) via `bootstrap.json` pointer while `DATA_ROOT` remains anchored to fast OS storage.
+2. **Pre-Migration Safety Snapshot Guarantee:** Ensure an automatic SQLite backup snapshot is captured in `BACKUP_DIR` prior to executing any schema-altering migration on an existing database.
+3. **Distribution Separation:** Windows installer packages separate read-only binaries into `APP_INSTALL_ROOT` (`%ProgramFiles%\AI Companion` or per-user local app dir) and runtime mutable data into `DATA_ROOT`, completely decoupled from git repository working copies.
 
 ---
 
-## 5. OPEN DESIGN
+## 5. Open Technical Details & Decision Debt
 
-The following technical mechanisms remain open design for future implementation plans:
+Detailed implementation choices for future planning are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
 
-- **Storage Relocation Utility & UX:** Design of management commands or settings UI enabling users to relocate `COMPANION_DATA_ROOT` across drives.
-- **Integrated Asset Verification Tool:** Diagnostic tooling checking database records against physical files on disk.
-- **Attachment Trash-Cleanup System:** Automated trash sweep mechanisms coordinating between retention policy and physical file unlinking.
-- **Storage Layout Versioning:** Migration strategies for evolving the physical directory structure (e.g., sharding attachments by date).
+- **Storage Relocation Utility & UX:** Client UI workflow enabling users to safely relocate `LIBRARY_ROOT` or `DATA_ROOT` across volumes with progress feedback and integrity verification.
+- **Attachment Trash-Cleanup & Garbage Collection:** Automated sweep mechanisms coordinating between chat deletion, profile soft-delete windows, and physical file unlinking.
 - **Encryption-at-Rest Strategy:** Optional whole-database or sensitive-field encryption (evaluating SQLCipher vs. application-layer AES-GCM envelope encryption).
 - **Asset Deduplication:** Content-addressable storage (CAS) or hash-based deduplication for identical image attachments uploaded across conversations.
-- **Configuration Layering & Precedence Implementation:** Exact file formats, schema definitions, precedence evaluation logic, and UI binding for separating persistent user settings from host machine configuration.
 
 ---
 
@@ -129,12 +134,15 @@ The following technical mechanisms remain open design for future implementation 
 
 ## 7. Canonical Relationships & Cross-Links
 
-### Upstream Baseline & Legacy Architecture
+### Upstream Baseline & Decision Spine
 - [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) — Baseline architecture, Phase 8P persistent data decoupling.
-- [`docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../../07_Archive/reference/architecture-legacy/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) — Detailed path specifications, environment variables, and migration scenarios.
+- [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) — Master Decision Register (Row 26 Storage Roots & Relocatable Assets).
+- [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md) — Open storage technical debt.
 
 ### Related Domain & Infrastructure Specifications
 - [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](runtime-and-models.md) — Model library paths and Decision D6 import pipeline.
 - [`docs/04_Architecture/01_Domains/multimodal-and-media.md`](../01_Domains/multimodal-and-media.md) — Attachment binary storage rules.
 - [`docs/04_Architecture/04_Infrastructure/backup-recovery-and-diagnostics.md`](backup-recovery-and-diagnostics.md) — Snapshot engine and disaster recovery.
+- [`docs/04_Architecture/02_Data_and_Security/profiles-and-devices.md`](../02_Data_and_Security/profiles-and-devices.md) — Multi-profile storage isolation.
 - [`docs/04_Architecture/02_Data_and_Security/authentication-and-secrets.md`](../02_Data_and_Security/authentication-and-secrets.md) — Secrets management, token storage, and credential isolation.
+

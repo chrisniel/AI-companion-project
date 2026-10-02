@@ -1,8 +1,8 @@
 # Tool Permissions and Actions Architecture
 
-> **Document Role:** Canonical domain architecture specification.
-> **Status:** Active Canonical — authority transferred during R11.4.
-> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D11. This focused specification owns normative architecture for its domain. Legacy monolithic architecture documents are subordinate compatibility and technical-reference material.
+> **Document Role:** Canonical domain architecture specification.  
+> **Status:** Active Canonical (Aligned with Decisions D1–D16, ADR-0009, ADR-0018)  
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D16. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for tool permissions, deterministic policy, and action execution.
 
 ---
 
@@ -120,18 +120,17 @@ The following technical mechanisms remain open design for future technical speci
 ## 6. Security & Ownership Boundaries
 
 - **Prompt Injection Defense (Decision D9):** The deterministic policy engine executes entirely outside the LLM context. Malicious prompts or prompt injections embedded in external data cannot bypass policy evaluation or grant auto-execute status to tools.
-- **BOLA Enforcement in Tool Adapters:** Every tool adapter modifying personal records must bind operations strictly to the authenticated `owner_id`.
+- **BOLA Enforcement in Tool Adapters:** Every tool adapter modifying personal records must bind operations strictly to the authenticated `profile_id` (migrated from `owner_id`).
 - **Resource Limits:** Tool adapters must apply appropriate bounded resource controls for their capability and threat model. Exact timeout, memory, payload, and concurrency limits are adapter-specific open design.
 
 ---
 
 ## 7. Canonical Relationships & Cross-Links
 
-### Upstream Baseline & Legacy Architecture
-- [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) — Decision D9 (Deterministic tool permissions), Principle P1 (Safe personal actions).
-- [`docs/04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md`](../../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md) — Tool risk tiers, execution guardrails, shell prohibition.
-
-### Related Domain & Security Specifications
-- [`docs/04_Architecture/01_Domains/assistant-and-conversations.md`](../01_Domains/assistant-and-conversations.md) — Orchestration loop and tool response injection.
-- [`docs/04_Architecture/02_Data_and_Security/privacy-retention-and-audit.md`](privacy-retention-and-audit.md) — Auditing of tool execution and state-changing actions.
-- [`docs/04_Architecture/03_Integrations/web-current-information.md`](../03_Integrations/web-current-information.md) — Read-only web query tool boundaries.
+- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D9, D10)
+- **Tool Security & Deterministic Policy ADR:** [`docs/04_Architecture/decisions/ADR-0009-tool-security-and-deterministic-policy.md`](../decisions/ADR-0009-tool-security-and-deterministic-policy.md)
+- **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
+- **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Decision D9), [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-ACTION-001`, `PC-ACTION-002`)
+- **Assistant Domain Specification:** [`docs/04_Architecture/01_Domains/assistant-and-conversations.md`](../01_Domains/assistant-and-conversations.md)
+- **Privacy & Audit Specification:** [`docs/04_Architecture/02_Data_and_Security/privacy-retention-and-audit.md`](privacy-retention-and-audit.md)
+- **Web Integrations Specification:** [`docs/04_Architecture/03_Integrations/web-current-information.md`](../03_Integrations/web-current-information.md)

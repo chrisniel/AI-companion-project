@@ -1,9 +1,20 @@
-# AI Companion — Canonical Product & Milestone Delivery Roadmap
+# AI Companion — Product & Milestone Delivery Roadmap (Legacy / Historical Reference)
 
-> **Document Role:** Canonical product and milestone delivery roadmap for the AI Companion ecosystem.
-> **Status:** Active Canonical (Decisions D1–D11 aligned through R10/R11 reconciliation)
-> **Last Updated:** 2026-09-29 (Reconciliation Closure / R13.2)
-> **Authority Precedence:** Normative architecture is owned by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md) and focused domain specifications under [`docs/04_Architecture/`](../04_Architecture/). Active sprint state is tracked in [`docs/01_Tracking/task.md`](../01_Tracking/task.md). Detailed feature implementation steps reside in active plans under [`docs/02_Planning/`](./).
+> [!WARNING]
+> **SUPERSEDED PLANNING AUTHORITY — HISTORICAL MILESTONE REFERENCE**  
+> Canonical milestone sequencing and release planning have transitioned to the **Master Planning Spine**:
+> - **Primary Milestone Roadmap:** [`docs/02_Planning/00_Master/SPRINT_ROADMAP.md`](./00_Master/SPRINT_ROADMAP.md)
+> - **Delivery Index:** [`docs/02_Planning/00_Master/DELIVERY_INDEX.md`](./00_Master/DELIVERY_INDEX.md)
+> - **Work Breakdown Structure (WBS):** [`docs/02_Planning/00_Master/WBS.md`](./00_Master/WBS.md)
+> - **Decision Register:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](./00_Master/DECISION_REGISTER.md)
+> - **Backlog:** [`docs/02_Planning/00_Master/BACKLOG.md`](./00_Master/BACKLOG.md)
+>
+> This document (`ROADMAP.md`) is preserved as authoritative historical reference for the delivery sequence and verification of Phases 1 through 8. Do not add new sprint plans or release scopes here.
+
+> **Document Role:** Historical product and milestone delivery roadmap for Phases 1–8.
+> **Status:** Superseded / Historical Reference
+> **Last Updated:** 2026-10-02 (Transferred to Master Planning Spine)
+> **Authority Precedence:** Normative architecture is owned by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md) and focused domain specifications under [`docs/04_Architecture/`](../04_Architecture/). Active milestone planning is owned by [`docs/02_Planning/00_Master/`](./00_Master/). Active sprint state is tracked in [`docs/01_Tracking/task.md`](../01_Tracking/task.md).
 
 ---
 

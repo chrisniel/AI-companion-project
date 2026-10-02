@@ -2,6 +2,8 @@
 
 This document defines the official engineering workflow for branching, commit conventions, versioning, and releases. Designed as a universal standard, this workflow ensures that active development remains isolated, traceable, and stable across projects.
 
+For complete engineering delivery gate procedures, testing rules, and walkthrough templates, consult [`docs/06_Guides/DELIVERY_WORKFLOW.md`](docs/06_Guides/DELIVERY_WORKFLOW.md). For agent operational rules, consult [`AGENTS.md`](AGENTS.md).
+
 ---
 
 ## 1. Core Branch Hierarchy
@@ -111,5 +113,6 @@ git branch -d release/vX.Y.Z
 When working alongside an AI coding assistant:
 1. **Branch Alignment & User-Owned Operations**: The AI operates on the branch created and checked out by the user. The AI coding assistant may suggest branch names or checkout commands for task isolation, but the user manually creates, checks out, switches, and deletes branches.
 2. **Read-Only by Default**: The AI inspects and reports; state-changing commands or code edits require an approved task-specific plan and explicit user authorization.
-3. **User-Owned Git Operations & Proposed Commits**: AI coding assistants never execute git branch, switch, checkout, add, commit, push, merge, rebase, tag, stash, reset, or restore commands. The AI verifies changes and proposes structured Conventional Commit messages and commands; the user manually reviews, stages, commits, and pushes.
-4. **Verification Requirement**: No change is marked complete without running relevant automated test suites (e.g., `pytest`, `vitest`, Android unit tests) and, where applicable, manual or hardware verification.
+3. **User-Owned Git Operations & Proposed Commits**: AI coding assistants never execute `git branch`, `switch`, `checkout`, `add`, `commit`, `push`, `merge`, `rebase`, `tag`, `stash`, `reset`, or `restore` commands. The AI verifies changes and proposes structured Conventional Commit messages and commands; the user manually reviews, stages, commits, and pushes.
+4. **Delivery Gate Lifecycle**: All non-trivial feature work must adhere to the 7-stage lifecycle (`PLAN → IMPLEMENT → IMPLEMENTATION GATE → DOCUMENT → DOCUMENTATION GATE → CLOSURE → CLOSURE GATE`) defined in [`docs/06_Guides/DELIVERY_WORKFLOW.md`](docs/06_Guides/DELIVERY_WORKFLOW.md).
+5. **Verification Requirement**: No change is marked complete without running relevant automated test suites (e.g., `pytest`, `vitest`, Flutter tests, Android unit tests) and, where applicable, manual or hardware verification.

@@ -1,10 +1,10 @@
 # Post-V1 Planning Sources (`docs/02_Planning/post-v1/`)
 
-> **Directory Role:** Repository for exploratory technical designs, feature plans, and integration documents that are explicitly outside the AI Companion V1 release boundary.  
-> **Status:** Future Planning Sources (Non-Authoritative for V1)  
+> **Directory Role:** Historical repository for exploratory technical designs and feature notes that are outside the AI Companion PC V1 release boundary.  
+> **Status:** Superseded / Historical Planning Sources  
 > **Authority Precedence:**
-> 1. **Locked V1 Boundary:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) owns the release boundary (Decision D1).
-> 2. **Milestone Sequencing:** [`docs/02_Planning/ROADMAP.md`](../ROADMAP.md) owns the authoritative delivery sequence.
+> 1. **Locked V1 Boundary:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) owns the release boundary.
+> 2. **Master Planning Spine:** [`docs/02_Planning/00_Master/BACKLOG.md`](../00_Master/BACKLOG.md) owns backlog categorization (`PC Later`, `Experimental`, `Mobile Follow-On`).
 > 3. **Normative Architecture:** Domain architecture documents in [`docs/04_Architecture/`](../../04_Architecture/) own technical standards.
 
 ---

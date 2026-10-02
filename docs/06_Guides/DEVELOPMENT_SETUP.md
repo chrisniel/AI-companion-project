@@ -1,8 +1,8 @@
 # Development Setup & Local Environment Guide
 
-> **Document Role:** Canonical developer setup and environment configuration guide.
-> **Status:** Active Canonical Guide
-> **Last Updated:** 2026-09-21 (Reconciliation Pass R4)
+> **Document Role:** Canonical developer setup and environment configuration guide.  
+> **Status:** Active Canonical Guide (PC V1 Frozen Baseline).  
+> **Normative Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md), [`windows-host-and-notifications.md`](../04_Architecture/04_Infrastructure/windows-host-and-notifications.md), [`ADR-0017`](../04_Architecture/decisions/ADR-0017-flutter-production-windows-client.md).
 
 ---
 
@@ -14,9 +14,11 @@ Before developing locally, ensure the following prerequisites are installed and 
 | :--- | :--- | :--- |
 | **Operating System** | Windows 10/11 64-bit | Primary host platform for Local AI Runtime and hardware acceleration. |
 | **Python** | 3.11.x 64-bit | Required for FastAPI backend and migration tools (`python --version`). |
-| **Node.js** | 22.x LTS (with npm) | Required for React Web client (`node --version`, `npm --version`). |
-| **Git & Git LFS** | Latest 64-bit | LFS pointers point to GitHub; weights stored on Hugging Face dataset. |
-| **Android Studio** | Ladybug (2024.2+) or JDK 17+ | Required for Android mobile client development (`android/`). |
+| **Flutter SDK** | 3.27+ (Dart 3.6+) | Required for primary Windows Desktop client (`flutter --version`). |
+| **Visual Studio Build Tools** | 2022 (with Desktop C++) | Required by Flutter for compiling native Windows C++/CMake executables. |
+| **Node.js** | 22.x LTS (with npm) | Required for React Web developer harness (`node --version`, `npm --version`). |
+| **Git & Git LFS** | Latest 64-bit | LFS pointers on GitHub; weights stored on private Hugging Face dataset. |
+| **Android Studio** | Ladybug (2024.2+) or JDK 17+ | Required for Android mobile client reference prototype (`android/`). |
 | **Vulkan Runtime** | Vulkan SDK / Driver | GPU offloading for AMD Radeon RX 580 (Polaris / gfx803). |
 
 ---
@@ -28,65 +30,52 @@ The repository is structured into distinct subsystem trees:
 ```text
 AI-companion-project/
 ├── backend/            # FastAPI Local AI Runtime (Python 3.11, SQLAlchemy 2, Alembic)
-├── frontend/web/       # React 19 Web Desktop Client (Vite 6, Tailwind CSS 4, Vitest)
-├── android/            # Android Mobile Companion Client (Kotlin, Jetpack Compose)
+├── frontend/desktop/   # Flutter Windows Desktop Client (Primary production client for PC V1)
+├── frontend/web/       # React 19 Web Client (Supported developer harness and test oracle)
+├── android/            # Android Mobile Companion Client (Prototype / reference client)
 ├── contracts/openapi/  # Canonical OpenAPI contract (openapi.json)
-├── models/             # GGUF models & registry templates (Git-tracked templates only)
-├── runtime/llama.cpp/  # Local llama.cpp binaries (llama-server.exe, Vulkan DLLs)
-├── scripts/            # Diagnostic & validation scripts
-└── docs/               # Canonical architecture, roadmap, tracking, guides
+├── models/             # GGUF models & registry templates (Git-tracked templates only; dev sources)
+├── runtime/llama.cpp/  # Local llama.cpp binaries (llama-server.exe, Vulkan DLLs; dev sources)
+├── scripts/            # Diagnostic, build, and validation scripts
+└── docs/               # Numbered documentation hierarchy (00_Drafts through 07_Archive)
 ```
-
-For canonical system boundaries, host topology, and locked architectural decisions D1–D11, refer to [SYSTEM_BASELINE.md](../04_Architecture/SYSTEM_BASELINE.md).
 
 ---
 
-## 3. Persistent Storage & Configuration
+## 3. The Five Storage Roots & Runtime Paths
 
-The Local AI Runtime separates repository code from mutable user data and model weights using a canonical storage root:
+In accordance with Phase 8P persistent storage architecture, repository directories (`runtime/`, `models/`) are **development sources only**. Active runtime data is partitioned into five canonical storage roots:
 
-### Resolution Precedence
+1. `APP_INSTALL_ROOT`: Read-only application distribution binaries, bundled engines, and static assets.
+2. `DATA_ROOT`: Persistent, profile-isolated SQLite database (`companion.db`), user settings, character avatars, and personal attachments. Defaults to `%LOCALAPPDATA%\AI Companion\Data`.
+3. `LIBRARY_ROOT`: Large, relocatable, host-shared assets (GGUF LLM weights, voice models, vision projectors). May be relocated to a secondary drive (e.g. `D:\AI-Models`) via `bootstrap.json`.
+4. `CACHE_ROOT`: Ephemeral working scratchpads, temporary audio buffers, and staging directories. Safe to purge on reboot.
+5. `LOG_ROOT`: Structured application logs, crash diagnostics, and rotation archives.
+
+### Resolution Precedence for `DATA_ROOT`
 1. **Environment Variable Override:** `COMPANION_DATA_ROOT` (highest precedence, used in CI and isolated testing)
-2. **Bootstrap Locator File:** `%LOCALAPPDATA%\AI Companion\bootstrap.json` on Windows (`~/.local/share/AI Companion/bootstrap.json` on Linux/macOS) containing `{"data_root": "..."}`
-3. **Approved OS Default:** `%LOCALAPPDATA%\AI Companion\Data` on Windows (`~/.local/share/AI Companion/Data` on Linux/macOS)
+2. **Bootstrap Locator File:** `%LOCALAPPDATA%\AI Companion\bootstrap.json` containing `{"data_root": "...", "library_root": "..."}`
+3. **Approved OS Default:** `%LOCALAPPDATA%\AI Companion\Data` on Windows
 
-### Canonical Storage Paths
-All persistent asset paths derive deterministically from the resolved `COMPANION_DATA_ROOT` (directory creation is lazy where appropriate):
-- `DATABASE_PATH`: `<COMPANION_DATA_ROOT>/database/companion.db` — SQLite persistent database (WAL mode, foreign keys enabled)
-- `LIBRARY_DIR`: `<COMPANION_DATA_ROOT>/library` — Base user library directory
-- `MODEL_LIBRARY_DIR`: `<COMPANION_DATA_ROOT>/library/models/llm` — Installed persistent GGUF models
-- `INSTALLED_REGISTRY_PATH`: `<COMPANION_DATA_ROOT>/library/registry/models.json` — Authoritative Model Registry Schema v3
-- `VOICE_LIBRARY_DIR`: `<COMPANION_DATA_ROOT>/library/voices` — Voice models and synthesis profiles (post-V1)
-- `ATTACHMENT_DIR`: `<COMPANION_DATA_ROOT>/attachments` — Persisted multimodal image attachments (Phase 8B)
-- `IMPORT_INBOX_DIR`: `<COMPANION_DATA_ROOT>/imports/inbox` — Model import drop inbox (Decision D6)
-- `IMPORT_STAGING_DIR`: `<COMPANION_DATA_ROOT>/imports/staging` — Preflight validation and quarantine staging (Decision D6)
-- `CHARACTER_DIR`: `<COMPANION_DATA_ROOT>/characters` — Character cards and persona definitions
-- `MEMORY_DIR`: `<COMPANION_DATA_ROOT>/memory` — Profile and memory exports
-- `BACKUP_DIR`: `<COMPANION_DATA_ROOT>/backups` — Persistent database backup location; currently used by verified legacy database migration backup flow
-
-### Key Environment Variables
-Create a `backend/.env` file or export environment variables as needed:
-
-```bash
-# Security: Master API key for administrative routes (fail-closed if unset in production)
-COMPANION_API_KEY=your-local-dev-api-key
-
-# Storage override (optional; defaults to %LOCALAPPDATA%\AI Companion\Data)
-COMPANION_DATA_ROOT=D:\AICompanionData
-
-# Hardware offload settings (defaults to vulkan on RX 580)
-LLM_ENGINE=llama_cpp
-LLM_ACCELERATION=vulkan
-```
+### Key Canonical Subpaths (under `DATA_ROOT` and `LIBRARY_ROOT`)
+- `DATABASE_PATH`: `<DATA_ROOT>/database/companion.db` — SQLite persistent database (WAL mode, foreign keys enabled)
+- `MODEL_LIBRARY_DIR`: `<LIBRARY_ROOT>/models/llm` — Installed persistent GGUF models
+- `INSTALLED_REGISTRY_PATH`: `<LIBRARY_ROOT>/registry/models.json` — Authoritative Model Registry Schema v3
+- `VOICE_LIBRARY_DIR`: `<LIBRARY_ROOT>/voices` — Voice models and synthesis profiles
+- `ATTACHMENT_DIR`: `<DATA_ROOT>/attachments` — Multimodal image attachments
+- `IMPORT_INBOX_DIR`: `<DATA_ROOT>/imports/inbox` — Model import drop inbox (Decision D6)
+- `IMPORT_STAGING_DIR`: `<DATA_ROOT>/imports/staging` — Preflight validation and quarantine staging (Decision D6)
+- `CHARACTER_DIR`: `<DATA_ROOT>/characters` — Character cards and persona definitions
+- `BACKUP_DIR`: `<DATA_ROOT>/backups` — Persistent database backup location
 
 ---
 
 ## 4. Backend Development Startup (FastAPI)
 
-The backend provides the REST and SSE streaming endpoints for conversation, memory, tasks, models, and runtime orchestration.
+The backend provides the REST, SSE, and WebSocket endpoints for conversation, memory, tasks, models, and runtime orchestration.
 
 ### Setup & Startup
-From the repository root:
+From repository root:
 
 ```powershell
 # 1. Navigate to backend
@@ -104,19 +93,37 @@ python -m pip install -r requirements.txt
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-> [!NOTE]
-> **Automatic Schema Preparation:** The FastAPI application lifespan automatically runs storage preflight and executes schema preparation to ensure the canonical database is at the current Alembic revision head upon server startup. Explicitly running `alembic upgrade head` is an optional developer command useful when authoring or verifying new migrations.
-
 - **Interactive API Documentation:** `http://127.0.0.1:8000/docs` (Swagger UI; available when `ENVIRONMENT=development`)
 - **OpenAPI JSON Specification:** `http://127.0.0.1:8000/openapi.json`
 - **Public Health Endpoint:** `http://127.0.0.1:8000/api/v1/health` (unauthenticated liveness probe)
-- **Protected System Status:** `http://127.0.0.1:8000/api/v1/system/status` (requires `COMPANION_API_KEY`)
 
 ---
 
-## 5. Frontend Development Startup (React Web)
+## 5. Primary Client Development (Flutter Desktop)
 
-The primary desktop client is a React 19 single-page application built with Vite 6 and Tailwind CSS 4.
+The primary Windows production client is built with Flutter Desktop.
+
+### Setup & Startup
+In a separate terminal:
+
+```powershell
+# 1. Navigate to desktop client directory
+cd frontend/desktop
+
+# 2. Fetch Flutter packages
+flutter pub get
+
+# 3. Launch Windows desktop application in debug mode
+flutter run -d windows
+```
+
+The Flutter desktop app connects to the running local backend at `http://127.0.0.1:8000`.
+
+---
+
+## 6. Supported Developer Harness (React Web)
+
+The React Web client serves as a supported developer test harness and web reference interface.
 
 ### Setup & Startup
 In a separate terminal:
@@ -125,7 +132,7 @@ In a separate terminal:
 # 1. Navigate to frontend/web
 cd frontend/web
 
-# 2. Install dependencies (commit package-lock.json; never commit node_modules)
+# 2. Install dependencies
 npm install
 
 # 3. Start Vite development server
@@ -133,42 +140,27 @@ npm run dev
 ```
 
 - **Local Web UI:** `http://localhost:3000` (or `http://127.0.0.1:3000`)
-- The web application connects to the backend at `http://127.0.0.1:8000`.
+- Connects to the backend at `http://127.0.0.1:8000`.
 
 ---
 
-## 6. Local AI Runtime & llama.cpp Relationship
+## 7. Engine Binaries & Hardware Reference
 
-### Production Runtime Daemon (Port 8085)
-The backend manages an independent `llama-server.exe` instance in multi-model router mode on port **`8085`**:
-- **Managed Port:** `8085` (reserved for FastAPI backend router daemon)
-- **Binary Path:** `runtime/llama.cpp/llama-server.exe`
-- **GPU Acceleration:** Vulkan offload on AMD Radeon RX 580
-- **Profiles (Configured in `backend/app/core/config.py`):**
-  - `eco`: context = 2048, GPU layers = 0, threads = 4, mmproj offload = false
-  - `balanced`: context = 4096, GPU layers = 28, threads = 6, mmproj offload = true
-  - `maximum`: context = 8192, GPU layers = 33, threads = 8, mmproj offload = true
+### Reference Hardware Baseline
+- **Primary GPU:** AMD Radeon RX 580 (8 GB VRAM, Polaris / gfx803) with Vulkan acceleration.
+- **Reference Engine:** `llama.cpp` b10936 Vulkan build.
+- **Managed Engine Port:** `8085` (reserved for FastAPI backend router daemon; invoked via `runtime/llama.cpp/llama-server.exe`).
+- **Standalone Diagnostic Probe:** Run `.\scripts\start-model.ps1 -GpuLayers 28 -ContextSize 4096` to test GPU layers on isolated port `8086`.
 
-For full runtime details, see [`04_Infrastructure/runtime-and-models.md`](../04_Architecture/04_Infrastructure/runtime-and-models.md) and [`04_Infrastructure/performance-and-capacity.md`](../04_Architecture/04_Infrastructure/performance-and-capacity.md).
-
-### Standalone Diagnostic Router Probe (Port 8086)
-For benchmarking or verifying GPU layers without starting the full FastAPI backend, run the diagnostic script:
-
-```powershell
-# Runs standalone llama-server on port 8086 (isolated from production port 8085)
-.\scripts\start-model.ps1 -GpuLayers 28 -ContextSize 4096
-```
+### Speech & Voice Engines (PC V1 Target)
+- **Speech-to-Text (STT):** `whisper.cpp` candidate binary managed by runtime for local transcription.
+- **Text-to-Speech (TTS):** `Kokoro-82M` ONNX candidate model executing on CPU/RAM.
 
 ---
 
-## 7. Android Mobile Client Development (Post-V1)
+## 8. Android Client Development (Prototype / Post-V1)
 
-The Android companion client is maintained in `android/`:
-
-> [!NOTE]
-> **Android Package Identity Reality:**
-> The current mobile prototype code still uses legacy/template identifiers (`namespace = "com.example"`, `applicationId = "com.aistudio.localcore.swbjtu"` in `android/app/build.gradle.kts`).
-> The locked production target under Decision D3 is `com.cnl.aicompanion`. This package rename refactor is planned and must occur before production Android data persistence, Keystore signing, Health Connect permissions, or app distribution depend on the package identity.
+The Android companion client is maintained in `android/` as a reference prototype:
 
 1. Open `android/` in Android Studio Ladybug or later.
 2. Allow Gradle sync to complete using the bundled Gradle wrapper (`gradlew`).
@@ -179,14 +171,8 @@ The Android companion client is maintained in `android/`:
    .\gradlew.bat :app:testDebugUnitTest
    ```
 
-> [!IMPORTANT]
-> **Implementation vs. Target Reality:**
-> - **Prototype Connection (Implemented):** The current Android app includes a functional prototype connection layer (`LocalAiRuntimeClient`) supporting health probes, token verification, and live two-way personal task synchronization (`HttpTasksRepository`) over local Wi-Fi or Tailscale.
-> - **Production Synchronization (Post-V1):** Production-hardened multi-device sync, secure Keystore credentials (Decision D4), full state sync (conversations/memory/profile), and durable Room offline queuing are strategic post-V1 roadmap capabilities.
-> - **Offline Mobile Inference (Post-V1):** Local on-device GGUF inference and autonomous offline routines are post-V1 capabilities. In V1, the primary client is the PC React Web application.
-
 ---
 
-## 8. Verification & Next Steps
+## 9. Verification & Next Steps
 
-After completing local setup, verify your environment using the commands documented in [docs/06_Guides/TESTING_AND_CI.md](TESTING_AND_CI.md).
+After completing local setup, verify your environment using the commands documented in [`docs/06_Guides/TESTING_AND_CI.md`](TESTING_AND_CI.md).

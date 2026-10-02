@@ -1,8 +1,8 @@
 # Runtime and Models Architecture
 
-> **Document Role:** Canonical domain architecture specification.
-> **Status:** Active Canonical — authority transferred during R11.4.
-> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D11. This focused specification owns normative architecture for its domain. Legacy monolithic architecture documents are subordinate compatibility and technical-reference material.
+> **Document Role:** Canonical domain architecture specification.  
+> **Status:** Active Canonical (Aligned with Decisions D1–D16, ADR-0006, ADR-0015)  
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D16. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for the local inference runtime, models, and execution providers.
 
 ---
 
@@ -11,7 +11,10 @@
 This specification defines the local inference runtime, hardware execution model, model registry lifecycle, and cloud fallback boundaries for the AI Companion:
 - Provider-independent LLM orchestration layer.
 - Primary local-first inference architecture supporting offline core/local companion operation without cloud LLM dependency.
-- Decision D6 local model import pipeline (`inbox` $\rightarrow$ `preflight` $\rightarrow$ `staging` $\rightarrow$ `atomic install` $\rightarrow$ `library` $\rightarrow$ `registry`).
+- Single resident model default policy (`--models-max 1`).
+- Decision D6 controlled local model import pipeline (`inbox` $\rightarrow$ `preflight` $\rightarrow$ `staging` $\rightarrow$ `atomic install` $\rightarrow$ `library` $\rightarrow$ `registry`).
+- User-initiated manual scan and atomic installation of multi-file bundles (`.gguf` + `mmproj`).
+- Relocatable model library (`LIBRARY_ROOT`).
 - Model registry, artifact identity, capability metadata, and validation lifecycles.
 - Phased model acquisition separating PC V1 local import from post-V1 online model hub downloads.
 - Opt-in, transparent Cloud LLM Fallback boundaries.
@@ -20,22 +23,22 @@ This specification defines the local inference runtime, hardware execution model
 
 ## 2. Durable Architecture & Invariants
 
-### 2.1 Local-First & Hardware Independence
+### 2.1 Local-First & Single Resident Model Policy
 
-- **Local Inference is Primary & Default:** The AI Companion is architected fundamentally as a private, locally hosted AI system. Core/local companion operation remains supported without cloud LLM dependency, and local-only operation remains valid. Naturally network-dependent integrations such as Web Search, Fetch, Weather, or current information require network connectivity.
-- **Provider & Hardware Independence:** The conversational orchestrator interacts with language models through an abstract provider interface. The architecture does not permanently lock a single runtime binary, backend driver, or hardware vendor. While the current implementation utilizes `llama.cpp` over Vulkan, the durable architecture accommodates ONNX Runtime, DirectML, ROCm, CUDA, or alternative execution engines where separately approved.
-- **Bounded Resource Residency:** Resource residency must remain bounded and safe for host capacity. Current implementation uses `LLAMA_ROUTER_MODELS_MAX = 1` as reference resource policy. Future multi-model residency remains open design.
+- **Local Inference is Primary & Default:** The AI Companion is architected fundamentally as a private, locally hosted AI system. Core/local companion operation remains supported without cloud LLM dependency. Naturally network-dependent integrations (Web Search, Fetch, Weather) require internet connectivity.
+- **Provider & Hardware Independence:** The conversational orchestrator interacts with language models through an abstract provider interface. The architecture does not permanently lock a single runtime binary, backend driver, or hardware vendor. While the current implementation utilizes `llama.cpp` over Vulkan on RX 580 baseline, the durable architecture accommodates ONNX Runtime, DirectML, ROCm, CUDA, or alternative execution engines where separately approved.
+- **Single Resident Model Default (`--models-max 1`):** To safeguard system stability and preserve memory for foreground gaming or creative workloads, the runtime enforces a default cap of **1 resident model in memory**. Loading a new model unloads the previously active model. Multi-model concurrency is an Advanced Setting requiring explicit user opt-in and presenting VRAM capacity warnings.
 
-### 2.2 Model Import Pipeline (Decision D6)
+### 2.2 Controlled Model Import Pipeline (Decision D6 & ADR-0006)
 
-In accordance with Decision D6, local model acquisition enforces a six-stage controlled pipeline:
+In accordance with Decision D6 and `ADR-0006`, local model acquisition enforces a six-stage controlled pipeline:
 $$\text{Inbox} \longrightarrow \text{Preflight} \longrightarrow \text{Staging} \longrightarrow \text{Atomic Install} \longrightarrow \text{Library} \longrightarrow \text{Registry}$$
 1. **Inbox:** User deposits model files into `IMPORT_INBOX_DIR`.
-2. **Preflight:** Inspects file headers, verifies format metadata, and estimates memory requirements against host capacity.
+2. **Preflight (User-Initiated Manual Scan):** Initiated manually by the user from the UI (no automatic filesystem watcher). Inspects file headers, parses GGUF/ONNX metadata, estimates VRAM/RAM requirements, and verifies format integrity.
 3. **Staging:** Moves validated models to `IMPORT_STAGING_DIR` for integrity validation.
-4. **Atomic Install:** Atomically moves the verified file into the canonical `MODEL_LIBRARY_DIR` (`COMPANION_DATA_ROOT/library/models/llm`).
-5. **Library:** The file resides in canonical permanent storage under managed paths.
-6. **Registry:** Updates the active model registry at `COMPANION_DATA_ROOT/library/registry/models.json`, exposing the model with declared capabilities (context length, vision support, recommended prompt template) to the runtime.
+4. **Atomic Install:** Atomically moves verified files into the canonical `MODEL_LIBRARY_DIR` (`LIBRARY_ROOT/models/llm`). Multi-file bundles (e.g., text LLM + matching `mmproj` vision projector) install atomically—either all files succeed, or the entire bundle rolls back.
+5. **Library:** The file resides in canonical permanent storage under relocatable `LIBRARY_ROOT`.
+6. **Registry:** Updates the active model registry at `LIBRARY_ROOT/registry/models.json`, exposing the model with declared capabilities (context length, vision support, prompt template) to the runtime.
 
 ### 2.3 Managed Online Model Downloading (PC Later)
 
@@ -132,45 +135,43 @@ Verified in `backend/app/services/model_registry.py`:
 
 When implemented for PC V1:
 
-1. **Executable Controlled Import Workflow:** An executable workflow implementing the D6 stages (inbox $\rightarrow$ preflight $\rightarrow$ staging $\rightarrow$ atomic install $\rightarrow$ library $\rightarrow$ registry). Exact execution mechanisms (such as watcher vs. on-demand worker) remain implementation design.
-2. **Optional Cloud LLM Fallback Router:** An opt-in provider adapter allowing users to configure cloud LLM access with transparent egress indications and strict local-first defaults. Fallback activation and routing policy remains open design.
+1. **Executable Controlled Import Workflow (Decision D6):** An executable workflow implementing the D6 stages (`inbox` $\rightarrow$ manual user-initiated scan $\rightarrow$ header metadata and capability detection $\rightarrow$ user confirmation $\rightarrow$ staging $\rightarrow$ atomic install $\rightarrow$ library $\rightarrow$ registry).
+   - **No Filesystem Watcher:** Import is triggered explicitly by user action ("Scan Inbox" via REST endpoint), eliminating background polling and partial-write races.
+   - **Atomic Multi-File Bundles:** Vision-language models requiring companion projectors (`.gguf` + `mmproj`) install atomically as a single coordinated bundle.
+2. **Optional Cloud LLM Fallback Router:** An opt-in provider adapter allowing users to configure cloud LLM access with transparent egress indications and strict local-first defaults (`LOCAL_FIRST`). Local-only execution is the default. Background cloud egress defaults to OFF.
 
 ---
 
-## 5. OPEN DESIGN
+## 5. Open Technical Details & Decision Debt
 
-The following technical mechanisms remain open design for future implementation plans:
+Detailed implementation choices for future planning are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
 
-- **Fallback Activation & Routing Policy:** Exact heuristic rules and user toggles for engaging optional cloud fallback (no automatic cloud egress merely because local resources are constrained).
-- **D6 Import Execution Mechanism:** Concrete worker architecture (e.g., asynchronous filesystem watcher vs. scheduled background worker vs. REST-triggered import endpoint).
 - **Integrity & Checksum Algorithms:** Exact hash and tensor verification algorithms for preflight/staging inspection.
-- **Future Multi-Model Residency:** Evaluation of multi-model concurrency for small specialist models (e.g., dedicated classifier, guardrail model, or embedding model concurrent with primary conversational LLM) subject to host capacity.
-- **Cloud Provider Integrations:** Evaluation and selection of supported external cloud APIs (e.g., Anthropic Claude, OpenAI, Google Gemini, OpenRouter) and credential management interfaces.
-- **Managed Downloader UI & Hub Integration:** Design for searching, queuing, and downloading GGUF quantization variants from Hugging Face Hub (PC Later).
-- **Model Compatibility & Guardrails:** Automated validation preventing users from loading GGUFs incompatible with their system RAM or compute capabilities.
-- **Logical Model & Artifact Grouping Schema:** Data structures and migration paths for grouping multiple quantization artifacts under a logical model identity.
-- **Companion Artifact Binding & Discovery:** Schema and discovery mechanics for associating auxiliary artifacts (e.g., `mmproj` vision projectors) with primary model entries.
-- **Status Lifecycle Enums & Capability Provenance:** Concrete schema fields for tracking model lifecycle status (`discovered`, `registered`, `verified`, `incompatible`) and capability confidence provenance (`declared`, `detected`, `verified`).
-- **Web-Based Import UX & D6 Boundary:** Client user experience for guided file import into the controlled D6 inbox directory without exposing unrestricted host filesystem picking.
+- **Automated RAM/VRAM Compatibility Guardrails:** Real-time formula or heuristic alerting users if a chosen model/context length exceeds available host memory.
+- **Cloud Provider Integrations:** Evaluation and selection of supported external cloud APIs (Anthropic Claude, OpenAI, Google Gemini, OpenRouter) and credential management interfaces.
+- **Managed Downloader UI & Hub Integration:** Design for searching, queuing, and downloading GGUF quantization variants from Hugging Face Hub (scheduled for PC Later).
+- **Future Multi-Model Residency:** Evaluation of multi-model concurrency for small specialist models (e.g., dedicated classifier, guardrail model, or embedding model concurrent with primary conversational LLM) subject to host capacity (scheduled for PC Later).
 
 ---
 
 ## 6. Security & Ownership Boundaries
 
-- **Local Inference Isolation:** During local inference, prompt/context data remains on the local host and does not require external/cloud egress by default. Current llama.cpp integration may exchange inference payloads over localhost/loopback HTTP between local processes.
+- **Local Inference Isolation:** During local inference, prompt/context data remains on the local host and does not require external/cloud egress by default. Current llama.cpp integration exchanges inference payloads over localhost/loopback HTTP between local processes.
 - **Cloud Egress Sanitization:** If cloud fallback is engaged, system prompts and context assembly must enforce privacy redaction policies, stripping sensitive profile identifiers, and health data must never be egressed without explicit authorization.
 - **Safe Model Format Boundary:** Durable safety rule: Never execute arbitrary untrusted code merely because it is packaged as a model asset. Unsafe executable or deserialization formats (e.g., raw Python pickles) require explicit safe handling or are rejected by the relevant importer. Current llama.cpp provider uses GGUF tensor format; safe runtime-specific formats (e.g., ONNX) may be supported where separately approved without permanently locking GGUF as the sole architectural format.
-- **Controlled Import Filesystem Boundary:** A browser or web client model-import workflow must never grant unrestricted host filesystem path authority. Local file imports must enter strictly through the controlled Decision D6 import boundary rather than passing arbitrary host filesystem paths.
+- **Controlled Import Filesystem Boundary:** A browser, desktop, or mobile client model-import workflow must never grant unrestricted host filesystem path authority. Local file imports must enter strictly through the controlled Decision D6 import boundary rather than passing arbitrary host filesystem paths.
 
 ---
 
 ## 7. Canonical Relationships & Cross-Links
 
-### Upstream Baseline & Legacy Architecture
+### Upstream Baseline & Decision Spine
 - [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) — Baseline inference model, Decision D6 (Model import pipeline), Optional Cloud LLM Fallback.
-- [`docs/04_Architecture/LLAMA_CPP_RUNTIME_ARCHITECTURE.md`](../../07_Archive/reference/architecture-legacy/LLAMA_CPP_RUNTIME_ARCHITECTURE.md) — Detailed llama.cpp server flags, Vulkan setup, and performance tuning.
+- [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) — Master Decision Register (D6 Model Acquisition, Residency).
+- [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md) — Open technical debt and deferred model tooling items.
 
 ### Related Domain & Infrastructure Specifications
 - [`docs/04_Architecture/01_Domains/assistant-and-conversations.md`](../01_Domains/assistant-and-conversations.md) — Conversational orchestration and token streaming.
 - [`docs/04_Architecture/04_Infrastructure/storage-and-assets.md`](storage-and-assets.md) — Canonical filesystem paths and model storage roots.
 - [`docs/04_Architecture/04_Infrastructure/performance-and-capacity.md`](performance-and-capacity.md) — Resource governance, gaming mode throttling, and VRAM management.
+

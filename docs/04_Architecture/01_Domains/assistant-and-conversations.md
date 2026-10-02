@@ -1,8 +1,8 @@
 # Assistant and Conversations Architecture
 
-> **Document Role:** Canonical domain architecture specification.
-> **Status:** Active Canonical — authority transferred during R11.4.
-> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D11. This focused specification owns normative architecture for its domain. Legacy monolithic architecture documents are subordinate compatibility and technical-reference material.
+> **Document Role:** Canonical domain architecture specification.  
+> **Status:** Active Canonical (Aligned with Decisions D1–D16, ADR-0018, ADR-0019)  
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D16. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for the assistant turn and conversation domain.
 
 ---
 
@@ -23,8 +23,8 @@ It governs the runtime flow between frontend user input and local generative mod
 
 ### 2.1 Profile Ownership & Character Context Binding
 
-In accordance with Decisions D7 and D11:
-- **Profile Ownership:** All conversations and message histories are strictly owned by the authenticated user Profile (`owner_id`).
+In accordance with Decisions D7, D8, and D11 (`ADR-0007`, `ADR-0018`, `ADR-0011`):
+- **Profile Ownership:** All conversations and message histories are strictly partitioned by the active user Profile (`profile_id`, migrated from legacy `owner_id` per `ADR-0018`). A single Account can host multiple Profiles, but conversations belong strictly to one Profile.
 - **Single Character Context:** Under approved D11 architecture, each conversation references exactly one active Character persona context (`character_id`).
 - **Permanent Turn Attribution:** Conversation history remains permanently bound to the Character under which turns were recorded.
 - **Character Switching Invariants:** Switching active companion personas must **never**:
@@ -33,9 +33,17 @@ In accordance with Decisions D7 and D11:
   - Silently mix multiple Character personas into a single active conversation thread.
 - **No Implicit Multi-Character Threads:** Group or multi-character conversations are **not** an approved implicit behavior; any future multi-character experience requires explicit, independent architectural approval.
 
-### 2.2 Turn Lifecycle & Ordering Guarantees
+### 2.2 Client-Runtime Contract & Durable Turn Queue (ADR-0019)
 
-The assistant turn lifecycle enforces strict transactional and sequencing guarantees:
+Per Decision D14 and `ADR-0019`, communication between client applications (Flutter Desktop, React Web, Android Companion) and the Windows Host Runtime is governed by strict protocol and persistence boundaries:
+- **Transport Separation:**
+  - **REST / JSON:** Used for commands, queries, configuration updates, and turn submissions.
+  - **Server-Sent Events (SSE):** Used for token completions and typed turn events (`token`, `tool_call`, `error`, `done`).
+  - **WebSocket:** Dedicated to full-duplex conversational voice streaming (audio frames, barge-in, STT/TTS control).
+- **Durable FIFO Turn Queue:**
+  - The Windows Host Runtime manages a durable FIFO turn queue per conversation.
+  - **Client Disconnect Resilience:** If a client disconnects during SSE generation (e.g. browser tab closed, network drop), generative turn execution continues to completion in the background and is committed to SQLite.
+  - **Reconnect Catch-Up:** Upon client reconnection, the client queries conversation history to retrieve the finalized turn without data loss or duplicate execution.
 - **Deterministic Ordering:** Messages within a conversation are ordered strictly chronologically via a monotonically increasing `sequence_no` constrained by a unique database constraint (`conversation_id`, `sequence_no`).
 - **Idempotency:** Client message submissions enforce deduplication using `client_message_id` with a scoped unique constraint (`conversation_id`, `client_message_id`).
 - **Transactional Turn Preparation:** User message persistence, sequence assignment, and attachment claims occur in an atomic database transaction prior to initiating generative inference.
@@ -134,8 +142,10 @@ The following implementation choices are intentionally left open for subsequent 
 
 ## 7. Canonical Relationships & Cross-Links
 
-- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§2 Core Architecture, Decisions D1, D7, D11)
-- **Feature Promotion Manifest:** [`docs/02_Planning/FEATURE_PROMOTION_MAP.md`](../../02_Planning/FEATURE_PROMOTION_MAP.md) (Multilingual Companion Interaction)
+- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D1, D7, D8, D11, D14)
+- **Client-Runtime Contract ADR:** [`docs/04_Architecture/decisions/ADR-0019-client-runtime-contract-and-work-boundaries.md`](../decisions/ADR-0019-client-runtime-contract-and-work-boundaries.md)
+- **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
+- **Work Breakdown Structure:** [`docs/02_Planning/00_Master/WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-API-001`, `PC-CLIENT-002`)
 - **Memory Domain Specification:** [`docs/04_Architecture/01_Domains/memory-and-personalization.md`](memory-and-personalization.md)
 - **Multimodal Domain Specification:** [`docs/04_Architecture/01_Domains/multimodal-and-media.md`](multimodal-and-media.md)
 - **Character Domain Specification:** [`docs/04_Architecture/01_Domains/characters-personality-and-emotion.md`](characters-personality-and-emotion.md)

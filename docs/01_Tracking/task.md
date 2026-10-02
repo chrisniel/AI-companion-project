@@ -2,20 +2,24 @@
 
 ## Current Execution State
 
-- **Current State:** Phase 8 Closure = COMPLETE / VERIFIED. Execution PAUSED pending development workflow redesign before next sprint selection.
-- **Archive:** [Task Archive: Phase 8C — UI Integration, Accessibility & Polish](archive/task-2026-10-01-phase8c-ui-integration-polish.md)
-- **Commit Owner:** Chris manually reviews, commits, pushes, opens/merges PRs, and performs branch operations.
+- **Current State:** PC V1 Documentation & Planning Canonicalization pass COMPLETE / READY FOR INDEPENDENT REVIEW.
+- **Commit Owner:** Chris manually reviews, commits, pushes, opens/merges PRs, and performs branch operations. Treat Git as strictly read-only.
+- **Next Sprint:** Sprint 01 (Foundation Band Scaffolding & Windows Host Setup) pending independent review approval.
 
 ## Phase State
 - **Phase 8 (8A, 8P, 8B, 8C):** COMPLETE / VERIFIED
-- **Phase 8 Overall:** COMPLETE / VERIFIED
-- **Foundation Band (Lanes A & B):** NEXT / UNBLOCKED (Paused)
+- **Documentation & Planning Canonicalization:** COMPLETE (Mechanically Verified; Awaiting Independent Review)
+- **Sprint 01 (Foundation Band):** READY / UNBLOCKED (Pending Review Gate)
 
-## Active State & Next Steps
-- [x] Phase 8 implementation, hardening, accessibility, and mock cleanup verified
-- [x] Cross-feature integration suite codified (`phase8Integration.test.tsx`)
-- [x] Remote CI #54 passed (SHA b45a89a: 331 backend, 229 frontend across 12 files, tsc clean, OpenAPI 23 routes zero drift, build clean, CI Gate passed)
-- [x] Independent review approved
-- [x] Status surfaces reconciled (Phase 8 COMPLETE / VERIFIED; Foundation Band NEXT / UNBLOCKED)
-- [x] Sprint archived to `task-2026-10-01-phase8c-ui-integration-polish.md`
-- [ ] Development workflow redesign discussion (Execution paused; zero Foundation implementation started)
+## Canonicalization Delivery Checklist
+- [x] Phase A: Audit & Reconciliation Map (Preserved Phase 8P baseline, verified 5 storage roots)
+- [x] Phase B: Master Planning Spine (`00_Master/` Decision Register, Delivery Index, WBS, Backlog, Sprint Roadmap, Master Checklist, Decision Debt)
+- [x] Phase C: Old Planning Authority Retirement (`ROADMAP.md`, `FEATURE_PROMOTION_MAP.md`, `post-v1/`)
+- [x] Phase D: Root & Navigation Rewrite (`DELIVERY_WORKFLOW.md`, `AGENTS.md`, `README.md`, `DOCUMENTATION_MAP.md`, `CONTRIBUTING.md`)
+- [x] Phase E: `SYSTEM_BASELINE.md` Compact Cross-Cutting Anchor Rewrite (D1–D16 table, 14 Golden Checkpoint Groups)
+- [x] Phase F: Reconcile 18 Focused Architecture Specs (Domains, Data & Security, Integrations, Infrastructure)
+- [x] Phase G: ADR Reconciliation (`ADR-0017`, `ADR-0018`, `ADR-0019`, annotations on ADR-0002..0012, `decisions/README.md`)
+- [x] Phase H: Design Documentation Promotion (7 focused specs in `docs/05_Design/`, `docs/05_Design/README.md`)
+- [x] Phase I: Testing & CI Documentation (`TESTING_AND_CI.md`, `DEVELOPMENT_SETUP.md` with Flutter desktop)
+- [x] Phase J: Active Tracking in `task.md`
+- [ ] Documentation Gate: Independent human review (Chris) and architecture partner review (GPT)

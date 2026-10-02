@@ -20,17 +20,22 @@ This specification defines the hardware resource governance, performance profile
 
 ## 2. Durable Architecture & Invariants
 
-### 2.1 Dynamic Resource Governance & Independence (Principle P23)
+### 2.1 Low-Impact / Gaming Mode Governance (Decisions D2, D16)
 
-In accordance with Principle P23:
-- **Gaming / Low-Impact Mode Approved:** PC V1 includes an approved capability to enter a lower-impact resource policy when the user engages in heavy interactive workloads (such as gaming, video editing, or 3D rendering).
-- **Domain Independence Invariant:** Resource governance operates as an independent system policy. It coordinates host resource contention **without redefining or mutating** the underlying model implementation, inference runtime architecture, character lore, or conversation state.
-- **Notification Governance Under Decision D10:** Engaging Gaming or Low-Impact Mode does **not** unconditionally suppress or discard notifications. Critical notifications (such as urgent alarms or time-sensitive reminders) remain strictly governed by the Decision D10 quiet-hours policy and authorized per-item overrides. Important scheduled reminders must not be silently dropped.
+In accordance with Decision D16 and [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Row 44):
+- **Three Operational Modes:** The companion runtime provides three operational performance policies:
+  1. `Normal`: Standard configured hardware profile (`eco`, `balanced`, or `maximum`).
+  2. `Low-Impact`: Throttled resource footprint designed to minimize VRAM, GPU compute, and CPU thread contention with foreground workloads.
+  3. `Auto`: Dynamically activates `Low-Impact` mode when a detected foreground application matches the configured **Game & Heavy Application List** (Option B); returns to `Normal` when the application closes.
+- **Host-Level Scope:** Performance mode is a machine-wide host policy. It applies globally across all profiles on the PC rather than varying per user profile.
+- **Low-Impact Model Substitution Option:** When entering `Low-Impact` mode, the runtime can optionally unload the primary 7B/8B model and substitute a lightweight 1B–3B text model (or drop GPU offload layers to 0/CPU-only), releasing VRAM for foreground gaming or rendering.
+- **Deferred Background Inference:** Non-urgent background inference jobs (such as long-term memory extraction or scheduled autonomous routines) are automatically deferred while `Low-Impact` mode is active.
+- **Notification Governance Under Decision D10:** Engaging Gaming or Low-Impact Mode does **not** suppress or drop scheduled alarms or urgent reminders. Critical notifications remain strictly governed by the Decision D10 quiet-hours policy and native toast dispatch.
 
 ### 2.2 Workstation Coexistence & Hardware Portability
 
-- **Workstation Coexistence:** Resource policy should minimize material contention with foreground workloads while preserving required companion behavior.
-- **Hardware-Agnostic Governance:** The architecture defines policy levels (e.g., maximum performance, balanced, background throttled, paused) rather than locking specific hardware requirements. The companion must scale gracefully from budget systems with integrated graphics to high-end workstations.
+- **Workstation Coexistence:** Resource policy minimizes material contention with foreground workloads while preserving required companion responsiveness and punctuality.
+- **Hardware-Agnostic Governance:** The architecture defines policy levels (maximum performance, balanced, background throttled, paused) rather than locking specific hardware requirements. The companion scales gracefully from budget systems with integrated graphics to high-end workstations.
 
 ### 2.3 Performance & Telemetry Truthfulness
 
@@ -42,7 +47,7 @@ To ensure truthful operational observability and prevent misleading system diagn
   2. *Measured Telemetry:* Empirical metrics obtained directly from a real supported probe, runtime metric counter, or verified OS/driver query.
   3. *Estimated Values:* Derived heuristics, theoretical approximations, or synthetic capacity estimates.
 - **Prohibition of Fabricated Telemetry:** UI, API, and runtime reporting must **never** fabricate measured telemetry. When hardware probes or runtime metrics are unavailable, unsupported, uninitialized, or permission-restricted on the host machine, telemetry must be reported truthfully as unavailable or unknown (`null` / `unknown`) rather than replaced with invented, synthetic, or hardcoded values.
-- **Probe & Vendor Independence:** The architecture does not permanently lock a single telemetry probing library, diagnostic utility, or GPU vendor SDK (such as `psutil`, AMD ADL, GPU-Z, NVML, or DirectX-specific hooks). Exact probing mechanisms and monitoring libraries remain open design. Current AMD Radeon RX 580 and Vulkan reference metrics represent development testing evidence only.
+- **Probe & Vendor Independence:** The architecture does not permanently lock a single telemetry probing library, diagnostic utility, or GPU vendor SDK. Current AMD Radeon RX 580 and Vulkan reference metrics represent development testing evidence only.
 
 ---
 
@@ -57,13 +62,13 @@ Verified in `backend/app/core/config.py`:
   - **`eco`:** Context window `2048`, GPU layers `0` (CPU-only execution), threads `4`, multimodal GPU offload disabled.
   - **`balanced`:** Context window `4096`, GPU layers `28`, threads `6`, multimodal GPU offload enabled.
   - **`maximum`:** Context window `8192`, GPU layers `33`, threads `8`, multimodal GPU offload enabled.
-- **Profile Switching API:** The backend exposes `PATCH /api/v1/models/profile` and `BaseLLMProvider.set_profile()`. In `LlamaCppProvider`, `set_profile()` can switch between `eco`, `balanced`, and `maximum` profiles when generation is inactive, cleanly recycling a Core-managed router so the new profile applies on subsequent activation. (Profile switching does not require manual config editing only).
+- **Profile Switching API:** The backend exposes `PATCH /api/v1/models/profile` and `BaseLLMProvider.set_profile()`. In `LlamaCppProvider`, `set_profile()` can switch between `eco`, `balanced`, and `maximum` profiles when generation is inactive, cleanly recycling a Core-managed router so the new profile applies on subsequent activation.
 - **Current Development Reference Baseline:** Current testing and development is conducted on an AMD Radeon RX 580 (8 GB VRAM, Vulkan acceleration). *(This configuration represents current development test hardware reality, not a universal product requirement or permanent architectural gate).*
 - **Voice Resource Strategy:** Voice synthesis and recognition CPU/RAM-first execution represents a development reference strategy, not an implemented Voice runtime and not a permanent hardware rule.
 
 ### 3.2 Implemented Reality Boundaries
 
-- **Dynamic Gaming / Low-Impact Automatic Policy:** **NOT IMPLEMENTED**. The current codebase contains no automatic background process monitor, no fullscreen DirectX/Vulkan game detection hooks, and no dynamic policy throttler.
+- **Dynamic Gaming / Low-Impact Automatic Policy:** **NOT IMPLEMENTED**. The current codebase contains no automatic process monitor or dynamic policy throttler.
 - **Dynamic VRAM Scaling Status:** **NOT IMPLEMENTED**. GPU layer allocation is determined at model load time and cannot dynamically adjust to foreground GPU pressure without reloading or recycling the provider process.
 
 ---
@@ -72,42 +77,40 @@ Verified in `backend/app/core/config.py`:
 
 When implemented for PC V1, the resource governance capability provides:
 
-1. **Lower-Impact Resource Policy:** Ability for the companion runtime to enter a lower-impact resource policy during heavy foreground activity.
-2. **Bounded Resource Usage:** Bounded resource utilization under foreground system pressure to minimize contention with user applications.
-3. **Preserved Notification Integrity:** Ensuring scheduled alarms and notifications are not silently dropped when low-impact mode is engaged.
+1. **Three-State Performance Policy (`Normal`, `Low-Impact`, `Auto`):** User-selectable performance state accessible via Flutter Settings and the System Tray menu.
+2. **Option B Game & Heavy App Detection:** In `Auto` mode, an OS process monitor checks against a user-configurable list of executable names (e.g. games, 3D software) to engage `Low-Impact` mode automatically.
+3. **Low-Impact Model Substitution:** Optional automatic swap to a lightweight 1B–3B text model to free VRAM for heavy foreground graphics tasks.
+4. **Deferred Background Tasks:** Pauses non-critical background jobs during `Low-Impact` mode while preserving alarm and reminder firing.
 
 ---
 
-## 5. OPEN DESIGN
+## 5. Open Technical Details & Decision Debt
 
-The following technical mechanisms remain open design for future implementation plans:
+Detailed implementation choices for future planning are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
 
-- **User Controls & Overrides:** Manual user toggles, forced modes, override precedence, automatic vs. manual activation heuristics, and settings/tray controls.
-- **Detection Strategy:** Specific detection heuristics (e.g., Windows Gaming Mode API, foreground fullscreen window queries, GPU load telemetry via DXGI, process whitelists, or purely manual user toggling).
-- **Throttling Mechanisms:** Concrete throttling techniques (e.g., GPU-layer offload adjustments, CPU thread limits, idle timeout adjustments, or deferral of non-critical background batch jobs like database vacuuming).
-- **Profile Transition & Hysteresis:** Smoothing delays and threshold timers preventing rapid thrashing between normal and low-impact modes.
-- **Cloud Fallback Interaction:** Whether and how low-impact mode interacts with optional cloud LLM fallback.
-- **Mode Taxonomy & UI Surface:** Exact mode names, settings switches, and tray menu controls.
-- **Hardware Telemetry Probing Mechanism:** Evaluation of portable, low-overhead hardware and runtime metric probes (e.g., OS performance counters, vendor-neutral query interfaces, or driver APIs) for measuring CPU, RAM, and VRAM utilization without imposing heavy background polling costs.
+- **Process Polling Interval:** Polling frequency and CPU cost of scanning running process names in `Auto` mode (e.g., 5-second tick).
+- **Hysteresis & Cooldown Delay:** Cooldown timer (e.g., 30–60 seconds) after a game exits before swapping back to the heavy model to avoid thrashing during restarts.
+- **Model Swap Transition UX:** Visual indicator in the Flutter client showing when a model swap or low-impact throttle is currently in progress.
 
 ---
 
 ## 6. Security & Ownership Boundaries
 
-- **Least Privilege & Governance Authority:** Resource governance should use the least privilege necessary and must not grant generic unrestricted OS-administration authority. Exact OS privilege requirements for a selected monitoring/throttling mechanism remain open design and require security review.
-- **Deterministic Override Precedence:** User-configured policy preferences participate in deterministic resource governance. Exact precedence between user overrides, resource-safety limits, and automated heuristics remains open design.
-- **Safe State Recovery:** When recovering from throttled or suspended states, the runtime must gracefully resume internal clocks and schedulers without dropping pending alarms or corrupting state.
+- **Least Privilege & Governance Authority:** Resource governance uses standard user process inspection APIs (e.g., enumerating running process names via standard Windows APIs) without requiring elevated Administrator privileges.
+- **Host Administration Isolation:** Configuring the Game & Heavy App list and changing performance mode is restricted to local host sessions.
+- **Safe State Recovery:** When recovering from throttled or low-impact states, the runtime gracefully resumes pending tasks without dropping scheduled alarms.
 
 ---
 
 ## 7. Canonical Relationships & Cross-Links
 
-### Upstream Baseline & Legacy Architecture
+### Upstream Baseline & Decision Spine
 - [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) — Baseline architecture, Principle P23 (Gaming / Low-Impact Resource Mode), Decision D10 (Scheduling & Quiet Hours).
-- [`docs/04_Architecture/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../../07_Archive/reference/architecture-legacy/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) — Hardware profiles, memory limits, and configuration defaults.
-- [`docs/04_Architecture/LLAMA_CPP_RUNTIME_ARCHITECTURE.md`](../../07_Archive/reference/architecture-legacy/LLAMA_CPP_RUNTIME_ARCHITECTURE.md) — llama.cpp thread counts, context limits, and VRAM management.
+- [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) — Master Decision Register (Row 44 Low-Impact / Gaming Mode).
+- [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md) — Open performance technical debt.
 
 ### Related Domain & Infrastructure Specifications
 - [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](runtime-and-models.md) — Inference server lifecycle, idle timeouts, and hardware execution profiles.
-- [`docs/04_Architecture/04_Infrastructure/windows-host-and-notifications.md`](windows-host-and-notifications.md) — Windows background execution and notification dispatch.
+- [`docs/04_Architecture/04_Infrastructure/windows-host-and-notifications.md`](windows-host-and-notifications.md) — Windows background execution, tray menu, and notification dispatch.
 - [`docs/04_Architecture/01_Domains/tasks-reminders-alarms-and-routines.md`](../01_Domains/tasks-reminders-alarms-and-routines.md) — Decision D10 quiet hours and urgent notification overrides.
+

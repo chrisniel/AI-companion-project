@@ -1,53 +1,63 @@
-# Implementation Planning Index (`docs/02_Planning/`)
+# Implementation Planning Directory (`docs/02_Planning/`)
 
-> **Directory Role:** Canonical catalog for all active feature implementation plans, technical templates, product roadmaps, and post-V1 planning sources.  
-> **Status:** Active Canonical (Reconciled in Pass R5)  
+> **Directory Role:** Implementation planning hub for the AI Companion project. Houses the canonical Master Planning Spine, active feature implementation plans, standard planning templates, and historical planning archives.  
+> **Status:** Active Canonical  
 > **Authority Precedence:**
-> 1. **System Architecture:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md) and domain specifications.
-> 2. **Product Delivery Roadmap:** [`docs/02_Planning/ROADMAP.md`](./ROADMAP.md).
-> 3. **Active Sprint Execution State:** [`docs/01_Tracking/task.md`](../01_Tracking/task.md).
-> 4. **Feature Implementation Plans:** Specific feature plans in this directory control execution steps during feature delivery.
+> 1. **System Architecture:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md) and canonical domain specifications.
+> 2. **Master Planning Spine:** [`docs/02_Planning/00_Master/`](./00_Master/) owns release milestones, work breakdown, backlog, and decision tracking.
+> 3. **Active Sprint Execution State:** [`docs/01_Tracking/task.md`](../01_Tracking/task.md) owns the immediate in-flight task tracking.
+> 4. **Feature Implementation Plans:** Specific feature plans in `01_Plans/` control step-by-step logic during approved implementation passes.
 
 ---
 
-## 1. Canonical Product Roadmap
+## 1. Master Planning Spine (`00_Master/`)
 
-- **[`ROADMAP.md`](./ROADMAP.md):** The single authoritative product and milestone delivery roadmap for the AI Companion ecosystem. Defines active delivery gates, V1 scope boundaries, post-V1 milestone tracks, and technical hardening recommendations.
+The Master Planning Spine is the single operational authority for release delivery, work breakdown, and decision traceability for PC V1 and beyond:
 
----
-
-## 2. Feature Plans & Planning Hubs
-
-The plans below catalog feature planning hubs and authoritative delivery plans for reference. (Execution is currently PAUSED following Phase 8 completion pending development workflow redesign before next sprint selection; zero Foundation implementation started):
-
-| Document Path | Title / Focus Area | Current Classification | Scope & Gate Status | Canonical Authority |
-| :--- | :--- | :--- | :--- | :--- |
-| [`phase-08/README.md`](./phase-08/README.md) | Phase 8 Planning Hub | **`COMPLETED / REFERENCE`** | Phase 8 complete & verified (8A, 8P, R0–R13.2, 8B.0–8B.8, and 8C). Completed Phase 8 planning hub. | Authoritative Phase 8 completion hub & reference. |
-| [`phase-08/plan-phase8-pc-frontend-architecture-ux.md`](./phase-08/plan-phase8-pc-frontend-architecture-ux.md) | Phase 8 Architecture & Multimodal Plan | **`COMPLETED / REFERENCE`** | Phase 8 complete & verified (8A, 8P, 8B, 8C). Authoritative delivery record for frontend architecture, multimodal foundation, and polish. | Authoritative Phase 8 plan & delivery record. |
-
----
-
-## 3. Planning Starter Templates
-
-| Document Path | Title / Focus Area | Current Classification | Role |
-| :--- | :--- | :--- | :--- |
-| [`templates/implementation-plan-template.md`](./templates/implementation-plan-template.md) | Feature Implementation Plan Template | **`TEMPLATE`** | Standard 6-section template for drafting new feature-named plans. |
+| Document | Primary Function |
+| :--- | :--- |
+| [`00_Master/DELIVERY_INDEX.md`](./00_Master/DELIVERY_INDEX.md) | Central delivery navigation hub linking milestones, active plans, WBS, and release gates. |
+| [`00_Master/SPRINT_ROADMAP.md`](./00_Master/SPRINT_ROADMAP.md) | Release milestone roadmap (M0 Setup through M5 Golden Gate + Mobile Follow-On). |
+| [`00_Master/WBS.md`](./00_Master/WBS.md) | Granular Work Breakdown Structure with stable tracking IDs (`PC-CLIENT`, `PC-HOST`, etc.). |
+| [`00_Master/DECISION_REGISTER.md`](./00_Master/DECISION_REGISTER.md) | Master register mapping approved architectural decisions (D1–D16) to canonical owners. |
+| [`00_Master/BACKLOG.md`](./00_Master/BACKLOG.md) | Partitioned backlog (`PC V1 Committed`, `PC Later`, `Experimental`, `Mobile Follow-On`, `Rejected`). |
+| [`00_Master/MASTER_CHECKLIST.md`](./00_Master/MASTER_CHECKLIST.md) | Cross-layer capability readiness audit (spec, source, CI, Golden Gate verification). |
+| [`00_Master/DECISION_DEBT.md`](./00_Master/DECISION_DEBT.md) | Explicit log of implementation-open details, required experiments, and bounded trade-offs. |
 
 ---
 
-## 4. Post-V1 Planning Sources (`post-v1/`)
+## 2. Directory Structure
 
-Exploratory architectural specifications and feature designs deferred beyond the V1 release boundary per Decision D1. See [`post-v1/README.md`](./post-v1/README.md) for authority rules and revalidation guidelines.
-
-| Document Path | Title / Domain | Current Classification | Roadmap Track |
-| :--- | :--- | :--- | :--- |
-| [`post-v1/PROACTIVE_COMPANION_ROUTINES.md`](./post-v1/PROACTIVE_COMPANION_ROUTINES.md) | Proactive Companion Routines | **`POST-V1 PLANNING SOURCE`** | Post-V1 Routine Track |
+```text
+docs/02_Planning/
+├── 00_Master/              # Canonical Master Planning Spine (active authority)
+├── 01_Plans/               # Active feature implementation plans (per-feature execution)
+├── 02_Templates/           # Standard implementation plan and RFC templates
+├── 03_Archive/             # Completed feature plans and historical planning records
+├── phase-08/               # Completed Phase 8 planning hub and delivery records (reference)
+├── post-v1/                # Historical post-V1 design notes (superseded by 00_Master/BACKLOG.md)
+├── ROADMAP.md              # Historical milestone roadmap (superseded by 00_Master/SPRINT_ROADMAP.md)
+└── FEATURE_PROMOTION_MAP.md# Historical promotion tracker (superseded by 00_Master/WBS.md)
+```
 
 ---
 
-## 5. Completed Historical Plans (Archived)
+## 3. Active Plans (`01_Plans/`)
 
-Historical planning files from completed engineering tracks (8 cross-cutting root plans, 5 backend plans, and 11 Android prototype plans) have been archived to keep this directory focused on active work:
+Active, approved implementation plans reside in [`01_Plans/`](./01_Plans/). Each plan is scoped to a specific subsystem or cohesive feature batch, following the standard template in [`02_Templates/implementation-plan-template.md`](./02_Templates/implementation-plan-template.md).
 
-- **Archive Catalog & Policy:** See [`docs/07_Archive/README.md`](../07_Archive/README.md) and [`docs/07_Archive/plans/`](../07_Archive/plans/).
-- **Non-Authoritative Status:** Archived plans represent point-in-time implementation history and are superseded by active source code and canonical domain architecture in [`docs/04_Architecture/`](../04_Architecture/).
+*(Note: Execution is currently paused after Phase 8 verification while the documentation and delivery workflow canonicalization completes; no active feature plan is in flight.)*
+
+---
+
+## 4. Templates (`02_Templates/`)
+
+- [`02_Templates/implementation-plan-template.md`](./02_Templates/implementation-plan-template.md): Required 6-section template for drafting new feature implementation plans.
+
+---
+
+## 5. Archiving & Historical Plans
+
+- Completed feature plans from historical sprints and phases reside in [`03_Archive/`](./03_Archive/) and [`docs/07_Archive/plans/`](../07_Archive/plans/).
+- Historical Phase 8 plans remain in [`phase-08/`](./phase-08/) as authoritative delivery records for completed frontend, multimodal, and integration work.
+- [`ROADMAP.md`](./ROADMAP.md) and [`FEATURE_PROMOTION_MAP.md`](./FEATURE_PROMOTION_MAP.md) are retained for historical auditability and are superseded by the Master Planning Spine.

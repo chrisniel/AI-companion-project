@@ -1,8 +1,8 @@
 # Tasks, Reminders, Alarms, and Routines Architecture
 
-> **Document Role:** Canonical domain architecture specification.
-> **Status:** Active Canonical — authority transferred during R11.4.
-> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D11. This focused specification owns normative architecture for its domain. Legacy monolithic architecture documents are subordinate compatibility and technical-reference material.
+> **Document Role:** Canonical domain architecture specification.  
+> **Status:** Active Canonical (Aligned with Decisions D1–D16, ADR-0010, ADR-0018)  
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D16. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for tasks, reminders, alarms, and routines.
 
 ---
 
@@ -14,18 +14,18 @@ This specification defines the domain semantics, lifecycle models, scheduling ru
 - Time-critical scheduled acoustic/visual alerts (Alarms)
 - Recurring proactive companion check-ins (Routines)
 
-It governs the boundary between personal productivity state and autonomous scheduler behaviors under the PC Local AI Runtime.
+It governs the boundary between personal productivity state and autonomous scheduler behaviors under the PC Windows Host Runtime.
 
 ---
 
 ## 2. Durable Architecture & Invariants
 
-### 2.1 Distinct Conceptual Entities
+### 2.1 Distinct Conceptual Entities (Decision D10 & ADR-0010)
 
 Tasks, Reminders, Alarms, and Routines are architecturally distinct concepts governed by Decision D10:
 
 1. **Task:**
-   - A personal work, action, or tracking item owned by the user profile.
+   - A personal work, action, or tracking item owned by the user profile (`profile_id`).
    - Owns a stateful completion lifecycle (e.g., progression from creation toward completion or cancellation).
    - May exist completely independently without any scheduled reminder or due date.
 2. **Reminder:**
@@ -33,20 +33,23 @@ Tasks, Reminders, Alarms, and Routines are architecturally distinct concepts gov
    - May exist standalone (e.g., "remind me to stretch in 20 minutes") without an underlying Task.
    - May be associated with a Task to provide advance or deadline-driven alerting.
    - Supports offline catch-up and missed-event recovery when the host system wakes or resumes.
+   - Respects quiet hours by default, with per-item override configuration.
 3. **Alarm:**
-   - A time-critical, scheduled alert demanding immediate user awareness.
+   - A time-critical, scheduled alert demanding immediate user awareness (visual and acoustic).
    - Possesses stronger delivery semantics than an ordinary informational Reminder.
+   - **Quiet Hours Default:** Alarms **bypass quiet hours by default** due to their urgent nature, unless explicitly configured to respect quiet hours.
    - Wake behavior from host sleep is strictly best-effort; architecture acknowledges there is no universal ACPI, OS, or firmware wake guarantee across all PC hardware.
 4. **Routine:**
    - A bounded, recurring companion check-in or interaction pattern (e.g., morning overview, evening wind-down).
-   - Governed by a deterministic scheduler that decides *when* and *what* intent triggers.
+   - Governed by a deterministic `SchedulerService` in the Windows Host Runtime that decides *when* and *what* intent triggers.
    - Companion character persona modulates *how* the resulting proactive check-in is phrased; the generative LLM does **not** possess unrestricted self-scheduling authority.
+   - Respects quiet hours by default.
 
 ### 2.2 Quiet Hours Governance
 
 - Quiet hours establish user-configured time windows that suppress non-urgent notification delivery.
-- Reminders, Alarms, and Routines support per-item override configuration (e.g., an urgent medical reminder or morning alarm can bypass quiet hours).
-- Architecture does **not** lock a universal automatic bypass default for all alarms; explicit configuration or item-level policy governs quiet-hour behavior.
+- Reminders and Routines respect quiet hours by default; Alarms bypass quiet hours by default.
+- Per-item explicit override flags allow users to customize quiet-hour behavior for any individual alert.
 
 ### 2.3 Tool Execution & Policy Resolution (Decision D9)
 
@@ -118,23 +121,22 @@ The following target capabilities are approved under Decision D10 and scheduled 
 
 ---
 
-## 5. OPEN DESIGN
+## 5. Implementation-Open Details (Decision Debt)
 
-The following implementation choices are intentionally left open for subsequent technical design:
+The normative architecture for D10 is frozen. The following implementation-level details are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
 
+- **Scheduler Engine Selection:** Choice between lightweight in-process scheduler (`APScheduler`, asyncio task loop) versus OS-native timers (`DEBT-V1-009`).
+- **Catch-Up & Stale Event Mechanics:** Batching, deduplication, summary aggregation, suppression windows, and expiration thresholds for missed events (`DEBT-V1-010`).
 - **Entity Persistence Schemas:** Relational table structures, foreign keys, or unified scheduling models for independent Reminders, Alarms, and Routines.
 - **Lifecycle State Machines:** Exact transition graphs, event triggers, and states for acknowledgment, dismissal, snooze, and re-arm.
-- **Scheduler Engine Selection:** Choice between lightweight in-process scheduler (`APScheduler`, asyncio task loop) versus OS-native timers.
 - **Audio & Escalation Patterns:** Alarm ringtone selection, acoustic playback mechanisms, volume ramping, and visual alert overlays.
-- **Quiet-Hour Alarm Policy:** Exact default handling when an Alarm falls inside quiet hours without explicit override flags.
 - **Host Sleep & Wake Primitives:** Feasibility and mechanism of Windows waitable timers (`CreateWaitableTimerEx`) for best-effort wake.
-- **Catch-Up & Stale Event Mechanics:** Batching, deduplication, summary aggregation, suppression windows, and expiration thresholds for missed events.
 
 ---
 
 ## 6. Security & Ownership Boundaries
 
-- **Profile Ownership:** All Tasks, Reminders, Alarms, and Routines are strictly owned by the primary Profile (`owner_id`).
+- **Profile Ownership:** All Tasks, Reminders, Alarms, and Routines are strictly owned by the primary Profile (`profile_id`, migrated from `owner_id`).
 - **Cross-Character Invariant:** Characters do not own productivity data. Switching active character personas does not alter, hide, or reattribute task or schedule records.
 - **Tool Execution Boundary:** LLM assistant access to task modification tools operates under deterministic profile policy; destructive permanent deletes require explicit user confirmation.
 
@@ -142,7 +144,9 @@ The following implementation choices are intentionally left open for subsequent 
 
 ## 7. Canonical Relationships & Cross-Links
 
-- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§4 / §7, Decision D10)
-- **Feature Promotion Manifest:** [`docs/02_Planning/FEATURE_PROMOTION_MAP.md`](../../02_Planning/FEATURE_PROMOTION_MAP.md) (Task CRUD & Lifecycle Foundation, Reminder & Alarm Scheduling Foundation, Bounded Companion Routines)
+- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decision D10)
+- **Productivity & Scheduler ADR:** [`docs/04_Architecture/decisions/ADR-0010-productivity-entity-semantics-and-scheduler-architecture.md`](../decisions/ADR-0010-productivity-entity-semantics-and-scheduler-architecture.md)
+- **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
+- **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Decision D10), [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-SCHED-001`, `PC-SCHED-002`)
 - **Windows Host Infrastructure:** [`docs/04_Architecture/04_Infrastructure/windows-host-and-notifications.md`](../04_Infrastructure/windows-host-and-notifications.md)
-- **UI Presentation Guidance:** [`docs/05_Design/README.md`](../../05_Design/README.md) (Schedule UI rendering rules)
+- **UI Design Presentation:** [`docs/05_Design/06_Notifications_and_Backlog_Activity.md`](../../05_Design/06_Notifications_and_Backlog_Activity.md)

@@ -1,8 +1,8 @@
 # Health and Wearables Integration Architecture
 
-> **Document Role:** Canonical domain architecture specification.
-> **Status:** Active Canonical — authority transferred during R11.4.
-> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D11. This focused specification owns normative architecture for its domain. Legacy monolithic architecture documents are subordinate compatibility and technical-reference material.
+> **Document Role:** Canonical domain architecture specification.  
+> **Status:** Active Canonical (Aligned with Decisions D1–D16, ADR-0018)  
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D16. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for health, wellness, and wearable biometric integrations.
 
 ---
 
@@ -97,7 +97,7 @@ The following functional and technical mechanisms remain open design for future 
 
 ## 6. Security & Ownership Boundaries
 
-- **Application Trust Boundary:** Health context synchronized to PC remains Profile-owned local data protected by the application trust boundary. Encryption-at-rest remains open design.
+- **Application Trust Boundary:** Health context synchronized to PC remains Profile-owned (`profile_id`) local data protected by the application trust boundary.
 - **Cloud Fallback Privacy Rule:** When optional Cloud LLM fallback is used, health data must not be included in cloud egress without explicit user authorization and applicable privacy policy.
 - **Informational / Non-Clinical Use:** Health metrics serve solely to provide empathetic, contextual awareness for the companion without making medical or diagnostic claims.
 
@@ -105,11 +105,8 @@ The following functional and technical mechanisms remain open design for future 
 
 ## 7. Canonical Relationships & Cross-Links
 
-### Upstream Baseline & Legacy Architecture
-- [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) — Baseline capabilities, PC Health Context Readiness (PC V1), Android Health Connect (Android V1).
-- [`docs/04_Architecture/ANDROID_COMPANION_ARCHITECTURE.md`](../../07_Archive/reference/architecture-legacy/ANDROID_COMPANION_ARCHITECTURE.md) — Mobile architecture, connected sync protocol.
-
-### Related Domain & Integration Specifications
-- [`docs/04_Architecture/01_Domains/android-companion.md`](../01_Domains/android-companion.md) — Mobile companion sync loop and sensor boundaries.
-- [`docs/04_Architecture/01_Domains/assistant-and-conversations.md`](../01_Domains/assistant-and-conversations.md) — Context assembly and companion tone modulation.
-- [`docs/04_Architecture/02_Data_and_Security/privacy-retention-and-audit.md`](../02_Data_and_Security/privacy-retention-and-audit.md) — Biometric data retention and user deletion controls.
+- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§2 Release Vocabulary, §3 Cross-Cutting Invariants)
+- **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
+- **Master Planning Spine:** [`docs/02_Planning/00_Master/SPRINT_ROADMAP.md`](../../02_Planning/00_Master/SPRINT_ROADMAP.md) (Milestone Track M-Android)
+- **Android Companion Domain Spec:** [`docs/04_Architecture/01_Domains/android-companion.md`](../01_Domains/android-companion.md)
+- **Privacy & Audit Specification:** [`docs/04_Architecture/02_Data_and_Security/privacy-retention-and-audit.md`](../02_Data_and_Security/privacy-retention-and-audit.md)

@@ -1,8 +1,8 @@
 # Web and Current Information Integration Architecture
 
-> **Document Role:** Canonical domain architecture specification.
-> **Status:** Active Canonical — authority transferred during R11.4.
-> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D11. This focused specification owns normative architecture for its domain. Legacy monolithic architecture documents are subordinate compatibility and technical-reference material.
+> **Document Role:** Canonical domain architecture specification.  
+> **Status:** Active Canonical (Aligned with Decisions D1–D16, ADR-0009)  
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D16. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for read-only web information, search, fetch, and weather integrations.
 
 ---
 
@@ -109,11 +109,9 @@ The following functional and technical mechanisms remain open design for future 
 
 ## 7. Canonical Relationships & Cross-Links
 
-### Upstream Baseline & Legacy Architecture
-- [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) — Baseline capabilities, platform vocabulary, Decisions D1 (PC V1 release boundary includes read-only public current information), D5 (network trust boundary), D9 (deterministic tool permission policy).
-- [`docs/04_Architecture/SECURITY_AND_TRUST_ARCHITECTURE.md`](../../07_Archive/reference/architecture-legacy/SECURITY_AND_TRUST_ARCHITECTURE.md) — Network boundaries, tool risk tiers, and SSRF threat model.
-
-### Related Domain & Infrastructure Specifications
-- [`docs/04_Architecture/01_Domains/assistant-and-conversations.md`](../01_Domains/assistant-and-conversations.md) — Context assembly and tool execution flow during assistant turns.
-- `docs/04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md` *(planned)* — Deterministic tool execution policy and action confirmation gates.
-- `docs/04_Architecture/02_Data_and_Security/authentication-and-secrets.md` *(planned)* — Secure storage of external provider API credentials.
+- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D5, D9)
+- **Tool Security & Deterministic Policy ADR:** [`docs/04_Architecture/decisions/ADR-0009-tool-security-and-deterministic-policy.md`](../decisions/ADR-0009-tool-security-and-deterministic-policy.md)
+- **Master Planning Spine:** [`docs/02_Planning/00_Master/WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-WEB-001`)
+- **Assistant Domain Specification:** [`docs/04_Architecture/01_Domains/assistant-and-conversations.md`](../01_Domains/assistant-and-conversations.md)
+- **Tool Permissions & Actions Spec:** [`docs/04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md`](../02_Data_and_Security/tool-permissions-and-actions.md)
+- **Authentication & Secrets Spec:** [`docs/04_Architecture/02_Data_and_Security/authentication-and-secrets.md`](../02_Data_and_Security/authentication-and-secrets.md)

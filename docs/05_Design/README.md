@@ -42,3 +42,20 @@ Design documents authored under `docs/05_Design/` must adhere to these invariant
    - Canonical product invariants
 2. **Cross-Reference Architecture:** Design documents must explicitly cross-reference the relevant architectural domain specification in [`docs/04_Architecture/`](../04_Architecture/) for technical semantics and constraints.
 3. **No Premature Specification:** Detailed UX screen designs, wireframes, and component specs are developed against approved architectural domains, not ahead of them.
+
+---
+
+## 3. Focused Design Specification Index
+
+The following specifications govern the PC V1 user experience, visual presentation, and interaction design:
+
+| Document | Scope & Experience Area | Normative Architectural Anchors |
+| :--- | :--- | :--- |
+| **[`01_PC_Desktop_Shell_and_Tray.md`](01_PC_Desktop_Shell_and_Tray.md)** | Windows Flutter desktop windowing, navigation rail, and System Tray lifecycle ("Quit UI != Stop Runtime"). | [`windows-host-and-notifications.md`](../04_Architecture/04_Infrastructure/windows-host-and-notifications.md), [`ADR-0017`](../04_Architecture/decisions/ADR-0017-flutter-production-windows-client.md) |
+| **[`02_Profile_Selector_and_Privacy.md`](02_Profile_Selector_and_Privacy.md)** | Multi-profile switching, profile card selector, 7-day soft-delete warning, and admin restoration. | [`profiles-and-devices.md`](../04_Architecture/02_Data_and_Security/profiles-and-devices.md), [`ADR-0018`](../04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md) |
+| **[`03_Character_Studio_and_Personality.md`](03_Character_Studio_and_Personality.md)** | Eight continuous trait sliders (0–100), template vs instance, preset styles, and immutable Neutral Assistant fallback. | [`characters-personality-and-emotion.md`](../04_Architecture/01_Domains/characters-personality-and-emotion.md), [`ADR-0012`](../04_Architecture/decisions/ADR-0012-d11-persona-and-state-separation.md) |
+| **[`04_Emotion_and_Visual_Presence.md`](04_Emotion_and_Visual_Presence.md)** | 2D portrait expression cross-fading, ambient mood glow, and deferral of Live2D/VRM to PC Later. | [`characters-personality-and-emotion.md`](../04_Architecture/01_Domains/characters-personality-and-emotion.md) |
+| **[`05_Voice_Mode_and_Audio_Controls.md`](05_Voice_Mode_and_Audio_Controls.md)** | Duplex conversational voice screen, audio device selectors, and mandatory Voice Barge-In. | [`voice-and-audio.md`](../04_Architecture/01_Domains/voice-and-audio.md), [`ADR-0019`](../04_Architecture/decisions/ADR-0019-client-runtime-contract-and-work-boundaries.md) |
+| **[`06_Notifications_and_Backlog_Activity.md`](06_Notifications_and_Backlog_Activity.md)** | Native Windows Toasts, urgency hierarchy (Alarms bypass quiet hours), and sleep catch-up drawer. | [`tasks-reminders-alarms-and-routines.md`](../04_Architecture/01_Domains/tasks-reminders-alarms-and-routines.md), [`ADR-0011`](../04_Architecture/decisions/ADR-0011-d10-scheduling-and-notification-semantics.md) |
+| **[`07_Low_Impact_and_Gaming_Controls.md`](07_Low_Impact_and_Gaming_Controls.md)** | Three-state performance selector (`Normal`, `Low-Impact`, `Auto`), Option B app list, and model substitution. | [`performance-and-capacity.md`](../04_Architecture/04_Infrastructure/performance-and-capacity.md), [`DECISION_REGISTER.md`](../02_Planning/00_Master/DECISION_REGISTER.md) |
+
