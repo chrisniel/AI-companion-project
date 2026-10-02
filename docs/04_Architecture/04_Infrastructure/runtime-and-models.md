@@ -1,8 +1,8 @@
 # Runtime and Models Architecture
 
 > **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Aligned with Decisions D1–D16, ADR-0006, ADR-0015)  
-> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D16. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for the local inference runtime, models, and execution providers.
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0006)  
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for the local inference runtime, models, and execution providers.
 
 ---
 
@@ -26,15 +26,15 @@ This specification defines the local inference runtime, hardware execution model
 ### 2.1 Local-First & Single Resident Model Policy
 
 - **Local Inference is Primary & Default:** The AI Companion is architected fundamentally as a private, locally hosted AI system. Core/local companion operation remains supported without cloud LLM dependency. Naturally network-dependent integrations (Web Search, Fetch, Weather) require internet connectivity.
-- **Provider & Hardware Independence:** The conversational orchestrator interacts with language models through an abstract provider interface. The architecture does not permanently lock a single runtime binary, backend driver, or hardware vendor. While the current implementation utilizes `llama.cpp` over Vulkan on RX 580 baseline, the durable architecture accommodates ONNX Runtime, DirectML, ROCm, CUDA, or alternative execution engines where separately approved.
+- **Provider & Hardware Independence:** The conversational orchestrator interacts with language models through an abstract provider interface. The architecture does not permanently lock a single runtime binary, backend driver, or hardware vendor. While the current implementation utilizes `llama.cpp` over Vulkan on RX 580 baseline, the durable architecture accommodates alternative execution engines where separately approved.
 - **Single Resident Model Default (`--models-max 1`):** To safeguard system stability and preserve memory for foreground gaming or creative workloads, the runtime enforces a default cap of **1 resident model in memory**. Loading a new model unloads the previously active model. Multi-model concurrency is an Advanced Setting requiring explicit user opt-in and presenting VRAM capacity warnings.
 
-### 2.2 Controlled Model Import Pipeline (Decision D6 & ADR-0006)
+### 2.2 Controlled Model Import Pipeline (Decision D6)
 
 In accordance with Decision D6 and `ADR-0006`, local model acquisition enforces a six-stage controlled pipeline:
 $$\text{Inbox} \longrightarrow \text{Preflight} \longrightarrow \text{Staging} \longrightarrow \text{Atomic Install} \longrightarrow \text{Library} \longrightarrow \text{Registry}$$
 1. **Inbox:** User deposits model files into `IMPORT_INBOX_DIR`.
-2. **Preflight (User-Initiated Manual Scan):** Initiated manually by the user from the UI (no automatic filesystem watcher). Inspects file headers, parses GGUF/ONNX metadata, estimates VRAM/RAM requirements, and verifies format integrity.
+2. **Preflight (User-Initiated Manual Scan):** Initiated manually by the user from the UI (no automatic filesystem watcher). Inspects file headers, parses GGUF metadata (and other supported format metadata), estimates VRAM/RAM requirements, and verifies format integrity.
 3. **Staging:** Moves validated models to `IMPORT_STAGING_DIR` for integrity validation.
 4. **Atomic Install:** Atomically moves verified files into the canonical `MODEL_LIBRARY_DIR` (`LIBRARY_ROOT/models/llm`). Multi-file bundles (e.g., text LLM + matching `mmproj` vision projector) install atomically—either all files succeed, or the entire bundle rolls back.
 5. **Library:** The file resides in canonical permanent storage under relocatable `LIBRARY_ROOT`.
@@ -150,7 +150,7 @@ Detailed implementation choices for future planning are tracked in [`docs/02_Pla
 - **Automated RAM/VRAM Compatibility Guardrails:** Real-time formula or heuristic alerting users if a chosen model/context length exceeds available host memory.
 - **Cloud Provider Integrations:** Evaluation and selection of supported external cloud APIs (Anthropic Claude, OpenAI, Google Gemini, OpenRouter) and credential management interfaces.
 - **Managed Downloader UI & Hub Integration:** Design for searching, queuing, and downloading GGUF quantization variants from Hugging Face Hub (scheduled for PC Later).
-- **Future Multi-Model Residency:** Evaluation of multi-model concurrency for small specialist models (e.g., dedicated classifier, guardrail model, or embedding model concurrent with primary conversational LLM) subject to host capacity (scheduled for PC Later).
+- **Multi-Model Residency:** Multi-model concurrency is available as a Developer/Advanced configuration requiring explicit user opt-in, accompanied by host capacity checks and strong VRAM warnings.
 
 ---
 
@@ -158,7 +158,7 @@ Detailed implementation choices for future planning are tracked in [`docs/02_Pla
 
 - **Local Inference Isolation:** During local inference, prompt/context data remains on the local host and does not require external/cloud egress by default. Current llama.cpp integration exchanges inference payloads over localhost/loopback HTTP between local processes.
 - **Cloud Egress Sanitization:** If cloud fallback is engaged, system prompts and context assembly must enforce privacy redaction policies, stripping sensitive profile identifiers, and health data must never be egressed without explicit authorization.
-- **Safe Model Format Boundary:** Durable safety rule: Never execute arbitrary untrusted code merely because it is packaged as a model asset. Unsafe executable or deserialization formats (e.g., raw Python pickles) require explicit safe handling or are rejected by the relevant importer. Current llama.cpp provider uses GGUF tensor format; safe runtime-specific formats (e.g., ONNX) may be supported where separately approved without permanently locking GGUF as the sole architectural format.
+- **Safe Model Format Boundary:** Durable safety rule: Never execute arbitrary untrusted code merely because it is packaged as a model asset. Unsafe executable or deserialization formats (e.g., raw Python pickles) require explicit safe handling or are rejected by the relevant importer. Current llama.cpp provider uses GGUF tensor format; safe runtime-specific formats (such as ONNX) may be supported where separately approved in provider-specific future work without permanently locking GGUF as the sole architectural format.
 - **Controlled Import Filesystem Boundary:** A browser, desktop, or mobile client model-import workflow must never grant unrestricted host filesystem path authority. Local file imports must enter strictly through the controlled Decision D6 import boundary rather than passing arbitrary host filesystem paths.
 
 ---

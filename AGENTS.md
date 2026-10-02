@@ -20,7 +20,7 @@ For comprehensive procedural details on delivery gates, pull requests, walkthrou
 - **Documentation Map:** [`docs/06_Guides/DOCUMENTATION_MAP.md`](docs/06_Guides/DOCUMENTATION_MAP.md)
 - **Canonical Architecture Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](docs/04_Architecture/SYSTEM_BASELINE.md)
 - **Primary Tech Stack:**
-  - **Windows Host Runtime:** Python 3.13, FastAPI, SQLAlchemy 2, Alembic, SQLite/FTS5, `llama.cpp` / ONNX Runtime.
+  - **Windows Host Runtime:** Python 3.11, FastAPI, SQLAlchemy 2, Alembic, SQLite/FTS5, `llama.cpp`.
   - **PC V1 Client Target:** Flutter Desktop (Windows), Dart.
   - **Supported Web Client & Dev Harness:** React 19, TypeScript 5.8, Vite 6, Tailwind CSS 4 (`frontend/web/`).
   - **Mobile Companion Prototype:** Kotlin, Jetpack Compose (`android/`, V1 follow-on).
@@ -138,6 +138,7 @@ PLAN → IMPLEMENT → IMPLEMENTATION GATE → DOCUMENT → DOCUMENTATION GATE �
 ## 9. Git Authority & External Boundaries
 
 - **Chris Owns Git Writes:** Do NOT execute `git add`, `commit`, `push`, `branch`, `merge`, `checkout`, `switch`, `tag`, `stash`, `reset`, or PR commands.
+- **Git Branch Preflight:** Before non-trivial edits, inspect the current Git branch (`git branch --show-current`). If on `develop` or `master`, STOP before editing. Recommend an appropriate task branch, ask Chris to create/switch/push it, and resume only after Chris confirms. Agents still perform no Git mutations.
 - **Stop After Verification:** Provide a clean Conventional Commit message proposal and stop for human execution.
 - **Read-Only External Environment:** Treat system paths, external repositories, and package caches outside the workspace as strictly read-only.
 - **Model Storage Policy:** Git repository and LFS pointers reside on GitHub; private Hugging Face dataset stores LFS model binaries. Do not alter Git/LFS configurations without explicit authorization.

@@ -21,16 +21,16 @@ It governs the boundary between audio hardware/drivers and conversational assist
 
 ## 2. Durable Architecture & Invariants
 
-### 2.1 Native Client & Runtime Voice Architecture (Decisions D14 & D15)
+### 2.1 Native Client & Runtime Voice Architecture 
 
-In accordance with Decisions D1, D14, and D15 (`ADR-0014`, `ADR-0017`, `ADR-0019`):
+In accordance with Decision D1:
 - **Hardware & Processing Boundary:**
   - **Flutter Desktop Client:** Owns local audio hardware enumeration, physical microphone capture, speaker/headphone playback, and OS audio focus.
   - **Windows Host Runtime:** Owns the speech pipeline engines (`STTProvider` and `TTSProvider`) and conversational turn coordination.
 - **WebSocket Full-Duplex Transport (`ADR-0019`):** Audio frames and speech control events stream over a dedicated persistent WebSocket connection between the desktop client and runtime.
 - **Approved PC V1 Local Speech Engines:**
-  - **Speech-to-Text (STT):** Local `whisper.cpp` (executing on CPU/RAM to preserve GPU VRAM).
-  - **Text-to-Speech (TTS):** Local `Kokoro-82M` (executing on CPU/RAM for fast, high-quality local voice synthesis).
+  - **Speech-to-Text (STT):** Local STT engine (e.g., whisper.cpp candidate) (executing on CPU/RAM to preserve GPU VRAM).
+  - **Text-to-Speech (TTS):** Local TTS engine (e.g., Kokoro-82M candidate) (executing on CPU/RAM for fast, high-quality local voice synthesis).
   - **Voice Activity Detection (VAD):** In-stream turn detection via Silero VAD or equivalent lightweight model.
 - **Mandatory Voice Barge-In (PC V1):**
   - Companion voice playback must support real-time user interruption.
@@ -40,7 +40,7 @@ In accordance with Decisions D1, D14, and D15 (`ADR-0014`, `ADR-0017`, `ADR-0019
 ### 2.2 Hardware Resource Isolation Principle
 
 - **Durable Principle:** Speech processing **SHOULD** avoid unnecessary contention with the active generative model on constrained target hardware.
-- **Reference Strategy (CPU/RAM-First):** To safeguard precious GPU VRAM for the primary text/multimodal LLM on reference hardware (8 GB RX 580 baseline), speech transcription (`whisper.cpp`) and synthesis (`Kokoro-82M`) are designed reference-first to execute comfortably on CPU and system RAM.
+- **Reference Strategy (CPU/RAM-First):** To safeguard precious GPU VRAM for the primary text/multimodal LLM on reference hardware (8 GB RX 580 baseline), speech transcription and synthesis are designed reference-first to execute comfortably on CPU and system RAM.
 - **Implementation Flexibility:** The architecture does not permanently lock speech to CPU forever. On higher-end hardware with abundant compute or dedicated NPUs, providers may utilize hardware acceleration if resource contention policies permit.
 
 ### 2.3 Voice Privacy Invariant
@@ -72,9 +72,9 @@ The following target capabilities are approved under Decisions D1, D11, and the 
    - Provider abstraction layer decoupling the backend from specific inference binaries or models.
    - Streaming or chunked audio ingestion with VAD-assisted or explicit turn boundary detection.
 2. **Candidate Provider Adapters:**
-   - **STT Candidate:** `Whisper` (via `whisper.cpp`, `faster-whisper`, or ONNX Runtime).
-   - **TTS Candidate:** `Kokoro` (or lightweight alternatives such as `Piper`).
-   - **VAD Candidate:** `Silero VAD` (via ONNX Runtime).
+   - **STT Candidate:** `whisper.cpp` is the primary/reference PC STT candidate, not an eternal requirement.
+   - **TTS Candidate:** `Kokoro` is the primary/reference local PC TTS candidate, not an eternal requirement. `ElevenLabs` remains an optional cloud TTS candidate.
+   - **VAD Candidate:** `Silero VAD` (VAD remains provider-independent).
    *(Note: These named engines are evaluated candidates for specific adapters; none are locked as mandatory architectural release requirements.)*
 3. **Wake Word Detection (PC Later):**
    - Background listening for low-power activation phrases (Candidate: `openWakeWord`). Deferred beyond PC V1 to preserve battery/resource budgets and privacy boundaries.
@@ -83,7 +83,7 @@ The following target capabilities are approved under Decisions D1, D11, and the 
 
 ## 5. Implementation-Open Details (Decision Debt)
 
-The normative architecture for D14/D15 is frozen. The following implementation-level details are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
+The normative architecture for Voice is frozen. The following implementation-level details are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
 
 - **Turn-Taking & VAD Tuning:** VAD threshold parameters, silence detection window length, and speaking cadence tuning (`DEBT-V1-011`).
 - **Audio Device Hotplugging:** Host audio device enumeration, default sink switching, and Bluetooth headset disconnect recovery in Flutter (`DEBT-V1-012`).
@@ -101,9 +101,8 @@ The normative architecture for D14/D15 is frozen. The following implementation-l
 
 ## 7. Canonical Relationships & Cross-Links
 
-- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D14, D15)
-- **Voice Subsystem ADR:** [`docs/04_Architecture/decisions/ADR-0014-voice-and-audio-subsystem-architecture.md`](../decisions/ADR-0014-voice-and-audio-subsystem-architecture.md)
+- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Voice)
 - **Client Target ADR:** [`docs/04_Architecture/decisions/ADR-0017-flutter-production-windows-client.md`](../decisions/ADR-0017-flutter-production-windows-client.md)
 - **Client-Runtime Contract ADR:** [`docs/04_Architecture/decisions/ADR-0019-client-runtime-contract-and-work-boundaries.md`](../decisions/ADR-0019-client-runtime-contract-and-work-boundaries.md)
-- **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Decision D15), [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-VOICE-001`)
+- **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) , [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-VOICE-001`)
 - **UI Design Presentation:** [`docs/05_Design/05_Voice_Mode_and_Audio_Controls.md`](../../05_Design/05_Voice_Mode_and_Audio_Controls.md)

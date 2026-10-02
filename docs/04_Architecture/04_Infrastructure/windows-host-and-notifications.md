@@ -23,9 +23,9 @@ It governs the host infrastructure that keeps the companion alive, responsive, a
 
 ## 2. Durable Architecture & Invariants
 
-### 2.1 Host Runtime & Client Lifecycle Independence (Decisions D2, D17, D19)
+### 2.1 Host Runtime & Client Lifecycle Independence (Decision D2)
 
-In accordance with Decisions D2, D17, and D19:
+In accordance with Decision D2:
 - **Decoupled Lifecycle:** The Local AI Runtime operates as an independent host runtime process whose lifecycle is strictly decoupled from any client application or session.
 - **Quit UI != Stop Runtime:** 
   - The primary Windows UI is Flutter Desktop. Launching the desktop app connects to the running runtime (or starts it if dormant).
@@ -44,7 +44,7 @@ In accordance with Decision D2 and [`ADR-0003`](../decisions/ADR-0003-d2-windows
 ### 2.3 Native Windows Notifications & Offline Catch-up (Decision D10)
 
 In accordance with Decision D10 and [`ADR-0011`](../decisions/ADR-0011-d10-scheduling-and-notification-semantics.md):
-- **Direct OS Notification Dispatch:** The Local AI Runtime dispatches notifications directly to the Windows notification system using native Windows Toast notifications (WinRT).
+- **Direct OS Notification Dispatch:** The Local AI Runtime manages durable scheduled events and event backlogs. The Flutter client consumes these events and owns native Windows Toast notification presentation.
 - **Client-Closed Delivery:** Native notifications ensure urgent alerts, scheduled reminders, and proactive companion check-ins reach the user even when the desktop window is hidden or the UI application is closed.
 - **Quiet-Hours & Urgency Policy:**
   - **Alarms:** Classified as high-urgency and **bypass quiet hours by default**, ringing audibly and visually.
@@ -66,7 +66,7 @@ Repository source code establishes the current baseline reality:
 
 - **Launch Model:** The FastAPI backend is currently launched as a foreground terminal process (via uvicorn / Python scripts) listening on `127.0.0.1:8000`. Diagnostic standalone model probes are launched via PowerShell scripts (e.g., `scripts/start-model.ps1` invoking `llama-server.exe` on isolated diagnostic ports).
 - **Autostart Status:** Windows host autostart at login is **NOT IMPLEMENTED**. No Task Scheduler registration or startup hook exists in the repository.
-- **Notification Adapter Status:** Native Windows notification dispatch is **NOT IMPLEMENTED**. The current codebase contains no WinRT toast bindings or system tray background dispatchers.
+- **Notification Adapter Status:** Native Windows notification presentation is **NOT IMPLEMENTED**. The codebase contains no Flutter toast bindings.
 - **Client Lifetime Reality:** In current development, closing the browser tab leaves the backend uvicorn terminal process running (confirming process independence), but no OS-level alerts are generated if events occur while the browser is closed.
 
 ---
@@ -77,7 +77,7 @@ When implemented for PC V1, the Windows host infrastructure will provide:
 
 1. **Flutter Desktop Client Integration (`ADR-0017`):** Native Windows Flutter desktop client serving as the primary desktop experience, with system tray icon, window hide-on-close, and background runtime status indicator.
 2. **Task Scheduler Autostart at User Login:** Automatic startup configuration established during installer setup or settings toggle.
-3. **Native WinRT Toast Dispatcher:** Direct platform notification delivery for reminders, alarms, and routines.
+3. **Native WinRT Toast Presentation:** Direct platform notification delivery for reminders, alarms, and routines.
 4. **Runtime Durable Turn Queue (`ADR-0019`):** Server-side turn queue persisting request processing across client disconnects.
 5. **Resilient Scheduling & Wake Catch-up:** Persistent `SchedulerService` requesting OS timer wake for scheduled alarms and reconciling missed events upon wake.
 

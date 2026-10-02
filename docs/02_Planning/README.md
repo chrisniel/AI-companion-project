@@ -19,7 +19,7 @@ The Master Planning Spine is the single operational authority for release delive
 | [`00_Master/DELIVERY_INDEX.md`](./00_Master/DELIVERY_INDEX.md) | Central delivery navigation hub linking milestones, active plans, WBS, and release gates. |
 | [`00_Master/SPRINT_ROADMAP.md`](./00_Master/SPRINT_ROADMAP.md) | Release milestone roadmap (M0 Setup through M5 Golden Gate + Mobile Follow-On). |
 | [`00_Master/WBS.md`](./00_Master/WBS.md) | Granular Work Breakdown Structure with stable tracking IDs (`PC-CLIENT`, `PC-HOST`, etc.). |
-| [`00_Master/DECISION_REGISTER.md`](./00_Master/DECISION_REGISTER.md) | Master register mapping approved architectural decisions (D1–D16) to canonical owners. |
+| [`00_Master/DECISION_REGISTER.md`](./00_Master/DECISION_REGISTER.md) | Master register mapping approved architectural decisions (D1-D11) to canonical owners. |
 | [`00_Master/BACKLOG.md`](./00_Master/BACKLOG.md) | Partitioned backlog (`PC V1 Committed`, `PC Later`, `Experimental`, `Mobile Follow-On`, `Rejected`). |
 | [`00_Master/MASTER_CHECKLIST.md`](./00_Master/MASTER_CHECKLIST.md) | Cross-layer capability readiness audit (spec, source, CI, Golden Gate verification). |
 | [`00_Master/DECISION_DEBT.md`](./00_Master/DECISION_DEBT.md) | Explicit log of implementation-open details, required experiments, and bounded trade-offs. |

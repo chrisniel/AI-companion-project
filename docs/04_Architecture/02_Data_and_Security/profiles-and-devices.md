@@ -1,8 +1,8 @@
 # Profiles and Devices Architecture
 
 > **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Aligned with Decisions D1–D16, ADR-0004, ADR-0018)  
-> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D16. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for profiles, identity, and client device enrollment.
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0004, ADR-0018)  
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for profiles, identity, and client device enrollment.
 
 ---
 
@@ -23,7 +23,7 @@ This specification defines identity boundaries, data ownership partitions, and c
 
 In accordance with Decision D8 and `ADR-0018`:
 - **Single Account, Multiple Isolated Profiles:**
-  - The PC installation operates under a single administrative Account, with first-class support for multiple isolated **Profiles** (e.g., "Personal", "Work", or separate household users).
+  - The PC installation operates under a single administrative Account, with first-class support for multiple isolated **Profiles** (e.g., separate household users sharing the installation. One human = one Profile. A Profile may contain multiple Characters/settings/configuration contexts.)
   - Each Profile has complete isolation over:
     - Conversations & turn histories
     - Long-term memories (`PROFILE` and `CHARACTER` scopes)
@@ -35,7 +35,7 @@ In accordance with Decision D8 and `ADR-0018`:
   - The local desktop administrator can switch between profiles without restarting the background Windows Host Runtime.
 - **Migration Path (`owner_id` → `profile_id`):**
   - Database schema transitions from legacy `owner_id` to `profile_id`.
-  - Existing database rows with `owner_id = 'default_user'` map automatically to the primary default profile (`profile_id = 'default'`).
+  - Existing database rows with `owner_id = 'default_user'` map automatically to the primary default profile (`a stable UUID`).
 
 ### 2.2 Profile vs. Device Separation (Decision D4)
 

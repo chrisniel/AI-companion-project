@@ -37,7 +37,7 @@ The ecosystem separates the long-running host runtime from client presentation i
                  ▼                            ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    Windows Host Runtime                     │
-│               FastAPI • Python 3.13 • asyncio               │
+│               FastAPI • Python 3.11 • asyncio               │
 │                                                             │
 │  ┌───────────────────────────────────────────────────────┐  │
 │  │ Assistant Engine • Turn Queue • Token Stream (SSE)    │  │
@@ -69,9 +69,9 @@ The ecosystem separates the long-running host runtime from client presentation i
 
 ### Component Roles
 - **Windows Host Runtime (`backend/`):** Long-running FastAPI daemon owning conversation turn queues, SQLite+FTS5 persistence, model execution, deterministic action policies, and speech engines.
-- **Flutter Desktop (`frontend/desktop/`):** The primary production client for PC V1, providing the desktop shell, system tray integration, native notifications, and audio hardware capture/playback.
+- **Flutter Desktop:** The target primary production client for PC V1 (Not Yet Scaffolded), providing the desktop shell, system tray integration, native notifications, and audio hardware capture/playback.
 - **React Web Client (`frontend/web/`):** Supported web client and browser-based test/development interface providing rich inspection dashboards.
-- **Android Companion (`android/`):** Native Android companion prototype, scheduled for production completion in a dedicated follow-on milestone.
+- **Android Companion (`android/`):** Native Android companion prototype (Kotlin is prototype/reference only). Flutter is intended mobile foundation later.
 
 ---
 
@@ -97,7 +97,7 @@ AI-companion-project/
 │   ├── alembic/            # SQLite database schema migrations
 │   └── tests/              # Backend test suites (pytest)
 ├── frontend/
-│   ├── desktop/            # Flutter Windows desktop application (PC V1 Target)
+│   ├── desktop/            # Flutter Windows desktop application (Target - Not Yet Scaffolded)
 │   └── web/                # React 19 / Vite / Tailwind web client
 ├── android/                # Native Android companion application (prototype)
 ├── contracts/

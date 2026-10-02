@@ -1,8 +1,8 @@
 # Assistant and Conversations Architecture
 
 > **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Aligned with Decisions D1–D16, ADR-0018, ADR-0019)  
-> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D16. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for the assistant turn and conversation domain.
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0018, ADR-0019)  
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for the assistant turn and conversation domain.
 
 ---
 
@@ -35,7 +35,7 @@ In accordance with Decisions D7, D8, and D11 (`ADR-0007`, `ADR-0018`, `ADR-0011`
 
 ### 2.2 Client-Runtime Contract & Durable Turn Queue (ADR-0019)
 
-Per Decision D14 and `ADR-0019`, communication between client applications (Flutter Desktop, React Web, Android Companion) and the Windows Host Runtime is governed by strict protocol and persistence boundaries:
+Per `ADR-0019`, communication between client applications (Flutter Desktop, React Web, Android Companion) and the Windows Host Runtime is governed by strict protocol and persistence boundaries:
 - **Transport Separation:**
   - **REST / JSON:** Used for commands, queries, configuration updates, and turn submissions.
   - **Server-Sent Events (SSE):** Used for token completions and typed turn events (`token`, `tool_call`, `error`, `done`).
@@ -142,7 +142,7 @@ The following implementation choices are intentionally left open for subsequent 
 
 ## 7. Canonical Relationships & Cross-Links
 
-- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D1, D7, D8, D11, D14)
+- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D1, D7, D8, D11)
 - **Client-Runtime Contract ADR:** [`docs/04_Architecture/decisions/ADR-0019-client-runtime-contract-and-work-boundaries.md`](../decisions/ADR-0019-client-runtime-contract-and-work-boundaries.md)
 - **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
 - **Work Breakdown Structure:** [`docs/02_Planning/00_Master/WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-API-001`, `PC-CLIENT-002`)

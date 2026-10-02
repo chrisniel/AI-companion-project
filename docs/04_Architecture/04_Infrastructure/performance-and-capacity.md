@@ -20,9 +20,9 @@ This specification defines the hardware resource governance, performance profile
 
 ## 2. Durable Architecture & Invariants
 
-### 2.1 Low-Impact / Gaming Mode Governance (Decisions D2, D16)
+### 2.1 Low-Impact / Gaming Mode Governance (Decision D2)
 
-In accordance with Decision D16 and [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Row 44):
+In accordance with Decision D2 and [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Row 44):
 - **Three Operational Modes:** The companion runtime provides three operational performance policies:
   1. `Normal`: Standard configured hardware profile (`eco`, `balanced`, or `maximum`).
   2. `Low-Impact`: Throttled resource footprint designed to minimize VRAM, GPU compute, and CPU thread contention with foreground workloads.
@@ -30,7 +30,7 @@ In accordance with Decision D16 and [`docs/02_Planning/00_Master/DECISION_REGIST
 - **Host-Level Scope:** Performance mode is a machine-wide host policy. It applies globally across all profiles on the PC rather than varying per user profile.
 - **Low-Impact Model Substitution Option:** When entering `Low-Impact` mode, the runtime can optionally unload the primary 7B/8B model and substitute a lightweight 1B–3B text model (or drop GPU offload layers to 0/CPU-only), releasing VRAM for foreground gaming or rendering.
 - **Deferred Background Inference:** Non-urgent background inference jobs (such as long-term memory extraction or scheduled autonomous routines) are automatically deferred while `Low-Impact` mode is active.
-- **Notification Governance Under Decision D10:** Engaging Gaming or Low-Impact Mode does **not** suppress or drop scheduled alarms or urgent reminders. Critical notifications remain strictly governed by the Decision D10 quiet-hours policy and native toast dispatch.
+- **Notification Governance Under Decision D10:** Engaging Gaming or Low-Impact Mode does **not** suppress or drop scheduled alarms or urgent reminders. Critical notifications remain strictly governed by the Decision D10 quiet-hours policy and native toast presentation.
 
 ### 2.2 Workstation Coexistence & Hardware Portability
 

@@ -30,7 +30,7 @@ The repository is structured into distinct subsystem trees:
 ```text
 AI-companion-project/
 ├── backend/            # FastAPI Local AI Runtime (Python 3.11, SQLAlchemy 2, Alembic)
-├── frontend/desktop/   # Flutter Windows Desktop Client (Primary production client for PC V1)
+├── frontend/desktop/   # Flutter Windows Desktop Client (Target - Not Yet Scaffolded)
 ├── frontend/web/       # React 19 Web Client (Supported developer harness and test oracle)
 ├── android/            # Android Mobile Companion Client (Prototype / reference client)
 ├── contracts/openapi/  # Canonical OpenAPI contract (openapi.json)
@@ -154,7 +154,7 @@ npm run dev
 
 ### Speech & Voice Engines (PC V1 Target)
 - **Speech-to-Text (STT):** `whisper.cpp` candidate binary managed by runtime for local transcription.
-- **Text-to-Speech (TTS):** `Kokoro-82M` ONNX candidate model executing on CPU/RAM.
+- **Text-to-Speech (TTS):** `Kokoro-82M` candidate model executing on CPU/RAM.
 
 ---
 

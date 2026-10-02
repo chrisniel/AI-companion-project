@@ -60,5 +60,5 @@ docs/02_Planning/00_Master/
 2. **OpenAPI Schema Contract → Flutter Client:** FastAPI OpenAPI contract generation is authoritative; Flutter Dart client code-generation or mechanical verification depends on it.
 3. **Multi-Profile Migration (`owner_id` → `profile_id`) → Domain Entities:** Updating DB models to support multi-Profile isolation must occur before building Profile-scoped memory, character instances, or conversational queues.
 4. **D9 Policy Engine → Tool Invocation:** The 5-stage deterministic pipeline ($\text{Model} \rightarrow \text{Typed Request} \rightarrow \text{Policy} \rightarrow \text{Adapter} \rightarrow \text{Capability}$) must be verified before allowing generative models to invoke tasks, memories, or web tools.
-5. **SchedulerService & Native Notifications → Closed-Browser Delivery:** Runtime-owned scheduling logic must precede native Windows Toast dispatch for alarms, reminders, and routines.
+5. **SchedulerService & Native Notifications → Closed-Browser Delivery:** Runtime-owned scheduling logic must precede native Windows Toast presentation for alarms, reminders, and routines.
 6. **Native Audio Device Handling (Flutter) ↔ Speech Orchestration (Runtime):** Flutter manages audio hardware devices and capture/playback; Local AI Runtime manages STT/TTS engine lifecycle over WebSocket.

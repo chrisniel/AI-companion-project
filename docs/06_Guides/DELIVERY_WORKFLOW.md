@@ -101,6 +101,7 @@ To prevent both microscopic over-ceremony and unwieldy, unreviewable pull reques
 Chris owns all repository mutations. AI agents operate under a **Strict Read-Only Git Policy**:
 - **Prohibited Agent Commands:** `git add`, `git commit`, `git push`, `git merge`, `git rebase`, `git branch`, `git checkout`, `git switch`, `git tag`, `git stash`, `git reset`, `git restore`, and PR creation/merge.
 - **Permitted Agent Commands (Read-Only):** `git status`, `git diff`, `git log`, `git show`, `git rev-parse`, `git branch` (list only), `git worktree list`.
+- **Git Branch Preflight:** Before non-trivial edits, inspect the current Git branch (`git branch --show-current`). If on `develop` or `master`, STOP before editing. Recommend an appropriate task branch, ask Chris to create/switch/push it, and resume only after Chris confirms. Agents still perform no Git mutations.
 - **Handoff Mechanism:** When verification passes, the agent stops, displays command evidence, and supplies a formatted Conventional Commit proposal for Chris to review, commit, and push manually.
 
 ### 4.2 Conventional Commit Proposals

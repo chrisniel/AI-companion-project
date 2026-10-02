@@ -71,7 +71,7 @@ docs/04_Architecture/
    - **Future external / device integrations:** Explicitly evaluated and approved future service connections *(planned)*.
    *(Boundary note: Voice/audio pipelines and the Android Companion are core experience domains owned by `01_Domains/`, not external integrations.)*
 4. **`04_Infrastructure/` (Host Runtime, Hardware & Platform):**
-   - **Runtime and models:** Local LLM inference via llama.cpp / ONNX, hardware offloading profiles, model management, and optional cloud fallback ([`04_Infrastructure/runtime-and-models.md`](04_Infrastructure/runtime-and-models.md)).
+   - **Runtime and models:** Local LLM inference via llama.cpp, hardware offloading profiles, model management, and optional cloud fallback ([`04_Infrastructure/runtime-and-models.md`](04_Infrastructure/runtime-and-models.md)).
    - **Storage and assets:** Host filesystem paths, application asset storage, and database migration mechanics ([`04_Infrastructure/storage-and-assets.md`](04_Infrastructure/storage-and-assets.md)).
    - **Windows host and notification infrastructure:** Native OS notification delivery, background autostart at login, and host lifecycle ([`04_Infrastructure/windows-host-and-notifications.md`](04_Infrastructure/windows-host-and-notifications.md)).
    - **Practical backup / recovery:** Database snapshot and asset recovery mechanisms for PC V1 ([`04_Infrastructure/backup-recovery-and-diagnostics.md`](04_Infrastructure/backup-recovery-and-diagnostics.md)). *(Note: A full Diagnostics / Recovery Center is an exploratory recommendation and is NOT an approved PC V1 capability.)*
