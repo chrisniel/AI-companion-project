@@ -6,22 +6,10 @@
 
 
 
-The frozen identity model relies on four core entities:
-- **Account:** One local installation/admin authority.
-- **Profile:** One human's private companion context.
-- **Device:** Enrolled endpoint.
-- **Session:** Temporary authenticated context.
-
 
 ## 1. Purpose & Scope
 
 ### 1.1 Identity Model Glossary
-
-The frozen identity model relies on four core entities:
-- **Account:** One local installation/admin authority.
-- **Profile:** One human's private companion context.
-- **Device:** Enrolled endpoint.
-- **Session:** Temporary authenticated context.
 
 
 This specification defines identity boundaries, data ownership partitions, and client device enrollment for the AI Companion:
@@ -55,7 +43,7 @@ Do not invent exact schema/API fields beyond what is frozen.
 
 ## 3. Durable Architecture & Invariants
 
-### 2.1 Multi-Profile PC V1 Ownership Model (ADR-0018)
+### 3.1 Multi-Profile PC V1 Ownership Model (ADR-0018)
 
 In accordance with `ADR-0018`, superseding historical D8 / ADR-0009:
 - **Single Account, Multiple Isolated Profiles:**
@@ -73,7 +61,7 @@ In accordance with `ADR-0018`, superseding historical D8 / ADR-0009:
   - Database schema transitions from legacy `owner_id` to `profile_id`.
   - Existing legacy `default_user` records migrate into a newly created Profile with a stable UUID. "Default Profile" may be an initial display name; the display name is not identity.
 
-### 2.2 Profile vs. Device Separation (Decision D4)
+### 3.2 Profile vs. Device Separation (Decision D4)
 
 In accordance with Decision D4:
 - **Profile Represents User Context:** A Profile models the companion user identity and owns all personal data.
@@ -87,7 +75,7 @@ In accordance with Decision D4:
 
 ---
 
-## 3. Current Verified Implementation
+## 4. Current Verified Implementation
 
 Repository source code establishes the following baseline reality:
 
@@ -99,7 +87,7 @@ Repository source code establishes the following baseline reality:
 
 ---
 
-## 4. Approved Target Architecture / Not Yet Implemented
+## 5. Approved Target Architecture / Not Yet Implemented
 
 The following target capabilities are approved for PC V1:
 
@@ -115,7 +103,7 @@ The following target capabilities are approved for PC V1:
 
 ---
 
-## 5. Implementation-Open Details (Decision Debt)
+## 6. Implementation-Open Details (Decision Debt)
 
 The normative architecture for D4 and ADR-0018 is frozen. The following implementation-level details are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
 
@@ -125,7 +113,7 @@ The normative architecture for D4 and ADR-0018 is frozen. The following implemen
 
 ---
 
-## 6. Security & Ownership Boundaries
+## 7. Security & Ownership Boundaries
 
 - **Profile Isolation:** All queries on user data mandate `WHERE entity.profile_id = :authenticated_profile_id`. Cross-profile data leakage is strictly prohibited.
 - **Satellite Isolation:** Satellite device tokens have access strictly to their bound profile.
@@ -133,7 +121,7 @@ The normative architecture for D4 and ADR-0018 is frozen. The following implemen
 
 ---
 
-## 7. Canonical Relationships & Cross-Links
+## 8. Canonical Relationships & Cross-Links
 
 - **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decision D4, ADR-0018)
 - **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)

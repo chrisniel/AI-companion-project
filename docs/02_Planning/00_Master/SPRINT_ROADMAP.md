@@ -69,7 +69,7 @@
 - **Exit Criteria:** Consented spoken voice conversation functions with instant barge-in interruption; D9 policy engine intercepts model tool intents under DEFAULT DENY and requires explicit user confirmation for Risk 2; read-only web information successfully provides fresh context with clear source provenance.
 
 ### Milestone M5: Integration, Resilience & Hardening
-- **Primary Objective:** Implement the host-level Low-Impact / Gaming resource controller with Option B configured app detection and lightweight 1B–3B model substitution, coordinated DB+Profile asset backup with pre-migration hooks and verified staging restore, local admin Factory Reset, Tailscale / Cloudflare Tunnel connection hardening, and pre-release test suite stabilization.
+- **Primary Objective:** Implement the host-level Low-Impact / Gaming resource controller with Option B configured app detection and compatible lightweight local text model (e.g., 1B-3B) substitution, coordinated DB+Profile asset backup with pre-migration hooks and verified staging restore, local admin Factory Reset, Tailscale / Cloudflare Tunnel connection hardening, and pre-release test suite stabilization.
 - **Exit Criteria:** Gaming mode activates reliably on configured app focus, throttling background work and swapping to lightweight model without losing conversation continuity; backup produces verified recoverable archives; Factory Reset cleanly resets companion to first-run state; all Level 1 CI verification lanes pass cleanly.
 
 ### GATE-PC-V1: Golden PC V1 Acceptance Gate

@@ -49,7 +49,7 @@
 - **`PC-CLIENT-008`**: Schedule, Reminder, Alarm & Routine Management View.
 - **`PC-CLIENT-009`**: Memory Inspection, Correction & Deletion Control Center.
 - **`PC-CLIENT-010`**: Model Management UI (D6 manual scan trigger, bundle install confirmation, VRAM metrics).
-- **PC-CLIENT-011**: Settings, Remote Access & Backup/Reset UI.
+- **`PC-CLIENT-011`**: Settings, Remote Access & Backup/Reset UI.
 - **`PC-CLIENT-012`**: Windows Native Notification Presentation (Toasts/Action Center delivery).
 
 ### Stream: `PC-HOST` — Windows Host Infrastructure

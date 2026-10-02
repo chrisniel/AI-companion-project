@@ -36,18 +36,6 @@ It governs the boundary between ephemeral conversation turns and durable compani
 - **Context Injection Security:** Retrieved memories are injected into LLM context as untrusted user-supplied facts inside `<retrieved_memories>` tags. Memories must never override core system prompts, character invariants, or safety policies.
 - **Bounded Context Recall:** Injected memories are strictly bounded by token budgets (`MEMORY_BUDGET_TOKENS`), prioritizing high-relevance matches.
 
-### 2.3 Local-Only Extraction & Temporary Validity
-
-
-- **Temporary Memory Validity & Revalidation:** Ephemeral statements (e.g., "I'm sick today", "I'm staying at a hotel this week") must carry expiration metadata or require revalidation before durable long-term persistence. Ambiguous statements or emotional vents must never silently become permanent profile facts.
-
-### 2.4 Retrieval Technology Independence
-
-- The durable architectural requirement is **persistent, queryable memory retrieval under profile authority**.
-- Specific search mechanisms (e.g., SQLite FTS5 full-text search, BM25 ranking, or vector embeddings) are implementation strategies, **not** immutable architectural invariants.
-
----
-
 ### 2.3 Frozen Memory Extraction & Management Policy
 
 The following behavioral invariants dictate how the runtime processes memories:
@@ -62,11 +50,19 @@ The following behavioral invariants dictate how the runtime processes memories:
 - **Provenance & Confidence:** Provenance is conceptually mandatory. Confidence represents extraction confidence, not objective truth probability.
 - **Reconciliation:** Related memories must reconcile as NEW, MERGE, UPDATE, or CONFLICT.
 - **Correction Authority:** Explicit user correction has high authority.
-- **Lifecycle & Expiry:** Memories support temporary validity, expiry, and revalidation. Expired Memory is excluded immediately.
+- **Lifecycle & Expiry:** Memories support temporary validity, expiry, and revalidation. Ephemeral statements (e.g., "I'm sick today") must carry expiration metadata or require revalidation. Ambiguous statements or emotional vents must never silently become permanent profile facts. Expired Memory is excluded immediately.
 - **Forget Semantics:** "Forget" removes the memory from retrieval and context immediately; physical purge may follow later. Tombstones prevent known resurrection from restore.
 - **Data Partitions:** Conversation History, Memory, and Emotion remain distinct architectural concepts.
 - **Open Design:** Exact schema names remain open.
 
+
+
+### 2.4 Retrieval Technology Independence
+
+- The durable architectural requirement is **persistent, queryable memory retrieval under profile authority**.
+- Specific search mechanisms (e.g., SQLite FTS5 full-text search, BM25 ranking, or vector embeddings) are implementation strategies, **not** immutable architectural invariants.
+
+---
 
 ## 3. Current Verified Implementation
 

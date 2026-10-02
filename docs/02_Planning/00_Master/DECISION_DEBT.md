@@ -88,4 +88,4 @@
 - **`DEBT-LATER-004`: Interactive Browser Automation (Playwright)**
   - *Context:* Automated web form completion and multi-step web transactions.
 - **`DEBT-LATER-005`: Mobile-to-PC Full Bidirectional State Synchronization**
-  - *Context:* Room database outbox synchronization for the follow-on Android companion pass.
+  - *Context:* Mobile-to-PC state synchronization; exact persistence/outbox mechanism deferred to the Mobile Architecture Pass.

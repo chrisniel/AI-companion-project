@@ -79,7 +79,7 @@ To ensure robust model management and avoid semantic conflation across model ide
 
 ---
 
-### 2.5 Cloud LLM Routing Policy
+### 2.6 Cloud LLM Routing Policy
 
 The high-level fallback routing policy for cloud models is frozen:
 
@@ -98,7 +98,7 @@ The high-level fallback routing policy for cloud models is frozen:
 - **D9 Authority:** Cloud providers have zero inherent D9 tool authority.
 - **Data Minimization:** Cloud context builder minimizes egress and does not send the entire Profile, Memory, or history.
 - **Provenance:** Provider/model provenance MUST be persisted with assistant messages.
-- **Credentials:** Device-local credential rules belong with uthentication-and-secrets.md.
+- **Credentials:** Device-local credential rules belong with [`authentication-and-secrets.md`](../02_Data_and_Security/authentication-and-secrets.md).
 - **Open Design:** The exact provider adapter implementation remains open design.
 
 

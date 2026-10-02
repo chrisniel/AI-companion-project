@@ -51,7 +51,7 @@
 | **Resilience**| Staged Restore Verification | `backup-recovery-and-diagnostics.md` | Pending restore validator | Restore tests | G13 | **NOT STARTED** |
 | **Resilience**| Local Admin Factory Reset | `backup-recovery-and-diagnostics.md` | Pending reset service | Reset tests | G13 | **NOT STARTED** |
 | **Remote** | Tailscale Mesh & Cloudflare Tunnel | `authentication-and-secrets.md` | Tailscale installed on host | Remote tests | G14 | **PARTIAL** |
-| **Golden Gate**| 14-Group End-to-End Release Gate | `SYSTEM_BASELINE.md` §8 | Verification Guide | Release Run | All 14 Groups | **NOT STARTED** |
+| **Golden Gate**| 14-Group End-to-End Release Gate | `SYSTEM_BASELINE.md` §5 | Verification Guide | Release Run | All 14 Groups | **NOT STARTED** |
 
 ---
 

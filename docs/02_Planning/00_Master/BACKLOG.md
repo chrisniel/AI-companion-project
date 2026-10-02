@@ -56,13 +56,19 @@
 - **Quick Cloudflare Tunnels:** Ephemeral quick tunnels for temporary mobile testing during development.
 
 ### 2.4 Mobile Follow-On Track (Android V1)
-- **Production Package Identity:** Rename from `com.example.aicompanion` to locked `com.cnl.aicompanion` (Decision D3).
-- **Flutter Mobile Foundation:** Re-evaluate and implement production mobile companion using Flutter framework, preserving SoftGlass neumorphic design concepts.
-- **Single-Profile Mobile Binding:** Satellite phone binds to exactly one Profile with individually revocable credentials (Decision D4).
-- **Authenticated Connected Synchronization:** Two-way sync over trusted LAN / Tailscale private mesh with PC Local AI Runtime as authority.
-- **Durable Mobile Persistence:** Local offline outbox queuing and state caching.
-- **Compact Offline Roaming LLM:** On-device local text inference via practical compact model (Gemma-2-2B / Qwen-2.5-1.5B or alternative).
-- **Health Connect Integration:** Wearable and biometric context synchronization (Android Health Connect API).
+- **Flutter Mobile Foundation:** Flutter is the intended production foundation, preserving SoftGlass neumorphic design concepts.
+- **Production Package Identity:** Locked com.cnl.aicompanion.
+- **PC V1 Independence:** Android development does not block PC V1 delivery.
+- **Single-Profile Mobile Binding:** Satellite phone binds to exactly one Profile.
+- **Local Credentials:** Provider/API/device credentials remain device-local.
+- **Current Evidence:** Current Kotlin repository code serves strictly as prototype/reference evidence.
+
+**MOBILE ARCHITECTURE CANDIDATE INPUTS / RESEARCH:**
+(To be evaluated during the separate mobile architecture pass; not currently frozen)
+- Mobile-to-PC state synchronization topology.
+- Local offline outbox queuing and state caching (e.g. Room).
+- On-device compact offline roaming LLM.
+- Wearable and biometric context synchronization (e.g. Android Health Connect API).
 
 ### 2.5 Rejected Proposals (Prohibited Capabilities)
 - **Generic Command Shell Execution:** Arbitrary `cmd.exe`, PowerShell, Bash, raw OS process spawning, or unrestricted filesystem administrative authority (Permanently REJECTED under Decision D9 Risk 3).

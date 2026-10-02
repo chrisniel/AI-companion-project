@@ -79,7 +79,7 @@ To ensure user agency and safe runtime intervention during tool execution, the a
 
 ---
 
-### 2.4 Frozen D9 Tool Execution Policy
+### 2.7 Frozen D9 Tool Execution Policy
 
 The following semantics codify the frozen D9 execution requirements for PC V1:
 
