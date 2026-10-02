@@ -20,7 +20,7 @@ For comprehensive procedural details on delivery gates, pull requests, walkthrou
 - **Documentation Map:** [`docs/06_Guides/DOCUMENTATION_MAP.md`](docs/06_Guides/DOCUMENTATION_MAP.md)
 - **Canonical Architecture Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](docs/04_Architecture/SYSTEM_BASELINE.md)
 - **Primary Tech Stack:**
-  - **Windows Host Runtime:** Python 3.11, FastAPI, SQLAlchemy 2, Alembic, SQLite/FTS5, `llama.cpp`.
+  - **Local AI Runtime:** Python 3.11, FastAPI, SQLAlchemy 2, Alembic, SQLite/FTS5, `llama.cpp`.
   - **PC V1 Client Target:** Flutter Desktop (Windows), Dart.
   - **Supported Web Client & Dev Harness:** React 19, TypeScript 5.8, Vite 6, Tailwind CSS 4 (`frontend/web/`).
   - **Mobile Companion Prototype:** Kotlin, Jetpack Compose (`android/`, V1 follow-on).

@@ -35,13 +35,13 @@ In accordance with Decisions D7, D8, and D11 (`ADR-0007`, `ADR-0018`, `ADR-0011`
 
 ### 2.2 Client-Runtime Contract & Durable Turn Queue (ADR-0019)
 
-Per `ADR-0019`, communication between client applications (Flutter Desktop, React Web, Android Companion) and the Windows Host Runtime is governed by strict protocol and persistence boundaries:
+Per `ADR-0019`, communication between client applications (Flutter Desktop, React Web, Android Companion) and the Local AI Runtime is governed by strict protocol and persistence boundaries:
 - **Transport Separation:**
   - **REST / JSON:** Used for commands, queries, configuration updates, and turn submissions.
   - **Server-Sent Events (SSE):** Used for token completions and typed turn events (`token`, `tool_call`, `error`, `done`).
   - **WebSocket:** Dedicated to full-duplex conversational voice streaming (audio frames, barge-in, STT/TTS control).
 - **Durable FIFO Turn Queue:**
-  - The Windows Host Runtime manages a durable FIFO turn queue per conversation.
+  - The Local AI Runtime manages a durable FIFO turn queue per conversation.
   - **Client Disconnect Resilience:** If a client disconnects during SSE generation (e.g. browser tab closed, network drop), generative turn execution continues to completion in the background and is committed to SQLite.
   - **Reconnect Catch-Up:** Upon client reconnection, the client queries conversation history to retrieve the finalized turn without data loss or duplicate execution.
 - **Deterministic Ordering:** Messages within a conversation are ordered strictly chronologically via a monotonically increasing `sequence_no` constrained by a unique database constraint (`conversation_id`, `sequence_no`).

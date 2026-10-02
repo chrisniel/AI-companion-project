@@ -26,7 +26,7 @@ It governs the boundary between audio hardware/drivers and conversational assist
 In accordance with Decision D1:
 - **Hardware & Processing Boundary:**
   - **Flutter Desktop Client:** Owns local audio hardware enumeration, physical microphone capture, speaker/headphone playback, and OS audio focus.
-  - **Windows Host Runtime:** Owns the speech pipeline engines (`STTProvider` and `TTSProvider`) and conversational turn coordination.
+  - **Local AI Runtime:** Owns the speech pipeline engines (`STTProvider` and `TTSProvider`) and conversational turn coordination.
 - **WebSocket Full-Duplex Transport (`ADR-0019`):** Audio frames and speech control events stream over a dedicated persistent WebSocket connection between the desktop client and runtime.
 - **Approved PC V1 Local Speech Engines:**
   - **Speech-to-Text (STT):** Local STT engine (e.g., whisper.cpp candidate) (executing on CPU/RAM to preserve GPU VRAM).
@@ -95,7 +95,7 @@ The normative architecture for Voice is frozen. The following implementation-lev
 
 - **Consent Boundaries:** The microphone must never open or record without clear user action or explicit, visible UI state.
 - **Transcript Authority:** Generated text transcripts become user messages within conversations, inheriting standard profile data ownership and retention rules (`profile_id`).
-- **Network Boundaries:** Local speech processing occurs entirely on-device under Windows Host Runtime authority; audio data is never transmitted to external cloud endpoints without explicit opt-in configuration.
+- **Network Boundaries:** Local speech processing occurs entirely on-device under Local AI Runtime authority; audio data is never transmitted to external cloud endpoints without explicit opt-in configuration.
 
 ---
 

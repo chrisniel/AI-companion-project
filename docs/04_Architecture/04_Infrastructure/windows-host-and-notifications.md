@@ -43,13 +43,16 @@ In accordance with Decision D2 and [`ADR-0003`](../decisions/ADR-0003-d2-windows
 
 ### 2.3 Native Windows Notifications & Offline Catch-up (Decision D10)
 
-In accordance with Decision D10 and [`ADR-0011`](../decisions/ADR-0011-d10-scheduling-and-notification-semantics.md):
-- **Direct OS Notification Dispatch:** The Local AI Runtime manages durable scheduled events and event backlogs. The Flutter client consumes these events and owns native Windows Toast notification presentation.
-- **Client-Closed Delivery:** Native notifications ensure urgent alerts, scheduled reminders, and proactive companion check-ins reach the user even when the desktop window is hidden or the UI application is closed.
+In accordance with Decision D10 and [ADR-0011](../decisions/ADR-0011-d10-scheduling-and-notification-semantics.md):
+- **Runtime Owns the Backlog:** The Local AI Runtime owns schedule truth, event generation, and the durable event backlog.
+- **Flutter Owns Presentation:** The Flutter client consumes these events and owns native Windows Toast presentation.
+- **Client Hidden vs. Quit Semantics:**
+  - **Hidden (System Tray):** If the Flutter UI is merely hidden (closed to tray), it remains running and presents notifications normally.
+  - **Explicit Quit:** If the user explicitly quits the Flutter client, the Runtime continues executing. The event remains durable in the backlog. Native presentation waits until the client returns. Quit Flutter != Stop Runtime.
 - **Quiet-Hours & Urgency Policy:**
   - **Alarms:** Classified as high-urgency and **bypass quiet hours by default**, ringing audibly and visually.
-  - **Reminders & Routines:** Respect configured quiet hours by default, holding or delivering silently unless an explicit per-item override is enabled.
-- **Offline & Sleep Catch-up:** When the host machine awakens from sleep, hibernation, or an offline period, `SchedulerService` evaluates missed reminder triggers, delivering aggregated catch-up notifications while expiring stale low-priority alerts.
+  - **Reminders & Routines:** Respect configured quiet hours by default.
+- **Offline & Sleep Catch-up:** When the host machine awakens or the client reconnects, SchedulerService evaluates missed reminder triggers, delivering aggregated catch-up notifications while expiring stale low-priority alerts.
 
 ### 2.4 Best-Effort OS Alarm Wake Invariant
 
@@ -106,7 +109,7 @@ Detailed implementation choices for future planning are tracked in [`docs/02_Pla
 ### Upstream Baseline & Decision Spine
 - [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) — Host execution baseline, Decision D2 (decoupled runtime), Decision D10 (Tasks & Reminders).
 - [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) — Master Decision Register (Row 22 Flutter Client, Row 25 Windows Host, Row 38 Scheduling).
-- [`docs/04_Architecture/decisions/ADR-0003-d2-windows-host-model.md`](../decisions/ADR-0003-d2-windows-host-model.md) — Windows Host Runtime Model.
+- [`docs/04_Architecture/decisions/ADR-0003-d2-windows-host-model.md`](../decisions/ADR-0003-d2-windows-host-model.md) — Local AI Runtime Model.
 - [`docs/04_Architecture/decisions/ADR-0017-flutter-production-windows-client.md`](../decisions/ADR-0017-flutter-production-windows-client.md) — Flutter Production Windows Client.
 - [`docs/04_Architecture/decisions/ADR-0019-client-runtime-contract-and-work-boundaries.md`](../decisions/ADR-0019-client-runtime-contract-and-work-boundaries.md) — Client ↔ Runtime Contract & Work Boundaries.
 

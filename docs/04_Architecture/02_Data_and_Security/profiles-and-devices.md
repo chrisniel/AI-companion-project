@@ -13,15 +13,15 @@ This specification defines identity boundaries, data ownership partitions, and c
 - Multi-Profile PC V1 ownership model (`ADR-0018`).
 - Migration roadmap from legacy single-user `owner_id` to `profile_id`.
 - Satellite device binding (a normal satellite binds to exactly one Profile).
-- Trusted device enrollment, per-device revocable credentials, and lifecycle management (`ADR-0004`).
+- Trusted device enrollment, per-device revocable credentials, and lifecycle management (`ADR-0005`).
 
 ---
 
 ## 2. Durable Architecture & Invariants
 
-### 2.1 Multi-Profile PC V1 Ownership Model (Decision D8 & ADR-0018)
+### 2.1 Multi-Profile PC V1 Ownership Model (ADR-0018)
 
-In accordance with Decision D8 and `ADR-0018`:
+In accordance with `ADR-0018`, superseding historical D8 / ADR-0009:
 - **Single Account, Multiple Isolated Profiles:**
   - The PC installation operates under a single administrative Account, with first-class support for multiple isolated **Profiles** (e.g., separate household users sharing the installation. One human = one Profile. A Profile may contain multiple Characters/settings/configuration contexts.)
   - Each Profile has complete isolation over:
@@ -32,10 +32,10 @@ In accordance with Decision D8 and `ADR-0018`:
     - Tasks, Reminders, Alarms, and Routines
 - **PC Desktop Administration:**
   - The primary PC desktop client (Flutter) provides profile switching and profile management (create, edit, delete, export).
-  - The local desktop administrator can switch between profiles without restarting the background Windows Host Runtime.
+  - The local desktop administrator can switch between profiles without restarting the background Local AI Runtime.
 - **Migration Path (`owner_id` → `profile_id`):**
   - Database schema transitions from legacy `owner_id` to `profile_id`.
-  - Existing database rows with `owner_id = 'default_user'` map automatically to the primary default profile (`a stable UUID`).
+  - Existing legacy `default_user` records migrate into a newly created Profile with a stable UUID. "Default Profile" may be an initial display name; the display name is not identity.
 
 ### 2.2 Profile vs. Device Separation (Decision D4)
 
@@ -46,7 +46,7 @@ In accordance with Decision D4:
   - A normal mobile satellite device (e.g., Android Companion) is enrolled and paired to **exactly one Profile**.
   - The mobile device interacts with data strictly within its bound profile context; it cannot switch profiles or inspect other profiles on the PC host.
 - **Independent Device Credentials:**
-  - Devices receive independent, revocable credentials (`ADR-0004`).
+  - Devices receive independent, revocable credentials (`ADR-0005`).
   - Revoking or resetting a Device does **not** alter or destroy the underlying Profile data.
 
 ---
@@ -85,7 +85,7 @@ The normative architecture for D4 and D8 is frozen. The following implementation
 
 - **Pairing & Enrollment UX:** User interaction flow for introducing a new client device (camera-scanned QR code vs. short numeric code entered on PC; `DEBT-V1-013`).
 - **Device Credential Format:** Token structure (cryptographically signed JWT device token vs. high-entropy random token hash).
-- **Profile Deletion Cascade:** User options when deleting a Profile (export archive, hard delete vs. soft-delete archive).
+- **Profile Deletion Cascade:** Exact cascade/cleanup implementation during the hard purge phase (ACTIVE -> 7-day recoverable deletion -> hard purge).
 
 ---
 
@@ -101,7 +101,7 @@ The normative architecture for D4 and D8 is frozen. The following implementation
 
 - **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D4, D8)
 - **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
-- **Device Authentication ADR:** [`docs/04_Architecture/decisions/ADR-0004-device-authentication-and-trust-model.md`](../decisions/ADR-0004-device-authentication-and-trust-model.md)
+- **Device Authentication ADR:** [`docs/04_Architecture/decisions/ADR-0005-d4-profile-device-credential-boundary.md`](../decisions/ADR-0005-d4-profile-device-credential-boundary.md)
 - **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Decisions D4, D8), [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-IDENTITY-001`, `PC-IDENTITY-002`)
 - **Authentication & Secrets Spec:** [`docs/04_Architecture/02_Data_and_Security/authentication-and-secrets.md`](authentication-and-secrets.md)
 - **UI Design Presentation:** [`docs/05_Design/02_Profile_Selector_and_Privacy.md`](../../05_Design/02_Profile_Selector_and_Privacy.md)

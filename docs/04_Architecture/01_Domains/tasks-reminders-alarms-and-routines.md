@@ -14,7 +14,7 @@ This specification defines the domain semantics, lifecycle models, scheduling ru
 - Time-critical scheduled acoustic/visual alerts (Alarms)
 - Recurring proactive companion check-ins (Routines)
 
-It governs the boundary between personal productivity state and autonomous scheduler behaviors under the PC Windows Host Runtime.
+It governs the boundary between personal productivity state and autonomous scheduler behaviors under the PC Local AI Runtime.
 
 ---
 
@@ -41,7 +41,7 @@ Tasks, Reminders, Alarms, and Routines are architecturally distinct concepts gov
    - Wake behavior from host sleep is strictly best-effort; architecture acknowledges there is no universal ACPI, OS, or firmware wake guarantee across all PC hardware.
 4. **Routine:**
    - A bounded, recurring companion check-in or interaction pattern (e.g., morning overview, evening wind-down).
-   - Governed by a deterministic `SchedulerService` in the Windows Host Runtime that decides *when* and *what* intent triggers.
+   - Governed by a deterministic `SchedulerService` in the Local AI Runtime that decides *when* and *what* intent triggers.
    - Companion character persona modulates *how* the resulting proactive check-in is phrased; the generative LLM does **not** possess unrestricted self-scheduling authority.
    - Respects quiet hours by default.
 

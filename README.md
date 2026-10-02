@@ -1,6 +1,6 @@
 # AI Companion Project
 
-A local-first, privacy-focused personal AI companion ecosystem centered around a persistent **Windows Host Runtime**, a dedicated **Flutter Desktop** companion application, a supported **React Web** development harness, and a future **Android Companion** mobile client.
+A local-first, privacy-focused personal AI companion ecosystem centered around a persistent **Local AI Runtime**, a dedicated **Flutter Desktop** companion application, a supported **React Web** development harness, and a future **Android Companion** mobile client.
 
 ---
 
@@ -36,7 +36,7 @@ The ecosystem separates the long-running host runtime from client presentation i
                  │                            │
                  ▼                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    Windows Host Runtime                     │
+│                    Local AI Runtime                     │
 │               FastAPI • Python 3.11 • asyncio               │
 │                                                             │
 │  ┌───────────────────────────────────────────────────────┐  │
@@ -55,7 +55,7 @@ The ecosystem separates the long-running host runtime from client presentation i
 │                              │                              │
 │                              ▼                              │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │ Model Execution Layer (llama.cpp / Vulkan / ONNX)     │  │
+│  │ Model Execution Layer (llama.cpp / Vulkan)     │  │
 │  └───────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
                                ▲
@@ -68,10 +68,10 @@ The ecosystem separates the long-running host runtime from client presentation i
 ```
 
 ### Component Roles
-- **Windows Host Runtime (`backend/`):** Long-running FastAPI daemon owning conversation turn queues, SQLite+FTS5 persistence, model execution, deterministic action policies, and speech engines.
+- **Local AI Runtime (`backend/`):** Long-running FastAPI daemon owning conversation turn queues, SQLite+FTS5 persistence, model execution, deterministic action policies, and speech engines.
 - **Flutter Desktop:** The target primary production client for PC V1 (Not Yet Scaffolded), providing the desktop shell, system tray integration, native notifications, and audio hardware capture/playback.
-- **React Web Client (`frontend/web/`):** Supported web client and browser-based test/development interface providing rich inspection dashboards.
-- **Android Companion (`android/`):** Native Android companion prototype (Kotlin is prototype/reference only). Flutter is intended mobile foundation later.
+- **React Web Client (`frontend/web/`):** Supported browser/remote client + dev/regression oracle providing rich inspection dashboards.
+- **Android Companion (`android/`):** Dedicated mobile companion prototype. The Kotlin/Compose repository is reference implementation evidence for V1 boundaries; detailed mobile architecture is a follow-on pass.
 
 ---
 
@@ -92,12 +92,12 @@ The PC V1 release is tuned and benchmarked against standard consumer hardware:
 
 ```text
 AI-companion-project/
-├── backend/                # FastAPI Windows Host Runtime
+├── backend/                # FastAPI Local AI Runtime
 │   ├── app/                # Core logic, domain services, API routes, models
 │   ├── alembic/            # SQLite database schema migrations
 │   └── tests/              # Backend test suites (pytest)
 ├── frontend/
-│   ├── desktop/            # Flutter Windows desktop application (Target - Not Yet Scaffolded)
+│   ├── (Target: Flutter desktop client to be scaffolded here)
 │   └── web/                # React 19 / Vite / Tailwind web client
 ├── android/                # Native Android companion application (prototype)
 ├── contracts/

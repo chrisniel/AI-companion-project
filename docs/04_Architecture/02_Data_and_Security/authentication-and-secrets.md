@@ -103,7 +103,7 @@ The normative architecture for D4 and D5 is frozen. The following implementation
 
 - **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D4, D5)
 - **Tailscale Remote Transport ADR:** [`docs/04_Architecture/decisions/ADR-0005-tailscale-preferred-remote-transport.md`](../decisions/ADR-0005-tailscale-preferred-remote-transport.md)
-- **Device Authentication ADR:** [`docs/04_Architecture/decisions/ADR-0004-device-authentication-and-trust-model.md`](../decisions/ADR-0004-device-authentication-and-trust-model.md)
+- **Device Authentication ADR:** [`docs/04_Architecture/decisions/ADR-0005-d4-profile-device-credential-boundary.md`](../decisions/ADR-0005-d4-profile-device-credential-boundary.md)
 - **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Decision D5), [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-API-002`)
 - **Profiles & Devices Specification:** [`docs/04_Architecture/02_Data_and_Security/profiles-and-devices.md`](profiles-and-devices.md)
 - **Tool Permissions & Actions Spec:** [`docs/04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md`](tool-permissions-and-actions.md)

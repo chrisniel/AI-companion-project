@@ -3,7 +3,7 @@
 > **Document Role:** High-level normative system architecture, ecosystem topology, release boundaries, cross-cutting invariants, and decision index for the AI Companion project.  
 > **Status:** Active Canonical (Decisions D1-D11 Aligned)  
 > **Last Updated:** 2026-10-02 (PC V1 Canonicalization Pass)  
-> **Authority Precedence:** Normative cross-cutting anchor. Detailed technical domain standards are owned by the 18 focused specifications under [`docs/04_Architecture/`](./README.md). Milestone delivery tracking is owned by [`docs/02_Planning/00_Master/`](../02_Planning/00_Master/). Active sprint state is tracked in [`docs/01_Tracking/task.md`](../01_Tracking/task.md).
+> **Authority Precedence:** Normative cross-cutting anchor. Detailed technical domain standards are owned by the 18 focused specifications under [`docs/04_Architecture/`](./README.md). Milestone delivery tracking is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). Active sprint state is tracked in [`docs/01_Tracking/task.md`](../../01_Tracking/task.md).
 
 ---
 
@@ -26,23 +26,23 @@ The AI Companion ecosystem is centered around an independent, persistent Windows
                   │                              │
                   ▼                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                      Windows Host Runtime                       │
+│                        Local AI Runtime                         │
 │             FastAPI • Python 3.11 • SQLite (WAL/FTS5)           │
 │                                                                 │
-│  Assistant • Turn Queue • Memory • Schedulers • Actions • Voice │
-│                   Single Resident Model Default                 │
-└─────────────────────────────────┬───────────────────────────────┘
-                                  ▲
-                                  │ Local LAN / Tailscale
-                                  ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                Android Companion App (Prototype)                │
-│         Kotlin • Jetpack Compose • Follow-on Milestone          │
-└─────────────────────────────────────────────────────────────────┘
+│  ┌───────────┐  ┌─────────────┐  ┌─────────────┐ ┌───────────┐  │
+│  │ D10 Sched │  │ D7 Memories │  │ D9 Policies │ │  Models   │  │
+│  └───────────┘  └─────────────┘  └─────────────┘ └─────┬─────┘  │
+└────────────────────────────────────────────────────────┼────────┘
+                                                         │
+                                                         ▼
+                                       ┌──────────────────────────┐
+                                       │ Local Inference Engine   │
+                                       │ (e.g., llama.cpp/Vulkan) │
+                                       └──────────────────────────┘
 ```
 
 ### Subsystem Summary
-- **Windows Host Runtime:** Persistent FastAPI background process (`backend/`). The single authority for state, multi-turn queue, SQLite+FTS5 persistence, model execution, deterministic action policies, and speech engines.
+- **Local AI Runtime:** Persistent FastAPI background process (`backend/`). The single authority for state, multi-turn queue, SQLite+FTS5 persistence, model execution, deterministic action policies, and speech engines.
 - **Flutter Desktop (Windows):** Primary production client for PC V1 (`ADR-0017`). Owns desktop window lifecycle, system tray integration, native Windows notifications, and physical audio capture/playback.
 - **React Web Client:** Supported web client and development / regression harness (`frontend/web/`). Provides browser-based testing, debugging, and administration.
 - **Android Companion:** Dedicated mobile companion prototype (`android/`, `com.cnl.aicompanion`). Scheduled for production delivery in an independent follow-on milestone (`Android V1`).
@@ -62,35 +62,35 @@ The AI Companion ecosystem is centered around an independent, persistent Windows
 ## 3. Cross-Cutting Architectural Invariants
 
 1. **Local-First Default:** All core intelligence runs locally on user hardware. Cloud LLM fallback is strictly opt-in, disabled by default, and transparent.
-2. **Runtime Independence:** Closing the Flutter UI hides to the system tray. Closing the React browser tab simply disconnects. Neither action terminates the Windows Host Runtime (`ADR-0002`). Quit UI != Stop Runtime.
+2. **Runtime Independence:** Closing the Flutter UI hides to the system tray. Closing the React browser tab simply disconnects. Neither action terminates the Local AI Runtime (`ADR-0003`). Quit UI != Stop Runtime.
 3. **Multi-Profile PC V1 Identity:** Operates under a single installation Account with multiple isolated Profiles (`ADR-0018`). Normal satellite devices bind to a single profile; PC desktop admin can manage and switch profiles.
-4. **Transparent, User-Controlled Memory:** Selective auto-extraction under deterministic policy (`ADR-0007`). Memories are scoped to `PROFILE` or `CHARACTER`, inspectable, and user-correctable.
-5. **Deterministic Action Policy & DEFAULT DENY:** Model requests are typed intents evaluated against deterministic policy (`ADR-0009`). Risk 0/1/2 configurable; Risk 3 generic shell execution is permanently rejected (`REJECTED`). Emergency kill switch provided.
-6. **Single Resident Model Default:** Runtime defaults to `--models-max 1` to preserve resources for concurrent desktop workloads (`ADR-0006`). Multi-model concurrency requires explicit opt-in in Advanced Settings.
+4. **Transparent, User-Controlled Memory:** Selective auto-extraction under deterministic policy (`ADR-0008`). Memories are scoped to `PROFILE` or `CHARACTER`, inspectable, and user-correctable.
+5. **Deterministic Action Policy & DEFAULT DENY:** Model requests are typed intents evaluated against deterministic policy (`ADR-0010`). Risk 0/1/2 configurable; Risk 3 generic shell execution is permanently rejected (`REJECTED`). Emergency kill switch provided.
+6. **Single Resident Model Default:** Runtime defaults to `--models-max 1` to preserve resources for concurrent desktop workloads. Multi-model concurrency is an approved advanced policy with capacity checks documented in `runtime-and-models.md`.
 7. **Storage Layout:** Standardized across 5 discrete directory roots: `APP_INSTALL_ROOT`, `DATA_ROOT`, `LIBRARY_ROOT` (relocatable), `CACHE_ROOT`, and `LOG_ROOT`.
-8. **Network Boundary:** Loopback default + Tailscale private mesh + Cloudflare Tunnel/Access (`ADR-0005`). Direct port forwarding is outside the supported trust model.
+8. **Network Boundary:** Loopback default + Tailscale private mesh + Cloudflare Tunnel/Access (`ADR-0006`). Direct port forwarding is outside the supported trust model.
 9. **Clean Client-Runtime Contract:** REST for commands/queries, SSE for token streams and typed events, WebSocket for full-duplex voice (`ADR-0019`). Durable FIFO turn queue survives transient client disconnects.
-10. **Native Voice Architecture:** Flutter desktop owns physical audio hardware; Windows Host Runtime owns STT and TTS speech engines over WebSocket. Voice barge-in is mandatory.
+10. **Native Voice Architecture:** Flutter desktop owns physical audio hardware; Local AI Runtime owns STT and TTS speech engines over WebSocket. Voice barge-in is mandatory.
 
 ---
 
 ## 4. Master Decision Register & ADR Index
 
-The system baseline codifies the 16 core architectural decisions approved for PC V1:
+The historical product decision spine is D1-D11. Additional accepted ADRs refine or supersede that spine where explicitly recorded.
 
 | Decision | Topic | Canonical Policy & Chosen Architecture | Key Spec / ADR |
 | :--- | :--- | :--- | :--- |
-| **D1** | Scope Boundary | PC V1 mandatory milestone; Android V1 independent follow-on | SYSTEM_BASELINE.md, [ADR-0002](decisions/ADR-0002-d1-pc-v1-release-boundary.md) |
-| **D2** | Host Lifecycle | Windows Host Runtime independent background service; Task Scheduler at login | windows-host-and-notifications.md, [ADR-0003](decisions/ADR-0003-d2-windows-host-model.md) |
-| **D3** | Android Identity | Package com.cnl.aicompanion; Android V1 follow-on milestone | ndroid-companion.md, [ADR-0004](decisions/ADR-0004-d3-android-application-identity.md) |
-| **D4** | Device Auth | Device tokens, Android Keystore, mutual handshake, revocable access | uthentication-and-secrets.md, [ADR-0005](decisions/ADR-0005-d4-profile-device-credential-boundary.md) |
-| **D5** | Remote Access | Loopback default + Tailscale private mesh + Cloudflare Tunnel; no port forwarding | uthentication-and-secrets.md, [ADR-0006](decisions/ADR-0006-d5-remote-access-trust-boundary.md) |
-| **D6** | Model Import | Controlled scan import: inbox → preflight → staging → atomic install → registry | untime-and-models.md, [ADR-0007](decisions/ADR-0007-d6-controlled-model-acquisition.md) |
-| **D7** | Memory Model | Profile-first, selective extraction, user-visible & correctable, FTS5 lexical baseline | memory-and-personalization.md, [ADR-0008](decisions/ADR-0008-d7-profile-first-memory-ownership.md) |
-| **D8** | Single Primary User | (Historical) Single Account. SUPERSEDED by ADR-0018 | profiles-and-devices.md, [ADR-0009](decisions/ADR-0009-d8-single-primary-user-baseline.md), [ADR-0018](decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md) |
-| **D9** | Tool Security | Deterministic policy, DEFAULT DENY; Risk 0/1/2 configurable; Risk 3 shell rejected | 	ool-permissions-and-actions.md, [ADR-0010](decisions/ADR-0010-d9-typed-tool-security-policy.md) |
-| **D10** | Productivity | Distinct Task / Reminder / Alarm / Routine semantics; native Windows notifications | 	asks-reminders-alarms-and-routines.md, [ADR-0011](decisions/ADR-0011-d10-scheduling-and-notification-semantics.md) |
-| **D11** | Persona/Emotion | Character Template vs. Instance; 8 continuous traits; bounded mood survives restart | characters-personality-and-emotion.md, [ADR-0012](decisions/ADR-0012-d11-persona-and-state-separation.md) |
+| **D1** | Scope Boundary | PC V1 mandatory milestone; Android V1 independent follow-on | `SYSTEM_BASELINE.md`, [ADR-0002](decisions/ADR-0002-d1-pc-v1-release-boundary.md) |
+| **D2** | Host Lifecycle | Local AI Runtime independent background service; Task Scheduler at login | [`windows-host-and-notifications.md`](04_Infrastructure/windows-host-and-notifications.md), [ADR-0003](decisions/ADR-0003-d2-windows-host-model.md) |
+| **D3** | Android Identity | Package com.cnl.aicompanion; Android V1 follow-on milestone | [`android-companion.md`](01_Domains/android-companion.md), [ADR-0004](decisions/ADR-0004-d3-android-application-identity.md) |
+| **D4** | Device Auth | Device tokens, Android Keystore, mutual handshake, revocable access | [`authentication-and-secrets.md`](02_Data_and_Security/authentication-and-secrets.md), [ADR-0005](decisions/ADR-0005-d4-profile-device-credential-boundary.md) |
+| **D5** | Remote Access | Loopback default + Tailscale private mesh + Cloudflare Tunnel; no port forwarding | [`authentication-and-secrets.md`](02_Data_and_Security/authentication-and-secrets.md), [ADR-0006](decisions/ADR-0006-d5-remote-access-trust-boundary.md) |
+| **D6** | Model Import | Controlled scan import: inbox → preflight → staging → atomic install → registry | [`runtime-and-models.md`](04_Infrastructure/runtime-and-models.md), [ADR-0007](decisions/ADR-0007-d6-controlled-model-acquisition.md) |
+| **D7** | Memory Model | Profile-first, selective extraction, user-visible & correctable, FTS5 lexical baseline | [`memory-and-personalization.md`](01_Domains/memory-and-personalization.md), [ADR-0008](decisions/ADR-0008-d7-profile-first-memory-ownership.md) |
+| **D8** | Multi-Profile | (Historical) Single Account. SUPERSEDED by ADR-0018 | [`profiles-and-devices.md`](02_Data_and_Security/profiles-and-devices.md), [ADR-0009](decisions/ADR-0009-d8-single-primary-user-baseline.md), [ADR-0018](decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md) |
+| **D9** | Tool Security | Deterministic policy, DEFAULT DENY; Risk 0/1/2 configurable; Risk 3 shell rejected | [`tool-permissions-and-actions.md`](02_Data_and_Security/tool-permissions-and-actions.md), [ADR-0010](decisions/ADR-0010-d9-typed-tool-security-policy.md) |
+| **D10** | Productivity | Distinct Task / Reminder / Alarm / Routine semantics; native Windows notifications | [`tasks-reminders-alarms-and-routines.md`](01_Domains/tasks-reminders-alarms-and-routines.md), [ADR-0011](decisions/ADR-0011-d10-scheduling-and-notification-semantics.md) |
+| **D11** | Persona/Emotion | Character Template vs. Instance; 8 continuous traits; bounded mood survives restart | [`characters-personality-and-emotion.md`](01_Domains/characters-personality-and-emotion.md), [ADR-0012](decisions/ADR-0012-d11-persona-and-state-separation.md) |
 
 ---
 
