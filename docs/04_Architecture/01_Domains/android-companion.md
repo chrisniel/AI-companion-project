@@ -33,5 +33,5 @@ To preserve focus on PC V1, the system baseline strictly defers locking implemen
 - Offline persistence topology (e.g., Room databases, outbox architecture).
 - Background synchronization strategy (e.g., WorkManager scheduling, WebSocket vs REST conflicts).
 - Exact local mobile LLM runtime, model family, and quantization constraints.
-- Future Kotlin production refactoring topology.
+- The Kotlin/Compose tree remains prototype/reference evidence. Any future Kotlin work should be described only as prototype/reference maintenance or migration evidence unless explicitly approved as a production-native component.
 - Exact Health Connect integration pipelines and API abstractions.
