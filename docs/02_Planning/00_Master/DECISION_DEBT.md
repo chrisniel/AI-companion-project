@@ -1,8 +1,8 @@
-# AI Companion — PC V1 Decision Debt & Open Implementation Details
+# AI Companion — Decision Debt & Open Implementation Details (PC V1 & Mobile V1)
 
 > **Document Role:** Authoritative catalog of approved implementation-open details, benchmark-dependent parameters, and deferred improvement candidates.  
 > **Status:** Active Canonical Planning Baseline  
-> **Governance Invariant:** PC V1 architecture is FROZEN. Do not use Decision Debt to casually reopen agreed architecture. This register captures technical mechanism choices, empirical evidence needs, and implementation parameters that were deliberately left open.
+> **Governance Invariant:** PC V1 architecture remains FROZEN. Approved Mobile V1 architecture is also indexed here, with Mobile implementation-open details tracked separately under Section 2 (`MOBILE V1 OPEN IMPLEMENTATION DETAIL`). This register captures technical mechanism choices, empirical evidence needs, and implementation parameters that were deliberately left open without reopening agreed architecture.
 
 ---
 
@@ -122,7 +122,17 @@
   - *Open Detail:* Exact FastAPI endpoint DTO schema and user-facing branch merge/inspection UI design.
   - *Resolution Point:* Stream `MOB-CONTRACT-006` / `MOB-SYNC-007` implementation plan.
 
-- **`DEBT-MOB-07`: Mobile Golden L3 Emulator & Device Test Matrix Configuration**
-  - *Context:* 5-layer test matrix L1–L5 and emulator matrix across API 29, 33, 34 (`mobile-capabilities-and-runtime.md` §7.1, §8).
-  - *Open Detail:* Exact CI headless emulator runner configuration, test runner tooling, and hardware testbed setup.
-  - *Resolution Point:* Stream `MOB-VERIFY-003` / `MOB-VERIFY-005` implementation plan.
+- **`DEBT-MOB-07`: Mobile Evidence-Driven L3 Emulator & Device Test Matrix Configuration**
+  - *Context:* 5-layer test matrix L1–L5 and evidence-driven emulator matrix spanning target SDK/API (e.g. API 36 prototype target evidence), supported lower boundaries, and behavioral transition boundaries (notifications at API 33, exact alarms & while-in-use FGS at API 34, process lifecycle & timeouts at API 35+) per [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §7.1.1.
+  - *Open Detail:* Exact CI headless emulator runner configuration, supported lower boundary pin, and hardware testbed setup.
+  - *Resolution Point:* Stream `MOB-VERIFY-003` / `MOB-VERIFY-006` implementation plan.
+
+- **`DEBT-MOB-08`: Flutter Relational Persistence Abstraction Library Selection**
+  - *Context:* Relational SQLite-backed durable persistence is mandatory (`mobile-offline-and-sync.md` §2.2). Drift is the preferred/recommended Flutter candidate.
+  - *Open Detail:* Final library confirmation between Drift vs alternative SQLite abstractions (e.g. sqflite) during Flutter scaffolding.
+  - *Resolution Point:* Stream `MOB-DATA-001` implementation plan.
+
+- **`DEBT-MOB-09`: Mobile WebSocket Audio Frame Codec Selection**
+  - *Context:* Full-duplex WebSocket audio transport connecting to PC Runtime canonical STT/TTS/VAD providers is mandatory (`mobile-capabilities-and-runtime.md` §3.1).
+  - *Open Detail:* Evaluation between Linear PCM 16-bit vs Opus 16 kHz compressed frames for bandwidth and latency optimization.
+  - *Resolution Point:* Stream `MOB-VOICE-001` implementation plan.

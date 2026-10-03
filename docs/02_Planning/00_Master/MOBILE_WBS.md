@@ -14,14 +14,14 @@
 | **`MOB-FOUNDATION`** | Flutter Mobile Foundation | Shared Dart/Flutter monorepo setup, package identity, platform adapters, lifecycle. |
 | **`MOB-CONTRACT`**   | Host Contract Prerequisites | Host write idempotency, client Task/Conversation IDs, revisions, cursor sync, turn import. |
 | **`MOB-IDENTITY`**   | Identity, Enrollment & Transport | Device pairing, 1-Profile binding, Keystore secrets, rotation, D5 transport. |
-| **`MOB-DATA`**       | Local Persistence & Outbox | Relational SQLite store (Drift), transactional outbox journal, offline working state, durability. |
+| **`MOB-DATA`**       | Local Persistence & Outbox | Relational SQLite store (Drift preferred candidate), transactional outbox journal, offline working state, durability. |
 | **`MOB-SYNC`**       | Sync & Reconciliation Engine | Asymmetric sync, desired-state ops, conflict resolution, re-baseline, whole-turn reconciliation. |
 | **`MOB-SCHED`**      | Scheduling, Reminders & Alarms | Replicated occurrences, AlarmManager exact alarms, permissions, Doze/reboot restoration. |
 | **`MOB-CONV`**       | Conversations & Offline Dialogue | Connected SSE streaming, qualified offline text turns, cached context, multimodal upload. |
 | **`MOB-INFER`**      | Local Inference & Tiers | Evidence-driven Tiers 0–3, LAN model transfer, single resident model cap, thermal/battery rules. |
 | **`MOB-VOICE`**      | Mobile Voice & Audio Pipeline | Connected WebSocket voice, audio focus, mandatory barge-in, FGS lifecycle, local TTS adapter. |
 | **`MOB-SECURITY`**   | Security, Privacy & Sandboxing | Keystore keys, backup/data-extraction exclusions, sandbox isolation, screen/clipboard privacy. |
-| **`MOB-VERIFY`**     | Verification & Golden Gate | 5-layer test matrix (L1–L5), emulator test matrix, 12 Mobile Golden Groups (MG1–MG12). |
+| **`MOB-VERIFY`**     | Verification & Golden Gate | 5-layer test matrix (L1–L5), evidence-driven emulator matrix, Mobile Golden qualification (MG1–MG12). |
 
 ---
 
@@ -167,8 +167,8 @@
 
 ### Stream: `MOB-DATA` — Mobile Local Persistence & Outbox Journal
 
-- **`MOB-DATA-001`**: Relational Local Database Scaffolding (Drift / SQLite)
-  - *Scope:* Scaffold relational local SQLite database using Drift with schema migrations, ACID transactions, and private sandbox storage.
+- **`MOB-DATA-001`**: Relational Local Database Scaffolding (SQLite / Drift Preferred)
+  - *Scope:* Scaffold relational SQLite-backed local persistence (Drift is the preferred/recommended Flutter candidate, with exact abstraction confirmed during implementation planning) with schema migrations, ACID transactions, and private sandbox storage.
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §2.2
   - *Principal Dependencies:* `MOB-FOUNDATION-003`
@@ -196,7 +196,7 @@
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-DATA-005`**: Synchronization Metadata & Monotonic Cursor Persistence
-  - *Scope:* Create local tables for sync cursors, entity revision vectors, and last-sync timestamps.
+  - *Scope:* Create local tables for sync cursors, Host-issued per-entity server revision values/tokens, and last-sync timestamps (preserving base_revision, Host current revision, monotonic sync cursor, and conflict outcomes as separate concepts; no vector clocks).
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §2.1, §3.2.5
   - *Principal Dependencies:* `MOB-DATA-001`
@@ -242,7 +242,7 @@
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-SYNC-006`**: Tombstone Propagation & Soft-Delete Cascading
-  - *Scope:* Synchronize soft-deleted entities and tombstone records, purging tombstones after authoritative synchronization intervals.
+  - *Scope:* Synchronize soft-deleted entities and tombstone records; retain tombstones and change history according to the bounded authoritative synchronization-history retention policy sufficient to prevent deletion resurrection (exact retention horizon tracked under DEBT-MOB-02).
   - *Responsibility:* Both
   - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Infrastructure/mobile-offline-and-sync.md) §3.1, §3.2.5
   - *Principal Dependencies:* `MOB-SYNC-005`
@@ -266,8 +266,8 @@
   - *Principal Dependencies:* `MOB-DATA-003`, `PC-SCHED-001`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
-- **`MOB-SCHED-002`**: Android Exact Alarm Scheduling Integration
-  - *Scope:* Integrate Android `AlarmManager.setExactAndAllowWhileIdle()` for active alarm occurrences with `SCHEDULE_EXACT_ALARM` permissions.
+- **`MOB-SCHED-002`**: Android Time-Critical Alarm Delivery & Alarm Clock Integration
+  - *Scope:* Integrate Android time-critical Alarm delivery using `AlarmManager.setAlarmClock()` (and exact alarm scheduling subject to active `canScheduleExactAlarms()` capability check) for punctual user-facing Alarms, contrasting with best-effort Reminders (without assuming `USE_EXACT_ALARM` or equating WorkManager to Alarm fidelity).
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Infrastructure/mobile-offline-and-sync.md) §6.2
   - *Principal Dependencies:* `MOB-SCHED-001`, `MOB-FOUNDATION-004`
@@ -352,14 +352,14 @@
 ### Stream: `MOB-INFER` — Mobile Local Inference & Hardware Tiers
 
 - **`MOB-INFER-001`**: Evidence-Driven Hardware Qualification Matrix Engine
-  - *Scope:* Evaluate device specs at runtime across RAM, SoC, and thermal headroom to classify into Tiers 0–3, gating local LLM inference eligibility.
+  - *Scope:* Evaluate device capabilities at runtime using the approved evidence-driven qualification model (supported ABI/backend, compatible verified model artifact, current available memory and validated reserve, successful load/warmup, sustained responsiveness, thermal status, storage reserve, and OS resource pressure) to classify into Tiers 0–3, gating local LLM inference eligibility without rigid hardware/model thresholds.
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Infrastructure/mobile-capabilities-and-runtime.md) §2.1, §2.2
   - *Principal Dependencies:* `MOB-FOUNDATION-004`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-INFER-002`**: LAN Host-to-Device Model Transfer Protocol
-  - *Scope:* Build local Wi-Fi transfer client to copy approved compact model bundles from PC Library to Mobile private storage with SHA-256 integrity preflight.
+  - *Scope:* Build authenticated Host-to-Device model transfer protocol over an approved protected LAN/Tailscale transport path (preserving Decision D5) to copy approved compact model bundles from PC Library to Mobile private storage with SHA-256 integrity preflight.
   - *Responsibility:* Both
   - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Infrastructure/mobile-capabilities-and-runtime.md) §2.3
   - *Principal Dependencies:* `PC-MODEL-001`, `MOB-IDENTITY-005`
@@ -391,7 +391,7 @@
 ### Stream: `MOB-VOICE` — Mobile Voice & Audio Pipeline
 
 - **`MOB-VOICE-001`**: Connected Voice Streaming Client over WebSocket
-  - *Scope:* Build full-duplex WebSocket audio client connecting to PC Runtime canonical STT/TTS/VAD providers with binary PCM streaming.
+  - *Scope:* Build full-duplex WebSocket audio client connecting to PC Runtime canonical STT/TTS/VAD providers with full-duplex audio-frame streaming (exact frame encoding/codec evaluated during implementation planning).
   - *Responsibility:* Both
   - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Infrastructure/mobile-capabilities-and-runtime.md) §3.1, [`voice-and-audio.md`](../../04_Architecture/01_Domains/voice-and-audio.md)
   - *Principal Dependencies:* `MOB-IDENTITY-005`, `PC-VOICE-005`
@@ -475,39 +475,46 @@
 
 ### Stream: `MOB-VERIFY` — Mobile Verification & Golden Acceptance
 
-- **`MOB-VERIFY-001`**: L1 Headless Unit & Contract Test Suite
-  - *Scope:* Author Dart unit tests for state machine models, outbox journal transactions, and serialized DTO compatibility running in headless CI without emulator overhead.
+- **`MOB-VERIFY-001`**: L1 Unit & Domain Test Suite (Headless)
+  - *Scope:* Author Dart unit tests for domain entity validation, outbox state machine, revision comparisons, conflict detection algorithms, JSON serialization, and idempotency key generation running in headless CI without emulator overhead.
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Infrastructure/mobile-capabilities-and-runtime.md) §7.1
   - *Principal Dependencies:* `MOB-FOUNDATION-003`, `MOB-DATA-002`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
-- **`MOB-VERIFY-002`**: L2 Local Integration & Database Durability Tests
-  - *Scope:* Implement integration tests verifying process-death survival, SQLite transaction rollback, and reboot receiver restoration.
+- **`MOB-VERIFY-002`**: L2 Storage & Outbox Durability Tests
+  - *Scope:* Implement integration tests verifying SQLite schema migrations, transactional mutation journal rollback, local persistence, outbox retry queuing, cursor pagination, and mock Keystore adapter.
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Infrastructure/mobile-capabilities-and-runtime.md) §7.1
-  - *Principal Dependencies:* `MOB-DATA-001`, `MOB-SCHED-005`
+  - *Principal Dependencies:* `MOB-DATA-001`, `MOB-DATA-002`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
-- **`MOB-VERIFY-003`**: L3 Android Emulator Matrix Verification
-  - *Scope:* Configure automated emulator test matrix across API 29 (baseline), API 33 (notifications), and API 34 (exact alarms, Doze testing).
+- **`MOB-VERIFY-003`**: L3 Platform Lifecycle & Android Emulator Matrix Verification
+  - *Scope:* Configure automated emulator verification across an evidence-driven platform matrix spanning current Target SDK/API, supported lower API boundaries, and behavioral transition boundaries (notification permissions at API 33, exact alarms & while-in-use FGS at API 34, process lifecycle & timeouts at API 35+). Verifies process-death restoration, reboot receiver behavior, exact-alarm permission lifecycle, and Android permission/lifecycle handling.
+  - *Responsibility:* Mobile
+  - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Infrastructure/mobile-capabilities-and-runtime.md) §7.1, §7.1.1
+  - *Principal Dependencies:* `MOB-SCHED-003`, `MOB-SCHED-005`, `MOB-SYNC-001`
+  - *Implementation State:* `APPROVED TARGET / NOT STARTED`
+
+- **`MOB-VERIFY-004`**: L4 Physical Hardware & Audio Verification
+  - *Scope:* Execute physical Android hardware verification pass for audio focus during phone calls, Bluetooth disconnect/reconnect, exact alarm firing out of deep overnight Doze, sustained thermal throttling under local inference load, and hardware-dependent behaviors.
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Infrastructure/mobile-capabilities-and-runtime.md) §7.1
-  - *Principal Dependencies:* `MOB-SCHED-003`, `MOB-SYNC-001`
+  - *Principal Dependencies:* `MOB-VOICE-002`, `MOB-VOICE-003`, `MOB-INFER-005`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
-- **`MOB-VERIFY-004`**: L4 Host ↔ Mobile Network & Sync Integration Suite
-  - *Scope:* Implement end-to-end integration tests between Mobile Companion and live PC Runtime verifying pairing, delta sync, conflict detection, and revocation.
+- **`MOB-VERIFY-005`**: L5 Host Integration & Network Verification
+  - *Scope:* Implement end-to-end multi-process and local network integration tests between Mobile Companion and live PC Runtime verifying pairing, delta sync, conflict detection, STALE_CURSOR re-baseline, DEVICE_REVOKED wipe, and SSE streaming resilience across disconnects.
   - *Responsibility:* Both
   - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Infrastructure/mobile-capabilities-and-runtime.md) §7.1, [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §4
   - *Principal Dependencies:* `MOB-SYNC-005`, `MOB-CONTRACT-004`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
-- **`MOB-VERIFY-005`**: L5 Physical Device Mobile Golden Acceptance Journey (MG1–MG12)
-  - *Scope:* Execute the full 12-group Mobile Golden Acceptance journey on physical reference Android devices, recording formal verification evidence.
+- **`MOB-VERIFY-006`**: Mobile Golden MG1–MG12 Release Qualification
+  - *Scope:* Aggregate verified evidence from L1–L5 verification layers and execute integrated release acceptance testing across all 12 Mobile Golden Acceptance Groups (MG1–MG12) to produce formal release qualification records (with mandatory physical reference Android hardware execution for hardware-dependent, audio, and thermal behaviors).
   - *Responsibility:* Both
   - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Infrastructure/mobile-capabilities-and-runtime.md) §8
-  - *Principal Dependencies:* All MOB streams
+  - *Principal Dependencies:* `MOB-VERIFY-001`, `MOB-VERIFY-002`, `MOB-VERIFY-003`, `MOB-VERIFY-004`, `MOB-VERIFY-005`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 ---

@@ -63,7 +63,7 @@
 - **PC V1 Independence:** Mobile Companion development does not block PC V1 delivery.
 - **Single-Profile Satellite Binding:** Mobile satellite binds to exactly one Profile; PC Host is sole Account/Profile Admin.
 - **Platform-Protected Secure Storage:** Device Token and third-party API credentials stored in Android Keystore; plaintext storage strictly prohibited.
-- **Relational Persistence & Durable Outbox:** Local SQLite store (Drift) with transactional mutation journal (outbox) surviving process death and reboot.
+- **Relational Persistence & Durable Outbox:** Relational SQLite-backed local persistence (Drift preferred candidate) with transactional mutation journal (outbox) surviving process death and reboot.
 - **Mobile ↔ Host Synchronization:** Asymmetric per-domain synchronization, client-generated stable entity IDs (UUIDv4), monotonic revision checks, and typed `CONFLICT_DETECTED` / `STALE_CURSOR` outcomes.
 - **Offline Task Management:** Full offline Task create, update, `SET_COMPLETION`, and delete with causal dependency ordering.
 - **Native Scheduling & Alarm Delivery:** Precomputed Reminder/Alarm occurrence replication from PC `SchedulerService`; `AlarmManager` exact alarms with `canScheduleExactAlarms()` degradation handling and reboot recovery.
@@ -72,7 +72,7 @@
 - **Decoupled Local TTS & STT:** Capability-dependent device-local TTS where approved provider installed; independently capability-gated local STT with truthful fallback to text.
 - **Connected Voice Streaming:** Full-duplex WebSocket audio streaming to PC Runtime canonical STT/TTS/VAD providers with mandatory immediate barge-in.
 - **Platform Security & Governance:** Backup exclusions (`dataExtractionRules`, `backup_rules.xml`), private sandbox baseline, clipboard/screen privacy (`FLAG_SECURE`), and thermal/battery governance.
-- **Multi-Layer Verification & Golden Gate:** 5-layer test matrix (L1–L5) and 12-group Mobile Golden Acceptance Gate (MG1–MG12) on physical Android hardware.
+- **Multi-Layer Verification & Golden Gate:** 5-layer test matrix (L1–L5) and 12-group Mobile Golden Acceptance Gate (MG1–MG12) collecting verified evidence across L1–L5 with mandatory physical hardware runs for hardware/audio/thermal behaviors.
 
 #### Mobile Later (Deferred Post-V1)
 - **Health Connect & Wearables:** Real Health Connect integration (`androidx.health.connect`) and biometric synchronization (prototype mock UI sequestered).

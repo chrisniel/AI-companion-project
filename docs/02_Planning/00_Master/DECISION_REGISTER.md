@@ -1,8 +1,8 @@
-# AI Companion — PC V1 Master Decision Register
+# AI Companion — Master Architecture Decision Register (PC V1 & Mobile V1)
 
-> **Document Role:** Authoritative master index of approved architecture and delivery decisions.  
-> **Status:** PC V1 Decision Pass CLOSED / FROZEN (2026-10-03).  
-> **Authority Precedence:** This document is an index and traceability memory, not a competing normative domain specification. Normative architecture is owned by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md), focused domain specifications under [`docs/04_Architecture/`](../../04_Architecture/), and accepted ADRs under [`docs/04_Architecture/decisions/`](../../04_Architecture/decisions/). Implemented reality is owned by source code, automated tests, and generated contracts.
+> **Document Role:** Authoritative master index of approved architecture and delivery decisions across PC V1 and Mobile V1.  
+> **Status:** PC V1 Decision Pass CLOSED / FROZEN (2026-10-03); Mobile Architecture Pass APPROVED (2026-10-04).  
+> **Authority Precedence:** This document is an index and traceability memory, not a competing normative domain specification. Normative architecture is owned by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md), [`MOBILE_SYSTEM_BASELINE.md`](../../04_Architecture/MOBILE_SYSTEM_BASELINE.md), focused domain specifications under [`docs/04_Architecture/`](../../04_Architecture/), and accepted ADRs under [`docs/04_Architecture/decisions/`](../../04_Architecture/decisions/). Implemented reality is owned by source code, automated tests, and generated contracts.
 
 ---
 
