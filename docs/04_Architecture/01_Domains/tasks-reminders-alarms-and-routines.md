@@ -73,6 +73,27 @@ The separation of scheduling truth and OS presentation is strictly partitioned:
 - **Explicit Quit Semantics:** If the Flutter process is explicitly quit by the user, the Runtime remains alive, keeps events durable in the backlog, and presentation pauses until a presentation client returns to deliver catch-up notifications.
 
 
+
+### 2.5 Frozen Scheduling Semantics
+
+- **Authority:** `SchedulerService` is the persistent Runtime authority.
+- **Timezone Awareness:** Recurrence is timezone aware. Profile-local recurring time (e.g. "9 AM wherever I am") and fixed-timezone recurring time (e.g. "9 AM EST") are distinct concepts.
+- **Reconciliation Triggers:** Restart, wake, system clock changes, or timezone changes trigger scheduler reconciliation.
+- **Natural Language Parsing:** Natural-language schedule input is normalized into structured, committed schedule state.
+
+### 2.6 Missed Event Policies
+
+- **Reminders:** Missed reminder policy uses bounded useful catch-up / staleness.
+- **Alarms:** Alarm missed state is explicit; configurable grace may alert immediately.
+- **Routines:** Stale Routine occurrences normally skip, collapse, or catch-up-once rather than replaying every missed occurrence.
+- **Snooze:** Snooze applies to an occurrence, not uncontrolled entity duplication.
+
+### 2.7 Routine Security & Presentation
+
+- **Routine Security:** Creating or materially expanding a Routine is a **Risk 2** action. Routines have a bounded capability envelope and cannot self-modify their own permissions.
+- **Enrichment:** LLM provides presentation/enrichment, not schedule authority. Gaming/Low-Impact mode may defer enrichment but never compromises scheduler correctness.
+- **Notification Ownership:** The Local AI Runtime persists Due Events and the backlog; the Flutter client owns Windows native presentation.
+
 ## 3. Current Verified Implementation
 
 Repository source code and test suites verify the following baseline reality:
@@ -146,7 +167,7 @@ The normative architecture for D10 is frozen. The following implementation-level
 
 ## 6. Security & Ownership Boundaries
 
-- **Profile Ownership:** All Tasks, Reminders, Alarms, and Routines are strictly owned by the primary Profile (`profile_id`, migrated from `owner_id`).
+- **Profile Ownership:** All Tasks, Reminders, Alarms, and Routines are strictly owned by the owning/authenticated Profile (`profile_id`, migrated from `owner_id`).
 - **Cross-Character Invariant:** Characters do not own productivity data. Switching active character personas does not alter, hide, or reattribute task or schedule records.
 - **Tool Execution Boundary:** LLM assistant access to task modification tools operates under deterministic profile policy; destructive permanent deletes require explicit user confirmation.
 

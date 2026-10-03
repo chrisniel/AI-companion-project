@@ -8,6 +8,10 @@
 
 ## 1. Purpose & Scope
 
+- **Host Maintenance:** Account-wide maintenance may operate across Profiles only as host maintenance while preserving strict Profile privacy and never feeding cross-Profile data into companion sessions.
+- **Deletion Invariant:** Known tombstones prevent silent resurrection. Exact tombstone storage mechanism remains implementation-open.
+
+
 This specification defines the privacy preservation principles, data retention lifecycles, and security auditing requirements for the AI Companion:
 - Data minimization and user-controlled deletion ("forget" capabilities).
 - Entity lifecycle states (active, soft-deleted, permanently purged).
@@ -23,7 +27,7 @@ This specification defines the privacy preservation principles, data retention l
 
 - **Data Minimization:** The companion collects, retains, and transmits only the minimal data necessary to fulfill conversational and functional duties.
 - **Explicit User Deletion Authority:** Users must have appropriate inspect, correct, delete, and forget controls over Profile-owned personal data across all domain models (conversations, memories, tasks, attachments). Deletion operations do not promise immediate permanent hard deletion across every domain, cache, and backup snapshot; exact soft-delete vs. hard-purge lifecycles remain governed by explicit retention and privacy policy.
-- **Owner Isolation Invariant:** Deletion and purge operations must preserve authenticated ownership boundaries, either through direct owner filtering or through an already owner-authorized parent/resource relationship. A purge operation initiated by or on behalf of one user can never affect records belonging to another. Host-controlled maintenance jobs may operate across the single-primary-user database when explicitly designed as global maintenance.
+- **Owner Isolation Invariant:** Deletion and purge operations must preserve authenticated ownership boundaries, either through direct owner filtering or through an already owner-authorized parent/resource relationship. A purge operation initiated by or on behalf of one user can never affect records belonging to another. Host-controlled maintenance jobs may operate across the  when explicitly designed as global maintenance.
 
 ### 2.2 Privacy-Safe Auditing Invariants
 

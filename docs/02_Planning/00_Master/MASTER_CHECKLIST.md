@@ -20,7 +20,7 @@
 | **Contracts** | Durable FIFO Conversation Queues | `assistant-and-conversations.md` | Pending implementation | Queue unit tests | G4 | **NOT STARTED** |
 | **Identity** | Multi-Profile PC V1 Model | `profiles-and-devices.md` | Migration 007 (Pending) | Adversarial test | G2 | **NOT STARTED** |
 | **Identity** | Satellite Device Revocable Token | `profiles-and-devices.md` | Pending implementation | Auth unit tests | G2 | **NOT STARTED** |
-| **Models** | Local `llama.cpp` Vulkan GPU Offload | `runtime-and-models.md` | `llama_cpp.py` (b10936 RX 580) | Pytest mocks | G3 | **VERIFIED** |
+| **Models** | Local `llama.cpp` Vulkan GPU Offload | `runtime-and-models.md` | `llama_cpp.py` (b10936 RX 580) | Pytest mocks | G3 | **PARTIAL** (reference/mock evidence only until supported live/packaged verification exists) |
 | **Models** | D6 Controlled Manual Import (Bundles)| `runtime-and-models.md` | GGUF parser done; service gap | Import unit tests| G3 | **PARTIAL** |
 | **Models** | Default Single Resident Model | `runtime-and-models.md` | Router `--models-max 1` | Router tests | G3 | **VERIFIED** |
 | **Multimodal**| Image Attachment Ingestion & History | `multimodal-and-media.md` | Phase 8B verified | Attachment tests | G4 | **VERIFIED** |

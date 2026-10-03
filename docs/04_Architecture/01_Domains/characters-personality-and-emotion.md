@@ -48,13 +48,10 @@ In accordance with Decision D11, companion character systems enforce strict conc
      8. **Humor:** Deadpan / Dry (0) ◄────────► Witty / Joking (100)
    - **Presets as Starting Templates:** Predefined presets (e.g., "Professional Assistant", "Playful Companion", "Quiet Scribe") copy baseline values into the 8 sliders; all values remain fully customizable.
 5. **Emotion & Mood Dynamics (Persistent & Bounded):**
-   - Lightweight, conceptual companion state tracking (e.g., cheerful, focused, reflective, flustered).
-   - **Persistence:** Current mood survives runtime and application restarts (persisted in SQLite).
-   - **Decay:** Mood decays exponentially over time back toward the personality baseline.
-   - **CRITICAL INVARIANT:** Mood modulates conversational phrasing and emotional tone ONLY. **Mood NEVER alters system correctness, security policy evaluation, tool permissions, safety boundaries, or truthfulness.**
-   - Strictly non-clinical: makes zero psychological, therapeutic, or sentient claims.
+   - **Persistent Simulated Mood:** Emotion/Mood is a persistent bounded simulated state across Runtime/Windows restart. It rebalances/decays based on elapsed time. Exact mathematical decay curve remains open. Do NOT mandate exponential decay in the durable architecture. Do NOT call PC V1 emotion state ephemeral.
+   - **Mood Isolation:** Mood affects social presentation only. Never affects facts, permissions, tools, alarms, scheduler, privacy, queue priority or correctness.
 6. **Neutral Assistant (Immutable Fallback):**
-   - An immutable, baseline assistant persona with neutral traits (50 across all sliders) and zero emotional bias. Always available as an uncorrupted fallback.
+   - Immutable built-in fallback. Do not hardcode all sliders = 50 unless separately approved.
 7. **Voice (Acoustic & Prosodic Configuration):**
    - Decoupled speech synthesis configuration (e.g., target voice identifier, speed, pitch, prosody).
    - Interchangeable across TTS providers without modifying character lore or personality schemas.
@@ -79,6 +76,8 @@ Switching active companion characters must **never**:
 Conversations remain permanently bound to the `character_id` under which turns were recorded. Starting a session with a different character initiates a distinct conversation thread or explicitly bounded transition.
 
 ---
+
+- **Character Deletion:** Character deletion should prefer archive/disable before purge so historical conversation identity remains interpretable.
 
 ## 3. Current Verified Implementation
 
@@ -113,7 +112,7 @@ The following target capabilities are approved under Decision D11:
 2. **Decoupled Personality Configuration (PC V1):**
    - Structured style trait settings (e.g., verbosity scale, humor frequency, technical depth) evaluated during persona/system-prompt composition.
 3. **Lightweight Conceptual Emotion State (PC V1):**
-   - Ephemeral companion state tracking that subtly influences tone without state-locking the assistant or impairing tool utility.
+   - Persistent companion state tracking that subtly influences tone without state-locking the assistant or impairing tool utility.
 
 ---
 

@@ -112,8 +112,8 @@
 
 ### Stream: `PC-VOICE` — Conversational Voice Pipeline
 - **`PC-VOICE-001`**: Flutter Native Audio Capture & Playback Hardware Controller.
-- **`PC-VOICE-002`**: Local STT Provider Adapter (`whisper.cpp` subprocess daemon or C++ runner).
-- **`PC-VOICE-003`**: Local TTS Provider Adapter (Kokoro-82M neural synthesis).
+- **`PC-VOICE-002`**: Local STT Provider Adapter (e.g., whisper.cpp reference candidate).
+- **`PC-VOICE-003`**: Local TTS Provider Adapter (e.g., Kokoro reference candidate).
 - **`PC-VOICE-004`**: Mandatory Voice Barge-In State Machine (Immediate playback stop, stale chunk cancellation).
 - **`PC-VOICE-005`**: Duplex Voice Session Orchestrator & Turn Identity Coordination over WebSocket.
 
@@ -124,7 +124,7 @@
 - **`PC-WEB-004`**: Untrusted External Content Sanitizer & Source Provenance Formatter.
 
 ### Stream: `PC-CLOUD` — Optional Cloud Fallback
-- **`PC-CLOUD-001`**: Cloud Provider Abstraction (OpenAI / Anthropic / OpenRouter adapters).
+- **`PC-CLOUD-001`**: Cloud Provider Abstraction (provider-agnostic CloudProvider abstraction).
 - **`PC-CLOUD-002`**: Device-Local Cloud API Key Storage & Per-Profile Routing Policy (`LOCAL_ONLY`, `LOCAL_FIRST`).
 - **`PC-CLOUD-003`**: Egress Transparency Indicator & Background Cloud Disable Guard.
 - **`PC-CLOUD-004`**: Cloud Usage Quotas & Cost Tracking Estimator.

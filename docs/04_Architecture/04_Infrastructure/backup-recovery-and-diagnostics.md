@@ -56,6 +56,29 @@ In accordance with Master Decision Register Row 43:
 
 ---
 
+## 2. Frozen Backup & Restore Semantics
+
+### 2.1 Normal Backup Scope
+
+- **Included:** Irreplaceable state, Profile-owned personal assets, manifest/integrity.
+- **Excluded:** Application binaries, provider runtimes, model weights, STT/TTS weights, cache, logs (by default), staging/temp, provider keys, device/session credentials.
+
+### 2.2 Restore Pipeline & Safety
+
+- **Restore Pipeline:** Stage first -> verify -> explicit confirm -> quiesce runtime as needed -> pre-restore safety snapshot -> activate -> restart -> verify.
+- **Reactivation Guard:** Restore MUST NOT automatically reactivate devices, API/provider keys, sessions, or network credentials.
+- **Replay Guard:** Do not blindly replay pending turns, pending actions, old notification backlog, or Routine occurrences.
+- **Confirmations:** Confirmations are NOT resurrected.
+- **Tombstones:** Known deletion tombstones prevent known resurrection from older restore material.
+- **Emotion Restore:** Emotion state may be restored, then elapsed-time decay/rebalancing applies.
+
+### 2.3 Factory Reset
+
+- **Authority:** Local AI Companion Account-admin operation, Risk 2. Does not imply Windows elevated Administrator privilege is required unless implementation actually needs it.
+- **Scope:** Removes Account/Profile state, conversations/memories/tasks/schedules, Character customizations, Emotion, pairings, sessions, provider credentials, profile/cloud configuration, queues, and cache/temp state.
+- **Persisted Assets:** App/provider binaries remain. Model/Voice Library deletion is a separate explicit choice. Backup deletion is a separate explicit option OFF by default with stronger irreversible confirmation.
+- **Outcome:** Successful full reset creates fresh identities.
+
 ## 3. Current Verified Implementation
 
 Repository source code establishes the following baseline reality:

@@ -137,7 +137,8 @@ PLAN → IMPLEMENT → IMPLEMENTATION GATE → DOCUMENT → DOCUMENTATION GATE �
 
 ## 9. Git Authority & External Boundaries
 
-- **Chris Owns Git Writes:** Do NOT execute `git add`, `commit`, `push`, `branch`, `merge`, `checkout`, `switch`, `tag`, `stash`, `reset`, or PR commands.
+- **Chris Owns Git Writes:** Do NOT execute `git add`, `commit`, `push`, `branch`, `merge`, `checkout`, `switch`, `tag`, `stash`, `reset`, `restore`, or PR commands.
+- **Git Mutation Clarification:** `git checkout <ref> -- <path>` and `git restore ...` are Git mutations and MUST NOT be used by agents. Historical content must be read using `git show` and written through normal file editing only.
 - **Git Branch Preflight:** Before non-trivial edits, inspect the current Git branch (`git branch --show-current`). If on `develop` or `master`, STOP before editing. Recommend an appropriate task branch, ask Chris to create/switch/push it, and resume only after Chris confirms. Agents still perform no Git mutations.
 - **Stop After Verification:** Provide a clean Conventional Commit message proposal and stop for human execution.
 - **Read-Only External Environment:** Treat system paths, external repositories, and package caches outside the workspace as strictly read-only.

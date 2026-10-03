@@ -14,7 +14,7 @@ Before developing locally, ensure the following prerequisites are installed and 
 | :--- | :--- | :--- |
 | **Operating System** | Windows 10/11 64-bit | Primary host platform for Local AI Runtime and hardware acceleration. |
 | **Python** | 3.11.x 64-bit | Required for FastAPI backend and migration tools (`python --version`). |
-| **Flutter SDK** | 3.27+ (Dart 3.6+) | Required for primary Windows Desktop client (`flutter --version`). |
+| **Flutter SDK** | Version will be officially pinned when scaffolded (PC-CLIENT-001) | Required for primary Windows Desktop client (`flutter --version`). |
 | **Visual Studio Build Tools** | 2022 (with Desktop C++) | Required by Flutter for compiling native Windows C++/CMake executables. |
 | **Node.js** | 22.x LTS (with npm) | Required for React Web developer harness (`node --version`, `npm --version`). |
 | **Git & Git LFS** | Latest 64-bit | LFS pointers on GitHub; weights stored on private Hugging Face dataset. |

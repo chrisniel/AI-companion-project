@@ -11,6 +11,13 @@
 
 ### 1.1 Identity Model Glossary
 
+The frozen identity model relies on four core entities:
+- **Account:** One local installation/admin authority.
+- **Profile:** One human's private companion context.
+- **Device:** Enrolled endpoint/device identity (a browser tab itself is not a Device; it is a Session on an endpoint).
+- **Session:** Temporary authenticated context.
+
+
 
 This specification defines identity boundaries, data ownership partitions, and client device enrollment for the AI Companion:
 - Structural separation between human identity (Profile) and client endpoints (Device).
@@ -27,7 +34,7 @@ The following constraints are permanently locked for PC V1:
 
 - **Account to Profile:** One local Account → multiple strictly isolated Profiles.
 - **Human to Profile:** One human = one Profile.
-- **Administration:** Local PC Flutter admin is the only V1 surface for Profile create/rename/delete/restore/device assignment/privacy/security administration.
+- **Administration:** Local PC Flutter admin is the only V1 surface for Profile create/rename/delete/restore/device assignment/privacy/security administration. (Remote/mobile clients cannot create or switch Profiles.)
 - **Device Binding:** A normal satellite/mobile device binds to exactly one Profile.
 - **Remote Constraints:** Remote/mobile clients cannot create or switch Profiles.
 - **Session:** Authenticated session determines Profile; payload cannot assert arbitrary profile_id.
@@ -39,7 +46,7 @@ The following constraints are permanently locked for PC V1:
 - **Recovery:** 7-day recovery window; only local Account admin can restore. Hard purge after recovery period.
 - **Identity:** Stable UUID Profile identity; display name is not identity.
 
-Do not invent exact schema/API fields beyond what is frozen.
+Conceptual Profile and Device records are required, but exact columns/schema remain implementation-open. Do not invent exact schema/API fields beyond what is frozen.
 
 ## 3. Durable Architecture & Invariants
 
@@ -55,7 +62,7 @@ In accordance with `ADR-0018`, superseding historical D8 / ADR-0009:
     - Active mood states
     - Tasks, Reminders, Alarms, and Routines
 - **PC Desktop Administration:**
-  - The primary PC desktop client (Flutter) provides profile switching and profile management (create, edit, delete, export).
+  - The primary PC desktop client (Flutter) provides profile switching and profile management (create, edit, delete).
   - The local desktop administrator can switch between profiles without restarting the background Local AI Runtime.
 - **Migration Path (`owner_id` → `profile_id`):**
   - Database schema transitions from legacy `owner_id` to `profile_id`.
@@ -117,7 +124,7 @@ The normative architecture for D4 and ADR-0018 is frozen. The following implemen
 
 - **Profile Isolation:** All queries on user data mandate `WHERE entity.profile_id = :authenticated_profile_id`. Cross-profile data leakage is strictly prohibited.
 - **Satellite Isolation:** Satellite device tokens have access strictly to their bound profile.
-- **Admin Boundary:** Profile management (creation, deletion, satellite pairing) requires local PC access or authenticated administrative credentials.
+- **Admin Boundary:** Profile management (creation, deletion, satellite pairing) requires local PC access .
 
 ---
 

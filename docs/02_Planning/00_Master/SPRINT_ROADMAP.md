@@ -65,7 +65,7 @@
 - **Exit Criteria:** Personalities distinctively modulate conversational tone; mood persists across runtime restarts without altering functional correctness; memories automatically capture clear facts under deterministic policy; alarms and reminders trigger accurately with quiet hours support.
 
 ### Milestone M4: Voice, Tools & Current Information
-- **Primary Objective:** Implement the conversational voice pipeline with native Flutter audio capture/playback, local STT (`whisper.cpp`) and TTS (Kokoro-82M) adapters, duplex WebSocket transport, mandatory voice barge-in with immediate playback cancellation, the D9 deterministic 5-stage action policy engine, and read-only WebSearch/WebFetch/Weather integrations with strict SSRF containment.
+- **Primary Objective:** Implement the conversational voice pipeline with native Flutter audio capture/playback, local STT (e.g., whisper.cpp) and TTS (e.g., Kokoro-82M) candidate adapters, duplex WebSocket transport, mandatory voice barge-in with immediate playback cancellation, the D9 deterministic 5-stage action policy engine, and read-only WebSearch/WebFetch/Weather integrations with strict SSRF containment.
 - **Exit Criteria:** Consented spoken voice conversation functions with instant barge-in interruption; D9 policy engine intercepts model tool intents under DEFAULT DENY and requires explicit user confirmation for Risk 2; read-only web information successfully provides fresh context with clear source provenance.
 
 ### Milestone M5: Integration, Resilience & Hardening

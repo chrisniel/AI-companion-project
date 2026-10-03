@@ -8,6 +8,9 @@
 
 ## 1. Purpose & Scope
 
+- **Device-Local Credentials:** Provider API credentials remain device-local and never automatically synchronize.
+
+
 This specification defines cryptographic authentication mechanisms, secret storage policies, rate limiting, and transport trust models for the AI Companion:
 - Fail-closed API authentication protecting companion endpoints.
 - Separation of network proximity from identity authentication.

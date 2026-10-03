@@ -31,14 +31,20 @@ This specification defines the local inference runtime, hardware execution model
 
 ### 2.2 Controlled Model Import Pipeline (Decision D6)
 
-In accordance with Decision D6 and `ADR-0007`, local model acquisition enforces a six-stage controlled pipeline:
-$$\text{Inbox} \longrightarrow \text{Preflight} \longrightarrow \text{Staging} \longrightarrow \text{Atomic Install} \longrightarrow \text{Library} \longrightarrow \text{Registry}$$
-1. **Inbox:** User deposits model files into `IMPORT_INBOX_DIR`.
-2. **Preflight (User-Initiated Manual Scan):** Initiated manually by the user from the UI (no automatic filesystem watcher). Inspects file headers, parses GGUF metadata (and other supported format metadata), estimates VRAM/RAM requirements, and verifies format integrity.
-3. **Staging:** Moves validated models to `IMPORT_STAGING_DIR` for integrity validation.
-4. **Atomic Install:** Atomically moves verified files into the canonical `MODEL_LIBRARY_DIR` (`LIBRARY_ROOT/models/llm`). Multi-file bundles (e.g., text LLM + matching `mmproj` vision projector) install atomically—either all files succeed, or the entire bundle rolls back.
-5. **Library:** The file resides in canonical permanent storage under relocatable `LIBRARY_ROOT`.
-6. **Registry:** Updates the active model registry at `LIBRARY_ROOT/registry/models.json`, exposing the model with declared capabilities (context length, vision support, prompt template) to the runtime.
+The frozen D6 pipeline for controlled local model import is as follows:
+`controlled inbox` -> `user Refresh / Scan` -> `discover candidate bundle` -> `detect identity / metadata / capabilities` -> `provenance classification` -> `user review/correction of configurable or inferred metadata` -> `preflight` -> `explicit confirmation` -> `staging` -> `atomic installation` -> `Library` -> `Registry`.
+
+- **No Automatic Filesystem Watcher:** The runtime does not automatically watch or ingest files. Import is user-initiated.
+- **No Arbitrary Host-Path Authority:** The runtime only operates within the defined import inbox and staging boundaries.
+- **Provenance Classification:** Conceptual provenance states are DECLARED, DETECTED, INFERRED, USER_CONFIGURED, VERIFIED, UNKNOWN.
+- **Metadata Integrity:** The user may correct inferred or configurable metadata but cannot falsify intrinsic artifact facts.
+- **Preflight Checks:** Preflight must distinguish between:
+  1. Artifact validity.
+  2. Provider compatibility.
+  3. Hardware suitability (a model may be valid/supported but "not recommended" on current hardware).
+- **Multi-File Bundles:** Multi-file bundles (such as a main GGUF + mmproj) are first-class atomic import units.
+- **Capabilities:** Detected capability != verified runtime compatibility.
+- **Future Managed Downloads:** Any future managed model downloads must converge through this exact same D6 pipeline.
 
 ### 2.3 Managed Online Model Downloading (PC Later)
 
