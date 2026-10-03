@@ -27,8 +27,10 @@ Relevant Focused Canonical Domain Specification & Accepted ADR(s)
   │  (Load ONLY the specific domain spec relevant to the active task)
   ▼
 docs/01_Tracking/task.md
-    │  (Shared milestone goals and integration state)
+    │  (If on develop/master: shared milestone goals and integration state)
     ▼
+[OR]
+
 docs/01_Tracking/active/task-[branch-slug].md
     │  (If on short-lived task branch: transient branch execution state)
   ▼

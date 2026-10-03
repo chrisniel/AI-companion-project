@@ -81,10 +81,13 @@ On develop/master:
 docs/01_Tracking/task.md
   │  (Verify shared milestone goals and integration state)
   ▼
+[OR]
+
 On an ordinary short-lived task branch:
 docs/01_Tracking/active/task-[branch-slug].md
   │  (Verify transient branch execution state)
   ▼
+  (The shared task.md may be consulted only when integration/milestone state is specifically relevant)
 Relevant Active Implementation Plan (in docs/02_Planning/01_Plans/)
 ```
 

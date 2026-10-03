@@ -70,12 +70,16 @@ For all non-trivial implementation, refactoring, or bug fixes, contributors and 
 ### Stage 6: CLOSURE
 - **Action:** Prepare delivery tracking updates.
 - **Tracker Updates:**
-  - Mark delivered items complete in the active the branch active task (`docs/01_Tracking/active/task-[branch-slug].md`).
+  - Mark delivered items complete in the branch active task (`docs/01_Tracking/active/task-[branch-slug].md`).
   - Surface any manual hardware verification steps (audio, physical device, GPU benchmarks) or known non-blocking issues.
   - Append an entry to [`CHANGELOG.md`](../../CHANGELOG.md) under `## [Unreleased]`.
 
 ### Stage 7: CLOSURE GATE & ARCHIVING
-- **Verification:** Independent check confirming the delivery.
+- **Verification:** Independent check confirming:
+  - Branch tracking matches independently verified code, tests, contracts and documentation as applicable.
+  - Delivered scope matches approved requirements.
+  - No unverified capability or test result is claimed.
+  - Known blockers, deferred work, and manual/hardware checks remain explicit.
 - **Same-Branch Closure:** Reconcile documentation/tracking on the same branch.
 - **Archiving:** Archive the branch active task to `docs/01_Tracking/archive/`.
 - **Git Handoff:** Prepare PR/squash handoff and provide a proposed Conventional Commit message.
