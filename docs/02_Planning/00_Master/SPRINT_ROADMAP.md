@@ -10,7 +10,11 @@
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│ M0: Docs & Architecture Reset                               │ ◄── [ACTIVE]
+│ M0: Docs & Architecture Reset                               │ ◄── [COMPLETE / VERIFIED]
+└──────────────────────────────┬──────────────────────────────┘
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ MOBILE-ARCH: Phone/Mobile V1 Canonical Architecture Pass    │ ◄── [NEXT]
 └──────────────────────────────┬──────────────────────────────┘
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -38,19 +42,28 @@
 └──────────────────────────────┬──────────────────────────────┘
                                ▼
                      [PC V1 RELEASE TAG]
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│ POST-V1: Dedicated Android / Mobile Architecture Pass       │
-└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## 2. Milestone Objectives & Exit Criteria
 
-### Milestone M0: Documentation & Architecture Reset (Current)
+### Milestone M0: Documentation & Architecture Reset (COMPLETE / VERIFIED)
 - **Primary Objective:** Execute the documentation canonicalization handoff, establish the master planning spine (`00_Master/`), update `SYSTEM_BASELINE.md` into a compact cross-cutting anchor, reconcile 18 focused domain specs, codify new ADRs (ADR-0017..0019), author `DELIVERY_WORKFLOW.md`, update setup/testing guides, and verify fresh-agent startup routing.
 - **Exit Criteria:** All validation gates pass; zero stale React-primary or single-user contradictions; clean fresh-agent review report approved by Chris and GPT.
+
+### MOBILE-ARCH: Phone/Mobile V1 Canonical Architecture Pass (NEXT)
+- **Primary Objective:** Formally unfreeze and redesign mobile architecture for production Android Companion. Precommitments to Room/outbox, compact mobile LLMs, or Health Connect are removed from this roadmap. The goal is to freeze shared vs PC-specific vs mobile-specific boundaries, establish Mobile System Baseline, establish Mobile WBS, and decide PC Flutter vs Mobile Flutter sharing boundaries before M1 implementation.
+
+**Preserved Mobile Inputs Only:**
+- Package: com.cnl.aicompanion.
+- Flutter is the intended production foundation.
+- Exact mobile technology choices remain undecided until MOBILE-ARCH.
+- Current Kotlin Android repository code serves strictly as prototype/reference evidence.
+- One satellite device binds to exactly one Profile.
+- Provider/API/device credentials remain device-local.
+- **Exit Criteria:** Approved Mobile System Baseline and Mobile WBS ready for implementation.
+- **Dependency Note:** Mobile architecture pass precedes M1. Mobile implementation still does NOT block PC V1 delivery.
 
 ### Milestone M1: Flutter Desktop Client Foundation
 - **Primary Objective:** Scaffold the production Flutter Windows Desktop client (`target Flutter path established during PC-CLIENT-001 scaffolding`), establish window lifecycle and system tray integration (minimize-to-tray, close-to-tray), build the SoftGlass design system with dark/light theme tokens, and integrate the OpenAPI-derived Dart API client and SSE token streaming consumer.
@@ -76,14 +89,3 @@
 - **Primary Objective:** Execute the comprehensive, 14-group end-to-end integrated release validation journey on the physical reference Windows workstation with live hardware, models, audio, and notification delivery.
 - **Exit Criteria:** All 14 Golden acceptance checkpoint groups pass with documented verification evidence; zero unhandled crashes or data integrity violations; formal release evidence recorded.
 
-### Post-PC-V1: Dedicated Android / Mobile Architecture Pass
-- **Primary Objective:** Formally unfreeze and redesign mobile architecture for production Android Companion. The mobile architecture is DEFERRED to a separate architecture pass. Precommitments to Room/outbox, compact mobile LLMs, or Health Connect are removed from this roadmap.
-
-**Preserved Mobile Inputs Only:**
-- Package: com.cnl.aicompanion.
-- Flutter is the intended production foundation.
-- Android development does not block PC V1 delivery.
-- One satellite device binds to exactly one Profile.
-- Provider/API/device credentials remain device-local.
-- Current Kotlin repository code serves strictly as prototype/reference evidence.
-- **Exit Criteria:** Approved Mobile System Baseline and Mobile WBS ready for implementation. Does not block PC V1.
