@@ -2,11 +2,32 @@
 
 **Task Branch:** `docs/mobile-v1-canonicalization`
 **Status:** PLANNING (Revised Draft)
-**Owner:** Antigravity
+**Git / Final Approval Owner:** Chris
+**Implementation / Authoring Agent:** Antigravity
+**Independent Reviewer:** GPT + Chris
 
 ## 1. Objective
 
 Define the canonical Mobile V1 architecture for the AI Companion project, elevating the mobile domain from a legacy Kotlin prototype into a formally specified, production-ready Flutter target. This architecture must solve the complexities of offline behavior, per-domain synchronization, credential security, background execution, and device resource constraints while strictly adhering to the established Multi-Profile PC V1 ownership model and existing system invariants.
+
+### 1.1 Scope Guardrails / Non-Goals
+
+This MOBILE-ARCH architecture pass **DOES NOT IMPLEMENT**:
+- Flutter Desktop or Flutter Mobile code;
+- M1;
+- Kotlin/Android production changes;
+- backend/runtime behavior;
+- migrations or OpenAPI changes;
+- mobile persistence/database implementation;
+- sync/outbox implementation;
+- local mobile inference;
+- Health Connect;
+- Android background workers/services;
+- notification/alarm implementation;
+- Voice implementation;
+- CI workflow changes.
+
+The architecture pass may document approved target behavior only.
 
 ## 2. Contradiction Inventory & Context Gaps
 
@@ -16,7 +37,7 @@ Inspection of the PC V1 architecture and Android prototype source code has surfa
 - **Package Identity:** The current Android project package is `com.example`, whereas D3 explicitly dictates `com.cnl.aicompanion`.
 - **Inference Reality:** The offline capability matrix states local model execution is unavailable on mobile, yet `ModelsScreen.kt` advertises an "OnDeviceHybridFailoverCard" using a quantized edge LLM (Gemma-2-2B) and local TTS (Kokoro-82M).
 - **Security & Storage:** `SharedPreferencesConnectionRepository.kt` stores the pairing token in cleartext `Context.MODE_PRIVATE` Android SharedPreferences, violating the protected production credential boundary. Mobile credentials and sensitive device-local secrets MUST use approved platform-protected secure storage (Android Keystore is a primary candidate for research).
-- **Transport Security:** `LocalAiRuntimeClient.kt` uses unencrypted HTTP configs which violates production security. Per D5, application authentication is always required, sensitive non-loopback traffic requires protected/encrypted transport, network proximity alone never grants trust, and direct public router port forwarding is rejected. Tailscale is the preferred private trusted-device transport, and Cloudflare Tunnel/Access is the preferred remote browser path.
+- **Transport Security:** The prototype globally permits cleartext transport and `LocalAiRuntimeClient.kt` does not itself guarantee protected non-loopback transport. Ordinary sensitive LAN traffic without an encrypted/protected transport path would violate D5. An approved encrypted overlay such as Tailscale may provide transport protection even when the local application endpoint uses HTTP internally. MOBILE-ARCH must define the supported production transport combinations explicitly. Application authentication remains mandatory regardless of network transport.
 - **Synchronization Mechanics:** `HttpTasksRepository.kt` performs optimistic in-memory task updates (`_tasks.update`) via `MutableStateFlow` without robust offline mutation persistence, violating reliable offline synchronization requirements.
 - **Health Connect:** `MockHealthDataProvider.kt` is a fully synthetic mock pipeline. It is classified as PROTOTYPE / REFERENCE EVIDENCE ONLY. Health Connect is an OPEN MOBILE ARCHITECTURE / RELEASE-ALLOCATION DECISION, and the prototype's state is not a violation since mobile health design was intentionally deferred.
 - **CI Evidence Verification:**
@@ -106,8 +127,15 @@ The architecture will halt for explicit human approval at defined batch boundari
 
 ## 8. Target Document Ownership
 
-Instead of creating files immediately, the architecture will be mapped into the following canonical structure, preserving `docs/04_Architecture/01_Domains/android-companion.md` as the root until unique semantics are individually promoted and verified:
-- **Mobile Baseline & Capability Matrix:** `android-companion.md`
+The architecture will be mapped into a canonical structure without creating new baseline files prematurely during PLAN.
+
+- `android-companion.md` remains the current/interim canonical Mobile boundary.
+- It must not be deleted or narrowed until its unique semantics are promoted and independently verified.
+- **Batch A** will determine whether it should remain the Mobile baseline or whether a dedicated Mobile baseline such as `MOBILE_SYSTEM_BASELINE.md` is justified.
+- Focused shared architecture should continue owning genuinely shared semantics.
+
+The tentative structural mapping includes:
+- **Mobile Baseline & Capability Matrix:** TBD by Batch A.
 - **Flutter Client Topology & Lifecycle:** Promoted to a shared/client specification or integrated into a generalized frontend baseline.
 - **Offline Storage & Sync:** New or updated storage specification.
 - **Background Work, Alarms & Notifications:** Promoted to `tasks-reminders-alarms-and-routines.md` (mobile section).
