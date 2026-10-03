@@ -1,7 +1,7 @@
 # Mobile Companion — Canonical System Baseline
 
 > **Document Role:** High-level normative system architecture, capability matrix, and cross-cutting boundaries for the Mobile Companion (Flutter).
-> **Status:** Active Canonical — Mobile Architecture Batch A/B Approved; Batch C Pending
+> **Status:** Active Canonical — Mobile Architecture Batch A/B Approved; Batch C Proposed (Review Pending)
 > **Authority Precedence:** This document defines the Mobile ecosystem boundaries. Cross-cutting PC boundaries remain in `SYSTEM_BASELINE.md`. Detailed mobile implementation logic remains subject to future Mobile batches.
 
 ## 1. Justification & Canonical Ownership
@@ -44,7 +44,7 @@ To prevent M1 Flutter Desktop and future Flutter Mobile from diverging unnecessa
 
 ### 4.3 Mobile Device Lifecycle
 - **Credential Validation:** The Host must authenticate the Device credential and derive/validate the Device's bound Profile from authoritative enrollment/session state. Mobile request payloads cannot override the authenticated Profile binding.
-- **Credential Rotation:** An independently enrolled Device credential can be rotated/reissued without changing Profile identity. Exact expiry periods, token format, overlap/grace windows, and rotation automation remain **[OPEN FOR BATCH C]**.
+- **Credential Rotation:** An independently enrolled Device credential can be rotated/reissued without changing Profile identity. Exact expiry periods, token format, overlap/grace windows, and rotation automation are **[PROPOSED IN BATCH C — REVIEW PENDING]** (see `04_Infrastructure/mobile-capabilities-and-runtime.md`).
 - **Profile Reassignment:** A normal Mobile Satellite cannot reassign itself to another Profile. Reassignment requires PC Account/Admin authority. Reassignment semantically requires re-enrollment / credential replacement or another explicit host-authorized transition. The old Profile's authorization must not survive reassignment.
 - **Lost / Stolen Device:** The PC Host must be able to revoke that specific Device without resetting the Profile or other Devices. Host access using the revoked credential must fail. Offline local-data handling remains subject to later security policy (**[RESOLVED IN BATCH B]** - see `04_Infrastructure/mobile-offline-and-sync.md`).
 - **App Reinstall / Credential Loss:** A reinstall or loss of protected local enrollment credentials must not silently recreate authenticated Device authority from arbitrary local data. The architectural recovery direction requires explicit re-enrollment or another host-authorized recovery flow.
@@ -58,27 +58,26 @@ The Mobile Companion operates across distinct modes. This matrix defines **what 
 | **Tasks** | AVAILABLE | LOCAL/CACHED (locally created/modified Task state pending later reconciliation) | Same as Offline | LIMITED / CACHED — exact stale write permission and reconciliation **[RESOLVED IN BATCH B]** |
 | **Reminders** | AVAILABLE | LOCAL/CACHED (replicated occurrence state/duplicate suppression is **[RESOLVED IN BATCH B]**) | Same as Offline | LIMITED / CACHED — exact stale write permission and reconciliation **[RESOLVED IN BATCH B]** |
 | **Alarms** | AVAILABLE | LOCAL/CACHED (exact offline behavior is **[RESOLVED IN BATCH B]**) | Same as Offline | LIMITED / CACHED — exact stale write permission and reconciliation **[RESOLVED IN BATCH B]** |
-| **Routines** | AVAILABLE | **[OPEN FOR BATCH C]** (governed by canonical Runtime scheduling, execution may require Batch C resolution) | **[OPEN FOR BATCH C]** | UNAVAILABLE / Cached view only |
+| **Routines** | AVAILABLE | **[PROPOSED IN BATCH C — REVIEW PENDING]** (governed by PC Runtime scheduling; cached view offline; autonomous execution deferred post-V1) | **[PROPOSED IN BATCH C — REVIEW PENDING]** | UNAVAILABLE / Cached view only |
 | **Conversations / history** | AVAILABLE (delegates to PC) | LOCAL/CACHED (viewing cached history) | Same as Offline | LIMITED / CACHED — exact stale write permission and reconciliation **[RESOLVED IN BATCH B]** |
-| **Assistant inference** | HOST-DEPENDENT | **[OPEN FOR BATCH C]** (local mobile LLM disposition deferred) | OPTIONAL-CLOUD (requires local provider API credentials) | Degraded / Unavailable |
-| **Voice** | HOST-DEPENDENT (approved PC Runtime services available; STT/TTS/VAD routing is **[OPEN FOR BATCH C]**) | **[OPEN FOR BATCH C]** | OPTIONAL-CLOUD (requires local provider API credentials) | Degraded / Unavailable |
+| **Assistant inference** | HOST-DEPENDENT (delegates to PC Runtime) | **[PROPOSED IN BATCH C — REVIEW PENDING]** (CAPABILITY-DEPENDENT / OPTIONAL-AUXILIARY: sub-1B/1B-3B models on supported tiers 2-3; core productivity functional offline without local LLM) | OPTIONAL-CLOUD (requires local provider API credentials) | Degraded / Truthful offline notice when unsupported |
+| **Voice** | HOST-DEPENDENT (full-duplex WebSocket to PC Runtime Whisper/Kokoro; mandatory barge-in) | **[PROPOSED IN BATCH C — REVIEW PENDING]** (DEFERRED / CAPABILITY-DEPENDENT in V1; degrades truthfully to text mode) | OPTIONAL-CLOUD (requires explicit separate cloud voice consent and local API credentials) | Degraded / Truthful fallback to text mode |
 | **Character / personality presentation** | AVAILABLE | LOCAL/CACHED | LOCAL/CACHED | LOCAL/CACHED |
 | **Memory** | HOST-DEPENDENT (delegates canonical writes/reads to PC) | UNAVAILABLE / Cached view only | UNAVAILABLE | UNAVAILABLE / Cached view only |
 | **Settings** | AVAILABLE | LOCAL/CACHED | LOCAL/CACHED | LOCAL/CACHED |
 | **Provider credentials** | AVAILABLE (device-local storage only) | AVAILABLE (device-local storage only) | AVAILABLE (device-local storage only) | AVAILABLE |
 | **Local media / assets** | AVAILABLE | AVAILABLE | AVAILABLE | AVAILABLE |
-| **Health / wearables** | **[OPEN FOR BATCH C]** | **[OPEN FOR BATCH C]** | **[OPEN FOR BATCH C]** | **[OPEN FOR BATCH C]** |
-| **Model management** | UNAVAILABLE (PC Host library admin) / **[OPEN FOR BATCH C]** (Mobile-local inference lifecycle) | UNAVAILABLE (PC Host library admin) / **[OPEN FOR BATCH C]** (Mobile-local inference lifecycle) | UNAVAILABLE (PC Host library admin) / **[OPEN FOR BATCH C]** (Mobile-local inference lifecycle) | UNAVAILABLE (PC Host library admin) / **[OPEN FOR BATCH C]** (Mobile-local inference lifecycle) |
+| **Health / wearables** | **[PROPOSED IN BATCH C — REVIEW PENDING]** (MOBILE LATER / DEFERRED POST-V1; prototype mock UI sequestered; no clinical claims) | UNAVAILABLE | UNAVAILABLE | UNAVAILABLE |
+| **Model management** | UNAVAILABLE (PC Host library admin) / **[PROPOSED IN BATCH C — REVIEW PENDING]** (Mobile D6 lifecycle: host-to-device transfer or curated mobile bundle download; single resident model cap) | UNAVAILABLE (PC Host library admin) / **[PROPOSED IN BATCH C — REVIEW PENDING]** (Local mobile model management) | UNAVAILABLE (PC Host library admin) / **[PROPOSED IN BATCH C — REVIEW PENDING]** (Local mobile model management) | UNAVAILABLE (PC Host library admin) / **[PROPOSED IN BATCH C — REVIEW PENDING]** (Local mobile model management) |
 | **Device / Profile administration** | UNAVAILABLE (PC Admin only) | UNAVAILABLE | UNAVAILABLE | UNAVAILABLE |
 
 ### 5.1 Additional Constraint Notes
 - **Stale Cache / Offline Productivity:** Stale state must be visibly distinguishable where material. Security-sensitive operations must fail safely. Exact stale-client write permission, reconciliation, re-baselining, and conflict behavior are **[RESOLVED IN BATCH B]** (see `04_Infrastructure/mobile-offline-and-sync.md`).
-- **Cloud Separation:** Cloud is optional and requires explicit opt-in. Cloud LLM, Cloud STT, and Cloud TTS permission boundaries remain distinct. Raw provider API credentials remain device-local. Specific Mobile Voice/cloud routing remains **[OPEN FOR BATCH C]**.
+- **Cloud Separation:** Cloud is optional and requires explicit opt-in. Cloud LLM, Cloud STT, and Cloud TTS permission boundaries remain distinct. Raw provider API credentials remain device-local. Specific Mobile Voice and cloud routing is **[PROPOSED IN BATCH C — REVIEW PENDING]** (see `04_Infrastructure/mobile-capabilities-and-runtime.md`).
 - **Revoked Credentials:** The PC Host immediately rejects requests. Handling of cached data purge, offline lockout, and re-enrollment while disconnected is **[RESOLVED IN BATCH B]** (see `04_Infrastructure/mobile-offline-and-sync.md`).
 
 ---
 
 ## 6. Open Architecture Decisions
-The following areas are explicitly deferred and must not be implemented during Batch A:
 - **[RESOLVED IN BATCH B]** Local persistence semantics, outbox design, per-domain synchronization, reconciliation algorithms, and Android background execution responsibilities (WorkManager, Doze, exact alarms) are defined in `04_Infrastructure/mobile-offline-and-sync.md`.
-- **[OPEN FOR BATCH C]** Local mobile inference, exact Voice/audio architecture, Health/Wearables release disposition, threat model completion, and performance/thermal policies.
+- **[PROPOSED IN BATCH C — REVIEW PENDING]** Local mobile inference, semantic hardware tiers, Voice streaming and audio focus, Health/Wearables release disposition (Mobile Later), threat model completion, thermal/battery governance, testing matrix, and Mobile Golden Acceptance architecture are defined in [`04_Infrastructure/mobile-capabilities-and-runtime.md`](./04_Infrastructure/mobile-capabilities-and-runtime.md).

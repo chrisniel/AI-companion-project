@@ -6,7 +6,7 @@
 
 ---
 
-> **Mobile Architecture Deferral:** Detailed mobile architecture is explicitly DEFERRED to a separate Mobile Architecture Pass. During the PC V1 pass, the current Kotlin health prototype and health/privacy research are preserved strictly as candidate input/evidence. Health Connect is a candidate/research input only until that pass.
+> **Mobile Architecture Disposition:** Detailed health integration is formally classified as **Mobile Later (Deferred Post-V1)** in the Mobile Architecture Pass (Batch C). The Kotlin health prototype and mock providers remain preserved strictly as non-production reference evidence.
 
 ## 1. Purpose & Scope
 
@@ -19,9 +19,11 @@ This specification documents the candidate integration architecture, data contra
 
 ## 2. Durable Architecture & Invariants
 
-### 2.1 Explicit Mobile Deferral
+### 2.1 Formal Release Disposition: Mobile Later (Deferred Post-V1)
 
-- **Deferred Architecture:** There is no frozen Android V1 or PC V1 health integration. Health Connect, PC backend readiness, and mobile health persistence are deferred. Health Connect remains a candidate research input.
+- **Release Boundary:** Health, wellness, and wearable biometric integrations are formally classified as **`Mobile Later` (Deferred Post-V1)** under Mobile Architecture Batch C (see [`04_Infrastructure/mobile-capabilities-and-runtime.md`](../04_Infrastructure/mobile-capabilities-and-runtime.md)).
+- **Mobile V1 Exclusion:** Real Health Connect integration (`androidx.health.connect`), health manifest permissions, and biometric synchronization are **strictly excluded** from the Mobile V1 release scope.
+- **Prototype Sequestration:** The existing Android Kotlin UI screens (`HealthScreen.kt`) and `MockHealthDataProvider` represent non-production exploratory mock/reference code only. They must remain sequestered or disabled behind developer flags in production release builds.
 
 ### 2.2 Candidate Privacy & Non-Clinical Invariants
 
@@ -53,15 +55,14 @@ Verified in `android/app/src/main/java/com/example/`:
 ---
 
 ## 4. Approved Target Architecture / Not Yet Implemented
-
-All health architecture is **DEFERRED** to the Mobile Architecture Pass. 
-There are no approved health integration targets for PC V1.
+ 
+Health and wearable integration is formally scheduled as **Mobile Later (Deferred Post-V1)**. There are no approved health integration targets for PC V1 or Mobile V1. 
 
 ---
 
 ## 5. OPEN DESIGN
 
-All functional and technical mechanisms for health integration remain open design for the future Mobile Architecture Pass, including:
+All functional and technical mechanisms for real health integration remain open design for future post-V1 mobile phases, including:
 
 - **Persistence & Injection Mechanisms:** Storage schema and prompt-injection hooks on the PC host.
 - **Provider & Aggregation Design:** Exact provider class names, metric sets, aggregation cadences, and sync protocol details.
@@ -80,6 +81,8 @@ All functional and technical mechanisms for health integration remain open desig
 ## 7. Canonical Relationships & Cross-Links
 
 - **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§2 Release Vocabulary, §3 Cross-Cutting Invariants)
+- **Mobile System Baseline:** [`docs/04_Architecture/MOBILE_SYSTEM_BASELINE.md`](../MOBILE_SYSTEM_BASELINE.md)
+- **Mobile Capabilities & Runtime Spec:** [`docs/04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md`](../04_Infrastructure/mobile-capabilities-and-runtime.md)
 - **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
 - **Master Planning Spine:** [`docs/02_Planning/00_Master/SPRINT_ROADMAP.md`](../../02_Planning/00_Master/SPRINT_ROADMAP.md) (Milestone Track M-Android)
 - **Android Companion Domain Spec:** [`docs/04_Architecture/01_Domains/android-companion.md`](../01_Domains/android-companion.md)
