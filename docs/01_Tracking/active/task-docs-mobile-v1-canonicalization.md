@@ -22,10 +22,13 @@
 
 ## Notes & Blockers
 - Phase 4 master planning spine and documentation integration aligned with approved Mobile architecture:
-  - Canonical `MOBILE_WBS.md` contains 64 unique work items across 11 streams (`MOB-FOUNDATION` through `MOB-VERIFY`), with `MOB-VERIFY-001`..`005` mapped to canonical layers L1–L5 and `MOB-VERIFY-006` as Golden release qualification.
-  - Canonical `MOBILE_CHECKLIST.md` restored to exact canonical definitions of `MG1` through `MG12` from `mobile-capabilities-and-runtime.md §8`.
-  - Evidence-driven emulator matrix, Alarm clock delivery (`AlarmManager.setAlarmClock()`), Drift preferred candidate status, audio codec neutrality, and evidence-driven local inference qualification aligned.
-  - Master planning spine (`DELIVERY_INDEX.md`, `SPRINT_ROADMAP.md`, `BACKLOG.md`, `DECISION_REGISTER.md`, `DECISION_DEBT.md`, `DOCUMENTATION_MAP.md`, `SYSTEM_BASELINE.md`, `README.md`, `MASTER_CHECKLIST.md`, `WBS.md`, and `task.md`) reconciled.
-  - Spec catalog count aligned to 20 canonical specifications.
+  - Canonical `MOBILE_WBS.md` contains exactly 65 unique work items across 11 streams (`MOB-FOUNDATION` through `MOB-VERIFY`), including `MOB-CONV-006` for Optional Cloud LLM Conversation Routing & Permission Boundary (6 items in `MOB-CONV`), with `MOB-VERIFY-001`..`005` mapped to canonical layers L1–L5 and `MOB-VERIFY-006` as Golden release qualification.
+  - Normalized `MOB-IDENTITY-001` pairing UX to architecture-neutral wording (`secure, explicit user-initiated Host↔Mobile enrollment/pairing flow`).
+  - Generalized disconnected conversation reconciliation and assistant provenance (`MOBILE_LOCAL_INFERENCE` and `MOBILE_CLOUD_INFERENCE` without secrets) in `mobile-offline-and-sync.md §3.2.6`, preserving the D9 Cloud tool-safety boundary (imported Cloud turns are historical records only; no Host tool authority or action replay).
+  - Clarified Tier 0/1 conversation input locking: input locks when disconnected only if neither Host nor an authorized Cloud LLM path is available.
+  - Updated `MOBILE_CHECKLIST.md` with an Optional Cloud LLM routing readiness row mapped to canonical Golden evidence (MG2, MG3, MG11).
+  - Updated `BACKLOG.md` and `DECISION_REGISTER.md` for explicit Mobile Optional Cloud discoverability.
+  - Canonical `MOBILE_CHECKLIST.md` verified with exact canonical definitions of `MG1` through `MG12`.
+  - Master planning spine reconciled across all 20 canonical specifications.
 - Mobile implementation is strictly classified as `APPROVED TARGET / NOT STARTED` across all streams; prototype code under `android/` is acknowledged as non-normative reference evidence only.
-- Stopping after Phase 4 handoff for independent review. Zero Git mutations performed.
+- Phase 4 remains `DOCUMENTATION & PLANNING INTEGRATION — REVIEW PENDING`. Stopping after Phase 4 handoff for independent review. Zero Git mutations performed.

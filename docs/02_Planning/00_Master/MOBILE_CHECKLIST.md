@@ -42,7 +42,8 @@
 | **Schedule** | Cross-Device Dismissal & Duplicate Prevention | `mobile-offline-and-sync.md` §6.3.2 | Pending alert state machine | Cross-device test | MG12 | **APPROVED TARGET (NOT STARTED)** |
 | **Dialogue** | Connected Conversation Streaming (SSE) | `mobile-offline-and-sync.md` §3.1 | Prototype has basic streaming chat | Streaming test | MG3 | **PARTIAL (PROTOTYPE REFERENCE)** |
 | **Dialogue** | Qualified Offline Text Turn Coordination | `mobile-offline-and-sync.md` §3.2.6 | Pending offline dialogue coordinator | Offline turn test | MG9 | **APPROVED TARGET (NOT STARTED)** |
-| **Dialogue** | Tier 0/1 Truthful Read-Only Input Locking | `mobile-offline-and-sync.md` §3.2.6 | Pending capability input guard | Degradation test | MG9 | **APPROVED TARGET (NOT STARTED)** |
+| **Dialogue** | Tier 0/1 Truthful Input Guard (Host/Cloud Unavailable) | `mobile-offline-and-sync.md` §3.2.6 | Pending capability input guard | Degradation test | MG9 | **APPROVED TARGET (NOT STARTED)** |
+| **Dialogue** | Optional Cloud LLM Conversation Routing & Permissions | `MOBILE_SYSTEM_BASELINE.md` §5.1, `mobile-capabilities-and-runtime.md` §3.2, `mobile-offline-and-sync.md` §3.2.6 | Pending Cloud LLM router & Keystore adapter | Cloud router test | MG2, MG3, MG11 | **APPROVED TARGET (NOT STARTED)** |
 | **Dialogue** | Multimodal Attachment Upload to Host | `mobile-offline-and-sync.md` §3.1 | Prototype lacks attachment queue | Attachment test | MG3 | **APPROVED TARGET (NOT STARTED)** |
 | **Inference** | Runtime Hardware Qualification (Tiers 0–3) | `mobile-capabilities-and-runtime.md` §2.1 | Pending hardware benchmark classifier | Tier detection test | MG9 | **APPROVED TARGET (NOT STARTED)** |
 | **Inference** | LAN Host-to-Device Model Transfer | `mobile-capabilities-and-runtime.md` §2.3 | Pending Wi-Fi model transfer client | Transfer test | MG9 | **APPROVED TARGET (NOT STARTED)** |

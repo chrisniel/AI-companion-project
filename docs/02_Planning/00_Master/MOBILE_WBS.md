@@ -17,7 +17,7 @@
 | **`MOB-DATA`**       | Local Persistence & Outbox | Relational SQLite store (Drift preferred candidate), transactional outbox journal, offline working state, durability. |
 | **`MOB-SYNC`**       | Sync & Reconciliation Engine | Asymmetric sync, desired-state ops, conflict resolution, re-baseline, whole-turn reconciliation. |
 | **`MOB-SCHED`**      | Scheduling, Reminders & Alarms | Replicated occurrences, AlarmManager exact alarms, permissions, Doze/reboot restoration. |
-| **`MOB-CONV`**       | Conversations & Offline Dialogue | Connected SSE streaming, qualified offline text turns, cached context, multimodal upload. |
+| **`MOB-CONV`**       | Conversations & Offline Dialogue | Connected SSE streaming, qualified offline text turns, optional Cloud LLM routing, cached context, multimodal upload. |
 | **`MOB-INFER`**      | Local Inference & Tiers | Evidence-driven Tiers 0–3, LAN model transfer, single resident model cap, thermal/battery rules. |
 | **`MOB-VOICE`**      | Mobile Voice & Audio Pipeline | Connected WebSocket voice, audio focus, mandatory barge-in, FGS lifecycle, local TTS adapter. |
 | **`MOB-SECURITY`**   | Security, Privacy & Sandboxing | Keystore keys, backup/data-extraction exclusions, sandbox isolation, screen/clipboard privacy. |
@@ -110,8 +110,8 @@
   - *Principal Dependencies:* `PC-API-004`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED` *(Note: `client_message_id` DB uniqueness exists; batch endpoint and client conversation ID acceptance are target requirements)*
 
-- **`MOB-CONTRACT-007`**: Assistant Local Inference Provenance & Dialogue Branch Metadata
-  - *Scope:* Extend Host message schema/DTOs to store assistant provenance (`MOBILE_LOCAL_INFERENCE`, `device_id`, `model_tag`) and represent branched offline conversation segments without PC LLM regeneration.
+- **`MOB-CONTRACT-007`**: Assistant Execution Origin Provenance & Dialogue Branch Metadata
+  - *Scope:* Extend Host message schema/DTOs to store assistant execution origin provenance (`MOBILE_LOCAL_INFERENCE`, `MOBILE_CLOUD_INFERENCE`, `device_id`, provider/model metadata without secrets) and represent branched offline conversation segments without PC LLM regeneration or tool replay.
   - *Responsibility:* Host Runtime (PC Backend)
   - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §3.2.6
   - *Principal Dependencies:* `MOB-CONTRACT-006`
@@ -129,7 +129,7 @@
 ### Stream: `MOB-IDENTITY` — Mobile Identity, Enrollment & Transport
 
 - **`MOB-IDENTITY-001`**: Satellite Device Pairing Handshake & Credential Exchange
-  - *Scope:* Implement QR code or LAN pairing flow between PC Host Admin and Mobile Companion, issuing an independently revocable Device Token bound to exactly one Profile.
+  - *Scope:* Implement secure, explicit user-initiated Host↔Mobile enrollment/pairing flow between PC Host Admin and Mobile Companion (exact pairing UX QR/PIN/code remains implementation-open), issuing an independently revocable Device Token bound to exactly one Profile under PC Host Admin authority.
   - *Responsibility:* Both
   - *Architectural Owner:* [`MOBILE_SYSTEM_BASELINE.md`](../../04_Architecture/MOBILE_SYSTEM_BASELINE.md) §4.1, [`profiles-and-devices.md`](../../04_Architecture/02_Data_and_Security/profiles-and-devices.md)
   - *Principal Dependencies:* `PC-IDENTITY-003`, `MOB-FOUNDATION-004`
@@ -326,11 +326,11 @@
   - *Principal Dependencies:* `MOB-DATA-004`, `MOB-INFER-001`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
-- **`MOB-CONV-003`**: Tier 0/1 Read-Only Dialogue Fallback & Input Locking
-  - *Scope:* Lock turn submission when offline on Tier 0/1 devices (or when local LLM is uninstalled), displaying truthful degraded notice while keeping history readable.
+- **`MOB-CONV-003`**: Tier 0/1 Read-Only Dialogue Fallback & Input Guard
+  - *Scope:* Lock turn submission when disconnected from PC Host on Tier 0/1 devices (or when local LLM is uninstalled/unsupported) ONLY when an authorized Cloud LLM path is also unavailable (i.e. Cloud LLM permission disabled, unconfigured, or device offline), displaying truthful degraded notice while keeping history readable.
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Infrastructure/mobile-offline-and-sync.md) §3.2.6, [`mobile-capabilities-and-runtime.md`](../../04_Infrastructure/mobile-capabilities-and-runtime.md) §2.1
-  - *Principal Dependencies:* `MOB-CONV-001`, `MOB-INFER-001`
+  - *Principal Dependencies:* `MOB-CONV-001`, `MOB-INFER-001`, `MOB-CONV-006`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-CONV-004`**: Cached Memory & Context Assembly for Offline Turns
@@ -345,6 +345,13 @@
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Infrastructure/mobile-offline-and-sync.md) §3.1, [`MOBILE_SYSTEM_BASELINE.md`](../../04_Architecture/MOBILE_SYSTEM_BASELINE.md) §7
   - *Principal Dependencies:* `MOB-CONV-001`
+  - *Implementation State:* `APPROVED TARGET / NOT STARTED`
+
+- **`MOB-CONV-006`**: Optional Cloud LLM Conversation Routing & Permission Boundary
+  - *Scope:* Implement direct Mobile conversational routing to a configured external Cloud LLM provider when PC Host is unavailable; require explicit user opt-in and device-local provider API credentials stored in Android Keystore; ensure Cloud LLM permission is independently revocable from Cloud STT and Cloud TTS; enforce zero silent cloud fallback, truthful unavailable/error state, and zero transmission without explicit user authorization (exact provider SDK remains implementation-open).
+  - *Responsibility:* Mobile
+  - *Architectural Owner:* [`MOBILE_SYSTEM_BASELINE.md`](../../04_Architecture/MOBILE_SYSTEM_BASELINE.md) §5.1, [`mobile-capabilities-and-runtime.md`](../../04_Infrastructure/mobile-capabilities-and-runtime.md) §3.2, [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §3.2.6
+  - *Principal Dependencies:* `MOB-FOUNDATION-004`, `MOB-IDENTITY-002`, `MOB-CONV-001`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 ---

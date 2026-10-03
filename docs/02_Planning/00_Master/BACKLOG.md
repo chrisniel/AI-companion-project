@@ -68,9 +68,10 @@
 - **Offline Task Management:** Full offline Task create, update, `SET_COMPLETION`, and delete with causal dependency ordering.
 - **Native Scheduling & Alarm Delivery:** Precomputed Reminder/Alarm occurrence replication from PC `SchedulerService`; `AlarmManager` exact alarms with `canScheduleExactAlarms()` degradation handling and reboot recovery.
 - **Capability-Dependent Local Inference:** Evidence-driven Tiers 0–3 runtime qualification as optional auxiliary capability; single resident model cap (`--models-max 1`); LAN Host-to-Device model transfer.
-- **Offline Local Conversation Working State:** Qualified Tier 2/3 devices support offline local text turns; synchronized as atomic whole-turn units with `MOBILE_LOCAL_INFERENCE` provenance and `client_message_id` deduplication without Host LLM replay.
+- **Disconnected Conversation Working State & Provenance:** Qualified Tier 2/3 devices support offline local text turns; devices with authorized Cloud LLM support disconnected cloud turns; synchronized as atomic whole-turn units with execution-origin provenance (`MOBILE_LOCAL_INFERENCE` / `MOBILE_CLOUD_INFERENCE`) and `client_message_id` deduplication without Host LLM replay or tool invocation.
 - **Decoupled Local TTS & STT:** Capability-dependent device-local TTS where approved provider installed; independently capability-gated local STT with truthful fallback to text.
 - **Connected Voice Streaming:** Full-duplex WebSocket audio streaming to PC Runtime canonical STT/TTS/VAD providers with mandatory immediate barge-in.
+- **Optional Cloud Providers:** Cloud LLM, Cloud STT, and Cloud TTS independently permissioned; explicit opt-in; provider credentials stored device-locally in Android Keystore; zero silent cloud fallback.
 - **Platform Security & Governance:** Backup exclusions (`dataExtractionRules`, `backup_rules.xml`), private sandbox baseline, clipboard/screen privacy (`FLAG_SECURE`), and thermal/battery governance.
 - **Multi-Layer Verification & Golden Gate:** 5-layer test matrix (L1–L5) and 12-group Mobile Golden Acceptance Gate (MG1–MG12) collecting verified evidence across L1–L5 with mandatory physical hardware runs for hardware/audio/thermal behaviors.
 
