@@ -14,7 +14,7 @@
 - [x] Final Plan Revision (Surgical corrections for mechanism neutrality, D5 transport constraints, and 3-batch implementation split).
 - [x] Await Chris's independent GPT review and approval of the revised plan.
 - [x] Phase 1: Architecture Implementation (Batch A — Mobile Foundation) — APPROVED / independently reviewed.
-- [ ] Phase 2: Architecture Implementation (Batch B — Offline & Native Reliability) — READY / NOT STARTED.
+- [x] Phase 2: Architecture Implementation (Batch B — Offline & Native Reliability) — IN PROGRESS / Review Pending.
 - [ ] Phase 3: Architecture Implementation (Batch C — Mobile Capabilities & Verification) — BLOCKED by Batch B.
 - [ ] Phase 4: Documentation & Planning Integration — NOT STARTED.
 - [ ] Closure & PR Preparation.
