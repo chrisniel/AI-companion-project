@@ -1,7 +1,7 @@
 # Mobile Capabilities, Inference, Voice, and Verification Architecture
 
 > **Document Role:** Canonical infrastructure and behavior specification for Mobile Companion hardware capabilities, local inference policy, voice architecture, security boundaries, and release verification.  
-> **Status:** Proposed Canonical — Mobile Architecture Batch C / Review Pending  
+> **Status:** Active Canonical — Mobile Architecture Batch C Approved  
 > **Authority Precedence:** This specification governs Mobile hardware tiering, local/remote inference delegation, voice streaming and audio focus, platform security controls, resource governance, and testing architecture. It operates under the cross-cutting boundaries defined in [`MOBILE_SYSTEM_BASELINE.md`](../MOBILE_SYSTEM_BASELINE.md) and [`mobile-offline-and-sync.md`](./mobile-offline-and-sync.md). PC Local AI Runtime domain truth remains owned by shared specifications (such as [`runtime-and-models.md`](./runtime-and-models.md), [`voice-and-audio.md`](../01_Domains/voice-and-audio.md), and [`health-and-wearables.md`](../03_Integrations/health-and-wearables.md)).
 
 ---
@@ -116,27 +116,33 @@ Voice on Mobile requires distinct architectural partitioning from PC Desktop due
                         | Capture / Playback / Audio Focus / Hints |
                         +--------------------+---------------------+
                                              |
-                   +-------------------------+-------------------------+
-                   |                                                   |
-         [CONNECTED_TO_PC]                                     [OPTIONAL_CLOUD]
-                   |                                                   |
-                   v                                                   v
-   +-------------------------------+                   +-------------------------------+
-   |      PC Local AI Runtime      |                   |    Provider Cloud Gateway     |
-   | (Canonical STT / TTS / VAD)   |                   |  (User API Keys in Keystore)  |
-   +-------------------------------+                   +-------------------------------+
+             +-------------------------------+-------------------------------+
+             |                               |                               |
+     [CONNECTED_TO_PC]                [OFFLINE_LOCAL]                 [OPTIONAL_CLOUD]
+             |                               |                               |
+             v                               v                               v
++-------------------------+     +-------------------------+     +-------------------------+
+|   PC Local AI Runtime   |     | Device-Local TTS / STT  |     | Provider Cloud Gateway  |
+| (Canonical STT/TTS/VAD) |     |  (Capability-Dependent) |     | (User Keys in Keystore) |
++-------------------------+     +-------------------------+     +-------------------------+
 ```
 
-1. **Connected-to-PC Voice Mode (Primary):**
+1. **Independent Capability Triad (TTS / STT / LLM Decoupling):**
+   - Device-local Text-to-Speech (TTS), device-local Speech-to-Text (STT), and device-local Large Language Model (LLM) inference are treated as **three separate, independently evaluated capabilities**.
+   - A mobile device may qualify for and execute device-local TTS (e.g. to vocalize companion text responses, reminders, or alarms) without supporting local speech recognition (STT) or hosting a resident local LLM.
+   - Enabling or executing one capability does not imply or mandate the presence of the others.
+2. **Connected-to-PC Voice Mode (Primary):**
    - Uses a dedicated full-duplex **WebSocket connection** (`ADR-0019`) over the authenticated local transport.
    - Raw audio frames captured by the mobile microphone stream in real time to the PC Runtime.
-   - The PC Runtime executes speech-to-text (`whisper.cpp` or equivalent CPU/RAM-first engine), feeds tokens to the language model, synthesizes audio via TTS (`Kokoro-82M` candidate), and streams audio buffers back to the phone for native playback.
-2. **Optional Cloud Voice Routing:**
-   - Supported only when the user explicitly enables Cloud Voice and provides personal API credentials.
+   - The PC Runtime executes canonical speech-to-text (`whisper.cpp` or equivalent engine), feeds tokens to the language model, synthesizes audio via its canonical TTS provider (`Kokoro-82M` reference candidate), and streams audio buffers back to the phone for native playback.
+3. **Offline Mobile Audio & Voice Capabilities:**
+   - *Device-Local TTS (Capability-Dependent):* Offline Mobile supports capability-dependent device-local TTS when an approved local TTS provider/runtime is installed and the device hardware qualifies (meeting memory, thermal, and platform runtime criteria).
+   - *Engine Independence:* The exact local TTS engine remains provider-independent. Candidates such as Kokoro or platform-native TTS engines serve as reference implementations or candidates, not permanent architectural mandates.
+   - *Independent Gating for Local STT & Conversational Voice:* Local speech recognition (STT) and full offline continuous conversational voice turn-taking are independently capability-gated. Mobile devices in V1 are not burdened with mandatory heavy local STT runtimes.
+   - *Truthful Degradation Invariant:* If disconnected from PC and without qualified local speech recognition (STT) or Cloud Voice credentials, interactive voice input truthfully degrades to typed text input. If local TTS is available, companion responses can still be vocalized locally; if local TTS is also unsupported or uninstalled, the interface truthfully falls back to visual text display with clear status indication (*"Speech input unavailable offline — connect to PC Host or configure Cloud Voice"*).
+4. **Optional Cloud Voice Routing:**
+   - Supported only when the user explicitly enables Cloud Voice and provides personal API credentials stored securely in Keystore.
    - *Permission Decoupling:* Cloud LLM, Cloud STT, and Cloud TTS are **three independently revocable permissions**. Enabling Cloud LLM does NOT authorize cloud audio streaming. Cloud audio transmission requires explicit separate consent.
-3. **Offline Voice Capability:**
-   - In Mobile V1, continuous heavy offline speech recognition (STT) and neural voice synthesis (TTS) are **DEFERRED / CAPABILITY-DEPENDENT**.
-   - If disconnected from PC and without cloud credentials, Voice Mode truthfully degrades to typed text input with visual companion responses, displaying an explicit indicator: *"Voice streaming requires connection to PC Host or Cloud Voice setup"*. Mobile devices are not burdened with mandatory heavy local TTS/STT runtimes in V1.
 
 ---
 
@@ -154,12 +160,19 @@ Voice on Mobile requires distinct architectural partitioning from PC Desktop due
 ### 3.4 Background, Screen-Lock, and Foreground Service Boundaries
 - **No Background Eavesdropping:** Continuous background microphone capture while the app is idle or closed is **STRICTLY PROHIBITED**.
 - **No Always-On Wake Word in V1:** Wake-word detection on mobile is deferred to post-V1 (aligned with PC V1 Decision D1). Voice interactions require explicit user initiation (push-to-talk, tap-to-speak, or entering an explicit active Voice Session screen).
-- **Active Session Screen-Lock & Foreground Execution (FGS):**
-  - Microphone access on modern Android is a while-in-use permission (`RECORD_AUDIO`). On Android 14+ (API 34+), microphone foreground services (`FOREGROUND_SERVICE_TYPE_MICROPHONE`) generally MUST be initiated while the application has an active, visible activity in the foreground.
-  - Background code cannot arbitrarily initiate microphone capture. Voice sessions originate strictly from visible, intentional user interaction.
-  - If the user explicitly starts a conversational voice session and subsequently locks the screen or switches tasks, the session MAY continue under an explicit Android Foreground Service (`android.permission.FOREGROUND_SERVICE_MICROPHONE`).
+- **Required Foreground Service & Audio Permissions:**
+  - *Base Foreground Service Permission:* Manifest must declare base `android.permission.FOREGROUND_SERVICE` (required on Android 9+, API 28+).
+  - *Type-Specific Foreground Service Permission:* Manifest must declare type-specific `android.permission.FOREGROUND_SERVICE_MICROPHONE` (mandatory on Android 14+, API 34+), and the service must declare `android:foregroundServiceType="microphone"`.
+  - *Runtime Audio Permission:* Runtime `android.permission.RECORD_AUDIO` must be requested and granted by the user prior to capturing audio.
+- **Modern Android While-in-Use Restrictions & Initiation Rules:**
+  - Microphone capture on modern Android is strictly a **while-in-use** capability. The application cannot access the microphone when running in the background without an active foreground service.
+  - On Android 14+ (API 34+), a microphone foreground service **CANNOT be initiated from the background**. It strictly requires a qualifying visible foreground user interaction (e.g. active visible activity). Attempting to start a microphone FGS from the background will fail with a platform exception (`ForegroundServiceStartNotAllowedException`).
+  - Background code cannot arbitrarily start or resume microphone capture. Voice sessions originate strictly from visible, intentional user interaction in the foreground UI.
+- **Active Session Screen-Lock & Foreground Execution Lifecycle:**
+  - If the user explicitly starts a conversational voice session in the foreground and subsequently locks the screen or navigates to another app, the active session MAY continue running under the initiated microphone Foreground Service.
   - *User-Visible Indication:* The OS notification drawer displays an ongoing, prominent user notification indicating active microphone use and featuring an explicit **"End Session"** action control.
-  - Ending the session immediately terminates the foreground service, releases the microphone hardware, and revokes foreground execution.
+  - *Session Termination:* Tapping "End Session" or terminating the turn immediately stops the foreground service (`stopForeground(STOP_FOREGROUND_REMOVE)`), releases the native microphone hardware, and ends foreground execution.
+
 
 ---
 
@@ -254,9 +267,10 @@ The mobile engine registers an active listener with `PowerManager.OnThermalStatu
 
 ### 6.3 Memory Pressure & Low-Storage Safeguards
 - **Memory Pressure Governance:**
-  - Monitor supported modern Android architecture signals: `ComponentCallbacks2.onTrimMemory` background and visibility states (`TRIM_MEMORY_UI_HIDDEN`, `TRIM_MEMORY_BACKGROUND`, `TRIM_MEMORY_COMPLETE`), `ActivityManager.MemoryInfo.lowMemory` / memory thresholds, and current process memory state. (Deprecated running-trim levels like `TRIM_MEMORY_RUNNING_CRITICAL` are not relied upon).
+  - Monitor supported modern Android architecture signals: `ComponentCallbacks2.onTrimMemory` background and visibility states (`TRIM_MEMORY_UI_HIDDEN`, applicable background trim states such as `TRIM_MEMORY_BACKGROUND`), `ActivityManager.MemoryInfo.lowMemory` / memory thresholds, and current process memory state. (Deprecated running-trim levels like `TRIM_MEMORY_RUNNING_CRITICAL` and legacy levels like `TRIM_MEMORY_COMPLETE` are no longer delivered on modern Android targets and are not relied upon).
+  - Enforce model-load memory preflight validation against available device RAM prior to loading local model artifacts.
   - When memory pressure signals are received, clear ephemeral image/media caches and release or suspend expensive resident model allocations as appropriate.
-  - Catch `OutOfMemoryError` gracefully during model operations, resetting engine state and presenting a truthful UI fallback rather than crashing the process.
+  - Handle allocation failures (`OutOfMemoryError` and native runtime allocation errors) gracefully during model operations, resetting engine state cleanly and presenting a truthful UI fallback rather than crashing the process.
 - **Storage Safeguards:**
   - Storage preflight checks must verify available storage against required model artifact sizes plus a safety reserve for database and outbox transactions.
   - When storage becomes severely constrained, block new model downloads and prune cached conversation attachments while preserving essential SQLite database and outbox mutations.
@@ -273,9 +287,19 @@ Verification of the Mobile Companion is partitioned into **five explicit testing
 | :--- | :--- | :--- | :--- |
 | **L1: Unit & Domain Tests** | Host JVM / Dart VM (Headless) | Domain entity validation, outbox state machine, revision comparisons, conflict detection algorithms, JSON serialization, idempotency key generation. | FUTURE AUTOMATED (Headless CI) |
 | **L2: Storage & Outbox Tests** | Headless / Robolectric / SQLite | SQLite migrations, transactional mutation journal rollback, outbox retry queuing, cursor pagination, mock Keystore adapter. | FUTURE AUTOMATED (Headless CI / Robolectric) |
-| **L3: Platform Lifecycle Tests** | Android Emulator (API 34/35) | Activity recreation, process death restoration, `canScheduleExactAlarms()` revocation recovery, `ACTION_BOOT_COMPLETED` receiver alarm re-registration, notification permission prompt handling. | FUTURE EMULATOR AUTOMATION (Scheduled emulator matrix) |
+| **L3: Platform Lifecycle Tests** | Android Emulator Matrix | Activity recreation, process death restoration, `canScheduleExactAlarms()` revocation recovery, `ACTION_BOOT_COMPLETED` receiver alarm re-registration, notification permission prompt handling. Validates across an evidence-driven matrix spanning current Target SDK/API, supported lower API boundaries, and breaking transition versions (notifications, exact alarms, typed/while-in-use FGS, process lifecycle/timeouts). | FUTURE EMULATOR AUTOMATION (Scheduled emulator matrix) |
 | **L4: Hardware & Audio Tests** | Physical Android Hardware | Real audio focus during incoming phone calls, Bluetooth headset disconnect, exact alarm firing out of deep overnight Doze, sustained thermal throttling behavior under local inference load. | PHYSICAL DEVICE / MANUAL GOLDEN (Physical hardware pass) |
 | **L5: Host Integration Tests** | Multi-Process / Local Network | Mobile client communicating with running PC Local AI Runtime FastAPI harness: delta cursor sync, `STALE_CURSOR` re-baseline, `DEVICE_REVOKED` wipe, SSE streaming resilience across disconnects. | FUTURE INTEGRATION AUTOMATION (Integration harness) |
+
+#### 7.1.1 Evidence-Driven L3 Emulator Matrix Specification
+Rather than hardcoding arbitrary fixed emulator versions, the L3 platform lifecycle matrix is governed by observable platform behavioral boundaries:
+1. **Target SDK/API Boundary:** Validates adherence to current target platform policies and runtime contracts (modern target API level).
+2. **Supported Lower API Boundary:** Validates minimum supported SDK compatibility baseline, ensuring backward-compatible execution paths execute safely without runtime failures.
+3. **Behavioral Transition Boundaries:** Specific OS releases introducing breaking platform lifecycle, permission, or background execution behavior:
+   - *Notifications (API 33 / Android 13):* Runtime `POST_NOTIFICATIONS` permission prompt, grant/denial flows, and settings toggle recovery.
+   - *Exact Alarms (API 34 / Android 14):* Restricted `SCHEDULE_EXACT_ALARM` access, dynamic `canScheduleExactAlarms()` gating, and absence of reliable revocation broadcast.
+   - *Foreground Services (API 34 / Android 14):* Typed foreground service declaration (`FOREGROUND_SERVICE_MICROPHONE`), while-in-use restrictions, and prohibition of background FGS starts without visible UI initiation.
+   - *Process Lifecycle & Timeouts (API 35+ / Android 15+):* Strict foreground service runtime limits, enhanced memory-pressure trimming, and 16 KB page-size compatibility.
 
 ### 7.2 CI Boundary Rule
 In accordance with project rules, **Batch C modifies ZERO existing CI workflow files** (`.github/workflows/`, `scripts/ci_policy.py`). The mobile testing architecture defines the verification contract for future mobile implementation tasks without destabilizing current PC V1 CI pipelines.
@@ -293,7 +317,7 @@ Analogous to the 14 Golden verification groups for PC V1, the Mobile Companion e
 - **MG5 — Synchronization & Conflict Reconciliation:** Delta cursor synchronization, typed `CONFLICT_DETECTED` handling with user conflict presentation, typed `STALE_CURSOR` full re-baseline, retry idempotency deduplication (`mutation_id`).
 - **MG6 — Punctual Offline Alarms & Reminders:** Alarm scheduling via `AlarmManager.setAlarmClock()`, precise ringing while device is in deep Doze conditional on exact-alarm capability/access, floating timezone recalculation, single-device duplicate firing suppression, and graceful degraded indication when exact alarm access is unavailable.
 - **MG7 — System Lifecycle & Permission Resilience:** Alarm re-registration following `ACTION_BOOT_COMPLETED`, recovery when `SCHEDULE_EXACT_ALARM` or `POST_NOTIFICATIONS` is revoked, graceful degradation warnings.
-- **MG8 — Voice Streaming & Audio Lifecycle:** Native mic capture, full-duplex WebSocket audio streaming to PC Host, immediate local barge-in playback muting, immediate muting on competing audio focus loss (`AUDIOFOCUS_LOSS`), pausing on unsafe route changes (`ACTION_AUDIO_BECOMING_NOISY`).
+- **MG8 — Voice Streaming & Audio Lifecycle:** Native mic capture, full-duplex WebSocket audio streaming to PC Host, immediate local barge-in playback muting, immediate muting on competing audio focus loss (`AUDIOFOCUS_LOSS`), pausing on unsafe route changes (`ACTION_AUDIO_BECOMING_NOISY`), device-local TTS vocalization when offline on qualifying devices, and graceful truthful degradation to text mode when unsupported.
 - **MG9 — Mobile Inference & Hardware Tiers:** Capability detection across Tiers 0–3 based on runtime preflight evidence, clean UI degradation when unsupported, resident model memory budget enforcement, D6 mobile lifecycle integrity.
 - **MG10 — Thermal, Battery & Power Governance:** WorkManager compliance with Doze maintenance windows, thermal throttling backoff under severe thermal state, graceful model unloading under modern `onTrimMemory` and memory pressure signals without process crash.
 - **MG11 — Security, Revocation & Privacy:** Authoritative discovery of `DEVICE_REVOKED` triggering local revocation cleanup, preservation of third-party user keys, backup exclusion verification, quarantine on `PROFILE_INACTIVE`, permanent wipe on `PROFILE_PURGED`.
