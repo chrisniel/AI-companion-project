@@ -1,7 +1,7 @@
 # Active Task: MOBILE-ARCH Canonicalization
 
 > **Branch:** `docs/mobile-v1-canonicalization`
-> **Status:** ARCHITECTURE IMPLEMENTATION — Batch A APPROVED / Batch B REVIEW PENDING
+> **Status:** ARCHITECTURE IMPLEMENTATION — Batch A/B APPROVED / Batch C READY
 > **Objective:** Execute the Mobile V1 Canonical Architecture Pass to define Mobile cross-cutting ecosystem boundaries, offline capabilities, and security rules.
 
 ## Current Execution State
@@ -14,10 +14,10 @@
 - [x] Final Plan Revision (Surgical corrections for mechanism neutrality, D5 transport constraints, and 3-batch implementation split).
 - [x] Await Chris's independent GPT review and approval of the revised plan.
 - [x] Phase 1: Architecture Implementation (Batch A — Mobile Foundation) — APPROVED / independently reviewed.
-- [x] Phase 2: Architecture Implementation (Batch B — Offline & Native Reliability) — IN PROGRESS / Review Pending.
-- [ ] Phase 3: Architecture Implementation (Batch C — Mobile Capabilities & Verification) — BLOCKED by Batch B.
+- [x] Phase 2: Architecture Implementation (Batch B — Offline & Native Reliability) — APPROVED / independently reviewed.
+- [ ] Phase 3: Architecture Implementation (Batch C — Mobile Capabilities & Verification) — READY / NOT STARTED.
 - [ ] Phase 4: Documentation & Planning Integration — NOT STARTED.
-- [ ] Closure & PR Preparation.
+- [ ] Closure & PR Preparation — NOT STARTED.
 
 ## Notes & Blockers
 - Found multiple contradictions in the prototype (e.g. package identity, SharedPreferences cleartext token, optimistic MutableStateFlow tasks without outbox, ModelsScreen advertising local LLM/TTS). MockHealthDataProvider is PROTOTYPE/REFERENCE only, and Health Connect is an OPEN architecture decision.

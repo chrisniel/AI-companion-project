@@ -1,7 +1,7 @@
 # Mobile Offline, Synchronization, and Android Background Architecture
 
 > **Document Role:** Canonical infrastructure and behavior specification for Mobile Companion offline capabilities, synchronization, and Android background delivery.  
-> **Status:** Proposed Canonical — Mobile Architecture Batch B / Review Pending  
+> **Status:** Active Canonical — Mobile Architecture Batch B Approved  
 > **Authority Precedence:** This specification governs Mobile synchronization, offline persistence semantics, and platform background execution limits. It operates under the cross-cutting boundaries defined in [`MOBILE_SYSTEM_BASELINE.md`](../MOBILE_SYSTEM_BASELINE.md). Entity schemas and domain truth remain owned by the shared domain specifications (such as [`tasks-reminders-alarms-and-routines.md`](../01_Domains/tasks-reminders-alarms-and-routines.md) and [`profiles-and-devices.md`](../02_Data_and_Security/profiles-and-devices.md)).
 
 ---
