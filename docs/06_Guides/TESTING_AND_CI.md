@@ -118,7 +118,7 @@ The automated GitHub Actions workflow is defined in [`.github/workflows/ci.yml`]
   3. **`backend` (Windows / Python 3.11):** Conditionally executed if `needs_backend` is true. Ephemeral data root, dependency installation, and backend pytest suite.
   4. **`contract` (Windows / Python 3.11):** Conditionally executed if `needs_contract` is true. Verifies OpenAPI contract equality.
   5. **`frontend` (Windows / Node 22):** Conditionally executed if `needs_frontend` is true. Clean npm ci, Vitest suite, TypeScript compilation check, and Vite production bundle build.
-  6. **`ci-gate` (Ubuntu):** Downstream aggregation job that acts as the single required status check for branch protection.
+  6. **`ci-gate` (Ubuntu):** Downstream aggregation job that provides the aggregate status intended to serve as the single required CI status when/if repository branch protection requires it.
 
 *Note: Future Flutter desktop verification will be added as an independent Windows job lane.*
 
@@ -128,16 +128,17 @@ To eliminate redundant runner minute consumption while hardening release integri
 
 | Git Event / Trigger | Execution Policy | Governance Rationale |
 | :--- | :--- | :--- |
-| **Push `feature/**`, `chore/**`** | **No automatic heavy full CI.** | Primary verification occurs locally. Prevents burning expensive runner minutes on rapid, WIP feature commits. |
+| **Push ordinary short-lived branch** (`feature/**`, `chore/**`, `docs/**`, `fix/**`, `refactor/**`, etc.) | **No automatic CI workflow.** | Primary verification occurs locally. Prevents burning expensive runner minutes on rapid, WIP branch commits. |
 | **Pull Request → `develop`** | **Path-aware / scoped CI.** | Targets verification strictly to the subsystems modified in the PR diff (e.g., frontend only, backend only). |
 | **Push to `develop`** | **Scoped integration CI.** | Primary integration gatekeeper for merged code, verifying interacting subsystems modified since the last passing baseline. |
 | **Pull Request → `master`** | **Full PC V1 CI.** | Critical release boundary. Must pass completely before merge approval. Target branch extraction overrides diff scopes. |
 | **Push to `master`** | **Full PC V1 CI.** | Production baseline verification. Required before any release packaging. |
 | **`workflow_dispatch`** | **Full CI anywhere.** | Allows manual, explicit invocation of the full pipeline on any branch via strict parameter override. |
+| **Docs-only PR → `develop`** | **classifier + docs-integrity + ci-gate** | Fast validation for `.md`/repo docs. `backend`, `frontend`, and `contract` are intentionally skipped. |
 
 ### 3.3 Path Mapping Rules
 - **Backend changes** (`backend/**`) require both `backend` and `contract` lanes.
-- **Contract changes** (`contracts/**`, `check_openapi_contract.py`) independently require the `contract` lane.
+- **Contract changes** (`contracts/**`, `scripts/check_openapi_contract.py`) independently require the `contract` lane.
 - **Mixed changes** (e.g., frontend + docs) correctly trigger both `frontend` and `docs-integrity`.
 - **Unknown/Shared changes** (e.g., `.github/**`, `android/**`, unmapped `scripts/**`) trigger conservative **Full Verification** (all lanes active).
 
@@ -151,4 +152,7 @@ The `ci-gate` job enforces the CI matrix validity securely:
 2. **Explicit Dependency Inspection:** It feeds the boolean requirements (from the classifier) and the actual step results (success, skipped, failed, cancelled) into the `ci_policy.py gate` command.
 3. **Deterministic Evaluation:**
    - **SUCCESS:** `ci-gate` exits 0 if and only if the classifier completed successfully, all required jobs explicitly report `success`, and all unrequired jobs explicitly report `skipped`.
-   - **FAILURE:** `ci-gate` fails (exit 1) if requirements strings are missing/malformed, the classifier crashed, required jobs skipped/failed, or unrequired jobs unexpectedly ran. This ensures fail-closed branch protection.
+   - **FAILURE:** `ci-gate` fails (exit 1) if requirements strings are missing/malformed, the classifier crashed, required jobs skipped/failed, or unrequired jobs unexpectedly ran. This ensures fail-closed CI gate evaluation.
+
+> [!NOTE]
+> **Branch Protection Separation:** Repository branch-protection configuration is separate from workflow implementation and must not be inferred from the existence of the `ci-gate` job. `ci-gate` merely provides a consolidated status check.

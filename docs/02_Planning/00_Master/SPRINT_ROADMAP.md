@@ -53,7 +53,7 @@
 - **Exit Criteria:** All validation gates pass; zero stale React-primary or single-user contradictions; clean fresh-agent review report approved by Chris and GPT.
 
 ### MOBILE-ARCH: Phone/Mobile V1 Canonical Architecture Pass (NEXT)
-- **Primary Objective:** Formally unfreeze and redesign mobile architecture for production Android Companion. Precommitments to Room/outbox, compact mobile LLMs, or Health Connect are removed from this roadmap. The goal is to freeze shared vs PC-specific vs mobile-specific boundaries, establish Mobile System Baseline, establish Mobile WBS, and decide PC Flutter vs Mobile Flutter sharing boundaries before M1 implementation.
+- **Primary Objective:** Canonicalize production Phone/Mobile architecture by inheriting shared ecosystem rules and resolving mobile-specific constraints, responsibilities, resource limits, runtime behavior, sync/offline behavior, and Flutter sharing boundaries before M1 implementation.
 
 **Preserved Mobile Inputs Only:**
 - Package: com.cnl.aicompanion.
@@ -63,7 +63,7 @@
 - One satellite device binds to exactly one Profile.
 - Provider/API/device credentials remain device-local.
 - **Exit Criteria:** Approved Mobile System Baseline and Mobile WBS ready for implementation.
-- **Dependency Note:** Mobile architecture pass precedes M1. Mobile implementation still does NOT block PC V1 delivery.
+- **Dependency Note:** MOBILE-ARCH is a prerequisite to M1 because it freezes shared vs PC-specific vs mobile-specific boundaries before Flutter implementation. Mobile IMPLEMENTATION remains independently scheduled and does not block PC V1.
 
 ### Milestone M1: Flutter Desktop Client Foundation
 - **Primary Objective:** Scaffold the production Flutter Windows Desktop client (`target Flutter path established during PC-CLIENT-001 scaffolding`), establish window lifecycle and system tray integration (minimize-to-tray, close-to-tray), build the SoftGlass design system with dark/light theme tokens, and integrate the OpenAPI-derived Dart API client and SSE token streaming consumer.

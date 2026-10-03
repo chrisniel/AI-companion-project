@@ -28,7 +28,7 @@ docs/02_Planning/00_Master/
 | Milestone ID | Title & Scope | Primary Deliverables | Target Gate / Status |
 | :--- | :--- | :--- | :--- |
 | **M0** | **Docs & Architecture Reset** | Canonicalization handoff execution, master planning spine creation, system baseline update, ADR reconciliation, and CI guide alignment. | **COMPLETE / VERIFIED** |
-| **MOBILE-ARCH** | **Mobile Architecture Pass** | Separate dedicated architecture pass for production Android Companion using Flutter foundation. Does not block PC V1. | **NEXT** |
+| **MOBILE-ARCH** | **Mobile Architecture Pass** | Canonicalize production Android architecture. Prerequisite to M1 to freeze shared vs PC-specific vs mobile-specific boundaries. Mobile IMPLEMENTATION does not block PC V1. | **NEXT** |
 | **M1** | **Flutter Client Foundation** | Production Flutter Desktop app scaffolding, window/tray management, REST/SSE client, App/Data/Library storage root awareness, and React Web parity checks. | **PLANNED** |
 | **M2** | **PC Companion Foundation** | Windows autostart at login, native desktop notifications, Task Scheduler integration, D6 controlled model import service, and multi-Profile database migration. | **PLANNED** |
 | **M3** | **Intelligence & Productivity** | Character Studio & 8 continuous personality traits, persistent bounded emotion, profile-first selective memory with revalidation, and Task/Reminder/Alarm scheduling. | **PLANNED** |

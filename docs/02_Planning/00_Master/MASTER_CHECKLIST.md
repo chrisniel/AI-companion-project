@@ -11,7 +11,7 @@
 | Domain Area | Target Capability | Architecture Spec | Implemented Source / Tests | Automated CI Gate | Golden Release Gate | Overall Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Governance** | Human-only Git write authority | `AGENTS.md`, `DELIVERY_WORKFLOW.md` | Process rules | N/A | Human review | **VERIFIED** |
-| **Governance** | Scoped CI Matrix (PC-VERIFY-001) | `TESTING_AND_CI.md` | `ci_policy.py`, CI yaml | Python static tests | N/A | **VERIFIED** |
+| **Governance** | Scoped CI Matrix (PC-VERIFY-001) | `TESTING_AND_CI.md` | `ci_policy.py`, CI yaml | Python static tests | N/A | **IMPLEMENTED / VERIFIED** (source/static) |
 | **PC Client** | Flutter Windows Desktop App | `windows-host-and-notifications.md` | Pending Flutter scaffold / target path TBD | Flutter CI lane | G1 | **NOT STARTED** |
 | **PC Client** | React Web Supported Client | `SYSTEM_BASELINE.md` §1 | `frontend/web/` | Vitest / Build | G14 | **VERIFIED** |
 | **PC Host** | Task Scheduler Autostart at Login | `windows-host-and-notifications.md` | Pending implementation | Host tests | G1 | **NOT STARTED** |
