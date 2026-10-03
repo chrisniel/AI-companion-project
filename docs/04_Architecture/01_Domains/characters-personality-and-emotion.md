@@ -31,7 +31,11 @@ In accordance with Decision D11, companion character systems enforce strict conc
    - Character switching must never mutate or reassign Profile ownership or Profile-owned personal data. A Character never owns Profile data.
 2. **Character Template vs. Character Instance:**
    - **Character Template (App-Owned):** Shipped with the application or imported; defines base immutable persona lore, archetype backstory, default display name, and avatar artwork.
-   - **Character Instance (Profile-Owned):** Instantiated within a specific user Profile (`profile_id`); binds to a Template, stores user-customized overrides (display name, avatar, trait values, prompt additions), and tracks the current active emotional state.
+   - **Character Instance (Profile-Owned):**
+     - is instantiated from a Character Template as an initial snapshot/configuration;
+     - stores Profile-owned customizations and persistent Character state;
+     - is NOT a live binding to the Template;
+     - later Template updates MUST NOT silently mutate existing Character Instances.
 3. **Conversation:**
    - Belongs to the user Profile.
    - References a specific Character persona; conversation history remains permanently bound to that Character as recorded.
