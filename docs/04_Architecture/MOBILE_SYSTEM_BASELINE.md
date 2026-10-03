@@ -18,7 +18,7 @@ The Mobile Companion operates as a Satellite in the broader AI Companion ecosyst
 - **Runtime Authority:** The Local AI Runtime remains the authoritative source for host-owned Runtime services, PC-hosted Profile state already defined as Runtime-owned, and model/tool/memory/scheduling truth where existing canonical specs assign that authority. Device-local secrets and future explicitly device-local Mobile state remain device-local. Per-domain replicated-state and synchronization authority remains **[OPEN FOR BATCH B]**.
 - **Request Payloads:** Request payloads cannot self-assert arbitrary Profile ownership. Ownership is determined strictly by the authenticated session/device token.
 - **Mobile Independence:** Mobile implementation remains completely independent from PC V1 delivery.
-- **Device-Local Secrets:** Raw provider APIs and device-specific secrets remain device-local unless explicitly approved otherwise. A client-held device credential secret remains protected on the client, while the host maintains the corresponding Device/enrollment/credential validation record necessary to authenticate and revoke that Device.
+- **Device-Local Secrets:** Raw provider API credentials remain device-local; they do not automatically synchronize between PC/Mobile/other Devices. A client-held device credential secret remains protected on the client, while the host maintains the corresponding Device/enrollment/credential validation record necessary to authenticate and revoke that Device.
 - **Revocation:** Device credentials are independently revocable by the PC Host.
 
 ## 3. Flutter Shared-Code & Platform Boundary (Batch A)
@@ -42,27 +42,39 @@ To prevent M1 Flutter Desktop and future Flutter Mobile from diverging unnecessa
 - **Encrypted Transport:** **[BATCH-A DECISION]** Ordinary sensitive LAN traffic without an encrypted/protected transport path violates D5. An approved encrypted overlay (such as Tailscale) provides transport protection even when the local application endpoint uses HTTP internally. Cloudflare Tunnel/Access remains the preferred remote-browser path. 
 - **Public Internet:** **[LOCKED]** Direct public router port forwarding remains strictly rejected.
 
+### 4.3 Mobile Device Lifecycle
+- **Credential Validation:** The Host must authenticate the Device credential and derive/validate the Device's bound Profile from authoritative enrollment/session state. Mobile request payloads cannot override the authenticated Profile binding.
+- **Credential Rotation:** An independently enrolled Device credential can be rotated/reissued without changing Profile identity. Exact expiry periods, token format, overlap/grace windows, and rotation automation remain **[OPEN FOR BATCH B]**.
+- **Profile Reassignment:** A normal Mobile Satellite cannot reassign itself to another Profile. Reassignment requires PC Account/Admin authority. Reassignment semantically requires re-enrollment / credential replacement or another explicit host-authorized transition. The old Profile's authorization must not survive reassignment.
+- **Lost / Stolen Device:** The PC Host must be able to revoke that specific Device without resetting the Profile or other Devices. Host access using the revoked credential must fail. Offline local-data handling remains subject to later security policy (**[OPEN FOR BATCH B]**).
+- **App Reinstall / Credential Loss:** A reinstall or loss of protected local enrollment credentials must not silently recreate authenticated Device authority from arbitrary local data. The architectural recovery direction requires explicit re-enrollment or another host-authorized recovery flow.
+
 ## 5. Connected / Offline / Optional Cloud Capability Matrix (Batch A)
 
-The Mobile Companion operates across distinct modes. This matrix defines **what should work** (the *how* is deferred to Batch B).
+The Mobile Companion operates across distinct modes. This matrix defines **what should work** (the *how* is deferred to Batch B and C). Connected Mobile remains subject to Mobile authority boundaries and release scope.
 
-### 5.1 CONNECTED_TO_PC
-- **State:** PC/Runtime reachable and authenticated.
-- **Capabilities:** Full capability. Mobile delegates heavy inference, canonical memory writes, and history synchronization to the PC Runtime. When connected, approved PC Runtime services are available to Mobile. Exact Mobile STT/TTS/VAD/audio routing remains **[OPEN FOR BATCH C]**.
+| Capability | `CONNECTED_TO_PC` | `OFFLINE_LOCAL` | `OPTIONAL_CLOUD` | `DEGRADED / PARTIALLY_AVAILABLE` |
+| :--- | :--- | :--- | :--- | :--- |
+| **Tasks** | AVAILABLE | LOCAL/CACHED (locally created/modified Task state pending later reconciliation) | Same as Offline | Read-only / Cached until sync restored |
+| **Reminders** | AVAILABLE | LOCAL/CACHED (replicated occurrence state/duplicate suppression is **[OPEN FOR BATCH B]**) | Same as Offline | Read-only / Cached |
+| **Alarms** | AVAILABLE | LOCAL/CACHED (exact offline behavior is **[OPEN FOR BATCH B]**) | Same as Offline | Read-only / Cached |
+| **Routines** | AVAILABLE | **[OPEN FOR BATCH B/C]** (governed by canonical Runtime scheduling, execution may require Batch C resolution) | **[OPEN FOR BATCH C]** | UNAVAILABLE / Cached view only |
+| **Conversations / history** | AVAILABLE (delegates to PC) | LOCAL/CACHED (viewing cached history) | Same as Offline | Read-only / Cached |
+| **Assistant inference** | HOST-DEPENDENT | **[OPEN FOR BATCH C]** (local mobile LLM disposition deferred) | OPTIONAL-CLOUD (requires local provider API credentials) | Degraded / Unavailable |
+| **Voice** | HOST-DEPENDENT (approved PC Runtime services available; STT/TTS/VAD routing is **[OPEN FOR BATCH C]**) | **[OPEN FOR BATCH C]** | OPTIONAL-CLOUD (requires local provider API credentials) | Degraded / Unavailable |
+| **Character / personality presentation** | AVAILABLE | LOCAL/CACHED | LOCAL/CACHED | LOCAL/CACHED |
+| **Memory** | HOST-DEPENDENT (delegates canonical writes/reads to PC) | UNAVAILABLE / Cached view only | UNAVAILABLE | UNAVAILABLE / Cached view only |
+| **Settings** | AVAILABLE | LOCAL/CACHED | LOCAL/CACHED | LOCAL/CACHED |
+| **Provider credentials** | AVAILABLE (device-local storage only) | AVAILABLE (device-local storage only) | AVAILABLE (device-local storage only) | AVAILABLE |
+| **Local media / assets** | AVAILABLE | AVAILABLE | AVAILABLE | AVAILABLE |
+| **Health / wearables** | **[OPEN FOR BATCH C]** | **[OPEN FOR BATCH C]** | **[OPEN FOR BATCH C]** | **[OPEN FOR BATCH C]** |
+| **Model management** | UNAVAILABLE (PC Admin only) | UNAVAILABLE | UNAVAILABLE | UNAVAILABLE |
+| **Device / Profile administration** | UNAVAILABLE (PC Admin only) | UNAVAILABLE | UNAVAILABLE | UNAVAILABLE |
 
-### 5.2 OFFLINE_LOCAL
-- **State:** No PC and no usable network path.
-- **Capabilities:** **[BATCH-A DECISION]** Mobile MUST remain usable for local capabilities. This includes locally created or modified Task state pending later reconciliation, triggering offline Reminders/Alarms/Routines, viewing cached conversation history, and accessing local media/assets. The Local AI Runtime `SchedulerService` remains canonical scheduling truth under D10/ADR-0011; Mobile may eventually maintain sufficient local replicated occurrence/delivery state for approved offline alert behavior. Exact replication, conflict handling, and reconciliation belong to **[OPEN FOR BATCH B]**.
-- **Local Inference:** **[OPEN FOR BATCH C]** Disposition of local mobile LLM inference is deferred. If unavailable, Assistant and Voice capabilities are gracefully degraded or disabled offline.
-
-### 5.3 OPTIONAL_CLOUD
-- **State:** PC unavailable, but an explicitly configured cloud capability (e.g., a local API key for a cloud provider) exists and network is available.
-- **Capabilities:** **[BATCH-A DECISION]** Cloud is NOT mandatory and requires explicit opt-in and device-local provider credentials. Existing shared architecture requires Cloud LLM, Cloud STT, and Cloud TTS permissions to remain distinct. Specific Mobile Voice/cloud routing and parsing tasks remain **[OPEN FOR BATCH C]**.
-
-### 5.4 DEGRADED / PARTIALLY_AVAILABLE
-- **Network Available, PC Unavailable:** Falls back to OFFLINE_LOCAL + OPTIONAL_CLOUD.
-- **Credential Revoked:** The PC Host is the revocation authority. Once a Device credential is revoked, the Host immediately rejects subsequent requests using that credential. A disconnected/offline device cannot necessarily learn about remote revocation until it reaches an authoritative endpoint; host-backed and remote capabilities remain unavailable after revocation is discovered. Handling of cached local Profile data, local credential purge, offline lockout, re-enrollment, and Profile deletion while a device is offline remains **[OPEN FOR BATCH B]**.
-- **Stale Local Cache:** Read-only access to cached domain data (Tasks, History) until sync is restored.
+### 5.1 Additional Constraint Notes
+- **Stale Cache / Offline Productivity:** Stale state must be visibly distinguishable where material. Security-sensitive operations must fail safely. Exact stale-client write permission, reconciliation, re-baselining, and conflict behavior remain **[OPEN FOR BATCH B]**.
+- **Cloud Separation:** Cloud is optional and requires explicit opt-in. Cloud LLM, Cloud STT, and Cloud TTS permission boundaries remain distinct. Raw provider API credentials remain device-local. Specific Mobile Voice/cloud routing remains **[OPEN FOR BATCH C]**.
+- **Revoked Credentials:** The PC Host immediately rejects requests. Handling of cached data purge, offline lockout, and re-enrollment while disconnected is **[OPEN FOR BATCH B]**.
 
 ---
 

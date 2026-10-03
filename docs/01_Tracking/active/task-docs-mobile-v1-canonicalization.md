@@ -1,4 +1,4 @@
-# Active Task: MOBILE-ARCH Plan
+# Active Task: MOBILE-ARCH Canonicalization
 
 > **Branch:** `docs/mobile-v1-canonicalization`
 > **Status:** ARCHITECTURE IMPLEMENTATION — Batch A Review Pending
@@ -24,4 +24,3 @@
 - Mobile credentials must use approved platform-protected secure storage (Android Keystore is a candidate, not locked).
 - Architecture implementation will proceed in three strictly bounded batches (A, B, C), each requiring independent approval.
 - Master planning spine (WBS, Roadmaps, etc.) will NOT be updated until all three batches are approved.
-- No canonical files will be edited until this revised plan is approved.
