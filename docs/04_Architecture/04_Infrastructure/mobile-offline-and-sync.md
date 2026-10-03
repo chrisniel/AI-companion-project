@@ -25,13 +25,13 @@ Mobile local state is partitioned into strict durability, security, and lifecycl
 
 | State Category | Examples | Durability Requirement | Protection / Storage Boundary | Revocation Lifecycle | Offline Availability |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Authoritative Local Device State** | Enrolled Device ID, device pairing token, device private key | Survives process death, app restart, and device reboot | **Platform-Protected Secure Storage** (Android Keystore / EncryptedSharedPreferences) | **Invalidated immediately** upon discovered revocation | Available locally (identifies endpoint) |
+| **Authoritative Local Device State** | Enrolled Device ID, device pairing token, device credential material | Survives process death, app restart, and device reboot | **Platform-Protected Secure Storage** (Android Keystore-backed storage) | **Invalidated immediately** upon authoritative `DEVICE_REVOKED` outcome | Available locally (identifies endpoint) |
 | **Device-Local Settings** | Local UI theme, local notification sounds, local vibration toggles | Survives process death, app restart, and device reboot | Private application sandbox | **Preserved** across revocation (device-specific preference) | Available & writable offline |
-| **Device-Local Third-Party Secrets** | User-configured OpenAI/Anthropic API keys configured on device | Survives process death, app restart, and device reboot | **Platform-Protected Secure Storage** | **Preserved** (Host device revocation MUST NOT erase unrelated 3rd-party user keys) | Available locally |
-| **Replicated Domain Replica** | Synced Tasks, active Reminders, scheduled Alarms | Survives process death, app restart, and device reboot | Private application sandbox (Relational database) | **Quarantined / Erased** upon discovered revocation or hard-purge | Available offline (domain-specific write permissions apply) |
-| **Pending Mutation Journal (Outbox)** | Queued task creations, task completion toggles, alarm dismissals | Survives process death, app restart, and device reboot | Private application sandbox (Transactional journal) | **Discarded** upon discovered revocation (cannot replay under revoked device) | Durable until host acknowledgment |
-| **Synchronization Metadata** | High-water mark cursor, entity revision vectors, last-sync time | Survives process death, app restart, and device reboot | Private application sandbox | **Reset / Cleared** upon discovered revocation or full re-baseline | Internal engine state |
-| **Cached / Read-Only History** | Recent conversation turns, retrieved memories, character profiles | Survives process death and restart; safely evictable on storage pressure | Private application sandbox (Cache store) | **Evicted / Erased** upon discovered revocation | Read-only view offline |
+| **Device-Local Third-Party Secrets** | User-configured OpenAI/Anthropic API keys configured on device | Survives process death, app restart, and device reboot | **Platform-Protected Secure Storage** (Android Keystore-backed storage) | **Preserved** (Host device revocation MUST NOT erase unrelated 3rd-party user keys) | Available locally |
+| **Replicated Domain Replica** | Synced Tasks, active Reminders, scheduled Alarms | Survives process death, app restart, and device reboot | Private application sandbox (Relational store) | **Quarantined** on `PROFILE_INACTIVE`; **Erased** on `DEVICE_REVOKED` or `PROFILE_PURGED` | Available offline (domain-specific write permissions apply) |
+| **Pending Mutation Journal (Outbox)** | Queued task creations, task completion toggles, alarm dismissals | Survives process death, app restart, and device reboot | Private application sandbox (Transactional journal) | **Discarded** upon authoritative `DEVICE_REVOKED` outcome | Durable until host acknowledgment |
+| **Synchronization Metadata** | Monotonic change cursor, entity revision vectors, last-sync time | Survives process death, app restart, and device reboot | Private application sandbox | **Reset / Cleared** upon `DEVICE_REVOKED` or full re-baseline | Internal engine state |
+| **Cached / Read-Only History** | Recent conversation turns, retrieved memories, character profiles | Survives process death and restart; safely evictable on storage pressure | Private application sandbox (Cache store) | **Evicted / Erased** upon `DEVICE_REVOKED` or `PROFILE_PURGED` | Read-only view offline |
 | **Transient UI State** | Active text input, scroll offsets, navigation stack | Discarded on process death (unless saved via Flutter state restoration) | Volatile memory | Discarded | UI-only |
 
 ### 2.2 Storage Architecture & Recommendations
@@ -39,7 +39,7 @@ Mobile local state is partitioned into strict durability, security, and lifecycl
 - **Architectural Requirement:** Pending offline mutations and replicated domain state MUST survive OS process death and device reboot. Storing pending mutations solely in in-memory state flows (as found in the mobile prototype) violates durability invariants.
 - **Implementation Pattern:** A **transactional mutation journal (outbox)** pattern is required. Local optimistic mutations MUST be committed atomically with local replica updates in a durable local store before dispatching over the network.
 - **Storage Technology Recommendation:** A relational SQLite-backed abstraction (such as Drift for Flutter) is recommended for replicated domain entities, outbox mutations, and sync metadata due to transaction support and structured query capabilities. Plaintext `SharedPreferences` for tokens or task state is strictly prohibited.
-- **Security Boundary Truth:** Platform-protected secure storage (Android Keystore) is required for device credentials and third-party API secrets. Replicated domain state resides within the private OS application sandbox; full-database encryption (e.g., SQLCipher) is not mandated in Batch B and is deferred to the Batch C security and threat-model review.
+- **Security Boundary Truth:** Platform-protected secure storage backed by the **Android Keystore** is required for device credentials and third-party API secrets. The deprecated AndroidX `EncryptedSharedPreferences` library is not recommended. Replicated domain state resides within the private OS application sandbox; full-database encryption (e.g., SQLCipher) is not mandated in Batch B and is deferred to the Batch C security and threat-model review.
 
 ---
 
@@ -51,9 +51,9 @@ The PC Local AI Runtime remains canonical domain authority. Mobile acts as an en
 
 | Domain | Canonical Authority | Offline Readable? | Offline Writable? | Durable Locally? | Sync Direction | Deletion Policy | Conflict Class | Batch C Dependency |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Tasks** | PC Runtime | YES | YES (create, update, toggle complete, delete) | YES (DB + Outbox) | Bidirectional | Soft-delete on host (30-day trash); Tombstones propagated | Host-mediated revision conflict; deterministic field merge or reject stale base | None |
-| **Reminders** | PC Runtime | YES (synced occurrences) | LIMITED (Ack / Dismiss / Snooze only; no arbitrary canonical creation) | YES (DB + Outbox) | Asymmetric (PC pushes schedule; Mobile reports delivery/snooze) | Host manages lifecycle; Mobile dismiss marks local state | Occurrence state monotonic transition; PC tie-breaker | None |
-| **Alarms** | PC Runtime | YES (synced occurrences) | LIMITED (Dismiss / Snooze only; canonical recurring alarm config is PC-owned) | YES (DB + Outbox) | Asymmetric (PC pushes schedule; Mobile reports delivery/snooze) | Host manages lifecycle; Mobile dismiss marks local state | Monotonic state transition; local user dismiss always accepted | None |
+| **Tasks** | PC Runtime | YES | YES (create, update, toggle complete, delete) | YES (DB + Outbox) | Bidirectional | Host soft-delete (30-day trash); Tombstones propagated | Host-mediated revision check; reject stale base revision by default; semantic toggle complete handled | None |
+| **Reminders** | PC Runtime | YES (synced occurrences) | LIMITED (Ack / Dismiss / Snooze only; no canonical entity creation) | YES (DB + Outbox) | Asymmetric (PC pushes schedule; Mobile reports delivery/snooze) | Host manages lifecycle; Mobile dismiss marks local state | State-machine transition; Host tie-breaker | None |
+| **Alarms** | PC Runtime | YES (synced occurrences) | LIMITED (Dismiss / Snooze only; canonical recurring alarm config is PC-owned) | YES (DB + Outbox) | Asymmetric (PC pushes schedule; Mobile reports delivery/snooze) | Host manages lifecycle; Mobile dismiss marks local state | State-machine transition; local user dismiss always accepted | None |
 | **Routines** | PC Runtime | YES (cached view) | NO (read-only view; no offline creation/edits) | YES (Cache) | Host to Mobile | PC-managed | None (PC exclusive authority) | OPEN FOR BATCH C (local execution disposition) |
 | **Conversations / History** | PC Runtime | YES (cached turns) | NO (submitting turns offline is not supported in Batch B) | YES (Cache) | Host to Mobile | PC-managed; soft-delete cascade | None (read-only replica) | OPEN FOR BATCH C (local inference turns) |
 | **Memory** | PC Runtime | YES (cached view) | NO (read-only view; memory extraction is PC policy-driven) | YES (Cache) | Host to Mobile | PC-managed; forget tombstones | None (read-only replica) | None |
@@ -62,82 +62,87 @@ The PC Local AI Runtime remains canonical domain authority. Mobile acts as an en
 | **Device-Local Settings** | Mobile Endpoint | YES | YES (all device preferences) | YES (Local prefs) | None (Device-local only) | Local reset | None (device-authoritative) | None |
 | **Media & Attachments** | PC Runtime | YES (cached files) | LIMITED (captured local media held pending turn upload) | YES (Sandbox files) | Asymmetric (fetch on demand; upload on turn) | PC-managed; file cleanup | None | OPEN FOR BATCH C (vision input routing) |
 
-### 3.2 Concurrency & Revision Architecture
+### 3.2 Concurrency, Entity Identity & Revision Architecture
 
 Universal client-timestamp Last-Write-Wins (LWW) is **rejected**. Mobile wall clocks are untrusted, user-manipulable, and susceptible to skew, timezone shifts, and clock resets.
 
-The synchronization concurrency model enforces:
+#### 3.2.1 Stable Offline Entity Identity Strategy
+To ensure that an offline-created entity (such as a Task) can be subsequently edited, toggled, or deleted offline before the Host ever acknowledges creation:
+- **Strategy Choice (Approach A):** **Client-generated stable entity IDs (UUIDv4)** accepted by the Host for offline-creatable entities.
+- **Rationale:** The backend Task model already uses UUID primary keys (`UUIDPrimaryKeyMixin`). When Mobile creates a Task offline, it generates a stable `entity_id: UUIDv4`. This ID becomes the permanent canonical identifier for the entity.
+- **Dependent Operations:** Subsequent offline mutations (edits, completion toggles, deletions) reference this identical `entity_id` directly. This eliminates complex local-to-remote ID translation tables, mutation dependency resolution, and race conditions during partial synchronization.
+- **Separation of Concerns:** `entity_id` uniquely identifies the domain entity throughout its lifetime. `mutation_id` (Idempotency Key) uniquely identifies each individual operational change in the mutation journal.
+
+#### 3.2.2 Host-Issued Entity Revisions & Optimistic Concurrency Control
 1. **Host-Issued Entity Revisions:** Every synchronizable entity on the PC Host maintains a monotonic integer revision (`revision: int`) or host-issued monotonic revision token. The revision increments on every committed update on the Host.
 2. **Base Revision Tracking:** When Mobile replicates an entity, it stores the current `server_revision`. When Mobile enqueues a mutation, the outbox record records `base_revision = server_revision`.
 3. **Optimistic Concurrency Control:** When Mobile submits an update or delete mutation to the Host:
-   - If Host `current_revision == mutation.base_revision`: Mutation is committed cleanly; Host bumps `revision = current_revision + 1`.
+   - If Host `current_revision == mutation.base_revision`: Mutation commits cleanly; Host increments `revision = current_revision + 1`.
    - If Host `current_revision > mutation.base_revision`: Host detects a concurrent modification.
-4. **Deterministic Conflict Resolution:**
-   - **Tasks:**
-     - *Status/Completion:* Monotonic transition (e.g. marked `completed` locally while edited on PC: Host applies completion state and merges non-overlapping edits).
-     - *Conflicting Content Edits:* If title or notes were concurrently modified on Host while modified on Mobile, Host rejects the mutation with `409 CONFLICT` containing the current Host entity. Mobile preserves the user's local edit in a draft/conflict state and prompts user resolution, or performs deterministic field-level merging if edits touched non-overlapping fields.
-   - **Reminders & Alarms (Occurrences):**
-     - Occurrence delivery state transitions are monotonic (`PENDING` -> `TRIGGERED` -> `DISMISSED` / `SNOOZED`). Dismissal and acknowledgment operations always succeed deterministically; the Host accepts user dismissal regardless of base revision.
-5. **Mutation Identity & Target Idempotency:**
-   - Every mutation generated by Mobile MUST carry a client-generated UUID `mutation_id` (Idempotency Key).
-   - *Current Implementation Truth:* Conversation turns currently implement `client_message_id` with database unique constraints (`uq_messages_conversation_client_message_id`). Backend Task endpoints currently lack idempotency keys. Batch B specifies a **target contract requirement** that Host write endpoints accept and deduplicate `mutation_id`.
-   - On retry with an identical `mutation_id`, Host detects prior commitment and returns HTTP `200 OK` with the existing committed result without executing duplicate mutations.
-6. **Change Discovery (Delta Synchronization):**
-   - Delta synchronization relies on a **Host-issued monotonic synchronization cursor** (sequence token or change tracking log) provided by the Host during sync.
-   - Mobile requests changes using `GET /api/v1/sync?cursor={cursor}`. Host returns all changes occurring after that cursor along with an updated `next_cursor`.
-   - High-water mark, logical clocks, and sequence IDs are not interchangeable synonyms: the system requires a Host-managed monotonic change sequence.
-7. **Stale Device Re-Baseline:**
-   - The Host maintains tombstone records for a bounded retention window (aligned with `DATA_RETENTION_DAYS = 30`).
-   - If a Mobile client presents a cursor older than the Host's tombstone retention horizon, the Host returns HTTP `410 GONE` (`STALE_CURSOR`).
-   - Mobile MUST perform a **full re-baseline**: clear the local replicated domain database, reset sync metadata, and fetch a complete snapshot from the Host.
+
+#### 3.2.3 Deterministic Conflict Policy (No Unproven Field Merging)
+For Mobile V1, generic automatic field-level merging is **rejected** because a stale `base_revision` alone does not convey sufficient baseline change evidence to guarantee disjoint updates without silent data loss.
+- **Default Rule:** Any update mutation submitted against a stale `base_revision` (`current_revision > base_revision`) results in a **Conflict Outcome** (`CONFLICT_DETECTED`).
+- **Conflict Handling:** The Host rejects the stale mutation and returns the current authoritative entity state. Mobile retains the user's uncommitted edit in a local conflict/draft state, prompting user resolution (e.g. keep server version or overwrite with new revision).
+- **Semantic Intent Exception:** Explicitly modeled, provably safe operational intents (such as toggling completion status) may be applied idempotently by the Host if the entity still exists and is not soft-deleted.
+- **Offline Deletes:** If Mobile submits a delete referencing a stale `base_revision` where substantive content was modified on the Host, the delete is rejected as a conflict, presenting the modified entity to the user.
+
+#### 3.2.4 Mutation Identity & Target Idempotency
+- Every mutation in the Mobile mutation journal MUST carry a unique UUID `mutation_id` (Idempotency Key).
+- *Target Contract Requirement:* Host write endpoints must accept and deduplicate `mutation_id` within a database transaction. On retry with an identical `mutation_id`, Host detects prior commitment and returns the committed result without re-executing.
+- *Current Implementation Reality:* Conversation turns currently implement `client_message_id` with database unique constraints (`uq_messages_conversation_client_message_id`). Backend Task endpoints currently lack idempotency keys; this is an architectural target requirement, not implemented reality.
+
+#### 3.2.5 Change Discovery & Re-Baseline
+- **Monotonic Sync Cursor:** Delta synchronization relies on a Host-issued monotonic change cursor (sequence token or change tracking log) provided by the Host during sync. Mobile requests changes occurring after that cursor.
+- **Stale Cursor Re-Baseline:** The Host maintains tombstone records for a bounded retention window (aligned with `DATA_RETENTION_DAYS = 30`). If a Mobile client presents a cursor older than the Host's tombstone retention horizon, the Host returns a typed `STALE_CURSOR` outcome. Mobile MUST perform a full re-baseline: clear the local replicated domain database, reset sync metadata, and fetch a complete snapshot from the Host.
 
 ---
 
 ## 4. Resolution of the 10 Mandatory Synchronization Failure Cases
 
-The architecture explicitly resolves all mandatory failure scenarios:
+The architecture explicitly resolves all mandatory failure scenarios via typed outcomes:
 
-### Case 1: Host commits mutation but Mobile loses HTTP response
+### Case 1: Host commits mutation but Mobile loses response
 - **Mechanism:** Mobile mutation remains in the durable outbox. When connectivity is restored, Mobile retries the request with the identical `mutation_id`.
-- **Resolution:** Host checks its idempotency journal, detects that `mutation_id` was already applied, bypasses re-execution, and returns the previously committed entity state with HTTP `200 OK`. Mobile marks the outbox item completed and purges it.
+- **Resolution:** Host detects that `mutation_id` was already applied, bypasses re-execution, and returns the committed entity state. Mobile marks the outbox item completed and purges it.
 
 ### Case 2: Mobile and PC modify the same Task while Mobile is offline
 - **Mechanism:** Mobile submits an update with `base_revision = N`. PC has already committed an update bumping Host revision to `N + 1`.
-- **Resolution:** Host detects `current_revision > base_revision`. If the changes affect disjoint fields (e.g. Mobile toggled completion status while PC edited category), Host deterministically merges the fields and increments to `N + 2`. If conflicting fields were modified (e.g. both modified title), Host rejects with `409 CONFLICT`; Mobile surfaces a conflict indicator and allows the user to overwrite or keep local changes.
+- **Resolution:** Host detects `current_revision > base_revision` and returns a typed `CONFLICT_DETECTED` outcome with the current Host entity. Mobile preserves the user's local edit in a draft/conflict state and prompts user resolution.
 
 ### Case 3: Mobile deletes an item offline while PC modifies it
 - **Mechanism:** Mobile enqueues a `DELETE` mutation referencing `base_revision = N`. PC modified the item while Mobile was offline (`revision = N + 1`).
-- **Resolution:** The Host does NOT apply an unconditional "delete always wins" rule. Because substantive content changed on PC, Host rejects the delete with `409 CONFLICT` and returns the updated task. The task is presented to the mobile user with a notice ("Item was modified on PC before deletion"). If the user confirms deletion, a fresh delete referencing the new revision is submitted.
+- **Resolution:** Because substantive content changed on PC, Host rejects the delete with `CONFLICT_DETECTED` and returns the updated task. The task is restored/shown on Mobile with a notice ("Item was modified on PC before deletion"). If the user confirms deletion, a fresh delete referencing the new revision is submitted.
 
 ### Case 4: A Device reconnects after several weeks
 - **Mechanism:** Mobile presents a sync cursor older than the Host's 30-day tombstone retention horizon.
-- **Resolution:** Host rejects the request with HTTP `410 GONE` (`CURSOR_EXPIRED`). Mobile initiates a full re-baseline: local replicated domain tables are cleared and repopulated via full snapshot download. Unflushed outbox items with expired base revisions are quarantined for review.
+- **Resolution:** Host returns a typed `STALE_CURSOR` outcome. Mobile initiates a full re-baseline: local replicated domain tables are cleared and repopulated via full snapshot download. Unflushed outbox items with expired base revisions are quarantined for user review.
 
 ### Case 5: PC revokes the Device while it is offline
 - **Mechanism:** PC Admin revokes the Device on the host. Mobile remains offline, continuing local read/write operations against cached data.
-- **Resolution:** Upon reconnection, the first authenticated request fails with HTTP `401 UNAUTHORIZED` / `403 FORBIDDEN` (`DEVICE_REVOKED`). Mobile immediately discovers revocation:
-  1. Authenticated host operations halt.
-  2. The local Device token is invalidated.
+- **Resolution:** Upon reconnection, the Host returns a typed `DEVICE_REVOKED` outcome. Mobile executes authoritative revocation cleanup:
+  1. Authenticated host operations halt immediately.
+  2. The local Device credential material is invalidated and cleared.
   3. Pending outbox mutations are cancelled and cleared.
   4. Replicated Profile domain data is purged (Local Data Erasure).
-  5. Unrelated device-local provider API keys (e.g. user-entered OpenAI keys) are preserved.
-  6. Mobile transitions to an un-enrolled initial setup state.
+  5. Unrelated device-local third-party API keys (e.g. user-entered OpenAI keys) are **preserved**.
+  6. Mobile transitions to an un-enrolled setup state.
 
 ### Case 6: Bound Profile is soft-deleted while Device is offline
 - **Mechanism:** PC Admin initiates Profile soft-delete (entering the 7-day recovery window). Mobile reconnects.
-- **Resolution:** Host rejects sync requests with HTTP `403 FORBIDDEN` (`PROFILE_INACTIVE`). Mobile does NOT execute permanent local erasure. Instead, Mobile enters a **quarantined/disabled mode**: UI displays "Profile Inactive / Soft-Deleted", local mutations are paused, and access is locked. If PC Admin restores the Profile within 7 days, subsequent authentication succeeds and normal sync resumes.
+- **Resolution:** Host returns a typed `PROFILE_INACTIVE` outcome. Mobile does NOT execute destructive local erasure. Instead, Mobile enters a **quarantined/disabled mode**: UI displays "Profile Inactive / Soft-Deleted", local mutations are paused, and access is locked. If PC Admin restores the Profile within 7 days, subsequent authentication succeeds and normal sync resumes.
 
 ### Case 7: Bound Profile reaches hard purge while Device is offline
 - **Mechanism:** The 7-day recovery window expires and the Host permanently purges the Profile. Mobile reconnects.
-- **Resolution:** Host returns HTTP `404 NOT_FOUND` or `410 GONE` (`PROFILE_PURGED`). Mobile treats this as permanent destruction: all local replicated Profile records, caches, and pending mutations are permanently deleted. The device is reset to fresh enrollment.
+- **Resolution:** Host returns a typed `PROFILE_PURGED` outcome. Mobile treats this as permanent destruction: all local replicated Profile records, caches, and pending mutations are permanently deleted. The device resets to fresh enrollment.
 
 ### Case 8: Mobile app is reinstalled and loses local synchronization metadata
 - **Mechanism:** User uninstalls and reinstalls the app. Local database, secure keystore entries, and outbox are wiped by the OS.
-- **Resolution:** The reinstalled app has no credentials or sync metadata. It cannot silently reuse old device authority. Mobile must undergo fresh pairing and enrollment. The PC Host issues a new Device record with a new independent credential. The previous device record remains orphaned on the Host until PC Admin revokes it. The new device performs a full initial sync.
+- **Resolution:** The reinstalled app has no credentials or sync metadata. It cannot silently assert old device authority. Mobile must undergo fresh pairing and enrollment. The PC Host issues a new Device record with new independent credential material. The previous device record remains orphaned on the Host until PC Admin revokes it. The new device performs a full initial sync.
 
 ### Case 9: Two retries arrive after a network timeout
 - **Mechanism:** Request 1 times out from Mobile's perspective but reaches the server. Request 2 is dispatched. Both arrive concurrently at the Host.
-- **Resolution:** Both requests carry the identical `mutation_id`. The Host wraps mutation processing in a database transaction with a unique constraint on `mutation_id`. The first transaction commits; the second detects the existing `mutation_id`, skips execution, and returns the committed response.
+- **Resolution:** Both requests carry the identical `mutation_id`. The Host wraps mutation processing in a database transaction with a unique constraint on `mutation_id`. The first transaction commits; the second detects the existing `mutation_id`, skips duplicate execution, and returns the committed response.
 
 ### Case 10: Mobile local clock is wrong
 - **Mechanism:** Mobile system time is manually set into the past or future, or has skewed significantly.
@@ -170,67 +175,92 @@ Android enforces strict background execution limits, process death, Doze modes, 
 
 Preserving Decision D10 and `ADR-0011`, the PC Local AI Runtime `SchedulerService` remains canonical scheduler truth. Mobile functions as a local presentation and delivery client.
 
-### 6.1 Replicated Occurrence State
+### 6.1 Replicated Occurrence State & Recurrence
 
 - **Precomputed Occurrences:** The PC Runtime computes scheduled occurrence events and replicates them to Mobile as concrete occurrence instances (`occurrence_id: UUID`, `entity_id: UUID`, `trigger_time_utc: datetime`, `type: ALARM | REMINDER`, `metadata: dict`).
 - **Autonomous Recurrence Metadata (Floating Time):**
   - *Fixed-Instant Events:* Stored as invariant UTC timestamps.
-  - *Floating Local-Time Recurrence (e.g. "9 AM wherever I am"):* Mobile receives bounded recurrence rule metadata (e.g. `local_time: 09:00`, days of week) for active alarms. If Mobile changes timezones while disconnected, it recalculates the trigger time in the new local timezone locally.
+  - *Floating Local-Time Recurrence (e.g. "9 AM wherever I am"):* Mobile receives bounded recurrence rule metadata (e.g. `local_time: 09:00`, active days) for active alarms. If Mobile changes timezones while disconnected, it recalculates the trigger time in the new local timezone locally.
 
 ### 6.2 Android Alarm Platform Lifecycle & Permissions
 
 Exact alarm scheduling on Android is strictly conditional and NOT an unconditional guarantee:
+
 1. **Permission Separation:**
    - `SCHEDULE_EXACT_ALARM`: User-revocable special app access (Android 12+, API 31+). Default denied on Android 13/14+ for newly installed general applications.
    - `USE_EXACT_ALARM`: Restricted permission limited by Google Play policy to core clock/timer apps. The Companion app CANNOT assume Google Play approval for `USE_EXACT_ALARM` and must support `SCHEDULE_EXACT_ALARM`.
-2. **Permission Revocation Lifecycle:**
-   - If the user revokes exact alarm access in Android settings, the OS automatically clears all scheduled exact alarms.
-   - Mobile MUST register for `ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED` to detect revocation, update internal capability state, and warn the user.
+2. **Permission Lifecycle & Active Verification:**
+   - `SCHEDULE_EXACT_ALARM` may be granted or revoked by the user/system at any time. When revoked, Android automatically cancels all future exact alarms and may terminate the app process.
+   - **No Revocation Broadcast Dependency:** Architecture must NOT depend on receiving a revocation broadcast. Broadcast `ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED` is delivered when permission is granted.
+   - **Active Verification:** Mobile MUST explicitly check `AlarmManager.canScheduleExactAlarms()` before scheduling/re-arming exact alarms and when entering relevant lifecycle states (app foregrounding, boot completion, work execution).
+   - When access becomes available again, Mobile reschedules still-valid occurrences from durable local state.
 3. **Notification Runtime Permission (`POST_NOTIFICATIONS`):**
    - Required on Android 13+ (API 33+).
    - If denied, OS suppresses status bar notifications and alert heads-up displays.
-   - *Alarm Behavior on Denial:* Full-screen alarm activity (`USE_FULL_SCREEN_INTENT`) can still launch over lockscreen for critical alarms if permitted, but background notification channels are blocked. UI must explicitly surface "Notification Permission Required" warnings.
-4. **Degraded Delivery Fallback:**
-   - **Alarms:** If exact alarm capability is unavailable, Alarms are marked **DEGRADED / UNARMED LOCALLY**. The app MUST NOT claim WorkManager provides alarm fidelity.
-   - **Reminders:** Reminders degrade gracefully to inexact alarms or WorkManager notifications.
+4. **Full-Screen Intent Restrictions (`USE_FULL_SCREEN_INTENT`):**
+   - On Android 14+, `USE_FULL_SCREEN_INTENT` is restricted; Google Play policy limits default eligibility primarily to calling and alarm apps.
+   - Full-Screen Intent is NOT a reliable bypass for missing notification permissions.
+5. **Truthful Degraded Capability States:**
+   - If exact alarm permission is missing (`!canScheduleExactAlarms()`): Alarms are marked **DEGRADED / UNARMED LOCALLY**; WorkManager is NOT claimed to provide alarm fidelity.
+   - If notification permission is missing (`POST_NOTIFICATIONS` denied): Visual heads-up and status bar notifications are **SUPPRESSED**; UI must display an explicit permission warning.
+   - If full-screen intent is denied: Companion CANNOT guarantee wake-over-lockscreen presentation.
+   - Reminders degrade gracefully to inexact alarms or WorkManager notifications.
 
-### 6.3 Deterministic Duplicate Suppression Protocol
+### 6.3 Idempotent Occurrence State Machine & Cross-Device Presentation
 
-To prevent double-alerting (e.g. PC toast + Mobile ring for the same alarm), the architecture enforces:
-1. **Stable Occurrence Identity:** Every alert occurrence has a stable unique ID (`occurrence_id`).
-2. **Monotonic Local State:** Mobile tracks local delivery status in its persistent store (`PENDING`, `TRIGGERED`, `DISMISSED`, `SNOOZED`, `REMOTE_DELIVERED`).
-3. **Local Trigger Suppression:** When an alert fires locally, Mobile sets status to `TRIGGERED` and enqueues an acknowledgment mutation to Host. If a remote push arrives later for that `occurrence_id`, Mobile inspects local state and suppresses duplicate alerts.
-4. **Remote Delivery Suppression:** If PC delivers an alert while Mobile is connected, Host pushes a dismissal/delivery event. Mobile updates local status to `REMOTE_DELIVERED` and cancels the scheduled local OS alarm.
+#### 6.3.1 Idempotent Occurrence State Machine
+Alert occurrences are governed by an idempotent, revision-aware state machine rather than an irreversible monotonic sequence:
+- **States:**
+  - `SCHEDULED` (Pending initial trigger)
+  - `TRIGGERED` (Local alarm actively firing/ringing)
+  - `ACKNOWLEDGED` / `DISMISSED` (User explicitly dismissed the alert)
+  - `SNOOZED` / `RE_ARMED` (User snoozed; re-armed with updated `snooze_until_utc`)
+  - `CANCELED` (Parent task/alarm deleted or disabled)
+  - `MISSED` (Trigger time elapsed while device was off or in un-alarmed state)
+- **Snooze Semantics:** Snoozing mutates the active occurrence state to `SNOOZED`, computes a new `snooze_until_utc`, and re-arms a one-shot exact alarm. It does NOT duplicate the parent entity.
+- **Idempotency:** Repeated duplicate dismiss or acknowledgment operations from retries or concurrent taps are safe and no-op.
+
+#### 6.3.2 Cross-Device Presentation Semantics
+- **Single-Device Duplicate Prevention:** An occurrence is presented at most once on a given device. Once triggered locally, local state transitions to `TRIGGERED` to prevent repeated local firing.
+- **No Unsafe First-Delivery-Wins:** The architecture does NOT permit passive alert display on one device (e.g. PC displaying a toast notification) to silently cancel or disarm an active alarm on Mobile. (An unattended PC displaying a toast must not silence a user's phone alarm).
+- **Cross-Device Dismissal:** Cross-device suppression occurs ONLY when:
+  1. The user explicitly dismisses or snoozes the occurrence on one device, committing an acknowledgment mutation that syncs to other devices; or
+  2. The Host explicitly assigns exclusive presentation targeting to a specific device.
 
 ### 6.4 System Lifecycle Events
 
-- **Device Reboot (`ACTION_BOOT_COMPLETED`):** The OS clears all scheduled alarms on reboot. Mobile registers a broadcast receiver to read active alarms from the local database and re-register them with `AlarmManager`.
+- **Device Reboot (`ACTION_BOOT_COMPLETED`):** The OS clears all scheduled alarms on reboot. Mobile registers a broadcast receiver to read active alarms from the local database, verify `canScheduleExactAlarms()`, and re-register them with `AlarmManager`.
 - **Timezone Change (`ACTION_TIMEZONE_CHANGED`):** Mobile recalculates floating-time alarms and reschedules `AlarmManager` intents.
 - **Manual Clock Change (`ACTION_TIME_CHANGED`):** Mobile re-evaluates all pending alarms against current system time.
 - **Missed Events:** Occurrences whose trigger time passed while the device was powered off are classified as `MISSED` on startup. Alarms show an explicit "Missed Alarm" banner; Reminders bundle into a catch-up notification summary.
-- **Snooze Semantics:** Snoozing an occurrence does NOT create a duplicate entity. It mutates the active occurrence record with a new `snooze_until_utc` timestamp and reschedules a one-shot exact alarm.
 
 ---
 
 ## 7. Device Revocation, Profile Soft-Delete, and Hard-Purge
 
-Authorization revocation and data erasure are strictly distinct architectural events:
+Authorization revocation and data erasure are strictly distinct architectural events governed by typed outcomes:
 
 ```
 +-----------------------------------------------------------------------------------+
-| EVENT                | HOST ACTION             | MOBILE DISCOVERY ACTION          |
+| TYPED OUTCOME        | HOST ACTION             | MOBILE DISCOVERY ACTION          |
 +-----------------------------------------------------------------------------------+
-| Device Revocation    | Invalidate device token | Wipe device token & replica DB;  |
+| DEVICE_REVOKED       | Invalidate device token | Wipe device token & replica DB;  |
 |                      | Reject mutations        | PRESERVE 3rd-party user API keys |
 +-----------------------------------------------------------------------------------+
-| Profile Soft-Delete  | Disable profile access  | Quarantine local replica;        |
+| PROFILE_INACTIVE     | Disable profile access  | Quarantine local replica;        |
 | (7-day recovery)     | Reject mutations        | Lock UI; preserve for recovery   |
 +-----------------------------------------------------------------------------------+
-| Profile Hard-Purge   | Destroy profile data    | Permanent Local Data Erasure;    |
+| PROFILE_PURGED       | Destroy profile data    | Permanent Local Data Erasure;    |
 | (Permanent)          | Reject authentication   | Full client reset                |
++-----------------------------------------------------------------------------------+
+| STALE_CURSOR         | Reject delta cursor     | Full re-baseline of domain store;|
+|                      | Keep enrollment         | Keep device credentials valid    |
++-----------------------------------------------------------------------------------+
+| CREDENTIAL_EXPIRED / | Require re-auth / token | Pause sync; prompt re-auth;      |
+| ROTATION_REQUIRED    | rotation; preserve data | DO NOT erase local Profile data  |
 +-----------------------------------------------------------------------------------+
 ```
 
+- **Typed Trigger Rule:** Destructive local data erasure MUST NOT trigger on generic HTTP error codes (`401`, `403`, `404`, `410`). It requires an explicit, typed authoritative outcome (`DEVICE_REVOKED`, `PROFILE_PURGED`).
 - **Remote Revocation:** Server-side revocation is instant on the Host. An offline Mobile device cannot know it is revoked until it establishes network contact.
-- **Local Data Erasure:** Physical deletion of replicated records occurs upon receiving an authoritative rejection (`401`/`403`/`410`).
 - **Storage Sandbox Truth:** Android filesystem deletion removes database and cache files within the app sandbox. Cryptographic zeroization of flash storage is not an Android OS guarantee and must not be falsely claimed.
