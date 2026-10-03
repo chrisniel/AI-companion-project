@@ -12,6 +12,7 @@
 | :--- | :--- | :--- |
 | **`V1 BLOCKER`** | Implementation detail that must be resolved before a specific PC V1 milestone can finish. | Resolve during respective milestone planning. |
 | **`V1 OPEN DETAIL`** | Approved functional requirement where the exact code mechanism is intentionally flexible. | Design during feature implementation. |
+| **`MOBILE V1 OPEN DETAIL`** | Approved Mobile V1 functional requirement where the code mechanism or parameter is open design. | Design during respective Mobile feature implementation. |
 | **`PC-LATER / V2`** | Valid architectural enhancement explicitly deferred to post-PC-V1 releases. | Revisit during V2 planning. |
 | **`EXPERIMENT NEEDED`**| Parameter or threshold that requires empirical workstation benchmarking. | Execute benchmark spike to tune values. |
 
@@ -87,5 +88,41 @@
   - *Context:* Interactive animated 2D/3D avatars and floating desktop widgets.
 - **`DEBT-LATER-004`: Interactive Browser Automation (Playwright)**
   - *Context:* Automated web form completion and multi-step web transactions.
-- **`DEBT-LATER-005`: Mobile-to-PC Full Bidirectional State Synchronization**
-  - *Context:* Mobile-to-PC state synchronization; exact persistence/outbox mechanism deferred to the Mobile Architecture Pass.
+- **`DEBT-LATER-005`: Mobile-to-PC Full Bidirectional State Synchronization [RESOLVED / SUPERSEDED]**
+  - *Resolution:* Superseded and resolved by approved Mobile synchronization architecture in [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) (asymmetric per-domain sync, durable outbox, client-generated stable entity IDs, monotonic revision checks, typed `CONFLICT_DETECTED` and `STALE_CURSOR` outcomes).
+
+### Category: `MOBILE V1 OPEN IMPLEMENTATION DETAIL`
+- **`DEBT-MOB-01`: Mobile Device Credential Expiry & Rotation Timing/Handshake**
+  - *Context:* Independent rotation of Device Token without profile alteration is approved (`MOBILE_SYSTEM_BASELINE.md` §4.3, `mobile-capabilities-and-runtime.md` §5.3).
+  - *Open Detail:* Exact expiry periods, token format, overlap/grace windows, and automated refresh protocol.
+  - *Resolution Point:* Stream `MOB-IDENTITY-003` implementation plan.
+
+- **`DEBT-MOB-02`: Synchronization Change-History Retention Horizon**
+  - *Context:* Host maintains bounded change-history retention for delta sync and tombstone propagation (`mobile-offline-and-sync.md` §3.2.5).
+  - *Open Detail:* Exact retention horizon duration (decoupled from user-facing 30-day recycle bin).
+  - *Resolution Point:* Stream `MOB-CONTRACT-004` / `MOB-SYNC-005` implementation plan.
+
+- **`DEBT-MOB-03`: Flutter/Android Secure Storage Adapter Selection**
+  - *Context:* Platform-protected Keystore-backed storage is mandatory; unencrypted SharedPreferences is prohibited (`mobile-offline-and-sync.md` §2.2, `mobile-capabilities-and-runtime.md` §5.1).
+  - *Open Detail:* Exact Dart package abstraction (`flutter_secure_storage` with Keystore vs custom platform channel).
+  - *Resolution Point:* Stream `MOB-IDENTITY-002` implementation plan.
+
+- **`DEBT-MOB-04`: Mobile Local Inference Runtime & Container Selection**
+  - *Context:* Pluggable mobile inference engine on qualified Tier 2/3 hardware (`mobile-capabilities-and-runtime.md` §2.2).
+  - *Open Detail:* Specific library/container runtime (e.g. ExecuTorch vs llama.cpp Android) and compilation flags.
+  - *Resolution Point:* Stream `MOB-INFER-004` implementation plan.
+
+- **`DEBT-MOB-05`: Mobile Local TTS Provider Selection**
+  - *Context:* Capability-dependent device-local TTS for alarm/text vocalization (`mobile-capabilities-and-runtime.md` §3.2).
+  - *Open Detail:* Candidate reference Kokoro-82M vs Sherpa-ONNX vs Android system TTS provider.
+  - *Resolution Point:* Stream `MOB-VOICE-005` implementation plan.
+
+- **`DEBT-MOB-06`: Offline Conversation Branch Review/Merge UX and Batch Turn Import Schema**
+  - *Context:* Atomic whole-turn sync and causal thread branching upon reconnection are approved (`mobile-offline-and-sync.md` §3.2.6).
+  - *Open Detail:* Exact FastAPI endpoint DTO schema and user-facing branch merge/inspection UI design.
+  - *Resolution Point:* Stream `MOB-CONTRACT-006` / `MOB-SYNC-007` implementation plan.
+
+- **`DEBT-MOB-07`: Mobile Golden L3 Emulator & Device Test Matrix Configuration**
+  - *Context:* 5-layer test matrix L1–L5 and emulator matrix across API 29, 33, 34 (`mobile-capabilities-and-runtime.md` §7.1, §8).
+  - *Open Detail:* Exact CI headless emulator runner configuration, test runner tooling, and hardware testbed setup.
+  - *Resolution Point:* Stream `MOB-VERIFY-003` / `MOB-VERIFY-005` implementation plan.

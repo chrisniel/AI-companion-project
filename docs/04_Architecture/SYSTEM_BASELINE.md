@@ -2,8 +2,8 @@
 
 > **Document Role:** High-level normative system architecture, ecosystem topology, release boundaries, cross-cutting invariants, and decision index for the AI Companion project.  
 > **Status:** Active Canonical (Decisions D1-D11 Aligned)  
-> **Last Updated:** 2026-10-02 (PC V1 Canonicalization Pass)  
-> **Authority Precedence:** Normative cross-cutting anchor. Detailed technical domain standards are owned by the 18 focused specifications under [`docs/04_Architecture/`](./README.md). Milestone delivery tracking is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). Active sprint state is tracked in [`docs/01_Tracking/task.md`](../01_Tracking/task.md).
+> **Last Updated:** 2026-10-04 (Mobile V1 Planning & Documentation Integration)  
+> **Authority Precedence:** Normative cross-cutting anchor. Detailed technical domain standards are owned by the 20 focused specifications under [`docs/04_Architecture/`](./README.md). Milestone delivery tracking is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). Active sprint state is tracked in [`docs/01_Tracking/task.md`](../01_Tracking/task.md).
 
 ---
 
@@ -123,7 +123,7 @@ Full PC V1 release readiness requires end-to-end evidence across 14 verification
 
 ## 7. Canonical Domain Specifications Index
 
-Detailed normative requirements are defined in the 18 focused specifications:
+Detailed normative requirements are defined in the 20 focused specifications:
 
 - **01 Domains:**
   - [`01_Domains/assistant-and-conversations.md`](01_Domains/assistant-and-conversations.md)
@@ -147,3 +147,5 @@ Detailed normative requirements are defined in the 18 focused specifications:
   - [`04_Infrastructure/windows-host-and-notifications.md`](04_Infrastructure/windows-host-and-notifications.md)
   - [`04_Infrastructure/backup-recovery-and-diagnostics.md`](04_Infrastructure/backup-recovery-and-diagnostics.md)
   - [`04_Infrastructure/performance-and-capacity.md`](04_Infrastructure/performance-and-capacity.md)
+  - [`04_Infrastructure/mobile-offline-and-sync.md`](04_Infrastructure/mobile-offline-and-sync.md)
+  - [`04_Infrastructure/mobile-capabilities-and-runtime.md`](04_Infrastructure/mobile-capabilities-and-runtime.md)

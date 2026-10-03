@@ -1,7 +1,7 @@
 # Active Task: MOBILE-ARCH Canonicalization
 
 > **Branch:** `docs/mobile-v1-canonicalization`
-> **Status:** MOBILE ARCHITECTURE APPROVED / Documentation & Planning Integration READY
+> **Status:** DOCUMENTATION & PLANNING INTEGRATION — REVIEW PENDING
 > **Objective:** Execute the Mobile V1 Canonical Architecture Pass to define Mobile cross-cutting ecosystem boundaries, offline capabilities, and security rules.
 
 ## Current Execution State
@@ -15,14 +15,16 @@
 - [x] Await Chris's independent GPT review and approval of the revised plan.
 - [x] Phase 1: Architecture Implementation (Batch A — Mobile Foundation) — APPROVED / independently reviewed.
 - [x] Phase 2: Architecture Implementation (Batch B — Offline & Native Reliability) — APPROVED / independently reviewed.
-- [x] Phase 3: Architecture Implementation (Batch C — Mobile Capabilities & Verification) — APPROVED / independently reviewed (COMPLETE).
+- [x] Phase 3: Architecture Implementation (Batch C — Mobile Capabilities & Verification) — APPROVED / independently reviewed.
 - [x] Cross-Batch Architecture Reconciliation — APPROVED / independently reviewed.
-- [ ] Phase 4: Documentation & Planning Integration — READY / NOT STARTED.
-- [ ] Closure & PR Preparation — NOT STARTED.
+- [x] Phase 4: Documentation & Planning Integration — COMPLETE / REVIEW PENDING.
+- [ ] Closure & PR Preparation — NOT STARTED (Awaiting independent human/GPT review of Phase 4).
 
 ## Notes & Blockers
-- Found multiple contradictions in the prototype (e.g. package identity, SharedPreferences cleartext token, optimistic MutableStateFlow tasks without outbox, ModelsScreen advertising local LLM/TTS). MockHealthDataProvider is PROTOTYPE/REFERENCE only; real Health Connect and wearable biometric integrations are formally classified as Mobile Later (Post-V1).
-- Mobile credentials must use approved platform-protected secure storage (Android Keystore is a candidate, not locked).
-- Architecture implementation proceeded in three strictly bounded batches (A, B, C), each independently reviewed and approved.
-- Batches A, B, and C and Cross-Batch Architecture Reconciliation are APPROVED. Mobile architecture canonicalization across Batches A through C is complete. Phase 4 Documentation & Planning Integration is UNBLOCKED and READY.
-- Master planning spine (WBS, Roadmaps, etc.) will be integrated in Phase 4.
+- Phase 4 master planning spine and documentation integration completed:
+  - Canonical `MOBILE_WBS.md` created with 11 streams (`MOB-FOUNDATION` through `MOB-VERIFY`) and stable work IDs.
+  - Canonical `MOBILE_CHECKLIST.md` created auditing readiness across architecture (APPROVED), implementation (NOT STARTED), and MG1–MG12.
+  - `DELIVERY_INDEX.md`, `SPRINT_ROADMAP.md`, `BACKLOG.md`, `DECISION_REGISTER.md`, `DECISION_DEBT.md`, `DOCUMENTATION_MAP.md`, `SYSTEM_BASELINE.md`, `README.md`, `MASTER_CHECKLIST.md`, `WBS.md`, and `task.md` reconciled.
+  - Spec catalog count aligned to 20 canonical specifications.
+- Mobile implementation is strictly classified as `APPROVED TARGET / NOT STARTED` across all streams; prototype code under `android/` is acknowledged as non-normative reference evidence only.
+- Stopping after Phase 4 handoff for independent review. Zero Git mutations performed.

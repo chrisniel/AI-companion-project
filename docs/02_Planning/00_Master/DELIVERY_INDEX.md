@@ -8,18 +8,25 @@
 
 ## 1. Planning Spine Navigation
 
-The AI Companion PC V1 planning spine consists of seven dedicated master documents under `docs/02_Planning/00_Master/`:
+The AI Companion PC V1 planning spine consists of dedicated master documents under `docs/02_Planning/00_Master/`:
 
 ```text
 docs/02_Planning/00_Master/
 ├── DELIVERY_INDEX.md      ◄── [YOU ARE HERE] Delivery hub, milestones, release gates
 ├── DECISION_REGISTER.md   ◄── Frozen architectural decisions and owner mapping
-├── WBS.md                 ◄── Granular stable work breakdown structure (work IDs)
+├── WBS.md                 ◄── PC V1 granular work breakdown structure (work IDs)
+├── MOBILE_WBS.md          ◄── Mobile V1 granular work breakdown structure (work IDs)
 ├── BACKLOG.md             ◄── Categorized backlog (PC V1, PC Later, Mobile, Rejected)
 ├── SPRINT_ROADMAP.md      ◄── Strategic milestone sequence (M0 through M5 + Golden)
-├── MASTER_CHECKLIST.md    ◄── Implementation, verification, and documentation checklist
+├── MASTER_CHECKLIST.md    ◄── PC V1 implementation, verification, and Golden checklist
+├── MOBILE_CHECKLIST.md    ◄── Mobile V1 readiness checklist and Golden MG1–MG12
 └── DECISION_DEBT.md       ◄── Open implementation details and evidence-needed items
 ```
+
+> **Mobile Architecture & Delivery Hub Links:**
+> - System Architecture: [`MOBILE_SYSTEM_BASELINE.md`](../../04_Architecture/MOBILE_SYSTEM_BASELINE.md) (especially §7 Approved Mobile Decision Ledger)
+> - Implementation Breakdown: [`MOBILE_WBS.md`](MOBILE_WBS.md)
+> - Readiness Checklist: [`MOBILE_CHECKLIST.md`](MOBILE_CHECKLIST.md)
 
 ---
 
@@ -28,8 +35,8 @@ docs/02_Planning/00_Master/
 | Milestone ID | Title & Scope | Primary Deliverables | Target Gate / Status |
 | :--- | :--- | :--- | :--- |
 | **M0** | **Docs & Architecture Reset** | Canonicalization handoff execution, master planning spine creation, system baseline update, ADR reconciliation, and CI guide alignment. | **COMPLETE / VERIFIED** |
-| **MOBILE-ARCH** | **Mobile Architecture Pass** | Canonicalize production Android architecture. Prerequisite to M1 to freeze shared vs PC-specific vs mobile-specific boundaries. Mobile IMPLEMENTATION does not block PC V1. | **NEXT** |
-| **M1** | **Flutter Client Foundation** | Production Flutter Desktop app scaffolding, window/tray management, REST/SSE client, App/Data/Library storage root awareness, and React Web parity checks. | **PLANNED** |
+| **MOBILE-ARCH** | **Mobile Architecture Pass** | Canonicalize production Mobile Companion architecture across Batches A, B, and C. Freezes shared vs PC-specific vs mobile-specific boundaries. Architecture prerequisite to M1 satisfied. Mobile production implementation remains an independent follow-on track ([`MOBILE_WBS.md`](MOBILE_WBS.md)) and does NOT block PC V1. | **COMPLETE / APPROVED** |
+| **M1** | **Flutter Client Foundation** | Production Flutter Desktop app scaffolding, window/tray management, REST/SSE client, App/Data/Library storage root awareness, and React Web parity checks. (Unblocked by MOBILE-ARCH). | **NEXT** |
 | **M2** | **PC Companion Foundation** | Windows autostart at login, native desktop notifications, Task Scheduler integration, D6 controlled model import service, and multi-Profile database migration. | **PLANNED** |
 | **M3** | **Intelligence & Productivity** | Character Studio & 8 continuous personality traits, persistent bounded emotion, profile-first selective memory with revalidation, and Task/Reminder/Alarm scheduling. | **PLANNED** |
 | **M4** | **Voice, Tools & Information** | Conversational voice pipeline with mandatory barge-in, WebSocket audio transport, D9 deterministic tool policy engine, and read-only public web/current info. | **PLANNED** |

@@ -169,11 +169,11 @@ To guarantee continuity, documentation migration follows a staged transfer patte
        - `backup / recovery`
        - `performance / capacity`
    - During R11.0–R11.3, legacy documents were preserved as authorities while focused specifications were authored and reviewed.
-2. **Authority Transfer Complete (Sub-slice R11.4) — `COMPLETE / VERIFIED`:**
-   - Following explicit human authorization and successful independent review, canonical domain authority was formally transferred to the 18 focused domain specifications.
+2. **Authority Transfer Complete (Sub-slice R11.4 & Mobile Canonicalization) — `COMPLETE / VERIFIED`:**
+   - Following explicit human authorization and successful independent review, canonical domain authority was formally transferred to the 20 focused canonical architecture specifications.
    - Legacy monolithic documents have been safely narrowed to subordinate compatibility, implementation, and technical reference roles.
-   - The top-level ecosystem baseline remains canonically anchored in [`SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md).
-   - Pass R11 Domain Architecture Alignment is COMPLETE / VERIFIED.
+   - The top-level ecosystem baseline remains canonically anchored in [`SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md), complemented by [`MOBILE_SYSTEM_BASELINE.md`](MOBILE_SYSTEM_BASELINE.md) for mobile.
+   - Pass R11 Domain Architecture Alignment and Mobile Architecture Canonicalization are COMPLETE / VERIFIED.
 
 ---
 
@@ -184,6 +184,7 @@ Following the Pass R11.4 authority transfer, canonical domain authority resides 
 | Canonical Focused Owner | Domain Scope | Legacy / Specialized Reference | Legacy Disposition |
 | :--- | :--- | :--- | :--- |
 | [`SYSTEM_BASELINE.md`](SYSTEM_BASELINE.md) | Shared Ecosystem Baseline | Retained Top-Level Baseline | Retained canonical baseline; owns cross-cutting decisions D1–D11 and release vocabulary. |
+| [`MOBILE_SYSTEM_BASELINE.md`](MOBILE_SYSTEM_BASELINE.md) | Mobile Ecosystem Baseline & Decision Ledger | Retained Mobile Baseline | Retained canonical baseline for Mobile Companion; owns approved Mobile decisions M-D1 through M-D7. |
 | [`01_Domains/assistant-and-conversations.md`](01_Domains/assistant-and-conversations.md) | Turn lifecycle, context assembly, token streaming, multilingual interaction | [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/MEMORY_AND_CHARACTER_ARCHITECTURE.md) | Subordinate compatibility / scoping reference. |
 | [`01_Domains/tasks-reminders-alarms-and-routines.md`](01_Domains/tasks-reminders-alarms-and-routines.md) | Distinct scheduling semantics, quiet hours, best-effort wake, notifications | — | New focused canonical domain specification. |
 | [`01_Domains/characters-personality-and-emotion.md`](01_Domains/characters-personality-and-emotion.md) | Persistent Character config, separate Personality traits, lightweight Emotion | [`MEMORY_AND_CHARACTER_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/MEMORY_AND_CHARACTER_ARCHITECTURE.md) | Subordinate compatibility / persona reference. |
@@ -202,6 +203,8 @@ Following the Pass R11.4 authority transfer, canonical domain authority resides 
 | [`04_Infrastructure/windows-host-and-notifications.md`](04_Infrastructure/windows-host-and-notifications.md) | Independent Windows host process, autostart at login, native OS notification delivery | [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) | Subordinate host integration reference. |
 | [`04_Infrastructure/backup-recovery-and-diagnostics.md`](04_Infrastructure/backup-recovery-and-diagnostics.md) | Practical backup/recovery and restore verification, local diagnostic logging | [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) | Subordinate technical reference. |
 | [`04_Infrastructure/performance-and-capacity.md`](04_Infrastructure/performance-and-capacity.md) | Resource governance, telemetry truthfulness, performance/capacity policy, Gaming / Low-Impact Mode | [`AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/AI_COMPANION_RUNTIME_CONFIGURATION_AND_ASSET_ARCHITECTURE.md) & [`LLAMA_CPP_RUNTIME_ARCHITECTURE.md`](../07_Archive/reference/architecture-legacy/LLAMA_CPP_RUNTIME_ARCHITECTURE.md) | Subordinate technical / benchmark reference. |
+| [`04_Infrastructure/mobile-offline-and-sync.md`](04_Infrastructure/mobile-offline-and-sync.md) | Mobile offline operation, sync engine, conflict resolution, sync protocol | — | Approved canonical specification (Batch B). |
+| [`04_Infrastructure/mobile-capabilities-and-runtime.md`](04_Infrastructure/mobile-capabilities-and-runtime.md) | Mobile runtime, auxiliary local inference, audio/voice streaming, security, verification | — | Approved canonical specification (Batch C). |
 | [`decisions/`](decisions/) | Architectural decision records | Accepted ADR set | Active decision index; focused specifications remain primary normative domain owners. |
 
 ## Architecture Decision Records (ADR)
