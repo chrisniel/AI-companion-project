@@ -39,7 +39,7 @@ Mobile local state is partitioned into strict durability, security, and lifecycl
 - **Architectural Requirement:** Pending offline mutations and replicated domain state MUST survive OS process death and device reboot. Storing pending mutations solely in in-memory state flows (as found in the mobile prototype) violates durability invariants.
 - **Implementation Pattern:** A **transactional mutation journal (outbox)** pattern is required. Local optimistic mutations MUST be committed atomically with local replica updates in a durable local store before dispatching over the network.
 - **Storage Technology Recommendation:** A relational SQLite-backed abstraction (such as Drift for Flutter) is recommended for replicated domain entities, outbox mutations, and sync metadata due to transaction support and structured query capabilities. Plaintext `SharedPreferences` for tokens or task state is strictly prohibited.
-- **Security Boundary Truth:** Platform-protected secure storage backed by the **Android Keystore** is required for device credentials and third-party API secrets. The deprecated AndroidX `EncryptedSharedPreferences` library is not recommended. Replicated domain state resides within the private OS application sandbox; full-database encryption (e.g., SQLCipher) is not mandated in Batch B and is deferred to the Batch C security and threat-model review.
+- **Security Boundary Truth:** Platform-protected secure storage backed by the **Android Keystore** is required for device credentials and third-party API secrets. The deprecated AndroidX `EncryptedSharedPreferences` library is not recommended. Replicated domain state resides within the private OS application sandbox, which provides the platform-enforced isolation baseline (`mobile-capabilities-and-runtime.md` §5.2). Full-database encryption (e.g., SQLCipher) remains optional and threat-model dependent (e.g., for rooted devices or heightened enterprise compliance) rather than an unconditional baseline mandate for standard non-rooted devices.
 
 ---
 
@@ -49,18 +49,18 @@ The PC Local AI Runtime remains canonical domain authority. Mobile acts as an en
 
 ### 3.1 Complete Per-Domain Synchronization Matrix
 
-| Domain | Canonical Authority | Offline Readable? | Offline Writable? | Durable Locally? | Sync Direction | Deletion Policy | Conflict Class | Batch C Dependency |
+| Domain | Canonical Authority | Offline Readable? | Offline Writable? | Durable Locally? | Sync Direction | Deletion Policy | Conflict Class | Cross-Batch Lifecycle / Final Disposition |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Tasks** | PC Runtime | YES | YES (create, update, set completion status, delete) | YES (DB + Outbox) | Bidirectional | Host soft-delete; Tombstones propagated | Host-mediated revision check; reject stale base revision by default; semantic desired-state updates (`SET_COMPLETION`) handled | None |
 | **Reminders** | PC Runtime | YES (synced occurrences) | LIMITED (Ack / Dismiss / Snooze only; no canonical entity creation) | YES (DB + Outbox) | Asymmetric (PC pushes schedule; Mobile reports delivery/snooze) | Host manages lifecycle; Mobile dismiss marks local state | State-machine transition; Host tie-breaker | None |
 | **Alarms** | PC Runtime | YES (synced occurrences) | LIMITED (Dismiss / Snooze only; canonical recurring alarm config is PC-owned) | YES (DB + Outbox) | Asymmetric (PC pushes schedule; Mobile reports delivery/snooze) | Host manages lifecycle; Mobile dismiss marks local state | State-machine transition; local user dismiss always accepted | None |
-| **Routines** | PC Runtime | YES (cached view) | NO (read-only view; no offline creation/edits) | YES (Cache) | Host to Mobile | PC-managed | None (PC exclusive authority) | OPEN FOR BATCH C (local execution disposition) |
-| **Conversations / History** | PC Runtime | YES (cached turns) | NO (submitting turns offline is not supported in Batch B) | YES (Cache) | Host to Mobile | PC-managed; soft-delete cascade | None (read-only replica) | OPEN FOR BATCH C (local inference turns) |
+| **Routines** | PC Runtime | YES (cached view) | NO (read-only view; no offline creation/edits) | YES (Cache) | Host to Mobile | PC-managed | None (PC exclusive authority) | [RESOLVED] Autonomous local execution deferred post-V1 (Mobile Later); cached view only offline |
+| **Conversations / History** | PC Runtime (Host) / Mobile (Local Turns) | YES (cached turns) | QUALIFIED (offline local text turns on qualified devices with approved local LLM; read-only replica when unsupported) | YES (DB + Outbox) | Bidirectional (local turns import to Host with local-inference provenance) | PC-managed; soft-delete cascade | Causal turn append (preserves turn order; no Host tool replay or PC LLM regeneration) | [RESOLVED] Qualified devices support offline local text turns; cached view remains read-only when local LLM unsupported (see §3.2.6) |
 | **Memory** | PC Runtime | YES (cached view) | NO (read-only view; memory extraction is PC policy-driven) | YES (Cache) | Host to Mobile | PC-managed; forget tombstones | None (read-only replica) | None |
 | **Character / Persona** | PC Runtime | YES (cached instance) | NO (templates and instances are PC-managed) | YES (Cache) | Host to Mobile | PC-managed | None (read-only replica) | None |
 | **Profile Settings** | PC Runtime | YES (cached view) | NO (Profile admin is PC-only) | YES (Cache) | Host to Mobile | PC-managed | None (read-only replica) | None |
 | **Device-Local Settings** | Mobile Endpoint | YES | YES (all device preferences) | YES (Local prefs) | None (Device-local only) | Local reset | None (device-authoritative) | None |
-| **Media & Attachments** | PC Runtime | YES (cached files) | LIMITED (captured local media held pending turn upload) | YES (Sandbox files) | Asymmetric (fetch on demand; upload on turn) | PC-managed; file cleanup | None | OPEN FOR BATCH C (vision input routing) |
+| **Media & Attachments** | PC Runtime | YES (cached files) | LIMITED (captured local media held pending turn upload) | YES (Sandbox files) | Asymmetric (fetch on demand; upload on turn) | PC-managed; file cleanup | None | [RESOLVED] Mobile Later / Future multimodal architecture (no local VLM in V1; turn attachment upload only) |
 
 ### 3.2 Concurrency, Entity Identity & Revision Architecture
 
@@ -104,6 +104,41 @@ For Mobile V1, generic automatic field-level merging is **rejected** because a s
 - **Bounded Change-History Retention:** The Host maintains a bounded synchronization/change-history retention policy sufficient for delta sync and deletion-resurrection prevention.
 - **Decoupling from Trash Retention:** The synchronization change-history retention horizon is architecturally **distinct from user-facing recycle-bin retention** (e.g. `DATA_RETENTION_DAYS = 30` in the current Task model is domain-specific implementation evidence only, not a universal synchronization retention rule). The exact duration of synchronization history retention remains policy/implementation open until Mobile planning.
 - **Stale Cursor Re-Baseline:** If a Mobile client presents a cursor that falls outside the retained authoritative synchronization history, the Host returns the typed semantic outcome `STALE_CURSOR`. Mobile MUST perform the approved full re-baseline flow: clear the local replicated domain database, reset sync metadata, and fetch a complete snapshot from the Host.
+
+#### 3.2.6 Offline Local Conversation Persistence and Reconciliation Architecture
+To resolve the boundary between offline local conversational assistance (`mobile-capabilities-and-runtime.md` §2.1) and Host-authoritative conversation history (`assistant-and-conversations.md` §2.2):
+
+1. **Qualified Offline Capability vs. Read-Only Fallback:**
+   - On evidence-qualified Tier 2 and Tier 3 devices with an approved mobile model artifact installed, Mobile supports **offline local text conversational assistance**.
+   - On Tier 0 and Tier 1 devices (or when local LLM inference is uninstalled/disabled), conversation history operates strictly as a **durable read-only cache**. Turn submission is locked until connectivity to the PC Runtime or Cloud provider is established.
+2. **Stable Offline Conversation Identity:**
+   - Conversations created offline by Mobile generate a stable client-side UUID `conversation_id`.
+   - *Target Contract Requirement:* Host conversation creation endpoints currently do not accept a client-generated `conversation_id`. Accepting and registering client-generated conversation identities upon sync is an explicit **TARGET architecture contract requirement**, not implemented reality.
+3. **Turn Identity & Idempotency:**
+   - Every user message submitted offline generates a client UUID `client_message_id`.
+   - On reconnection, turns are synchronized to the Host. The Host enforces deduplication using `client_message_id` within the conversation scope (aligning with existing Host database unique constraints `uq_messages_conversation_client_message_id`).
+   - A dedicated batch turn sync/import endpoint on the Host is an explicit **TARGET architecture contract requirement**.
+4. **Local Assistant Response Provenance:**
+   - Assistant responses generated via Mobile-local inference are committed locally with explicit provenance metadata (`source: MOBILE_LOCAL_INFERENCE`, `device_id: UUID`, `model_tag: string`).
+   - On synchronization, the Host imports and stores the dialogue turn as an authoritative historical record.
+   - **No Host LLM Regeneration:** The Host MUST NOT replay or re-generate synchronized assistant responses through the PC language model upon import.
+5. **Tool Side Effects & Safety Isolation:**
+   - Offline local conversational generation MUST NOT fabricate or execute Host desktop tools.
+   - Offline conversational turns synchronize strictly as textual dialogue history. No PC tool invocations or side effects are triggered on the Host merely because an offline conversation is imported.
+   - Local device actions (such as creating a Task via local UI) are committed to the local Task outbox independently and follow the Task synchronization pipeline (§3.1).
+6. **Causal Ordering & Concurrent Turn Reconciliation:**
+   - Turns within an offline session maintain strict local causal ordering.
+   - *Non-Conflicting Append:* If the thread was not modified on the Host while Mobile was disconnected, offline turns append sequentially, receiving monotonic Host `sequence_no` assignments.
+   - *Concurrent Thread Append Reconciliation:* If both the Host and Mobile concurrently appended turns to the same conversation thread while disconnected, **Mobile wall-clock Last-Write-Wins (LWW) is strictly REJECTED**. Arbitrary timestamp interleaving risks corrupting multi-turn dialogue context.
+   - Instead, the Host preserves its authoritative thread sequence while importing Mobile's offline turns as a distinct, causally branched offline dialogue segment or session, surfacing a clear thread indicator to the user. User-level branch inspection or thread merge decisions belong to future application UI design.
+7. **Durable Local Persistence:**
+   - All offline user turns and generated local assistant responses MUST be committed atomically to local SQLite storage before presentation or network queuing. Volatile in-memory holding is prohibited.
+8. **Memory & Context Consumption Invariant:**
+   - Mobile-local inference may consume:
+     - cached recent conversation context in the active thread;
+     - cached Character/persona definitions;
+     - cached read-only Profile and Character memories replicated from the Host.
+   - **No Autonomous Local Memory Extraction:** Local Memory candidate extraction, autonomous memory creation, and memory database writes are **DISABLED** on Mobile in V1. Memory ownership and automatic extraction policies remain strictly Host-governed (`memory-and-personalization.md`). Reconnected offline conversation turns may be evaluated for memory extraction on the PC Host under canonical Host policies after synchronization.
 
 ---
 
@@ -171,12 +206,12 @@ Android enforces strict background execution limits, process death, Doze modes, 
 | **Periodic Background Delta Sync** | Opportunistic / Periodic | `WorkManager` (PeriodicWorkRequest, min 15m) | Runs periodically when device conditions permit. Defers during deep Doze. |
 | **Scheduled Alarm Delivery** | Exact Time / Time-Critical | `AlarmManager.setAlarmClock()` | Fires at precise wall-clock time even in deep Doze. Requires explicit permission. |
 | **Scheduled Reminder Delivery** | Inexact / Tolerant | `AlarmManager.setAndAllowWhileIdle()` or inexact `set()` | Fires near scheduled time; OS may batch within Doze windows. Gracefully degrades. |
-| **User-Visible Long-Running Work** | Continuous Long-Running | Foreground Service (FGS) where permitted by Android | User-visible notification required. Permitted only during active, user-visible operations. Exact Voice/audio foreground-service type, microphone lifecycle, and related permissions are OPEN FOR BATCH C. |
+| **User-Visible Long-Running Work** | Continuous Long-Running | Foreground Service (FGS) where permitted by Android | User-visible notification required. Permitted only during active, user-visible operations. Voice foreground service lifecycle, type declaration (`FOREGROUND_SERVICE_MICROPHONE`), while-in-use constraints, and permission requirements are resolved in [`mobile-capabilities-and-runtime.md`](./mobile-capabilities-and-runtime.md) §3.4. |
 
 ### 5.2 Foreground Service Boundaries
 
 - **Background Sync Restriction:** Continuous Foreground Services (FGS) for ordinary background synchronization or outbox processing are **STRICTLY PROHIBITED**. Using persistent foreground notifications to keep sync sockets alive violates mobile battery guidelines and Android platform expectations.
-- **User-Visible Continuous Operations:** User-visible continuous operations may require Android foreground execution depending on the approved feature. Exact Voice/audio foreground-service type, microphone lifecycle, and related permissions are **OPEN FOR BATCH C**. No specific foreground service type (such as microphone) is locked during Batch B.
+- **User-Visible Continuous Operations:** User-visible continuous operations may require Android foreground execution depending on the approved feature. Voice foreground-service type, microphone lifecycle, while-in-use restrictions, and permission requirements are resolved in [`mobile-capabilities-and-runtime.md`](./mobile-capabilities-and-runtime.md) §3.4 (requiring base `FOREGROUND_SERVICE`, type-specific `FOREGROUND_SERVICE_MICROPHONE`, runtime `RECORD_AUDIO`, and visible foreground UI initiation).
 
 ---
 

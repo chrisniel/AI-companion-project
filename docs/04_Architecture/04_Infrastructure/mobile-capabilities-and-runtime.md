@@ -331,6 +331,6 @@ A comprehensive coherence check across Batch A, Batch B, and Batch C confirms co
 
 1. **Authority Model:** PC Host remains sole Account/Profile Administrator (`ADR-0018`). Mobile operates strictly as an enrolled Satellite bound to 1 Profile.
 2. **Domain Synchronization:** Tasks, Reminders, and Alarms follow the asymmetric replication and revision rules established in `mobile-offline-and-sync.md`.
-3. **Inference & Voice Decoupling:** Desktop PC V1 voice and model architectures (`voice-and-audio.md`, `runtime-and-models.md`) remain unaffected. Mobile client acts as an audio capture/playback edge node streaming over WebSocket to PC Runtime.
+3. **Inference & Voice Decoupling:** Desktop PC V1 voice and model architectures (`voice-and-audio.md`, `runtime-and-models.md`) remain unaffected. When connected, Mobile streams audio over full-duplex WebSocket to PC Runtime canonical STT/TTS/VAD providers. When offline, Mobile supports capability-dependent device-local TTS and independently capability-gated local STT/LLM inference without freezing a permanent single engine requirement or restricting Mobile solely to a passive audio edge node.
 4. **Health Integration:** Formally aligned with `health-and-wearables.md` as `Mobile Later` (Deferred Post-V1).
 5. **No PC Code Regressions:** Zero changes to backend Python runtime, React web frontend, or Windows desktop code.

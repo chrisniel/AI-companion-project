@@ -1,7 +1,7 @@
 # Active Task: MOBILE-ARCH Canonicalization
 
 > **Branch:** `docs/mobile-v1-canonicalization`
-> **Status:** ARCHITECTURE IMPLEMENTATION — Batches A/B/C APPROVED / Documentation Integration READY
+> **Status:** ARCHITECTURE IMPLEMENTATION — Batches A/B/C APPROVED — Cross-Batch Reconciliation IN PROGRESS / REVIEW PENDING
 > **Objective:** Execute the Mobile V1 Canonical Architecture Pass to define Mobile cross-cutting ecosystem boundaries, offline capabilities, and security rules.
 
 ## Current Execution State
@@ -16,12 +16,13 @@
 - [x] Phase 1: Architecture Implementation (Batch A — Mobile Foundation) — APPROVED / independently reviewed.
 - [x] Phase 2: Architecture Implementation (Batch B — Offline & Native Reliability) — APPROVED / independently reviewed.
 - [x] Phase 3: Architecture Implementation (Batch C — Mobile Capabilities & Verification) — APPROVED / independently reviewed (COMPLETE).
-- [ ] Phase 4: Documentation & Planning Integration — READY / NOT STARTED.
+- [ ] Cross-Batch Architecture Reconciliation — IN PROGRESS / REVIEW PENDING.
+- [ ] Phase 4: Documentation & Planning Integration — BLOCKED (Requires cross-batch reconciliation approval).
 - [ ] Closure & PR Preparation — NOT STARTED.
 
 ## Notes & Blockers
-- Found multiple contradictions in the prototype (e.g. package identity, SharedPreferences cleartext token, optimistic MutableStateFlow tasks without outbox, ModelsScreen advertising local LLM/TTS). MockHealthDataProvider is PROTOTYPE/REFERENCE only, and Health Connect is an OPEN architecture decision.
+- Found multiple contradictions in the prototype (e.g. package identity, SharedPreferences cleartext token, optimistic MutableStateFlow tasks without outbox, ModelsScreen advertising local LLM/TTS). MockHealthDataProvider is PROTOTYPE/REFERENCE only; real Health Connect and wearable biometric integrations are formally classified as Mobile Later (Post-V1).
 - Mobile credentials must use approved platform-protected secure storage (Android Keystore is a candidate, not locked).
 - Architecture implementation proceeded in three strictly bounded batches (A, B, C), each independently reviewed and approved.
-- Batches A, B, and C are APPROVED. Phase 4 Documentation & Planning Integration is UNBLOCKED and READY.
+- Batches A, B, and C are APPROVED. Cross-batch architecture reconciliation is currently in progress / review pending. Phase 4 Documentation & Planning Integration remains BLOCKED pending reconciliation review and approval.
 - Master planning spine (WBS, Roadmaps, etc.) will be integrated in Phase 4.

@@ -1,8 +1,8 @@
 # Android Companion Architecture (Prototype & V1 Boundary)
 
 > **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Mobile Architecture Boundary)  
-> **Note:** Mobile production baseline architecture is currently being promoted to [`MOBILE_SYSTEM_BASELINE.md`](../MOBILE_SYSTEM_BASELINE.md) under the Mobile Batch A architecture pass. This document remains the interim reference until promotion is demonstrably complete.
+> **Status:** Active Canonical (Prototype & Reference Boundary)  
+> **Canonical Ownership:** Mobile Companion production architecture is canonically established in [`MOBILE_SYSTEM_BASELINE.md`](../MOBILE_SYSTEM_BASELINE.md), [`mobile-offline-and-sync.md`](../04_Infrastructure/mobile-offline-and-sync.md), and [`mobile-capabilities-and-runtime.md`](../04_Infrastructure/mobile-capabilities-and-runtime.md) following approved Mobile Architecture Batches A, B, and C. This document governs the boundary and preserved role of the exploratory Kotlin/Compose prototype (`android/`).
 
 ## 1. Prototype & Reference State
 
@@ -25,13 +25,14 @@ The following fundamental integration bounds are firmly decided under the PC V1 
 
 ## 3. Explicit Architecture Boundary
 
-> [!WARNING]  
-> **DETAILED ANDROID/MOBILE V1 ARCHITECTURE IS DEFERRED TO THE SEPARATE MOBILE ARCHITECTURE PASS.**
+> [!NOTE]  
+> **PRODUCTION MOBILE ARCHITECTURE CANONICALIZATION COMPLETED**  
+> Detailed Mobile Companion architecture has been established across canonical infrastructure specifications:
+> - **Offline Persistence & Sync:** Transactional outbox, revision checks, and per-domain replication are governed by [`mobile-offline-and-sync.md`](../04_Infrastructure/mobile-offline-and-sync.md).
+> - **Inference, Voice & Hardware Tiers:** Evidence-based runtime qualification, local TTS/STT decoupling, Voice streaming, and platform security are governed by [`mobile-capabilities-and-runtime.md`](../04_Infrastructure/mobile-capabilities-and-runtime.md).
+> - **System Ecosystem:** Satellite authority, Flutter boundaries, and identity are governed by [`MOBILE_SYSTEM_BASELINE.md`](../MOBILE_SYSTEM_BASELINE.md).
 
-To preserve focus on PC V1, the system baseline strictly defers locking implementation specifics for the Android companion. The following areas remain explicitly **OPEN DESIGN** and must not be canonically prescribed in this PC V1 phase:
-
-- Offline persistence topology (e.g., Room databases, outbox architecture).
-- Background synchronization strategy (e.g., WorkManager scheduling, WebSocket vs REST conflicts).
-- Exact local mobile LLM runtime, model family, and quantization constraints.
-- The Kotlin/Compose tree remains prototype/reference evidence. Any future Kotlin work should be described only as prototype/reference maintenance or migration evidence unless explicitly approved as a production-native component.
-- Exact Health Connect integration pipelines and API abstractions.
+The following boundaries govern the legacy prototype:
+- The Kotlin/Compose tree (`android/`) remains non-production prototype/reference and migration evidence.
+- Real Health Connect integration and biometric sync are classified as **Mobile Later (Post-V1)**; prototype mock health UI is sequestered.
+- Production Mobile development will execute under the shared Flutter workspace topology (`ADR-0004`).
