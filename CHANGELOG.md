@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Conditional Verification Lanes**: Added dedicated, conditionally executed `backend`, `frontend`, `contract`, and `docs-integrity` lanes.
 - **Aggregate Gatekeeper**: Introduced fail-closed `ci-gate` for downstream dependency evaluation.
 - **Release Verification Overrides**: Configured Full Verification forced overrides for `master` pushes/PRs and manual `workflow_dispatch`.
-- **Deterministic Testing**: Deployed repository-owned `scripts/ci_policy.py` protected by native Python static tests.
+- **Deterministic Testing**: Added repository-owned `scripts/ci_policy.py` with deterministic Python policy tests.
 
 ### Added & Verified (2026-09-25 - Phase 8B: Multimodal Image Attachment Foundation - Slices 8B.0–8B.6)
 
