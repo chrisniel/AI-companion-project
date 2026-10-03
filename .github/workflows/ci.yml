@@ -29,12 +29,12 @@ jobs:
       needs_docs: ${{ steps.classify.outputs.needs_docs }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
@@ -46,24 +46,36 @@ jobs:
       - name: Classify paths
         id: classify
         run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            python scripts/ci_policy.py classify --event workflow_dispatch
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            target_branch="${{ github.base_ref }}"
+          elif [ "${{ github.event_name }}" == "push" ]; then
+            target_branch="${{ github.ref_name }}"
           else
+            target_branch=""
+          fi
+          
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            python scripts/ci_policy.py classify --event workflow_dispatch --target-branch "$target_branch"
+          else
+            diff_success="false"
             if [ "${{ github.event_name }}" == "pull_request" ]; then
-              git diff --name-only ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} > diff.txt || true
+              if git diff --name-only ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} > diff.txt; then
+                diff_success="true"
+              fi
             else
-              if [ "${{ github.event.before }}" == "0000000000000000000000000000000000000000" ]; then
-                echo "" > diff.txt
-              else
-                git diff --name-only ${{ github.event.before }}..${{ github.sha }} > diff.txt || true
+              if [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+                if git diff --name-only ${{ github.event.before }}..${{ github.sha }} > diff.txt; then
+                  diff_success="true"
+                fi
               fi
             fi
             
-            if [ -s diff.txt ]; then
+            if [ "$diff_success" == "true" ] && [ -s diff.txt ]; then
               json_arr=$(python -c 'import sys, json; print(json.dumps(sys.stdin.read().splitlines()))' < diff.txt)
-              python scripts/ci_policy.py classify --event ${{ github.event_name }} --files-json "$json_arr"
+              python scripts/ci_policy.py classify --event ${{ github.event_name }} --target-branch "$target_branch" --files-json "$json_arr"
             else
-              python scripts/ci_policy.py classify --event ${{ github.event_name }} --files-json "[]"
+              echo "Git diff failed, empty, or unresolvable. Falling back to Full Verification."
+              python scripts/ci_policy.py classify --event ${{ github.event_name }} --target-branch "$target_branch" --files-json "[]"
             fi
           fi
 
@@ -74,7 +86,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -105,10 +117,10 @@ jobs:
       COMPANION_API_KEY: ci-ephemeral-test-key
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -138,10 +150,10 @@ jobs:
       COMPANION_API_KEY: ci-ephemeral-test-key
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -162,10 +174,10 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'npm'
@@ -190,10 +202,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 

@@ -15,8 +15,8 @@ def is_docs_only_file(filepath):
 def classify(args):
     event = args.event
     
-    # workflow_dispatch forces Full CI override
-    if event == "workflow_dispatch":
+    # workflow_dispatch and master targets force Full CI override
+    if event == "workflow_dispatch" or args.target_branch == "master":
         return {"needs_backend": "true", "needs_frontend": "true", "needs_contract": "true", "needs_docs": "true"}
         
     if not args.files_json:
@@ -91,7 +91,12 @@ def gate(args):
     all_passed = True
     
     for lane, req_key in lane_map.items():
-        req = reqs.get(req_key, "false") == "true"
+        req_val = reqs.get(req_key)
+        if req_val not in ("true", "false"):
+            print(f"FAIL: requirement {req_key} must be exactly 'true' or 'false', got '{req_val}'")
+            return False
+            
+        req = (req_val == "true")
         res = results.get(lane, "empty")
         
         if req:
