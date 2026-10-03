@@ -19,18 +19,18 @@ It governs the boundary between audio hardware/drivers and conversational assist
 
 ---
 
-## 2. Durable Architecture & Invariants
+## 2. Durable Architecture
 
-### 2.1 Native Client & Runtime Voice Architecture (Decisions D14 & D15)
+### 2.1 Native Client & Runtime Voice Architecture 
 
-In accordance with Decisions D1, D14, and D15 (`ADR-0014`, `ADR-0017`, `ADR-0019`):
+In accordance with Decision D1:
 - **Hardware & Processing Boundary:**
   - **Flutter Desktop Client:** Owns local audio hardware enumeration, physical microphone capture, speaker/headphone playback, and OS audio focus.
-  - **Windows Host Runtime:** Owns the speech pipeline engines (`STTProvider` and `TTSProvider`) and conversational turn coordination.
+  - **Local AI Runtime:** Owns the speech pipeline engines (`STTProvider` and `TTSProvider`) and conversational turn coordination.
 - **WebSocket Full-Duplex Transport (`ADR-0019`):** Audio frames and speech control events stream over a dedicated persistent WebSocket connection between the desktop client and runtime.
 - **Approved PC V1 Local Speech Engines:**
-  - **Speech-to-Text (STT):** Local `whisper.cpp` (executing on CPU/RAM to preserve GPU VRAM).
-  - **Text-to-Speech (TTS):** Local `Kokoro-82M` (executing on CPU/RAM for fast, high-quality local voice synthesis).
+  - **Speech-to-Text (STT):** Local STT engine (e.g., whisper.cpp candidate) (executing on CPU/RAM to preserve GPU VRAM).
+  - **Text-to-Speech (TTS):** Local TTS engine (e.g., Kokoro-82M candidate) (executing on CPU/RAM for fast, high-quality local voice synthesis).
   - **Voice Activity Detection (VAD):** In-stream turn detection via Silero VAD or equivalent lightweight model.
 - **Mandatory Voice Barge-In (PC V1):**
   - Companion voice playback must support real-time user interruption.
@@ -40,7 +40,7 @@ In accordance with Decisions D1, D14, and D15 (`ADR-0014`, `ADR-0017`, `ADR-0019
 ### 2.2 Hardware Resource Isolation Principle
 
 - **Durable Principle:** Speech processing **SHOULD** avoid unnecessary contention with the active generative model on constrained target hardware.
-- **Reference Strategy (CPU/RAM-First):** To safeguard precious GPU VRAM for the primary text/multimodal LLM on reference hardware (8 GB RX 580 baseline), speech transcription (`whisper.cpp`) and synthesis (`Kokoro-82M`) are designed reference-first to execute comfortably on CPU and system RAM.
+- **Reference Strategy (CPU/RAM-First):** To safeguard precious GPU VRAM for the primary text/multimodal LLM on reference hardware (8 GB RX 580 baseline), speech transcription and synthesis are designed reference-first to execute comfortably on CPU and system RAM.
 - **Implementation Flexibility:** The architecture does not permanently lock speech to CPU forever. On higher-end hardware with abundant compute or dedicated NPUs, providers may utilize hardware acceleration if resource contention policies permit.
 
 ### 2.3 Voice Privacy Invariant
@@ -49,6 +49,35 @@ In accordance with Decisions D1, D14, and D15 (`ADR-0014`, `ADR-0017`, `ADR-0019
 - Buffering is kept strictly in transient memory during active turns. User-approved transcripts are persisted as conversation messages; raw audio chunks are discarded after turn completion.
 
 ---
+
+
+### 2.4 Capability Ownership
+
+- **Flutter Client Owns:** Mic/device enumeration, capture, output-device selection, playback.
+- **Local AI Runtime Owns:** STT, TTS, VAD, `VoiceSession` orchestration, conversation/provider lifecycle.
+- **PC V1 Flow:** Push-to-talk fallback, manually started active Voice Conversation, VAD-assisted turn-taking. Constant-listening wake word is deferred.
+
+### 2.5 Mandatory Barge-In
+
+- **Barge-in Behavior:** Must instantly stop playback, cancel pending TTS/audio, cancel stale text generation as appropriate, discard stale chunks, and start the new turn.
+- **Identity Check:** Audio uses voice-session + turn identity so stale output cannot accidentally resume after a barge-in.
+- **Profile Isolation:** A Profile switch strictly kills the old Profile's voice session and clears all buffers.
+
+### 2.6 Privacy & Data Retention
+
+- **Voice is NOT Authentication:** Conversational voiceprint matching is never used as an authorization or authentication factor.
+- **Ephemeral Audio:** Partial STT is ephemeral. The final transcript becomes an ordinary conversation message. Raw audio is not stored by default. Debug capture requires explicit visible opt-in and bounded retention.
+- **Cloud Boundaries:** Cloud LLM, cloud STT, and cloud TTS are strictly separate permissions. Gaming/resource pressure never silently sends audio to the cloud.
+- **Proactive Speech:** Private proactive speech from notifications or Routines is OFF by default unless the user explicitly opts in.
+
+### 2.7 Actions & Policy
+
+- **Policy Parity:** Voice tools use the exact same D9 policy as text.
+- **Low-Confidence Extraction:** Low-confidence consequential action fields require explicit clarification.
+
+### 2.8 Provider Candidates
+
+- Exact provider implementation remains open. `whisper.cpp`, `Kokoro`, and `Silero` remain primary reference candidates.
 
 ## 3. Current Verified Implementation
 
@@ -65,16 +94,16 @@ Repository source code and test suites verify the following baseline reality:
 
 ## 4. Approved Target Architecture / Not Yet Implemented
 
-The following target capabilities are approved under Decisions D1, D11, and the Feature Promotion Map:
+The following target capabilities are approved under Decisions D1, D11, and the Master Decision Register:
 
 1. **Conversational Speech Pipeline (PC V1):**
    - Consented conversational voice interaction integrated with the primary conversation view.
    - Provider abstraction layer decoupling the backend from specific inference binaries or models.
    - Streaming or chunked audio ingestion with VAD-assisted or explicit turn boundary detection.
 2. **Candidate Provider Adapters:**
-   - **STT Candidate:** `Whisper` (via `whisper.cpp`, `faster-whisper`, or ONNX Runtime).
-   - **TTS Candidate:** `Kokoro` (or lightweight alternatives such as `Piper`).
-   - **VAD Candidate:** `Silero VAD` (via ONNX Runtime).
+   - **STT Candidate:** `whisper.cpp` is the primary/reference PC STT candidate, not an eternal requirement.
+   - **TTS Candidate:** `Kokoro` is the primary/reference local PC TTS candidate, not an eternal requirement. `ElevenLabs` remains an optional cloud TTS candidate.
+   - **VAD Candidate:** `Silero VAD` (VAD remains provider-independent).
    *(Note: These named engines are evaluated candidates for specific adapters; none are locked as mandatory architectural release requirements.)*
 3. **Wake Word Detection (PC Later):**
    - Background listening for low-power activation phrases (Candidate: `openWakeWord`). Deferred beyond PC V1 to preserve battery/resource budgets and privacy boundaries.
@@ -83,7 +112,7 @@ The following target capabilities are approved under Decisions D1, D11, and the 
 
 ## 5. Implementation-Open Details (Decision Debt)
 
-The normative architecture for D14/D15 is frozen. The following implementation-level details are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
+The normative architecture for Voice is frozen. The following implementation-level details are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
 
 - **Turn-Taking & VAD Tuning:** VAD threshold parameters, silence detection window length, and speaking cadence tuning (`DEBT-V1-011`).
 - **Audio Device Hotplugging:** Host audio device enumeration, default sink switching, and Bluetooth headset disconnect recovery in Flutter (`DEBT-V1-012`).
@@ -95,15 +124,14 @@ The normative architecture for D14/D15 is frozen. The following implementation-l
 
 - **Consent Boundaries:** The microphone must never open or record without clear user action or explicit, visible UI state.
 - **Transcript Authority:** Generated text transcripts become user messages within conversations, inheriting standard profile data ownership and retention rules (`profile_id`).
-- **Network Boundaries:** Local speech processing occurs entirely on-device under Windows Host Runtime authority; audio data is never transmitted to external cloud endpoints without explicit opt-in configuration.
+- **Network Boundaries:** Local speech processing occurs entirely on-device under Local AI Runtime authority; audio data is never transmitted to external cloud endpoints without explicit opt-in configuration.
 
 ---
 
 ## 7. Canonical Relationships & Cross-Links
 
-- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D14, D15)
-- **Voice Subsystem ADR:** [`docs/04_Architecture/decisions/ADR-0014-voice-and-audio-subsystem-architecture.md`](../decisions/ADR-0014-voice-and-audio-subsystem-architecture.md)
+- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Voice)
 - **Client Target ADR:** [`docs/04_Architecture/decisions/ADR-0017-flutter-production-windows-client.md`](../decisions/ADR-0017-flutter-production-windows-client.md)
 - **Client-Runtime Contract ADR:** [`docs/04_Architecture/decisions/ADR-0019-client-runtime-contract-and-work-boundaries.md`](../decisions/ADR-0019-client-runtime-contract-and-work-boundaries.md)
-- **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Decision D15), [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-VOICE-001`)
+- **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) , [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-VOICE-001`)
 - **UI Design Presentation:** [`docs/05_Design/05_Voice_Mode_and_Audio_Controls.md`](../../05_Design/05_Voice_Mode_and_Audio_Controls.md)

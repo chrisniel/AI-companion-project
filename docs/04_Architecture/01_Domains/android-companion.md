@@ -1,136 +1,36 @@
-# Android Companion Architecture
+# Android Companion Architecture (Prototype & V1 Boundary)
 
 > **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Aligned with Decisions D1–D16, ADR-0003, ADR-0018)  
-> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D16. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for the mobile Android companion domain.
+> **Status:** Active Canonical (Mobile Architecture Boundary)  
 
----
+## 1. Prototype & Reference State
 
-## 1. Purpose & Scope
+The current Android repository (`android/`) contains a mobile companion prototype built in Kotlin and Jetpack Compose. This prototype serves strictly as reference implementation evidence for networking and basic interaction, rather than the final frozen production architecture.
 
-This specification defines the mobile architecture, synchronization protocol, security boundaries, and offline capabilities for the Android Companion client:
-- Identity, package namespaces, and application boundaries.
-- Client synchronization model with the PC Local AI Runtime as the canonical authority.
-- Trusted device credentials and secure hardware storage.
-- Compact offline local LLM execution boundaries.
-- Android Health Connect integration for biometric companion context.
-- Phased delivery boundaries distinguishing PC V1 from Android V1.
+### 1.1 Verified Current Evidence
+- **Kotlin/Compose Prototype:** Real Compose UI exists for navigation, chat, and basic task lists (`android/app/src/main/java/com/example/`).
+- **Package Identity:** The current prototype utilizes an interim package namespace (`com.example` / `com.aistudio.localcore.swbjtu`).
+- **Network/Repository State:** Direct `OkHttp` networking is implemented to communicate with the PC FastAPI backend (`LocalAiRuntimeClient`). Some repositories use fake implementations, and device credentials use basic unencrypted `SharedPreferences`.
 
-It governs the boundary between the desktop host runtime and the satellite mobile companion.
+## 2. Frozen Cross-Platform Decisions
 
----
+The following fundamental integration bounds are firmly decided under the PC V1 architecture:
 
-## 2. Durable Architecture & Invariants
+- **Target Application Identity:** The final production mobile package namespace is frozen as `com.cnl.aicompanion` (Decision D3 / `ADR-0004`).
+- **Development Parallelism:** Android development does **not** block the PC V1 milestone (Decision D1).
+- **Profile Binding:** A single satellite device binds to **exactly one Profile** (`ADR-0018`).
+- **Device Credential Isolation:** Provider and device credentials remain completely device-local and are never leaked to or synchronized with the host (`ADR-0005`).
+- **Production Mobile Foundation:** Flutter is the intended cross-platform production mobile foundation for the future release.
 
-### 2.1 Release Phasing & Non-Blocking Invariant
+## 3. Explicit Architecture Boundary
 
-In accordance with Decision D1:
-- **Independent Follow-on Release:** Android V1 is an independent, follow-on production mobile release.
-- **Non-Blocking Invariant:** Development, verification, or staging of the Android Companion does **not** block the delivery, feature freeze, or release of the PC V1 ecosystem milestone.
-- **Canonical Authority:** The Windows Host Runtime owns persistent canonical authority over user data, conversation histories, memories, and task state. Android operates as a connected satellite client with offline caching capabilities.
-- **Profile Binding (`ADR-0018`):** A normal mobile satellite device binds to a single user Profile (`profile_id`). The PC desktop administrator manages profiles, while the mobile client operates within its bound profile context.
+> [!WARNING]  
+> **DETAILED ANDROID/MOBILE V1 ARCHITECTURE IS DEFERRED TO THE SEPARATE MOBILE ARCHITECTURE PASS.**
 
-### 2.2 Application Identity & Package Target (Decision D3)
+To preserve focus on PC V1, the system baseline strictly defers locking implementation specifics for the Android companion. The following areas remain explicitly **OPEN DESIGN** and must not be canonically prescribed in this PC V1 phase:
 
-- **Target Production Identifier:** In accordance with Decision D3, the official application ID and package namespace for production release is:
-  ```text
-  com.cnl.aicompanion
-  ```
-- **Product-Oriented Identity:** The package name is permanently product-oriented, model-independent, and companion-persona-independent.
-
-### 2.3 Device Credential Isolation (Decision D4)
-
-- In accordance with Decision D4, device authentication tokens are strictly separated from Profile-owned personal data.
-- The mobile device stores an independently revocable device credential. Master secrets, root database encryption keys, and desktop administration credentials are **never** distributed to the mobile client.
-
-### 2.4 Speech Synthesis Release Boundary
-
-- **Device-Local TTS Status:** Classified in the Feature Promotion Map as `EXPERIMENTAL / NOT STARTED / FUTURE / UNSCHEDULED`.
-- Local on-device TTS is **not** an Android V1 requirement and is **not** a committed Android Later milestone scope. Historical exploratory notes ("local STT/TTS where feasible") are non-normative and do not form a delivery gate.
-
----
-
-## 3. Current Verified Implementation
-
-Repository source code and test suites verify the following baseline reality:
-
-### 3.1 Codebase & Prototype Package State
-
-Verified in `android/app/build.gradle.kts`:
-- **Prototype Namespace:** The current codebase prototype uses:
-  ```kotlin
-  namespace = "com.example"
-  applicationId = "com.aistudio.localcore.swbjtu"
-  minSdk = 24
-  targetSdk = 36
-  ```
-- **Migration Requirement:** Transitioning to `com.cnl.aicompanion` is scheduled for the Android V1 production track.
-
-### 3.2 Implemented Components
-
-Verified in `android/app/src/main/java/com/example/`:
-- **Compose UI Foundation:** Jetpack Compose navigation, home view, conversation chat interface, and task list screens.
-- **Network Client:** Uses `OkHttp` directly (configured in `LocalAiRuntimeClient`) for communication with the FastAPI backend over LAN or Tailscale.
-- **Repository Wiring:** Real HTTP repository wiring exists for `SharedPreferencesConnectionRepository`, `HttpTasksRepository`, and `LocalAiRuntimeClient`. Other major domains—including Assistant conversations, Characters, Memory, Schedule, Alarms, and Models/Devices—remain wired to Fake repositories in `DefaultAppContainer`. General conversation synchronization is not implemented.
-- **Credential Storage (Current):** Device pairing token is stored in ordinary, unencrypted `SharedPreferences`.
-- **Health Foundation (Current):** The codebase contains the `HealthDataProvider` abstraction, a `MockHealthDataProvider` stub, and Health UI/view-model structures. No real Health Connect client or platform API integration is implemented (mock/provider contract and UI foundation only).
-- **Test Baseline:** Passing unit, repository, and Robolectric UI test baselines exist in the repository (`android/app/src/test/`).
-
-### 3.3 Explicitly Unimplemented Capabilities
-
-The following target capabilities have zero operational implementation in the current Android prototype:
-- **Hardware Keystore Integration:** `NOT IMPLEMENTED` (credentials currently use basic `SharedPreferences`).
-- **Durable Room Outbox:** `NOT IMPLEMENTED` (no SQLite/Room local persistence database or offline mutation outbox).
-- **General Conversation Synchronization:** `NOT IMPLEMENTED` (conversations use in-memory mock repositories; sync is not implemented).
-- **Offline Local LLM Inference:** `NOT IMPLEMENTED` (zero on-device inference runtime).
-- **Local Alarms & Push Notifications:** `NOT IMPLEMENTED` (no Android notification channels or exact AlarmManager scheduling).
-- **Real Health Connect Integration:** `NOT IMPLEMENTED` (Android V1 capability remains APPROVED / NOT STARTED; current code provides mock contract and UI foundation only).
-
----
-
-## 4. Approved Target Architecture / Not Yet Implemented
-
-The following target capabilities are approved under Decision D1 and scheduled for Android V1:
-
-1. **Production Identity & Secure Keystore (Android V1):**
-   - Migration to `com.cnl.aicompanion`.
-   - Device credentials protected via platform-secure facilities backed by the Android Keystore system (e.g., `EncryptedSharedPreferences` as an implementation candidate; exact mechanism remains open design).
-2. **Durable Room Outbox & Connected Synchronization (Android V1):**
-   - Local Room database caching active tasks, memories, and conversations.
-   - Offline mutation queue (outbox) synchronizing with PC Windows Host Runtime upon reconnect.
-3. **Practical Compact Offline Local LLM (Android V1):**
-   - On-device local LLM execution for basic conversational continuity when disconnected from the PC host.
-   - Model family, format (e.g., GGUF, ONNX), parameter size, and quantization remain OPEN DESIGN. Existing benchmarks on Dimensity / Infinix hardware are historical proof-of-concept evidence, not locked hardware constraints.
-4. **Health Connect Biometric Context (Android V1):**
-   - Ingests aggregated biometric summaries from Android Health Connect with explicit user permission, synchronizing approved summaries to the PC Windows Host Runtime.
-
----
-
-## 5. OPEN DESIGN
-
-The following implementation choices are intentionally left open for subsequent technical design:
-
-- **Secure Credential Storage Mechanism:** Choice of Android Keystore wrapper or library (e.g., `EncryptedSharedPreferences`, Jetpack Security, or custom Keystore provider).
-- **Offline LLM Runtime & Format:** Choice of mobile inference engine (e.g., `llama.cpp` Android NDK build, ONNX Runtime Mobile, or MediaPipe), model architecture, and quantization level.
-- **Sync Protocol & Conflict Resolution:** Exact transport (WebSocket streaming vs. gRPC vs. HTTPS REST polling) and conflict resolution rules (e.g., last-write-wins with server timestamp authority).
-- **Background Synchronization Schedule:** WorkManager constraints, battery optimization exemptions, and Wi-Fi-only sync preferences.
-- **Health Connect Metrics & Aggregation:** Initial metric selection, aggregation windows, sync cadence, and privacy filters (governed under `health-and-wearables.md`).
-
----
-
-## 6. Security & Ownership Boundaries
-
-- **Subordinate Authority:** The mobile client cannot unilaterally override canonical PC state. All sync operations resolve against the PC Windows Host Runtime as the single source of truth.
-- **Network Boundaries:** Operates over trusted LAN or Tailscale private mesh in accordance with Decision D5. Direct public internet port exposure is outside the supported trust model.
-- **Biometric Privacy:** Raw biometric sensor streams are never collected. Only aggregated, user-approved summaries (e.g., total sleep hours) are processed into context.
-
----
-
-## 7. Canonical Relationships & Cross-Links
-
-- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§2 Release Vocabulary, §3 Cross-Cutting Invariants, Decisions D1, D3, D4, D5)
-- **Application Identity ADR:** [`docs/04_Architecture/decisions/ADR-0003-android-application-identity-and-lifecycle.md`](../decisions/ADR-0003-android-application-identity-and-lifecycle.md)
-- **Device Authentication ADR:** [`docs/04_Architecture/decisions/ADR-0004-device-authentication-and-trust-model.md`](../decisions/ADR-0004-device-authentication-and-trust-model.md)
-- **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
-- **Master Planning Spine:** [`docs/02_Planning/00_Master/SPRINT_ROADMAP.md`](../../02_Planning/00_Master/SPRINT_ROADMAP.md) (Milestone Track M-Android)
-- **Health & Wearables Integration:** [`docs/04_Architecture/03_Integrations/health-and-wearables.md`](../03_Integrations/health-and-wearables.md)
+- Offline persistence topology (e.g., Room databases, outbox architecture).
+- Background synchronization strategy (e.g., WorkManager scheduling, WebSocket vs REST conflicts).
+- Exact local mobile LLM runtime, model family, and quantization constraints.
+- Future Kotlin production refactoring topology.
+- Exact Health Connect integration pipelines and API abstractions.

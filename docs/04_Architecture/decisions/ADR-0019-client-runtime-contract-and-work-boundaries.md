@@ -1,7 +1,7 @@
 # Client ↔ Runtime Contract & Work Boundaries
 
 **Status:** Accepted  
-**Decision ID:** D19  
+**Decision ID:** ADR-0019  
 **Codification Date:** 2026-10-03  
 **Primary Canonical Owner:** [`assistant-and-conversations.md`](../01_Domains/assistant-and-conversations.md)  
 **Related Specifications:** [`windows-host-and-notifications.md`](../04_Infrastructure/windows-host-and-notifications.md), [`voice-and-audio.md`](../01_Domains/voice-and-audio.md)
@@ -26,7 +26,7 @@ With multiple clients planned or supported (Flutter Desktop primary, React Web h
   - The client retrieves the completed state upon reconnecting via REST or SSE replay.
 - **Work Boundary Separation:**
   - **Client Responsibilities:** UI rendering, user input collection, local audio capture/playback hardware control, and native toast presentation.
-  - **Runtime Responsibilities:** Model management, local LLM/VLM inference, tool policy execution, memory extraction/retrieval, speech recognition (`whisper.cpp`), speech synthesis (`Kokoro-82M`), and background scheduling.
+  - **Runtime Responsibilities:** Model management, local LLM/VLM inference, tool policy execution, memory extraction/retrieval, speech recognition, speech synthesis, and background scheduling.
 
 ## Consequences
 - Clean separation allows clients in Dart/Flutter, TypeScript/React, or Kotlin/Android to interact with the runtime interchangeably.

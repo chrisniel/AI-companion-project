@@ -15,7 +15,7 @@ The AI Companion project maintains a strict test-first verification discipline. 
 | Subsystem | Test Framework | Test Location | Primary Scope |
 | :--- | :--- | :--- | :--- |
 | **Backend** | `pytest` + `httpx` + `pytest-asyncio` | `backend/tests/` | REST/SSE endpoints, memory, tasks, storage roots, models, auth, attachments, media resolver |
-| **Flutter Desktop** | `flutter_test` | `frontend/desktop/test/` | Windows desktop shell, tray lifecycle, navigation rail, widgets, voice audio UI |
+| **Flutter Desktop** | `flutter_test` | `(FUTURE/TARGET path TBD)` | (Target - Not Yet Scaffolded) Windows desktop shell, tray lifecycle, navigation rail, widgets, voice audio UI |
 | **React Web** | `vitest` + React Testing Library | `frontend/web/src/` | Developer test harness, components, state hooks, control panels, soft-glass rendering |
 | **Android** | `JUnit4` + `Robolectric` + `Roborazzi` | `android/app/src/test/` | ViewModels, repository contracts, MVI state flow, Compose UI screenshot regression |
 | **Contract** | Python drift detection script | `contracts/openapi/` | OpenAPI 3.1 schema equality between FastAPI routes and committed specification |
@@ -26,7 +26,22 @@ The AI Companion project maintains a strict test-first verification discipline. 
 The project distinguishes two complementary verification tiers:
 
 - **Level 1 — Automated Scoped CI (Code, Contract & Build Gatekeeper):** Fast, deterministic automated checks running at configured integration boundaries. Covers unit tests, component tests, static typing, build verification, and OpenAPI contract drift detection. Automated CI provides repeatable code-level protection, but cannot substitute for integrated release acceptance.
-- **Level 2 — Golden PC V1 Acceptance Checklist (Release Gatekeeper):** Comprehensive, end-to-end companion verification path proving seamless operation across the **14 Golden Acceptance Checkpoint Groups** covering all mandatory PC V1 capabilities (defined in [`SYSTEM_BASELINE.md §8`](../04_Architecture/SYSTEM_BASELINE.md#8-golden-pc-v1-acceptance-checkpoint-groups)). Evaluates real Windows host processes, physical/virtual audio devices, native OS notifications, user interactive journeys, and restart/restore persistence that headless CI environments cannot fully simulate. Passing the Golden Gate is the mandatory prerequisite for tagging a PC V1 release.
+- **Level 2 — Golden PC V1 Acceptance Checklist (Release Gatekeeper):** Comprehensive, end-to-end companion verification path proving seamless operation across the **14 Golden Acceptance Checkpoint Groups** covering all mandatory PC V1 capabilities (defined in [`SYSTEM_BASELINE.md §5`](../04_Architecture/SYSTEM_BASELINE.md#5-golden-pc-v1-acceptance-gate-14-verification-groups)). Evaluates real Windows host processes, physical/virtual audio devices, native OS notifications, user interactive journeys, and restart/restore persistence that headless CI environments cannot fully simulate. Passing the Golden Gate is the mandatory prerequisite for tagging a PC V1 release.
+
+- G1 Installation / startup / process lifecycle
+- G2 Account / multi-Profile / privacy isolation
+- G3 Runtime / models / D6
+- G4 Conversation / durable queues / multimodal
+- G5 Character / Personality / Emotion
+- G6 Memory / historical continuity
+- G7 Typed actions / D9 policy
+- G8 Scheduler / native notifications
+- G9 Voice / real barge-in
+- G10 Current information / web security
+- G11 Local-only + optional cloud
+- G12 Low-Impact / Gaming
+- G13 Backup / deletion / restore / Factory Reset
+- G14 Remote client + final resilience
 
 ---
 
@@ -58,7 +73,7 @@ python scripts/check_openapi_contract.py --write
 ```
 
 ### C. Flutter Desktop Verification (Primary Client)
-From `frontend/desktop/` (once scaffolded):
+From the Flutter target path (FUTURE/TARGET, once scaffolded):
 
 ```powershell
 # 1. Run static analysis
@@ -105,16 +120,17 @@ The automated GitHub Actions workflow is defined in [`.github/workflows/ci.yml`]
 
 ### 3.2 Target Event Matrix & Cost-Conscious CI Governance (P25)
 
-To eliminate redundant runner minute consumption while hardening release integrity, the project adopts the following CI event policy:
+To eliminate redundant runner minute consumption while hardening release integrity, the project adopts the following CI event policy as the future target:
 
 | Git Event / Trigger | Target Execution Policy | Governance Rationale |
 | :--- | :--- | :--- |
-| **Push to `feature/**`** | **No automatic heavy full CI by default.** | Primary verification occurs locally via developer execution of targeted suites. Prevents burning expensive runner minutes on rapid, WIP feature commits. |
-| **Pull Request → `develop`** | **No heavy full CI by default.** | Avoids triplicating full verification across feature push, develop PR, and develop push. Full verification runs on integration. |
-| **Push to `develop`** | **Run full required verification.** | Primary integration gatekeeper for merged code. Safe docs-only push skip optimization permitted where proven safe. |
-| **Pull Request → `master`** | **Run full required verification.** | Critical release boundary. Must pass completely before merge approval. No skip or paths-ignore allowed. |
-| **Push to `master`** | **Run full required verification.** | Production baseline verification. Required before any release packaging. |
-| **`workflow_dispatch`** | **Full CI available on demand.** | Allows manual, explicit invocation of the full CI pipeline on any branch. |
+| **Push `feature/**`** | **No automatic heavy full CI.** | Primary verification occurs locally. Prevents burning expensive runner minutes on rapid, WIP feature commits. |
+| **Pull Request → `develop`** | **Path-aware / scoped CI.** | Targets verification strictly to the subsystems modified in the PR diff (e.g., frontend only, backend only). |
+| **Push to `develop`** | **Scoped integration CI.** | Primary integration gatekeeper for merged code, verifying interacting subsystems modified since the last passing baseline. |
+| **Pull Request → `master`** | **Full PC V1 CI.** | Critical release boundary. Must pass completely before merge approval. No skip or paths-ignore allowed. |
+| **Push to `master`** | **Full PC V1 CI.** | Production baseline verification. Required before any release packaging. |
+| **`workflow_dispatch`** | **Full CI anywhere.** | Allows manual, explicit invocation of the full pipeline on any branch. |
+| **Docs-only** | **Verified lightweight documentation/integrity lane.** | Extremely fast validation for `.md`/repo docs without triggering full test suites. |
 
 ### 3.3 Runner Cost Governance
 - **Windows Runner Parity:** Windows runner execution reflects host-runtime parity for the Windows-first PC V1 platform.

@@ -1,12 +1,15 @@
 # Privacy, Retention, and Audit Architecture
 
 > **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Aligned with Decisions D1–D16, ADR-0018)  
-> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D16. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for privacy, retention lifecycles, and auditing.
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0018)  
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for privacy, retention lifecycles, and auditing.
 
 ---
 
 ## 1. Purpose & Scope
+
+- **Deletion Invariant:** Known tombstones prevent silent resurrection. Exact tombstone storage mechanism remains implementation-open.
+
 
 This specification defines the privacy preservation principles, data retention lifecycles, and security auditing requirements for the AI Companion:
 - Data minimization and user-controlled deletion ("forget" capabilities).
@@ -23,8 +26,8 @@ This specification defines the privacy preservation principles, data retention l
 
 - **Data Minimization:** The companion collects, retains, and transmits only the minimal data necessary to fulfill conversational and functional duties.
 - **Explicit User Deletion Authority:** Users must have appropriate inspect, correct, delete, and forget controls over Profile-owned personal data across all domain models (conversations, memories, tasks, attachments). Deletion operations do not promise immediate permanent hard deletion across every domain, cache, and backup snapshot; exact soft-delete vs. hard-purge lifecycles remain governed by explicit retention and privacy policy.
-- **Owner Isolation Invariant:** Deletion and purge operations must preserve authenticated ownership boundaries, either through direct owner filtering or through an already owner-authorized parent/resource relationship. A purge operation initiated by or on behalf of one user can never affect records belonging to another. Host-controlled maintenance jobs may operate across the single-primary-user database when explicitly designed as global maintenance.
-
+- **Owner Isolation Invariant:** Deletion/purge initiated for one Profile must never affect another Profile's private records.
+- **Host Maintenance:** Account-wide host maintenance may operate across Profiles only when explicitly designed as host maintenance, while preserving strict Profile privacy and never exposing one Profile's private content to another companion session. 
 ### 2.2 Privacy-Safe Auditing Invariants
 
 - **Auditable State Mutations (Principle P1):** Tool executions and companion actions that modify system state, access external networks, or perform elevated operations require deterministic, auditable action governance where required by policy.
@@ -106,9 +109,9 @@ The following technical mechanisms remain open design for future technical speci
 
 ## 7. Canonical Relationships & Cross-Links
 
-- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D8, D9)
+- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, ADR-0018, Decision D9)
 - **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
-- **Tool Security & Deterministic Policy ADR:** [`docs/04_Architecture/decisions/ADR-0009-tool-security-and-deterministic-policy.md`](../decisions/ADR-0009-tool-security-and-deterministic-policy.md)
+- **Tool Security & Deterministic Policy ADR:** [`docs/04_Architecture/decisions/ADR-0010-d9-typed-tool-security-policy.md`](../decisions/ADR-0010-d9-typed-tool-security-policy.md)
 - **Master Planning Spine:** [`docs/02_Planning/00_Master/WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-IDENTITY-001`, `PC-ACTION-001`)
 - **Memory Domain Specification:** [`docs/04_Architecture/01_Domains/memory-and-personalization.md`](../01_Domains/memory-and-personalization.md)
 - **Multimodal Domain Specification:** [`docs/04_Architecture/01_Domains/multimodal-and-media.md`](../01_Domains/multimodal-and-media.md)

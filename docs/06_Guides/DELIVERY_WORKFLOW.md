@@ -70,16 +70,19 @@ For all non-trivial implementation, refactoring, or bug fixes, contributors and 
 ### Stage 6: CLOSURE
 - **Action:** Prepare delivery tracking updates.
 - **Tracker Updates:**
-  - Mark delivered items complete in the active [`docs/01_Tracking/task.md`](../01_Tracking/task.md).
+  - Mark delivered items complete in the branch active task (`docs/01_Tracking/active/task-[branch-slug].md`).
   - Surface any manual hardware verification steps (audio, physical device, GPU benchmarks) or known non-blocking issues.
   - Append an entry to [`CHANGELOG.md`](../../CHANGELOG.md) under `## [Unreleased]`.
 
 ### Stage 7: CLOSURE GATE & ARCHIVING
 - **Verification:** Independent check confirming:
-  - Tracker state matches independently verified code and documentation.
-  - Delivered scope matches approved requirements with zero unverified claims.
-- **Archiving:** Move completed sprint checklists into a dedicated archive file under `docs/01_Tracking/archive/task-[YYYY-MM-DD]-[feature-name].md`.
-- **Git Handoff:** Provide proposed Conventional Commit message to Chris.
+  - Branch tracking matches independently verified code, tests, contracts and documentation as applicable.
+  - Delivered scope matches approved requirements.
+  - No unverified capability or test result is claimed.
+  - Known blockers, deferred work, and manual/hardware checks remain explicit.
+- **Same-Branch Closure:** Reconcile documentation/tracking on the same branch.
+- **Archiving:** Archive the branch active task to `docs/01_Tracking/archive/`.
+- **Git Handoff:** Prepare PR/squash handoff and provide a proposed Conventional Commit message.
 
 ---
 
@@ -101,6 +104,7 @@ To prevent both microscopic over-ceremony and unwieldy, unreviewable pull reques
 Chris owns all repository mutations. AI agents operate under a **Strict Read-Only Git Policy**:
 - **Prohibited Agent Commands:** `git add`, `git commit`, `git push`, `git merge`, `git rebase`, `git branch`, `git checkout`, `git switch`, `git tag`, `git stash`, `git reset`, `git restore`, and PR creation/merge.
 - **Permitted Agent Commands (Read-Only):** `git status`, `git diff`, `git log`, `git show`, `git rev-parse`, `git branch` (list only), `git worktree list`.
+- **Git Branch Preflight:** Before non-trivial edits, inspect the current Git branch (`git branch --show-current`). If on `develop` or `master`, STOP before editing. Recommend an appropriate task branch, ask Chris to create/switch/push it, and resume only after Chris confirms. Agents still perform no Git mutations.
 - **Handoff Mechanism:** When verification passes, the agent stops, displays command evidence, and supplies a formatted Conventional Commit proposal for Chris to review, commit, and push manually.
 
 ### 4.2 Conventional Commit Proposals
@@ -150,3 +154,9 @@ When a deliverable introduces new architectural patterns, complex workflows, or 
   - **Durable Architecture & Policies:** Document in **present tense** (*"operates"*, *"validates"*, *"owns"*).
   - **Planned Capabilities:** Document in **target/future wording** (*"target design"*, *"will support"*, *"planned"*).
   - **No Ephemeral State:** Never embed temporary branch names, volatile test run counts, or in-flight PR numbers into permanent canonical documentation.
+
+### PR & Integration Protocol
+- **Before PR:** Closure-ready branch tracking.
+- **PR:** Candidate CI/review evidence.
+- **Before merge:** Confirm required checks applicable to the delivery.
+- **After merge:** Read-only target-branch verification by default. Do not require a dedicated post-merge documentation commit.

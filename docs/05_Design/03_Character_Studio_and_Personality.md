@@ -27,18 +27,7 @@ The Character Studio is structured into three coordinated panels:
 
 ## 3. Eight Continuous Personality Traits
 
-Personality is defined by eight continuous, calibrated sliders on a scale of **0 to 100**:
-
-| Trait | Left (0) Endpoint | Right (100) Endpoint | Default | Visual Icon |
-| :--- | :--- | :--- | :--- | :--- |
-| **Warmth** | Reserved, clinical | Affectionate, deeply warm | 65 | Heart / Sun |
-| **Humor** | Serious, dry | Witty, playful, bantering | 50 | Sparkles |
-| **Formality** | Casual, slang-friendly | Academic, polite, structured | 40 | Tie / Book |
-| **Empathy** | Pragmatic, logical | Compassionate, emotionally attuned | 70 | Handshake |
-| **Directness** | Diplomatic, gentle | Candid, blunt, concise | 55 | Arrow |
-| **Curiosity** | Passive, answering only | Inquisitive, proactive questions | 60 | Compass |
-| **Playfulness** | Sedate, grounded | Whimsical, teasing, energetic | 45 | Dice |
-| **Patience** | Terse, quick-to-conclude | Tolerant, thorough, accommodating | 80 | Hourglass |
+Exactly eight continuous (0–100) dimensions: Warmth, Teasing, Guardedness, Directness, Expressiveness, Affection, Formality, Verbosity.
 
 ### Slider Interaction Design
 - Each slider features a real-time numerical indicator and descriptive tooltip describing how extreme positions manifest in speech.
@@ -48,18 +37,23 @@ Personality is defined by eight continuous, calibrated sliders on a scale of **0
 ---
 
 ## 4. Presets as Template Configurations
+  
+A prominent **"Load Preset Style"** dropdown allows users to load exactly these frozen presets:
+- Custom
+- Warm Companion
+- Playful
+- Formal Advisor
+- Tsundere
+- Kuudere
+- Dandere
+- Yandere
 
-A prominent **"Load Preset Style"** dropdown at the top of the personality panel allows users to quickly configure the eight sliders:
-- **Warm Companion:** High Warmth (85), High Empathy (80), Moderate Humor (60), Low Formality (30).
-- **Professional Assistant:** High Formality (85), High Directness (80), High Patience (85), Low Playfulness (15), Low Humor (20).
-- **Sarcastic Scholar:** High Humor (85), High Directness (75), High Curiosity (85), Moderate Warmth (40), Low Formality (35).
-- **Creative Collaborator:** High Playfulness (80), High Curiosity (90), Moderate Formality (40), High Warmth (70).
-
-*Behavioral Rule:* Selecting a preset **copies** the preset's baseline trait values into the active configuration. The user remains free to adjust any individual slider afterwards.
-
+*Behavioral Rule:* Selecting a preset **copies** the preset's initial trait values into the active configuration. All sliders remain fully editable. Do not invent rigid archetype behavior. Preset values use only the eight continuous traits (Warmth, Teasing, Guardedness, Directness, Expressiveness, Affection, Formality, Verbosity).
+  
 ---
-
+  
 ## 5. Immutable Neutral Assistant Fallback
+
 
 A prominent button and safety toggle labeled **"Reset to Neutral Assistant"** is permanently accessible:
 - Instantly sets all behavioral traits to a neutral, balanced baseline.

@@ -1,7 +1,7 @@
 # Flutter Production Windows Client
 
 **Status:** Accepted  
-**Decision ID:** D17  
+**Decision ID:** ADR-0017  
 **Codification Date:** 2026-10-03  
 **Primary Canonical Owner:** [`windows-host-and-notifications.md`](../04_Infrastructure/windows-host-and-notifications.md)  
 **Related Specifications:** [`SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md), [`voice-and-audio.md`](../01_Domains/voice-and-audio.md), [`ADR-0002`](ADR-0002-d1-pc-v1-release-boundary.md), [`ADR-0003`](ADR-0003-d2-windows-host-model.md)
@@ -28,7 +28,7 @@ Previously, React Web served as the primary interface accessed via a browser tab
 
 ## Consequences
 - Windows users receive a single coherent desktop application with background persistence and system tray integration.
-- Desktop UI development standardizes on Flutter and Dart, while backend ML/runtime logic remains in Python and C++ (`llama.cpp`, `whisper.cpp`).
+- Desktop UI development standardizes on Flutter and Dart, while backend ML/runtime logic remains in Python and C++ .
 - Web browser tab closures no longer disrupt background companion operations or audio sessions.
 - React Web remains maintained for rapid frontend testing, API verification, and headless/remote browser access.
 

@@ -1,41 +1,34 @@
 # Health and Wearables Integration Architecture
 
 > **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Aligned with Decisions D1–D16, ADR-0018)  
-> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D16. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for health, wellness, and wearable biometric integrations.
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0018)  
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for health, wellness, and wearable biometric integrations.
 
 ---
 
+> **Mobile Architecture Deferral:** Detailed mobile architecture is explicitly DEFERRED to a separate Mobile Architecture Pass. During the PC V1 pass, the current Kotlin health prototype and health/privacy research are preserved strictly as candidate input/evidence. Health Connect is a candidate/research input only until that pass.
+
 ## 1. Purpose & Scope
 
-This specification defines the integration architecture, data contracts, and privacy boundaries for health, wellness, and wearable biometric context:
-- Phased delivery distinguishing PC V1 schema readiness from Android V1 physical integration.
-- Android V1 platform integration with Android Health Connect.
-- Decoupling from proprietary wearable vendors and upstream companion apps.
-- Informational, non-clinical companion context boundaries.
-- User consent, data minimization, and privacy invariants.
+This specification documents the candidate integration architecture, data contracts, and privacy boundaries for future health, wellness, and wearable biometric context:
+- Preservation of current Kotlin mock/prototype evidence.
+- Establishment of health/privacy/non-clinical guardrails as candidate future principles.
+- Explicit deferral to a separate Mobile Architecture Pass.
 
 ---
 
 ## 2. Durable Architecture & Invariants
 
-### 2.1 Phased Delivery Boundaries (PC V1 vs. Android V1)
+### 2.1 Explicit Mobile Deferral
 
-In accordance with the Feature Promotion Map:
-- **PC V1: Health-Context Ready Architecture:** Classified as `APPROVED / NOT STARTED / PC V1`. PC V1 establishes health-context/data-contract readiness and the semantic boundaries required to receive appropriately summarized wellness context. **PC V1 does NOT directly connect to physical wearables or Bluetooth biometric sensors.**
-- **Android V1: Android Health Connect Integration:** Classified as `APPROVED / NOT STARTED / ANDROID V1`. Physical collection of biometric context occurs via the Android Companion device leveraging Android's platform-standard Health Connect API.
+- **Deferred Architecture:** There is no frozen Android V1 or PC V1 health integration. Health Connect, PC backend readiness, and mobile health persistence are deferred. Health Connect remains a candidate research input.
 
-### 2.2 Platform Integration & Wearable Decoupling (Android V1)
+### 2.2 Candidate Privacy & Non-Clinical Invariants
 
-- **Approved Android V1 Platform Integration:** Android V1 uses Health Connect as its approved platform integration, providing a vendor-decoupled path for supported wearable data. Upstream wearable vendors and companion apps remain replaceable.
-- **No Vendor-Specific Dependency in Android V1:** Android V1 does not require vendor-specific SDKs or direct Bluetooth Low Energy (BLE) integrations with proprietary wearable hardware. Android V1 reads metrics from Health Connect subject to explicit Android OS permissions.
-- **Future Integration Boundary:** Future additional or vendor-specific integrations require separate human review and approval; they are not permanently prohibited, but are not part of Android V1.
-
-### 2.3 Non-Clinical & Privacy Invariants
-
+If health integration is pursued in the future, it must follow these candidate principles:
 - **Informational Companion Context Only:** Health metrics serve solely to provide empathetic, contextual awareness for the companion. The companion makes **no clinical, medical, or diagnostic claims**.
 - **Explicit User Authorization:** Ingestion of biometric data requires active, informed user consent. Users may selectively grant or revoke access to individual metric categories at any time.
-- **Data Minimization:** Health-context processing follows data minimization: the companion should request, process, and retain no more health data or granularity than required for the approved companion capability and user authorization. Exact metric granularity, aggregation windows, and persistence representation remain open design. Raw or high-frequency health data must not be silently persisted or used without a separately approved need and explicit user authorization.
+- **Data Minimization:** Health-context processing follows data minimization: the companion should request, process, and retain no more health data or granularity than required for the approved companion capability and user authorization. Raw or high-frequency health data must not be silently persisted or used without a separately approved need and explicit user authorization.
 
 ---
 
@@ -46,17 +39,8 @@ Repository source code establishes the following baseline reality:
 ### 3.1 Android Provider Interface & UI Foundation
 
 Verified in `android/app/src/main/java/com/example/`:
-- **Interface Contract (`HealthDataProvider`):** Located at `data/health/HealthDataProvider.kt`, defines an abstract contract with exact properties and methods:
-  - `val providerId: String`
-  - `val providerDisplayName: String`
-  - `fun getSourceStatus(): HealthSourceStatus`
-  - `fun getHealthMetrics(timeRange: HealthTimeRange): List<HealthMetric>`
-  - `fun getWellnessInsights(timeRange: HealthTimeRange): List<WellnessInsight>`
-  - `fun observeSourceStatus(): Flow<HealthSourceStatus>`
-  - `fun observeHealthMetrics(timeRange: HealthTimeRange): Flow<List<HealthMetric>>`
-  - `fun observeWellnessInsights(timeRange: HealthTimeRange): Flow<List<WellnessInsight>>`
-  - `suspend fun triggerSync()`
-- **Mock Implementation (`MockHealthDataProvider`):** Located at `data/health/MockHealthDataProvider.kt`, supplies synthetic biometric values across selectable availability profiles (`STANDARD_DEFAULT`, `ALL_AVAILABLE`, `STALE_SYNC`, `UNSUPPORTED_SENSOR`, `NOT_SYNCHRONIZED`).
+- **Interface Contract (`HealthDataProvider`):** Located at `data/health/HealthDataProvider.kt`, defines an abstract contract with exact properties and methods.
+- **Mock Implementation (`MockHealthDataProvider`):** Located at `data/health/MockHealthDataProvider.kt`, supplies synthetic biometric values across selectable availability profiles.
 - **Health UI & ViewModel:** `ui/screens/health/HealthScreen.kt` and `HealthViewModel.kt` render biometric dashboards (heart rate, sleep, steps, SpO2) driven by the provider interface.
 - **Testing Coverage:** Unit tests in `AccessibilityAndDeviceAuditTest.kt` and `HealthAndWellnessUnitTest.kt` verify UI rendering and profile switching against the mock provider.
 
@@ -70,34 +54,24 @@ Verified in `android/app/src/main/java/com/example/`:
 
 ## 4. Approved Target Architecture / Not Yet Implemented
 
-When implemented across target milestones:
-
-1. **PC V1 Backend Readiness:**
-   - Capability- and data-contract readiness for receiving and injecting summarized wellness context into companion conversational turns.
-   - Decoupled contracts enabling health context ingestion without locking storage schemas prematurely.
-2. **Android V1 Production Integration:**
-   - Platform integration with Android Health Connect to read authorized user health records and transfer summarized health metrics to the PC Local AI Runtime during connected synchronization sessions.
-   - Declarative permission requests for reading supported health records (such as sleep sessions, heart rate records, and step counts).
+All health architecture is **DEFERRED** to the Mobile Architecture Pass. 
+There are no approved health integration targets for PC V1.
 
 ---
 
 ## 5. OPEN DESIGN
 
-The following functional and technical mechanisms remain open design for future implementation plans:
+All functional and technical mechanisms for health integration remain open design for the future Mobile Architecture Pass, including:
 
-- **PC V1 Persistence & Injection Mechanisms:** Exact Pydantic persistence models, database tables, storage schema, and prompt-injection hooks on the PC host.
-- **Android V1 Provider & Aggregation Design:** Exact provider class name, metric set, aggregation cadence, and sync protocol details.
-- **Metric Set & Granularity:** Final list of supported metric types (e.g., resting heart rate, sleep duration/stages, step counts, active energy burned, SpO2) and aggregation intervals (hourly averages vs. daily rollups).
-- **Sync Cadence & Thresholds:** Frequency and trigger mechanisms for syncing mobile health data to the PC host (e.g., once daily on morning companion wake, on-demand during companion check-ins, or scheduled background sync).
-- **Health-Memory Interaction:** Policy governing whether notable health events (e.g., "recovered from a cold", "completed a marathon") are selectively converted into persistent memory notes.
-- **Permission & Revocation UX:** User interface controls on both Android and PC for granular metric toggling, data inspection, and instant biometric history purging.
-- **Upstream Source Mapping:** UI heuristics for informing the user if their proprietary wearable app is properly syncing into Health Connect.
+- **Persistence & Injection Mechanisms:** Storage schema and prompt-injection hooks on the PC host.
+- **Provider & Aggregation Design:** Exact provider class names, metric sets, aggregation cadences, and sync protocol details.
+- **Permission & Revocation UX:** User interface controls for granular metric toggling, data inspection, and biometric history purging.
 
 ---
 
 ## 6. Security & Ownership Boundaries
 
-- **Application Trust Boundary:** Health context synchronized to PC remains Profile-owned (`profile_id`) local data protected by the application trust boundary.
+- **Application Trust Boundary:** If health context is synchronized to PC in the future, it must remain Profile-owned (`profile_id`) local data protected by the application trust boundary.
 - **Cloud Fallback Privacy Rule:** When optional Cloud LLM fallback is used, health data must not be included in cloud egress without explicit user authorization and applicable privacy policy.
 - **Informational / Non-Clinical Use:** Health metrics serve solely to provide empathetic, contextual awareness for the companion without making medical or diagnostic claims.
 

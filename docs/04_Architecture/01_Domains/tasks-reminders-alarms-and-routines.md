@@ -1,8 +1,8 @@
 # Tasks, Reminders, Alarms, and Routines Architecture
 
 > **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Aligned with Decisions D1–D16, ADR-0010, ADR-0018)  
-> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D16. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for tasks, reminders, alarms, and routines.
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0011, ADR-0018)  
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for tasks, reminders, alarms, and routines.
 
 ---
 
@@ -14,13 +14,13 @@ This specification defines the domain semantics, lifecycle models, scheduling ru
 - Time-critical scheduled acoustic/visual alerts (Alarms)
 - Recurring proactive companion check-ins (Routines)
 
-It governs the boundary between personal productivity state and autonomous scheduler behaviors under the PC Windows Host Runtime.
+It governs the boundary between personal productivity state and autonomous scheduler behaviors under the PC Local AI Runtime.
 
 ---
 
 ## 2. Durable Architecture & Invariants
 
-### 2.1 Distinct Conceptual Entities (Decision D10 & ADR-0010)
+### 2.1 Distinct Conceptual Entities (Decision D10 & ADR-0011)
 
 Tasks, Reminders, Alarms, and Routines are architecturally distinct concepts governed by Decision D10:
 
@@ -41,7 +41,7 @@ Tasks, Reminders, Alarms, and Routines are architecturally distinct concepts gov
    - Wake behavior from host sleep is strictly best-effort; architecture acknowledges there is no universal ACPI, OS, or firmware wake guarantee across all PC hardware.
 4. **Routine:**
    - A bounded, recurring companion check-in or interaction pattern (e.g., morning overview, evening wind-down).
-   - Governed by a deterministic `SchedulerService` in the Windows Host Runtime that decides *when* and *what* intent triggers.
+   - Governed by a deterministic `SchedulerService` in the Local AI Runtime that decides *when* and *what* intent triggers.
    - Companion character persona modulates *how* the resulting proactive check-in is phrased; the generative LLM does **not** possess unrestricted self-scheduling authority.
    - Respects quiet hours by default.
 
@@ -62,6 +62,37 @@ When productivity tools are invoked via conversational or autonomous flows:
 - Irreversible deletions, bulk modifications, or external communication actions mandate explicit confirmation.
 
 ---
+
+### 2.4 Scheduler & Native Notification Ownership
+
+The separation of scheduling truth and OS presentation is strictly partitioned:
+
+- **Runtime Owns Truth & Backlog:** The background Runtime SchedulerService acts as the exclusive source of time and domain truth. It persists due events and the notification backlog.
+- **Flutter Owns Presentation:** The Flutter client owns native Windows notification presentation (Toasts).
+- **Background Presentation Resilience:** As long as the Flutter tray/presentation client is running, native delivery continues regardless of whether a browser or React dashboard is closed.
+- **Explicit Quit Semantics:** If the Flutter process is explicitly quit by the user, the Runtime remains alive, keeps events durable in the backlog, and presentation pauses until a presentation client returns to deliver catch-up notifications.
+
+
+
+### 2.5 Frozen Scheduling Semantics
+
+- **Authority:** `SchedulerService` is the persistent Runtime authority.
+- **Timezone Awareness:** Recurrence is timezone aware. Profile-local recurring time (e.g. "9 AM wherever I am") and fixed-timezone recurring time (e.g. "9 AM EST") are distinct concepts.
+- **Reconciliation Triggers:** Restart, wake, system clock changes, or timezone changes trigger scheduler reconciliation.
+- **Natural Language Parsing:** Natural-language schedule input is normalized into structured, committed schedule state.
+
+### 2.6 Missed Event Policies
+
+- **Reminders:** Missed reminder policy uses bounded useful catch-up / staleness.
+- **Alarms:** Alarm missed state is explicit; configurable grace may alert immediately.
+- **Routines:** Stale Routine occurrences normally skip, collapse, or catch-up-once rather than replaying every missed occurrence.
+- **Snooze:** Snooze applies to an occurrence, not uncontrolled entity duplication.
+
+### 2.7 Routine Security & Presentation
+
+- **Routine Security:** Creating or materially expanding a Routine is a **Risk 2** action. Routines have a bounded capability envelope and cannot self-modify their own permissions.
+- **Enrichment:** LLM provides presentation/enrichment, not schedule authority. Gaming/Low-Impact mode may defer enrichment but never compromises scheduler correctness.
+- **Notification Ownership:** The Local AI Runtime persists Due Events and the backlog; the Flutter client owns Windows native presentation.
 
 ## 3. Current Verified Implementation
 
@@ -136,7 +167,7 @@ The normative architecture for D10 is frozen. The following implementation-level
 
 ## 6. Security & Ownership Boundaries
 
-- **Profile Ownership:** All Tasks, Reminders, Alarms, and Routines are strictly owned by the primary Profile (`profile_id`, migrated from `owner_id`).
+- **Profile Ownership:** All Tasks, Reminders, Alarms, and Routines are strictly owned by the owning/authenticated Profile (`profile_id`, migrated from `owner_id`).
 - **Cross-Character Invariant:** Characters do not own productivity data. Switching active character personas does not alter, hide, or reattribute task or schedule records.
 - **Tool Execution Boundary:** LLM assistant access to task modification tools operates under deterministic profile policy; destructive permanent deletes require explicit user confirmation.
 
@@ -145,7 +176,7 @@ The normative architecture for D10 is frozen. The following implementation-level
 ## 7. Canonical Relationships & Cross-Links
 
 - **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decision D10)
-- **Productivity & Scheduler ADR:** [`docs/04_Architecture/decisions/ADR-0010-productivity-entity-semantics-and-scheduler-architecture.md`](../decisions/ADR-0010-productivity-entity-semantics-and-scheduler-architecture.md)
+- **Productivity & Scheduler ADR:** [`docs/04_Architecture/decisions/ADR-0011-d10-scheduling-and-notification-semantics.md`](../decisions/ADR-0011-d10-scheduling-and-notification-semantics.md)
 - **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
 - **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Decision D10), [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-SCHED-001`, `PC-SCHED-002`)
 - **Windows Host Infrastructure:** [`docs/04_Architecture/04_Infrastructure/windows-host-and-notifications.md`](../04_Infrastructure/windows-host-and-notifications.md)

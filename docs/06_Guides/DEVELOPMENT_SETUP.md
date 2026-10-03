@@ -14,7 +14,7 @@ Before developing locally, ensure the following prerequisites are installed and 
 | :--- | :--- | :--- |
 | **Operating System** | Windows 10/11 64-bit | Primary host platform for Local AI Runtime and hardware acceleration. |
 | **Python** | 3.11.x 64-bit | Required for FastAPI backend and migration tools (`python --version`). |
-| **Flutter SDK** | 3.27+ (Dart 3.6+) | Required for primary Windows Desktop client (`flutter --version`). |
+| **Flutter SDK** | Version will be officially pinned when scaffolded (PC-CLIENT-001) | Required for primary Windows Desktop client (`flutter --version`). |
 | **Visual Studio Build Tools** | 2022 (with Desktop C++) | Required by Flutter for compiling native Windows C++/CMake executables. |
 | **Node.js** | 22.x LTS (with npm) | Required for React Web developer harness (`node --version`, `npm --version`). |
 | **Git & Git LFS** | Latest 64-bit | LFS pointers on GitHub; weights stored on private Hugging Face dataset. |
@@ -30,7 +30,6 @@ The repository is structured into distinct subsystem trees:
 ```text
 AI-companion-project/
 ├── backend/            # FastAPI Local AI Runtime (Python 3.11, SQLAlchemy 2, Alembic)
-├── frontend/desktop/   # Flutter Windows Desktop Client (Primary production client for PC V1)
 ├── frontend/web/       # React 19 Web Client (Supported developer harness and test oracle)
 ├── android/            # Android Mobile Companion Client (Prototype / reference client)
 ├── contracts/openapi/  # Canonical OpenAPI contract (openapi.json)
@@ -63,8 +62,8 @@ In accordance with Phase 8P persistent storage architecture, repository director
 - `INSTALLED_REGISTRY_PATH`: `<LIBRARY_ROOT>/registry/models.json` — Authoritative Model Registry Schema v3
 - `VOICE_LIBRARY_DIR`: `<LIBRARY_ROOT>/voices` — Voice models and synthesis profiles
 - `ATTACHMENT_DIR`: `<DATA_ROOT>/attachments` — Multimodal image attachments
-- `IMPORT_INBOX_DIR`: `<DATA_ROOT>/imports/inbox` — Model import drop inbox (Decision D6)
-- `IMPORT_STAGING_DIR`: `<DATA_ROOT>/imports/staging` — Preflight validation and quarantine staging (Decision D6)
+- `IMPORT_INBOX_DIR`: TARGET PC V1: `<LIBRARY_ROOT>/imports/inbox` (CURRENT implementation: `<DATA_ROOT>/imports/inbox`) — Model import drop inbox (Decision D6)
+- `IMPORT_STAGING_DIR`: TARGET PC V1: `<LIBRARY_ROOT>/imports/staging` (CURRENT implementation: `<DATA_ROOT>/imports/staging`) — Preflight validation and quarantine staging (Decision D6)
 - `CHARACTER_DIR`: `<DATA_ROOT>/characters` — Character cards and persona definitions
 - `BACKUP_DIR`: `<DATA_ROOT>/backups` — Persistent database backup location
 
@@ -108,7 +107,7 @@ In a separate terminal:
 
 ```powershell
 # 1. Navigate to desktop client directory
-cd frontend/desktop
+cd [target_flutter_path] # FUTURE/TARGET: Path TBD during PC-CLIENT-001
 
 # 2. Fetch Flutter packages
 flutter pub get
@@ -154,7 +153,7 @@ npm run dev
 
 ### Speech & Voice Engines (PC V1 Target)
 - **Speech-to-Text (STT):** `whisper.cpp` candidate binary managed by runtime for local transcription.
-- **Text-to-Speech (TTS):** `Kokoro-82M` ONNX candidate model executing on CPU/RAM.
+- **Text-to-Speech (TTS):** `Kokoro-82M` candidate model executing on CPU/RAM.
 
 ---
 

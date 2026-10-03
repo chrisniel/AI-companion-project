@@ -26,7 +26,7 @@ Documentation in this repository follows a strict hierarchy of authority. Each d
 | **Source Code, Contracts, & Tests** | *What exists right now?* | Authoritative for implemented reality, runtime behavior, and verified test assertions. |
 | **Architecture (`docs/04_Architecture/`)** | *What should be true?* | Authoritative for durable semantics, trust boundaries, persistence invariants, and approved target capabilities. |
 | **Design (`docs/05_Design/`)** | *How do people see and interact with it?* | Defines user experience, interface presentation, visual language, and interaction flows. Cross-references Architecture; cannot redefine system authority. |
-| **Product Roadmap (`docs/02_Planning/ROADMAP.md`)** | *When should capabilities ship?* | Defines release milestones, platform delivery phasing (e.g., PC V1 vs. Android V1), and sequencing. |
+| **Product Roadmap (`docs/02_Planning/00_Master/DELIVERY_INDEX.md`)** | *When should capabilities ship?* | Defines release milestones, platform delivery phasing (e.g., PC V1 vs. Android V1), and sequencing. |
 | **Task Tracker (`docs/01_Tracking/task.md`)** | *What is actively being worked on now?* | Tracks current execution state, active sub-slices, and immediate blockers. |
 | **Implementation Plans (`docs/02_Planning/`)** | *How will approved work be built?* | Feature-specific technical execution plans, step-by-step logic, and verification criteria. |
 | **Walkthroughs (`docs/03_Walkthroughs/`)** | *What was delivered at a point in time?* | Point-in-time delivery records and historical verification evidence. Ignored during normal startup. |
@@ -60,7 +60,7 @@ docs/04_Architecture/
    - **Multimodal and media:** Message image attachments, multimodal vision understanding, and media metadata ([`01_Domains/multimodal-and-media.md`](01_Domains/multimodal-and-media.md)).
    - **Android Companion:** Connected synchronization protocol, offline LLM execution boundaries, and mobile companion behavior ([`01_Domains/android-companion.md`](01_Domains/android-companion.md)).
 2. **`02_Data_and_Security/` (Data & Security Architecture):**
-   - **Profiles and devices:** Identity boundaries, device registration, and single-primary-user baseline ([`02_Data_and_Security/profiles-and-devices.md`](02_Data_and_Security/profiles-and-devices.md)).
+   - **Profiles and devices:** Identity boundaries, device registration, and multi-profile architecture ([`02_Data_and_Security/profiles-and-devices.md`](02_Data_and_Security/profiles-and-devices.md)).
    - **Authentication and secrets:** Credential isolation, token handling, and trusted network boundaries ([`02_Data_and_Security/authentication-and-secrets.md`](02_Data_and_Security/authentication-and-secrets.md)).
    - **Tool permissions and actions:** Risk tiers, deterministic policy evaluation (`ALLOW` / `CONFIRM` / `DENY`), and elevated action restrictions ([`02_Data_and_Security/tool-permissions-and-actions.md`](02_Data_and_Security/tool-permissions-and-actions.md)).
    - **Privacy / retention / audit:** Data minimization, user consent, audit logging, and deletion policies ([`02_Data_and_Security/privacy-retention-and-audit.md`](02_Data_and_Security/privacy-retention-and-audit.md)).
@@ -71,7 +71,7 @@ docs/04_Architecture/
    - **Future external / device integrations:** Explicitly evaluated and approved future service connections *(planned)*.
    *(Boundary note: Voice/audio pipelines and the Android Companion are core experience domains owned by `01_Domains/`, not external integrations.)*
 4. **`04_Infrastructure/` (Host Runtime, Hardware & Platform):**
-   - **Runtime and models:** Local LLM inference via llama.cpp / ONNX, hardware offloading profiles, model management, and optional cloud fallback ([`04_Infrastructure/runtime-and-models.md`](04_Infrastructure/runtime-and-models.md)).
+   - **Runtime and models:** Local LLM inference via llama.cpp, hardware offloading profiles, model management, and optional cloud fallback ([`04_Infrastructure/runtime-and-models.md`](04_Infrastructure/runtime-and-models.md)).
    - **Storage and assets:** Host filesystem paths, application asset storage, and database migration mechanics ([`04_Infrastructure/storage-and-assets.md`](04_Infrastructure/storage-and-assets.md)).
    - **Windows host and notification infrastructure:** Native OS notification delivery, background autostart at login, and host lifecycle ([`04_Infrastructure/windows-host-and-notifications.md`](04_Infrastructure/windows-host-and-notifications.md)).
    - **Practical backup / recovery:** Database snapshot and asset recovery mechanisms for PC V1 ([`04_Infrastructure/backup-recovery-and-diagnostics.md`](04_Infrastructure/backup-recovery-and-diagnostics.md)). *(Note: A full Diagnostics / Recovery Center is an exploratory recommendation and is NOT an approved PC V1 capability.)*

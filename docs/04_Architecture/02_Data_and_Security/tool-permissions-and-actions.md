@@ -1,8 +1,8 @@
 # Tool Permissions and Actions Architecture
 
 > **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Aligned with Decisions D1–D16, ADR-0009, ADR-0018)  
-> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D16. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for tool permissions, deterministic policy, and action execution.
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0010, ADR-0018)  
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for tool permissions, deterministic policy, and action execution.
 
 ---
 
@@ -52,7 +52,7 @@ Risk tiers represent a conceptual architecture for categorizing operations, **no
 
 ### 2.4 Unrestricted OS Shell Prohibited
 
-In accordance with the Feature Promotion Map (**Generic Shell / OS Administration**):
+In accordance with Decision D9:
 - **Classification:** `REJECTED / NOT STARTED / N/A`.
 - **Policy Invariant:** Unrestricted command-line shell execution (e.g., arbitrary `cmd.exe`, PowerShell, Bash, raw OS process spawning, unrestricted filesystem traversal, credential access, or security reconfiguration) is **strictly prohibited** as a generic assistant tool.
 - **No PC Later Promotion:** Generic shell tools must **NOT** be classified as `PC LATER` or scheduled for future delivery.
@@ -60,7 +60,7 @@ In accordance with the Feature Promotion Map (**Generic Shell / OS Administratio
 
 ### 2.5 Interactive Browser Automation Phasing
 
-In accordance with the Feature Promotion Map (**Interactive Browser Automation**):
+In accordance with Decision D9:
 - **Classification:** `APPROVED / NOT STARTED / PC LATER`.
 - **Scope Distinction:** Programmatic browser interaction (e.g., automated form submission, checkout flows, authenticated sessions via Playwright) is classified as a post-PC-V1 capability. It is architecturally separate from read-only search and fetch (PC V1).
 
@@ -75,9 +75,29 @@ To ensure user agency and safe runtime intervention during tool execution, the a
   4. *Global Tool Kill-Switch:* A master administrative toggle enabling the user to immediately disable all autonomous or external tool execution across the entire runtime.
 - **Cancellation vs. Rollback Boundary:** Cancellation halts further execution and terminates pending work. When supported by the adapter, cooperative cancellation signals are dispatched to in-flight tasks. However, the architecture strictly recognizes that **cancellation cannot promise rollback of an already-committed external side effect** (e.g., an external HTTP mutation already processed by a remote server, an external webhook triggered, or an irreversible physical/network transmission).
 - **Implementation Status:** Like the conversational tool engine itself, these emergency control mechanisms represent target governance architecture and are **NOT IMPLEMENTED** in the current runtime.
-- **Open Design Parameters:** Exact API endpoints, cancellation token plumbing, frontend UI controls (such as emergency stop buttons), transport signaling, persistence of global kill-switch state, and user notification/recovery workflows remain open design.
+- **Open Design Parameters:** Exact API endpoints, cancellation token plumbing, frontend UI controls (such as emergency stop buttons), transport signaling, and user notification/recovery workflows remain open design.
 
 ---
+
+### 2.7 Frozen D9 Tool Execution Policy
+
+The following semantics codify the frozen D9 execution requirements for PC V1:
+
+- **Intent Provenance:** Every tool invocation MUST possess an intent provenance tag: EXPLICIT_USER, COMPANION_SUGGESTED, APPROVED_ROUTINE, SYSTEM_RECOVERY, or EXTERNAL_CONTENT.
+- **Policy Evaluation:** The execution policy evaluates: risk tier, intent provenance, Profile/session authority, domain, state, and resource/cost/privacy limits.
+- **Risk Behavior Semantics:**
+  - **Risk 0 (Read-Only):** May execute automatically if enabled/authorized.
+  - **Risk 1 (Reversible/Low-Impact):** Explicit-user Risk 1 operations may auto-execute when enabled and policy permits. Companion-suggested Risk 1 requires explicit acceptance unless covered by an approved bounded Routine.
+  - **Risk 2 (State-Changing):** Enabled means the capability is available, but explicit confirmation remains the V1 default. If OFF, it is strictly denied.
+  - **Risk 3 (Generic Unrestricted OS/Shell):** Strictly rejected and architecturally locked.
+- **Confirmation Binding:** Confirmation signatures MUST bind: action, target, parameters, Profile, session, expiry, and fingerprint. Material parameter changes invalidate the confirmation.
+- **Conversational Confirmation:** One unambiguous pending ordinary action may be conversationally confirmed. An ambiguous "yes" is insufficient.
+- **Zero Inherent Authority:** External web/file/history/memory content has zero authorization authority. Local and cloud models have equal zero inherent authority.
+- **Kill Switch Persistence:** The Global Tool Kill Switch MUST persist across Runtime restarts until explicitly re-enabled. Kill-switch persistence is NOT open design.
+- **Multi-Step Plans:** Multi-step plans remain bounded; each state-changing step is independently policy-checked.
+- **Success Criteria:** Success may be claimed only after backend-confirmed execution (not immediately upon intent generation).
+- **Open Design:** The exact API, DB, and UI representation of these policies remains open.
+
 
 ## 3. Current Verified Implementation
 
@@ -128,7 +148,7 @@ The following technical mechanisms remain open design for future technical speci
 ## 7. Canonical Relationships & Cross-Links
 
 - **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D9, D10)
-- **Tool Security & Deterministic Policy ADR:** [`docs/04_Architecture/decisions/ADR-0009-tool-security-and-deterministic-policy.md`](../decisions/ADR-0009-tool-security-and-deterministic-policy.md)
+- **Tool Security & Deterministic Policy ADR:** [`docs/04_Architecture/decisions/ADR-0010-d9-typed-tool-security-policy.md`](../decisions/ADR-0010-d9-typed-tool-security-policy.md)
 - **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
 - **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Decision D9), [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-ACTION-001`, `PC-ACTION-002`)
 - **Assistant Domain Specification:** [`docs/04_Architecture/01_Domains/assistant-and-conversations.md`](../01_Domains/assistant-and-conversations.md)

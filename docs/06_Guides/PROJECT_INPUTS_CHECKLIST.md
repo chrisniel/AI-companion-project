@@ -2,7 +2,7 @@
 
 > **Document Role:** Operational checklist for contributors and users when preparing task requests, feature inputs, and reviews.
 > **Status:** Active Canonical Guide
-> **Normative Authority:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md), [`docs/02_Planning/ROADMAP.md`](../02_Planning/ROADMAP.md), and relevant domain architecture.
+> **Normative Authority:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md), [`docs/02_Planning/00_Master/DELIVERY_INDEX.md`](../02_Planning/00_Master/DELIVERY_INDEX.md), and relevant domain architecture.
 
 Provide only the items relevant to the specific task. Never include real passwords, API keys, access tokens, private certificates, signing keys, raw health records, or private user conversations.
 
@@ -12,7 +12,7 @@ Provide only the items relevant to the specific task. Never include real passwor
 
 - Exact objective and whether you want read-only inspection, an architecture review, a documentation edit, or a specific code edit.
 - Authorized target paths or subsystem, plus anything that must remain untouched.
-- Current milestone/phase and any divergence from [`SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md), [`ROADMAP.md`](../02_Planning/ROADMAP.md), or domain architecture.
+- Current milestone/phase and any divergence from [`SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md), [`DELIVERY_INDEX.md`](../02_Planning/00_Master/DELIVERY_INDEX.md), or domain architecture.
 - Expected outcome, acceptance criteria, and any deadline or hardware constraint.
 - Relevant files, diffs, error logs, screenshots, or reproduction steps.
 - Commands already run and their actual output; do not summarize away important error traces.

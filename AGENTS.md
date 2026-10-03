@@ -11,8 +11,9 @@ For comprehensive procedural details on delivery gates, pull requests, walkthrou
 ## Project Profile
 
 - **Project Name:** AI Companion Project
-- **Active Task File:** [`docs/01_Tracking/task.md`](docs/01_Tracking/task.md)
-- **Task Archive Directory:** [`docs/01_Tracking/archive/`](docs/01_Tracking/archive/)
+- **Shared Milestone Task:** [`docs/01_Tracking/task.md`](docs/01_Tracking/task.md)
+- **Active Branch Task Directory:** [`docs/01_Tracking/active/`](docs/01_Tracking/active/)
+- **Task Archive:** [`docs/01_Tracking/archive/`](docs/01_Tracking/archive/)
 - **Implementation Plan Directory:** [`docs/02_Planning/01_Plans/`](docs/02_Planning/01_Plans/)
 - **Master Planning Spine:** [`docs/02_Planning/00_Master/`](docs/02_Planning/00_Master/)
 - **Walkthrough Folder:** [`docs/03_Walkthroughs/`](docs/03_Walkthroughs/)
@@ -20,7 +21,7 @@ For comprehensive procedural details on delivery gates, pull requests, walkthrou
 - **Documentation Map:** [`docs/06_Guides/DOCUMENTATION_MAP.md`](docs/06_Guides/DOCUMENTATION_MAP.md)
 - **Canonical Architecture Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](docs/04_Architecture/SYSTEM_BASELINE.md)
 - **Primary Tech Stack:**
-  - **Windows Host Runtime:** Python 3.13, FastAPI, SQLAlchemy 2, Alembic, SQLite/FTS5, `llama.cpp` / ONNX Runtime.
+  - **Local AI Runtime:** Python 3.11, FastAPI, SQLAlchemy 2, Alembic, SQLite/FTS5, `llama.cpp`.
   - **PC V1 Client Target:** Flutter Desktop (Windows), Dart.
   - **Supported Web Client & Dev Harness:** React 19, TypeScript 5.8, Vite 6, Tailwind CSS 4 (`frontend/web/`).
   - **Mobile Companion Prototype:** Kotlin, Jetpack Compose (`android/`, V1 follow-on).
@@ -34,7 +35,7 @@ For comprehensive procedural details on delivery gates, pull requests, walkthrou
 
 Documentation must adhere to the zero-padded two-digit numbering scheme under `docs/`:
 - `docs/00_Drafts/` (Scratchpads and unreviewed notes; strictly ignored by default)
-- `docs/01_Tracking/` (Active `task.md` and `archive/` directory)
+- `docs/01_Tracking/` (Shared `task.md`, active branch execution in `active/`, historical delivery in `archive/`)
 - `docs/02_Planning/` (Master Spine in `00_Master/`, active plans in `01_Plans/`, templates in `02_Templates/`, archives in `03_Archive/`)
 - `docs/03_Walkthroughs/` (Delivery walkthroughs; ignored during normal startup context)
 - `docs/04_Architecture/` (System Baseline, ADRs in `decisions/`, and 18 focused domain specifications)
@@ -76,9 +77,17 @@ docs/02_Planning/00_Master/DELIVERY_INDEX.md
 Relevant Focused Domain Specification & Accepted ADR(s)
   │  (Load only the specific domain relevant to the active task)
   ▼
+On develop/master:
 docs/01_Tracking/task.md
-  │  (Verify active sprint goals and blockers)
+  │  (Verify shared milestone goals and integration state)
   ▼
+[OR]
+
+On an ordinary short-lived task branch:
+docs/01_Tracking/active/task-[branch-slug].md
+  │  (Verify transient branch execution state)
+  ▼
+  (The shared task.md may be consulted only when integration/milestone state is specifically relevant)
 Relevant Active Implementation Plan (in docs/02_Planning/01_Plans/)
 ```
 
@@ -98,14 +107,29 @@ PLAN → IMPLEMENT → IMPLEMENTATION GATE → DOCUMENT → DOCUMENTATION GATE �
 
 ---
 
-## 5. In-Place Task Tracking (`task.md`)
+## 5. SHARED MILESTONE VS BRANCH TRACKING
 
-- **Read Before Resuming:** Check [`docs/01_Tracking/task.md`](docs/01_Tracking/task.md) before starting work.
-- **Update In-Place:** Maintain checkboxes and current state in place. Never prepend new task blocks above uncompleted tasks.
-- **Active Scope Only:** Keep `task.md` focused on current work (target under 80 lines).
-- **Per-File Archiving:** When a feature sprint is verified, move completed checklists to a dedicated file: `docs/01_Tracking/archive/task-[YYYY-MM-DD]-[feature-name].md`.
+- **Shared `task.md`:** Tracks milestone/integration direction. Does not track every temporary branch heartbeat. Should avoid volatile "PR pending", "current HEAD", and temporary branch-state wording.
+- **Branch active task:** Tracks plan execution, implementation, verification, documentation, independent review, closure, blockers, and relevant evidence.
+- **One coherent delivery branch owns:**
+  `PLAN → IMPLEMENT → IMPLEMENTATION GATE → DOCUMENT → DOCUMENTATION GATE → CLOSURE → CLOSURE GATE`
+  Do not create new branches merely because the delivery moves between those stages.
 
----
+## 5.1 SAME-BRANCH CLOSURE & POST-MERGE RECONCILIATION
+
+- Planning, implementation, verification, review fixes, documentation, and closure normally stay on the same short-lived branch.
+- Before PR/merge, reconcile branch-owned tracking so the delivery does not knowingly land with stale execution state.
+- Archive/remove the branch active task on that same branch when closure is verified.
+- Do not create a follow-up branch merely to replace: pending, uncommitted, current HEAD, awaiting review, PR pending, merge pending, or similar transient wording.
+- Historical records preserve point-in-time truth. Use labels such as "implementation checkpoint", "reviewed revision", or "publication checkpoint" rather than claiming a SHA is eternally current.
+
+## 5.2 POST-MERGE INTEGRATION & CI EVIDENCE
+
+- After merge, perform read-only integration verification. Verify develop contains the expected squash/integration.
+- Do NOT create a cleanup branch solely to add a merge SHA, post-merge CI result, or replace harmless historical pending-at-the-time wording.
+- Only create a corrective delivery if current canonical/master planning is materially false, dependent work is blocked, or a real integration defect exists.
+- **CI is evidence, not shared task state.** Record separately: local verification, PR/candidate CI, post-merge/integration CI, Golden release verification.
+- Never infer one from another. A delivery may truthfully record "PR-head CI PASSED, Post-merge CI NOT VERIFIED" without reopening the delivery solely to update that historical fact.
 
 ## 6. Single Source of Truth & Stable Tense
 
@@ -137,7 +161,9 @@ PLAN → IMPLEMENT → IMPLEMENTATION GATE → DOCUMENT → DOCUMENTATION GATE �
 
 ## 9. Git Authority & External Boundaries
 
-- **Chris Owns Git Writes:** Do NOT execute `git add`, `commit`, `push`, `branch`, `merge`, `checkout`, `switch`, `tag`, `stash`, `reset`, or PR commands.
+- **Chris Owns Git Writes:** Do NOT execute `git add`, `commit`, `push`, `branch`, `merge`, `checkout`, `switch`, `tag`, `stash`, `reset`, `restore`, or PR commands.
+- **Git Mutation Clarification:** `git checkout <ref> -- <path>` and `git restore ...` are Git mutations and MUST NOT be used by agents. Historical content must be read using `git show` and written through normal file editing only.
+- **Git Branch Preflight:** Before non-trivial edits, inspect the current Git branch (`git branch --show-current`). If on `develop` or `master`, STOP before editing. Recommend an appropriate task branch, ask Chris to create/switch/push it, and resume only after Chris confirms. Agents still perform no Git mutations.
 - **Stop After Verification:** Provide a clean Conventional Commit message proposal and stop for human execution.
 - **Read-Only External Environment:** Treat system paths, external repositories, and package caches outside the workspace as strictly read-only.
 - **Model Storage Policy:** Git repository and LFS pointers reside on GitHub; private Hugging Face dataset stores LFS model binaries. Do not alter Git/LFS configurations without explicit authorization.

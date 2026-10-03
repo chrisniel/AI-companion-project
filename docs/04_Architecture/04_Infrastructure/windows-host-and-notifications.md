@@ -8,7 +8,7 @@
 
 ## 1. Purpose & Scope
 
-This specification defines the host execution model, OS lifecycle integration, background persistence, and native notification dispatch for the AI Companion on Windows:
+This specification defines the host execution model, OS lifecycle integration, background persistence, and native notification presentation for the AI Companion on Windows:
 - Decoupled host runtime lifecycle independent of client window or session lifetime.
 - Primary production client is Flutter Desktop ([`ADR-0017`](../decisions/ADR-0017-flutter-production-windows-client.md)); React Web remains a supported developer harness; Android is prototype/reference.
 - Autostart integration upon Windows user login via Windows Task Scheduler.
@@ -23,9 +23,9 @@ It governs the host infrastructure that keeps the companion alive, responsive, a
 
 ## 2. Durable Architecture & Invariants
 
-### 2.1 Host Runtime & Client Lifecycle Independence (Decisions D2, D17, D19)
+### 2.1 Host Runtime & Client Lifecycle Independence (Decision D2)
 
-In accordance with Decisions D2, D17, and D19:
+In accordance with Decision D2:
 - **Decoupled Lifecycle:** The Local AI Runtime operates as an independent host runtime process whose lifecycle is strictly decoupled from any client application or session.
 - **Quit UI != Stop Runtime:** 
   - The primary Windows UI is Flutter Desktop. Launching the desktop app connects to the running runtime (or starts it if dormant).
@@ -43,13 +43,16 @@ In accordance with Decision D2 and [`ADR-0003`](../decisions/ADR-0003-d2-windows
 
 ### 2.3 Native Windows Notifications & Offline Catch-up (Decision D10)
 
-In accordance with Decision D10 and [`ADR-0011`](../decisions/ADR-0011-d10-scheduling-and-notification-semantics.md):
-- **Direct OS Notification Dispatch:** The Local AI Runtime dispatches notifications directly to the Windows notification system using native Windows Toast notifications (WinRT).
-- **Client-Closed Delivery:** Native notifications ensure urgent alerts, scheduled reminders, and proactive companion check-ins reach the user even when the desktop window is hidden or the UI application is closed.
+In accordance with Decision D10 and [ADR-0011](../decisions/ADR-0011-d10-scheduling-and-notification-semantics.md):
+- **Runtime Owns the Backlog:** The Local AI Runtime owns schedule truth, event generation, and the durable event backlog.
+- **Flutter Owns Presentation:** The Flutter client consumes these events and owns native Windows Toast presentation.
+- **Client Hidden vs. Quit Semantics:**
+  - **Hidden (System Tray):** If the Flutter UI is merely hidden (closed to tray), it remains running and presents notifications normally.
+  - **Explicit Quit:** If the user explicitly quits the Flutter client, the Runtime continues executing. The event remains durable in the backlog. Native presentation waits until the client returns. Quit Flutter != Stop Runtime.
 - **Quiet-Hours & Urgency Policy:**
   - **Alarms:** Classified as high-urgency and **bypass quiet hours by default**, ringing audibly and visually.
-  - **Reminders & Routines:** Respect configured quiet hours by default, holding or delivering silently unless an explicit per-item override is enabled.
-- **Offline & Sleep Catch-up:** When the host machine awakens from sleep, hibernation, or an offline period, `SchedulerService` evaluates missed reminder triggers, delivering aggregated catch-up notifications while expiring stale low-priority alerts.
+  - **Reminders & Routines:** Respect configured quiet hours by default.
+- **Offline & Sleep Catch-up:** When the host machine awakens or the client reconnects, SchedulerService evaluates missed reminder triggers, delivering aggregated catch-up notifications while expiring stale low-priority alerts.
 
 ### 2.4 Best-Effort OS Alarm Wake Invariant
 
@@ -66,7 +69,7 @@ Repository source code establishes the current baseline reality:
 
 - **Launch Model:** The FastAPI backend is currently launched as a foreground terminal process (via uvicorn / Python scripts) listening on `127.0.0.1:8000`. Diagnostic standalone model probes are launched via PowerShell scripts (e.g., `scripts/start-model.ps1` invoking `llama-server.exe` on isolated diagnostic ports).
 - **Autostart Status:** Windows host autostart at login is **NOT IMPLEMENTED**. No Task Scheduler registration or startup hook exists in the repository.
-- **Notification Adapter Status:** Native Windows notification dispatch is **NOT IMPLEMENTED**. The current codebase contains no WinRT toast bindings or system tray background dispatchers.
+- **Notification Adapter Status:** Native Windows notification presentation is **NOT IMPLEMENTED**. The codebase contains no Flutter toast bindings.
 - **Client Lifetime Reality:** In current development, closing the browser tab leaves the backend uvicorn terminal process running (confirming process independence), but no OS-level alerts are generated if events occur while the browser is closed.
 
 ---
@@ -77,7 +80,7 @@ When implemented for PC V1, the Windows host infrastructure will provide:
 
 1. **Flutter Desktop Client Integration (`ADR-0017`):** Native Windows Flutter desktop client serving as the primary desktop experience, with system tray icon, window hide-on-close, and background runtime status indicator.
 2. **Task Scheduler Autostart at User Login:** Automatic startup configuration established during installer setup or settings toggle.
-3. **Native WinRT Toast Dispatcher:** Direct platform notification delivery for reminders, alarms, and routines.
+3. **Native WinRT Toast Presentation:** Direct platform notification delivery for reminders, alarms, and routines.
 4. **Runtime Durable Turn Queue (`ADR-0019`):** Server-side turn queue persisting request processing across client disconnects.
 5. **Resilient Scheduling & Wake Catch-up:** Persistent `SchedulerService` requesting OS timer wake for scheduled alarms and reconciling missed events upon wake.
 
@@ -96,7 +99,7 @@ Detailed implementation choices for future planning are tracked in [`docs/02_Pla
 ## 6. Security & Ownership Boundaries
 
 - **Local Host Boundary (Decision D2):** The host runtime binds exclusively to loopback (`127.0.0.1`) by default, preventing unauthenticated remote LAN access to host administration endpoints.
-- **User Permission Execution:** The runtime executes under the standard privileges of the logged-in Windows user account. It does **not** require elevated Windows Administrator privileges for day-to-day companion conversation or notification dispatch.
+- **User Permission Execution:** The runtime executes under the standard privileges of the logged-in Windows user account. It does **not** require elevated Windows Administrator privileges for day-to-day companion conversation or notification presentation.
 - **Quiet-Hours & Notification Governance:** Native notification delivery MUST obey the D10 quiet-hours policy and authorized per-item overrides. High-frequency automated routines are bounded to avoid notification fatigue.
 
 ---
@@ -106,7 +109,7 @@ Detailed implementation choices for future planning are tracked in [`docs/02_Pla
 ### Upstream Baseline & Decision Spine
 - [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) — Host execution baseline, Decision D2 (decoupled runtime), Decision D10 (Tasks & Reminders).
 - [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) — Master Decision Register (Row 22 Flutter Client, Row 25 Windows Host, Row 38 Scheduling).
-- [`docs/04_Architecture/decisions/ADR-0003-d2-windows-host-model.md`](../decisions/ADR-0003-d2-windows-host-model.md) — Windows Host Runtime Model.
+- [`docs/04_Architecture/decisions/ADR-0003-d2-windows-host-model.md`](../decisions/ADR-0003-d2-windows-host-model.md) — Local AI Runtime Model.
 - [`docs/04_Architecture/decisions/ADR-0017-flutter-production-windows-client.md`](../decisions/ADR-0017-flutter-production-windows-client.md) — Flutter Production Windows Client.
 - [`docs/04_Architecture/decisions/ADR-0019-client-runtime-contract-and-work-boundaries.md`](../decisions/ADR-0019-client-runtime-contract-and-work-boundaries.md) — Client ↔ Runtime Contract & Work Boundaries.
 

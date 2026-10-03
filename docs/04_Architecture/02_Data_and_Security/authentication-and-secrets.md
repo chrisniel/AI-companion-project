@@ -1,12 +1,15 @@
 # Authentication and Secrets Architecture
 
 > **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Aligned with Decisions D1–D16, ADR-0004, ADR-0005)  
-> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D16. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for authentication, secrets, and network trust boundaries.
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0005, ADR-0006)  
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for authentication, secrets, and network trust boundaries.
 
 ---
 
 ## 1. Purpose & Scope
+
+- **Device-Local Credentials:** Provider API credentials remain device-local and never automatically synchronize.
+
 
 This specification defines cryptographic authentication mechanisms, secret storage policies, rate limiting, and transport trust models for the AI Companion:
 - Fail-closed API authentication protecting companion endpoints.
@@ -25,26 +28,52 @@ This specification defines cryptographic authentication mechanisms, secret stora
 In accordance with Decision D5:
 - **Fail-Closed by Construction:** All companion endpoints require explicit cryptographic authentication by default. Endpoints are protected unless explicitly assigned to a strictly bounded public whitelist (`GET /api/v1/health` only).
 - **Proximity is Not Authentication:** Physical or network-layer proximity (sharing local Wi-Fi or subnet) does **not** grant implicit trust or bypass authentication. Network proximity never substitutes for application auth.
-- **Master Secret Containment:** Master runtime administrative secrets and third-party API credentials are held strictly on the host runtime machine and are **never** transmitted to or stored on client endpoints.
 
-### 2.2 Supported Trust Topologies & Remote Access (ADR-0005)
 
-The companion architecture supports three bounded network topologies under Decision D5 and `ADR-0005`:
+### 2.2 Supported Trust Topologies & Remote Access (ADR-0006)
+
+The companion architecture preserves the current localhost/Tailscale/Cloudflare architecture under Decision D5 and `ADR-0006`:
 1. **Authenticated Localhost Loopback (Default):** Local desktop clients (Flutter, React Web) and host processes communicating over `127.0.0.1` / `::1`.
 2. **Explicitly Trusted LAN:** Satellite devices communicating across a private home network with explicit host pairing and application authentication.
-3. **Encrypted Overlay Mesh (Tailscale Private Mesh — Preferred):** Remote satellite access routed through an authenticated, encrypted WireGuard-based private mesh network without exposing open router ports (`ADR-0005`). Alternatively, a managed **Cloudflare Tunnel** with Cloudflare Access authentication is supported for controlled web egress.
+3. **Encrypted Overlay Mesh (Tailscale — Preferred):** Tailscale is the preferred private trusted-device transport.
+4. **Cloudflare Tunnel + Access (Preferred Remote-Browser):** Cloudflare Tunnel + Access is the preferred controlled remote-browser internet path.
+   - **Important:** Cloudflare Access identity does NOT replace AI Companion application authentication.
+- **Encrypted Transport Rule:** Sensitive non-loopback traffic requires encrypted transport.
 
 ### 2.3 Direct Public Internet Port Forwarding Rejected
+
 
 In accordance with Decision D5:
 - **Status:** `PERMANENTLY REJECTED`.
 - **Policy Invariant:** Direct port forwarding from the public internet (opening external router ports, dynamic DNS directly to companion port, unauthenticated public ingress) is **strictly excluded** from the supported trust model. The companion runtime is not a multi-tenant public web server and must never be exposed directly to unauthenticated public internet traffic.
 
-### 2.4 Rate Limiting & DoS Protection
+### 2.4 Production Browser Authentication
 
-- All client-facing HTTP and WebSocket endpoints must enforce rate limiting to defend against brute-force token enumeration and local denial-of-service. Sensitive authentication routes enforce tighter request throttling.
+- Never expose raw provider credentials to browser clients.
+- Never store the root/master companion credential in browser `localStorage`.
+- Prefer a secure server-session / `HttpOnly`-cookie-style browser session architecture.
+- Exact implementation mechanism remains open.
 
----
+### 2.5 Rate Limiting & DoS Protection
+
+- **Rate Limiting Scope:** Rate limiting protects: authentication, pairing/enrollment, session creation, turn/message submission, tool/action requests, imports/uploads, and remote APIs.
+- **Streaming Exemption:** Rate limiting is NOT conceptually applied to every individual SSE token delta or audio frame.
+
+### 2.6 Device-Local Provider Credentials
+
+The handling of third-party provider credentials (e.g. OpenAI, Anthropic, Groq API keys) is governed by the following frozen constraints:
+
+- **Device-Local Secrets:** Provider API credentials are device-local secrets.
+- **No Automatic Sync:** Keys do NOT automatically sync between PC, mobile, or other devices. PC-configured keys stay on the PC.
+- **Future Mobile Scope:** Future mobile companions may configure and store their own provider keys locally on the device.
+- **Profile Policy, Not Secret Storage:** The Profile owns permission and routing policies, not the raw secret itself.
+- **No Remote Exposure:** The Runtime/provider layer never exposes raw keys to remote browser clients.
+- **Backup & Restore Exclusions:** Restore/backup processes do not restore device/provider credentials by default.
+
+
+### 2.7 API Key Legacy Status
+
+Current shared `COMPANION_API_KEY` remains legacy/development implementation only.
 
 ## 3. Current Verified Implementation
 
@@ -102,8 +131,8 @@ The normative architecture for D4 and D5 is frozen. The following implementation
 ## 7. Canonical Relationships & Cross-Links
 
 - **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D4, D5)
-- **Tailscale Remote Transport ADR:** [`docs/04_Architecture/decisions/ADR-0005-tailscale-preferred-remote-transport.md`](../decisions/ADR-0005-tailscale-preferred-remote-transport.md)
-- **Device Authentication ADR:** [`docs/04_Architecture/decisions/ADR-0004-device-authentication-and-trust-model.md`](../decisions/ADR-0004-device-authentication-and-trust-model.md)
+- **Tailscale Remote Transport ADR:** [`docs/04_Architecture/decisions/ADR-0006-d5-remote-access-trust-boundary.md`](../decisions/ADR-0006-d5-remote-access-trust-boundary.md)
+- **Device Authentication ADR:** [`docs/04_Architecture/decisions/ADR-0005-d4-profile-device-credential-boundary.md`](../decisions/ADR-0005-d4-profile-device-credential-boundary.md)
 - **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Decision D5), [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-API-002`)
 - **Profiles & Devices Specification:** [`docs/04_Architecture/02_Data_and_Security/profiles-and-devices.md`](profiles-and-devices.md)
 - **Tool Permissions & Actions Spec:** [`docs/04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md`](tool-permissions-and-actions.md)

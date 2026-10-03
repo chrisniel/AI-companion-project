@@ -22,10 +22,10 @@ This specification defines the filesystem layout, persistent storage root resolu
 
 ### 2.1 Persistent Storage Decoupling & The Five Storage Roots
 
-In accordance with Phase 8P persistent storage architecture and Decision D15:
+In accordance with Phase 8P persistent storage architecture:
 - **Code vs. Data Separation:** Application code (Git repository, virtual environment, temporary builds) is strictly decoupled from persistent user data. Updating, moving, or reinstalling the codebase must never mutate, corrupt, or orphan user databases, model weights, or personal attachments.
 - **Repository Paths vs. Runtime Paths:** The repository directories `runtime/` and `models/` are **development sources and templates only**. They must never serve as active runtime storage for end users. Active runtime storage is strictly partitioned into five canonical storage roots:
-  1. `APP_INSTALL_ROOT`: Read-only application distribution binaries, bundled engines (`llama.cpp`, `whisper.cpp`), and static assets.
+  1. `APP_INSTALL_ROOT`: Read-only application distribution binaries, bundled engines , and static assets.
   2. `DATA_ROOT`: Persistent, profile-isolated SQLite database (`companion.db`), user settings, character avatars, and personal attachments. Defaults to `%LOCALAPPDATA%\AI Companion\Data`.
   3. `LIBRARY_ROOT`: Large, relocatable, host-shared assets (GGUF LLM weights, voice models, vision projectors). May be relocated to a secondary drive (e.g., dedicated SSD/HDD) via `bootstrap.json` without moving `DATA_ROOT`.
   4. `CACHE_ROOT`: Ephemeral working scratchpads, temporary audio buffers, and staging directories. Safe to purge on reboot without data loss.
@@ -102,6 +102,11 @@ Verified in `backend/app/core/storage.py` and `backend/migrations/`:
   - `prepare_database_schema()` executes Alembic upgrades on the canonical database.
 
 ---
+
+
+### 3.4 Current D6 Import Path Discrepancy
+- **Current Implementation:** The codebase may currently derive import paths from `COMPANION_DATA_ROOT` (e.g., `DATA_ROOT/imports`). This is a temporary technical debt mismatch.
+- **Target Architecture:** D6 import inbox and staging belong exclusively under `LIBRARY_ROOT` as described above. `DATA_ROOT/imports` is not the final canonical architecture.
 
 ## 4. Approved Target Architecture / Not Yet Implemented (PC V1)
 

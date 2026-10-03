@@ -63,29 +63,29 @@
   - *Resolution Point:* Milestone M3 implementation plan.
 
 ### Category: `EXPERIMENT / EVIDENCE NEEDED`
-- **`DEBT-EXP-01`: Low-Impact Lightweight Model Benchmark on RX 580**
+- **`DEBT-EXP-001`: Low-Impact Lightweight Model Benchmark on RX 580**
   - *Context:* Low-Impact mode swaps in a 1B–3B text model to conserve VRAM/compute during gaming.
   - *Need:* Empirical benchmark testing candidate GGUF models (e.g., Qwen-2.5-1.5B, Llama-3.2-1B/3B, Gemma-2-2B) on AMD RX 580 to verify VRAM footprint under 1.5 GB and sub-second prompt evaluation.
   - *Resolution Point:* Milestone M5 discovery spike.
 
-- **`DEBT-EXP-02`: Kokoro-82M Neural Synthesis RTF on Reference CPU**
+- **`DEBT-EXP-002`: Kokoro-82M Neural Synthesis RTF on Reference CPU**
   - *Context:* Real-time factor (RTF) for Kokoro-82M on AMD Ryzen 5 3600 CPU cores.
   - *Need:* Benchmark ONNX quantized model execution on CPU to ensure RTF < 0.3x without starving foreground games.
   - *Resolution Point:* Milestone M4 discovery spike.
 
-- **`DEBT-EXP-03`: Emotion Decay Rate Tuning**
+- **`DEBT-EXP-003`: Emotion Decay Rate Tuning**
   - *Context:* Simulated companion mood decays toward neutral over elapsed time.
-  - *Need:* Tune decay half-life curves (e.g., 4-hour vs. 12-hour rebalancing) through experiential testing.
+  - *Need:* Emotion decay/rebalancing function and time constants require empirical tuning.
   - *Resolution Point:* Milestone M3 tuning.
 
 ### Category: `PC-LATER / V2 IMPROVEMENT CANDIDATE`
-- **`DEBT-LATER-01`: Semantic / Vector Memory Retrieval (sqlite-vec)**
+- **`DEBT-LATER-001`: Semantic / Vector Memory Retrieval (sqlite-vec)**
   - *Context:* Post-V1 addition of dense vector embeddings alongside SQLite FTS5 lexical search.
-- **`DEBT-LATER-02`: Managed Public Model Hub Downloads**
+- **`DEBT-LATER-002`: Managed Public Model Hub Downloads**
   - *Context:* In-app browsing and downloading directly from Hugging Face / Ollama.
-- **`DEBT-LATER-03`: Advanced Presence (Live2D / VRM / Floating Overlay)**
+- **`DEBT-LATER-003`: Advanced Presence (Live2D / VRM / Floating Overlay)**
   - *Context:* Interactive animated 2D/3D avatars and floating desktop widgets.
-- **`DEBT-LATER-04`: Interactive Browser Automation (Playwright)**
+- **`DEBT-LATER-004`: Interactive Browser Automation (Playwright)**
   - *Context:* Automated web form completion and multi-step web transactions.
-- **`DEBT-LATER-05`: Mobile-to-PC Full Bidirectional State Synchronization**
-  - *Context:* Room database outbox synchronization for the follow-on Android companion pass.
+- **`DEBT-LATER-005`: Mobile-to-PC Full Bidirectional State Synchronization**
+  - *Context:* Mobile-to-PC state synchronization; exact persistence/outbox mechanism deferred to the Mobile Architecture Pass.

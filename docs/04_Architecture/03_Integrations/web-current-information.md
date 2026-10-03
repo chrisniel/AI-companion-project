@@ -1,8 +1,8 @@
 # Web and Current Information Integration Architecture
 
 > **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Aligned with Decisions D1–D16, ADR-0009)  
-> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D16. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for read-only web information, search, fetch, and weather integrations.
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0010)  
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for read-only web information, search, fetch, and weather integrations.
 
 ---
 
@@ -23,7 +23,7 @@ It governs all outbound network requests initiated by or on behalf of the assist
 
 ### 2.1 Read-Only Public Current Information (PC V1)
 
-In accordance with the Feature Promotion Map (**Public Current Information**):
+In accordance with Decision D9:
 - **Approved Capability:** PC V1 includes capability-level, provider-independent access to read-only public information:
   - **Web Search:** Querying public search engines to locate relevant web resources.
   - **Webpage Fetch:** Retrieving and parsing text content from publicly accessible URLs.
@@ -51,7 +51,7 @@ All content ingested from external web sources is untrusted:
 
 ### 2.4 Browser Automation Separation (PC Later)
 
-In accordance with the Feature Promotion Map (**Interactive Browser Automation**):
+In accordance with Decision D9:
 - **Deferred Capability:** Interactive browser automation (e.g., programmatic form submission, automated checkout, authenticated portal sessions, complex DOM traversal, headless browser orchestration via engines like Playwright or Selenium) is classified as `APPROVED / PC LATER`.
 - **Strict Separation:** Interactive automation is architecturally and operationally distinct from read-only search and fetch. It is **not** part of PC V1 and must not be conflated with read-only retrieval capabilities.
 
@@ -110,7 +110,7 @@ The following functional and technical mechanisms remain open design for future 
 ## 7. Canonical Relationships & Cross-Links
 
 - **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D5, D9)
-- **Tool Security & Deterministic Policy ADR:** [`docs/04_Architecture/decisions/ADR-0009-tool-security-and-deterministic-policy.md`](../decisions/ADR-0009-tool-security-and-deterministic-policy.md)
+- **Tool Security & Deterministic Policy ADR:** [`docs/04_Architecture/decisions/ADR-0010-d9-typed-tool-security-policy.md`](../decisions/ADR-0010-d9-typed-tool-security-policy.md)
 - **Master Planning Spine:** [`docs/02_Planning/00_Master/WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-WEB-001`)
 - **Assistant Domain Specification:** [`docs/04_Architecture/01_Domains/assistant-and-conversations.md`](../01_Domains/assistant-and-conversations.md)
 - **Tool Permissions & Actions Spec:** [`docs/04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md`](../02_Data_and_Security/tool-permissions-and-actions.md)

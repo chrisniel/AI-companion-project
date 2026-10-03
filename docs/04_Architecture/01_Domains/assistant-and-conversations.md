@@ -1,8 +1,8 @@
 # Assistant and Conversations Architecture
 
 > **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Aligned with Decisions D1–D16, ADR-0018, ADR-0019)  
-> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D16. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for the assistant turn and conversation domain.
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0018, ADR-0019)  
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for the assistant turn and conversation domain.
 
 ---
 
@@ -23,7 +23,7 @@ It governs the runtime flow between frontend user input and local generative mod
 
 ### 2.1 Profile Ownership & Character Context Binding
 
-In accordance with Decisions D7, D8, and D11 (`ADR-0007`, `ADR-0018`, `ADR-0011`):
+In accordance with Decision D7, ADR-0018, and D11 (`ADR-0008`, `ADR-0018`, `ADR-0012`):
 - **Profile Ownership:** All conversations and message histories are strictly partitioned by the active user Profile (`profile_id`, migrated from legacy `owner_id` per `ADR-0018`). A single Account can host multiple Profiles, but conversations belong strictly to one Profile.
 - **Single Character Context:** Under approved D11 architecture, each conversation references exactly one active Character persona context (`character_id`).
 - **Permanent Turn Attribution:** Conversation history remains permanently bound to the Character under which turns were recorded.
@@ -35,13 +35,13 @@ In accordance with Decisions D7, D8, and D11 (`ADR-0007`, `ADR-0018`, `ADR-0011`
 
 ### 2.2 Client-Runtime Contract & Durable Turn Queue (ADR-0019)
 
-Per Decision D14 and `ADR-0019`, communication between client applications (Flutter Desktop, React Web, Android Companion) and the Windows Host Runtime is governed by strict protocol and persistence boundaries:
+Per `ADR-0019`, communication between client applications (Flutter Desktop, React Web, Android Companion) and the Local AI Runtime is governed by strict protocol and persistence boundaries:
 - **Transport Separation:**
   - **REST / JSON:** Used for commands, queries, configuration updates, and turn submissions.
   - **Server-Sent Events (SSE):** Used for token completions and typed turn events (`token`, `tool_call`, `error`, `done`).
   - **WebSocket:** Dedicated to full-duplex conversational voice streaming (audio frames, barge-in, STT/TTS control).
 - **Durable FIFO Turn Queue:**
-  - The Windows Host Runtime manages a durable FIFO turn queue per conversation.
+  - The Local AI Runtime manages a durable FIFO turn queue per conversation.
   - **Client Disconnect Resilience:** If a client disconnects during SSE generation (e.g. browser tab closed, network drop), generative turn execution continues to completion in the background and is committed to SQLite.
   - **Reconnect Catch-Up:** Upon client reconnection, the client queries conversation history to retrieve the finalized turn without data loss or duplicate execution.
 - **Deterministic Ordering:** Messages within a conversation are ordered strictly chronologically via a monotonically increasing `sequence_no` constrained by a unique database constraint (`conversation_id`, `sequence_no`).
@@ -52,7 +52,7 @@ Per Decision D14 and `ADR-0019`, communication between client applications (Flut
 
 ### 2.3 Multilingual Companion Interaction (PC V1)
 
-- **Approved Capability:** In accordance with the Feature Promotion Map (Multilingual Companion Interaction), PC V1 supports companion interaction across:
+- **Approved Capability:** In accordance with the Master Decision Register, PC V1 supports companion interaction across:
   - English
   - Tagalog / Filipino
   - Japanese
@@ -110,7 +110,7 @@ Verified in `backend/app/services/assistant/orchestrator.py`:
 
 ## 4. Approved Target Architecture / Not Yet Implemented
 
-The following target capabilities are approved under Decision D1 and the Feature Promotion Map:
+The following target capabilities are approved under Decision D1 and the Master Decision Register:
 
 1. **Multilingual Interaction Evaluation (PC V1):**
    - Verified interaction stability across English, Tagalog, and Japanese.
@@ -142,7 +142,7 @@ The following implementation choices are intentionally left open for subsequent 
 
 ## 7. Canonical Relationships & Cross-Links
 
-- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D1, D7, D8, D11, D14)
+- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D1, D7, ADR-0018, D11)
 - **Client-Runtime Contract ADR:** [`docs/04_Architecture/decisions/ADR-0019-client-runtime-contract-and-work-boundaries.md`](../decisions/ADR-0019-client-runtime-contract-and-work-boundaries.md)
 - **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
 - **Work Breakdown Structure:** [`docs/02_Planning/00_Master/WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-API-001`, `PC-CLIENT-002`)

@@ -1,8 +1,8 @@
 # Multimodal and Media Architecture
 
 > **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Aligned with Decisions D1–D16, ADR-0006, ADR-0018)  
-> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1–D16. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for multimodal vision and media assets.
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0007, ADR-0018)  
+> **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for multimodal vision and media assets.
 
 ---
 
@@ -32,7 +32,7 @@ Multimodal vision understanding is governed by the approved Phase 8B delivery ro
 ### 2.2 Approved Scope, Multi-File Bundles & Non-Image Media
 
 - **PC V1 Approved Scope:** Strictly **image understanding** (PNG, JPEG) associated with user conversational messages.
-- **Multi-File Bundles & Atomic Installation (Decision D6 & ADR-0006):**
+- **Multi-File Bundles & Atomic Installation (Decision D6 & ADR-0007):**
   - Multimodal vision models in llama.cpp typically require two companion files: the primary LLM GGUF (e.g. `Qwen2-VL-7B-Instruct-Q4_K_M.gguf`) and the matching vision projector weights (`mmproj-*.gguf`).
   - The controlled model import pipeline mandates that multi-file bundles install atomically: either both files validate and install into `LIBRARY_ROOT`, or the entire bundle is rolled back.
   - A vision model is never activated without its matching projector.
@@ -151,9 +151,8 @@ The following implementation choices are intentionally left open for subsequent 
 
 ## 7. Canonical Relationships & Cross-Links
 
-- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D6, D8)
-- **Model Import Pipeline ADR:** [`docs/04_Architecture/decisions/ADR-0006-controlled-local-model-import-pipeline.md`](../decisions/ADR-0006-controlled-local-model-import-pipeline.md)
+- **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decision D6, ADR-0018)
+- **Model Import Pipeline ADR:** [`docs/04_Architecture/decisions/ADR-0007-d6-controlled-model-acquisition.md`](../decisions/ADR-0007-d6-controlled-model-acquisition.md)
 - **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
-- **Storage Roots ADR:** [`docs/04_Architecture/decisions/ADR-0015-storage-roots-and-asset-hierarchy.md`](../decisions/ADR-0015-storage-roots-and-asset-hierarchy.md)
 - **Master Planning Spine:** [`docs/02_Planning/00_Master/WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-API-001`, `PC-MODEL-001`)
 - **Assistant Domain Specification:** [`docs/04_Architecture/01_Domains/assistant-and-conversations.md`](assistant-and-conversations.md)

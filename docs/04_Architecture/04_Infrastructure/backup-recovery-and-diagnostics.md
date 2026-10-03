@@ -18,43 +18,30 @@ This specification defines disaster recovery, database snapshot mechanics, asset
 
 ---
 
-## 2. Durable Architecture & Invariants
+## 2. Durable Architecture
 
 ### 2.1 Critical Status Distinctions (PC V1 vs. Exploratory)
+- **Local Application Lifecycle (PC V1):** Backup, staged restore, and local admin Factory Reset are foundational to PC V1.
+- **Continuous Remote/Cloud DB Sync (Deferred):** Transparent remote database synchronization (e.g., streaming WAL replication to mobile or cloud) is explicitly deferred to **PC Later** or the Mobile Architecture pass.
 
-In accordance with the Feature Promotion Map and Master Decision Register:
-- **Practical Backup & Recovery (`APPROVED / PARTIAL / PC V1`):** PC V1 requires coordinated backup of the persistent database and referenced profile assets with integrity-preserving restore verification.
-- **Local Admin Factory Reset (`APPROVED / NOT STARTED / PC V1`):** PC V1 requires a local admin-only reset capability to return the companion to first-run state while providing safe controls to preserve or prune large models and past backups.
-- **Full Diagnostics / Recovery Center (`EXPLORATORY / UNAPPROVED / FUTURE`):** An exploratory audit recommendation for a dedicated desktop recovery console, deep log visualizer, or automated self-healing center. **This is NOT an approved PC V1 capability.** The presence of "Diagnostics" in this specification's title must **never** be used to silently promote a Diagnostics Center into PC V1.
+### 2.2 Normal Backup Scope & Asset Referential Coherence
+Backup artifacts must encapsulate both database state (SQLite) and associated Profile-owned external file assets to guarantee referential coherence.
+- **Included:** Irreplaceable state, Profile-owned personal assets (Character studio avatars, custom images), and manifest/integrity records.
+- **Excluded:** Application binaries, provider runtimes, model weights, STT/TTS weights, cache, logs (by default), staging/temp directories, provider keys, and device/session credentials.
 
-### 2.2 Coordinated Backup & Asset Referential Coherence
-
-In accordance with Master Decision Register Row 42:
-- **Scope of Backup:** The backup archive captures:
-  1. Consistent SQLite database snapshot (`companion.db`) captured via the SQLite online backup API;
-  2. Referenced profile assets (custom avatars, media attachments, persona cards);
-  3. Backup manifest containing timestamp, schema version, profile list, file inventory, and SHA-256 checksums.
-- **Excluded Assets:** Backups strictly **exclude**:
-  - Model weights (`LIBRARY_ROOT`) due to gigabyte-scale storage;
-  - Application distribution binaries (`APP_INSTALL_ROOT`);
-  - Ephemeral caches and temporary buffers (`CACHE_ROOT`);
-  - Cleartext secrets, device pairing tokens, and API keys.
-- **Pre-Migration Safety Snapshot:** A backup snapshot must automatically be taken before applying any schema-altering migration to an active canonical database.
-
-### 2.3 Staged Restore & Safety Snapshot Verification
-
-- **Pre-Restore Safety Snapshot:** Prior to overwriting active database or asset state during a restore, the runtime automatically captures a safety snapshot of current data. If restoration fails or corrupts state, the pre-restore snapshot can be restored immediately.
-- **Staged Verification:** The restore process unpacks into a temporary staging folder, validates archive manifest integrity, verifies SHA-256 checksums, and inspects database schema version compatibility before promoting staged files into active canonical directories.
+### 2.3 Restore Pipeline & Safety
+Database schema migrations must execute safely against restored payload data.
+- **Restore Pipeline:** Stage first -> verify -> explicit confirm -> quiesce runtime as needed -> pre-restore safety snapshot -> activate -> restart -> verify.
+- **Reactivation Guard:** Restore MUST NOT automatically reactivate devices, API/provider keys, sessions, or network credentials. Confirmations are NOT resurrected.
+- **Replay Guard:** Do not blindly replay pending turns, pending actions, old notification backlog, or Routine occurrences.
+- **Tombstones:** Known deletion tombstones prevent known resurrection from older restore material.
+- **Emotion Restore:** Emotion state may be restored, then elapsed-time decay/rebalancing applies.
 
 ### 2.4 Local Admin Factory Reset
-
-In accordance with Master Decision Register Row 43:
-- **First-Run State Restoration:** Returns the companion to a clean, newly installed state (clearing database tables, user profiles, conversation history, and ephemeral caches).
-- **Preserved Distribution:** Does not uninstall or corrupt application binaries or runtime engines.
-- **Model & Backup Retention Controls:** Large model weights in `LIBRARY_ROOT` and existing backup archives in `BACKUP_DIR` default to **KEEP**. The user must explicitly check separate opt-in checkboxes to delete models or wipe prior backups.
-- **Local Admin Authority:** Factory reset can only be executed by a local administrator session on the host PC (never via remote satellite devices). It requires strong multi-step confirmation.
-
----
+- **Authority & Security:** Factory Reset is a local AI Companion Account-admin operation (Risk 2). It requires strong local confirmation. There is **no requirement for Windows elevation** unless the implementation later genuinely requires it.
+- **Scope:** Removes Account/Profile state, conversations/memories/tasks/schedules, Character customizations, Emotion, pairings, sessions, provider credentials, profile/cloud configuration, queues, and cache/temp state.
+- **Persisted Assets:** App/provider binaries remain. Model/Voice Library deletion is a separate explicit choice. Backup deletion is a separate explicit option OFF by default with stronger irreversible confirmation.
+- **Outcome:** Successful full reset creates fresh identities.
 
 ## 3. Current Verified Implementation
 
@@ -102,7 +89,7 @@ Detailed implementation choices for future planning are tracked in [`docs/02_Pla
 
 ## 6. Security & Ownership Boundaries
 
-- **Local Admin Authority:** Both restore and factory reset operations strictly require local admin authentication on the host workstation. Remote satellite devices and unauthenticated sessions must never be allowed to trigger restore or reset.
+- **Local Admin Authority:** Restore and Factory Reset require authenticated local AI Companion Account-admin authority. Remote/mobile clients and ordinary companion tools cannot invoke them. Windows OS elevation is not an architectural requirement unless a concrete future implementation operation genuinely requires it. Factory Reset remains a Risk 2 operation with strong local confirmation.
 - **Backup Credential Protection:** Backup archives must **never** package cleartext API keys, third-party credentials, or environment secrets. When restored on a new machine, authentication tokens must be re-established.
 - **Safe Pre-Restore Verification:** A restore must never proceed if manifest checksums fail or database version is forward-incompatible with the currently installed application code.
 

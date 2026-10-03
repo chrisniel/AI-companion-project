@@ -11,7 +11,7 @@
 - Accepted/relocked during R10.
 - Canonical focused-domain authority transferred during R11.4.
 - Codified during R13.1.
-- Refined during PC V1 Decision Pass (2026-10-03): Runtime `SchedulerService` owns canonical scheduling state. Alarms bypass quiet hours by default; Reminders and Routines respect quiet hours by default. Native Windows toasts are dispatched directly by the host runtime.
+- Refined during PC V1 Decision Pass (2026-10-03): Runtime `SchedulerService` owns canonical scheduling state. Alarms bypass quiet hours by default; Reminders and Routines respect quiet hours by default. Native Windows toasts are presented by the Flutter client, driven by durable runtime events.
 
 ## Context
 Time-based proactivity must clearly distinguish between low-priority reminders and high-priority alarms.

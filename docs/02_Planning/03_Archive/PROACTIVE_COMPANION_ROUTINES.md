@@ -1,3 +1,5 @@
+> **Historical Note:** Routines were formerly considered post-V1 but were later promoted into PC V1 under D10 and [ADR-0011](../../04_Architecture/decisions/ADR-0011-d10-scheduling-and-notification-semantics.md).
+
 # Proactive Companion Routines / Scheduled Check-ins (Post-V1 Design Note)
 
 > [!NOTE]

@@ -27,8 +27,8 @@ docs/02_Planning/00_Master/
 
 | Milestone ID | Title & Scope | Primary Deliverables | Target Gate / Status |
 | :--- | :--- | :--- | :--- |
-| **M0** | **Docs & Architecture Reset** | Canonicalization handoff execution, master planning spine creation, system baseline update, ADR reconciliation (ADR-0017..0019), and CI guide alignment. | **IN PROGRESS** |
-| **M1** | **Flutter Client Foundation** | Production Flutter Desktop app scaffolding, window/tray management, REST/SSE client, App/Data/Library storage root awareness, and React Web parity checks. | **NEXT / UNBLOCKED** |
+| **M0** | **Docs & Architecture Reset** | Canonicalization handoff execution, master planning spine creation, system baseline update, ADR reconciliation, and CI guide alignment. | **COMPLETE / VERIFIED** |
+| **M1** | **Flutter Client Foundation** | Production Flutter Desktop app scaffolding, window/tray management, REST/SSE client, App/Data/Library storage root awareness, and React Web parity checks. | **NEXT** |
 | **M2** | **PC Companion Foundation** | Windows autostart at login, native desktop notifications, Task Scheduler integration, D6 controlled model import service, and multi-Profile database migration. | **PLANNED** |
 | **M3** | **Intelligence & Productivity** | Character Studio & 8 continuous personality traits, persistent bounded emotion, profile-first selective memory with revalidation, and Task/Reminder/Alarm scheduling. | **PLANNED** |
 | **M4** | **Voice, Tools & Information** | Conversational voice pipeline with mandatory barge-in, WebSocket audio transport, D9 deterministic tool policy engine, and read-only public web/current info. | **PLANNED** |
@@ -60,5 +60,5 @@ docs/02_Planning/00_Master/
 2. **OpenAPI Schema Contract → Flutter Client:** FastAPI OpenAPI contract generation is authoritative; Flutter Dart client code-generation or mechanical verification depends on it.
 3. **Multi-Profile Migration (`owner_id` → `profile_id`) → Domain Entities:** Updating DB models to support multi-Profile isolation must occur before building Profile-scoped memory, character instances, or conversational queues.
 4. **D9 Policy Engine → Tool Invocation:** The 5-stage deterministic pipeline ($\text{Model} \rightarrow \text{Typed Request} \rightarrow \text{Policy} \rightarrow \text{Adapter} \rightarrow \text{Capability}$) must be verified before allowing generative models to invoke tasks, memories, or web tools.
-5. **SchedulerService & Native Notifications → Closed-Browser Delivery:** Runtime-owned scheduling logic must precede native Windows Toast dispatch for alarms, reminders, and routines.
+5. **SchedulerService & Native Notifications → Closed-Browser Delivery:** Runtime-owned scheduling logic must precede native Windows Toast presentation for alarms, reminders, and routines.
 6. **Native Audio Device Handling (Flutter) ↔ Speech Orchestration (Runtime):** Flutter manages audio hardware devices and capture/playback; Local AI Runtime manages STT/TTS engine lifecycle over WebSocket.
