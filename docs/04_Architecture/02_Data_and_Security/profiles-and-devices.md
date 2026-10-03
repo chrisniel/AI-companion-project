@@ -72,7 +72,7 @@ In accordance with `ADR-0018`, superseding historical D8 / ADR-0009:
 
 In accordance with Decision D4:
 - **Profile Represents User Context:** A Profile models the companion user identity and owns all personal data.
-- **Device Represents Client Endpoint:** A Device models a physical client endpoint (Flutter desktop, browser tab, Android phone).
+- **Device Represents Client Endpoint:** Device = enrolled endpoint/device identity, such as the Windows host installation or an enrolled mobile device. Browser tabs and authenticated browser connections operate through Sessions and are not durable Device identities.
 - **Satellite Device Profile Binding:**
   - A normal mobile satellite device (e.g., Android Companion) is enrolled and paired to **exactly one Profile**.
   - The mobile device interacts with data strictly within its bound profile context; it cannot switch profiles or inspect other profiles on the PC host.

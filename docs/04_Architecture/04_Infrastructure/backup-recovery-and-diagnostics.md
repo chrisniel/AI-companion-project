@@ -89,7 +89,7 @@ Detailed implementation choices for future planning are tracked in [`docs/02_Pla
 
 ## 6. Security & Ownership Boundaries
 
-- **Local Admin Authority:** Both restore and factory reset operations strictly require local admin authentication on the host workstation. Remote satellite devices and unauthenticated sessions must never be allowed to trigger restore or reset.
+- **Local Admin Authority:** Restore and Factory Reset require authenticated local AI Companion Account-admin authority. Remote/mobile clients and ordinary companion tools cannot invoke them. Windows OS elevation is not an architectural requirement unless a concrete future implementation operation genuinely requires it. Factory Reset remains a Risk 2 operation with strong local confirmation.
 - **Backup Credential Protection:** Backup archives must **never** package cleartext API keys, third-party credentials, or environment secrets. When restored on a new machine, authentication tokens must be re-established.
 - **Safe Pre-Restore Verification:** A restore must never proceed if manifest checksums fail or database version is forward-incompatible with the currently installed application code.
 

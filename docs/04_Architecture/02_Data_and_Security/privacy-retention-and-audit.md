@@ -8,7 +8,6 @@
 
 ## 1. Purpose & Scope
 
-- **Host Maintenance:** Account-wide host maintenance may operate across Profiles when explicitly designed as host maintenance, while preserving strict Profile privacy and never exposing one Profile\'s private content to another companion session.
 - **Deletion Invariant:** Known tombstones prevent silent resurrection. Exact tombstone storage mechanism remains implementation-open.
 
 
@@ -27,8 +26,7 @@ This specification defines the privacy preservation principles, data retention l
 
 - **Data Minimization:** The companion collects, retains, and transmits only the minimal data necessary to fulfill conversational and functional duties.
 - **Explicit User Deletion Authority:** Users must have appropriate inspect, correct, delete, and forget controls over Profile-owned personal data across all domain models (conversations, memories, tasks, attachments). Deletion operations do not promise immediate permanent hard deletion across every domain, cache, and backup snapshot; exact soft-delete vs. hard-purge lifecycles remain governed by explicit retention and privacy policy.
-- **Owner Isolation Invariant:** Deletion and purge operations must preserve authenticated ownership boundaries, either through direct owner filtering or through an already owner-authorized parent/resource relationship. A purge operation initiated by or on behalf of one user can never affect records belonging to another. - **Host Maintenance:** Account-wide host maintenance may operate across Profiles when explicitly designed as host maintenance, while preserving strict Profile privacy and never exposing one Profile\'s private content to another companion session.
-
+- **Owner Isolation Invariant:** Deletion and purge operations must preserve authenticated ownership boundaries, either through direct owner filtering or through an already owner-authorized parent/resource relationship. A purge operation initiated by or on behalf of one user can never affect records belonging to another. 
 ### 2.2 Privacy-Safe Auditing Invariants
 
 - **Auditable State Mutations (Principle P1):** Tool executions and companion actions that modify system state, access external networks, or perform elevated operations require deterministic, auditable action governance where required by policy.

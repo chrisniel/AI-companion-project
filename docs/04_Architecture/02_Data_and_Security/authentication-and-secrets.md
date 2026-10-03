@@ -32,24 +32,34 @@ In accordance with Decision D5:
 
 ### 2.2 Supported Trust Topologies & Remote Access (ADR-0006)
 
-The companion architecture supports three bounded network topologies under Decision D5 and `ADR-0006`:
+The companion architecture preserves the current localhost/Tailscale/Cloudflare architecture under Decision D5 and `ADR-0006`:
 1. **Authenticated Localhost Loopback (Default):** Local desktop clients (Flutter, React Web) and host processes communicating over `127.0.0.1` / `::1`.
 2. **Explicitly Trusted LAN:** Satellite devices communicating across a private home network with explicit host pairing and application authentication.
-3. **Encrypted Overlay Mesh (Tailscale Private Mesh — Preferred):** Remote satellite access routed through an authenticated, encrypted WireGuard-based private mesh network without exposing open router ports (`ADR-0006`). Alternatively, a managed **Cloudflare Tunnel** with Cloudflare Access authentication is supported for controlled remote-browser ingress.
+3. **Encrypted Overlay Mesh (Tailscale — Preferred):** Tailscale is the preferred private trusted-device transport.
+4. **Cloudflare Tunnel + Access (Preferred Remote-Browser):** Cloudflare Tunnel + Access is the preferred controlled remote-browser internet path.
+   - **Important:** Cloudflare Access identity does NOT replace AI Companion application authentication.
+- **Encrypted Transport Rule:** Sensitive non-loopback traffic requires encrypted transport.
 
 ### 2.3 Direct Public Internet Port Forwarding Rejected
+
 
 In accordance with Decision D5:
 - **Status:** `PERMANENTLY REJECTED`.
 - **Policy Invariant:** Direct port forwarding from the public internet (opening external router ports, dynamic DNS directly to companion port, unauthenticated public ingress) is **strictly excluded** from the supported trust model. The companion runtime is not a multi-tenant public web server and must never be exposed directly to unauthenticated public internet traffic.
 
-### 2.4 Rate Limiting & DoS Protection
+### 2.4 Production Browser Authentication
 
-- All client-facing HTTP and WebSocket endpoints must enforce rate limiting to defend against brute-force token enumeration and local denial-of-service. Sensitive authentication routes enforce tighter request throttling.
+- Never expose raw provider credentials to browser clients.
+- Never store the root/master companion credential in browser `localStorage`.
+- Prefer a secure server-session / `HttpOnly`-cookie-style browser session architecture.
+- Exact implementation mechanism remains open.
 
----
+### 2.5 Rate Limiting & DoS Protection
 
-### 2.5 Device-Local Provider Credentials
+- **Rate Limiting Scope:** Rate limiting protects: authentication, pairing/enrollment, session creation, turn/message submission, tool/action requests, imports/uploads, and remote APIs.
+- **Streaming Exemption:** Rate limiting is NOT conceptually applied to every individual SSE token delta or audio frame.
+
+### 2.6 Device-Local Provider Credentials
 
 The handling of third-party provider credentials (e.g. OpenAI, Anthropic, Groq API keys) is governed by the following frozen constraints:
 
@@ -61,9 +71,9 @@ The handling of third-party provider credentials (e.g. OpenAI, Anthropic, Groq A
 - **Backup & Restore Exclusions:** Restore/backup processes do not restore device/provider credentials by default.
 
 
-### 2.6 API Key Legacy Status
+### 2.7 API Key Legacy Status
 
-- Distinguish current shared `COMPANION_API_KEY` as a legacy/development implementation only.
+Current shared `COMPANION_API_KEY` remains legacy/development implementation only.
 
 ## 3. Current Verified Implementation
 
