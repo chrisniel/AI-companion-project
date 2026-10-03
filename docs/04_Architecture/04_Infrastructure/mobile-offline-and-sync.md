@@ -29,7 +29,7 @@ Mobile local state is partitioned into strict durability, security, and lifecycl
 | **Device-Local Settings** | Local UI theme, local notification sounds, local vibration toggles | Survives process death, app restart, and device reboot | Private application sandbox | **Preserved** across revocation (device-specific preference) | Available & writable offline |
 | **Device-Local Third-Party Secrets** | User-configured OpenAI/Anthropic API keys configured on device | Survives process death, app restart, and device reboot | **Platform-Protected Secure Storage** (Android Keystore-backed storage) | **Preserved** (Host device revocation MUST NOT erase unrelated 3rd-party user keys) | Available locally |
 | **Replicated Domain Replica** | Synced Tasks, active Reminders, scheduled Alarms | Survives process death, app restart, and device reboot | Private application sandbox (Relational store) | **Quarantined** on `PROFILE_INACTIVE`; **Erased** on `DEVICE_REVOKED` or `PROFILE_PURGED` | Available offline (domain-specific write permissions apply) |
-| **Pending Mutation Journal (Outbox)** | Queued task creations, task completion toggles, alarm dismissals | Survives process death, app restart, and device reboot | Private application sandbox (Transactional journal) | **Discarded** upon authoritative `DEVICE_REVOKED` outcome | Durable until host acknowledgment |
+| **Pending Mutation Journal (Outbox)** | Queued task creations, task completion updates (`SET_COMPLETION`), alarm dismissals | Survives process death, app restart, and device reboot | Private application sandbox (Transactional journal) | **Discarded** upon authoritative `DEVICE_REVOKED` outcome | Durable until host acknowledgment |
 | **Synchronization Metadata** | Monotonic change cursor, entity revision vectors, last-sync time | Survives process death, app restart, and device reboot | Private application sandbox | **Reset / Cleared** upon `DEVICE_REVOKED` or full re-baseline | Internal engine state |
 | **Cached / Read-Only History** | Recent conversation turns, retrieved memories, character profiles | Survives process death and restart; safely evictable on storage pressure | Private application sandbox (Cache store) | **Evicted / Erased** upon `DEVICE_REVOKED` or `PROFILE_PURGED` | Read-only view offline |
 | **Transient UI State** | Active text input, scroll offsets, navigation stack | Discarded on process death (unless saved via Flutter state restoration) | Volatile memory | Discarded | UI-only |
@@ -51,7 +51,7 @@ The PC Local AI Runtime remains canonical domain authority. Mobile acts as an en
 
 | Domain | Canonical Authority | Offline Readable? | Offline Writable? | Durable Locally? | Sync Direction | Deletion Policy | Conflict Class | Batch C Dependency |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Tasks** | PC Runtime | YES | YES (create, update, toggle complete, delete) | YES (DB + Outbox) | Bidirectional | Host soft-delete (30-day trash); Tombstones propagated | Host-mediated revision check; reject stale base revision by default; semantic toggle complete handled | None |
+| **Tasks** | PC Runtime | YES | YES (create, update, set completion status, delete) | YES (DB + Outbox) | Bidirectional | Host soft-delete; Tombstones propagated | Host-mediated revision check; reject stale base revision by default; semantic desired-state updates (`SET_COMPLETION`) handled | None |
 | **Reminders** | PC Runtime | YES (synced occurrences) | LIMITED (Ack / Dismiss / Snooze only; no canonical entity creation) | YES (DB + Outbox) | Asymmetric (PC pushes schedule; Mobile reports delivery/snooze) | Host manages lifecycle; Mobile dismiss marks local state | State-machine transition; Host tie-breaker | None |
 | **Alarms** | PC Runtime | YES (synced occurrences) | LIMITED (Dismiss / Snooze only; canonical recurring alarm config is PC-owned) | YES (DB + Outbox) | Asymmetric (PC pushes schedule; Mobile reports delivery/snooze) | Host manages lifecycle; Mobile dismiss marks local state | State-machine transition; local user dismiss always accepted | None |
 | **Routines** | PC Runtime | YES (cached view) | NO (read-only view; no offline creation/edits) | YES (Cache) | Host to Mobile | PC-managed | None (PC exclusive authority) | OPEN FOR BATCH C (local execution disposition) |
@@ -66,16 +66,20 @@ The PC Local AI Runtime remains canonical domain authority. Mobile acts as an en
 
 Universal client-timestamp Last-Write-Wins (LWW) is **rejected**. Mobile wall clocks are untrusted, user-manipulable, and susceptible to skew, timezone shifts, and clock resets.
 
-#### 3.2.1 Stable Offline Entity Identity Strategy
-To ensure that an offline-created entity (such as a Task) can be subsequently edited, toggled, or deleted offline before the Host ever acknowledges creation:
+#### 3.2.1 Stable Offline Entity Identity & Dependency Strategy
+To ensure that an offline-created entity (such as a Task) can be subsequently edited, updated, or deleted offline before the Host ever acknowledges creation:
 - **Strategy Choice (Approach A):** **Client-generated stable entity IDs (UUIDv4)** accepted by the Host for offline-creatable entities.
-- **Rationale:** The backend Task model already uses UUID primary keys (`UUIDPrimaryKeyMixin`). When Mobile creates a Task offline, it generates a stable `entity_id: UUIDv4`. This ID becomes the permanent canonical identifier for the entity.
-- **Dependent Operations:** Subsequent offline mutations (edits, completion toggles, deletions) reference this identical `entity_id` directly. This eliminates complex local-to-remote ID translation tables, mutation dependency resolution, and race conditions during partial synchronization.
-- **Separation of Concerns:** `entity_id` uniquely identifies the domain entity throughout its lifetime. `mutation_id` (Idempotency Key) uniquely identifies each individual operational change in the mutation journal.
+- **Contract Boundary & Target Requirement:** Current backend `TaskCreate` does NOT accept a client-provided Task ID. Accepting a client-generated stable identity is therefore an **explicit target contract requirement**, not implemented reality.
+- **Creation Semantics:** Offline CREATE uses the client-generated permanent `entity_id`. Because a CREATE operation has no pre-existing Host revision, its base revision is conceptually represented as `NONE` / `NOT_YET_CREATED` rather than inventing an artificial integer revision.
+- **Causal Ordering & Dependency Resolution:** While a stable `entity_id` establishes uniform entity identity across offline operations, mutations against an entity whose CREATE has not yet been acknowledged by the Host MUST preserve causal ordering. The local mutation journal must either:
+  1. *Coalesce* subsequent local edits into the pending CREATE mutation record where safe; or
+  2. Preserve an *explicit per-entity dependency/order* ensuring the CREATE mutation reaches and commits on the Host before any dependent UPDATE or DELETE operations are processed.
+- **Retry Idempotency:** Retrying a CREATE operation over the network uses the identical `entity_id` and `mutation_id`, preventing duplicate entity creation on the Host.
+- **Separation of Concerns:** `entity_id` uniquely identifies the domain entity throughout its lifetime. `mutation_id` (Idempotency Key) uniquely identifies each individual operational mutation attempt in the mutation journal.
 
 #### 3.2.2 Host-Issued Entity Revisions & Optimistic Concurrency Control
 1. **Host-Issued Entity Revisions:** Every synchronizable entity on the PC Host maintains a monotonic integer revision (`revision: int`) or host-issued monotonic revision token. The revision increments on every committed update on the Host.
-2. **Base Revision Tracking:** When Mobile replicates an entity, it stores the current `server_revision`. When Mobile enqueues a mutation, the outbox record records `base_revision = server_revision`.
+2. **Base Revision Tracking:** When Mobile replicates an entity, it stores the current `server_revision`. When Mobile enqueues a mutation against an existing entity, the outbox record records `base_revision = server_revision`.
 3. **Optimistic Concurrency Control:** When Mobile submits an update or delete mutation to the Host:
    - If Host `current_revision == mutation.base_revision`: Mutation commits cleanly; Host increments `revision = current_revision + 1`.
    - If Host `current_revision > mutation.base_revision`: Host detects a concurrent modification.
@@ -84,7 +88,10 @@ To ensure that an offline-created entity (such as a Task) can be subsequently ed
 For Mobile V1, generic automatic field-level merging is **rejected** because a stale `base_revision` alone does not convey sufficient baseline change evidence to guarantee disjoint updates without silent data loss.
 - **Default Rule:** Any update mutation submitted against a stale `base_revision` (`current_revision > base_revision`) results in a **Conflict Outcome** (`CONFLICT_DETECTED`).
 - **Conflict Handling:** The Host rejects the stale mutation and returns the current authoritative entity state. Mobile retains the user's uncommitted edit in a local conflict/draft state, prompting user resolution (e.g. keep server version or overwrite with new revision).
-- **Semantic Intent Exception:** Explicitly modeled, provably safe operational intents (such as toggling completion status) may be applied idempotently by the Host if the entity still exists and is not soft-deleted.
+- **Idempotent Desired-State Semantic Operations:** A toggle operation is not inherently idempotent. The architecture requires explicit desired-state semantic operations, such as:
+  - `SET_COMPLETION(completed=true|false)`
+  - or conceptually equivalent `SET_TASK_STATUS(desired_status)`
+  Repeated execution of the same semantic desired-state mutation produces the identical result. If an update only asserts a desired status or completion state, the Host may apply that state idempotently if the entity still exists and is not soft-deleted.
 - **Offline Deletes:** If Mobile submits a delete referencing a stale `base_revision` where substantive content was modified on the Host, the delete is rejected as a conflict, presenting the modified entity to the user.
 
 #### 3.2.4 Mutation Identity & Target Idempotency
@@ -94,7 +101,9 @@ For Mobile V1, generic automatic field-level merging is **rejected** because a s
 
 #### 3.2.5 Change Discovery & Re-Baseline
 - **Monotonic Sync Cursor:** Delta synchronization relies on a Host-issued monotonic change cursor (sequence token or change tracking log) provided by the Host during sync. Mobile requests changes occurring after that cursor.
-- **Stale Cursor Re-Baseline:** The Host maintains tombstone records for a bounded retention window (aligned with `DATA_RETENTION_DAYS = 30`). If a Mobile client presents a cursor older than the Host's tombstone retention horizon, the Host returns a typed `STALE_CURSOR` outcome. Mobile MUST perform a full re-baseline: clear the local replicated domain database, reset sync metadata, and fetch a complete snapshot from the Host.
+- **Bounded Change-History Retention:** The Host maintains a bounded synchronization/change-history retention policy sufficient for delta sync and deletion-resurrection prevention.
+- **Decoupling from Trash Retention:** The synchronization change-history retention horizon is architecturally **distinct from user-facing recycle-bin retention** (e.g. `DATA_RETENTION_DAYS = 30` in the current Task model is domain-specific implementation evidence only, not a universal synchronization retention rule). The exact duration of synchronization history retention remains policy/implementation open until Mobile planning.
+- **Stale Cursor Re-Baseline:** If a Mobile client presents a cursor that falls outside the retained authoritative synchronization history, the Host returns the typed semantic outcome `STALE_CURSOR`. Mobile MUST perform the approved full re-baseline flow: clear the local replicated domain database, reset sync metadata, and fetch a complete snapshot from the Host.
 
 ---
 
@@ -108,15 +117,15 @@ The architecture explicitly resolves all mandatory failure scenarios via typed o
 
 ### Case 2: Mobile and PC modify the same Task while Mobile is offline
 - **Mechanism:** Mobile submits an update with `base_revision = N`. PC has already committed an update bumping Host revision to `N + 1`.
-- **Resolution:** Host detects `current_revision > base_revision` and returns a typed `CONFLICT_DETECTED` outcome with the current Host entity. Mobile preserves the user's local edit in a draft/conflict state and prompts user resolution.
+- **Resolution:** Host detects `current_revision > base_revision` and returns a typed `CONFLICT_DETECTED` outcome with the current Host entity. Mobile preserves the user's local edit in a draft/conflict state and prompts user resolution. (If the Mobile mutation was an explicit idempotent desired-state update like `SET_COMPLETION(completed=true)` and non-conflicting, Host applies the state idempotently).
 
 ### Case 3: Mobile deletes an item offline while PC modifies it
 - **Mechanism:** Mobile enqueues a `DELETE` mutation referencing `base_revision = N`. PC modified the item while Mobile was offline (`revision = N + 1`).
 - **Resolution:** Because substantive content changed on PC, Host rejects the delete with `CONFLICT_DETECTED` and returns the updated task. The task is restored/shown on Mobile with a notice ("Item was modified on PC before deletion"). If the user confirms deletion, a fresh delete referencing the new revision is submitted.
 
 ### Case 4: A Device reconnects after several weeks
-- **Mechanism:** Mobile presents a sync cursor older than the Host's 30-day tombstone retention horizon.
-- **Resolution:** Host returns a typed `STALE_CURSOR` outcome. Mobile initiates a full re-baseline: local replicated domain tables are cleared and repopulated via full snapshot download. Unflushed outbox items with expired base revisions are quarantined for user review.
+- **Mechanism:** Mobile presents a sync cursor older than the Host's retained authoritative synchronization history horizon.
+- **Resolution:** Host returns a typed `STALE_CURSOR` outcome. Mobile initiates the approved full re-baseline: local replicated domain tables are cleared and repopulated via full snapshot download. Unflushed outbox items with expired base revisions are quarantined for user review.
 
 ### Case 5: PC revokes the Device while it is offline
 - **Mechanism:** PC Admin revokes the Device on the host. Mobile remains offline, continuing local read/write operations against cached data.
@@ -162,12 +171,12 @@ Android enforces strict background execution limits, process death, Doze modes, 
 | **Periodic Background Delta Sync** | Opportunistic / Periodic | `WorkManager` (PeriodicWorkRequest, min 15m) | Runs periodically when device conditions permit. Defers during deep Doze. |
 | **Scheduled Alarm Delivery** | Exact Time / Time-Critical | `AlarmManager.setAlarmClock()` | Fires at precise wall-clock time even in deep Doze. Requires explicit permission. |
 | **Scheduled Reminder Delivery** | Inexact / Tolerant | `AlarmManager.setAndAllowWhileIdle()` or inexact `set()` | Fires near scheduled time; OS may batch within Doze windows. Gracefully degrades. |
-| **Active Voice / Audio Session** | Continuous Long-Running | Foreground Service (`FOREGROUND_SERVICE_TYPE_MICROPHONE`) | User-visible notification required. Allowed ONLY during active interaction. |
+| **User-Visible Long-Running Work** | Continuous Long-Running | Foreground Service (FGS) where permitted by Android | User-visible notification required. Permitted only during active, user-visible operations. Exact Voice/audio foreground-service type, microphone lifecycle, and related permissions are OPEN FOR BATCH C. |
 
 ### 5.2 Foreground Service Boundaries
 
 - **Background Sync Restriction:** Continuous Foreground Services (FGS) for ordinary background synchronization or outbox processing are **STRICTLY PROHIBITED**. Using persistent foreground notifications to keep sync sockets alive violates mobile battery guidelines and Android platform expectations.
-- **Approved FGS Use Cases:** Foreground Services are reserved strictly for user-initiated, ongoing, real-time operations, specifically active Voice interaction sessions or active media streaming (evaluated in Batch C).
+- **User-Visible Continuous Operations:** User-visible continuous operations may require Android foreground execution depending on the approved feature. Exact Voice/audio foreground-service type, microphone lifecycle, and related permissions are **OPEN FOR BATCH C**. No specific foreground service type (such as microphone) is locked during Batch B.
 
 ---
 
