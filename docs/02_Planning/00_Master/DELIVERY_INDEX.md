@@ -28,13 +28,13 @@ docs/02_Planning/00_Master/
 | Milestone ID | Title & Scope | Primary Deliverables | Target Gate / Status |
 | :--- | :--- | :--- | :--- |
 | **M0** | **Docs & Architecture Reset** | Canonicalization handoff execution, master planning spine creation, system baseline update, ADR reconciliation, and CI guide alignment. | **COMPLETE / VERIFIED** |
-| **M1** | **Flutter Client Foundation** | Production Flutter Desktop app scaffolding, window/tray management, REST/SSE client, App/Data/Library storage root awareness, and React Web parity checks. | **NEXT** |
+| **MOBILE-ARCH** | **Mobile Architecture Pass** | Canonicalize production Android architecture. Prerequisite to M1 to freeze shared vs PC-specific vs mobile-specific boundaries. Mobile IMPLEMENTATION does not block PC V1. | **NEXT** |
+| **M1** | **Flutter Client Foundation** | Production Flutter Desktop app scaffolding, window/tray management, REST/SSE client, App/Data/Library storage root awareness, and React Web parity checks. | **PLANNED** |
 | **M2** | **PC Companion Foundation** | Windows autostart at login, native desktop notifications, Task Scheduler integration, D6 controlled model import service, and multi-Profile database migration. | **PLANNED** |
 | **M3** | **Intelligence & Productivity** | Character Studio & 8 continuous personality traits, persistent bounded emotion, profile-first selective memory with revalidation, and Task/Reminder/Alarm scheduling. | **PLANNED** |
 | **M4** | **Voice, Tools & Information** | Conversational voice pipeline with mandatory barge-in, WebSocket audio transport, D9 deterministic tool policy engine, and read-only public web/current info. | **PLANNED** |
 | **M5** | **Integration, Hardening & Resilience** | Low-Impact/Gaming mode with model substitution, coordinated backup & restore verification, Factory Reset, Tailscale/Cloudflare hardening, and release preflight. | **PLANNED** |
 | **GATE-PC-V1** | **Golden PC V1 Acceptance Gate** | 14-group end-to-end integrated release verification on physical Windows host environment. Prerequisite for cutting PC V1 release tag. | **RELEASE GATE** |
-| **POST-PC-V1** | **Mobile Architecture Pass** | Separate dedicated architecture pass for production Android Companion using Flutter foundation. Does not block PC V1. | **FOLLOW-ON TRACK** |
 
 ---
 

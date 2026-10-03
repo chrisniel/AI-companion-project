@@ -109,46 +109,50 @@ cd android
 
 ## 3. Continuous Integration (CI) Workflow Structure
 
-### 3.1 Current Workflow Reality
-The automated GitHub Actions workflow is defined in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
-- **Execution Environment:** Windows Server (`windows-latest`) preserving Windows host fidelity.
-- **Concurrency:** `cancel-in-progress: true` preventing redundant in-flight runs.
+### 3.1 Implemented Workflow Reality
+The automated GitHub Actions workflow is defined in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) and relies on a script-driven classification architecture.
+- **Concurrency:** `cancel-in-progress: true` prevents redundant in-flight runs.
 - **Active Jobs:**
-  1. **`backend` (Windows / Python 3.11):** Ephemeral data root, dependency installation, OpenAPI contract check, and backend pytest suite.
-  2. **`frontend` (Windows / Node 22):** Clean npm ci, Vitest suite, TypeScript compilation check, and Vite production bundle build.
-  3. **`ci-gate`:** Downstream aggregation job declared with `needs: [backend, frontend]`.
+  1. **`classifier` (Ubuntu):** Executes static tests for `scripts/ci_policy.py`, then evaluates Git diffs (PR or Push) against a deterministic matrix to output boolean requirements (`needs_backend`, `needs_frontend`, etc.).
+  2. **`docs-integrity` (Ubuntu):** Conditionally executed if `needs_docs` is true. Performs fast file-presence and diff-formatting checks.
+  3. **`backend` (Windows / Python 3.11):** Conditionally executed if `needs_backend` is true. Ephemeral data root, dependency installation, and backend pytest suite.
+  4. **`contract` (Windows / Python 3.11):** Conditionally executed if `needs_contract` is true. Verifies OpenAPI contract equality.
+  5. **`frontend` (Windows / Node 22):** Conditionally executed if `needs_frontend` is true. Clean npm ci, Vitest suite, TypeScript compilation check, and Vite production bundle build.
+  6. **`ci-gate` (Ubuntu):** Downstream aggregation job that provides the aggregate status intended to serve as the single required CI status when/if repository branch protection requires it.
 
-### 3.2 Target Event Matrix & Cost-Conscious CI Governance (P25)
+*Note: Future Flutter desktop verification will be added as an independent Windows job lane.*
 
-To eliminate redundant runner minute consumption while hardening release integrity, the project adopts the following CI event policy as the future target:
+### 3.2 Event Policy Matrix
 
-| Git Event / Trigger | Target Execution Policy | Governance Rationale |
+To eliminate redundant runner minute consumption while hardening release integrity, the CI implements the following execution policy:
+
+| Git Event / Trigger | Execution Policy | Governance Rationale |
 | :--- | :--- | :--- |
-| **Push `feature/**`** | **No automatic heavy full CI.** | Primary verification occurs locally. Prevents burning expensive runner minutes on rapid, WIP feature commits. |
+| **Push ordinary short-lived branch** (`feature/**`, `chore/**`, `docs/**`, `fix/**`, `refactor/**`, etc.) | **No automatic CI workflow.** | Primary verification occurs locally. Prevents burning expensive runner minutes on rapid, WIP branch commits. |
 | **Pull Request → `develop`** | **Path-aware / scoped CI.** | Targets verification strictly to the subsystems modified in the PR diff (e.g., frontend only, backend only). |
 | **Push to `develop`** | **Scoped integration CI.** | Primary integration gatekeeper for merged code, verifying interacting subsystems modified since the last passing baseline. |
-| **Pull Request → `master`** | **Full PC V1 CI.** | Critical release boundary. Must pass completely before merge approval. No skip or paths-ignore allowed. |
+| **Pull Request → `master`** | **Full PC V1 CI.** | Critical release boundary. Must pass completely before merge approval. Target branch extraction overrides diff scopes. |
 | **Push to `master`** | **Full PC V1 CI.** | Production baseline verification. Required before any release packaging. |
-| **`workflow_dispatch`** | **Full CI anywhere.** | Allows manual, explicit invocation of the full pipeline on any branch. |
-| **Docs-only** | **Verified lightweight documentation/integrity lane.** | Extremely fast validation for `.md`/repo docs without triggering full test suites. |
+| **`workflow_dispatch`** | **Full CI anywhere.** | Allows manual, explicit invocation of the full pipeline on any branch via strict parameter override. |
+| **Docs-only PR → `develop`** | **classifier + docs-integrity + ci-gate** | Fast validation for `.md`/repo docs. `backend`, `frontend`, and `contract` are intentionally skipped. |
 
-### 3.3 Runner Cost Governance
-- **Windows Runner Parity:** Windows runner execution reflects host-runtime parity for the Windows-first PC V1 platform.
-- **Linux Runner Offloading Candidate:** Offloading platform-agnostic test suites (e.g., frontend Vitest, lint, contract checks) to Linux runners is recognized as an approved cost-optimization evaluation candidate. Mandatory Windows runner verification is preserved wherever Windows-specific APIs or paths are evaluated.
+### 3.3 Path Mapping Rules
+- **Backend changes** (`backend/**`) require both `backend` and `contract` lanes.
+- **Contract changes** (`contracts/**`, `scripts/check_openapi_contract.py`) independently require the `contract` lane.
+- **Mixed changes** (e.g., frontend + docs) correctly trigger both `frontend` and `docs-integrity`.
+- **Unknown/Shared changes** (e.g., `.github/**`, `android/**`, unmapped `scripts/**`) trigger conservative **Full Verification** (all lanes active).
 
 ---
 
 ## 4. CI Gate Governance & Branch Protection Prerequisite
 
-### 4.1 Target `ci-gate` Failure-Aggregation Semantics
-Pass R12.4 formalizes the required target behavior for `ci-gate`:
-1. **Always-Running Execution:** `ci-gate` must execute unconditionally via an always-run condition (`if: always()`).
-2. **Explicit Inspection of Upstream Jobs:** It must inspect the actual result of all required upstream jobs (`backend`, `frontend`, `contract`, and future `flutter`).
+### 4.1 Strict `ci-gate` Failure-Aggregation Semantics
+The `ci-gate` job enforces the CI matrix validity securely:
+1. **Always-Running Execution:** `ci-gate` executes unconditionally via an always-run condition (`if: always()`).
+2. **Explicit Dependency Inspection:** It feeds the boolean requirements (from the classifier) and the actual step results (success, skipped, failed, cancelled) into the `ci_policy.py gate` command.
 3. **Deterministic Evaluation:**
-   - **SUCCESS:** `ci-gate` resolves success only if every required upstream verification job succeeded (or was intentionally skipped under an approved safe policy).
-   - **FAILURE:** `ci-gate` fails if any required upstream job failed, timed out, was cancelled, or was unexpectedly skipped.
+   - **SUCCESS:** `ci-gate` exits 0 if and only if the classifier completed successfully, all required jobs explicitly report `success`, and all unrequired jobs explicitly report `skipped`.
+   - **FAILURE:** `ci-gate` fails (exit 1) if requirements strings are missing/malformed, the classifier crashed, required jobs skipped/failed, or unrequired jobs unexpectedly ran. This ensures fail-closed CI gate evaluation.
 
-### 4.2 Implementation Safety Boundary
-
-> [!IMPORTANT]
-> **Implementation Boundary:** Target CI governance and failure aggregation semantics are codified as policy in this guide. Documenting target governance does **not** constitute workflow modification. The workflow file [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) remains unchanged during documentation canonicalization; actual YAML updates belong to a dedicated infrastructure implementation task.
+> [!NOTE]
+> **Branch Protection Separation:** Repository branch-protection configuration is separate from workflow implementation and must not be inferred from the existence of the `ci-gate` job. `ci-gate` merely provides a consolidated status check.

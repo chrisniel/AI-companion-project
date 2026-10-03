@@ -5,7 +5,6 @@ on:
     branches:
       - develop
       - master
-      - 'feature/**'
   pull_request:
     branches:
       - develop
@@ -20,8 +19,99 @@ permissions:
   contents: read
 
 jobs:
+  classifier:
+    name: Path Classification
+    runs-on: ubuntu-latest
+    outputs:
+      needs_backend: ${{ steps.classify.outputs.needs_backend }}
+      needs_frontend: ${{ steps.classify.outputs.needs_frontend }}
+      needs_contract: ${{ steps.classify.outputs.needs_contract }}
+      needs_docs: ${{ steps.classify.outputs.needs_docs }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Verify policy script integrity
+        run: |
+          python -m py_compile scripts/ci_policy.py
+          python -m unittest scripts/tests/test_ci_policy.py
+
+      - name: Classify paths
+        id: classify
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            target_branch="${{ github.base_ref }}"
+          elif [ "${{ github.event_name }}" == "push" ]; then
+            target_branch="${{ github.ref_name }}"
+          else
+            target_branch=""
+          fi
+          
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            python scripts/ci_policy.py classify --event workflow_dispatch --target-branch "$target_branch"
+          else
+            diff_success="false"
+            if [ "${{ github.event_name }}" == "pull_request" ]; then
+              if git diff --name-only ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} > diff.txt; then
+                diff_success="true"
+              fi
+            else
+              if [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+                if git diff --name-only ${{ github.event.before }}..${{ github.sha }} > diff.txt; then
+                  diff_success="true"
+                fi
+              fi
+            fi
+            
+            if [ "$diff_success" == "true" ] && [ -s diff.txt ]; then
+              json_arr=$(python -c 'import sys, json; print(json.dumps(sys.stdin.read().splitlines()))' < diff.txt)
+              python scripts/ci_policy.py classify --event ${{ github.event_name }} --target-branch "$target_branch" --files-json "$json_arr"
+            else
+              echo "Git diff failed, empty, or unresolvable. Falling back to Full Verification."
+              python scripts/ci_policy.py classify --event ${{ github.event_name }} --target-branch "$target_branch" --files-json "[]"
+            fi
+          fi
+
+  docs-integrity:
+    name: Docs Integrity
+    needs: classifier
+    if: needs.classifier.outputs.needs_docs == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check Diff
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "Workflow dispatch: git diff --check is N/A."
+          elif [ "${{ github.event_name }}" == "pull_request" ]; then
+            git diff --check ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} -- docs/ "*.md" || exit 1
+          else
+            if [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+              git diff --check ${{ github.event.before }}..${{ github.sha }} -- docs/ "*.md" || exit 1
+            fi
+          fi
+
+      - name: Canonical presence checks
+        run: |
+          test -f "docs/04_Architecture/SYSTEM_BASELINE.md" || { echo "Missing SYSTEM_BASELINE.md"; exit 1; }
+          test -f "AGENTS.md" || { echo "Missing AGENTS.md"; exit 1; }
+          test -f "docs/06_Guides/DOCUMENTATION_MAP.md" || { echo "Missing DOCUMENTATION_MAP.md"; exit 1; }
+
   backend:
     name: Backend Verification (Windows / Python 3.11)
+    needs: classifier
+    if: needs.classifier.outputs.needs_backend == 'true'
     runs-on: windows-latest
     env:
       COMPANION_API_KEY: ci-ephemeral-test-key
@@ -48,14 +138,39 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r backend/requirements.txt
 
-      - name: Verify OpenAPI contract and route integrity
-        run: python scripts/check_openapi_contract.py
-
       - name: Run backend pytest suite
         run: python -m pytest backend/tests -q
 
+  contract:
+    name: Contract Verification (Windows / Python 3.11)
+    needs: classifier
+    if: needs.classifier.outputs.needs_contract == 'true'
+    runs-on: windows-latest
+    env:
+      COMPANION_API_KEY: ci-ephemeral-test-key
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'backend/requirements.txt'
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+
+      - name: Verify OpenAPI contract and route integrity
+        run: python scripts/check_openapi_contract.py
+
   frontend:
     name: Frontend Verification (Windows / Node 22)
+    needs: classifier
+    if: needs.classifier.outputs.needs_frontend == 'true'
     runs-on: windows-latest
     steps:
       - name: Checkout repository
@@ -82,8 +197,21 @@ jobs:
 
   ci-gate:
     name: CI Gate
-    needs: [backend, frontend]
-    runs-on: windows-latest
+    if: always()
+    needs: [classifier, backend, frontend, contract, docs-integrity]
+    runs-on: ubuntu-latest
     steps:
-      - name: Confirm all verification gates passed
-        run: echo "All backend and frontend verification gates passed successfully."
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Evaluate Gates
+        run: |
+          python scripts/ci_policy.py gate \
+            --classifier-status "${{ needs.classifier.result }}" \
+            --requirements-json '{"needs_backend": "${{ needs.classifier.outputs.needs_backend }}", "needs_frontend": "${{ needs.classifier.outputs.needs_frontend }}", "needs_contract": "${{ needs.classifier.outputs.needs_contract }}", "needs_docs": "${{ needs.classifier.outputs.needs_docs }}"}' \
+            --results-json '{"backend": "${{ needs.backend.result }}", "frontend": "${{ needs.frontend.result }}", "contract": "${{ needs.contract.result }}", "docs_integrity": "${{ needs.docs-integrity.result }}"}'

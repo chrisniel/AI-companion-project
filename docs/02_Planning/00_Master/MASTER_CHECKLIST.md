@@ -11,6 +11,7 @@
 | Domain Area | Target Capability | Architecture Spec | Implemented Source / Tests | Automated CI Gate | Golden Release Gate | Overall Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Governance** | Human-only Git write authority | `AGENTS.md`, `DELIVERY_WORKFLOW.md` | Process rules | N/A | Human review | **VERIFIED** |
+| **Governance** | Scoped CI Matrix (PC-VERIFY-001) | `TESTING_AND_CI.md` | `ci_policy.py`, CI yaml | Python static tests | N/A | **IMPLEMENTED / VERIFIED** (source/static) |
 | **PC Client** | Flutter Windows Desktop App | `windows-host-and-notifications.md` | Pending Flutter scaffold / target path TBD | Flutter CI lane | G1 | **NOT STARTED** |
 | **PC Client** | React Web Supported Client | `SYSTEM_BASELINE.md` §1 | `frontend/web/` | Vitest / Build | G14 | **VERIFIED** |
 | **PC Host** | Task Scheduler Autostart at Login | `windows-host-and-notifications.md` | Pending implementation | Host tests | G1 | **NOT STARTED** |
@@ -57,7 +58,7 @@
 
 ## 2. Release Blocker Audit
 
-- [ ] **M0 Docs & Architecture Reset Pass:** Complete canonicalization, verify fresh-agent startup, and obtain Chris approval.
+- [x] **M0 Docs & Architecture Reset Pass:** Complete canonicalization, verify fresh-agent startup, and obtain Chris approval.
 - [ ] **M1 Flutter Scaffolding:** Initial Flutter Windows app operational and connecting to Local AI Runtime.
 - [ ] **M2 Host Autostart & Notifications:** Proved working without open browser tab.
 - [ ] **M2 Multi-Profile Migration:** Database schema updated with full privacy isolation.
