@@ -75,6 +75,7 @@ All functional and technical mechanisms for real health integration remain open 
 - **Application Trust Boundary:** If health context is synchronized to PC in the future, it must remain Profile-owned (`profile_id`) local data protected by the application trust boundary.
 - **Cloud Fallback Privacy Rule:** When optional Cloud LLM fallback is used, health data must not be included in cloud egress without explicit user authorization and applicable privacy policy.
 - **Informational / Non-Clinical Use:** Health metrics serve solely to provide empathetic, contextual awareness for the companion without making medical or diagnostic claims.
+- **Purge Rights Boundary:** Users retain absolute authority to inspect, export, or permanently erase all Companion-retained and synchronized health data copies. The Companion does not claim automatic deletion authority over external source records residing in Android Health Connect unless created by the Companion and explicitly authorized by future architecture.
 
 ---
 
