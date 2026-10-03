@@ -30,8 +30,9 @@ Mobile local state is partitioned into strict durability, security, and lifecycl
 | **Device-Local Third-Party Secrets** | User-configured OpenAI/Anthropic API keys configured on device | Survives process death, app restart, and device reboot | **Platform-Protected Secure Storage** (Android Keystore-backed storage) | **Preserved** (Host device revocation MUST NOT erase unrelated 3rd-party user keys) | Available locally |
 | **Replicated Domain Replica** | Synced Tasks, active Reminders, scheduled Alarms | Survives process death, app restart, and device reboot | Private application sandbox (Relational store) | **Quarantined** on `PROFILE_INACTIVE`; **Erased** on `DEVICE_REVOKED` or `PROFILE_PURGED` | Available offline (domain-specific write permissions apply) |
 | **Pending Mutation Journal (Outbox)** | Queued task creations, task completion updates (`SET_COMPLETION`), alarm dismissals | Survives process death, app restart, and device reboot | Private application sandbox (Transactional journal) | **Discarded** upon authoritative `DEVICE_REVOKED` outcome | Durable until host acknowledgment |
+| **Offline Conversation Working State** | Offline user turns, generated local assistant responses, turn provenance metadata | Survives process death, app restart, and device reboot (committed in local SQLite store until synced or resolved) | Private application sandbox (Relational store / Outbox) | **Discarded / Erased** upon `DEVICE_REVOKED` or `PROFILE_PURGED` | Locally writable on qualified devices with approved local LLM (pending Host reconciliation per §3.2.6); read-only fallback when unsupported |
 | **Synchronization Metadata** | Monotonic change cursor, entity revision vectors, last-sync time | Survives process death, app restart, and device reboot | Private application sandbox | **Reset / Cleared** upon `DEVICE_REVOKED` or full re-baseline | Internal engine state |
-| **Cached / Read-Only History** | Recent conversation turns, retrieved memories, character profiles | Survives process death and restart; safely evictable on storage pressure | Private application sandbox (Cache store) | **Evicted / Erased** upon `DEVICE_REVOKED` or `PROFILE_PURGED` | Read-only view offline |
+| **Cached / Read-Only History** | Host-synchronized conversation history, retrieved memories, character profiles | Survives process death and restart; safely evictable on storage pressure | Private application sandbox (Cache store) | **Evicted / Erased** upon `DEVICE_REVOKED` or `PROFILE_PURGED` | Read-only replica offline |
 | **Transient UI State** | Active text input, scroll offsets, navigation stack | Discarded on process death (unless saved via Flutter state restoration) | Volatile memory | Discarded | UI-only |
 
 ### 2.2 Storage Architecture & Recommendations
@@ -60,7 +61,7 @@ The PC Local AI Runtime remains canonical domain authority. Mobile acts as an en
 | **Character / Persona** | PC Runtime | YES (cached instance) | NO (templates and instances are PC-managed) | YES (Cache) | Host to Mobile | PC-managed | None (read-only replica) | None |
 | **Profile Settings** | PC Runtime | YES (cached view) | NO (Profile admin is PC-only) | YES (Cache) | Host to Mobile | PC-managed | None (read-only replica) | None |
 | **Device-Local Settings** | Mobile Endpoint | YES | YES (all device preferences) | YES (Local prefs) | None (Device-local only) | Local reset | None (device-authoritative) | None |
-| **Media & Attachments** | PC Runtime | YES (cached files) | LIMITED (captured local media held pending turn upload) | YES (Sandbox files) | Asymmetric (fetch on demand; upload on turn) | PC-managed; file cleanup | None | [RESOLVED] Mobile Later / Future multimodal architecture (no local VLM in V1; turn attachment upload only) |
+| **Media & Attachments** | PC Runtime | YES (cached files) | LIMITED (captured local media held pending turn upload) | YES (Sandbox files) | Asymmetric (fetch on demand; upload on turn) | PC-managed; file cleanup | None | [RESOLVED] [IMPLEMENTATION OPEN / POST-V1 CANDIDATE] (local VLM inference excluded from Mobile V1; local media capture and upload to PC Host supported; future local vision inference remains unscheduled and requires a separate decision; turn attachment upload only) |
 
 ### 3.2 Concurrency, Entity Identity & Revision Architecture
 
@@ -113,13 +114,14 @@ To resolve the boundary between offline local conversational assistance (`mobile
    - On Tier 0 and Tier 1 devices (or when local LLM inference is uninstalled/disabled), conversation history operates strictly as a **durable read-only cache**. Turn submission is locked until connectivity to the PC Runtime or Cloud provider is established.
 2. **Stable Offline Conversation Identity:**
    - Conversations created offline by Mobile generate a stable client-side UUID `conversation_id`.
-   - *Target Contract Requirement:* Host conversation creation endpoints currently do not accept a client-generated `conversation_id`. Accepting and registering client-generated conversation identities upon sync is an explicit **TARGET architecture contract requirement**, not implemented reality.
+   - *Target Contract Requirement (Not Implemented):* Host conversation creation endpoints currently do not accept a client-generated `conversation_id`. Accepting and registering client-generated conversation identities upon sync is an explicit **TARGET CONTRACT REQUIREMENT (NOT IMPLEMENTED)**.
 3. **Turn Identity & Idempotency:**
    - Every user message submitted offline generates a client UUID `client_message_id`.
-   - On reconnection, turns are synchronized to the Host. The Host enforces deduplication using `client_message_id` within the conversation scope (aligning with existing Host database unique constraints `uq_messages_conversation_client_message_id`).
-   - A dedicated batch turn sync/import endpoint on the Host is an explicit **TARGET architecture contract requirement**.
+   - *Implemented Reality Evidence:* The current PC backend already enforces `client_message_id` uniqueness on the `messages` table within conversation scope (`uq_messages_conversation_client_message_id`), preventing duplicate message insertion.
+   - *Target Contract Requirement (Not Implemented):* A dedicated batch turn sync/import endpoint on the Host (accepting a sequence of offline turns in a single transactional request) is an explicit **TARGET CONTRACT REQUIREMENT (NOT IMPLEMENTED)**.
 4. **Local Assistant Response Provenance:**
    - Assistant responses generated via Mobile-local inference are committed locally with explicit provenance metadata (`source: MOBILE_LOCAL_INFERENCE`, `device_id: UUID`, `model_tag: string`).
+   - *Target Contract Requirement (Not Implemented):* Storing assistant turn provenance fields (`source: MOBILE_LOCAL_INFERENCE`, `device_id: UUID`, `model_tag: string`, generation metrics) on the Host `messages` schema is an explicit **TARGET CONTRACT REQUIREMENT (NOT IMPLEMENTED)**; current schema stores standard message records without client provenance metadata.
    - On synchronization, the Host imports and stores the dialogue turn as an authoritative historical record.
    - **No Host LLM Regeneration:** The Host MUST NOT replay or re-generate synchronized assistant responses through the PC language model upon import.
 5. **Tool Side Effects & Safety Isolation:**
@@ -131,6 +133,7 @@ To resolve the boundary between offline local conversational assistance (`mobile
    - *Non-Conflicting Append:* If the thread was not modified on the Host while Mobile was disconnected, offline turns append sequentially, receiving monotonic Host `sequence_no` assignments.
    - *Concurrent Thread Append Reconciliation:* If both the Host and Mobile concurrently appended turns to the same conversation thread while disconnected, **Mobile wall-clock Last-Write-Wins (LWW) is strictly REJECTED**. Arbitrary timestamp interleaving risks corrupting multi-turn dialogue context.
    - Instead, the Host preserves its authoritative thread sequence while importing Mobile's offline turns as a distinct, causally branched offline dialogue segment or session, surfacing a clear thread indicator to the user. User-level branch inspection or thread merge decisions belong to future application UI design.
+   - *Target Contract Requirement (Not Implemented):* Explicit conversation branch/segment metadata and non-destructive dialogue branch representations on the Host are **TARGET CONTRACT REQUIREMENTS (NOT IMPLEMENTED)**.
 7. **Durable Local Persistence:**
    - All offline user turns and generated local assistant responses MUST be committed atomically to local SQLite storage before presentation or network queuing. Volatile in-memory holding is prohibited.
 8. **Memory & Context Consumption Invariant:**
@@ -139,6 +142,10 @@ To resolve the boundary between offline local conversational assistance (`mobile
      - cached Character/persona definitions;
      - cached read-only Profile and Character memories replicated from the Host.
    - **No Autonomous Local Memory Extraction:** Local Memory candidate extraction, autonomous memory creation, and memory database writes are **DISABLED** on Mobile in V1. Memory ownership and automatic extraction policies remain strictly Host-governed (`memory-and-personalization.md`). Reconnected offline conversation turns may be evaluated for memory extraction on the PC Host under canonical Host policies after synchronization.
+9. **Canonical Ownership & Atomic Turn Invariants:**
+   - *Active Profile Binding:* All client-imported conversation turns MUST belong to the active Profile bound to the pairing/enrolled Device credential. Request payloads cannot self-assert or override Profile ownership.
+   - *Single Character Binding:* Offline conversation turns MUST belong to a single explicit `character_id`. Multi-character or unassigned offline persona dialogue is prohibited.
+   - *Atomic Whole-Turn Unit Import:* Conversational history reconciliation is imported as a **whole turn unit** (user prompt + assistant response + timing/model metadata) or rejected atomically. Partial turn imports (e.g. storing a user prompt while dropping the local assistant answer, or importing an assistant response without its triggering prompt) are strictly rejected to prevent orphaned assistant answers or desynchronized dialogue contexts.
 
 ---
 

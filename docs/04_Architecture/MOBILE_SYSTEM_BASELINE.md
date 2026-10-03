@@ -2,13 +2,13 @@
 
 > **Document Role:** High-level normative system architecture, capability matrix, and cross-cutting boundaries for the Mobile Companion (Flutter).
 > **Status:** Active Canonical — Mobile Architecture Batches A, B, and C Approved
-> **Authority Precedence:** This document defines the Mobile ecosystem boundaries. Cross-cutting PC boundaries remain in `SYSTEM_BASELINE.md`. Detailed mobile implementation logic remains subject to future Mobile batches.
+> **Authority Precedence:** This document defines the Mobile ecosystem boundaries. Cross-cutting PC boundaries remain in `SYSTEM_BASELINE.md`. Detailed mobile architecture and cross-cutting boundaries have been finalized across approved Mobile Batches A, B, and C.
 
 ## 1. Justification & Canonical Ownership
 
 This document serves as the dedicated Mobile baseline (`MOBILE_SYSTEM_BASELINE.md`). It is architecturally justified because the Mobile Companion requires its own cross-cutting definitions (offline capability, Flutter boundaries, mobile security) that extend beyond the PC-centric `SYSTEM_BASELINE.md`. The previous prototype-focused `01_Domains/android-companion.md` remains intact as the legacy reference boundary until all unique semantics are fully promoted and verified. 
 
-## 2. Shared Ecosystem & Authority Boundary (Batch A)
+## 2. Shared Ecosystem & Authority Boundary
 
 The Mobile Companion operates as a Satellite in the broader AI Companion ecosystem. The following authority boundaries are **[LOCKED]**:
 
@@ -21,7 +21,7 @@ The Mobile Companion operates as a Satellite in the broader AI Companion ecosyst
 - **Device-Local Secrets:** Raw provider API credentials remain device-local; they do not automatically synchronize between PC/Mobile/other Devices. A client-held device credential secret remains protected on the client, while the host maintains the corresponding Device/enrollment/credential validation record necessary to authenticate and revoke that Device.
 - **Revocation:** Device credentials are independently revocable by the PC Host.
 
-## 3. Flutter Shared-Code & Platform Boundary (Batch A)
+## 3. Flutter Shared-Code & Platform Boundary
 
 To prevent M1 Flutter Desktop and future Flutter Mobile from diverging unnecessarily while keeping Mobile concerns from contaminating PC V1, the following boundary is established (**[BATCH-A DECISION]**):
 
@@ -31,7 +31,7 @@ To prevent M1 Flutter Desktop and future Flutter Mobile from diverging unnecessa
 - **Platform Adapters:** Any functionality interacting directly with OS hardware, lifecycle, or platform APIs (e.g., Android WorkManager, Windows System Tray, native secure storage) MUST remain completely platform-specific and be injected via explicit platform-service interfaces. 
 - **Maximum Sharing is Not the Goal:** The architecture prefers sharing stable domain contracts and isolating platform behavior over forcing unified implementations where platforms fundamentally differ.
 
-## 4. Mobile Identity, Enrollment & Transport (Batch A)
+## 4. Mobile Identity, Enrollment & Transport
 
 ### 4.1 Device Identity & Enrollment
 - **Pairing & Credentials:** Device enrollment issues an independently revocable credential (Device Token) bound to one Profile.
@@ -49,9 +49,9 @@ To prevent M1 Flutter Desktop and future Flutter Mobile from diverging unnecessa
 - **Lost / Stolen Device:** The PC Host must be able to revoke that specific Device without resetting the Profile or other Devices. Host access using the revoked credential must fail. Offline local-data handling remains subject to later security policy (**[RESOLVED IN BATCH B]** - see `04_Infrastructure/mobile-offline-and-sync.md`).
 - **App Reinstall / Credential Loss:** A reinstall or loss of protected local enrollment credentials must not silently recreate authenticated Device authority from arbitrary local data. The architectural recovery direction requires explicit re-enrollment or another host-authorized recovery flow.
 
-## 5. Connected / Offline / Optional Cloud Capability Matrix (Batch A)
+## 5. Connected / Offline / Optional Cloud Capability Matrix
 
-The Mobile Companion operates across distinct modes. This matrix defines **what should work** (the *how* is deferred to Batch B and C). Connected Mobile remains subject to Mobile authority boundaries and release scope.
+The Mobile Companion operates across distinct modes. This matrix defines **what should work**, with detailed mechanisms finalized across approved Batches B and C. Connected Mobile remains subject to Mobile authority boundaries and release scope.
 
 | Capability | `CONNECTED_TO_PC` | `OFFLINE_LOCAL` | `OPTIONAL_CLOUD` | `DEGRADED / PARTIALLY_AVAILABLE` |
 | :--- | :--- | :--- | :--- | :--- |
@@ -104,8 +104,8 @@ This ledger summarizes all approved Mobile Companion architectural decisions acr
 | **Connected Voice Streaming** | `[APPROVED C]` | [`mobile-capabilities-and-runtime.md`](./04_Infrastructure/mobile-capabilities-and-runtime.md) §3, `ADR-0019` | Mobile owns capture/playback/audio focus; PC Runtime owns canonical STT/TTS/VAD/turn authority; full-duplex WebSocket; mandatory immediate barge-in. |
 | **Optional Cloud Providers** | `[LOCKED]` | [`MOBILE_SYSTEM_BASELINE.md`](./MOBILE_SYSTEM_BASELINE.md) §5.1, `mobile-capabilities-and-runtime.md` §3.2 | Explicit opt-in only; personal API keys in Keystore; Cloud LLM, Cloud STT, and Cloud TTS are 3 independently revocable permissions; no silent cloud fallback. |
 | **Model Lifecycle & Acquisition** | `[APPROVED C]` | [`mobile-capabilities-and-runtime.md`](./04_Infrastructure/mobile-capabilities-and-runtime.md) §2.3 | LAN Host-to-Device transfer in V1; single resident model cap; SHA-256 preflight; curated online bundle download is optional post-V1; container/engine format remains implementation-open. |
-| **Platform Security & Sandboxing** | `[APPROVED C]` | [`mobile-capabilities-and-runtime.md`](./04_Infrastructure/mobile-capabilities-and-runtime.md) §5 | OS private application sandbox baseline; backup exclusion (`android:allowBackup="false"`); database encryption (SQLCipher) optional/threat-model dependent. |
+| **Platform Security & Sandboxing** | `[APPROVED C]` | [`mobile-capabilities-and-runtime.md`](./04_Infrastructure/mobile-capabilities-and-runtime.md) §5 | OS private application sandbox baseline; Android backup/data-extraction rules (`dataExtractionRules` / `backup_rules.xml`) explicitly exclude device-bound credentials, replicated databases, outbox journals, models, and caches from cloud backups and device transfers as appropriate; database encryption (SQLCipher) optional/threat-model dependent. |
 | **Testing & Golden Acceptance** | `[APPROVED C]` | [`mobile-capabilities-and-runtime.md`](./04_Infrastructure/mobile-capabilities-and-runtime.md) §7, §8 | 5-layer verification matrix (L1–L5); evidence-driven L3 emulator matrix; 12 Mobile Golden Acceptance Groups (MG1–MG12); zero changes to PC CI workflows. |
 | **Health & Wearables** | `[MOBILE LATER]` | [`health-and-wearables.md`](./03_Integrations/health-and-wearables.md), `mobile-capabilities-and-runtime.md` §4 | Real Health Connect and wearable biometric sync excluded from Mobile V1; mock UI sequestered; no clinical claims. |
 | **Autonomous Local Routines** | `[MOBILE LATER]` | [`mobile-offline-and-sync.md`](./04_Infrastructure/mobile-offline-and-sync.md) §3.1 | Autonomous local routine execution deferred post-V1; cached view only offline; PC Runtime owns canonical scheduling. |
-| **Local Multimodal / Vision Input** | `[MOBILE LATER]` | [`mobile-offline-and-sync.md`](./04_Infrastructure/mobile-offline-and-sync.md) §3.1 | Local VLM inference excluded from Mobile V1; future mobile vision architecture is implementation-open / post-V1; turn attachment upload only. |
+| **Local Multimodal / Vision Input** | `[IMPLEMENTATION OPEN / POST-V1 CANDIDATE]` | [`mobile-offline-and-sync.md`](./04_Infrastructure/mobile-offline-and-sync.md) §3.1 | Local VLM inference excluded from Mobile V1; local media capture and upload to PC Host supported; future local vision inference remains unscheduled and requires a separate decision; turn attachment upload only. |
