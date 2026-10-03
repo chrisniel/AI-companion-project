@@ -1,7 +1,7 @@
 # Active Task: MOBILE-ARCH Canonicalization
 
 > **Branch:** `docs/mobile-v1-canonicalization`
-> **Status:** ARCHITECTURE IMPLEMENTATION — Batch A APPROVED / Batch B READY
+> **Status:** ARCHITECTURE IMPLEMENTATION — Batch A APPROVED / Batch B REVIEW PENDING
 > **Objective:** Execute the Mobile V1 Canonical Architecture Pass to define Mobile cross-cutting ecosystem boundaries, offline capabilities, and security rules.
 
 ## Current Execution State
