@@ -27,8 +27,8 @@ docs/02_Planning/00_Master/
 
 | Milestone ID | Title & Scope | Primary Deliverables | Target Gate / Status |
 | :--- | :--- | :--- | :--- |
-| **M0** | **Docs & Architecture Reset** | Canonicalization handoff execution, master planning spine creation, system baseline update, ADR reconciliation (ADR-0017..0019), and CI guide alignment. | **IN PROGRESS** |
-| **M1** | **Flutter Client Foundation** | Production Flutter Desktop app scaffolding, window/tray management, REST/SSE client, App/Data/Library storage root awareness, and React Web parity checks. | **NEXT / UNBLOCKED** |
+| **M0** | **Docs & Architecture Reset** | Canonicalization handoff execution, master planning spine creation, system baseline update, ADR reconciliation, and CI guide alignment. | **COMPLETE / VERIFIED** |
+| **M1** | **Flutter Client Foundation** | Production Flutter Desktop app scaffolding, window/tray management, REST/SSE client, App/Data/Library storage root awareness, and React Web parity checks. | **NEXT** |
 | **M2** | **PC Companion Foundation** | Windows autostart at login, native desktop notifications, Task Scheduler integration, D6 controlled model import service, and multi-Profile database migration. | **PLANNED** |
 | **M3** | **Intelligence & Productivity** | Character Studio & 8 continuous personality traits, persistent bounded emotion, profile-first selective memory with revalidation, and Task/Reminder/Alarm scheduling. | **PLANNED** |
 | **M4** | **Voice, Tools & Information** | Conversational voice pipeline with mandatory barge-in, WebSocket audio transport, D9 deterministic tool policy engine, and read-only public web/current info. | **PLANNED** |

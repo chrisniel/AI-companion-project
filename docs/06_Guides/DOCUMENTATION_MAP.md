@@ -27,7 +27,10 @@ Relevant Focused Canonical Domain Specification & Accepted ADR(s)
   │  (Load ONLY the specific domain spec relevant to the active task)
   ▼
 docs/01_Tracking/task.md
-  │  (Active sprint, current execution state, immediate blockers)
+    │  (Shared milestone goals and integration state)
+    ▼
+docs/01_Tracking/active/task-[branch-slug].md
+    │  (If on short-lived task branch: transient branch execution state)
   ▼
 Relevant Active Implementation Plan (in docs/02_Planning/01_Plans/)
 ```
@@ -52,7 +55,7 @@ When seeking the authoritative answer to any question, consult documents and art
 | **4. Architectural Decisions** | **Accepted ADRs** ([`docs/04_Architecture/decisions/`](../04_Architecture/decisions/README.md)) | **Durable decision records containing context, trade-offs, and consequences. ADRs do not compete with domain specs.** |
 | **5. Master Planning Spine** | **Master Planning Hub** ([`docs/02_Planning/00_Master/`](../02_Planning/00_Master/DELIVERY_INDEX.md)) | **Authoritative for milestone roadmaps, Work Breakdown Structure (WBS), backlog categorization, and decision indexing.** |
 | **6. UX & Presentation** | **Design Specifications** ([`docs/05_Design/`](../05_Design/README.md)) | **Authoritative for interface layout, styling, interaction models, and visual language.** Subordinate to architecture contracts. |
-| **7. Active Execution** | **Active Task File** ([`docs/01_Tracking/task.md`](../01_Tracking/task.md)) | **Authoritative for current in-flight task execution, immediate sub-slices, and blockers.** Target under 80 lines. |
+| **7. Active Execution** | **Active Branch Task** (`docs/01_Tracking/active/task-[branch-slug].md`) | **Authoritative for current in-flight task execution, immediate sub-slices, and blockers.** Target under 80 lines. |
 | **8. Approved Implementation Logic** | **Active Feature Plans** ([`docs/02_Planning/01_Plans/`](../02_Planning/01_Plans/README.md)) | **Authoritative for step-by-step logic, pseudocode, and TDD steps during an active feature delivery.** |
 | **9. Contributor & Engineering Guides** | **Guides Directory** ([`docs/06_Guides/`](./DELIVERY_WORKFLOW.md)) | **Authoritative for delivery workflows, developer setup, testing standards, and PR protocols.** |
 | **10. Historical Evidence (Non-Normative)** | **Walkthroughs, Archives & Legacy Notes** (`docs/03_Walkthroughs/`, `docs/01_Tracking/archive/`, `docs/07_Archive/`, `docs/02_Planning/ROADMAP.md`) | **Historical point-in-time delivery records and superseded roadmaps.** Strictly non-normative. |
@@ -91,7 +94,7 @@ Use this matrix to identify the single canonical owner for specific questions:
 | Delivery gates, Git ownership, or walkthrough templates | [`docs/06_Guides/DELIVERY_WORKFLOW.md`](./DELIVERY_WORKFLOW.md) |
 | Developer workstation setup, compilers, or venv | [`docs/06_Guides/DEVELOPMENT_SETUP.md`](./DEVELOPMENT_SETUP.md) |
 | Test execution, CI pipeline design, or Golden Gate | [`docs/06_Guides/TESTING_AND_CI.md`](./TESTING_AND_CI.md) |
-| Immediate active sprint tasks and blockers | [`docs/01_Tracking/task.md`](../01_Tracking/task.md) |
+| Immediate active sprint tasks and blockers | `docs/01_Tracking/active/task-[branch-slug].md` |
 
 ---
 
@@ -100,7 +103,7 @@ Use this matrix to identify the single canonical owner for specific questions:
 | Directory | Canonical Status | Role & Content | AI Context Default |
 | :--- | :--- | :--- | :--- |
 | `docs/00_Drafts/` | Non-Canonical | Scratchpads, unreviewed brainstorms. | **Strictly ignored.** |
-| `docs/01_Tracking/` | Canonical (Execution) | Active `task.md` (< 80 lines) and per-sprint `archive/`. | `task.md` read on resume; `archive/` ignored. |
+| `docs/01_Tracking/` | Canonical (Execution) | Shared `task.md`, active branch execution in `active/`, historical delivery in `archive/`. | `task.md` read on develop; `active/` on branch. |
 | `docs/02_Planning/` | Canonical (Planning) | Master Planning Spine (`00_Master/`), active plans (`01_Plans/`), templates, and historical archives. | `DELIVERY_INDEX.md` consulted on startup; active plan during execution. |
 | `docs/03_Walkthroughs/` | Historical Evidence | Point-in-time delivery records and handovers. | Ignored during normal startup. |
 | `docs/04_Architecture/` | Canonical (Normative) | System Baseline, ADRs (`decisions/`), and 18 focused domain specifications. | Consulted on demand per active domain. |
