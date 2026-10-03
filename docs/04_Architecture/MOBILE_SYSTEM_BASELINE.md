@@ -1,0 +1,74 @@
+# Mobile Companion — Canonical System Baseline
+
+> **Document Role:** High-level normative system architecture, capability matrix, and cross-cutting boundaries for the Mobile Companion (Flutter).
+> **Status:** Active Canonical (Mobile Architecture - Batch A)
+> **Authority Precedence:** This document defines the Mobile ecosystem boundaries. Cross-cutting PC boundaries remain in `SYSTEM_BASELINE.md`. Detailed mobile implementation logic remains subject to future Mobile batches.
+
+## 1. Justification & Canonical Ownership
+
+This document serves as the dedicated Mobile baseline (`MOBILE_SYSTEM_BASELINE.md`). It is architecturally justified because the Mobile Companion requires its own cross-cutting definitions (offline capability, Flutter boundaries, mobile security) that extend beyond the PC-centric `SYSTEM_BASELINE.md`. The previous prototype-focused `01_Domains/android-companion.md` remains intact as the legacy reference boundary until all unique semantics are fully promoted and verified. 
+
+## 2. Shared Ecosystem & Authority Boundary (Batch A)
+
+The Mobile Companion operates as a Satellite in the broader AI Companion ecosystem. The following authority boundaries are **[LOCKED]**:
+
+- **Account / Profile / Device:** The PC Host is the Account Admin. A Mobile device is an enrolled Satellite Device.
+- **Profile Binding:** One normal Mobile Satellite binds to exactly ONE Profile.
+- **Admin Authority:** The PC remains the sole Account and Profile administration authority. Mobile cannot arbitrarily create, delete, or switch Profiles.
+- **Runtime Authority:** The Local AI Runtime remains the host authority for canonical PC-side AI work and canonical state.
+- **Request Payloads:** Request payloads cannot self-assert arbitrary Profile ownership. Ownership is determined strictly by the authenticated session/device token.
+- **Mobile Independence:** Mobile implementation remains completely independent from PC V1 delivery.
+
+The following are new **[BATCH-A DECISIONS]**:
+- **Device-Local Secrets:** Provider APIs and device-specific secrets remain device-local unless explicitly approved otherwise.
+- **Revocation:** Device credentials are independently revocable by the PC Host, instantly degrading the Mobile Satellite to an unauthenticated state.
+
+## 3. Flutter Shared-Code & Platform Boundary (Batch A)
+
+To prevent M1 Flutter Desktop and future Flutter Mobile from diverging unnecessarily while keeping Mobile concerns from contaminating PC V1, the following boundary is established (**[BATCH-A DECISION]**):
+
+- **Workspace Topology:** Desktop and Mobile should reside in a single shared Flutter workspace (monorepo), utilizing separate application targets (e.g., `apps/desktop` and `apps/mobile`).
+- **Shared Packages:** Domain models, OpenAPI/REST clients, the core design system (colors, typography), and authentication abstractions MUST be shared packages.
+- **State Management & Repositories:** Core business logic and repository interfaces MUST be shared. 
+- **Platform Adapters:** Any functionality interacting directly with OS hardware, lifecycle, or platform APIs (e.g., Android WorkManager, Windows System Tray, native secure storage) MUST remain completely platform-specific and be injected via explicit platform-service interfaces. 
+- **Maximum Sharing is Not the Goal:** The architecture prefers sharing stable domain contracts and isolating platform behavior over forcing unified implementations where platforms fundamentally differ.
+
+## 4. Mobile Identity, Enrollment & Transport (Batch A)
+
+### 4.1 Device Identity & Enrollment
+- **Pairing & Credentials:** Device enrollment issues an independently revocable credential (Device Token) bound to one Profile.
+- **Secret Storage:** **[BATCH-A DECISION]** Sensitive Mobile credentials (pairing tokens, local secrets) MUST use approved platform-protected device-local storage. Android Keystore (or a vetted Flutter abstraction backed by it) is the primary target for Android deployments. Plaintext storage (e.g., standard SharedPreferences) is strictly prohibited.
+
+### 4.2 Transport Security & Trust
+- **Transport Constraints:** **[LOCKED]** Application authentication is mandatory regardless of network location. 
+- **Encrypted Transport:** **[BATCH-A DECISION]** Ordinary sensitive LAN traffic without an encrypted/protected transport path violates D5. An approved encrypted overlay (such as Tailscale) provides transport protection even when the local application endpoint uses HTTP internally. Cloudflare Tunnel/Access remains the preferred remote-browser path. 
+- **Public Internet:** **[LOCKED]** Direct public router port forwarding remains strictly rejected.
+
+## 5. Connected / Offline / Optional Cloud Capability Matrix (Batch A)
+
+The Mobile Companion operates across distinct modes. This matrix defines **what should work** (the *how* is deferred to Batch B).
+
+### 5.1 CONNECTED_TO_PC
+- **State:** PC/Runtime reachable and authenticated.
+- **Capabilities:** Full capability. Mobile delegates heavy inference, canonical memory writes, and history synchronization to the PC Runtime. Real-time Voice and Assistant features rely on the PC.
+
+### 5.2 OFFLINE_LOCAL
+- **State:** No PC and no usable network path.
+- **Capabilities:** **[BATCH-A DECISION]** Mobile MUST remain usable for local capabilities. This includes viewing/creating queued Tasks, triggering offline Reminders/Alarms/Schedules, accessing local settings, viewing cached conversation history, and accessing local media/assets.
+- **Local Inference:** **[OPEN FOR BATCH C]** Disposition of local mobile LLM inference is deferred. If unavailable, Assistant and Voice capabilities are gracefully degraded or disabled offline.
+
+### 5.3 OPTIONAL_CLOUD
+- **State:** PC unavailable, but an explicitly configured cloud capability (e.g., a local API key for a cloud LLM/TTS provider) exists and network is available.
+- **Capabilities:** **[BATCH-A DECISION]** Cloud is NOT mandatory. If configured, Mobile may use cloud services for Voice, Assistant inference, and parsing tasks, provided this data flow requires separate authorization and respects device-local secret storage.
+
+### 5.4 DEGRADED / PARTIALLY_AVAILABLE
+- **Network Available, PC Unavailable:** Falls back to OFFLINE_LOCAL + OPTIONAL_CLOUD.
+- **Credential Revoked:** Immediate local session wipe, returning to the enrollment/pairing screen.
+- **Stale Local Cache:** Read-only access to cached domain data (Tasks, History) until sync is restored.
+
+---
+
+## 6. Open Architecture Decisions
+The following areas are explicitly deferred and must not be implemented during Batch A:
+- **[OPEN FOR BATCH B]** Local persistence semantics, outbox design, per-domain synchronization, reconciliation algorithms, and Android background execution responsibilities (WorkManager, Doze, exact alarms).
+- **[OPEN FOR BATCH C]** Local mobile inference, exact Voice/audio architecture, Health/Wearables release disposition, threat model completion, and performance/thermal policies.

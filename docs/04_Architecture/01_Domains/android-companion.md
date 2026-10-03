@@ -2,6 +2,7 @@
 
 > **Document Role:** Canonical domain architecture specification.  
 > **Status:** Active Canonical (Mobile Architecture Boundary)  
+> **Note:** Mobile production baseline architecture is currently being promoted to [`MOBILE_SYSTEM_BASELINE.md`](../MOBILE_SYSTEM_BASELINE.md) under the Mobile Batch A architecture pass. This document remains the interim reference until promotion is demonstrably complete.
 
 ## 1. Prototype & Reference State
 

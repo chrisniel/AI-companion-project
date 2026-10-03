@@ -1,7 +1,7 @@
 # Active Task: MOBILE-ARCH Plan
 
 > **Branch:** `docs/mobile-v1-canonicalization`
-> **Status:** PLANNING (Awaiting Human Approval)
+> **Status:** PLANNING (Batch A Architecture - Awaiting Human Approval)
 > **Objective:** Establish the implementation plan for the Mobile V1 Canonical Architecture Pass.
 
 ## Current Execution State
@@ -12,8 +12,8 @@
 - [x] Inspection Gap Closure (Verified missing governance/architecture files and codebase to find new contradictions).
 - [x] Generate the revised formal MOBILE-ARCH plan (`docs/02_Planning/01_Plans/plan-mobile-v1-canonicalization.md`).
 - [x] Final Plan Revision (Surgical corrections for mechanism neutrality, D5 transport constraints, and 3-batch implementation split).
-- [ ] Await Chris's independent GPT review and approval of the revised plan.
-- [ ] Phase 1: Architecture Implementation (Batch A — Mobile Foundation).
+- [x] Await Chris's independent GPT review and approval of the revised plan.
+- [x] Phase 1: Architecture Implementation (Batch A — Mobile Foundation).
 - [ ] Phase 2: Architecture Implementation (Batch B — Offline & Native Reliability).
 - [ ] Phase 3: Architecture Implementation (Batch C — Mobile Capabilities & Verification).
 - [ ] Phase 4: Documentation & Planning Integration.

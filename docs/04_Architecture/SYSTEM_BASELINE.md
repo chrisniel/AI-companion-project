@@ -127,6 +127,7 @@ Detailed normative requirements are defined in the 18 focused specifications:
   - [`01_Domains/voice-and-audio.md`](01_Domains/voice-and-audio.md)
   - [`01_Domains/multimodal-and-media.md`](01_Domains/multimodal-and-media.md)
   - [`01_Domains/android-companion.md`](01_Domains/android-companion.md)
+  - [`MOBILE_SYSTEM_BASELINE.md`](MOBILE_SYSTEM_BASELINE.md) (Mobile Ecosystem Boundary)
 - **02 Data and Security:**
   - [`02_Data_and_Security/profiles-and-devices.md`](02_Data_and_Security/profiles-and-devices.md)
   - [`02_Data_and_Security/authentication-and-secrets.md`](02_Data_and_Security/authentication-and-secrets.md)

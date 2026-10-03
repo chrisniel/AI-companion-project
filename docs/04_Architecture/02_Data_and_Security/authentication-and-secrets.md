@@ -114,7 +114,7 @@ The normative architecture for D4 and D5 is frozen. The following implementation
 
 - **Rate Limiting Parameters:** Request rate thresholds, burst limits, and backoff windows per endpoint tier (`DEBT-V1-014`).
 - **Host Secret Store Mechanism:** Specific host credential storage mechanism (Windows Credential Manager, DPAPI wrappers, or encrypted configuration files).
-- **Client Secret Store Mechanism:** Mobile credential storage mechanism (Android Keystore, EncryptedSharedPreferences).
+- **Client Secret Store Mechanism:** **[BATCH-A DECISION]** Sensitive Mobile credentials MUST use approved platform-protected device-local storage. For Android, Android Keystore (or a vetted abstraction backed by it) is the primary target. Plaintext storage is prohibited.
 - **Token Rotation & Expiration:** Policies and automation for periodic credential rotation and inactivity timeouts.
 
 ---
