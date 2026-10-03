@@ -139,7 +139,7 @@
 - **`PC-RESOURCE-001`**: Host Resource Policy Controller (Normal / Low Impact / Auto).
 - **`PC-RESOURCE-002`**: Option B Configured Game & Heavy App Detection with Cooldown Hysteresis.
 - **`PC-RESOURCE-003`**: Background Work Deferral & Durable Queue Throttling.
-- **`PC-RESOURCE-004`**: Low-Impact Lightweight Model Substitution (1B–3B text LLM swap with state preservation).
+- **`PC-RESOURCE-004`**: Low-Impact Lightweight Model Substitution (compatible lightweight local text model substitution. 1B-3B is an example/reference range only).
 
 ### Stream: `PC-VERIFY` — Verification & Golden Gate
 - **`PC-VERIFY-001`**: CI Pipeline Update (Always-running `ci-gate` failure aggregator, scoped PR/push matrix).

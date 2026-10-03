@@ -19,7 +19,7 @@ It governs the boundary between audio hardware/drivers and conversational assist
 
 ---
 
-## 2. Durable Architecture & Invariants
+## 2. Durable Architecture
 
 ### 2.1 Native Client & Runtime Voice Architecture 
 
@@ -50,33 +50,32 @@ In accordance with Decision D1:
 
 ---
 
-## 2. Frozen PC V1 Voice Semantics & Architecture
 
-### 2.1 Capability Ownership
+### 2.4 Capability Ownership
 
 - **Flutter Client Owns:** Mic/device enumeration, capture, output-device selection, playback.
 - **Local AI Runtime Owns:** STT, TTS, VAD, `VoiceSession` orchestration, conversation/provider lifecycle.
 - **PC V1 Flow:** Push-to-talk fallback, manually started active Voice Conversation, VAD-assisted turn-taking. Constant-listening wake word is deferred.
 
-### 2.2 Mandatory Barge-In
+### 2.5 Mandatory Barge-In
 
 - **Barge-in Behavior:** Must instantly stop playback, cancel pending TTS/audio, cancel stale text generation as appropriate, discard stale chunks, and start the new turn.
 - **Identity Check:** Audio uses voice-session + turn identity so stale output cannot accidentally resume after a barge-in.
 - **Profile Isolation:** A Profile switch strictly kills the old Profile's voice session and clears all buffers.
 
-### 2.3 Privacy & Data Retention
+### 2.6 Privacy & Data Retention
 
 - **Voice is NOT Authentication:** Conversational voiceprint matching is never used as an authorization or authentication factor.
 - **Ephemeral Audio:** Partial STT is ephemeral. The final transcript becomes an ordinary conversation message. Raw audio is not stored by default. Debug capture requires explicit visible opt-in and bounded retention.
 - **Cloud Boundaries:** Cloud LLM, cloud STT, and cloud TTS are strictly separate permissions. Gaming/resource pressure never silently sends audio to the cloud.
 - **Proactive Speech:** Private proactive speech from notifications or Routines is OFF by default unless the user explicitly opts in.
 
-### 2.4 Actions & Policy
+### 2.7 Actions & Policy
 
 - **Policy Parity:** Voice tools use the exact same D9 policy as text.
 - **Low-Confidence Extraction:** Low-confidence consequential action fields require explicit clarification.
 
-### 2.5 Provider Candidates
+### 2.8 Provider Candidates
 
 - Exact provider implementation remains open. `whisper.cpp`, `Kokoro`, and `Silero` remain primary reference candidates.
 

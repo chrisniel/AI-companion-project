@@ -304,7 +304,7 @@ The capability tracks below represent approved PC Later features scheduled for m
 Capabilities in this category are evaluated or experimental without committed release scheduling. They must not be promoted to committed release milestones without formal review:
 - **Stable Diffusion Presence Renderer:** Intent: `EXPERIMENTAL`; Delivery: `NOT STARTED`; Release: `FUTURE / UNSCHEDULED`. Evaluated as an exploratory generative visual option; distinct from advanced Presence.
   - *Canonical Owner:* [`docs/04_Architecture/01_Domains/multimodal-and-media.md`](../04_Architecture/01_Domains/multimodal-and-media.md).
-- **Multi-Profile Architecture:** Intent: `PROVISIONAL`; Delivery: `NOT STARTED`; Release: `FUTURE / UNSCHEDULED`. The ecosystem operates as a single-primary-user system (`owner_id` preserves the Profile boundary; Decision D8); multi-profile support remains a possible future architectural consideration without an approved delivery commitment.
+- **Multi-Profile Architecture:** Intent: `PROVISIONAL`; Delivery: `NOT STARTED`; Release: `FUTURE / UNSCHEDULED`. The ecosystem supports a Multi-Profile PC V1 ownership model (ADR-0018).
   - *Canonical Owner:* [`docs/04_Architecture/02_Data_and_Security/profiles-and-devices.md`](../04_Architecture/02_Data_and_Security/profiles-and-devices.md).
 - **Android Device-Local TTS:** Intent: `EXPERIMENTAL`; Delivery: `NOT STARTED`; Release: `FUTURE / UNSCHEDULED`. Historical optional idea only ("where feasible"). Not an Android V1 requirement, and not currently committed to Android Later.
   - *Canonical Owner:* [`docs/04_Architecture/01_Domains/android-companion.md`](../04_Architecture/01_Domains/android-companion.md).

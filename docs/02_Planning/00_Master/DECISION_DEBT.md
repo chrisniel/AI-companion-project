@@ -75,7 +75,7 @@
 
 - **`DEBT-EXP-003`: Emotion Decay Rate Tuning**
   - *Context:* Simulated companion mood decays toward neutral over elapsed time.
-  - *Need:* Tune decay half-life curves (e.g., 4-hour vs. 12-hour rebalancing) through experiential testing.
+  - *Need:* Emotion decay/rebalancing function and time constants require empirical tuning.
   - *Resolution Point:* Milestone M3 tuning.
 
 ### Category: `PC-LATER / V2 IMPROVEMENT CANDIDATE`

@@ -104,7 +104,7 @@ Verified in `backend/app/core/storage.py` and `backend/migrations/`:
 ---
 
 
-### 3.3 Current D6 Import Path Discrepancy
+### 3.4 Current D6 Import Path Discrepancy
 - **Current Implementation:** The codebase may currently derive import paths from `COMPANION_DATA_ROOT` (e.g., `DATA_ROOT/imports`). This is a temporary technical debt mismatch.
 - **Target Architecture:** D6 import inbox and staging belong exclusively under `LIBRARY_ROOT` as described above. `DATA_ROOT/imports` is not the final canonical architecture.
 

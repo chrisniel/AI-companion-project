@@ -30,7 +30,7 @@
 - **Selective Memory with Revalidation:** Profile/Character scoping, explicit remember commands, deterministic local extraction, temporary memory validity tracking, and bounded history recall.
 - **D9 Deterministic Policy Engine:** 5-stage pipeline, DEFAULT DENY, configurable Risk 0/1/2, exact confirmation parameter binding, emergency kill switch, and auditable logging.
 - **Scheduling & Notifications (D10):** Runtime `SchedulerService`, distinct Task/Reminder/Alarm/Routine, quiet hours defaults (Alarm bypasses; Reminder/Routine respects), native notification delivery.
-- **Conversational Voice:** Local STT (`whisper.cpp`), local TTS (Kokoro-82M), mandatory voice barge-in, WebSocket audio streaming.
+- **Conversational Voice:** Local STT (e.g. `whisper.cpp` reference), local TTS (e.g. Kokoro-82M reference candidate), mandatory voice barge-in, WebSocket audio streaming.
 - **Read-Only Web Information:** Public search, web fetch with strict SSRF containment, weather context, untrusted content sanitization, source provenance.
 - **Optional Cloud Fallback:** `LOCAL_ONLY` default; opt-in `LOCAL_FIRST`; device-local API keys; background cloud inference defaults OFF; egress transparency.
 - **Resilience & Maintenance:** Coordinated DB+Profile asset backup, pre-migration snapshots, staged restore verification, local admin Factory Reset.

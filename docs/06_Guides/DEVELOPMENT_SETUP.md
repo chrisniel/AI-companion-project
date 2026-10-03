@@ -62,8 +62,8 @@ In accordance with Phase 8P persistent storage architecture, repository director
 - `INSTALLED_REGISTRY_PATH`: `<LIBRARY_ROOT>/registry/models.json` — Authoritative Model Registry Schema v3
 - `VOICE_LIBRARY_DIR`: `<LIBRARY_ROOT>/voices` — Voice models and synthesis profiles
 - `ATTACHMENT_DIR`: `<DATA_ROOT>/attachments` — Multimodal image attachments
-- `IMPORT_INBOX_DIR`: `<DATA_ROOT>/imports/inbox` — Model import drop inbox (Decision D6)
-- `IMPORT_STAGING_DIR`: `<DATA_ROOT>/imports/staging` — Preflight validation and quarantine staging (Decision D6)
+- `IMPORT_INBOX_DIR`: TARGET PC V1: `<LIBRARY_ROOT>/imports/inbox` (CURRENT implementation: `<DATA_ROOT>/imports/inbox`) — Model import drop inbox (Decision D6)
+- `IMPORT_STAGING_DIR`: TARGET PC V1: `<LIBRARY_ROOT>/imports/staging` (CURRENT implementation: `<DATA_ROOT>/imports/staging`) — Preflight validation and quarantine staging (Decision D6)
 - `CHARACTER_DIR`: `<DATA_ROOT>/characters` — Character cards and persona definitions
 - `BACKUP_DIR`: `<DATA_ROOT>/backups` — Persistent database backup location
 

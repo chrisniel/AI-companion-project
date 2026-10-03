@@ -35,7 +35,7 @@ In accordance with Decision D5:
 The companion architecture supports three bounded network topologies under Decision D5 and `ADR-0006`:
 1. **Authenticated Localhost Loopback (Default):** Local desktop clients (Flutter, React Web) and host processes communicating over `127.0.0.1` / `::1`.
 2. **Explicitly Trusted LAN:** Satellite devices communicating across a private home network with explicit host pairing and application authentication.
-3. **Encrypted Overlay Mesh (Tailscale Private Mesh — Preferred):** Remote satellite access routed through an authenticated, encrypted WireGuard-based private mesh network without exposing open router ports (`ADR-0006`). Alternatively, a managed **Cloudflare Tunnel** with Cloudflare Access authentication is supported for controlled web egress.
+3. **Encrypted Overlay Mesh (Tailscale Private Mesh — Preferred):** Remote satellite access routed through an authenticated, encrypted WireGuard-based private mesh network without exposing open router ports (`ADR-0006`). Alternatively, a managed **Cloudflare Tunnel** with Cloudflare Access authentication is supported for controlled remote-browser ingress.
 
 ### 2.3 Direct Public Internet Port Forwarding Rejected
 
@@ -60,6 +60,10 @@ The handling of third-party provider credentials (e.g. OpenAI, Anthropic, Groq A
 - **No Remote Exposure:** The Runtime/provider layer never exposes raw keys to remote browser clients.
 - **Backup & Restore Exclusions:** Restore/backup processes do not restore device/provider credentials by default.
 
+
+### 2.6 API Key Legacy Status
+
+- Distinguish current shared `COMPANION_API_KEY` as a legacy/development implementation only.
 
 ## 3. Current Verified Implementation
 

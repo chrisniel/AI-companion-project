@@ -63,7 +63,7 @@ When productivity tools are invoked via conversational or autonomous flows:
 
 ---
 
-### 2.5 Scheduler & Native Notification Ownership
+### 2.4 Scheduler & Native Notification Ownership
 
 The separation of scheduling truth and OS presentation is strictly partitioned:
 

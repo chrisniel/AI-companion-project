@@ -27,18 +27,7 @@ The Character Studio is structured into three coordinated panels:
 
 ## 3. Eight Continuous Personality Traits
 
-Personality is defined by eight continuous, calibrated sliders on a scale of **0 to 100**:
-
-| Trait | Left (0) Endpoint | Right (100) Endpoint | Default | Visual Icon |
-| :--- | :--- | :--- | :--- | :--- |
-| **Warmth** | Reserved, clinical | Affectionate, deeply warm | 65 | Heart / Sun |
-| **Humor** | Serious, dry | Witty, playful, bantering | 50 | Sparkles |
-| **Formality** | Casual, slang-friendly | Academic, polite, structured | 40 | Tie / Book |
-| **Empathy** | Pragmatic, logical | Compassionate, emotionally attuned | 70 | Handshake |
-| **Directness** | Diplomatic, gentle | Candid, blunt, concise | 55 | Arrow |
-| **Curiosity** | Passive, answering only | Inquisitive, proactive questions | 60 | Compass |
-| **Playfulness** | Sedate, grounded | Whimsical, teasing, energetic | 45 | Dice |
-| **Patience** | Terse, quick-to-conclude | Tolerant, thorough, accommodating | 80 | Hourglass |
+Exactly eight continuous (0–100) dimensions: Warmth, Teasing, Guardedness, Directness, Expressiveness, Affection, Formality, Verbosity.
 
 ### Slider Interaction Design
 - Each slider features a real-time numerical indicator and descriptive tooltip describing how extreme positions manifest in speech.

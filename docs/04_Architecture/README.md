@@ -60,7 +60,7 @@ docs/04_Architecture/
    - **Multimodal and media:** Message image attachments, multimodal vision understanding, and media metadata ([`01_Domains/multimodal-and-media.md`](01_Domains/multimodal-and-media.md)).
    - **Android Companion:** Connected synchronization protocol, offline LLM execution boundaries, and mobile companion behavior ([`01_Domains/android-companion.md`](01_Domains/android-companion.md)).
 2. **`02_Data_and_Security/` (Data & Security Architecture):**
-   - **Profiles and devices:** Identity boundaries, device registration, and single-primary-user baseline ([`02_Data_and_Security/profiles-and-devices.md`](02_Data_and_Security/profiles-and-devices.md)).
+   - **Profiles and devices:** Identity boundaries, device registration, and multi-profile architecture ([`02_Data_and_Security/profiles-and-devices.md`](02_Data_and_Security/profiles-and-devices.md)).
    - **Authentication and secrets:** Credential isolation, token handling, and trusted network boundaries ([`02_Data_and_Security/authentication-and-secrets.md`](02_Data_and_Security/authentication-and-secrets.md)).
    - **Tool permissions and actions:** Risk tiers, deterministic policy evaluation (`ALLOW` / `CONFIRM` / `DENY`), and elevated action restrictions ([`02_Data_and_Security/tool-permissions-and-actions.md`](02_Data_and_Security/tool-permissions-and-actions.md)).
    - **Privacy / retention / audit:** Data minimization, user consent, audit logging, and deletion policies ([`02_Data_and_Security/privacy-retention-and-audit.md`](02_Data_and_Security/privacy-retention-and-audit.md)).

@@ -35,18 +35,11 @@ In accordance with Decision D11, companion character systems enforce strict conc
 3. **Conversation:**
    - Belongs to the user Profile.
    - References a specific Character persona; conversation history remains permanently bound to that Character as recorded.
-4. **Personality (8 Continuous Traits):**
-   - Distinct from lore or visual assets; governs behavioral mannerisms, communication style, and phrasing tone.
-   - Evaluated on a continuous **0–100 scale** across 8 core dimensions:
-     1. **Warmth:** Reserved / Cool (0) ◄────────► Warm / Affectionate (100)
-     2. **Directness:** Indirect / Gentle (0) ◄────────► Direct / Blunt (100)
-     3. **Verbosity:** Concise / Terse (0) ◄────────► Elaborate / Expressive (100)
-     4. **Playfulness:** Serious / Practical (0) ◄────────► Playful / Whimsical (100)
-     5. **Empathy:** Analytical / Detached (0) ◄────────► Highly Empathetic / Validating (100)
-     6. **Formality:** Casual / Colloquial (0) ◄────────► Formal / Professional (100)
-     7. **Curiosity:** Reactive (0) ◄────────► Inquisitive / Proactive (100)
-     8. **Humor:** Deadpan / Dry (0) ◄────────► Witty / Joking (100)
-   - **Presets as Starting Templates:** Predefined presets (e.g., "Professional Assistant", "Playful Companion", "Quiet Scribe") copy baseline values into the 8 sliders; all values remain fully customizable.
+4. **Personality Dimensions (8 Continuous Scales):**
+   - **Eight Continuous Dimensions:** Exact frozen V1 dimensions are: Warmth, Teasing, Guardedness, Directness, Expressiveness, Affection, Formality, Verbosity. These are represented as 0-100 continuous values.
+   - **Frozen Presets:** Custom, Warm Companion, Playful, Formal Advisor, Tsundere, Kuudere, Dandere, Yandere. Presets copy/initialize trait values and remain editable. Do not treat presets as rigid personality classes.
+   - **Character Template:** App-owned/versioned initial template.
+   - **Character Instance:** Profile-owned snapshot/configuration instantiated from a template. Future Template updates MUST NOT silently mutate existing Character instances. Do not describe Character instances as permanently or live "bound" to templates.
 5. **Emotion & Mood Dynamics (Persistent & Bounded):**
    - **Persistent Simulated Mood:** Emotion/Mood is a persistent bounded simulated state across Runtime/Windows restart. It rebalances/decays based on elapsed time. Exact mathematical decay curve remains open. Do NOT mandate exponential decay in the durable architecture. Do NOT call PC V1 emotion state ephemeral.
    - **Mood Isolation:** Mood affects social presentation only. Never affects facts, permissions, tools, alarms, scheduler, privacy, queue priority or correctness.
@@ -121,7 +114,7 @@ The following target capabilities are approved under Decision D11:
 The normative architecture for D11 is frozen. The following implementation-level details are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
 
 - **Database Schemas:** Exact SQLite column types, constraints, and foreign keys for character instances, presets, and mood persistence (`DEBT-V1-006`).
-- **Mood Decay Half-Life Formula:** Mathematical formula for exponential time decay back to baseline mood (`DEBT-V1-007`).
+- **Mood Decay Half-Life Formula:** Mathematical formula for time decay back to baseline mood (`DEBT-V1-007`).
 - **Presence Architecture (PC Later):** Host sensors, privacy controls, and presentation models for PC Later.
 - **Relationship State Mechanics (PC Later):** Progression algorithms, safety boundaries, user controls, and lifecycle.
 

@@ -14,7 +14,7 @@
 The frozen identity model relies on four core entities:
 - **Account:** One local installation/admin authority.
 - **Profile:** One human's private companion context.
-- **Device:** Enrolled endpoint/device identity (a browser tab itself is not a Device; it is a Session on an endpoint).
+- **Device:** Enrolled endpoint/device identity. A browser tab is NOT itself a Device; it participates through a Session on an endpoint.
 - **Session:** Temporary authenticated context.
 
 
@@ -96,19 +96,13 @@ Repository source code establishes the following baseline reality:
 
 ## 5. Approved Target Architecture / Not Yet Implemented
 
-The following target capabilities are approved for PC V1:
+The target implementation requires robust, structurally separate persistence for Profiles and Devices. Exact database columns and schema remain implementation-open, but the system must implement the following conceptual target architecture:
 
-1. **Profiles Table & Migration (`PC-IDENTITY-001`):**
-   - New `profiles` table in SQLite (`id`, `name`, `avatar`, `created_at`, `is_active`).
-   - Migration script transitioning domain entities from `owner_id` to `profile_id`.
-2. **Device Registry & Independent Credentials (`PC-IDENTITY-002`):**
-   - `devices` table storing enrolled hardware, client names, platform types, and hashed device tokens.
-   - Independent credential generation during pairing, enabling individual device revocation from PC desktop settings.
-3. **Satellite Device Binding (`ADR-0018`):**
-   - Enrolling an Android satellite binds the device token to a specific `profile_id`.
-   - Incoming API requests authenticate the device token and automatically resolve the bound `profile_id`.
-
----
+- **Stable UUID Profile record:** `profile_id` must be the root authority for memories, assets, and settings.
+- **Migration:** A migration from legacy `owner_id` to `profile_id` is required.
+- **Device Enrollment:** Device enrollment/credential records must exist, distinct from Profiles.
+- **Single-Profile Satellite:** One normal satellite Device binds to exactly one Profile.
+- **Revocable Credentials:** Each device must have independently revocable device credentials.
 
 ## 6. Implementation-Open Details (Decision Debt)
 
@@ -124,7 +118,7 @@ The normative architecture for D4 and ADR-0018 is frozen. The following implemen
 
 - **Profile Isolation:** All queries on user data mandate `WHERE entity.profile_id = :authenticated_profile_id`. Cross-profile data leakage is strictly prohibited.
 - **Satellite Isolation:** Satellite device tokens have access strictly to their bound profile.
-- **Admin Boundary:** Profile management (creation, deletion, satellite pairing) requires local PC access .
+- **Admin Boundary:** Profile management (creation, deletion, satellite pairing) requires local PC access.
 
 ---
 
