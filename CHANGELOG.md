@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added (2026-10-03 - PC-VERIFY-001: Classifier-Driven Scoped CI Matrix)
+
+- **Scoped CI Policy**: Implemented classifier-driven workflow replacing automatic heavy CI on ordinary short-lived branch pushes.
+- **Conditional Verification Lanes**: Added dedicated, conditionally executed `backend`, `frontend`, `contract`, and `docs-integrity` lanes.
+- **Aggregate Gatekeeper**: Introduced fail-closed `ci-gate` for downstream dependency evaluation.
+- **Release Verification Overrides**: Configured Full Verification forced overrides for `master` pushes/PRs and manual `workflow_dispatch`.
+- **Deterministic Testing**: Deployed repository-owned `scripts/ci_policy.py` protected by native Python static tests.
+
 ### Added & Verified (2026-09-25 - Phase 8B: Multimodal Image Attachment Foundation - Slices 8B.0–8B.6)
 
 - Multimodal Attachment Architecture: Established end-to-end image attachment pipeline across persistence, validation, API security, transactional binding, vision provider translation, and React Web composer UI.
