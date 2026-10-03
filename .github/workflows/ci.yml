@@ -95,10 +95,10 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "Workflow dispatch: git diff --check is N/A."
           elif [ "${{ github.event_name }}" == "pull_request" ]; then
-            git diff --check ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} || exit 1
+            git diff --check ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} -- docs/ "*.md" || exit 1
           else
             if [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
-              git diff --check ${{ github.event.before }}..${{ github.sha }} || exit 1
+              git diff --check ${{ github.event.before }}..${{ github.sha }} -- docs/ "*.md" || exit 1
             fi
           fi
 

@@ -88,4 +88,3 @@
 ### GATE-PC-V1: Golden PC V1 Acceptance Gate
 - **Primary Objective:** Execute the comprehensive, 14-group end-to-end integrated release validation journey on the physical reference Windows workstation with live hardware, models, audio, and notification delivery.
 - **Exit Criteria:** All 14 Golden acceptance checkpoint groups pass with documented verification evidence; zero unhandled crashes or data integrity violations; formal release evidence recorded.
-
