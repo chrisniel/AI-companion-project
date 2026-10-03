@@ -1,7 +1,7 @@
 # Mobile Companion — Canonical System Baseline
 
 > **Document Role:** High-level normative system architecture, capability matrix, and cross-cutting boundaries for the Mobile Companion (Flutter).
-> **Status:** Proposed Canonical — Mobile Architecture Batch A / Review Pending
+> **Status:** Active Canonical — Mobile Architecture Batch A Approved; Batch B/C Pending
 > **Authority Precedence:** This document defines the Mobile ecosystem boundaries. Cross-cutting PC boundaries remain in `SYSTEM_BASELINE.md`. Detailed mobile implementation logic remains subject to future Mobile batches.
 
 ## 1. Justification & Canonical Ownership
@@ -55,11 +55,11 @@ The Mobile Companion operates across distinct modes. This matrix defines **what 
 
 | Capability | `CONNECTED_TO_PC` | `OFFLINE_LOCAL` | `OPTIONAL_CLOUD` | `DEGRADED / PARTIALLY_AVAILABLE` |
 | :--- | :--- | :--- | :--- | :--- |
-| **Tasks** | AVAILABLE | LOCAL/CACHED (locally created/modified Task state pending later reconciliation) | Same as Offline | Read-only / Cached until sync restored |
-| **Reminders** | AVAILABLE | LOCAL/CACHED (replicated occurrence state/duplicate suppression is **[OPEN FOR BATCH B]**) | Same as Offline | Read-only / Cached |
-| **Alarms** | AVAILABLE | LOCAL/CACHED (exact offline behavior is **[OPEN FOR BATCH B]**) | Same as Offline | Read-only / Cached |
+| **Tasks** | AVAILABLE | LOCAL/CACHED (locally created/modified Task state pending later reconciliation) | Same as Offline | LIMITED / CACHED — exact stale write permission and reconciliation **[OPEN FOR BATCH B]** |
+| **Reminders** | AVAILABLE | LOCAL/CACHED (replicated occurrence state/duplicate suppression is **[OPEN FOR BATCH B]**) | Same as Offline | LIMITED / CACHED — exact stale write permission and reconciliation **[OPEN FOR BATCH B]** |
+| **Alarms** | AVAILABLE | LOCAL/CACHED (exact offline behavior is **[OPEN FOR BATCH B]**) | Same as Offline | LIMITED / CACHED — exact stale write permission and reconciliation **[OPEN FOR BATCH B]** |
 | **Routines** | AVAILABLE | **[OPEN FOR BATCH B/C]** (governed by canonical Runtime scheduling, execution may require Batch C resolution) | **[OPEN FOR BATCH C]** | UNAVAILABLE / Cached view only |
-| **Conversations / history** | AVAILABLE (delegates to PC) | LOCAL/CACHED (viewing cached history) | Same as Offline | Read-only / Cached |
+| **Conversations / history** | AVAILABLE (delegates to PC) | LOCAL/CACHED (viewing cached history) | Same as Offline | LIMITED / CACHED — exact stale write permission and reconciliation **[OPEN FOR BATCH B]** |
 | **Assistant inference** | HOST-DEPENDENT | **[OPEN FOR BATCH C]** (local mobile LLM disposition deferred) | OPTIONAL-CLOUD (requires local provider API credentials) | Degraded / Unavailable |
 | **Voice** | HOST-DEPENDENT (approved PC Runtime services available; STT/TTS/VAD routing is **[OPEN FOR BATCH C]**) | **[OPEN FOR BATCH C]** | OPTIONAL-CLOUD (requires local provider API credentials) | Degraded / Unavailable |
 | **Character / personality presentation** | AVAILABLE | LOCAL/CACHED | LOCAL/CACHED | LOCAL/CACHED |
@@ -68,7 +68,7 @@ The Mobile Companion operates across distinct modes. This matrix defines **what 
 | **Provider credentials** | AVAILABLE (device-local storage only) | AVAILABLE (device-local storage only) | AVAILABLE (device-local storage only) | AVAILABLE |
 | **Local media / assets** | AVAILABLE | AVAILABLE | AVAILABLE | AVAILABLE |
 | **Health / wearables** | **[OPEN FOR BATCH C]** | **[OPEN FOR BATCH C]** | **[OPEN FOR BATCH C]** | **[OPEN FOR BATCH C]** |
-| **Model management** | UNAVAILABLE (PC Admin only) | UNAVAILABLE | UNAVAILABLE | UNAVAILABLE |
+| **Model management** | UNAVAILABLE (PC Host library admin) / **[OPEN FOR BATCH C]** (Mobile-local inference lifecycle) | UNAVAILABLE (PC Host library admin) / **[OPEN FOR BATCH C]** (Mobile-local inference lifecycle) | UNAVAILABLE (PC Host library admin) / **[OPEN FOR BATCH C]** (Mobile-local inference lifecycle) | UNAVAILABLE (PC Host library admin) / **[OPEN FOR BATCH C]** (Mobile-local inference lifecycle) |
 | **Device / Profile administration** | UNAVAILABLE (PC Admin only) | UNAVAILABLE | UNAVAILABLE | UNAVAILABLE |
 
 ### 5.1 Additional Constraint Notes

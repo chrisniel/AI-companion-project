@@ -1,7 +1,7 @@
 # Active Task: MOBILE-ARCH Canonicalization
 
 > **Branch:** `docs/mobile-v1-canonicalization`
-> **Status:** ARCHITECTURE IMPLEMENTATION — Batch A Review Pending
+> **Status:** ARCHITECTURE IMPLEMENTATION — Batch A APPROVED / Batch B READY
 > **Objective:** Execute the Mobile V1 Canonical Architecture Pass to define Mobile cross-cutting ecosystem boundaries, offline capabilities, and security rules.
 
 ## Current Execution State
@@ -13,10 +13,10 @@
 - [x] Generate the revised formal MOBILE-ARCH plan (`docs/02_Planning/01_Plans/plan-mobile-v1-canonicalization.md`).
 - [x] Final Plan Revision (Surgical corrections for mechanism neutrality, D5 transport constraints, and 3-batch implementation split).
 - [x] Await Chris's independent GPT review and approval of the revised plan.
-- [x] Phase 1: Architecture Implementation (Batch A — Mobile Foundation).
-- [ ] Phase 2: Architecture Implementation (Batch B — Offline & Native Reliability).
-- [ ] Phase 3: Architecture Implementation (Batch C — Mobile Capabilities & Verification).
-- [ ] Phase 4: Documentation & Planning Integration.
+- [x] Phase 1: Architecture Implementation (Batch A — Mobile Foundation) — APPROVED / independently reviewed.
+- [ ] Phase 2: Architecture Implementation (Batch B — Offline & Native Reliability) — READY / NOT STARTED.
+- [ ] Phase 3: Architecture Implementation (Batch C — Mobile Capabilities & Verification) — BLOCKED by Batch B.
+- [ ] Phase 4: Documentation & Planning Integration — NOT STARTED.
 - [ ] Closure & PR Preparation.
 
 ## Notes & Blockers
