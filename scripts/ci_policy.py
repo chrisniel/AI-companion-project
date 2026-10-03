@@ -118,6 +118,7 @@ def main():
     
     c_parser = subparsers.add_parser("classify")
     c_parser.add_argument("--event", required=True, help="GitHub event name (push, pull_request, workflow_dispatch)")
+    c_parser.add_argument("--target-branch", required=False, default="", help="Target branch for the event")
     c_parser.add_argument("--files-json", required=False, default="", help="JSON array of changed files")
     
     g_parser = subparsers.add_parser("gate")

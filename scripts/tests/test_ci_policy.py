@@ -128,5 +128,17 @@ class TestCIPolicy(unittest.TestCase):
         )
         self.assertFalse(ci_policy.gate(args))
 
+    def test_cli_smoke(self):
+        import subprocess
+        cmd = [
+            sys.executable, "scripts/ci_policy.py", "classify",
+            "--event", "pull_request",
+            "--target-branch", "develop",
+            "--files-json", '["docs/test.md"]'
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        self.assertIn("needs_docs=true", result.stdout)
+        self.assertIn("needs_backend=false", result.stdout)
+
 if __name__ == '__main__':
     unittest.main()
