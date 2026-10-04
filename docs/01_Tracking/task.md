@@ -7,7 +7,7 @@
 
 - **Phase 8:** COMPLETE / VERIFIED
 - **M0 Documentation & Architecture Reset:** COMPLETE / VERIFIED.
-- **MOBILE-ARCH — Mobile V1 Canonical Architecture Pass:** COMPLETE / APPROVED (Architecture specs, Mobile WBS, and Mobile Checklist completed).
+- **MOBILE-ARCH — Mobile V1 Canonical Architecture Pass:** COMPLETE / VERIFIED (Architecture specs, Mobile WBS, and Mobile Checklist completed; Closure Gate passed).
 
 ## Next Milestone
 
