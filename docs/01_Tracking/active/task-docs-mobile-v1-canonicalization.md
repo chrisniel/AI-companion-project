@@ -22,13 +22,12 @@
 
 ## Notes & Blockers
 - Phase 4 master planning spine and documentation integration aligned with approved Mobile architecture:
-  - Canonical `MOBILE_WBS.md` contains exactly 65 unique work items across 11 streams (`MOB-FOUNDATION` through `MOB-VERIFY`), including `MOB-CONV-006` for Optional Cloud LLM Conversation Routing & Permission Boundary (6 items in `MOB-CONV`), with `MOB-VERIFY-001`..`005` mapped to canonical layers L1–L5 and `MOB-VERIFY-006` as Golden release qualification.
-  - Normalized `MOB-IDENTITY-001` pairing UX to architecture-neutral wording (`secure, explicit user-initiated Host↔Mobile enrollment/pairing flow`).
-  - Generalized disconnected conversation reconciliation and assistant provenance (`MOBILE_LOCAL_INFERENCE` and `MOBILE_CLOUD_INFERENCE` without secrets) in `mobile-offline-and-sync.md §3.2.6`, preserving the D9 Cloud tool-safety boundary (imported Cloud turns are historical records only; no Host tool authority or action replay).
-  - Clarified Tier 0/1 conversation input locking: input locks when disconnected only if neither Host nor an authorized Cloud LLM path is available.
-  - Updated `MOBILE_CHECKLIST.md` with an Optional Cloud LLM routing readiness row mapped to canonical Golden evidence (MG2, MG3, MG11).
-  - Updated `BACKLOG.md` and `DECISION_REGISTER.md` for explicit Mobile Optional Cloud discoverability.
-  - Canonical `MOBILE_CHECKLIST.md` verified with exact canonical definitions of `MG1` through `MG12`.
+  - Canonical `MOBILE_WBS.md` contains exactly 65 unique work items across 11 streams (`MOB-FOUNDATION` through `MOB-VERIFY`), with `MOB-CONV-006` explicitly persisting Cloud whole-turn results into disconnected working state and depending on `MOB-DATA-004`.
+  - Generalized `MOB-DATA-004` (Durable Disconnected Conversation Working State Store) and `MOB-SYNC-007` (Disconnected Conversation Turn Reconciliation & Import Dispatcher) to cover both `MOBILE_LOCAL_INFERENCE` and `MOBILE_CLOUD_INFERENCE` whole-turn units.
+  - Normalized `MOB-CONTRACT-007` to branched disconnected conversation segments without Host tool replay or PC LLM regeneration.
+  - Restored capability-mode separation: `OFFLINE_LOCAL` describes local-offline turns/fallback only; `OPTIONAL_CLOUD` describes explicitly authorized Cloud LLM turns; `mobile-offline-and-sync.md §3.1` Offline Writable cell remains strictly offline-local.
+  - Eliminated stale revision-vector terminology in `mobile-offline-and-sync.md §2.1` in favor of Host-issued per-entity server revision values/tokens.
+  - Normalized decision ledger domain title to `Disconnected Conversation & Provenance` in `MOBILE_SYSTEM_BASELINE.md §7`.
   - Master planning spine reconciled across all 20 canonical specifications.
 - Mobile implementation is strictly classified as `APPROVED TARGET / NOT STARTED` across all streams; prototype code under `android/` is acknowledged as non-normative reference evidence only.
 - Phase 4 remains `DOCUMENTATION & PLANNING INTEGRATION — REVIEW PENDING`. Stopping after Phase 4 handoff for independent review. Zero Git mutations performed.

@@ -29,7 +29,7 @@
 | **Identity** | D5 Transport Protection (Tailscale / TLS) | `MOBILE_SYSTEM_BASELINE.md` §4.2 | Prototype uses plain HTTP | Network test | MG2 | **APPROVED TARGET (NOT STARTED)** |
 | **Data** | Relational Local Store (SQLite-backed, Drift preferred) | `mobile-offline-and-sync.md` §2.2 | Prototype uses in-memory MutableStateFlow | Drift schema test | MG4 | **APPROVED TARGET (NOT STARTED)** |
 | **Data** | Durable Transactional Outbox Journal | `mobile-offline-and-sync.md` §2.2 | Prototype lacks outbox (violates durability) | Outbox durability test | MG4 | **APPROVED TARGET (NOT STARTED)** |
-| **Data** | Durable Offline Conversation Working State | `mobile-offline-and-sync.md` §2.1 | Pending SQLite conversation store | Durability test | MG4, MG9 | **APPROVED TARGET (NOT STARTED)** |
+| **Data** | Durable Disconnected Conversation Working State | `mobile-offline-and-sync.md` §2.1 | Pending SQLite conversation store | Durability test | MG4, MG9 | **APPROVED TARGET (NOT STARTED)** |
 | **Sync** | Offline Task Create, Update, Delete & Coalesce | `mobile-offline-and-sync.md` §3.2.1 | Prototype has un-journaled optimistic tasks | Outbox sync test | MG4, MG5 | **APPROVED TARGET (NOT STARTED)** |
 | **Sync** | Idempotent Desired-State `SET_COMPLETION` | `mobile-offline-and-sync.md` §3.2.3 | Pending desired-state mutation handler | Idempotency test | MG5 | **APPROVED TARGET (NOT STARTED)** |
 | **Sync** | Optimistic Concurrency Conflict Resolution | `mobile-offline-and-sync.md` §3.2.3 | Pending conflict draft UI | Conflict test | MG5 | **APPROVED TARGET (NOT STARTED)** |

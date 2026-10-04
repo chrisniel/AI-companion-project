@@ -117,7 +117,7 @@
   - *Open Detail:* Candidate reference Kokoro-82M vs Sherpa-ONNX vs Android system TTS provider.
   - *Resolution Point:* Stream `MOB-VOICE-005` implementation plan.
 
-- **`DEBT-MOB-06`: Offline Conversation Branch Review/Merge UX and Batch Turn Import Schema**
+- **`DEBT-MOB-06`: Disconnected Conversation Branch Review/Merge UX and Batch Turn Import Schema**
   - *Context:* Atomic whole-turn sync and causal thread branching upon reconnection are approved (`mobile-offline-and-sync.md` §3.2.6).
   - *Open Detail:* Exact FastAPI endpoint DTO schema and user-facing branch merge/inspection UI design.
   - *Resolution Point:* Stream `MOB-CONTRACT-006` / `MOB-SYNC-007` implementation plan.

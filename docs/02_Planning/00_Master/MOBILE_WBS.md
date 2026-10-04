@@ -111,7 +111,7 @@
   - *Implementation State:* `APPROVED TARGET / NOT STARTED` *(Note: `client_message_id` DB uniqueness exists; batch endpoint and client conversation ID acceptance are target requirements)*
 
 - **`MOB-CONTRACT-007`**: Assistant Execution Origin Provenance & Dialogue Branch Metadata
-  - *Scope:* Extend Host message schema/DTOs to store assistant execution origin provenance (`MOBILE_LOCAL_INFERENCE`, `MOBILE_CLOUD_INFERENCE`, `device_id`, provider/model metadata without secrets) and represent branched offline conversation segments without PC LLM regeneration or tool replay.
+  - *Scope:* Extend Host message schema/DTOs to store assistant execution origin provenance (`MOBILE_LOCAL_INFERENCE`, `MOBILE_CLOUD_INFERENCE`, `device_id`, provider/model metadata without secrets) and represent branched disconnected conversation segments without PC LLM regeneration or tool replay.
   - *Responsibility:* Host Runtime (PC Backend)
   - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §3.2.6
   - *Principal Dependencies:* `MOB-CONTRACT-006`
@@ -188,8 +188,8 @@
   - *Principal Dependencies:* `MOB-DATA-001`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
-- **`MOB-DATA-004`**: Durable Offline Conversation Working State Store
-  - *Scope:* Create local SQLite tables for durable offline user turns, generated assistant responses, and provenance metadata, surviving reboot until synced.
+- **`MOB-DATA-004`**: Durable Disconnected Conversation Working State Store
+  - *Scope:* Create local SQLite tables for durable disconnected user turns, generated assistant responses (covering both `MOBILE_LOCAL_INFERENCE` and `MOBILE_CLOUD_INFERENCE`), and execution-origin provenance metadata, surviving reboot until synced.
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §2.1, §3.2.6
   - *Principal Dependencies:* `MOB-DATA-001`
@@ -248,8 +248,8 @@
   - *Principal Dependencies:* `MOB-SYNC-005`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
-- **`MOB-SYNC-007`**: Offline Conversation Turn Reconciliation & Import Dispatcher
-  - *Scope:* Dispatch batch offline conversation turns upon reconnection; handle `client_message_id` deduplication and causal branch attribution without PC LLM regeneration.
+- **`MOB-SYNC-007`**: Disconnected Conversation Turn Reconciliation & Import Dispatcher
+  - *Scope:* Dispatch batch disconnected conversation turns upon reconnection; synchronize both Mobile-local and Mobile-cloud whole-turn units with execution-origin provenance, `client_message_id` deduplication, and causal branch handling, without PC LLM regeneration or Host tool replay.
   - *Responsibility:* Both
   - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Infrastructure/mobile-offline-and-sync.md) §3.2.6
   - *Principal Dependencies:* `MOB-DATA-004`, `MOB-CONTRACT-006`, `MOB-CONTRACT-007`
@@ -348,10 +348,10 @@
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-CONV-006`**: Optional Cloud LLM Conversation Routing & Permission Boundary
-  - *Scope:* Implement direct Mobile conversational routing to a configured external Cloud LLM provider when PC Host is unavailable; require explicit user opt-in and device-local provider API credentials stored in Android Keystore; ensure Cloud LLM permission is independently revocable from Cloud STT and Cloud TTS; enforce zero silent cloud fallback, truthful unavailable/error state, and zero transmission without explicit user authorization (exact provider SDK remains implementation-open).
+  - *Scope:* Implement direct Mobile conversational routing to a configured external Cloud LLM provider when PC Host is unavailable, explicitly persisting Cloud-generated whole-turn results into the durable disconnected conversation working state; require explicit user opt-in and device-local provider API credentials stored in Android Keystore; ensure Cloud LLM permission is independently revocable from Cloud STT and Cloud TTS; enforce zero silent cloud fallback, truthful unavailable/error state, zero Host tool authority, and zero transmission without explicit user authorization (exact provider SDK remains implementation-open).
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`MOBILE_SYSTEM_BASELINE.md`](../../04_Architecture/MOBILE_SYSTEM_BASELINE.md) §5.1, [`mobile-capabilities-and-runtime.md`](../../04_Infrastructure/mobile-capabilities-and-runtime.md) §3.2, [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §3.2.6
-  - *Principal Dependencies:* `MOB-FOUNDATION-004`, `MOB-IDENTITY-002`, `MOB-CONV-001`
+  - *Principal Dependencies:* `MOB-FOUNDATION-004`, `MOB-IDENTITY-002`, `MOB-DATA-004`, `MOB-CONV-001`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 ---
