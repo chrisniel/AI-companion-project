@@ -1,7 +1,7 @@
 # Active Task: MOBILE-ARCH Canonicalization
 
 > **Branch:** `docs/mobile-v1-canonicalization`
-> **Status:** MOBILE-ARCH DOCUMENTATION APPROVED / CLOSURE READY
+> **Status:** CLOSURE PREPARED / INDEPENDENT CLOSURE REVIEW PENDING
 > **Objective:** Execute the Mobile V1 Canonical Architecture Pass to define Mobile cross-cutting ecosystem boundaries, offline capabilities, and security rules.
 
 ## Current Execution State
@@ -18,19 +18,29 @@
 - [x] Phase 3: Architecture Implementation (Batch C — Mobile Capabilities & Verification) — APPROVED / independently reviewed.
 - [x] Cross-Batch Architecture Reconciliation — APPROVED / independently reviewed.
 - [x] Phase 4: Documentation & Planning Integration — APPROVED / independently reviewed.
-- [ ] Closure & PR Preparation — READY / NOT STARTED.
+- [x] Stage 6: Closure Preparation — COMPLETE (Delivery walkthrough created, catalog updated, CHANGELOG updated, active task updated, mechanical checks verified).
+- [ ] Stage 7: Closure Gate & PR Handoff — PENDING INDEPENDENT REVIEW.
 
 ## Notes & Blockers
-- Phase 4 Documentation & Planning Integration has PASSED independent GPT review and is explicitly approved by Chris.
-- Full approval ledger across all phases:
-  - Phase 1: Architecture Implementation (Batch A — Mobile Foundation) — APPROVED / independently reviewed (`ccdafe45009088523b0ff90a19ca44ea9ebc757c`).
-  - Phase 2: Architecture Implementation (Batch B — Offline & Native Reliability) — APPROVED / independently reviewed (`d0ceab9c606df83445585ff6dc82fb067eb21ef7`).
-  - Phase 3: Architecture Implementation (Batch C — Mobile Capabilities & Verification) — APPROVED / independently reviewed (`ccb3e9e3ad25afa04abc1a515a8d19a487ccfe66`).
-  - Cross-Batch Architecture Reconciliation — APPROVED / independently reviewed (`454f8fe7c23a1880d534982a407ea5cfa507e334`).
-  - Phase 4: Documentation & Planning Integration — APPROVED / independently reviewed (`07575c8188e71d9525519fe45b5c33a230a81e67`).
-- All 20 canonical specifications, `MOBILE_SYSTEM_BASELINE.md`, `MOBILE_WBS.md`, `MOBILE_CHECKLIST.md`, and master planning documents (`SYSTEM_BASELINE.md`, `DELIVERY_INDEX.md`, `WBS.md`, `ROADMAP.md`, `BACKLOG.md`) are reconciled.
-- Canonical `MOBILE_WBS.md` contains exactly 65 unique work items across 11 streams (`MOB-FOUNDATION` through `MOB-VERIFY`).
-- In `MOBILE_CHECKLIST.md`, normalized SQLite verification wording to mechanism-consistent `SQLite persistence/schema test using selected Flutter adapter` (preserving `DEBT-MOB-08`) and model transfer to transport-neutral `Pending authenticated LAN/Tailscale model transfer client` (preserving Decision D5).
-- Mobile implementation status remains truthfully `APPROVED TARGET / NOT STARTED` across all streams; prototype code under `android/` is acknowledged as non-normative reference evidence only.
-- The next engineering priority on the shared milestone roadmap remains `M1 Flutter Client Foundation`.
-- Delivery lifecycle state: Mobile documentation approved, ready for Closure & PR Preparation stage. Closure has not been started. Strictly zero Git mutations performed.
+- Delivery lifecycle state: Stage 6 Closure Preparation complete; awaiting independent Closure Gate (Stage 7) review. Delivery is NOT marked closed yet. Active task and plan remain unarchived.
+- Complete architectural approval ledger:
+  - Phase 1: Architecture Implementation (Batch A — Mobile Foundation) — APPROVED (`ccdafe45009088523b0ff90a19ca44ea9ebc757c`).
+  - Phase 2: Architecture Implementation (Batch B — Offline & Native Reliability) — APPROVED (`d0ceab9c606df83445585ff6dc82fb067eb21ef7`).
+  - Phase 3: Architecture Implementation (Batch C — Mobile Capabilities & Verification) — APPROVED (`ccb3e9e3ad25afa04abc1a515a8d19a487ccfe66`).
+  - Cross-Batch Architecture Reconciliation — APPROVED (`454f8fe7c23a1880d534982a407ea5cfa507e334`).
+  - Phase 4: Documentation & Planning Integration — APPROVED (`07575c8188e71d9525519fe45b5c33a230a81e67`).
+- Delivery Artifacts Created & Updated:
+  - Delivery Walkthrough created at `docs/03_Walkthroughs/walkthrough-mobile-v1-canonical-architecture.md` (point-in-time status: Closure Review Pending).
+  - Walkthrough catalog updated in `docs/03_Walkthroughs/README.md`.
+  - `CHANGELOG.md` updated under `## Unreleased` with concise `MOBILE-ARCH` entry dated `2026-10-04`.
+- Architectural Integrity & Verification Evidence:
+  - All 20 canonical specifications, `MOBILE_SYSTEM_BASELINE.md`, `MOBILE_WBS.md` (exactly 65 items across 11 streams, 0 cycles, 0 missing dependencies), `MOBILE_CHECKLIST.md` (26 capabilities, MG1–MG12 mappings), and master planning spine are reconciled.
+  - Mechanical checks passed: OpenAPI contract verified (23 routes), CI policy tests passed (15/15 tests OK).
+  - Stale scan clean: zero vector clocks, zero positive LWW semantics, zero deprecated storage targets, package namespace locked to `com.cnl.aicompanion`.
+- Truthful Implementation Boundaries:
+  - Strictly NO production Mobile implementation is delivered by MOBILE-ARCH (`APPROVED TARGET / NOT STARTED`).
+  - Kotlin/Compose prototype under `android/` is non-normative reference evidence only.
+  - No manual hardware verification is required for this documentation delivery; physical-device Golden verification (L5 / MG1–MG12) remains future implementation evidence.
+  - PR candidate CI: NOT RUN YET (awaits human-executed branch push/PR creation).
+  - Shared milestone roadmap priority remains unchanged: `M1 Flutter Client Foundation` is `NEXT`.
+- Strictly zero Git mutations performed.

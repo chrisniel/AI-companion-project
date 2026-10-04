@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added (2026-10-04 - MOBILE-ARCH: Mobile V1 Canonical Architecture & Planning Pass)
+
+- **Mobile Canonical Baseline & Decision Ledger**: Established `MOBILE_SYSTEM_BASELINE.md` defining the Satellite Device boundary, single-Profile binding (`ADR-0018`), and the 12-item Approved Mobile Decision Ledger (§7, Decisions D1–D12).
+- **Offline & Synchronization Architecture**: Established `mobile-offline-and-sync.md` defining local relational SQLite persistence, durable transactional outbox journal, per-domain synchronization protocols, deterministic conflict handling (no client last-write-wins), monotonic change cursors, tombstones, and revocation quarantine/erasure.
+- **Runtime Capabilities & Native Reliability**: Established `mobile-capabilities-and-runtime.md` defining evidence-based hardware qualification (Tiers 0–3), single-model residency cap (`--models-max 1`), decoupled local/cloud inference, independent local TTS/STT, low-latency WebSocket audio streaming, Android foreground services, lifecycle management, and Keystore secret storage (`ADR-0005`).
+- **Health & Biometrics Boundary**: Established `health-and-wearables.md`, sequestering real Health Connect integration and biometric sync to Mobile Later (Post-V1).
+- **Mobile Execution Planning & Readiness Checklist**: Created `MOBILE_WBS.md` with 65 canonical work items across 11 streams, `MOBILE_CHECKLIST.md` tracking 26 architectural readiness capabilities, and synchronized master planning spine. Mobile architecture prerequisite for M1 satisfied without delivering production Mobile implementation.
+
 ### Added (2026-10-03 - PC-VERIFY-001: Classifier-Driven Scoped CI Matrix)
 
 - **Scoped CI Policy**: Implemented classifier-driven workflow replacing automatic heavy CI on ordinary short-lived branch pushes.
