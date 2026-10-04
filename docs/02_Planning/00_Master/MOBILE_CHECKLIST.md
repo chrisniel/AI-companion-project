@@ -27,7 +27,7 @@
 | **Identity** | Credential Expiry & Non-Destructive Rotation | `mobile-capabilities-and-runtime.md` §5.3 | Pending rotation handshake | Rotation test | MG2 | **APPROVED TARGET (NOT STARTED)** |
 | **Identity** | Revocation Data Erasure & Quarantine | `mobile-offline-and-sync.md` §7 | Pending cleanup coordinator | Erasure test | MG11 | **APPROVED TARGET (NOT STARTED)** |
 | **Identity** | D5 Transport Protection (Tailscale / TLS) | `MOBILE_SYSTEM_BASELINE.md` §4.2 | Prototype uses plain HTTP | Network test | MG2 | **APPROVED TARGET (NOT STARTED)** |
-| **Data** | Relational Local Store (SQLite-backed, Drift preferred) | `mobile-offline-and-sync.md` §2.2 | Prototype uses in-memory MutableStateFlow | Drift schema test | MG4 | **APPROVED TARGET (NOT STARTED)** |
+| **Data** | Relational Local Store (SQLite-backed, Drift preferred) | `mobile-offline-and-sync.md` §2.2 | Prototype uses in-memory MutableStateFlow | SQLite persistence/schema test using selected Flutter adapter | MG4 | **APPROVED TARGET (NOT STARTED)** |
 | **Data** | Durable Transactional Outbox Journal | `mobile-offline-and-sync.md` §2.2 | Prototype lacks outbox (violates durability) | Outbox durability test | MG4 | **APPROVED TARGET (NOT STARTED)** |
 | **Data** | Durable Disconnected Conversation Working State | `mobile-offline-and-sync.md` §2.1 | Pending SQLite conversation store | Durability test | MG4, MG9 | **APPROVED TARGET (NOT STARTED)** |
 | **Sync** | Offline Task Create, Update, Delete & Coalesce | `mobile-offline-and-sync.md` §3.2.1 | Prototype has un-journaled optimistic tasks | Outbox sync test | MG4, MG5 | **APPROVED TARGET (NOT STARTED)** |
@@ -46,7 +46,7 @@
 | **Dialogue** | Optional Cloud LLM Conversation Routing & Permissions | `MOBILE_SYSTEM_BASELINE.md` §5.1, `mobile-capabilities-and-runtime.md` §3.2, `mobile-offline-and-sync.md` §3.2.6 | Pending Cloud LLM router & Keystore adapter | Cloud router test | MG2, MG3, MG11 | **APPROVED TARGET (NOT STARTED)** |
 | **Dialogue** | Multimodal Attachment Upload to Host | `mobile-offline-and-sync.md` §3.1 | Prototype lacks attachment queue | Attachment test | MG3 | **APPROVED TARGET (NOT STARTED)** |
 | **Inference** | Runtime Hardware Qualification (Tiers 0–3) | `mobile-capabilities-and-runtime.md` §2.1 | Pending hardware benchmark classifier | Tier detection test | MG9 | **APPROVED TARGET (NOT STARTED)** |
-| **Inference** | LAN Host-to-Device Model Transfer | `mobile-capabilities-and-runtime.md` §2.3 | Pending Wi-Fi model transfer client | Transfer test | MG9 | **APPROVED TARGET (NOT STARTED)** |
+| **Inference** | LAN Host-to-Device Model Transfer | `mobile-capabilities-and-runtime.md` §2.3 | Pending authenticated LAN/Tailscale model transfer client | Transfer test | MG9 | **APPROVED TARGET (NOT STARTED)** |
 | **Inference** | Single Resident Model Cap (`--models-max 1`) | `mobile-capabilities-and-runtime.md` §2.3 | Pending model lifecycle manager | Lifecycle test | MG9 | **APPROVED TARGET (NOT STARTED)** |
 | **Inference** | Local Inference Runtime Adapter | `mobile-capabilities-and-runtime.md` §2.2 | Pending engine adapter (e.g. llama.cpp / ExecuTorch) | Inference test | MG9 | **APPROVED TARGET (NOT STARTED)** |
 | **Voice** | Connected WebSocket Audio Streaming to PC | `mobile-capabilities-and-runtime.md` §3.1 | Pending WebSocket audio transport | WS audio test | MG8 | **APPROVED TARGET (NOT STARTED)** |
