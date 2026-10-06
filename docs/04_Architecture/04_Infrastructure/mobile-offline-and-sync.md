@@ -1,7 +1,7 @@
 # Mobile Offline, Synchronization, and Android Background Architecture
 
-> **Document Role:** Canonical infrastructure and behavior specification for Mobile Companion offline capabilities, synchronization, and Android background delivery.  
-> **Status:** Active Canonical — Mobile Architecture Batch B Approved  
+> **Document Role:** Canonical infrastructure and behavior specification for Mobile Companion offline capabilities, synchronization, and Android background delivery.
+> **Status:** Active Canonical — Mobile Architecture Batch B Approved
 > **Authority Precedence:** This specification governs Mobile synchronization, offline persistence semantics, and platform background execution limits. It operates under the cross-cutting boundaries defined in [`MOBILE_SYSTEM_BASELINE.md`](../MOBILE_SYSTEM_BASELINE.md). Entity schemas and domain truth remain owned by the shared domain specifications (such as [`tasks-reminders-alarms-and-routines.md`](../01_Domains/tasks-reminders-alarms-and-routines.md) and [`profiles-and-devices.md`](../02_Data_and_Security/profiles-and-devices.md)).
 
 ---
@@ -52,10 +52,10 @@ The PC Local AI Runtime remains canonical domain authority. Mobile acts as an en
 
 | Domain | Canonical Authority | Offline Readable? | Offline Writable? | Durable Locally? | Sync Direction | Deletion Policy | Conflict Class | Cross-Batch Lifecycle / Final Disposition |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Tasks** | PC Runtime | YES | YES (create, update, set completion status, delete) | YES (DB + Outbox) | Bidirectional | Host soft-delete; Tombstones propagated | Host-mediated revision check; reject stale base revision by default; semantic desired-state updates (`SET_COMPLETION`) handled | None |
-| **Reminders** | PC Runtime | YES (synced occurrences) | LIMITED (Ack / Dismiss / Snooze only; no canonical entity creation) | YES (DB + Outbox) | Asymmetric (PC pushes schedule; Mobile reports delivery/snooze) | Host manages lifecycle; Mobile dismiss marks local state | State-machine transition; Host tie-breaker | None |
-| **Alarms** | PC Runtime | YES (synced occurrences) | LIMITED (Dismiss / Snooze only; canonical recurring alarm config is PC-owned) | YES (DB + Outbox) | Asymmetric (PC pushes schedule; Mobile reports delivery/snooze) | Host manages lifecycle; Mobile dismiss marks local state | State-machine transition; local user dismiss always accepted | None |
-| **Routines** | PC Runtime | YES (cached view) | NO (read-only view; no offline creation/edits) | YES (Cache) | Host to Mobile | PC-managed | None (PC exclusive authority) | [RESOLVED] Autonomous local execution deferred post-V1 (Mobile Later); cached view only offline |
+| **Tasks** | PC Runtime | YES | YES (create, update, set completion status, delete) | YES (DB + Outbox) | Bidirectional | Host soft-delete; Tombstones propagated | Host-mediated revision check; reject stale base revision by default; semantic desired-state updates (`SET_COMPLETION`) handled | Client-generated stable UUIDs (`D-SHARED-SCHED-01`); outbox durability |
+| **Reminders** | PC Runtime | YES (synced occurrences & local reminders) | YES for Mobile-origin Reminders (`D-PHONE-10`: full offline management: create, edit, cancel/delete, local delivery/presentation, dismiss/snooze); Host-origin definitions remain read-only offline, but occurrence delivery/dismiss/snooze is supported; client-generated stable UUIDs (`D-SHARED-SCHED-01`) | YES (DB + Outbox) | Bidirectional (Mobile uploads mobile-origin reminders & delivery state; Host pushes host-origin schedules) | Host manages lifecycle; Mobile dismiss marks local state; tombstones synced | State-machine transition; Host tie-breaker on conflict; reconciliation avoids duplicate alerts (`D-SHARED-SCHED-02`) | Offline Mobile-origin authoring approved (`D-PHONE-10`); Host-origin definitions protected offline |
+| **Alarms** | PC Runtime | YES (synced occurrences & local alarms) | YES for Mobile-origin Alarms (`D-PHONE-11`: full offline management: create, edit, recurrence, cancel, arm/deliver locally, dismiss/snooze); Host-origin definitions remain read-only offline, but occurrence ringing/dismiss/snooze is supported; client-generated stable UUIDs (`D-SHARED-SCHED-01`) | YES (DB + Outbox) | Bidirectional (Mobile uploads mobile-origin alarms & firing/snooze state; Host pushes host-origin schedules) | Host manages lifecycle; Mobile dismiss marks local state; tombstones synced | State-machine transition; local user dismiss always accepted; reliability-first escalation on arbitration (`D-SHARED-SCHED-02`) | Offline Mobile-origin authoring approved (`D-PHONE-11`); Host-origin definitions protected offline; reliability-first escalation |
+| **Routines** | PC Runtime | YES (bounded Host-authorized future occurrences cached and presented locally `D-PHONE-12`; optional local presentation enrichment `D-PHONE-12A`) | LIMITED (device-local suppression allowed `D-PHONE-12C`; no offline canonical routine creation or recurrence rule extension; connected authoring only via Host APIs/D9 Risk-2 policy `D-PHONE-12B`) | YES (Cache) | Host to Mobile | PC-managed | None (PC exclusive authority) | [RESOLVED] Bounded occurrence replication in V1 (`D-PHONE-12`); autonomous recurrence extension deferred post-V1; local suppression permitted (`D-PHONE-12C`) |
 | **Conversations / History** | PC Runtime (Host) / Mobile (Disconnected Turns) | YES (cached turns) | QUALIFIED (offline local text turns on evidence-qualified devices with approved local LLM; read-only replica when unsupported; see §3.2.6 for disconnected optional cloud execution) | YES (DB + Outbox) | Bidirectional (disconnected turns import to Host with local or cloud inference provenance) | PC-managed; soft-delete cascade | Causal turn append (preserves turn order; no Host tool replay or PC LLM regeneration) | [RESOLVED] Qualified devices support offline local text turns; cached view remains read-only when local LLM unsupported; disconnected optional cloud path governed by §3.2.6 |
 | **Memory** | PC Runtime | YES (cached view) | NO (read-only view; memory extraction is PC policy-driven) | YES (Cache) | Host to Mobile | PC-managed; forget tombstones | None (read-only replica) | None |
 | **Character / Persona** | PC Runtime | YES (cached instance) | NO (templates and instances are PC-managed) | YES (Cache) | Host to Mobile | PC-managed | None (read-only replica) | None |
@@ -65,35 +65,36 @@ The PC Local AI Runtime remains canonical domain authority. Mobile acts as an en
 
 ### 3.2 Concurrency, Entity Identity & Revision Architecture
 
-Universal client-timestamp Last-Write-Wins (LWW) is **rejected**. Mobile wall clocks are untrusted, user-manipulable, and susceptible to skew, timezone shifts, and clock resets.
+Universal client-timestamp Last-Write-Wins (LWW) is **strictly rejected**. Mobile wall clocks are untrusted, user-manipulable, and susceptible to skew, timezone shifts, and clock resets.
 
-#### 3.2.1 Stable Offline Entity Identity & Dependency Strategy
-To ensure that an offline-created entity (such as a Task) can be subsequently edited, updated, or deleted offline before the Host ever acknowledges creation:
-- **Strategy Choice (Approach A):** **Client-generated stable entity IDs (UUIDv4)** accepted by the Host for offline-creatable entities.
+#### 3.2.1 Stable Offline Entity Identity & Dependency Strategy (`D-SHARED-SCHED-01`)
+To ensure that an offline-created entity (Tasks, Mobile-origin Reminders, Mobile-origin Alarms) can be subsequently edited, updated, or deleted offline before the Host ever acknowledges creation:
+- **Strategy Choice (Approach A):** **Client-generated stable entity IDs (UUIDv4)** accepted by the Host for all synchronizable scheduling entities (`D-SHARED-SCHED-01`). Disconnected entity creation never relies on temporary or client-provisional IDs that require re-keying upon sync.
 - **Contract Boundary & Target Requirement:** Current backend `TaskCreate` does NOT accept a client-provided Task ID. Accepting a client-generated stable identity is therefore an **explicit target contract requirement**, not implemented reality.
+- **Profile Ownership vs. Device Provenance:** Entities belong strictly to the authenticated Profile (`profile_id`), not the physical client device. Device origin is recorded as provenance metadata determining offline authoring and mutation privileges (e.g. Mobile-origin vs. Host-origin). Synchronized Mobile-created Reminders and Alarms survive client device revocation as durable Profile data.
 - **Creation Semantics:** Offline CREATE uses the client-generated permanent `entity_id`. Because a CREATE operation has no pre-existing Host revision, its base revision is conceptually represented as `NONE` / `NOT_YET_CREATED` rather than inventing an artificial integer revision.
 - **Causal Ordering & Dependency Resolution:** While a stable `entity_id` establishes uniform entity identity across offline operations, mutations against an entity whose CREATE has not yet been acknowledged by the Host MUST preserve causal ordering. The local mutation journal must either:
   1. *Coalesce* subsequent local edits into the pending CREATE mutation record where safe; or
   2. Preserve an *explicit per-entity dependency/order* ensuring the CREATE mutation reaches and commits on the Host before any dependent UPDATE or DELETE operations are processed.
 - **Retry Idempotency:** Retrying a CREATE operation over the network uses the identical `entity_id` and `mutation_id`, preventing duplicate entity creation on the Host.
-- **Separation of Concerns:** `entity_id` uniquely identifies the domain entity throughout its lifetime. `mutation_id` (Idempotency Key) uniquely identifies each individual operational mutation attempt in the mutation journal.
+- **Separation of Concerns:** `entity_id` uniquely identifies the domain entity throughout its lifetime across all devices. `mutation_id` (Idempotency Key) uniquely identifies each individual operational mutation attempt in the mutation journal.
 
 #### 3.2.2 Host-Issued Entity Revisions & Optimistic Concurrency Control
 1. **Host-Issued Entity Revisions:** Every synchronizable entity on the PC Host maintains a monotonic integer revision (`revision: int`) or host-issued monotonic revision token. The revision increments on every committed update on the Host.
 2. **Base Revision Tracking:** When Mobile replicates an entity, it stores the current `server_revision`. When Mobile enqueues a mutation against an existing entity, the outbox record records `base_revision = server_revision`.
 3. **Optimistic Concurrency Control:** When Mobile submits an update or delete mutation to the Host:
-   - If Host `current_revision == mutation.base_revision`: Mutation commits cleanly; Host increments `revision = current_revision + 1`.
-   - If Host `current_revision > mutation.base_revision`: Host detects a concurrent modification.
+    - If Host `current_revision == mutation.base_revision`: Mutation commits cleanly; Host increments `revision = current_revision + 1`.
+    - If Host `current_revision > mutation.base_revision`: Host detects a concurrent modification.
 
-#### 3.2.3 Deterministic Conflict Policy (No Unproven Field Merging)
-For Mobile V1, generic automatic field-level merging is **rejected** because a stale `base_revision` alone does not convey sufficient baseline change evidence to guarantee disjoint updates without silent data loss.
-- **Default Rule:** Any update mutation submitted against a stale `base_revision` (`current_revision > base_revision`) results in a **Conflict Outcome** (`CONFLICT_DETECTED`).
-- **Conflict Handling:** The Host rejects the stale mutation and returns the current authoritative entity state. Mobile retains the user's uncommitted edit in a local conflict/draft state, prompting user resolution (e.g. keep server version or overwrite with new revision).
+#### 3.2.3 Deterministic Conflict Policy (No Universal Server-Wins or Client-Wins)
+For Mobile V1, generic automatic field-level merging is **rejected** because a stale `base_revision` alone does not convey sufficient baseline change evidence to guarantee disjoint updates without silent data loss. Likewise, blanket universal "server-wins" or "client-wins" policies are rejected:
+- **Default Rule:** Any substantive update mutation submitted against a stale `base_revision` (`current_revision > base_revision`) results in a **Conflict Outcome** (`CONFLICT_DETECTED`).
+- **Conflict Handling:** The Host rejects the stale mutation and returns the current authoritative entity state. Mobile MUST NOT silently discard local work; it retains the user's uncommitted edit in a local conflict/draft state, prompting user resolution (e.g. keep server version or overwrite with new revision).
 - **Idempotent Desired-State Semantic Operations:** A toggle operation is not inherently idempotent. The architecture requires explicit desired-state semantic operations, such as:
   - `SET_COMPLETION(completed=true|false)`
   - or conceptually equivalent `SET_TASK_STATUS(desired_status)`
   Repeated execution of the same semantic desired-state mutation produces the identical result. If an update only asserts a desired status or completion state, the Host may apply that state idempotently if the entity still exists and is not soft-deleted.
-- **Offline Deletes:** If Mobile submits a delete referencing a stale `base_revision` where substantive content was modified on the Host, the delete is rejected as a conflict, presenting the modified entity to the user.
+- **Offline Deletes:** If Mobile submits a delete referencing a stale `base_revision` where substantive content was modified on the Host, the delete is rejected as a conflict, presenting the modified entity to the user. Deletions on the Host propagate tombstones across devices.
 
 #### 3.2.4 Mutation Identity & Target Idempotency
 - Every mutation in the Mobile mutation journal MUST carry a unique UUID `mutation_id` (Idempotency Key).
@@ -276,12 +277,23 @@ Alert occurrences are governed by an idempotent, revision-aware state machine ra
 - **Snooze Semantics:** Snoozing mutates the active occurrence state to `SNOOZED`, computes a new `snooze_until_utc`, and re-arms a one-shot exact alarm. It does NOT duplicate the parent entity.
 - **Idempotency:** Repeated duplicate dismiss or acknowledgment operations from retries or concurrent taps are safe and no-op.
 
-#### 6.3.2 Cross-Device Presentation Semantics
-- **Single-Device Duplicate Prevention:** An occurrence is presented at most once on a given device. Once triggered locally, local state transitions to `TRIGGERED` to prevent repeated local firing.
-- **No Unsafe First-Delivery-Wins:** The architecture does NOT permit passive alert display on one device (e.g. PC displaying a toast notification) to silently cancel or disarm an active alarm on Mobile. (An unattended PC displaying a toast must not silence a user's phone alarm).
-- **Cross-Device Dismissal:** Cross-device suppression occurs ONLY when:
-  1. The user explicitly dismisses or snoozes the occurrence on one device, committing an acknowledgment mutation that syncs to other devices; or
-  2. The Host explicitly assigns exclusive presentation targeting to a specific device.
+#### 6.3.2 Cross-Device Presentation Arbitration (`D-SHARED-SCHED-02`)
+When the PC Host and Mobile are connected, the Host coordinates primary and secondary alert presentation across devices:
+- **Reminders (Duplicate Suppression Priority):** Reminders favor suppression of duplicate notifications. A designated primary device presents the reminder; secondary devices remain silent or retain a synchronized passive entry. If the primary device fails to present or becomes unreachable, the secondary device takes over presentation.
+- **Alarms (Reliability & Waking Awareness Priority):** Alarms prioritize reliability over duplicate suppression:
+  1. The primary device rings and presents first.
+  2. The standby device remains locally armed.
+  3. Explicit user acknowledgment, dismissal, or snooze commits an immediate mutation that propagates across devices to dismiss or re-arm the standby device.
+  4. **Passive Display != Acknowledgment:** Passive display on one device (e.g. an unattended PC displaying a toast notification) does NOT count as user acknowledgment and MUST NOT silence or cancel the ringing alarm on Mobile.
+  5. **Standby Escalation:** If the primary alarm is not explicitly acknowledged within a bounded grace window, the standby device escalates into active ringing.
+- **Arbitration Preferences:** Default `AUTO` arbitration evaluates client reachability, active client focus, recent user interaction, and device permissions. User configuration options include: `Automatic`, `Prefer PC`, `Prefer Phone`, and `Ring All Available Devices`.
+- **Disconnected Fallback Rule:** When cross-device coordination is impossible due to network disruption or Host unavailability, **a duplicate Alarm is explicitly preferred over a missed Alarm**.
+
+#### 6.3.3 Companion Alert Enrichment & Deterministic Fallback (`D-SHARED-SCHED-03`)
+- **Occurrence Authority:** Scheduled occurrence triggering is authoritative and strictly deterministic. Ringing, chime, and native notification display are deterministic platform events.
+- **Optional Presentation Enrichment:** Companion personality, character speech, and TTS are optional presentation enrichments.
+- **Zero Trigger Delay:** Generative language model execution or TTS synthesis MUST NEVER delay, reschedule, or suppress the physical alarm trigger. If enrichment generation is slow, uninitialized, or fails, immediate deterministic acoustic and visual alert presentation proceeds without delay.
+- **Enrichment Ownership:** The primary presenter delivers companion voice/enrichment by default; standby devices deliver vocal enrichment only upon escalation. Active Character persona and Mood affect alert tone and phrasing, never schedule timing or delivery invariants.
 
 ### 6.4 System Lifecycle Events
 
