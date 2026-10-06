@@ -67,10 +67,10 @@ When productivity tools are invoked via conversational or autonomous flows:
 
 The separation of scheduling truth, entity identity, and presentation is strictly defined across PC Host and Mobile clients:
 
-- **Runtime Owns Truth & Backlog:** The background PC Local AI Runtime `SchedulerService` acts as the exclusive source of calendar and domain truth for the owning Profile. It persists definitions, due events, and the central notification backlog.
-- **Client-Generated Stable Identity:** Synchronizable Tasks, Reminders, Alarms, Routines, and alert occurrences MUST use client-generated stable UUIDs (UUIDv4) accepted by the Host. Disconnected client authoring never relies on temporary or provisional IDs that require re-keying upon reconciliation.
+- **Synchronized Scheduling Authority:** The owning Profile owns synchronized scheduling entities. The PC Host and its background Local AI Runtime `SchedulerService` act as the canonical synchronized scheduler authority for the Profile, owning the central notification backlog and canonical Routine definitions/recurrence truth. Mobile maintains durable locally authoritative provisional state within its approved offline mutation authority for Mobile-origin Reminders and Alarms. On reconnection, Host revision and reconciliation semantics apply. Host-origin definitions remain read-only on Mobile while disconnected.
+- **Stable UUID Identity (`D-SHARED-SCHED-01`):** Every synchronizable scheduling entity (Tasks, Reminders, Alarms, Routines, and alert occurrences) possesses a stable UUID identity. Mobile-created entities use stable client-generated UUIDs (UUIDv4) accepted by the Host upon reconciliation, without temporary or client-provisional IDs that require re-keying upon sync. Host-created entities retain stable Host-issued UUID identities.
 - **Profile Ownership vs. Device Provenance:** Entities belong strictly to the owning Profile (`profile_id`), never to client devices. Device origin is recorded as provenance metadata determining offline authoring and mutation privileges (e.g. Mobile-origin vs. Host-origin). Synced Mobile-created Reminders and Alarms survive client device revocation as durable Profile data.
-- **Mutation Idempotency:** Operational mutations in the local outbox use a distinct `mutation_id` (Idempotency Key) to ensure network retry idempotency without duplicate executions.
+- **Mutation Idempotency:** Operational mutations in the local outbox use an independent UUID `mutation_id` (Idempotency Key) to ensure network retry idempotency without duplicate executions.
 
 ### 2.5 Offline Mobile-Origin Reminders & Alarms (`D-PHONE-10`, `D-PHONE-11`)
 
@@ -92,7 +92,10 @@ When the PC Host and Mobile device are connected, the Host arbitrates alert pres
   3. Explicit user acknowledgment, dismissal, or snooze commits an immediate mutation that propagates across devices to dismiss or re-arm the standby device.
   4. **Passive Display != Acknowledgment:** Passive display on one device (e.g. an unattended PC displaying a toast notification) does NOT count as user acknowledgment and MUST NOT silence or cancel a ringing alarm on Mobile.
   5. **Standby Escalation:** If the primary alarm is not explicitly acknowledged within a bounded grace window, the standby device escalates into active ringing.
-- **Arbitration Preferences:** Default `AUTO` evaluates client reachability, active client focus, recent user interaction, and device permissions. User configuration options include: `Automatic`, `Prefer PC`, `Prefer Phone`, and `Ring All Available Devices`.
+- **Arbitration Policies:** Default automatic arbitration evaluates client reachability, active client focus, recent user interaction, and device permissions. Policy directions conceptually include:
+  - *Reminders (Duplicate Suppression Priority):* `Automatic`, `Prefer PC`, `Prefer Phone`, `Both`.
+  - *Alarms (Reliability Priority):* `Automatic with fallback`, `Prefer PC`, `Prefer Phone`, `Ring all available devices`.
+  (Exact final UI labels remain design-open; policies reflect distinct underlying architectural priorities).
 - **Disconnected Fallback Rule:** When cross-device coordination is severed due to network disruption or Host unavailability, **a duplicate Alarm is explicitly preferred over a missed Alarm**.
 
 ### 2.7 Companion Alert Enrichment & Deterministic Fallback (`D-SHARED-SCHED-03`)
@@ -109,7 +112,7 @@ Routines represent proactive companion check-ins governed by strict capability e
 - **Host Scheduling Authority (`D-PHONE-12`):** The PC Runtime `SchedulerService` owns canonical Routine definitions and recurrence rules. While disconnected, Mobile caches and presents a bounded horizon of Host-authorized occurrences (exact horizon remains implementation-open). Mobile does NOT autonomously extend recurrence rules once cached occurrences elapse.
 - **Routine Presentation Enrichment (`D-PHONE-12A`):** Qualified local model or TTS capabilities may personalize the proactive Routine greeting using permitted cached context and active Character persona. Deterministic template fallback is mandatory; generation never owns the trigger.
 - **Connected Authoring Only (`D-PHONE-12B`):** Connected Mobile may manage Routines via Host APIs under Decision D9 Risk-2 confirmation policy. Offline Mobile V1 CANNOT create canonical Routines, materially edit recurrence rules, expand capability envelopes, or alter permissions.
-- **Device-Local Suppression (`D-PHONE-12C`):** A user may pause or suppress Routine presentation locally on Mobile while offline without silently rewriting the Host's canonical Routine definition.
+- **Device-Local Suppression & Disable Request (`D-PHONE-12C`):** A user may pause or suppress Routine presentation locally on Mobile while offline without silently rewriting the Host's canonical Routine definition. A user request to disable or cancel the Routine everywhere is enqueued as a pending Host mutation in the outbox for reconciliation upon reconnect.
 - **Missed Routine Policy:** Stale Routine occurrences skip, collapse, or catch up once upon reconnect or resume; the scheduler never replays an avalanche of stale missed routines.
 
 ### 2.9 Temporal Intent Resolution & Parity (`D-SHARED-SCHED-04..04E`)

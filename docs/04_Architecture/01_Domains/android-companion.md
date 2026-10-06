@@ -1,7 +1,7 @@
 # Android Platform Adapter Architecture (Flutter Production & Prototype Boundary)
 
 > **Document Role:** Canonical Android platform adapter architecture specification.
-> **Status:** Active Canonical (Aligned with Batches A, B, C, and D2)
+> **Status:** Active Canonical (Prototype & Platform Adapter Boundary)
 > **Canonical Ownership:** Mobile Companion production architecture is canonically established in [`MOBILE_SYSTEM_BASELINE.md`](../MOBILE_SYSTEM_BASELINE.md), [`mobile-offline-and-sync.md`](../04_Infrastructure/mobile-offline-and-sync.md), and [`mobile-capabilities-and-runtime.md`](../04_Infrastructure/mobile-capabilities-and-runtime.md). This specification governs the Android platform adapter boundaries under the shared Flutter workspace topology (`D-SHARED-FLUTTER-01..08`) and preserves the reference role of the legacy Kotlin/Compose prototype (`android/`).
 
 ---
@@ -33,7 +33,9 @@ Under the shared monorepo workspace topology (`D-SHARED-FLUTTER-01`), shared Flu
                               │
                               ▼ (Native Android Platform APIs)
 +-------------------------------------------------------------+
-|               Android OS (API 26+ / Target API 34+)         |
+|                         Android OS                          |
+| (supported API range determined by implementation           |
+|  qualification)                                             |
 +-------------------------------------------------------------+
 ```
 
