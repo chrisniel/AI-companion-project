@@ -1,7 +1,7 @@
 # Runtime and Models Architecture
 
-> **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0007)  
+> **Document Role:** Canonical domain architecture specification.
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0007)
 > **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for the local inference runtime, models, and execution providers.
 
 ---
@@ -18,6 +18,7 @@ This specification defines the local inference runtime, hardware execution model
 - Model registry, artifact identity, capability metadata, and validation lifecycles.
 - Phased model acquisition separating PC V1 local import from post-V1 online model hub downloads.
 - Opt-in, transparent Cloud LLM Fallback boundaries.
+- Mobile device-local model architecture, lifecycle states, and component separation (Mobile V1).
 
 ---
 
@@ -107,6 +108,34 @@ The high-level fallback routing policy for cloud models is frozen:
 - **Credentials:** Device-local credential rules belong with [`authentication-and-secrets.md`](../02_Data_and_Security/authentication-and-secrets.md).
 - **Open Design:** The exact provider adapter implementation remains open design.
 
+### 2.7 Mobile Device-Local Model Architecture & Lifecycle (Mobile V1)
+
+In accordance with Decisions `D-PHONE-01`, `D-PHONE-01C`, `D-PHONE-03`, and `D-PHONE-05`:
+
+- **Four-Way Component Separation (`D-PHONE-05`):** To avoid architectural ambiguity, mobile model management strictly distinguishes four separate layers:
+  1. *Model Artifact / Model:* The packaged weights, format, and configuration file (e.g., `.gguf` file).
+  2. *Runtime / Provider:* The software inference engine executing inference (e.g., `llama.cpp` mobile bindings, ExecuTorch).
+  3. *Execution Backend:* The hardware accelerator interface / compute driver layer (CPU, OpenCL, Vulkan, NPU).
+  4. *Physical Hardware:* The host mobile SoC, compute cores, RAM, and thermal chassis.
+- **Canonical Mobile Model Lifecycle States (`D-PHONE-05`):** The lifecycle of a local generative model on mobile transitions through explicit states:
+  - `installed`: The model artifact resides in app-scoped local storage and has passed cryptographic and format preflight validation.
+  - `loaded / resident`: Model weights are mapped into device RAM / accelerator memory and runtime execution context is initialized.
+  - `active`: The model is actively processing prompt context or generating tokens.
+  - `unloaded`: Model weights are evicted from memory to release RAM/VRAM. *Architectural Invariant:* `unloaded` does **not** mean `removed`. An unloaded model remains installed on device storage ready for reloading.
+  - `removed`: The model artifact is explicitly deleted from local device storage by user action.
+- **Single Resident Generative LLM Cap (`D-PHONE-05`):** Mobile V1 enforces a hard limit of at most **one resident generative LLM** in device memory at any time. Loading a different generative model automatically unloads the previously active model. Concurrent execution of multiple generative LLMs on mobile is strictly prohibited. Speech (STT/TTS) and vision models are budgeted separately.
+- **Replaceable Local Model Architecture (`D-PHONE-01C`):**
+  - Users may install, select, change, load, unload, and remove approved local models.
+  - No model family is permanently mandated or hard-coded into mobile architecture.
+  - Model capabilities adhere to shared qualification semantics; switching models truthfully disables unsupported capabilities (e.g., switching to a pure text model disables vision assistance).
+  - A generative model proposes typed tool intent; actual tool execution is mediated strictly by the Mobile Tool Gateway and deterministic Decision D9 policy.
+- **Vendor-Neutral Execution & Candidate Models (`D-PHONE-03`):**
+  - Mobile execution architecture is vendor-neutral, without permanent hardware lock to specific chipset vendors or architectures.
+  - CPU execution serves as a broad fallback where supported, but is not an absolute universal guarantee across all low-end devices.
+  - Requested execution backend (e.g., `AUTO`, `CPU`, `GPU`, `NPU`) and the actually applied backend must be truthfully and separately reported.
+  - Evaluated models (such as Gemma 3 1B) represent empirical research candidates, not hard-coded architectural dependencies.
+
+---
 
 ## 3. Current Verified Implementation
 
@@ -203,4 +232,5 @@ Detailed implementation choices for future planning are tracked in [`docs/02_Pla
 - [`docs/04_Architecture/01_Domains/assistant-and-conversations.md`](../01_Domains/assistant-and-conversations.md) — Conversational orchestration and token streaming.
 - [`docs/04_Architecture/04_Infrastructure/storage-and-assets.md`](storage-and-assets.md) — Canonical filesystem paths and model storage roots.
 - [`docs/04_Architecture/04_Infrastructure/performance-and-capacity.md`](performance-and-capacity.md) — Resource governance, gaming mode throttling, and VRAM management.
+- [`docs/04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md`](mobile-capabilities-and-runtime.md) — Mobile capability qualification, inference runtimes, and local execution policy.
 

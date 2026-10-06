@@ -15,6 +15,7 @@ This specification defines the hardware resource governance, performance profile
 - Preservation of notification delivery under Decision D10 during low-impact modes.
 - Distinguishing current development test hardware (RX 580) from universal performance architecture.
 - Telemetry truthfulness, distinguishing configured, measured, and estimated values, and prohibiting fabricated metrics.
+- Mobile Progressive Resource Governor, evidence-driven qualification, and truthful Out-of-Memory (OOM) resilience (Mobile V1).
 
 ---
 
@@ -58,6 +59,37 @@ To ensure truthful operational observability and prevent misleading system diagn
   3. *Estimated Values:* Derived heuristics, theoretical approximations, or synthetic capacity estimates.
 - **Prohibition of Fabricated Telemetry:** UI, API, and runtime reporting must **never** fabricate measured telemetry. When hardware probes or runtime metrics are unavailable, unsupported, uninitialized, or permission-restricted on the host machine, telemetry must be reported truthfully as unavailable or unknown (`null` / `unknown`) rather than replaced with invented, synthetic, or hardcoded values.
 - **Probe & Vendor Independence:** The architecture does not permanently lock a single telemetry probing library, diagnostic utility, or GPU vendor SDK. Current AMD Radeon RX 580 and Vulkan reference metrics represent development testing evidence only.
+
+### 2.4 Mobile Progressive Resource Governor & Hardware Qualification (Mobile V1)
+
+In accordance with Decision `D-PHONE-05A` and the Mobile V1 hardware architecture baseline:
+
+- **Progressive Resource Governor (`D-PHONE-05A`):** Resource governance on mobile devices operates via progressive, user-visible intervention driven by empirical thermal, battery, and memory metrics:
+  - *Non-Critical Pressure (`NORMAL` / `CONSTRAINED` display states):* The governor warns early and mitigates gracefully. Non-urgent background tasks (routine execution, sync catch-up) are deferred first, allowing active foreground generation to complete safely where thermal headroom permits.
+  - *Severe Pressure (`HIGH_PRESSURE`):* May pause or throttle ongoing inference. User choices may include: Continue at reduced throughput, Finish current turn then cool down, or Stop & unload model.
+  - *Critical / Emergency Pressure (`CRITICAL`):* Forces cancellation of in-flight inference and unloads model weights after preserving durable conversation turn state and intent outbox.
+  - *Hardware Safety Boundary:* The user cannot override underlying hardware safety protections (OS thermal throttling, emergency shutdown).
+  - *Unload Invariant:* Automatic unload never deletes or removes the installed model artifact from disk.
+  - *Truthful Observability:* Resource state, requested vs. actual execution backend, model residency status, and exact degradation reasons are visible to the user. Presentation labels (`NORMAL`, `CONSTRAINED`, `HIGH_PRESSURE`, `CRITICAL`) are user-friendly display abstractions, not replacements for underlying platform thermal metrics (such as Android `THERMAL_STATUS_*`).
+  - *No Runtime Quantization Dial:* The architecture does not invent "lower quantization" as an automatic online runtime transition (quantization is an immutable property of an installed artifact). Exact metric thresholds remain implementation-open.
+- **Evidence-Driven Mobile Hardware Qualification:**
+  - Qualification for device-local generative LLM execution is evidence-based rather than tied to arbitrary commercial hardware brackets or rigid RAM thresholds (no "minimum 6 GB RAM" mandate in canonical architecture):
+    1. *Supported ABI & Execution Backend:* 64-bit ABI support and compatible runtime acceleration libraries.
+    2. *Memory Headroom Preflight:* Currently available system memory meets the model's resident working set plus a validated safety margin without triggering OS low-memory killer (LMK) eviction.
+    3. *Thermal Stability:* Device sustains inference without immediate thermal throttling under normal ambient conditions.
+    4. *Preflight Warmup:* Clean model initialization without allocation failures.
+    5. *Sustained Responsiveness:* Acceptable interactive token generation throughput without UI thread jank or frame drops.
+    6. *Battery Policy Compliance:* Battery state and power-saver policies permit local inference.
+- **Truthful Out-Of-Memory (OOM) and Process Death Architecture:**
+  - Canonical architecture must **never** claim or promise absolute "zero crashes under Out-Of-Memory". Mobile operating systems (such as Android via LMK) terminate processes abruptly at the OS level under memory pressure without throwing catchable exceptions.
+  - The architecture enforces truthful defensive measures:
+    - Preflight memory headroom verification before loading models.
+    - Graceful load failure handling returning structured error diagnostics.
+    - Bounded context window allocation and strict single resident generative model cap (`D-PHONE-05`).
+    - Preserving durable conversation turns, outbox intents, and scheduling state *before* launching heavy generative operations.
+    - Safe tolerance and clean recovery from abrupt OS process death without database or state corruption.
+
+---
 
 ---
 
@@ -123,4 +155,5 @@ Detailed implementation choices for future planning are tracked in [`docs/02_Pla
 - [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](runtime-and-models.md) — Inference server lifecycle, idle timeouts, and hardware execution profiles.
 - [`docs/04_Architecture/04_Infrastructure/windows-host-and-notifications.md`](windows-host-and-notifications.md) — Windows background execution, tray menu, and notification dispatch.
 - [`docs/04_Architecture/01_Domains/tasks-reminders-alarms-and-routines.md`](../01_Domains/tasks-reminders-alarms-and-routines.md) — Decision D10 quiet hours and urgent notification overrides.
+- [`docs/04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md`](mobile-capabilities-and-runtime.md) — Mobile capability qualification, inference runtimes, and local execution policy.
 

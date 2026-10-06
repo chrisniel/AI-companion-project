@@ -1,7 +1,7 @@
 # Web and Current Information Integration Architecture
 
-> **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0010)  
+> **Document Role:** Canonical domain architecture specification.
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0010, Batch D Aligned)
 > **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for read-only web information, search, fetch, and weather integrations.
 
 ---
@@ -14,8 +14,9 @@ This specification defines the integration architecture, security constraints, p
 - Treatment of retrieved external data as untrusted input.
 - Separation of read-only information retrieval from interactive browser automation.
 - Phased delivery boundaries distinguishing PC V1 read-only capabilities from post-V1 browser interaction.
+- Architectural decoupling of internet connectivity and web information tools from Cloud LLM authorization (`D-PHONE-13C`, `D-PHONE-01A`).
 
-It governs all outbound network requests initiated by or on behalf of the assistant to retrieve current real-world information.
+It governs all outbound network requests initiated by or on behalf of the assistant to retrieve current real-world information across PC Desktop, Web, and Mobile Companion clients.
 
 ---
 
@@ -54,6 +55,14 @@ All content ingested from external web sources is untrusted:
 In accordance with Decision D9:
 - **Deferred Capability:** Interactive browser automation (e.g., programmatic form submission, automated checkout, authenticated portal sessions, complex DOM traversal, headless browser orchestration via engines like Playwright or Selenium) is classified as `APPROVED / PC LATER`.
 - **Strict Separation:** Interactive automation is architecturally and operationally distinct from read-only search and fetch. It is **not** part of PC V1 and must not be conflated with read-only retrieval capabilities.
+
+### 2.5 Internet Connectivity Decoupled from Cloud AI Permission (D-PHONE-13C, D-PHONE-01A)
+
+In accordance with Decisions `D-PHONE-13C` and `D-PHONE-01A`:
+- **Architectural Decoupling:** Internet availability and public web tool execution are strictly decoupled from Cloud LLM authorization.
+- **No Implicit Cloud AI Egress:** The presence of active internet connectivity, and the user's permission to execute read-only web tools (WebSearch, WebFetch, Weather), do **NOT** grant authorization to route conversational turns, prompts, or personal user context to external third-party Cloud LLMs.
+- **Local Synthesis of Web Context:** A local companion (running on the PC Host or on qualified Standalone Mobile) may retrieve public web snippets or weather data over the internet and synthesize responses using its local on-device language model, without transmitting user conversation prompts to cloud generative AI providers.
+- **Independent Authorization Boundary:** Cloud LLM usage remains an independent, explicit, user-opt-in capability requiring user-supplied API credentials. Enabling public internet retrieval never implicitly enables or authorizes Cloud LLM routing.
 
 ---
 
@@ -115,3 +124,4 @@ The following functional and technical mechanisms remain open design for future 
 - **Assistant Domain Specification:** [`docs/04_Architecture/01_Domains/assistant-and-conversations.md`](../01_Domains/assistant-and-conversations.md)
 - **Tool Permissions & Actions Spec:** [`docs/04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md`](../02_Data_and_Security/tool-permissions-and-actions.md)
 - **Authentication & Secrets Spec:** [`docs/04_Architecture/02_Data_and_Security/authentication-and-secrets.md`](../02_Data_and_Security/authentication-and-secrets.md)
+- **Mobile Capabilities & Local Runtime:** [`docs/04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md`](../04_Infrastructure/mobile-capabilities-and-runtime.md)

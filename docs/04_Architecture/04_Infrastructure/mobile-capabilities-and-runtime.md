@@ -1,7 +1,7 @@
 # Mobile Capabilities, Inference, Voice, and Verification Architecture
 
-> **Document Role:** Canonical infrastructure and behavior specification for Mobile Companion hardware capabilities, local inference policy, voice architecture, security boundaries, and release verification.  
-> **Status:** Active Canonical — Mobile Architecture Batch C Approved  
+> **Document Role:** Canonical infrastructure and behavior specification for Mobile Companion hardware capabilities, local inference policy, voice architecture, security boundaries, and release verification.
+> **Status:** Active Canonical — Mobile Architecture Batch D Aligned
 > **Authority Precedence:** This specification governs Mobile hardware tiering, local/remote inference delegation, voice streaming and audio focus, platform security controls, resource governance, and testing architecture. It operates under the cross-cutting boundaries defined in [`MOBILE_SYSTEM_BASELINE.md`](../MOBILE_SYSTEM_BASELINE.md) and [`mobile-offline-and-sync.md`](./mobile-offline-and-sync.md). PC Local AI Runtime domain truth remains owned by shared specifications (such as [`runtime-and-models.md`](./runtime-and-models.md), [`voice-and-audio.md`](../01_Domains/voice-and-audio.md), and [`health-and-wearables.md`](../03_Integrations/health-and-wearables.md)).
 
 ---
@@ -19,16 +19,21 @@ A dedicated specification is architecturally justified because:
 
 ## 2. C1: Local Mobile Inference & Hardware Capability Policy
 
-### 2.1 Release Disposition: Capability-Dependent / Optional-Auxiliary
-The foundational architecture question for Mobile V1 is resolved:
-**Local Mobile inference is CAPABILITY-DEPENDENT and OPTIONAL-AUXILIARY for Mobile V1. It is NOT mandatory to run or use the Mobile Companion.**
+### 2.1 Release Disposition: Production Local LLM Path on Qualified Hardware
+In accordance with Decision `D-PHONE-01`:
+**Mobile V1 product implementation includes a real production-capable device-local LLM execution path for qualified devices.**
 
-#### 2.1.1 Architectural Rationale
-1. **Core Product Usability Without Local LLM:** The essential productivity core of the Mobile Companion—viewing, creating, and modifying Tasks; receiving scheduled Reminders; triggering punctual, exact Alarms; viewing cached conversation history; and managing local device settings—functions 100% offline without any resident generative language model.
-2. **Primary Delegation Model:** When network connectivity is present, the Mobile Companion delegates conversational turn execution to the PC Local AI Runtime (`CONNECTED_TO_PC`) over the authenticated local network or Tailscale mesh (`ADR-0019`).
-3. **Optional Cloud Fallback:** When disconnected from the PC Host but internet access is available, the mobile client can optionally route conversational turns to external Cloud LLMs (`OPTIONAL_CLOUD`), provided the user has explicitly opted in and supplied their own provider API keys stored securely in platform-protected device storage.
-4. **Offline Assistant Utility:** When disconnected from both PC and cloud, the conversational assistant is available **only if** the device meets evidence-based runtime qualification, an approved mobile model artifact is installed, and device thermals/battery permit execution.
-5. **Truthful Degradation Invariant:** If local inference is not supported by the hardware, not installed, or throttled due to resource pressure, the application MUST truthfully inform the user via the UI (e.g., *"Offline — Local Assistant model not installed. Connect to PC or configure Cloud API to chat; Tasks and Alarms remain fully active"*). The application must NEVER pretend to possess generative capability it cannot deliver, nor silently freeze the interface.
+#### 2.1.1 Architectural Principles & Boundaries
+1. **Production Path on Qualified Hardware (`D-PHONE-01`):** Local generative LLM inference is an approved Mobile V1 product capability, not a speculative research experiment or auxiliary afterthought.
+2. **Individual Device Qualification (`D-PHONE-01`, `D-PHONE-03`):** Not every supported mobile phone must qualify. Local LLM capability is enabled dynamically based on measured runtime preflight qualification.
+3. **Core Companion Survival Without Generative AI (`D-PHONE-02`):** The essential productivity core of the Mobile Companion—viewing, creating, and modifying Tasks; receiving scheduled Reminders; triggering punctual, exact Alarms; bounded Routine occurrence presentation; viewing cached conversations; managing local settings; and interacting with the companion presence shell—survives 100% offline without any resident generative language model.
+4. **Orthogonal Availability Dimensions (`D-PHONE-01A`):** PC Host reachability, internet connectivity, and inference routing are strictly orthogonal state dimensions. Standalone Mobile (`STANDALONE_MOBILE`) is an ordinary operational state, never an application error.
+5. **Inference Delegation Routes:**
+   - *Connected to PC (`CONNECTED_TO_PC`):* When the PC Host is reachable over LAN or Tailscale, the client delegates heavy turn execution to the PC Local AI Runtime.
+   - *Standalone Mobile with Qualified Local LLM:* When disconnected from the PC Host, qualified devices execute turns locally using their resident on-device model.
+   - *Optional Cloud Fallback (`OPTIONAL_CLOUD`):* Disconnected mobile clients with internet access may optionally route turns to external Cloud LLMs only when the user has explicitly opted in and supplied their own credentials. Internet access does not imply Cloud LLM authorization (`D-PHONE-13C`).
+   - *Limited Non-Generative Offline:* When disconnected and lacking a qualified or resident local model, the assistant interface truthfully informs the user while preserving all core non-generative features.
+6. **Truthful Degradation Invariant:** The application MUST truthfully report active capabilities, requested vs. actual execution backend, model residency, and resource state. It must NEVER pretend to possess generative capability it cannot deliver, nor silently freeze the interface.
 
 ---
 
@@ -57,17 +62,17 @@ The architecture defines four **non-overlapping semantic capability tiers** base
 | **Tier 3: Full-Local Qualified** | Demonstrably satisfies preflight for standard compact mobile models, possessing substantial measured memory headroom, sustained compute throughput, and thermal resilience. | **QUALIFIED (Compact Mobile Class)** | Full offline productivity + advanced offline conversational assistance, summarization, and task extraction. | `CONNECTED_TO_PC` primary; Local model fallback when disconnected; `OPTIONAL_CLOUD` opt-in. |
 
 #### 2.2.2 Non-Canonical Research Context (Provisional Evidence Only)
-Exploratory tests conducted on an Infinix ZERO ULTRA (MediaTek Dimensity 920, 8 GB RAM, Android 13) utilizing PocketPal demonstrated provisional feasibility for sub-1B and 1B models:
+Empirical tests conducted on a reference hardware baseline (**Reference Android Device A: Android 13, ARM64, 8 GB physical RAM, mid-range mobile SoC class**) utilizing standalone mobile inference engines demonstrated provisional feasibility for sub-1B and 1B class models:
 - *Gemma 3 270M Q8:* Prompt processing $\approx$ 172.8 t/s, Generation $\approx$ 25.6 t/s, Resident RAM $\approx$ 754 MB.
 - *Qwen 3.5 0.8B:* Prompt processing $\approx$ 62.5 t/s, Generation $\approx$ 14.8 t/s.
 - *Llama 3.2 1B:* Prompt processing $\approx$ 42.9 t/s, Generation $\approx$ 12.4 t/s.
-*Archival Caveat:* These empirical figures represent point-in-time exploratory research on a single device configuration. They serve as feasibility evidence that sub-1B and 1B models can achieve interactive speeds on mid-range hardware, but parameter counts, quantization formats, and chipset names are non-canonical research examples. They do NOT constitute contractual throughput guarantees across Android hardware.
+*Archival Caveat:* These empirical figures represent point-in-time exploratory research recorded in [`docs/00_Drafts/research/mobile/benchmarks/MOBILE_LOCAL_MODEL_BENCHMARK_EVIDENCE.md`](../../00_Drafts/research/mobile/benchmarks/MOBILE_LOCAL_MODEL_BENCHMARK_EVIDENCE.md). They serve as non-canonical empirical feasibility evidence that sub-1B and 1B models can achieve interactive speeds on mid-range hardware. Parameter counts, quantization formats, and candidate model names are non-canonical research examples. They do NOT constitute contractual throughput guarantees or permanent architectural dependencies.
 
 ---
 
 ### 2.3 Mobile-Local Model Lifecycle & D6 Mobile Adaptation
 
-While PC workstations follow the Decision D6 import pipeline (`inbox` $\rightarrow$ `scan` $\rightarrow$ `preflight` $\rightarrow$ `staging` $\rightarrow$ `library`), mobile platforms operate under Android Scoped Storage and sandboxing constraints. The mobile adaptation of D6 enforces the following rules:
+While PC workstations follow the Decision D6 import pipeline (`inbox` $\rightarrow$ `scan` $\rightarrow$ `preflight` $\rightarrow$ `staging` $\rightarrow$ `library`), mobile platforms operate under Android Scoped Storage and sandboxing constraints. The mobile adaptation of D6 enforces the following rules in accordance with `D-PHONE-05`:
 
 1. **Model Acquisition & Distribution:**
    - *Host-to-Device Direct Transfer (Preferred LAN Path):* When connected over LAN or Tailscale, the PC Host can package an approved, verified small-format model artifact and stream it directly to the Mobile Companion over the authenticated local connection.
@@ -76,13 +81,14 @@ While PC workstations follow the Decision D6 import pipeline (`inbox` $\rightarr
 2. **Cryptographic Integrity & Preflight:**
    - Before a downloaded or transferred model artifact is registered, its cryptographic hash (SHA-256) is verified against the signed manifest.
    - *Preflight Capacity Check:* Before loading, the mobile engine inspects current device available RAM (`ActivityManager.MemoryInfo.availMem`) and thermal status. Available memory must meet the model's declared resident working set plus a measured, configurable safety reserve ensuring adequate headroom for the host OS and companion UI. If insufficient, the load operation aborts with an informative diagnostic message.
-3. **Single Resident Model Policy (`--models-max 1` Mobile Equivalent):**
-   - At most **ONE** generative model may reside in mobile RAM at any given time.
-   - Loading a local model automatically unloads any prior active model. Concurrent execution of multiple generative models on mobile is strictly prohibited.
+3. **Canonical Model Lifecycle States (`D-PHONE-05`):**
+   - The lifecycle of a local generative model transitions through explicit states: `installed`, `loaded / resident`, `active`, `unloaded`, `removed`.
+   - *Single Resident Model Policy (`--models-max 1` Mobile Equivalent):* At most **ONE** generative LLM may reside in mobile RAM at any given time. Loading a local model automatically unloads any prior active model. Concurrent execution of multiple generative models on mobile is strictly prohibited. Speech and vision models are budgeted separately.
+   - *Unload vs. Removal:* Unloading evicts weights from memory to release RAM/VRAM. *Unload never removes or deletes the model artifact from disk.* Explicit removal/purge is a separate user-initiated action.
 4. **Model Resource & Process Lifecycle:**
    - *Background Release/Suspension:* Backgrounding the application with no active approved user-visible operation may release or suspend expensive model resources to prevent premature process termination by the Android low-memory killer (LMK).
    - *Active Operations:* Explicitly user-initiated active operations (such as an approved active Voice foreground session) follow their approved execution lifecycle.
-   - *Resource Pressure Triggers:* High memory pressure, elevated thermal state, OS process lifecycle constraints, or user battery policies may force model unloading.
+   - *Resource Pressure Triggers:* High memory pressure, elevated thermal state, OS process lifecycle constraints, or user battery policies may force model unloading via the Progressive Resource Governor (`D-PHONE-05A`).
    - *Process Death Resilience:* OS process termination by the Android platform must always be tolerated safely; transient model state is reconstructed cleanly on subsequent launch.
 5. **Container & Engine Independence:**
    - The architecture accommodates mobile runtime backends such as `llama.cpp` JNI bindings, ONNX Runtime Mobile, or ExecuTorch. The canonical specification does NOT permanently freeze a single container format (such as GGUF) or vendor engine for all mobile eternity.
