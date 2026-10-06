@@ -32,6 +32,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
     - `docs/04_Architecture/01_Domains/characters-personality-and-emotion.md`
     - `docs/05_Design/08_Mobile_Companion_Shell_and_UX.md` (New proposed design specification)
   - Batch D5:
+    - `docs/04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md` (Canonical Mobile verification & future CI architecture owner)
     - `docs/02_Planning/00_Master/MOBILE_WBS.md`
     - `docs/02_Planning/00_Master/MOBILE_CHECKLIST.md`
     - `docs/02_Planning/00_Master/MASTER_CHECKLIST.md`
@@ -60,8 +61,9 @@ The result will re-close MOBILE-ARCH truthfully, align canonical specifications 
 
 1. **Batch D2 Canonical Architecture Promotion:** Update 5 foundational architectural files establishing orthogonal availability states, device enrollment and one-device-to-one-profile lifecycle, core survival without generative AI, synchronized scheduling authority (Profile ownership, PC Host scheduler truth, Mobile-origin Reminders/Alarms with stable client-generated UUIDs, protected Host-origin definitions), Companion Alert Enrichment (`D-SHARED-SCHED-03`), bounded Routine occurrence presentation without autonomous recurrence, shared temporal intent resolution semantics (`D-SHARED-SCHED-04` through `04E`), and Flutter shared-core workspace boundaries without freezing exact package names.
 2. **Batch D3 AI Runtime & Context Canonical Promotion:** Update 8 runtime, conversation, memory, and tool specifications establishing the real local LLM V1 product path for qualified devices (with core surviving without it), replaceable local model behavior (`D-PHONE-01C`), max 1 resident generative model, approved lifecycle terms (`installed`, `loaded/resident`, `active`, `unloaded`, `removed`), progressive truthful Resource Governor without invented fixed tiers or RAM floors, shared Context/Generation/Reasoning Budget Manager (`D-SHARED-AI-01`), Unified Context Retrieval across distinct sources (`D-SHARED-AI-03`), authoritative raw transcripts (`D-SHARED-AI-02`), Host-mediated streaming (`D-SHARED-CONV-02`), preserved "NOT IMPLEMENTED" rolling compaction truth, pending memory intents as outbox submissions to PC Host with local continuity overlays (`D-PHONE-08`, `08A`, `09`), causal conversation branching without Last-Write-Wins (LWW) (`D-SHARED-CONV-01`), and D9 Mobile Standalone Tool Gateway boundaries with deterministic confirmation (`D-PHONE-13` through `13F`).
-3. **Batch D4 Voice, Health, Vision, Character & Mobile UX Promotion:** Update 9 domain/infrastructure specifications and author 1 new canonical design document (`docs/05_Design/08_Mobile_Companion_Shell_and_UX.md`) establishing independent composable Voice routing with mandatory barge-in, conditional read-only Health Connect V1 as a distinct Health-domain source (not D7 Memory), conditional still-image Vision V1 with routed inference (`D-PHONE-16B` to `16E`), PC Character authority with Emotion Event sync to Host, Companion Check-in Surfaces and Tone (`D-PHONE-12D`, `12E`), future remote expression discovery (`P-PRESENCE-02`), and the 5-tab companion shell with hybrid visual design tokens, compact truthful status UX, and full appearance options.
+3. **Batch D4 Voice, Health, Vision, Character & Mobile UX Promotion:** Update 9 domain/infrastructure specifications and author 1 new canonical design document (`docs/05_Design/08_Mobile_Companion_Shell_and_UX.md`) establishing independent composable Voice routing with mandatory barge-in, conditional read-only Health Connect V1 as a distinct Health-domain source (not D7 Memory), conditional still-image Vision V1 with routed inference (`D-PHONE-16B` to `16E`), PC Character authority with Emotion Event sync to Host, Companion Check-in Surfaces and Tone (`D-PHONE-12D`, `12E`), Opt-in Location Context as Mobile Later / Approved Future Direction (`P-PHONE-LOC-01`), future remote expression discovery (`P-PRESENCE-02`), and the 5-tab companion shell with hybrid visual design tokens, compact truthful status UX, and full appearance options.
 4. **Batch D5 Master Planning Spine, Golden Verification & PR Closure:**
+   - Update canonical verification architecture in `docs/04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md` reconciling Mobile Golden architecture to MG1–MG18 (`D-MOBILE-VERIFY-01` through `03`) and documenting future Flutter path-scoped, shared-package fan-out, and tiered L1–L5 CI architecture (`D-CI-01` through `04`) with zero modifications to `.github/workflows/ci.yml`.
    - Expand `MOBILE_WBS.md` from its current 65 items as required by promoted architecture, deriving exact task counts and new stable IDs during D5 while preserving existing stable IDs (`MOB-VOICE-005`, `006`, `007`).
    - Expand `MOBILE_CHECKLIST.md` to the exact locked MG1–MG18 structure with explicit qualification classes (`REQUIRED`, `CONDITIONAL`, `OPTIONAL`, `DEFERRED`).
    - Synchronize `MASTER_CHECKLIST.md`, `DECISION_REGISTER.md` (indexing every approved Batch D decision while preserving accepted ADRs ADR-0001 through ADR-0012, ADR-0017, ADR-0018, ADR-0019; ADR-0013 through ADR-0016 remain historical/unaccepted), `SPRINT_ROADMAP.md`, `DELIVERY_INDEX.md`, `DECISION_DEBT.md` (allocating/updating a Mobile Decision Debt item for One Profile → Multiple Phones; exact stable debt ID derived during D5), and `DOCUMENTATION_MAP.md`.
@@ -78,6 +80,8 @@ This implementation plan strictly enforces the following project guardrails:
 - **No Invention of Unapproved Architecture:** Every canonical edit must trace directly to an approved decision in `MOBILE_ARCH_BATCH_D_APPROVED_DECISION_LEDGER.md` or an existing canonical invariant.
 - **No Erasure of Implementation Truth:** Documentation must truthfully distinguish implemented reality from target architecture. Implemented code in `frontend/web/` and `src/` retains its current state; "NOT IMPLEMENTED" statuses remain explicit; the Kotlin Android app in `android/` remains prototype/reference evidence only.
 - **No Benchmark Data Promotion as Architecture:** Benchmark data in `MOBILE_LOCAL_MODEL_BENCHMARK_EVIDENCE.md` serves as non-canonical empirical qualification evidence only and must not turn specific benchmark numbers or retail phone models into permanent architecture requirements.
+- **No Mobile V1 Location Implementation Tasks:** Location context (`P-PHONE-LOC-01`) is an approved future direction (Mobile Later) only; no implementation tasks or V1 capabilities are introduced for Location.
+- **No Active Flutter CI Modifications in Batch D:** Future CI lanes (`D-CI-01` through `04`) are documented in canonical architecture only; `.github/workflows/ci.yml` MUST NOT be modified in this delivery.
 
 ---
 
@@ -142,7 +146,7 @@ The audited reconciliation report (`MOBILE_ARCH_BATCH_D_RECONCILIATION_REPORT.md
 - **Planned Changes:**
   - Update Section 1 & Section 3 to define the 3 orthogonal availability axes (`D-PHONE-01A`): PC Host Reachability (Local LAN / Encrypted Overlay / Unreachable), Internet Reachability (Available / Unavailable), and Inference Route (Local On-Device / PC Host / Cloud / None). Standalone Mobile is explicitly defined as an operational state, not an application failure.
   - Define Device Enrollment & One-Device-to-One-Profile Lifecycle (`D-PHONE-01B`): Enrolled mobile device binds strictly to exactly 1 Profile. Mobile client cannot create, switch, or manage multi-profiles. Pairing direction establishes explicit authorized Host enrollment and QR/code UX direction, while exact cryptographic handshake payloads remain implementation-open.
-  - Document that One Profile → Multiple Phones remains **OPEN / DECISION DEBT** (it is NOT approved as deferred or post-V1).
+  - Document that One Profile → Multiple Phones remains **OPEN / DECISION DEBT** (it is NOT approved as deferred or post-V1; exact stable debt ID derived during D5).
   - Define Core Companion Survival (`D-PHONE-02`): Core Mobile companion functionality (alarms, reminders, schedules, companion presence shell) survives completely without local generative AI.
   - Document Flutter client architecture baseline (`D-SHARED-FLUTTER-01` to `08`, `D-PHONE-FLUTTER-01`): Monorepo shared workspace with separate Desktop and Mobile app targets; shared stable domain, contracts, controller, and design primitives where appropriate; platform adapters strictly isolated; platform-specific screen composition allowed. Exact package names and count remain implementation-open (no pre-freezing unapproved package names). Explicitly note that `android/` Kotlin code is legacy prototype reference only.
 - **Invariants to Preserve:** PC Host remains master administrator and root of trust; Android platform protection; Android Keystore for private keys.
@@ -312,10 +316,10 @@ The audited reconciliation report (`MOBILE_ARCH_BATCH_D_RECONCILIATION_REPORT.md
 
 ### 3.3 Batch D4 — Voice, Health, Vision, Character/Presence & Mobile UX
 
-**Goal:** Establish composable Voice, conditional Health Connect V1 as a distinct domain source, conditional local still-image Vision with routed inference, Character authority with Emotion Event sync, Companion Check-in Surfaces/Tone, future Presence boundaries, language extensibility, and the approved Mobile product UX.
+**Goal:** Establish composable Voice, conditional Health Connect V1 as a distinct domain source, conditional local still-image Vision with routed inference, Character authority with Emotion Event sync, Companion Check-in Surfaces/Tone, Opt-in Location Context as an approved future direction, future Presence boundaries, language extensibility, and the approved Mobile product UX.
 
 **Approved Decision Groups:**
-`D-PHONE-04`, `D-PHONE-14` through `D-PHONE-14G`, Voice shared invariants, `D-PHONE-15` through `D-PHONE-15E`, `D-SHARED-HEALTH-01` through `D-SHARED-HEALTH-04`, `D-PHONE-16` through `D-PHONE-16E`, `D-SHARED-VISION-01`, `D-PHONE-06`, Character authority rule, `D-PHONE-EMO-01`, `D-PHONE-12D`, `12E`, `P-SHARED-PRESENCE-01`, `P-PHONE-AR-01`, `P-PHONE-AR-02`, `P-PRESENCE-02`, `D-PHONE-UX-01` through `D-PHONE-UX-10`, `D-SHARED-LANG-01`, `D-SHARED-LANG-02`.
+`D-PHONE-04`, `D-PHONE-14` through `D-PHONE-14G`, Voice shared invariants, `D-PHONE-15` through `D-PHONE-15E`, `D-SHARED-HEALTH-01` through `D-SHARED-HEALTH-04`, `D-PHONE-16` through `D-PHONE-16E`, `D-SHARED-VISION-01`, `D-PHONE-06`, Character authority rule, `D-PHONE-EMO-01`, `D-PHONE-12D`, `12E`, `P-PHONE-LOC-01`, `P-SHARED-PRESENCE-01`, `P-PHONE-AR-01`, `P-PHONE-AR-02`, `P-PRESENCE-02`, `D-PHONE-UX-01` through `D-PHONE-UX-10`, `D-SHARED-LANG-01`, `D-SHARED-LANG-02`.
 
 #### [MODIFY] `docs/04_Architecture/MOBILE_SYSTEM_BASELINE.md`
 - **Primary Responsibility:** Mobile baseline subsystem registration.
@@ -323,6 +327,7 @@ The audited reconciliation report (`MOBILE_ARCH_BATCH_D_RECONCILIATION_REPORT.md
   - Add Voice subsystem registration (`D-PHONE-14`): Composable STT/LLM/TTS pipeline, foreground service lifecycle, barge-in mandatory.
   - Add Health Connect subsystem registration (`D-PHONE-15`): Conditional Mobile V1, read-only, non-clinical, distinct Health-domain source (not D7 Memory).
   - Add Vision subsystem registration (`D-PHONE-16`): Conditional Mobile V1, still-image VLM with routed inference (`16B` to `16E`), shared attachment pipeline.
+  - Add Opt-in Location Context boundary (`P-PHONE-LOC-01`): Documented strictly as **MOBILE LATER / APPROVED FUTURE DIRECTION** (opt-in only, event-driven OS geofencing preferred over continuous GPS, contextual signal not Memory/authority, no raw continuous tracking by default, user purgeable; Character cannot override privacy; NO implementation tasks for Mobile V1).
   - Add Companion Shell & Navigation registration (`D-PHONE-UX-01` to `10`): 5-tab navigation, companion-centered home, compact status UX (`PC` / `Local` / `Cloud` / `Limited`), full appearance options (OLED default, Dark, Light, System, reduced motion).
 - **Invariants to Preserve:** Subsystem lifecycle isolation; zero cross-subsystem crashes.
 
@@ -374,6 +379,12 @@ The audited reconciliation report (`MOBILE_ARCH_BATCH_D_RECONCILIATION_REPORT.md
   - Extensible Language Registry (`D-SHARED-LANG-01`) & Qualified Capabilities (`02`): Companion language persona registry is extensible; Companion language persona is distinct from app UI localization (`D-PHONE-UX-09`).
 - **Invariants to Preserve:** Persona consistency; ethical companion guardrails.
 
+#### [MODIFY] `docs/04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md`
+- **Primary Responsibility:** Hardware capabilities, sensors, and future direction boundaries.
+- **Planned Changes:**
+  - Document Opt-in Location Context boundaries (`P-PHONE-LOC-01`): Formally categorized as **MOBILE LATER / APPROVED FUTURE DIRECTION**; opt-in only; event-oriented geofencing preferred over raw GPS; location data is contextual evidence, never D7 Memory; location is a signal, never scheduling or security authority; no continuous location logging by default; user inspect/purge authority; no implicit cloud egress. No V1 implementation tasks.
+- **Invariants to Preserve:** Sensor permission isolation; privacy boundaries.
+
 #### [ADD] `docs/05_Design/08_Mobile_Companion_Shell_and_UX.md`
 - **Primary Responsibility:** Canonical Mobile UI/UX specification, layout shell, design tokens, and interaction flows.
 - **Planned Changes:** Create new design document adhering to `docs/05_Design/` flat numbering convention (`01_` through `07_` exist) using exact approved UX decision mappings:
@@ -390,6 +401,7 @@ The audited reconciliation report (`MOBILE_ARCH_BATCH_D_RECONCILIATION_REPORT.md
   - `D-PHONE-UX-10`: Lightweight Mood Presence with guaranteed emoji / mood-glyph fallback.
   - `D-SHARED-LANG-01`, `02`: Extensible language registry and code-switching capabilities.
   - `D-PHONE-12D`, `12E`: Check-in surfaces (in-app card, notification, widgets) and character-aware check-in tone.
+  - `P-PHONE-LOC-01`: Bounded reference for future opt-in location permission UX (Mobile Later).
   - Accessibility: Accessible touch targets conforming to repository accessibility conventions.
 - **Invariants to Preserve:** Compliance with repository design system; contrast standards.
 
@@ -397,7 +409,23 @@ The audited reconciliation report (`MOBILE_ARCH_BATCH_D_RECONCILIATION_REPORT.md
 
 ### 3.4 Batch D5 — Master Planning Spine, Golden Verification, Documentation Integration & PR Handoff
 
-**Goal:** Synchronize the master planning spine, expand the WBS and Golden verification checklist, clean trailing whitespace blocking Docs Integrity CI across the full PR diff, author the delivery walkthrough, and prepare PR #21 for closure.
+**Goal:** Reconcile canonical Mobile verification and future CI architecture in `mobile-capabilities-and-runtime.md`, expand the WBS and Golden verification checklist, synchronize the master planning spine, clean trailing whitespace blocking Docs Integrity CI across the full PR diff, author the delivery walkthrough, and prepare PR #21 for closure.
+
+**Approved Decision Groups:**
+`D-MOBILE-VERIFY-01`, `D-MOBILE-VERIFY-02`, `D-MOBILE-VERIFY-03`, `D-CI-01`, `D-CI-02`, `D-CI-03`, `D-CI-04`, `P-PHONE-LOC-01`, `P-SHARED-PRESENCE-01`, `P-PHONE-AR-01`, `P-PHONE-AR-02`, `P-PRESENCE-02`, and all approved Batch D and shared decision families.
+
+#### [MODIFY] `docs/04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md`
+- **Primary Responsibility:** Canonical Mobile verification architecture owner and future CI strategy baseline.
+- **Planned Changes:**
+  - Product-Centered Mobile Golden Gate Architecture (`D-MOBILE-VERIFY-01`): Formally establish the expansion of the Mobile Golden gate from MG1–MG12 to the exact locked MG1–MG18 structure, preserving infrastructure verification while incorporating actual Companion product behavior.
+  - Granular Qualification Classes (`D-MOBILE-VERIFY-02`): Define qualification classes (`REQUIRED`, `CONDITIONAL`, `OPTIONAL`, `DEFERRED`) at the capability and assertion level; a weaker device is not invalidated simply because a conditional capability (local STT, Health Connect, local VLM) does not qualify.
+  - Integrated Companion Journey Architecture (`D-MOBILE-VERIFY-03`): Specify MG18 as the final end-to-end integrated Companion journey verifying enrollment, Character continuity, connected use, Standalone Mobile use, local conversation where qualified, Task/Reminder, Routine check-in, Health where authorized/available, Vision where available, Voice, reconnect/reconciliation, continuity, and device revocation.
+  - Future Flutter CI Architecture (`D-CI-01` through `04`):
+    - Path-Scoped Verification (`D-CI-01`): Conceptually distinguish CI pipelines for `backend`, `contract`, `frontend-web`, `docs`, `flutter-shared`, `flutter-desktop`, and `flutter-mobile` (exact syntax and path globs remain implementation-open).
+    - Shared-Package Fan-Out (`D-CI-02`): Shared package changes trigger verification of both Desktop and Mobile; Desktop-only changes verify Desktop; Mobile-only changes verify Mobile; Android-native adapter changes verify Mobile plus platform coverage.
+    - Tiered Mobile Verification (`D-CI-03`): L1 (Dart/domain/unit), L2 (storage/package integration), L3 (Android emulator/platform), L4 (physical hardware), and L5 (live Host/network integration). Do not require L3–L5 for trivial UI changes.
+    - CI Guardrail (`D-CI-04`): Document future CI routing only; `.github/workflows/ci.yml` MUST NOT be modified in this delivery; active Flutter CI lanes are implemented only after M1 creates the real Flutter workspace and dependencies.
+- **Invariants to Preserve:** Canonical architecture ownership for verification policy without duplicating every checklist assertion verbatim.
 
 #### [MODIFY] `docs/02_Planning/00_Master/MOBILE_WBS.md`
 - **Primary Responsibility:** Mobile Work Breakdown Structure and task definitions.
@@ -410,9 +438,9 @@ The audited reconciliation report (`MOBILE_ARCH_BATCH_D_RECONCILIATION_REPORT.md
 - **Invariants to Preserve:** Existing task IDs and completed baseline milestones.
 
 #### [MODIFY] `docs/02_Planning/00_Master/MOBILE_CHECKLIST.md`
-- **Primary Responsibility:** Mobile Golden verification criteria and capability qualification checklist.
+- **Primary Responsibility:** Detailed Mobile Golden readiness and evidence matrix.
 - **Planned Changes:**
-  - Replace current checklist with the exact approved, locked MG1–MG18 structure:
+  - Replace current checklist with the exact approved, locked MG1–MG18 structure (`D-MOBILE-VERIFY-01`):
     - **MG1 — Enrollment, Identity & Profile Isolation**
     - **MG2 — Security, Secrets & Protected Transport**
     - **MG3 — Connected Companion Operation**
@@ -430,9 +458,9 @@ The audited reconciliation report (`MOBILE_ARCH_BATCH_D_RECONCILIATION_REPORT.md
     - **MG15 — Health-Aware Companion**
     - **MG16 — Multimodal Vision**
     - **MG17 — Mobile UX, Accessibility & Personalization**
-    - **MG18 — Full Companion Journey** (must remain the integrated final journey)
-  - Apply granular qualification classes (`REQUIRED`, `CONDITIONAL`, `OPTIONAL`, `DEFERRED`) to sub-capabilities within groups rather than simplistic one-word classifications for whole groups.
-- **Invariants to Preserve:** Explicit verification evidence requirements for each checklist item.
+    - **MG18 — Full Companion Journey** (`D-MOBILE-VERIFY-03`, must remain the integrated final journey)
+  - Apply granular qualification classes (`REQUIRED`, `CONDITIONAL`, `OPTIONAL`, `DEFERRED`) to sub-capabilities within groups (`D-MOBILE-VERIFY-02`) rather than simplistic one-word classifications for whole groups.
+- **Invariants to Preserve:** Detailed evidence requirements for each checklist item.
 
 #### [MODIFY] `docs/02_Planning/00_Master/MASTER_CHECKLIST.md`
 - **Primary Responsibility:** Top-level project milestone delivery checklist.
@@ -441,12 +469,18 @@ The audited reconciliation report (`MOBILE_ARCH_BATCH_D_RECONCILIATION_REPORT.md
 
 #### [MODIFY] `docs/02_Planning/00_Master/DECISION_REGISTER.md`
 - **Primary Responsibility:** Authoritative registry of architectural decisions.
-- **Planned Changes:** Index every approved Batch D decision/direction from the approved ledger, preserving exact IDs and statuses (including all suffixed and non-contiguous IDs like `01A`, `01B`, `01C`, `05A`, `08A`, `12A`–`12E`, `13A`–`13F`, `14A`–`14G`, `15A`–`15E`, `16A`–`16E`, `D-PHONE-UX-01` to `10`, `D-PHONE-EMO-01`, and shared decision families `D-SHARED-SCHED-*`, `D-SHARED-AI-*`, `D-SHARED-CONV-*`, `D-SHARED-FLUTTER-*`, `D-SHARED-HEALTH-*`, `D-SHARED-VISION-*`, `D-SHARED-LANG-*`, `P-PRESENCE-02`). Preserve accepted ADR authority: ADR-0001 through ADR-0012, ADR-0017, ADR-0018, ADR-0019 (ADR-0013 through ADR-0016 remain historical/unaccepted).
-- **Invariants to Preserve:** Accepted ADR authority.
+- **Planned Changes:** Index every approved Batch D decision and direction from the approved ledger, preserving exact IDs and statuses:
+  - Mobile decisions: `D-PHONE-01`, `01A`, `01B`, `01C`, `02`, `03`, `04`, `05`, `05A`, `06`, `08`, `08A`, `09`, `10`, `11`, `12`, `12A`, `12B`, `12C`, `12D`, `12E`, `13`, `13A`–`13F`, `14`, `14A`–`14G`, `15`, `15A`–`15E`, `16`, `16A`–`16E`, `D-PHONE-UX-01` to `10`, `D-PHONE-EMO-01`, `D-PHONE-FLUTTER-01`.
+  - Future/Presence directions: `P-PHONE-LOC-01`, `P-SHARED-PRESENCE-01`, `P-PHONE-AR-01`, `P-PHONE-AR-02`, `P-PRESENCE-02`.
+  - Verification & CI decisions: `D-MOBILE-VERIFY-01`, `02`, `03`, `D-CI-01`, `02`, `03`, `04`.
+  - Shared decision families: `D-SHARED-SCHED-01` to `04E`, `D-SHARED-AI-01` to `03`, `D-SHARED-CONV-01` to `03A`, `D-SHARED-FLUTTER-01` to `08`, `D-SHARED-HEALTH-01` to `04`, `D-SHARED-VISION-01`, `D-SHARED-LANG-01`, `02`.
+  - Research requirements with their correct non-normative status.
+  - Preserve accepted ADR authority: ADR-0001 through ADR-0012, ADR-0017, ADR-0018, ADR-0019 (ADR-0013 through ADR-0016 remain historical/unaccepted).
+- **Invariants to Preserve:** Accepted ADR authority; non-normative status for research requirements.
 
 #### [MODIFY] `docs/02_Planning/00_Master/DECISION_DEBT.md`
 - **Primary Responsibility:** Catalog of deferred decisions, technical debt, and open architectural questions.
-- **Planned Changes:** Allocate/update a Mobile Decision Debt item for One Profile → Multiple Mobile Phones as **OPEN / DECISION DEBT** (exact stable debt ID derived during D5).
+- **Planned Changes:** Allocate/update a Mobile Decision Debt item for One Profile → Multiple Mobile Phones as **OPEN / DECISION DEBT** in `DECISION_DEBT.md` (exact stable debt ID derived during D5).
 - **Invariants to Preserve:** Existing recorded debt items.
 
 #### [MODIFY] `docs/02_Planning/00_Master/SPRINT_ROADMAP.md` & `DELIVERY_INDEX.md`
@@ -479,7 +513,7 @@ The audited reconciliation report (`MOBILE_ARCH_BATCH_D_RECONCILIATION_REPORT.md
 ## 4. Step-by-Step Implementation Sequence
 
 ```
-PLAN CORRECTED (Current Task)
+PLAN COMPLETED & VERIFIED (Current Task)
   │
   ▼
 STOP: Independent Chris & GPT Plan Review & Approval
@@ -541,9 +575,9 @@ Chris executes commit & push of Batch D4 checkpoint
   │
   ▼
 BATCH D5: Planning Spine, Golden Verification, Whitespace Cleanup & PR Handoff
-  │  (MOBILE_WBS.md, MOBILE_CHECKLIST.md, MASTER_CHECKLIST.md,
-  │   DECISION_REGISTER.md, SPRINT_ROADMAP.md, DELIVERY_INDEX.md,
-  │   DECISION_DEBT.md, DOCUMENTATION_MAP.md, CHANGELOG.md,
+  │  (mobile-capabilities-and-runtime.md, MOBILE_WBS.md, MOBILE_CHECKLIST.md,
+  │   MASTER_CHECKLIST.md, DECISION_REGISTER.md, SPRINT_ROADMAP.md,
+  │   DELIVERY_INDEX.md, DECISION_DEBT.md, DOCUMENTATION_MAP.md, CHANGELOG.md,
   │   walkthrough-mobile-v1-batch-d-reconciliation.md,
   │   Full PR trailing-whitespace mechanical cleanup)
   ▼
@@ -582,7 +616,7 @@ Chris triggers fresh CI, verifies green Docs Integrity, and executes squash merg
 ### 4.3 Recommended Conventional Commit Checkpoints
 
 Because Chris owns all Git mutations, the implementation agent will halt at the end of each batch, report verification results, and provide a single Conventional Commit suggestion for Chris to execute:
-1. **Plan Correction (Current):** `docs(mobile): finalize Batch D canonical promotion plan`
+1. **Plan Completion (Current):** `docs(mobile): complete Batch D canonical promotion plan`
 2. **Batch D2 Checkpoint:** `docs(mobile): promote Batch D2 core baseline, identity, scheduling and flutter boundaries`
 3. **Batch D3 Checkpoint:** `docs(mobile): promote Batch D3 ai runtime, context, memory and tools`
 4. **Batch D4 Checkpoint:** `docs(mobile): promote Batch D4 voice, health, vision, character and ux`
@@ -610,8 +644,8 @@ Execution strictly halts at four intermediate review gates and one final closure
 - [ ] **Gate 0 (Plan Approval):** Chris and GPT review and approve this corrected plan file before any canonical files are edited or the active tracker is created.
 - [ ] **Gate 1 (Batch D2 Approval):** Chris and GPT review canonical diffs for `MOBILE_SYSTEM_BASELINE.md`, `mobile-offline-and-sync.md`, `tasks-reminders-alarms-and-routines.md`, `android-companion.md`, and `profiles-and-devices.md`.
 - [ ] **Gate 2 (Batch D3 Approval):** Chris and GPT review canonical diffs for runtime, performance, assistant, memory, tool, and web specifications, including reference-device sanitization.
-- [ ] **Gate 3 (Batch D4 Approval):** Chris and GPT review canonical diffs for voice, health, vision, character, check-ins, presence, and the new design specification `docs/05_Design/08_Mobile_Companion_Shell_and_UX.md`.
-- [ ] **Gate 4 (Batch D5 Closure Gate):** Chris and GPT perform final closure review of the master planning spine, WBS, Golden checklist MG1–MG18, walkthrough, changelog, and PR #21 description update.
+- [ ] **Gate 3 (Batch D4 Approval):** Chris and GPT review canonical diffs for voice, health, vision, character, check-ins, presence, location boundaries, and the new design specification `docs/05_Design/08_Mobile_Companion_Shell_and_UX.md`.
+- [ ] **Gate 4 (Batch D5 Closure Gate):** Chris and GPT perform final closure review of the canonical verification specification in `mobile-capabilities-and-runtime.md`, the master planning spine, WBS, Golden checklist MG1–MG18, walkthrough, changelog, and PR #21 description update.
 
 ### 5.3 Batch-by-Batch Acceptance Criteria
 
@@ -672,6 +706,7 @@ Execution strictly halts at four intermediate review gates and one final closure
 - [ ] **Character Authority Model:** Mobile inherits Decision D11 Character model; connected Mobile creates/edits Character through Host service; offline creation/editing is not V1; Character switching never changes Profile-owned data; conversation remains Character-bound (`D-PHONE-06`).
 - [ ] **Emotion Event Sync Model:** Offline interaction generates typed bounded emotion events in durable outbox; provisional local presentation; Host reconciles events into canonical Mood (`D-PHONE-EMO-01`). Mobile does not directly synchronize/overwrite canonical Mood. Exact mathematical representation open.
 - [ ] **Companion Check-in Surfaces & Tone:** Check-in surfaces across in-app card, notification, and widgets without creating a separate scheduler (`D-PHONE-12D`); character-aware tone using D11 Personality and bounded Mood without fabricating events or threats (`12E`).
+- [ ] **Opt-in Location Context Boundary:** Location context is formally designated as **MOBILE LATER / APPROVED FUTURE DIRECTION** (`P-PHONE-LOC-01`); opt-in only; event-driven geofencing preferred over GPS; location is contextual signal, never D7 Memory; no raw continuous history; user purgeable; Character cannot override privacy; NO implementation tasks for Mobile V1.
 - [ ] **Lightweight Mood Presence & Emoji/Glyph Fallback:** Guaranteed lightweight emoji / mood-glyph fallback (`D-PHONE-UX-10`).
 - [ ] **Future Remote Expression Discovery:** Explicit user search, preview, and download to local assets (`P-PRESENCE-02`). Classified as **FUTURE / MOBILE LATER / EXPERIMENTAL LATER**.
 - [ ] **Presence Boundaries:** AR and spatial presence are formally classified as **FUTURE / MOBILE LATER** (`P-SHARED-PRESENCE-01`, `P-PHONE-AR-01`, `02`).
@@ -682,12 +717,16 @@ Execution strictly halts at four intermediate review gates and one final closure
 - [ ] **Accessible Design Tokens:** Accessible touch targets conforming to repository accessibility conventions.
 
 #### Batch D5 Acceptance Criteria
+- [ ] **Canonical Verification Architecture Alignment:** `mobile-capabilities-and-runtime.md` updated as canonical verification architecture owner, fully agreeing with `MOBILE_CHECKLIST.md` on the MG1–MG18 structure (`D-MOBILE-VERIFY-01`).
+- [ ] **Granular Qualification Classes:** Applies `REQUIRED`, `CONDITIONAL`, `OPTIONAL`, `DEFERRED` at capability and assertion levels in both canonical architecture and checklist (`D-MOBILE-VERIFY-02`).
+- [ ] **Integrated Full Companion Journey:** MG18 is canonically specified as the final end-to-end journey verifying enrollment, Character, connected, Standalone, conversation, Task/Reminder, Routine check-in, Health, Vision, Voice, reconnection, and revocation (`D-MOBILE-VERIFY-03`).
+- [ ] **Future Flutter CI Architecture Documented:** Path-scoped verification (`D-CI-01`), shared-package fan-out (`D-CI-02`), and tiered L1–L5 verification (`D-CI-03`) documented in `mobile-capabilities-and-runtime.md`.
+- [ ] **CI Workflow Invariant Preserved:** `.github/workflows/ci.yml` has zero modifications or semantic changes in this delivery (`D-CI-04`).
 - [ ] **WBS Expansion:** `MOBILE_WBS.md` expanded as required by promoted architecture from current 65 items, with exact final count derived during D5.
 - [ ] **WBS Integrity:** Zero duplicate IDs, zero dangling dependencies, zero dependency cycles; no overloaded unrelated existing IDs; existing IDs (`MOB-VOICE-005`, `006`, `007`) preserved.
 - [ ] **Locked Golden Structure MG1–MG18:** `MOBILE_CHECKLIST.md` follows the exact locked structure (MG1 Enrollment/Identity/Profile, MG2 Security/Secrets/Transport, MG3 Connected Companion, MG4 Standalone Mobile Core, MG5 Durable Offline State/Sync, MG6 Conversations/Branches/Turns, MG7 Context/Memory/Recall, MG8 Character/Mood/Continuity, MG9 Tasks/Reminders/Alarms/Temporal, MG10 Cross-Device Alert Arbitration, MG11 Routines/Check-ins/Surfaces, MG12 Local Tools/Current Info, MG13 Voice/Speech Composition, MG14 Local Models/Resources/Qualification, MG15 Health-Aware Companion, MG16 Multimodal Vision, MG17 Mobile UX/A11y/Personalization, MG18 Full Companion Journey).
-- [ ] **Granular Qualification Classes:** Applies `REQUIRED`, `CONDITIONAL`, `OPTIONAL`, `DEFERRED` to sub-capabilities within Golden groups rather than simplistic one-word classifications for entire groups.
 - [ ] **Master Checklist Alignment:** `MASTER_CHECKLIST.md` Line 6 updated with cross-references to expanded Golden criteria.
-- [ ] **Decision Register Synchronized:** Index every approved Batch D decision/direction from the approved ledger, preserving exact IDs and statuses. Accepted ADR authority preserved (ADR-0001 through ADR-0012, ADR-0017, ADR-0018, ADR-0019; ADR-0013 to ADR-0016 remain historical/unaccepted).
+- [ ] **Decision Register Synchronized:** Index every approved Batch D decision and direction from the ledger (`D-PHONE-*`, `P-PHONE-LOC-01`, `P-PRESENCE-*`, `D-MOBILE-VERIFY-01` to `03`, `D-CI-01` to `04`, shared families, research requirements), preserving exact IDs and statuses. Accepted ADR authority preserved (ADR-0001 through ADR-0012, ADR-0017, ADR-0018, ADR-0019; ADR-0013 to ADR-0016 remain historical/unaccepted).
 - [ ] **Planning Spine Synchronized:** `SPRINT_ROADMAP.md`, `DELIVERY_INDEX.md`, and `DOCUMENTATION_MAP.md` aligned.
 - [ ] **Decision Debt Updated:** Allocate/update a Mobile Decision Debt item for One Profile → Multiple Mobile Phones as **OPEN / DECISION DEBT** in `DECISION_DEBT.md` (exact stable debt ID derived during D5).
 - [ ] **Docs Integrity Whitespace Clean:** Full PR diff against `develop` passes `git diff --check` with 0 trailing whitespace errors across all PR-modified files.
