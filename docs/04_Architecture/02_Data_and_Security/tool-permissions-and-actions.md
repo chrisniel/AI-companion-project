@@ -1,7 +1,7 @@
 # Tool Permissions and Actions Architecture
 
 > **Document Role:** Canonical domain architecture specification.
-> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0010, ADR-0018, Batch D Aligned)
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0010, ADR-0018)
 > **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for tool permissions, deterministic policy, and action execution.
 
 ---
@@ -123,7 +123,7 @@ In accordance with Decisions `D-PHONE-13` through `D-PHONE-13F` and `D-SHARED-CO
   The following capabilities are strictly **REJECTED** and prohibited on mobile:
   - NO arbitrary shell execution (`sh`, `bash`, `cmd`, PowerShell, terminal emulation).
   - NO raw, unrestricted filesystem access (restricted strictly to scoped app storage).
-  - NO master credentials or encryption key access.
+  - NO credential access: The local model, prompt context, tool intent payload, and ordinary tool result must NEVER receive or expose raw secret material, including device credentials, pairing secrets, API keys, cloud provider credentials, tokens, encryption keys, or other secret material. A narrow approved adapter MAY internally use a securely stored credential when required for its bounded capability, but raw secret material must not be exposed to the model, tool intent payload, prompt context, or ordinary tool result.
   - NO PC Host or Profile administration (creating, deleting, or switching Profiles).
   - NO mobile device pairing reassignment or security boundary reconfiguration.
   - NO unrestricted interactive browser automation.

@@ -112,10 +112,10 @@ The high-level fallback routing policy for cloud models is frozen:
 
 In accordance with Decisions `D-PHONE-01`, `D-PHONE-01C`, `D-PHONE-03`, and `D-PHONE-05`:
 
-- **Four-Way Component Separation (`D-PHONE-05`):** To avoid architectural ambiguity, mobile model management strictly distinguishes four separate layers:
-  1. *Model Artifact / Model:* The packaged weights, format, and configuration file (e.g., `.gguf` file).
+- **Four-Way Component Separation (`D-PHONE-03`):** In accordance with vendor-neutral mobile execution (`D-PHONE-03`), mobile model management strictly distinguishes four separate layers to prevent architectural ambiguity:
+  1. *Model Artifact / Model Identity:* The packaged weights, format, configuration, and declared model identity (e.g., `.gguf` artifact).
   2. *Runtime / Provider:* The software inference engine executing inference (e.g., `llama.cpp` mobile bindings, ExecuTorch).
-  3. *Execution Backend:* The hardware accelerator interface / compute driver layer (CPU, OpenCL, Vulkan, NPU).
+  3. *Execution / Acceleration Backend:* The hardware compute driver / accelerator interface (CPU, OpenCL, Vulkan, NPU).
   4. *Physical Hardware:* The host mobile SoC, compute cores, RAM, and thermal chassis.
 - **Canonical Mobile Model Lifecycle States (`D-PHONE-05`):** The lifecycle of a local generative model on mobile transitions through explicit states:
   - `installed`: The model artifact resides in app-scoped local storage and has passed cryptographic and format preflight validation.

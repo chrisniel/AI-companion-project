@@ -1,7 +1,7 @@
 # Memory and Personalization Architecture
 
 > **Document Role:** Canonical domain architecture specification.
-> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0008, ADR-0018, Batch D Aligned)
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0008, ADR-0018)
 > **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for the memory and personalization domain.
 
 ---
@@ -87,7 +87,7 @@ In accordance with Decisions `D-PHONE-08`, `D-PHONE-08A`, and `D-PHONE-09`:
   - Replica contents may include: explicitly pinned memories (`Always available on this phone`), bounded Profile continuity set, Character memories for cached personas, and recently fetched relevant memories.
   - Pinned memories survive ordinary local cache eviction.
   - *Read-Only Invariant:* The cached canonical Memory replica on Mobile is strictly **read-only** while offline. Disconnected Mobile cannot directly write, mutate, or delete canonical Memory records.
-  - Upstream mutations (deletions, forget requests, Profile purge, or credential revocation) propagate from the PC Host and invalidate cached replicas immediately.
+  - *Revocation & Invalidation Authority:* Host-side revocation, purge, deletion, or forget state becomes authoritative immediately on the PC Host. A Mobile replica invalidates or purges affected cached state when it receives or observes the authoritative revocation, purge, or tombstone state according to the approved disconnected/reconnection security lifecycle.
 - **Offline Explicit Memory Intent Outbox (`D-PHONE-08`):**
   - When the user explicitly requests memory creation while offline (e.g. "Remember that my car keys are in the desk drawer"), Mobile does **not** write directly to canonical Memory.
   - Instead, the request creates a durable, typed Memory Intent record with `PENDING_SYNC` status in the Mobile Outbox.

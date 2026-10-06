@@ -1,7 +1,7 @@
 # Web and Current Information Integration Architecture
 
 > **Document Role:** Canonical domain architecture specification.
-> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0010, Batch D Aligned)
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0010)
 > **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for read-only web information, search, fetch, and weather integrations.
 
 ---

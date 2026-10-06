@@ -1,7 +1,7 @@
 # Assistant and Conversations Architecture
 
 > **Document Role:** Canonical domain architecture specification.
-> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0018, ADR-0019, Batch D Aligned)
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0018, ADR-0019)
 > **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for the assistant turn and conversation domain.
 
 ---
@@ -68,19 +68,19 @@ Per `ADR-0019`, communication between client applications (Flutter Desktop, Reac
 ### 2.4 Shared Context / Generation / Reasoning Budget Manager (D-SHARED-AI-01)
 
 To prevent context overflow, model degradation, and runaway memory usage, all prompt construction is governed by an explicit Context Budget Manager:
-- **Three-Tier Context Distinctions:**
-  1. *Native Model Maximum Context:* The hardware and model architecture ceiling declared by the model's tokenizer/metadata (e.g., 8192 or 32768 tokens).
-  2. *Configured Runtime Context:* The user- or profile-configured context allocation (e.g., `2048` eco, `4096` balanced, `8192` maximum).
-  3. *Effective Safe Context:* The actual safe operating context window dynamically determined after accounting for runtime hardware headroom, VRAM constraints, and thermal state under the Resource Governor (`D-PHONE-05A`). The Resource Governor may reduce effective safe context under pressure.
-- **Explicit Bounded Budget Allocations:** The context window is partitioned into explicit bounded categories:
+- **Three Context Concepts:**
+  1. *Native Model/Runtime Context Maximum:* The intrinsic architectural context limit supported by the model weights, tokenizer, and underlying runtime engine.
+  2. *Configured Runtime Context:* The user-, profile-, or environment-configured baseline context limit allocated for execution.
+  3. *Effective Safe Context:* The dynamic, safe operating context ceiling evaluated at runtime after accounting for host memory headroom, VRAM limits, and thermal/resource governor pressure (`D-PHONE-05A`). Hardware or resource pressure dynamically constrains the effective safe context; it does not redefine or alter the model's intrinsic/native maximum context.
+- **Explicit Bounded Budget Allocations:** The context window is partitioned into explicit bounded categories (without freezing rigid permanent token allocations):
   - *System & Security Directives:* Fixed reserve for safety framing, untrusted content delimiters, and output format constraints.
   - *Character / Personality & Mood:* Persona prompt, core behavioral traits, and active bounded mood expression (`D11`).
   - *Retrieved Memory:* Bounded memory facts from canonical Memory and pending memory overlays (`D7`, `D-PHONE-08A`).
   - *Recent Conversation Turns:* Verbatim historical turns kept for conversational immediacy.
   - *Summaries & Retrieved Excerpts:* Rolling conversation summaries and relevant historical raw turn excerpts (`D-SHARED-AI-02`).
   - *Tool Schemas & Action Results:* Active typed tool definitions and confirmed adapter results (`D9`).
-  - *Reasoning Allowance:* Dedicated headroom allocated for internal chain-of-thought tokens on reasoning-capable models.
-  - *Response Generation Reserve:* Explicit reserved token headroom guaranteeing the assistant can complete its response without premature truncation.
+  - *Reasoning Allowance:* Bounded reasoning headroom where supported by the active model/runtime. Dedicated token headroom is budgeted for models that perform intermediate reasoning; the architecture does not require internal or hidden reasoning tokens to be exposed, persisted, or made user-visible.
+  - *Response Generation Reserve:* Reserve sufficient configured output headroom to reduce avoidable truncation and support the requested response budget, without promising arbitrary response completion.
 - **Budget Invariants:**
   - Recent history and reasoning tokens must **never** consume the entire context window at the expense of system rules or memory recall.
   - Tool-intent extraction operates under a tight, dedicated structured budget.

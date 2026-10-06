@@ -2,10 +2,11 @@
 
 > **Branch:** `docs/mobile-v1-canonicalization`
 > **Delivery:** MOBILE-ARCH Batch D Canonical Promotion
-> **Status:** D3 AUTHORED — AWAITING INDEPENDENT GATE 2 REVIEW
+> **Status:** D3 CORRECTED / AUTHORED — AWAITING INDEPENDENT GATE 2 RE-REVIEW
 > **Approved Plan:** `docs/02_Planning/01_Plans/plan-mobile-v1-batch-d-canonical-promotion.md`
 > **Gate 0 Approved Checkpoint:** `2b0fdbb8f21d6aaeec3e6d3dfdf9ca990d50f53f`
 > **Gate 1 Passed Checkpoint:** `19116d9965e369e2869fbdf1a4d0702ccd730077`
+> **Gate 2 Result:** CORRECTIONS REQUIRED
 > **M1 Status:** NOT ACTIVE / Sequenced after MOBILE-ARCH Batch D re-closure
 
 ---
@@ -13,7 +14,7 @@
 ## 1. Governance & Delivery Sequence
 
 - **Git Authority:** Strictly read-only for AI agents. Chris is the sole owner of all Git mutations.
-- **Delivery Lifecycle Stage:** DOCUMENTATION GATE (Batch D3) — Canonical authoring completed; awaiting independent Gate 2 review.
+- **Delivery Lifecycle Stage:** DOCUMENTATION GATE (Batch D3.1 Corrections) — Canonical corrections applied; awaiting independent Gate 2 re-review.
 - **Known CI Blocker:** Historical PR-wide Markdown trailing whitespace; full-PR mechanical cleanup scheduled for Batch D5.
 
 ### Delivery Stages & Batch Sequence
@@ -23,7 +24,7 @@
 | **D1 Research** | Approved Decision Ledger, Reconciliation Report, Benchmark Evidence | COMPLETED | Gate 0 Passed |
 | **Plan Authoring** | Batch D Canonical Promotion Plan | APPROVED | Gate 0 Passed (`2b0fdbb8f21d6aaeec3e6d3dfdf9ca990d50f53f`) |
 | **Batch D2** | Core Baseline, Identity, Scheduling & Flutter Boundaries | **APPROVED** | Gate 1 Passed (`19116d9965e369e2869fbdf1a4d0702ccd730077`) |
-| **Batch D3** | AI Runtime, Conversations, Context, Memory & Tools | **D3 AUTHORED** | Awaiting Independent Gate 2 Review |
+| **Batch D3** | AI Runtime, Conversations, Context, Memory & Tools | **D3 CORRECTED / AUTHORED** | Awaiting Independent Gate 2 Re-Review |
 | **Batch D4** | Voice, Health, Vision, Character/Presence & Mobile UX | PENDING | Gate 3 Pending |
 | **Batch D5** | Master Planning Spine, Golden Verification, CI & PR Handoff | PENDING | Gate 4 Closure Gate Pending |
 
@@ -55,7 +56,7 @@
 ### Targeted Canonical Files & Responsibilities
 
 - [x] `docs/04_Architecture/SYSTEM_BASELINE.md`: Production-capable device-local LLM path on qualified devices (`D-PHONE-01`, `D-PHONE-03`), core companion survival without generative AI (`D-PHONE-02`), PC Host master runtime authority.
-- [x] `docs/04_Architecture/04_Infrastructure/runtime-and-models.md`: Four-way component separation (`D-PHONE-05`), mobile model lifecycle states (`installed`, `loaded / resident`, `active`, `unloaded`, `removed`) with max 1 resident generative LLM cap (`D-PHONE-05`), replaceable local model architecture (`D-PHONE-01C`), vendor-neutral execution with CPU broad fallback (`D-PHONE-03`), non-binding research candidates (Gemma 3 1B).
+- [x] `docs/04_Architecture/04_Infrastructure/runtime-and-models.md`: Four-way component separation (`D-PHONE-03`), mobile model lifecycle states (`installed`, `loaded / resident`, `active`, `unloaded`, `removed`) with max 1 resident generative LLM cap (`D-PHONE-05`), replaceable local model architecture (`D-PHONE-01C`), vendor-neutral execution with CPU broad fallback (`D-PHONE-03`), non-binding research candidates (Gemma 3 1B).
 - [x] `docs/04_Architecture/04_Infrastructure/performance-and-capacity.md`: Progressive Resource Governor (`D-PHONE-05A`), evidence-driven qualification without fixed RAM floor, truthful OOM and process death architecture.
 - [x] `docs/04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md`: Updated capability matrix reflecting local LLM production path (`D-PHONE-01`, `D-PHONE-03`), reference device sanitization ("Reference Android Device A: Android 13, ARM64, 8 GB physical RAM, mid-range mobile SoC class"), empirical research role of benchmark data.
 - [x] `docs/04_Architecture/01_Domains/assistant-and-conversations.md`: Shared Context / Generation / Reasoning Budget Manager (`D-SHARED-AI-01`), raw conversation transcript authority and compaction truth (`D-SHARED-AI-02`), Host-mediated live turn streaming (`D-SHARED-CONV-02`), causal conversation branching without timestamp LWW (`D-SHARED-CONV-01`), active turn control (`D-SHARED-CONV-03`), safe regeneration without tool replay (`D-SHARED-CONV-03A`).

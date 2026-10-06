@@ -1,7 +1,7 @@
 # Mobile Capabilities, Inference, Voice, and Verification Architecture
 
 > **Document Role:** Canonical infrastructure and behavior specification for Mobile Companion hardware capabilities, local inference policy, voice architecture, security boundaries, and release verification.
-> **Status:** Active Canonical — Mobile Architecture Batch D Aligned
+> **Status:** Active Canonical
 > **Authority Precedence:** This specification governs Mobile hardware tiering, local/remote inference delegation, voice streaming and audio focus, platform security controls, resource governance, and testing architecture. It operates under the cross-cutting boundaries defined in [`MOBILE_SYSTEM_BASELINE.md`](../MOBILE_SYSTEM_BASELINE.md) and [`mobile-offline-and-sync.md`](./mobile-offline-and-sync.md). PC Local AI Runtime domain truth remains owned by shared specifications (such as [`runtime-and-models.md`](./runtime-and-models.md), [`voice-and-audio.md`](../01_Domains/voice-and-audio.md), and [`health-and-wearables.md`](../03_Integrations/health-and-wearables.md)).
 
 ---
@@ -46,7 +46,7 @@ To avoid locking arbitrary retail price points, ephemeral chipset model numbers,
 3. **Available Memory & Safety Reserve:** Currently available system memory (`ActivityManager.MemoryInfo.availMem`) meets the model's declared resident working set plus a measured, configurable safety reserve ensuring adequate headroom for the host OS and companion UI.
 4. **Successful Preflight & Load:** Model initialization and warmup complete cleanly without memory allocation failures (`OutOfMemoryError`) or system memory warnings (`MemoryInfo.lowMemory`).
 5. **Acceptable Sustained Responsiveness:** Generation maintains interactive responsiveness without causing UI thread jank or frame drops.
-6. **Acceptable Thermal State:** Device thermal status remains below throttling limits (`THERMAL_STATUS_NONE` or `LIGHT`).
+6. **Acceptable Sustained Thermal Stability:** The device must demonstrate acceptable sustained thermal stability without unacceptable throttling under the qualified runtime workload. Exact Android thermal-status thresholds and qualification cutoffs remain implementation/benchmark open.
 7. **Sufficient Storage Reserve:** Local storage accommodates model weights plus a verified safety margin for database and outbox transactions.
 8. **No Critical OS Resource Pressure:** System is not under severe background memory reclamation or power-saver suppression.
 
