@@ -2,11 +2,11 @@
 
 > **Branch:** `docs/mobile-v1-canonicalization`
 > **Delivery:** MOBILE-ARCH Batch D Canonical Promotion
-> **Status:** D3 CORRECTED / AUTHORED — AWAITING INDEPENDENT GATE 2 RE-REVIEW
+> **Status:** D3.2 CORRECTED / AUTHORED — AWAITING INDEPENDENT GATE 2 RE-REVIEW
 > **Approved Plan:** `docs/02_Planning/01_Plans/plan-mobile-v1-batch-d-canonical-promotion.md`
 > **Gate 0 Approved Checkpoint:** `2b0fdbb8f21d6aaeec3e6d3dfdf9ca990d50f53f`
 > **Gate 1 Passed Checkpoint:** `19116d9965e369e2869fbdf1a4d0702ccd730077`
-> **Gate 2 Result:** CORRECTIONS REQUIRED
+> **Gate 2 Re-Review Result:** CORRECTIONS REQUIRED — credential-location consistency
 > **M1 Status:** NOT ACTIVE / Sequenced after MOBILE-ARCH Batch D re-closure
 
 ---
@@ -14,7 +14,7 @@
 ## 1. Governance & Delivery Sequence
 
 - **Git Authority:** Strictly read-only for AI agents. Chris is the sole owner of all Git mutations.
-- **Delivery Lifecycle Stage:** DOCUMENTATION GATE (Batch D3.1 Corrections) — Canonical corrections applied; awaiting independent Gate 2 re-review.
+- **Delivery Lifecycle Stage:** DOCUMENTATION GATE (Batch D3.2 Corrections) — Canonical credential consistency applied; awaiting independent Gate 2 re-review.
 - **Known CI Blocker:** Historical PR-wide Markdown trailing whitespace; full-PR mechanical cleanup scheduled for Batch D5.
 
 ### Delivery Stages & Batch Sequence
@@ -24,7 +24,7 @@
 | **D1 Research** | Approved Decision Ledger, Reconciliation Report, Benchmark Evidence | COMPLETED | Gate 0 Passed |
 | **Plan Authoring** | Batch D Canonical Promotion Plan | APPROVED | Gate 0 Passed (`2b0fdbb8f21d6aaeec3e6d3dfdf9ca990d50f53f`) |
 | **Batch D2** | Core Baseline, Identity, Scheduling & Flutter Boundaries | **APPROVED** | Gate 1 Passed (`19116d9965e369e2869fbdf1a4d0702ccd730077`) |
-| **Batch D3** | AI Runtime, Conversations, Context, Memory & Tools | **D3 CORRECTED / AUTHORED** | Awaiting Independent Gate 2 Re-Review |
+| **Batch D3** | AI Runtime, Conversations, Context, Memory & Tools | **D3.2 CORRECTED / AUTHORED** | Awaiting Independent Gate 2 Re-Review |
 | **Batch D4** | Voice, Health, Vision, Character/Presence & Mobile UX | PENDING | Gate 3 Pending |
 | **Batch D5** | Master Planning Spine, Golden Verification, CI & PR Handoff | PENDING | Gate 4 Closure Gate Pending |
 
@@ -62,7 +62,7 @@
 - [x] `docs/04_Architecture/01_Domains/assistant-and-conversations.md`: Shared Context / Generation / Reasoning Budget Manager (`D-SHARED-AI-01`), raw conversation transcript authority and compaction truth (`D-SHARED-AI-02`), Host-mediated live turn streaming (`D-SHARED-CONV-02`), causal conversation branching without timestamp LWW (`D-SHARED-CONV-01`), active turn control (`D-SHARED-CONV-03`), safe regeneration without tool replay (`D-SHARED-CONV-03A`).
 - [x] `docs/04_Architecture/01_Domains/memory-and-personalization.md`: Unified Context Retrieval across distinct sources (`D-SHARED-AI-03`), selective offline Memory replica (`D-PHONE-09`), offline explicit Memory intent outbox (`D-PHONE-08`), pending Memory overlay (`D-PHONE-08A`), PC Host D7 Memory engine authority.
 - [x] `docs/04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md`: Standalone Mobile Tool Gateway under Decision D9 (`D-PHONE-13`), approved tool scope (`D-PHONE-13A`, `13B`, `13D`), explicitly prohibited tools (`D-PHONE-13E`), tool capability qualification and deterministic confirmation (`D-PHONE-13F`), committed side-effect replay prohibition.
-- [x] `docs/04_Architecture/03_Integrations/web-current-information.md`: Internet access decoupled from Cloud LLM authorization (`D-PHONE-13C`, `D-PHONE-01A`).
+- [x] `docs/04_Architecture/03_Integrations/web-current-information.md`: Internet access decoupled from Cloud LLM authorization (`D-PHONE-13C`, `D-PHONE-01A`), platform-neutral device-local provider credential isolation.
 
 ### Verification Checklist for Batch D3
 
