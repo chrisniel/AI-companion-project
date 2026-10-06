@@ -1,7 +1,7 @@
 # Multimodal and Media Architecture
 
-> **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0007, ADR-0018)  
+> **Document Role:** Canonical domain architecture specification.
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0007, ADR-0018)
 > **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for multimodal vision and media assets.
 
 ---
@@ -51,6 +51,20 @@ Multimodal vision understanding is governed by the approved Phase 8B delivery ro
   - *Post-Commit Persistence:* Once `prepare_turn` commits, the user message, assistant placeholder, and attachment bindings are permanently committed in the database.
   - *Streaming Failure / Disconnection Cancellation:* If `orchestrate_chat_stream` subsequently fails during token generation, the committed user message and attachment bindings remain; the assistant placeholder is marked `failed` (preserving any partial generated content). If generation is cancelled or client disconnection causes cancellation, the assistant placeholder is marked `cancelled` while committed preparation state remains.
 
+### 2.4 Mobile V1 Multimodal Architecture (`D-PHONE-16` through `D-PHONE-16E`, `D-SHARED-VISION-01`)
+
+- **Conditional Mobile V1 Disposition (`D-PHONE-16`):** Qualified mobile hardware and local models may perform local still-image understanding in Mobile V1, intentionally superseding the prior post-V1-only disposition. Mobile local vision is optional and capability-gated.
+- **Camera as Input Adapter (`D-PHONE-16A`):** Device camera capture and photo gallery selection function strictly as input adapters feeding into the shared attachment and multimodal conversation pipeline. Camera capture is not a distinct vision subsystem; captured frames become standard image attachments conforming to the canonical validation pipeline.
+- **Multimodal Route Selection (`D-PHONE-16B`):** Image inference routes deterministically based on reachability and permissions:
+  1. Connected: Local vision on PC Host (preferred if available and connected).
+  2. Qualified Mobile Local VLM: Local inference on device if qualified and active.
+  3. Authorized Cloud Multimodal: Cloud vision fallback only when specifically authorized.
+  4. Unavailable: Graceful degradation with clear user feedback if no vision route qualifies.
+  *Permission Invariant:* Public internet access or general Cloud LLM permission does **not** imply permission for Cloud Vision. Cloud multimodal egress requires independent user authorization.
+- **Evidence-Based Qualification (`D-PHONE-16C`):** Mobile vision models must pass empirical task-scoped qualification. Passing basic object recognition does not imply competence in fine OCR, spatial navigation, or high-risk medical/document parsing. Resource Governor limits vision residency to preserve device thermal and memory stability.
+- **Offline Multimodal Persistence & Sync (`D-PHONE-16D`):** When operating disconnected, local image attachments, user turns, and generated local responses persist durably in local SQLite/storage. Upon reconnecting, the turn history and binary attachments synchronize to the PC Host without Host re-generation.
+- **Explicit-Capture Boundary (`D-PHONE-16E`):** Mobile V1 strictly limits vision to explicit, user-initiated still-image capture or gallery file picking. Continuous ambient camera streams, background visual sensing, and automated environmental monitoring are strictly excluded.
+- **Vision vs Memory Decoupling (`D-SHARED-VISION-01`):** Visual observations and image turn contents remain scoped to conversation context and media history. They must **never** automatically generate canonical D7 Memory records without explicit user intent and D7 evaluation.
 
 ---
 
@@ -104,6 +118,12 @@ Verified in frontend components and API contracts:
 
 - **Live Hardware Vision Benchmarks:** Live RX 580 vision inference latency benchmarks are historical reference data, not a gating closure requirement.
 
+### 3.7 Mobile Implementation Reality
+
+- **Flutter Mobile Camera Capture:** `NOT IMPLEMENTED`. The Flutter codebase does not yet include camera capture or gallery picker adapters for still-image turn input.
+- **Mobile Attachment Store & Pipeline:** `NOT IMPLEMENTED`. Mobile offline attachment staging, thumbnail caching, and background sync to PC Host are not implemented in the repository.
+- **Mobile Local VLM Execution:** `NOT IMPLEMENTED`. On-device visual language model execution (such as mobile llama.cpp/runtime running small multimodal models like Qwen-VL with vision projectors) is not implemented in repository code.
+
 ---
 
 ## 4. Phase 8B Closure Requirements
@@ -133,6 +153,7 @@ The following implementation choices are intentionally left open for subsequent 
 - **Non-Image Media Ingestion:** Architecture for PDF documents, audio clips, and OCR pipelines for post-V1 milestones.
 - **Image Optimization & Transcoding:** Optional on-disk thumbnail generation or WebP compression to reduce disk footprint.
 - **Attachment Retention & Trash Sweeps:** Automated background purge schedules for unreferenced or deleted attachments.
+- **Mobile VLM Packaging & Quantization:** Selection of specific mobile VLM architectures (e.g. Qwen2-VL 2B/0.8B), quantization schemes (Q4_K_M vs Q3_K_S), and separate vision-projector memory allocation ceilings.
 - **Generative Visual Presence:** Exploration of local diffusion models (Stable Diffusion) for companion visual mood expressions (classified as future experimental).
 
 ---
@@ -152,6 +173,10 @@ The following implementation choices are intentionally left open for subsequent 
 ## 7. Canonical Relationships & Cross-Links
 
 - **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decision D6, ADR-0018)
+- **Mobile System Baseline:** [`docs/04_Architecture/MOBILE_SYSTEM_BASELINE.md`](../MOBILE_SYSTEM_BASELINE.md)
+- **Mobile Capabilities & Runtime Spec:** [`docs/04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md`](../04_Infrastructure/mobile-capabilities-and-runtime.md)
+- **Mobile Offline & Sync Spec:** [`docs/04_Architecture/04_Infrastructure/mobile-offline-and-sync.md`](../04_Infrastructure/mobile-offline-and-sync.md)
+- **Memory & Personalization Spec:** [`docs/04_Architecture/01_Domains/memory-and-personalization.md`](memory-and-personalization.md)
 - **Model Import Pipeline ADR:** [`docs/04_Architecture/decisions/ADR-0007-d6-controlled-model-acquisition.md`](../decisions/ADR-0007-d6-controlled-model-acquisition.md)
 - **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
 - **Master Planning Spine:** [`docs/02_Planning/00_Master/WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-API-001`, `PC-MODEL-001`)

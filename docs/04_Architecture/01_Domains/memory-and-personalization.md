@@ -98,6 +98,11 @@ In accordance with Decisions `D-PHONE-08`, `D-PHONE-08A`, and `D-PHONE-09`:
   - Overlay items carry explicit provenance tags distinguishing them from verified canonical Memory.
   - Upon reconnection and successful Host reconciliation, accepted canonical memories replace the local overlay.
 
+### 2.7 External Domain Boundaries: Health and Vision Decoupling (`D-PHONE-15C`, `D-SHARED-VISION-01`)
+
+- **Health Context is NOT Memory (`D-PHONE-15C`):** Biometric sensor readings, wearable statistics (steps, sleep, heart rate), trends, and time-window summaries belong strictly to the Health Context domain ([`health-and-wearables.md`](../03_Integrations/health-and-wearables.md)). Biometric data is never automatically promoted into canonical D7 Memory records. Only explicit user declarations regarding health (e.g. *"Remember that I am training for a half-marathon"*) may become canonical Profile Memory.
+- **Vision Observations Do NOT Automatically Create Memory (`D-SHARED-VISION-01`):** Image turn contents, visual descriptions, and camera observations remain scoped to conversation turn history and media attachments ([`multimodal-and-media.md`](multimodal-and-media.md)). Visual perception must never autonomously persist permanent D7 Memory records without explicit user intent and D7 policy evaluation.
+
 ---
 
 ## 3. Current Verified Implementation
@@ -178,4 +183,6 @@ The normative architecture for D7 and ADR-0018 is frozen. The following implemen
 - **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
 - **Character Domain Specification:** [`docs/04_Architecture/01_Domains/characters-personality-and-emotion.md`](characters-personality-and-emotion.md)
 - **Assistant & Conversations Spec:** [`docs/04_Architecture/01_Domains/assistant-and-conversations.md`](assistant-and-conversations.md)
+- **Health & Wearables Integration Spec:** [`docs/04_Architecture/03_Integrations/health-and-wearables.md`](../03_Integrations/health-and-wearables.md)
+- **Multimodal & Media Architecture:** [`docs/04_Architecture/01_Domains/multimodal-and-media.md`](multimodal-and-media.md)
 - **Mobile Capabilities & Runtime Spec:** [`docs/04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md`](../04_Infrastructure/mobile-capabilities-and-runtime.md)

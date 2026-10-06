@@ -2,11 +2,11 @@
 
 > **Branch:** `docs/mobile-v1-canonicalization`
 > **Delivery:** MOBILE-ARCH Batch D Canonical Promotion
-> **Status:** D3.2 CORRECTED / AUTHORED — AWAITING INDEPENDENT GATE 2 RE-REVIEW
+> **Status:** D4 AUTHORED — AWAITING INDEPENDENT GATE 3 REVIEW
 > **Approved Plan:** `docs/02_Planning/01_Plans/plan-mobile-v1-batch-d-canonical-promotion.md`
 > **Gate 0 Approved Checkpoint:** `2b0fdbb8f21d6aaeec3e6d3dfdf9ca990d50f53f`
 > **Gate 1 Passed Checkpoint:** `19116d9965e369e2869fbdf1a4d0702ccd730077`
-> **Gate 2 Re-Review Result:** CORRECTIONS REQUIRED — credential-location consistency
+> **Gate 2 Passed Checkpoint:** `5d860625510ffae0437cc9c58662dfe087c3fad9`
 > **M1 Status:** NOT ACTIVE / Sequenced after MOBILE-ARCH Batch D re-closure
 
 ---
@@ -14,7 +14,7 @@
 ## 1. Governance & Delivery Sequence
 
 - **Git Authority:** Strictly read-only for AI agents. Chris is the sole owner of all Git mutations.
-- **Delivery Lifecycle Stage:** DOCUMENTATION GATE (Batch D3.2 Corrections) — Canonical credential consistency applied; awaiting independent Gate 2 re-review.
+- **Delivery Lifecycle Stage:** DOCUMENTATION GATE (Batch D4) — Canonical promotion of Voice, Health, Vision, Character/Emotion, and Mobile UX architecture.
 - **Known CI Blocker:** Historical PR-wide Markdown trailing whitespace; full-PR mechanical cleanup scheduled for Batch D5.
 
 ### Delivery Stages & Batch Sequence
@@ -24,8 +24,8 @@
 | **D1 Research** | Approved Decision Ledger, Reconciliation Report, Benchmark Evidence | COMPLETED | Gate 0 Passed |
 | **Plan Authoring** | Batch D Canonical Promotion Plan | APPROVED | Gate 0 Passed (`2b0fdbb8f21d6aaeec3e6d3dfdf9ca990d50f53f`) |
 | **Batch D2** | Core Baseline, Identity, Scheduling & Flutter Boundaries | **APPROVED** | Gate 1 Passed (`19116d9965e369e2869fbdf1a4d0702ccd730077`) |
-| **Batch D3** | AI Runtime, Conversations, Context, Memory & Tools | **D3.2 CORRECTED / AUTHORED** | Awaiting Independent Gate 2 Re-Review |
-| **Batch D4** | Voice, Health, Vision, Character/Presence & Mobile UX | PENDING | Gate 3 Pending |
+| **Batch D3** | AI Runtime, Conversations, Context, Memory & Tools | **APPROVED** | Gate 2 Passed (`5d860625510ffae0437cc9c58662dfe087c3fad9`) |
+| **Batch D4** | Voice, Health, Vision, Character/Presence & Mobile UX | **AUTHORED** | Gate 3 Pending (Awaiting Review) |
 | **Batch D5** | Master Planning Spine, Golden Verification, CI & PR Handoff | PENDING | Gate 4 Closure Gate Pending |
 
 ---
@@ -49,7 +49,7 @@
 
 ---
 
-## 4. Active Work: Batch D3 AI Runtime, Conversations, Context, Memory & Tools
+## 4. Completed Work: Batch D3 AI Runtime, Conversations, Context, Memory & Tools
 
 **Objective:** Promote device-local generative LLM production path for qualified devices, replaceable local model architecture, model and resource lifecycle states, progressive resource governance, evidence-driven qualification, shared context budget management, transcript authority and compaction reality, unified context retrieval, offline memory intent outbox, pending memory overlay, causal conversation branching, turn control, safe regeneration, and the Standalone Mobile Tool Gateway with deterministic confirmation.
 
@@ -74,3 +74,33 @@
 - [x] Implemented reality truth preserved (rolling compaction truthfully recorded as NOT IMPLEMENTED).
 - [x] Reference device sanitized to generic description in canonical docs.
 - [x] Stop for independent Gate 2 review (Chris & GPT).
+
+---
+
+## 5. Completed Work: Batch D4 Voice, Health, Vision, Character/Presence & Mobile UX
+
+**Objective:** Promote Composable Voice architecture (`D-PHONE-04`, `D-PHONE-14` through `14G`), Health Connect integration as Conditional Mobile V1 (`D-PHONE-15` through `15E`, `D-SHARED-HEALTH-01` through `04`), Multimodal Vision architecture (`D-PHONE-16` through `16E`, `D-SHARED-VISION-01`), Character, Emotion & Presence boundaries (`D-PHONE-06`, `D-PHONE-EMO-01`, `D-PHONE-12D`, `12E`, `D-PHONE-UX-10`, `P-SHARED-PRESENCE-01`, `P-PHONE-AR-01..02`, `P-PRESENCE-02`), bounded Location Context direction (`P-PHONE-LOC-01`), and canonical Mobile Companion Shell and UX design specification (`D-PHONE-UX-01` through `10`, `D-SHARED-LANG-01`, `02`).
+
+### Targeted Canonical Files & Responsibilities
+
+- [x] `docs/04_Architecture/03_Integrations/health-and-wearables.md`: Promoted Health Connect to Conditional Mobile V1 (`D-PHONE-15`), granular metric authorizations (`D-PHONE-15A`), read-only ingestion (`D-PHONE-15B`), health vs D7 memory decoupling (`D-PHONE-15C`), shared normalized context schema (`D-PHONE-15D`, `D-SHARED-HEALTH-01`), Health Connect platform aggregation boundary (`D-PHONE-15E`), non-clinical wellness boundary (`D-SHARED-HEALTH-02`), health-aware check-ins (`D-SHARED-HEALTH-03`), health cloud egress isolation (`D-SHARED-HEALTH-04`), and explicit implementation truth (not implemented in code).
+- [x] `docs/04_Architecture/01_Domains/multimodal-and-media.md`: Promoted Mobile V1 Multimodal Architecture (`D-PHONE-16`), camera still-capture & image attachments (`D-PHONE-16A`), attachment lifecycle (`media://` scheme, local cache, non-destructive sync; `D-PHONE-16D`), cloud VLM fallback route (`D-PHONE-16C`), local VLM qualification (`D-PHONE-16B`), multimodal context boundaries decoupled from D7 Memory (`D-PHONE-16E`, `D-SHARED-VISION-01`), implementation truth (not implemented), and open design boundaries.
+- [x] `docs/04_Architecture/01_Domains/voice-and-audio.md`: Promoted Composable Mobile Voice Architecture (`D-PHONE-04`, `D-PHONE-14`), independent STT and TTS engine routing (`D-PHONE-14A`), local speech engine lifecycle (`D-PHONE-14B`), remote Host audio streaming over secure WebSocket (`D-PHONE-14C`), cloud speech route (`D-PHONE-14D`), platform TTS fallback (`D-PHONE-14E`), client-side Voice Barge-In (`D-PHONE-14F`), audio routing and focus management (`D-PHONE-14G`), and explicit implementation truth (not implemented).
+- [x] `docs/04_Architecture/01_Domains/characters-personality-and-emotion.md`: Promoted Mobile Character, Emotion & Presence Boundaries (`D-PHONE-06`), character definition synchronization, offline emotion event capture (`D-PHONE-EMO-01`), check-in cadence and companion tone (`D-PHONE-12D`, `12E`), lightweight mood presence with emoji fallback (`D-PHONE-UX-10`), bounded presence research references (`P-SHARED-PRESENCE-01`, `P-PHONE-AR-01..02`, `P-PRESENCE-02`), and implementation truth (not implemented).
+- [x] `docs/04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md`: Added Section 2.4 Mobile Multimodal & Local Vision (`D-PHONE-16`), updated Section 3.2 Composable Voice model (`D-PHONE-14`), updated Section 4 Health & Wearables to Conditional Mobile V1 (`D-PHONE-15`), recorded Bounded Opt-in Location Context (`P-PHONE-LOC-01`) as Mobile Later / Approved Future Direction with no V1 implementation tasks, and bounded presence directions (`P-SHARED-PRESENCE-01`, `P-PHONE-AR-01..02`, `P-PRESENCE-02`).
+- [x] `docs/04_Architecture/MOBILE_SYSTEM_BASELINE.md`: Updated capability matrix (§5.3) for Voice, Character, Multimodal Vision, and Health Connect; added Section 6 Batch D resolution note; updated Section 7 Decision Ledger rows for Health, Vision, Voice, Character/Emotion, and UX.
+- [x] `docs/04_Architecture/04_Infrastructure/mobile-offline-and-sync.md`: Updated Section 3.1 sync matrix for Character profiles, Media attachments (`media://`), Emotion events, and Health context; added §3.2.7 Offline Emotion Event Synchronization Pipeline (`D-PHONE-EMO-01`), §3.2.8 Offline Multimodal Persistence (`D-PHONE-16D`), and §3.2.9 Activity & Reconciliation Inbox (`D-PHONE-UX-05`).
+- [x] `docs/04_Architecture/01_Domains/memory-and-personalization.md`: Added Section 2.7 External Domain Boundaries establishing that raw health metrics are NOT D7 Memory (`D-PHONE-15C`) and raw images/multimodal attachments are NOT D7 Memory (`D-SHARED-VISION-01`), with explicit cross-links to health and multimodal specs.
+- [x] `docs/04_Architecture/01_Domains/assistant-and-conversations.md`: Added Section 2.8 Unified Interaction Surface & Extensible Language Registry (`D-PHONE-UX-03`, `D-PHONE-UX-09`, `D-SHARED-LANG-01`, `D-SHARED-LANG-02`), documenting conversation surface unification and language registry decoupling.
+- [x] `docs/05_Design/08_Mobile_Companion_Shell_and_UX.md`: Authored new canonical design specification covering 5-tab shell (`D-PHONE-UX-01`), icon-first navigation with accessibility semantics (`D-PHONE-UX-01A`), contextual Companion Home (`D-PHONE-UX-02`), unified interaction surface (`D-PHONE-UX-03`), unified schedule experience (`D-PHONE-UX-04`), activity & reconciliation inbox (`D-PHONE-UX-05`), compact capability status + drill-down (`D-PHONE-UX-06`), graceful standalone UX (`D-PHONE-UX-07`), hybrid visual language (`D-PHONE-UX-08`), appearance modes (OLED default, Dark, Light, System), reduced motion/effects governor, language decoupling (`D-PHONE-UX-09`, `D-SHARED-LANG-01`, `02`), lightweight mood presence (`D-PHONE-UX-10`), check-in tone (`D-PHONE-12D`, `12E`), bounded location context (`P-PHONE-LOC-01`), and explicit implementation truth (not implemented in code).
+
+### Verification Checklist for Batch D4
+
+- [x] File Purity: Exactly 10 canonical/design files and 1 active tracking file modified/added; plan file remains frozen; planning spine untouched (reserved for D5).
+- [x] Whole-file trailing whitespace scan returns 0 matches across all 11 modified/added files.
+- [x] Scoped `git diff --check` passes with exit code 0 across all changes.
+- [x] Relative Markdown links valid across all touched files.
+- [x] Zero unapproved D5 IDs (`D-MOBILE-VERIFY-`, `D-CI-`, `MG13` through `MG18` in new/modified sections).
+- [x] Zero forbidden self-certification claims (`Batch D Aligned`, `Gate 3 Passed`, `D4 Approved`, `D4 Verified`) in canonical documentation.
+- [x] Implemented reality truth preserved: Flutter mobile UI, screens, voice, health, and vision recorded truthfully as NOT IMPLEMENTED in current repository code.
+- [x] Stop for independent Gate 3 review (Chris & GPT).

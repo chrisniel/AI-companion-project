@@ -72,9 +72,33 @@ Switching active companion characters must **never**:
 
 Conversations remain permanently bound to the `character_id` under which turns were recorded. Starting a session with a different character initiates a distinct conversation thread or explicitly bounded transition.
 
----
-
 - **Character Deletion:** Character deletion should prefer archive/disable before purge so historical conversation identity remains interpretable.
+
+### 2.3 Mobile Character, Emotion & Presence Boundaries (`D-PHONE-06`, `D-PHONE-EMO-01`, `D-PHONE-12D`, `D-PHONE-12E`, `D-PHONE-UX-10`, `P-SHARED-PRESENCE-01`, `P-PHONE-AR-01`, `P-PHONE-AR-02`, `P-PRESENCE-02`)
+
+- **Inheritance of Shared D11 Architecture (`D-PHONE-06`):** Mobile companion clients strictly inherit the shared D11 Character, Personality, and Emotion architecture. There is no separate or competing mobile-only character schema.
+- **Character Selection & Isolation:** Mobile clients may select among cached or synchronized Character Instances for the authenticated user Profile. Switching characters never mutates or reassigns Profile ownership, security or tool permissions, Task records, Health context, or Profile Memories. Conversations remain permanently bound to the Character under which they were initiated.
+- **Character Studio & Authoring Authority:**
+  - *Connected Mobile:* May expose Character Studio authoring and editing UI as a client to the PC Host canonical Character service, utilizing shared D11 traits, dimensions, presets, and validation rules.
+  - *Offline Mobile V1:* Canonical Character creation and trait editing are **not** supported offline in Mobile V1. Local drafts are non-canonical until reconciled with the Host.
+  - *Withdrawn Concepts:* Standalone mobile-local authoritative Character creation, independent mobile character variant forks, and separate mobile-only mood layers are explicitly superseded and rejected.
+- **Offline Emotion Event Synchronization (`D-PHONE-EMO-01`):** Mobile does not directly mutate canonical persistent Mood numerical values while disconnected. Instead:
+  $$\text{offline interaction} \to \text{typed bounded emotion event} \to \text{durable outbox} \to \text{optional provisional local expression} \to \text{Host reconciliation} \to \text{shared D11 Emotion policy} \to \text{canonical Mood}$$
+  The mobile client synchronizes typed emotion events (e.g. conversational sentiment, interaction cues) rather than arbitrary numeric overrides.
+- **Companion Check-In Surfaces & Tone (`D-PHONE-12D`, `D-PHONE-12E`):**
+  - Check-ins, routines, and home widgets reflect the active Character's Personality traits and bounded Mood.
+  - Expressive presets (e.g. Tsundere, Kuudere, Yandere) may use stylized persona phrases (such as *"I was lonely"* or *"Don't keep me waiting"*) provided factual companion information follows immediately, facts are not distorted, and the system strictly avoids coercive threats, emotional manipulation, or isolation pressure.
+- **Lightweight Mood Presence & Emoji Fallback (`D-PHONE-UX-10`):**
+  - Mobile V1 presents mood through available Character expression assets, lightweight static portraits, or local 2D assets.
+  - Standard **Emoji / Mood-Glyphs** serve as the mandatory, guaranteed lightweight V1 fallback across all devices and low-resource states.
+  - Visual expression is purely presentation; it is never the authoritative underlying Mood state.
+- **Approved Future Direction: Embodied Presence & Mobile AR (`P-SHARED-PRESENCE-01`, `P-PHONE-AR-01`, `P-PHONE-AR-02`, `P-PRESENCE-02`):**
+  - *Embodied Presence (`P-SHARED-PRESENCE-01`):* Approved future direction where Character instances may reference 2D expression bundles, Live2D rigs, or 3D/VRM models. Presence is decoupled from Character identity, Personality, and Voice.
+  - *Mobile AR Presence (`P-PHONE-AR-01`):* Approved future direction for explicit, user-started AR sessions rendering the companion into the physical environment.
+  - *Bounded Scene Awareness (`P-PHONE-AR-02`):* AR rendering does not require continuous VLM inference; still-image cloud consent does not authorize live camera streaming.
+  - *Remote Expression Assets (`P-PRESENCE-02`):* Future experimental search/import for user-directed expression assets. Automatic web GIF downloading upon mood changes is rejected.
+
+---
 
 ## 3. Current Verified Implementation
 
@@ -97,6 +121,12 @@ Repository source code and frontend truthfulness test suites verify the followin
   - Does **not** import mock character persistence fixtures in production builds.
   - Does **not** maintain fake `activeCharacterId` persistence state or claim backend synchronization.
   - Does **not** bind unapproved voice synthesis engines.
+
+### 3.3 Mobile Implementation Reality
+
+- **Mobile Character Studio:** `NOT IMPLEMENTED`. Flutter mobile character authoring and trait customization UI is not implemented in the repository.
+- **Mobile Emotion Event Outbox & Sync:** `NOT IMPLEMENTED`. Offline emotion event recording, durable outbox queuing, and host reconciliation are not implemented.
+- **Mobile AR / 3D / Live2D Presence:** `NOT IMPLEMENTED`. Augmented reality, Live2D, and VRM companion rendering runtimes are not implemented in repository code.
 
 ---
 
@@ -136,6 +166,10 @@ The normative architecture for D11 is frozen. The following implementation-level
 ## 7. Canonical Relationships & Cross-Links
 
 - **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, ADR-0018, D11)
+- **Mobile System Baseline:** [`docs/04_Architecture/MOBILE_SYSTEM_BASELINE.md`](../MOBILE_SYSTEM_BASELINE.md)
+- **Mobile Capabilities & Runtime Spec:** [`docs/04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md`](../04_Infrastructure/mobile-capabilities-and-runtime.md)
+- **Mobile Offline & Sync Spec:** [`docs/04_Architecture/04_Infrastructure/mobile-offline-and-sync.md`](../04_Infrastructure/mobile-offline-and-sync.md)
+- **Mobile Companion Shell & UX:** [`docs/05_Design/08_Mobile_Companion_Shell_and_UX.md`](../../05_Design/08_Mobile_Companion_Shell_and_UX.md)
 - **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Decision D11), [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-CHAR-001`, `PC-CHAR-002`)
 - **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
 - **UI Design Presentation:** [`docs/05_Design/03_Character_Studio_and_Personality.md`](../../05_Design/03_Character_Studio_and_Personality.md), [`04_Emotion_and_Visual_Presence.md`](../../05_Design/04_Emotion_and_Visual_Presence.md)

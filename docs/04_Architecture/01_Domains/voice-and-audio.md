@@ -21,7 +21,7 @@ It governs the boundary between audio hardware/drivers and conversational assist
 
 ## 2. Durable Architecture
 
-### 2.1 Native Client & Runtime Voice Architecture 
+### 2.1 Native Client & Runtime Voice Architecture
 
 In accordance with Decision D1:
 - **Hardware & Processing Boundary:**
@@ -79,6 +79,33 @@ In accordance with Decision D1:
 
 - Exact provider implementation remains open. `whisper.cpp`, `Kokoro`, and `Silero` remain primary reference candidates.
 
+### 2.9 Composable Mobile Voice Architecture (`D-PHONE-04`, `D-PHONE-14` through `D-PHONE-14G`)
+
+- **Composable Voice Decomposition (`D-PHONE-14`):** Voice functionality decomposes into three independent, decoupled stages:
+  1. Speech-to-Text (STT): Converting spoken input into text.
+  2. Reasoning / Generation: Conversational turn evaluation and LLM response generation.
+  3. Text-to-Speech (TTS): Synthesizing spoken output from generated text.
+  Each stage may independently execute via **Local Mobile**, **PC Host**, or separately authorized **Cloud** provider.
+- **Connected Mobile Voice (`D-PHONE-14A`):**
+  - *Mobile Phone Owns:* Physical microphone capture, audio frame buffering, audio focus management, route transitions (Bluetooth, speaker, earpiece), immediate local muting, and UI controls.
+  - *PC Runtime Owns:* Canonical connected STT, turn orchestration, LLM reasoning, TTS synthesis, VAD state, and `VoiceSession` lifecycle over an authenticated full-duplex WebSocket stream.
+- **Local Mobile TTS (`D-PHONE-14B`):** Classified as **Conditional Mobile V1**. A qualified on-device lightweight TTS engine may operate independently of local STT or local LLM. It synthesizes assistant speech for local text turns, offline alarms, check-in prompts, and routine occurrences.
+- **Local Mobile STT (`D-PHONE-14C`):** Classified as **Conditional Mobile V1**. Supported on devices passing qualification. Mobile V1 focuses strictly on explicit, user-initiated input: push-to-talk, tap-to-speak, or explicit active Voice session mode. Continuous always-on ambient listening is strictly excluded.
+- **Full Offline Voice Composition (`D-PHONE-14D`):** Classified as **Conditional Mobile V1**. Full standalone voice (speech input -> local reasoning -> speech output) activates when local STT, local LLM, and local TTS all qualify on the device and current battery/thermal resources permit. If any component becomes unavailable (e.g., thermal throttle unloads the local LLM), voice degrades compositionally (e.g., falling back to local STT input with text display, or text input with local TTS).
+- **Voice Route Selection (`D-PHONE-14E`):** Default `Auto` route selection evaluates PC Host reachability, local component qualification, device thermal/battery pressure, internet connectivity, and user cloud authorizations. The active operational route (e.g., `Host STT + Host LLM + Host TTS` vs `Local STT + Local LLM + Local TTS`) must remain truthful and inspectable in the UI. Cloud speech services require distinct, independent user authorizations.
+- **Explicit Voice Session Lifecycle (`D-PHONE-14F`):** Background eavesdropping is prohibited. Voice input begins only through explicit user initiation. An explicitly started active voice session may continue when the device is locked under Android foreground service rules with persistent, visible OS notification and audio indicators.
+- **Shared STT Candidate Qualification (`D-PHONE-14G`):** `whisper.cpp` is the primary research candidate for mobile local STT to maximize architectural alignment with the PC Host. Mobile qualification is distinct from PC; empirical evaluation benchmarks English, Tagalog, Taglish code-switching, date/time recognition, memory footprint, thermal load, and barge-in responsiveness. If `whisper.cpp` fails mobile resource constraints, it may be replaced with an alternative qualified mobile engine without altering the composable voice architecture.
+- **Shared Voice Invariants:**
+  - *Immediate Local Barge-In:* User interruption immediately halts local playback and cancels audio pipelines.
+  - *Policy Parity with Text:* Voice-triggered actions enforce identical D9 security and authorization policies.
+  - *Ephemeral Audio:* Raw audio buffers are discarded immediately after transcription; raw speech is never retained by default.
+  - *Voice is Not Authentication:* Voice characteristics are never used for biometric authentication.
+  - *Independent Cloud Permissions:* Separate toggles govern Cloud LLM, Cloud STT, and Cloud TTS.
+  - *No Always-On Wake Word:* Always-on passive wake-word detection is excluded from Mobile V1.
+  - *Opt-In Proactive Speech:* Proactive spoken announcements remain strictly opt-in.
+
+---
+
 ## 3. Current Verified Implementation
 
 Repository source code and test suites verify the following baseline reality:
@@ -89,6 +116,12 @@ Repository source code and test suites verify the following baseline reality:
 - **Speech Engines:** There is currently zero operational STT, TTS, VAD, or wake-word runtime code integrated into the FastAPI backend or React frontend.
 - **Router Status:** `app.api.v1.router` mounts health, auth, tasks, llm, conversations, attachments, and memories routers. No audio, voice, or speech endpoints are mounted.
 - **Frontend State:** Voice UI controls in the frontend operate as non-functional visual placeholders or UI previews without backend WebSocket or audio streaming bindings.
+
+### 3.2 Mobile Implementation Reality
+
+- **Flutter Mobile Audio Pipeline:** `NOT IMPLEMENTED`. The Flutter client does not yet include audio capture, playback, or audio focus handlers.
+- **Mobile WebSocket Voice Stream:** `NOT IMPLEMENTED`. Full-duplex WebSocket client transport for speech frames is not implemented on mobile.
+- **Mobile Local STT / TTS Engines:** `NOT IMPLEMENTED`. On-device execution of whisper.cpp or mobile TTS runtimes is not implemented in repository code.
 
 ---
 
@@ -131,6 +164,9 @@ The normative architecture for Voice is frozen. The following implementation-lev
 ## 7. Canonical Relationships & Cross-Links
 
 - **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Voice)
+- **Mobile System Baseline:** [`docs/04_Architecture/MOBILE_SYSTEM_BASELINE.md`](../MOBILE_SYSTEM_BASELINE.md)
+- **Mobile Capabilities & Runtime Spec:** [`docs/04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md`](../04_Infrastructure/mobile-capabilities-and-runtime.md)
+- **Mobile Offline & Sync Spec:** [`docs/04_Architecture/04_Infrastructure/mobile-offline-and-sync.md`](../04_Infrastructure/mobile-offline-and-sync.md)
 - **Client Target ADR:** [`docs/04_Architecture/decisions/ADR-0017-flutter-production-windows-client.md`](../decisions/ADR-0017-flutter-production-windows-client.md)
 - **Client-Runtime Contract ADR:** [`docs/04_Architecture/decisions/ADR-0019-client-runtime-contract-and-work-boundaries.md`](../decisions/ADR-0019-client-runtime-contract-and-work-boundaries.md)
 - **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) , [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-VOICE-001`)

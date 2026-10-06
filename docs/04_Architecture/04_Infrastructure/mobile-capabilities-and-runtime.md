@@ -93,6 +93,21 @@ While PC workstations follow the Decision D6 import pipeline (`inbox` $\rightarr
 5. **Container & Engine Independence:**
    - The architecture accommodates mobile runtime backends such as `llama.cpp` JNI bindings, ONNX Runtime Mobile, or ExecuTorch. The canonical specification does NOT permanently freeze a single container format (such as GGUF) or vendor engine for all mobile eternity.
 
+### 2.4 Mobile Multimodal & Local Vision Capabilities (`D-PHONE-16` through `D-PHONE-16E`, `D-SHARED-VISION-01`)
+
+- **Conditional Mobile V1 Disposition (`D-PHONE-16`):** Qualified mobile hardware and local models may perform local still-image understanding in Mobile V1, intentionally superseding the prior post-V1-only disposition. Mobile local vision is optional, non-universal, and capability-gated.
+- **Camera as Input Adapter (`D-PHONE-16A`):** Device camera capture and photo gallery selection function strictly as input adapters feeding into the shared attachment and multimodal conversation pipeline. Captured frames become standard image attachments conforming to the canonical validation pipeline.
+- **Multimodal Route Selection (`D-PHONE-16B`):** Image inference routes deterministically based on reachability and permissions:
+  1. Connected: Local vision on PC Host (preferred if available and connected).
+  2. Qualified Mobile Local VLM: Local inference on device if qualified and active.
+  3. Authorized Cloud Multimodal: Cloud vision fallback only when specifically authorized.
+  4. Unavailable: Graceful degradation with clear user feedback if no vision route qualifies.
+  *Permission Invariant:* Public internet access or general Cloud LLM permission does **not** imply permission for Cloud Vision. Cloud multimodal egress requires independent user authorization.
+- **Evidence-Based Qualification (`D-PHONE-16C`):** Mobile vision models must pass empirical task-scoped qualification. Passing basic object recognition does not imply competence in fine OCR, spatial navigation, or high-risk medical/document parsing. Resource Governor limits vision residency to preserve device thermal and memory stability.
+- **Offline Multimodal Persistence & Sync (`D-PHONE-16D`):** When operating disconnected, local image attachments, user turns, and generated local responses persist durably in local SQLite/storage. Upon reconnecting, the turn history and binary attachments synchronize to the PC Host without Host re-generation.
+- **Explicit-Capture Boundary (`D-PHONE-16E`):** Mobile V1 strictly limits vision to explicit, user-initiated still-image capture or gallery file picking. Continuous ambient camera streams, background visual sensing, and automated environmental monitoring are strictly excluded.
+- **Vision vs Memory Decoupling (`D-SHARED-VISION-01`):** Visual observations and image turn contents remain scoped to conversation context and media history. They must **never** automatically generate canonical D7 Memory records without explicit user intent and D7 evaluation.
+
 ---
 
 ## 3. C2: Mobile Voice and Audio Architecture
@@ -133,22 +148,31 @@ Voice on Mobile requires distinct architectural partitioning from PC Desktop due
 +-------------------------+     +-------------------------+     +-------------------------+
 ```
 
-1. **Independent Capability Triad (TTS / STT / LLM Decoupling):**
-   - Device-local Text-to-Speech (TTS), device-local Speech-to-Text (STT), and device-local Large Language Model (LLM) inference are treated as **three separate, independently evaluated capabilities**.
-   - A mobile device may qualify for and execute device-local TTS (e.g. to vocalize companion text responses, reminders, or alarms) without supporting local speech recognition (STT) or hosting a resident local LLM.
-   - Enabling or executing one capability does not imply or mandate the presence of the others.
-2. **Connected-to-PC Voice Mode (Primary):**
+1. **Composable Voice Architecture (`D-PHONE-04`, `D-PHONE-14`):**
+   - Voice decomposes into three independent, decoupled pipeline stages: Speech-to-Text (STT), conversational reasoning (LLM), and Text-to-Speech (TTS).
+   - Each stage may independently execute via **Local Mobile**, **PC Host**, or separately authorized **Cloud** provider.
+   - Enabling or executing one stage does not mandate the presence of the others.
+2. **Connected-to-PC Voice Mode (`D-PHONE-14A`):**
    - Uses a dedicated full-duplex **WebSocket connection** (`ADR-0019`) over the authenticated local transport.
    - Raw audio frames captured by the mobile microphone stream in real time to the PC Runtime.
-   - The PC Runtime executes canonical speech-to-text (`whisper.cpp` or equivalent engine), feeds tokens to the language model, synthesizes audio via its canonical TTS provider (`Kokoro-82M` reference candidate), and streams audio buffers back to the phone for native playback.
-3. **Offline Mobile Audio & Voice Capabilities:**
-   - *Device-Local TTS (Capability-Dependent):* Offline Mobile supports capability-dependent device-local TTS when an approved local TTS provider/runtime is installed and the device hardware qualifies (meeting memory, thermal, and platform runtime criteria).
-   - *Engine Independence:* The exact local TTS engine remains provider-independent. Candidates such as Kokoro or platform-native TTS engines serve as reference implementations or candidates, not permanent architectural mandates.
-   - *Independent Gating for Local STT & Conversational Voice:* Local speech recognition (STT) and full offline continuous conversational voice turn-taking are independently capability-gated. Mobile devices in V1 are not burdened with mandatory heavy local STT runtimes.
+   - The PC Runtime executes canonical speech-to-text (`whisper.cpp` reference candidate), feeds tokens to the language model, synthesizes audio via its canonical TTS provider (`Kokoro-82M` reference candidate), and streams audio buffers back to the phone for native playback.
+   - Mobile phone owns capture, playback, audio focus, dynamic route switching, immediate local muting, and UI.
+3. **Offline Mobile Audio & Voice Capabilities (`D-PHONE-14B`, `D-PHONE-14C`, `D-PHONE-14D`):**
+   - *Device-Local TTS (`D-PHONE-14B`):* Classified as **Conditional Mobile V1**. A qualified local TTS engine vocalizes companion text turns, alarms, and routine check-ins independently of local STT or local LLM.
+   - *Device-Local STT (`D-PHONE-14C`):* Classified as **Conditional Mobile V1**. Evaluated under evidence-driven qualification. Focuses strictly on explicit user action (push-to-talk, tap-to-speak, or active session); continuous ambient listening is excluded.
+   - *Full Offline Voice (`D-PHONE-14D`):* Classified as **Conditional Mobile V1**. Activates when local STT, local LLM, and local TTS all qualify and resource governor permits. Degrades compositionally if any component is evicted or throttled.
    - *Truthful Degradation Invariant:* If disconnected from PC and without qualified local speech recognition (STT) or Cloud Voice credentials, interactive voice input truthfully degrades to typed text input. If local TTS is available, companion responses can still be vocalized locally; if local TTS is also unsupported or uninstalled, the interface truthfully falls back to visual text display with clear status indication (*"Speech input unavailable offline — connect to PC Host or configure Cloud Voice"*).
-4. **Optional Cloud Voice Routing:**
+4. **Voice Route Selection (`D-PHONE-14E`):**
+   - Default `Auto` route selection dynamically evaluates PC Host reachability, local component qualification, device thermal/battery headroom, network state, and cloud permissions.
+   - The active operational route (e.g. `Host STT + Host LLM + Host TTS` vs `Local STT + Local LLM + Local TTS`) remains visible and inspectable in the UI.
+5. **Shared STT Candidate Qualification (`D-PHONE-14G`):**
+   - `whisper.cpp` is the primary research candidate for mobile local STT to maximize architectural parity with the PC Host.
+   - Mobile qualification is independent of PC; empirical benchmarks evaluate English, Tagalog, Taglish code-switching, date/time recognition, memory footprint, thermal load, and barge-in responsiveness.
+6. **Optional Cloud Voice Routing & Permission Decoupling:**
    - Supported only when the user explicitly enables Cloud Voice and provides personal API credentials stored securely in Keystore.
-   - *Permission Decoupling:* Cloud LLM, Cloud STT, and Cloud TTS are **three independently revocable permissions**. Enabling Cloud LLM does NOT authorize cloud audio streaming. Cloud audio transmission requires explicit separate consent.
+   - *Permission Decoupling:* Cloud LLM, Cloud STT, and Cloud TTS are **three independently revocable permissions**:
+     $$\text{Public Internet} \neq \text{Cloud LLM} \neq \text{Cloud STT} \neq \text{Cloud TTS}$$
+     Enabling Cloud LLM does NOT authorize cloud audio streaming. Cloud audio transmission requires explicit separate consent.
 
 ---
 
@@ -189,25 +213,29 @@ Voice on Mobile requires distinct architectural partitioning from PC Desktop due
 
 ---
 
-## 4. C3: Health and Wearables Release Disposition
+## 4. C3: Health and Wearables Release Disposition (`D-PHONE-15` through `D-PHONE-15E`, `D-SHARED-HEALTH-01` through `04`)
 
-### 4.1 Formal Release Decision: `Mobile Later` (Deferred Post-V1)
-In accordance with the PC V1 deferral in `docs/04_Architecture/03_Integrations/health-and-wearables.md`, the formal release disposition for Mobile V1 is:
-**`Mobile Later` (Deferred Post-V1). Real Health Connect integration and wearable biometric sync are EXCLUDED from Mobile V1 release scope.**
+### 4.1 Formal Release Decision: Conditional Mobile V1 (`D-PHONE-15`)
+In accordance with [`docs/04_Architecture/03_Integrations/health-and-wearables.md`](../03_Integrations/health-and-wearables.md), the formal release disposition for Mobile V1 is:
+**Conditional Mobile V1 (`D-PHONE-15`), intentionally superseding the prior Batch C `Mobile Later (Deferred Post-V1)` deferral.**
+Real Health Connect integration (`androidx.health.connect`) is an optional, read-only, consent-driven capability for qualified Android environments. A device, platform, or user configuration without usable Health Connect remains a fully valid Mobile V1 installation.
 
-#### 4.1.1 Prototype Sequestration & Non-Production Boundary
+#### 4.1.1 Ingestion & Boundary Architecture
+- **Granular Metric Authorization (`D-PHONE-15A`):** Biometric ingestion requires explicit user authorization partitioned by metric type (active calories, blood pressure, body temperature, distance, heart rate, oxygen saturation/SpO₂, sleep, steps). Only metrics actually supplied by the source are claimed.
+- **Read-Only Ingestion (`D-PHONE-15B`):** The Companion reads approved Health Connect records into its local context but does not write or modify health records in Health Connect in Mobile V1.
+- **Health Context vs. Memory Decoupling (`D-PHONE-15C`):** Health metrics, readings, and trends belong strictly to the Health Context domain and are **not** canonical D7 Memory. Explicit user health preferences may separately become Memory through D7.
+- **Shared Normalized Health Context (`D-PHONE-15D`, `D-SHARED-HEALTH-01`):** Mobile serves as the Health Connect ingestion point and shares a unified normalized health schema with the PC Host, preserving timestamp, freshness, and source provenance.
+- **Aggregation Boundary (`D-PHONE-15E`):** Android Health Connect serves as the canonical V1 mobile aggregation boundary. Direct proprietary wearable SDKs are not required in Mobile V1.
+- **Non-Clinical Awareness & Check-Ins (`D-SHARED-HEALTH-02`, `D-SHARED-HEALTH-03`):** Health context provides empathetic conversational awareness, wellness suggestions, and check-in enrichment without making medical or diagnostic claims. Underlying facts remain deterministic; Character presentation modulates conversational framing only.
+- **Health Egress Isolation (`D-SHARED-HEALTH-04`):** Permitting Cloud LLM or internet tools does **not** authorize transmitting health data off-device:
+  $$\text{Public Internet} \neq \text{Cloud LLM} \neq \text{Health-to-Cloud}$$
+  Health data inclusion in cloud prompts requires distinct, standalone user authorization.
+
+#### 4.1.2 Prototype Sequestration & Implementation Reality
 - **Current Prototype Status:** The existing Android codebase contains UI mock screens (`HealthScreen.kt`, `HealthViewModel.kt`) backed by synthetic profiles (`MockHealthDataProvider.kt`).
-- **Production Boundary:**
-  - The repository contains **zero** production Health Connect client code, zero `androidx.health.connect` dependencies, and zero health manifest permissions (`android.permission.health.*`).
-  - For Mobile V1 production releases, all health UI routes, mock providers, and biometric screens MUST be sequestered as developer-only reference/demo code or disabled behind compile-time feature flags.
-  - Production releases must not expose non-functional or mock health dashboards to end users.
-
-#### 4.1.2 Permanent Non-Clinical & Privacy Invariants
-Whenever health or biometric capabilities are designed in future phases, they MUST conform to the following non-negotiable principles:
-1. **Absolute Non-Clinical Boundary:** The AI Companion is strictly an empathetic personal companion and productivity assistant. It makes **NO medical, clinical, or diagnostic claims**. It must never provide medical advice, diagnosis, triage, or clinical recommendations.
-2. **Granular Per-Metric Consent:** Biometric ingestion requires explicit, informed user consent. Users must be able to grant or revoke access to individual metric categories (e.g. steps vs. heart rate vs. sleep) independently.
-3. **No Automatic Cloud Egress:** Health and biometric context is strictly Profile-isolated local data. It MUST NEVER be transmitted to third-party Cloud LLMs or cloud endpoints without explicit, affirmative user authorization.
-4. **Purge Rights Over Retained Copies:** Users retain absolute authority to inspect, export, or permanently erase all Companion-retained/synchronized health copies on demand. (The Companion does not claim automatic deletion authority over external source records residing in Android Health Connect unless created by the Companion and explicitly authorized by future architecture).
+- **Production Implementation Reality:** The repository currently contains **zero** production Health Connect client code, zero `androidx.health.connect` dependencies, and zero health manifest permissions (`android.permission.health.*`). Production Flutter Mobile health integration is **NOT IMPLEMENTED**.
+- **Sequestration Boundary:** Until real Health Connect integration is implemented and verified under an approved plan, existing Kotlin prototype screens remain sequestered as developer reference code and disabled in production builds.
+- **Purge Rights Over Retained Copies:** Users retain absolute authority to inspect, export, or permanently erase all Companion-retained/synchronized health copies on demand. (The Companion does not claim automatic deletion authority over external source records residing in Android Health Connect unless created by the Companion and explicitly authorized by future architecture).
 
 ---
 
@@ -338,5 +366,5 @@ A comprehensive coherence check across Batch A, Batch B, and Batch C confirms co
 1. **Authority Model:** PC Host remains sole Account/Profile Administrator (`ADR-0018`). Mobile operates strictly as an enrolled Satellite bound to 1 Profile.
 2. **Domain Synchronization:** Tasks, Reminders, and Alarms follow the asymmetric replication and revision rules established in `mobile-offline-and-sync.md`.
 3. **Inference & Voice Decoupling:** Desktop PC V1 voice and model architectures (`voice-and-audio.md`, `runtime-and-models.md`) remain unaffected. When connected, Mobile streams audio over full-duplex WebSocket to PC Runtime canonical STT/TTS/VAD providers. When offline, Mobile supports capability-dependent device-local TTS and independently capability-gated local STT/LLM inference without freezing a permanent single engine requirement or restricting Mobile solely to a passive audio edge node.
-4. **Health Integration:** Formally aligned with `health-and-wearables.md` as `Mobile Later` (Deferred Post-V1).
+4. **Health Integration:** Formally aligned with [`health-and-wearables.md`](../03_Integrations/health-and-wearables.md) as **Conditional Mobile V1** (`D-PHONE-15`), intentionally superseding the prior Batch C `Mobile Later` deferral.
 5. **No PC Code Regressions:** Zero changes to backend Python runtime, React web frontend, or Windows desktop code.
