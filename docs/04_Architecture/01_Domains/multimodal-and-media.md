@@ -55,11 +55,12 @@ Multimodal vision understanding is governed by the approved Phase 8B delivery ro
 
 - **Conditional Mobile V1 Disposition (`D-PHONE-16`):** Qualified mobile hardware and local models may perform local still-image understanding in Mobile V1, intentionally superseding the prior post-V1-only disposition. Mobile local vision is optional and capability-gated.
 - **Camera as Input Adapter (`D-PHONE-16A`):** Device camera capture and photo gallery selection function strictly as input adapters feeding into the shared attachment and multimodal conversation pipeline. Camera capture is not a distinct vision subsystem; captured frames become standard image attachments conforming to the canonical validation pipeline.
-- **Multimodal Route Selection (`D-PHONE-16B`):** Image inference routes deterministically based on reachability and permissions:
-  1. Connected: Local vision on PC Host (preferred if available and connected).
-  2. Qualified Mobile Local VLM: Local inference on device if qualified and active.
-  3. Authorized Cloud Multimodal: Cloud vision fallback only when specifically authorized.
-  4. Unavailable: Graceful degradation with clear user feedback if no vision route qualifies.
+- **Multimodal Route Selection (`D-PHONE-16B`):** Image inference routes among the approved route set:
+  - PC Host local vision
+  - Qualified Mobile local VLM
+  - Separately authorized Cloud multimodal model
+  - Unavailable (graceful degradation with clear user feedback if no route qualifies)
+  Route selection dynamically evaluates Host reachability, local model qualification and resource state, device thermal/battery conditions, user privacy preferences, and explicit cloud authorizations. The exact preference, fallback order, and retry timing remain implementation-open.
   *Permission Invariant:* Public internet access or general Cloud LLM permission does **not** imply permission for Cloud Vision. Cloud multimodal egress requires independent user authorization.
 - **Evidence-Based Qualification (`D-PHONE-16C`):** Mobile vision models must pass empirical task-scoped qualification. Passing basic object recognition does not imply competence in fine OCR, spatial navigation, or high-risk medical/document parsing. Resource Governor limits vision residency to preserve device thermal and memory stability.
 - **Offline Multimodal Persistence & Sync (`D-PHONE-16D`):** When operating disconnected, local image attachments, user turns, and generated local responses persist durably in local SQLite/storage. Upon reconnecting, the turn history and binary attachments synchronize to the PC Host without Host re-generation.
@@ -122,7 +123,7 @@ Verified in frontend components and API contracts:
 
 - **Flutter Mobile Camera Capture:** `NOT IMPLEMENTED`. The Flutter codebase does not yet include camera capture or gallery picker adapters for still-image turn input.
 - **Mobile Attachment Store & Pipeline:** `NOT IMPLEMENTED`. Mobile offline attachment staging, thumbnail caching, and background sync to PC Host are not implemented in the repository.
-- **Mobile Local VLM Execution:** `NOT IMPLEMENTED`. On-device visual language model execution (such as mobile llama.cpp/runtime running small multimodal models like Qwen-VL with vision projectors) is not implemented in repository code.
+- **Mobile Local VLM Execution:** `NOT IMPLEMENTED`. On-device visual language model execution (such as mobile llama.cpp/runtime running qualified local vision-language models with vision projectors) is not implemented in repository code.
 
 ---
 
@@ -153,7 +154,7 @@ The following implementation choices are intentionally left open for subsequent 
 - **Non-Image Media Ingestion:** Architecture for PDF documents, audio clips, and OCR pipelines for post-V1 milestones.
 - **Image Optimization & Transcoding:** Optional on-disk thumbnail generation or WebP compression to reduce disk footprint.
 - **Attachment Retention & Trash Sweeps:** Automated background purge schedules for unreferenced or deleted attachments.
-- **Mobile VLM Packaging & Quantization:** Selection of specific mobile VLM architectures (e.g. Qwen2-VL 2B/0.8B), quantization schemes (Q4_K_M vs Q3_K_S), and separate vision-projector memory allocation ceilings.
+- **Mobile VLM Packaging & Quantization:** Selection of specific mobile VLM architectures, model quantization schemes, and vision-projector memory allocation ceilings based on empirical qualification evidence rather than frozen candidate choices.
 - **Generative Visual Presence:** Exploration of local diffusion models (Stable Diffusion) for companion visual mood expressions (classified as future experimental).
 
 ---

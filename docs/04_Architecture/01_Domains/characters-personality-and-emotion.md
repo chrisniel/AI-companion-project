@@ -80,20 +80,20 @@ Conversations remain permanently bound to the `character_id` under which turns w
 - **Character Selection & Isolation:** Mobile clients may select among cached or synchronized Character Instances for the authenticated user Profile. Switching characters never mutates or reassigns Profile ownership, security or tool permissions, Task records, Health context, or Profile Memories. Conversations remain permanently bound to the Character under which they were initiated.
 - **Character Studio & Authoring Authority:**
   - *Connected Mobile:* May expose Character Studio authoring and editing UI as a client to the PC Host canonical Character service, utilizing shared D11 traits, dimensions, presets, and validation rules.
-  - *Offline Mobile V1:* Canonical Character creation and trait editing are **not** supported offline in Mobile V1. Local drafts are non-canonical until reconciled with the Host.
+  - *Offline Mobile V1:* Canonical Character creation and trait editing are **not** supported offline in Mobile V1; local Character creation or modification is NOT an approved offline canonical capability. Any potential client-side drafts are strictly non-canonical and do not alter companion identity until reconciled and accepted by the PC Host.
   - *Withdrawn Concepts:* Standalone mobile-local authoritative Character creation, independent mobile character variant forks, and separate mobile-only mood layers are explicitly superseded and rejected.
 - **Offline Emotion Event Synchronization (`D-PHONE-EMO-01`):** Mobile does not directly mutate canonical persistent Mood numerical values while disconnected. Instead:
   $$\text{offline interaction} \to \text{typed bounded emotion event} \to \text{durable outbox} \to \text{optional provisional local expression} \to \text{Host reconciliation} \to \text{shared D11 Emotion policy} \to \text{canonical Mood}$$
   The mobile client synchronizes typed emotion events (e.g. conversational sentiment, interaction cues) rather than arbitrary numeric overrides.
 - **Companion Check-In Surfaces & Tone (`D-PHONE-12D`, `D-PHONE-12E`):**
   - Check-ins, routines, and home widgets reflect the active Character's Personality traits and bounded Mood.
-  - Expressive presets (e.g. Tsundere, Kuudere, Yandere) may use stylized persona phrases (such as *"I was lonely"* or *"Don't keep me waiting"*) provided factual companion information follows immediately, facts are not distorted, and the system strictly avoids coercive threats, emotional manipulation, or isolation pressure.
+  - Character-aware check-in language remains optional presentation. Expressive persona presets may modulate stylistic framing provided factual companion information follows immediately, underlying facts are not distorted, and the interaction strictly avoids coercive threats, emotional manipulation, isolation pressure, punishment, or fabricated claims regarding missed interactions.
 - **Lightweight Mood Presence & Emoji Fallback (`D-PHONE-UX-10`):**
   - Mobile V1 presents mood through available Character expression assets, lightweight static portraits, or local 2D assets.
   - Standard **Emoji / Mood-Glyphs** serve as the mandatory, guaranteed lightweight V1 fallback across all devices and low-resource states.
   - Visual expression is purely presentation; it is never the authoritative underlying Mood state.
 - **Approved Future Direction: Embodied Presence & Mobile AR (`P-SHARED-PRESENCE-01`, `P-PHONE-AR-01`, `P-PHONE-AR-02`, `P-PRESENCE-02`):**
-  - *Embodied Presence (`P-SHARED-PRESENCE-01`):* Approved future direction where Character instances may reference 2D expression bundles, Live2D rigs, or 3D/VRM models. Presence is decoupled from Character identity, Personality, and Voice.
+  - *Embodied Presence (`P-SHARED-PRESENCE-01`):* Approved future direction where Character instances may reference 2D expression bundles, Live2D rigs, or 3D/VRM models. Presence is strictly decoupled from Character identity, Personality, Mood, and Voice.
   - *Mobile AR Presence (`P-PHONE-AR-01`):* Approved future direction for explicit, user-started AR sessions rendering the companion into the physical environment.
   - *Bounded Scene Awareness (`P-PHONE-AR-02`):* AR rendering does not require continuous VLM inference; still-image cloud consent does not authorize live camera streaming.
   - *Remote Expression Assets (`P-PRESENCE-02`):* Future experimental search/import for user-directed expression assets. Automatic web GIF downloading upon mood changes is rejected.

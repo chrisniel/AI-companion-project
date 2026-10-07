@@ -97,11 +97,12 @@ While PC workstations follow the Decision D6 import pipeline (`inbox` $\rightarr
 
 - **Conditional Mobile V1 Disposition (`D-PHONE-16`):** Qualified mobile hardware and local models may perform local still-image understanding in Mobile V1, intentionally superseding the prior post-V1-only disposition. Mobile local vision is optional, non-universal, and capability-gated.
 - **Camera as Input Adapter (`D-PHONE-16A`):** Device camera capture and photo gallery selection function strictly as input adapters feeding into the shared attachment and multimodal conversation pipeline. Captured frames become standard image attachments conforming to the canonical validation pipeline.
-- **Multimodal Route Selection (`D-PHONE-16B`):** Image inference routes deterministically based on reachability and permissions:
-  1. Connected: Local vision on PC Host (preferred if available and connected).
-  2. Qualified Mobile Local VLM: Local inference on device if qualified and active.
-  3. Authorized Cloud Multimodal: Cloud vision fallback only when specifically authorized.
-  4. Unavailable: Graceful degradation with clear user feedback if no vision route qualifies.
+- **Multimodal Route Selection (`D-PHONE-16B`):** Image inference routes among the approved route set:
+  - PC Host local vision
+  - Qualified Mobile local VLM
+  - Separately authorized Cloud multimodal model
+  - Unavailable (graceful degradation with clear user feedback if no route qualifies)
+  Route selection dynamically evaluates Host reachability, local model qualification and resource state, device thermal/battery conditions, user privacy preferences, and explicit cloud authorizations. The exact preference, fallback order, and retry timing remain implementation-open.
   *Permission Invariant:* Public internet access or general Cloud LLM permission does **not** imply permission for Cloud Vision. Cloud multimodal egress requires independent user authorization.
 - **Evidence-Based Qualification (`D-PHONE-16C`):** Mobile vision models must pass empirical task-scoped qualification. Passing basic object recognition does not imply competence in fine OCR, spatial navigation, or high-risk medical/document parsing. Resource Governor limits vision residency to preserve device thermal and memory stability.
 - **Offline Multimodal Persistence & Sync (`D-PHONE-16D`):** When operating disconnected, local image attachments, user turns, and generated local responses persist durably in local SQLite/storage. Upon reconnecting, the turn history and binary attachments synchronize to the PC Host without Host re-generation.
@@ -166,7 +167,7 @@ Voice on Mobile requires distinct architectural partitioning from PC Desktop due
    - Default `Auto` route selection dynamically evaluates PC Host reachability, local component qualification, device thermal/battery headroom, network state, and cloud permissions.
    - The active operational route (e.g. `Host STT + Host LLM + Host TTS` vs `Local STT + Local LLM + Local TTS`) remains visible and inspectable in the UI.
 5. **Shared STT Candidate Qualification (`D-PHONE-14G`):**
-   - `whisper.cpp` is the primary research candidate for mobile local STT to maximize architectural parity with the PC Host.
+   - `whisper.cpp` is the first approved research candidate for mobile local STT qualification to align with the PC Voice architecture direction. It serves as an empirical research and qualification candidate, replaceable if benchmarks or qualification dictate, without altering overall composable voice architecture.
    - Mobile qualification is independent of PC; empirical benchmarks evaluate English, Tagalog, Taglish code-switching, date/time recognition, memory footprint, thermal load, and barge-in responsiveness.
 6. **Optional Cloud Voice Routing & Permission Decoupling:**
    - Supported only when the user explicitly enables Cloud Voice and provides personal API credentials stored securely in Keystore.
@@ -208,7 +209,7 @@ Voice on Mobile requires distinct architectural partitioning from PC Desktop due
 
 ### 3.5 Voice Privacy & Invariants
 - **Voice is NOT Authentication:** Conversational voiceprints or acoustic characteristics must NEVER be used as an authentication or authorization factor (`ADR-0005`, `ADR-0018`).
-- **Raw Audio is Transient:** Raw user audio buffers captured on the device or received over the network are transient memory buffers. They are never intentionally persisted to disk by default. Application-level buffers and memory references are promptly released and eligible for memory reclamation after processing. Debug audio recording requires separate, explicit developer opt-in if ever implemented.
+- **Raw Audio is Transient:** Raw user audio buffers captured on the device or received over the network are transient memory buffers and are not retained by default. Application-level buffers and memory references are promptly released after their active processing lifecycle according to the approved Voice privacy policy. Debug audio recording requires separate, explicit developer opt-in if ever implemented.
 - **Transcript Ownership:** Only the final transcribed text becomes a permanent conversation turn message, owned strictly by the active `profile_id`.
 
 ---
@@ -236,6 +237,33 @@ Real Health Connect integration (`androidx.health.connect`) is an optional, read
 - **Production Implementation Reality:** The repository currently contains **zero** production Health Connect client code, zero `androidx.health.connect` dependencies, and zero health manifest permissions (`android.permission.health.*`). Production Flutter Mobile health integration is **NOT IMPLEMENTED**.
 - **Sequestration Boundary:** Until real Health Connect integration is implemented and verified under an approved plan, existing Kotlin prototype screens remain sequestered as developer reference code and disabled in production builds.
 - **Purge Rights Over Retained Copies:** Users retain absolute authority to inspect, export, or permanently erase all Companion-retained/synchronized health copies on demand. (The Companion does not claim automatic deletion authority over external source records residing in Android Health Connect unless created by the Companion and explicitly authorized by future architecture).
+
+### 4.2 Future Location Context Boundary (`P-PHONE-LOC-01`)
+- **Disposition:** `MOBILE LATER / APPROVED FUTURE DIRECTION`.
+- **Architectural Boundary:** Location awareness is an optional future contextual signal, not an implemented Mobile V1 feature. Mobile V1 contains zero location permissions, zero background geolocation services, and zero location implementation tasks.
+- **Privacy & Autonomy Invariants:**
+  - *Opt-In Only:* Location ingestion requires explicit, separate user opt-in with clear disclosure of purpose.
+  - *Geofencing Preference:* Event-oriented geofencing (e.g. entering or leaving a user-defined zone) is strongly preferred over continuous high-frequency GPS tracking.
+  - *Context, Not Memory:* Location fixes and zone transitions belong strictly to ephemeral context, **not** canonical D7 Memory.
+  - *Evidence, Not Security Authority:* Location data serves solely as contextual evidence; it never possesses scheduling, authorization, or security policy authority.
+  - *No Hidden Tracking:* Silent or hidden background continuous location tracking is strictly prohibited.
+  - *No Continuous History by Default:* The Companion does not maintain a continuous raw GPS track or breadcrumb location history by default.
+  - *Explicit Background Purpose:* Any future background location evaluation requires an explicit, user-approved purpose and dedicated platform permissions.
+  - *No Implicit Cloud Egress:* Location data is never transmitted to cloud services or cloud LLM providers by default; cloud transmission requires independent, explicit user consent.
+  - *User Inspection & Purge Rights:* Users retain unconditional rights to inspect, disable, and permanently purge any retained location evidence.
+  - *Character Guardrail:* Character persona, emotional state, or relationship framing cannot override or bypass user location privacy preferences.
+  - *No V1 Implementation:* Mobile V1 introduces zero implementation tasks or code dependencies for location services. Exact geofence radii, retention windows, polling intervals, and provider APIs remain open for future specification.
+
+### 4.3 Future Embodied Presence & AR Directions (`P-SHARED-PRESENCE-01`, `P-PHONE-AR-01`, `P-PHONE-AR-02`, `P-PRESENCE-02`)
+- **Disposition:** `APPROVED FUTURE DIRECTION / EXPERIMENTAL LATER`.
+- **Decoupled Architecture:** Physical and visual presence rendering is strictly decoupled from the core companion personality architecture:
+  $$\text{Presence} \neq \text{Character Identity} \neq \text{Personality} \neq \text{Mood} \neq \text{Voice}$$
+- **Presentation Modality Isolation:**
+  - *Mobile V1 Focus:* Mobile V1 focuses entirely on the companion presence shell, 2D avatar/portrait representation, ambient visual state, and responsive text/voice conversational interfaces (`D-PHONE-06`, `D-PHONE-EMO-01`, `D-PHONE-12D`, `D-PHONE-12E`, `D-PHONE-UX-10`).
+  - *Future Embodied Presence (`P-SHARED-PRESENCE-01`):* Shared embodied presence abstractions (e.g. unified 3D coordinate frames, spatial anchors, multi-device physical presence) are approved long-term architectural directions for subsequent milestones.
+  - *Mobile AR Companion (`P-PHONE-AR-01`, `P-PHONE-AR-02`):* Augmented reality visual anchoring, spatial awareness, and mobile AR camera overlays are approved future research and design directions.
+  - *Experimental Presence (`P-PRESENCE-02`):* Advanced embodied presence experiments (e.g. interactive spatial avatars, animated Live2D/3D skeletal runtimes, XR device integration) remain experimental post-V1 concepts.
+- **Non-Requirement for V1:** 3D rendering engines, ARCore/scene graph dependencies, Live2D runtimes, and continuous spatial tracking are explicitly **NOT** requirements for Mobile V1 release.
 
 ---
 

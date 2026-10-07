@@ -138,12 +138,16 @@ To prevent context overflow, model degradation, and runaway memory usage, all pr
   - Text messaging, Voice capture, camera still images, and file attachments converge on the same Character-bound conversation experience.
   - Modality transitions (e.g. speaking a prompt then reading a response, or attaching a photo then typing a query) occur seamlessly within the active conversation thread without fragmenting context across separate subsystem screens.
 - **Extensible Language Registry (`D-SHARED-LANG-01`):**
-  - Languages are managed through an extensible capability registry using standard identifiers (e.g. BCP-47 / ISO-639) rather than rigid closed enums.
+  - Languages are managed through an extensible capability registry using standard identifiers (e.g. BCP-47 / ISO-639 where practical) rather than rigid closed enums; exact registry data structures and storage representations remain implementation-open.
   - Initial active targets include English (`en`), Tagalog/Filipino (`fil`), Japanese (`ja`), and natural conversational code-switching (e.g. Taglish).
   - Adding future language targets (e.g. Cebuano/Bisaya, Korean, German) expands registry capabilities without requiring architectural redesign.
-- **Qualified Language Capability (`D-SHARED-LANG-02`):**
-  - Full companion language capability is advertised truthfully only when the active LLM, STT, and TTS pipeline components demonstrably qualify for that language.
-  - `Auto` detection supports fluid bilingual interaction and code-switching where qualified models support it.
+- **Modality-Aware Language Qualification (`D-SHARED-LANG-02`):**
+  - Language capability is advertised truthfully according to the specific, relevant components required for the active modality:
+    - Text conversational capability requires qualified LLM comprehension and generation in that language; it does not require STT or TTS qualification.
+    - Speech input capability requires a qualified STT engine for that language.
+    - Spoken output synthesis requires a qualified TTS engine for that language.
+    - Full local voice interaction requires concurrent qualification across all three constituent components (STT + LLM + TTS).
+  - `Auto` detection mode may support bilingual interaction and code-switching where active constituent models qualify, without promising universal or unverified automatic code-switching across all components.
 - **Conversational Language vs UI Localization Decoupling (`D-PHONE-UX-09`):**
   - Companion conversational understanding and speech generation are architecturally distinct from application UI string localization.
   - A user may converse with the companion in Tagalog or Japanese even when the client application UI menus and settings operate in English. Application UI localization requires translated resource bundles and is evaluated independently.

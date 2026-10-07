@@ -58,7 +58,7 @@ This specification documents the canonical integration architecture, data contra
   - Ingestion timestamp (`last_updated`)
   - Freshness status (stale threshold evaluation)
   - Source provenance (e.g., specific Health Connect source app/device)
-- **Host Sync:** When connected, authorized and useful normalized health summaries may synchronize to the PC Host to enrich companion interactions across client surfaces. High-frequency raw sensor streams are not synchronized; only bounded aggregations and state summaries are transferred.
+- **Host Sync:** When connected, bounded useful normalized health context may synchronize to the PC Host to enrich companion interactions across client surfaces. Arbitrary unlimited high-frequency raw telemetry is not synchronized by default. Exact aggregation/raw-window policy, sync cadence, retention, and protected transport binding remain implementation-open within approved shared transport and security architecture.
 
 ### 2.5 Non-Clinical Wellness Guardrails (`D-SHARED-HEALTH-02`, `D-SHARED-HEALTH-03`)
 
@@ -103,7 +103,7 @@ Verified in `android/app/src/main/java/com/example/`:
 The following target capabilities are approved in Mobile V1 architecture but are not yet implemented in source code:
 - **Mobile V1 Health Connect Ingestion (`D-PHONE-15`, `D-PHONE-15A`, `D-PHONE-15B`):** Android Health Connect client adapter, permission flow, and read-only record polling.
 - **Health Context Store & Normalizer (`D-SHARED-HEALTH-01`):** In-memory and local SQLite persistence for bounded normalized metric records.
-- **Host Sync Pipeline (`D-PHONE-15D`):** Encrypted REST/WebSocket transfer of normalized health summaries between Mobile and PC Host.
+- **Host Sync Pipeline (`D-PHONE-15D`):** Protected transfer of bounded useful normalized health context between Mobile and PC Host (exact transport binding implementation-open).
 - **Health-Aware Prompt Injector (`D-SHARED-HEALTH-03`):** Bounded context injector supplying recent wellness summaries to local conversation and routine assembly.
 - **Health Cloud Egress Guard (`D-SHARED-HEALTH-04`):** Policy filter enforcing strict stripping of health data from prompts destined for cloud LLM providers unless explicitly authorized.
 
@@ -112,15 +112,16 @@ The following target capabilities are approved in Mobile V1 architecture but are
 ## 5. Open Design & Implementation Notes
 
 The following technical details remain open design for future implementation milestones:
-- **Aggregation Windows:** Exact sliding windows (e.g., 24-hour vs 7-day) and polling frequencies for background synchronization.
-- **Database Schema:** Specific table schemas for local SQLite storage of health events and summaries.
+- **Aggregation & Raw-Window Policy:** Exact sliding windows, aggregation functions, raw observation retention windows, and background sync polling frequencies.
+- **Database Schema & Retention:** Specific table schemas for local SQLite storage of health events, normalized context, and retention/pruning thresholds.
+- **Transport Binding:** Concrete protocol binding (e.g. secure REST or WebSocket frames) within approved shared transport and encryption architecture.
 - **UI Management Controls:** Detailed settings screens for granular metric toggle switches and data retention periods.
 
 ---
 
 ## 6. Security & Ownership Boundaries
 
-- **Application Trust Boundary:** Health context is Profile-owned (`profile_id`) sensitive data protected by the application trust boundary and local encryption.
+- **Application Trust Boundary:** Health context is Profile-owned (`profile_id`) sensitive data protected by the OS private application sandbox as the baseline. Full database encryption (e.g. SQLCipher) remains an optional, threat-model-dependent mitigation.
 - **Cloud Egress Guard:** Health data is never transmitted to cloud endpoints without explicit, standalone user authorization (`D-SHARED-HEALTH-04`).
 - **Purge Rights Boundary:** Users retain absolute authority to inspect, export, or permanently erase all Companion-retained and synchronized health data copies. The Companion does not claim automatic deletion authority over external source records residing in Android Health Connect unless created by the Companion and explicitly authorized by future architecture.
 
