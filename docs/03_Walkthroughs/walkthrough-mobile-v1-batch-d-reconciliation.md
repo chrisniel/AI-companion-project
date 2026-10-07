@@ -4,7 +4,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - **Purpose:** Comprehensive point-in-time delivery walkthrough and engineering audit for the MOBILE-ARCH Batch D reconciliation pass, promoting 104 approved decisions and directions across core baseline, conversation branching, memory overlays, local tools, composable voice, conditional Health Connect, multimodal vision, mobile companion UX, expanded 88-item WBS, and the locked 18-group Mobile Golden Gate (MG1–MG18).
 - **Audience:** Chris (human owner), independent GPT reviewers, maintainers, and future implementation agents.
-- **Status:** D5.5 Authored — Awaiting Independent Closure Gate Re-Review
+- **Status:** VERIFIED — INDEPENDENT CLOSURE GATE PASSED
 - **Last Updated:** 2026-10-07
 
 ---
@@ -54,7 +54,7 @@ The following table details all files touched across the MOBILE-ARCH promotion d
 
 | Document Path | Lifecycle Batch | Architectural Scope & Promoted Authority |
 | :--- | :--- | :--- |
-| [`docs/01_Tracking/active/task-docs-mobile-v1-canonicalization.md`](../01_Tracking/active/task-docs-mobile-v1-canonicalization.md) | D2–D5.5 | Active branch delivery tracker recording Gate 0, Gate 1, Gate 2, Gate 3, and D5.5 reconciliation state. |
+| [`docs/01_Tracking/archive/task-2026-10-07-mobile-v1-batch-d-canonical-promotion.md`](../01_Tracking/archive/task-2026-10-07-mobile-v1-batch-d-canonical-promotion.md) | D1–D5.5 | Archived delivery tracker recording Gate 0, Gate 1, Gate 2, Gate 3, and Gate 4 Closure Gate approval. |
 | [`docs/02_Planning/01_Plans/plan-mobile-v1-batch-d-canonical-promotion.md`](../02_Planning/01_Plans/plan-mobile-v1-batch-d-canonical-promotion.md) | D1 | Approved Batch D Canonical Promotion Plan (Gate 0 approved). |
 | [`docs/04_Architecture/MOBILE_SYSTEM_BASELINE.md`](../04_Architecture/MOBILE_SYSTEM_BASELINE.md) | D2, D4, D5.1 | Primary Mobile System Baseline: orthogonal availability, enrollment, local LLM path, Flutter topology, MG1–MG18 link. |
 | [`docs/04_Architecture/04_Infrastructure/mobile-offline-and-sync.md`](../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) | D2, D3, D4 | Offline Persistence & Sync: whole-turn reconciliation, client UUIDs, memory outbox, causal branching. |
@@ -91,7 +91,7 @@ The following table details all files touched across the MOBILE-ARCH promotion d
 - **Gate 1 (Batch D2 Review):** PASSED after narrow correction pass D2.1 (`19116d99`).
 - **Gate 2 (Batch D3 Review):** PASSED after narrow correction passes D3.1 and D3.2 (`5d860625`).
 - **Gate 3 (Batch D4 Review):** PASSED after narrow correction passes D4.1 and D4.2 (`ed1c71b7`).
-- **Closure Gate (Batch D5):** Initial result: `CORRECTIONS REQUIRED`. Batch D5.5 final six traceability corrections authored and verified; awaiting independent human and GPT closure re-review.
+- **Closure Gate (Batch D5):** PASSED at checkpoint `282f3607c6663cb72b34ad8f3596651aaf5ac18f`; Hosted PR candidate CI Run #84 SUCCESS. PR #21 merge pending; post-merge verification not yet performed; M1 pending until merge.
 
 ### 3.2 Mechanical Verification Results
 
@@ -106,4 +106,4 @@ The following table details all files touched across the MOBILE-ARCH promotion d
 
 1. **Strictly Zero Git Mutations:** All git commands executed during authoring were read-only inspection commands (`git status`, `git branch`, `git rev-parse`, `git diff --check`). Chris owns all Git writes.
 2. **Zero Code / Test / CI Workflow Alterations:** No files in `backend/`, `frontend/`, `android/`, `tests/`, or `.github/workflows/` were modified; production Flutter Mobile implementation remains NOT IMPLEMENTED.
-3. **M1 Scaffolding Sequenced:** M1 Flutter Desktop client foundation remains pending and sequenced after reclosure and merge of Batch D.
+3. **M1 Scaffolding Sequenced:** M1 Flutter Desktop client foundation remains pending and sequenced after merge of PR #21.
