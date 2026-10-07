@@ -4,7 +4,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - **Purpose:** Comprehensive point-in-time delivery walkthrough and engineering audit for the MOBILE-ARCH Batch D reconciliation pass, promoting 104 approved decisions and directions across core baseline, conversation branching, memory overlays, local tools, composable voice, conditional Health Connect, multimodal vision, mobile companion UX, expanded 88-item WBS, and the locked 18-group Mobile Golden Gate (MG1–MG18).
 - **Audience:** Chris (human owner), independent GPT reviewers, maintainers, and future implementation agents.
-- **Status:** D5.4 Authored — Awaiting Independent Closure Gate Re-Review
+- **Status:** D5.5 Authored — Awaiting Independent Closure Gate Re-Review
 - **Last Updated:** 2026-10-07
 
 ---
@@ -22,7 +22,7 @@ The MOBILE-ARCH Batch D delivery reconciles product-level companion decisions es
 - **Batch D2 — Core Baseline, Identity, Scheduling & Flutter Boundaries (Gate 1 Passed):**
   - Updated [`MOBILE_SYSTEM_BASELINE.md`](../04_Architecture/MOBILE_SYSTEM_BASELINE.md) (§2, §3, §4, §5, §7) establishing orthogonal availability dimensions, enrollment requirements, vendor-neutral hardware abstraction, replaceable local models, and Flutter monorepo boundaries.
   - Updated [`mobile-offline-and-sync.md`](../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) (§2, §3, §6, §7) standardizing atomic whole-turn units, client conversation UUIDs, execution-origin provenance, and offline task mutations.
-  - Updated [`tasks-reminders-alarms-and-routines.md`](../04_Architecture/01_Domains/tasks-reminders-alarms-and-routines.md) (§5, §6) aligning temporal parity, cross-device presentation arbitration, and companion alert enrichment.
+  - Updated [`tasks-reminders-alarms-and-routines.md`](../04_Architecture/01_Domains/tasks-reminders-alarms-and-routines.md) (§2.6, §2.7, §2.9) aligning temporal parity, cross-device presentation arbitration, and companion alert enrichment.
   - Updated [`android-companion.md`](../04_Architecture/01_Domains/android-companion.md) and [`profiles-and-devices.md`](../04_Architecture/02_Data_and_Security/profiles-and-devices.md) ensuring prototype evidence boundaries and satellite device token lifecycle consistency.
 
 - **Batch D3 — AI Runtime, Conversations, Context, Memory & Tools (Gate 2 Passed):**
@@ -39,7 +39,7 @@ The MOBILE-ARCH Batch D delivery reconciles product-level companion decisions es
   - Updated [`characters-personality-and-emotion.md`](../04_Architecture/01_Domains/characters-personality-and-emotion.md) (§2.3) standardizing typed bounded Emotion Events with Host reconciliation upon reconnection under shared D11 policy and avatar expression fallback; implementation remains not started.
   - Authored canonical design specification [`08_Mobile_Companion_Shell_and_UX.md`](../05_Design/08_Mobile_Companion_Shell_and_UX.md) (§2–§8) establishing portrait-first shell navigation (§2, §3), truthful capability status (§4), hybrid visual design language (Minimalist foundation, selective Neumorphic tactile controls, contextual Glass / Liquid Glass; §5), companion check-in surfaces and tone (§6), and interaction language decoupling (§8); implementation remains not started.
 
-- **Batch D5 / D5.4 — Master Planning Spine, Golden Verification, CI Direction & Closure Reconciliation (Current Checkpoint):**
+- **Batch D5 / D5.5 — Master Planning Spine, Golden Verification, CI Direction & Closure Reconciliation (Current Checkpoint):**
   - Updated [`mobile-capabilities-and-runtime.md`](../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) (§7, §8) canonicalizing tiered verification (L1–L5), future path-scoped CI routing, shared package fan-out rules, and the expanded MG1–MG18 Mobile Golden Gate.
   - Rebuilt [`MOBILE_CHECKLIST.md`](../02_Planning/00_Master/MOBILE_CHECKLIST.md) into the locked 18-group structure with granular qualification classes (`REQUIRED`, `CONDITIONAL`, `OPTIONAL`, `DEFERRED`) and auditable sub-assertions with explicit applicability conditions.
   - Expanded and reconciled [`MOBILE_WBS.md`](../02_Planning/00_Master/MOBILE_WBS.md) from 65 items to 88 items across 16 streams, preserving all stable IDs and validating a cycle-free dependency DAG.
@@ -54,7 +54,7 @@ The following table details all files touched across the MOBILE-ARCH promotion d
 
 | Document Path | Lifecycle Batch | Architectural Scope & Promoted Authority |
 | :--- | :--- | :--- |
-| [`docs/01_Tracking/active/task-docs-mobile-v1-canonicalization.md`](../01_Tracking/active/task-docs-mobile-v1-canonicalization.md) | D2–D5.4 | Active branch delivery tracker recording Gate 0, Gate 1, Gate 2, Gate 3, and D5.4 reconciliation state. |
+| [`docs/01_Tracking/active/task-docs-mobile-v1-canonicalization.md`](../01_Tracking/active/task-docs-mobile-v1-canonicalization.md) | D2–D5.5 | Active branch delivery tracker recording Gate 0, Gate 1, Gate 2, Gate 3, and D5.5 reconciliation state. |
 | [`docs/02_Planning/01_Plans/plan-mobile-v1-batch-d-canonical-promotion.md`](../02_Planning/01_Plans/plan-mobile-v1-batch-d-canonical-promotion.md) | D1 | Approved Batch D Canonical Promotion Plan (Gate 0 approved). |
 | [`docs/04_Architecture/MOBILE_SYSTEM_BASELINE.md`](../04_Architecture/MOBILE_SYSTEM_BASELINE.md) | D2, D4, D5.1 | Primary Mobile System Baseline: orthogonal availability, enrollment, local LLM path, Flutter topology, MG1–MG18 link. |
 | [`docs/04_Architecture/04_Infrastructure/mobile-offline-and-sync.md`](../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) | D2, D3, D4 | Offline Persistence & Sync: whole-turn reconciliation, client UUIDs, memory outbox, causal branching. |
@@ -71,10 +71,10 @@ The following table details all files touched across the MOBILE-ARCH promotion d
 | [`docs/04_Architecture/01_Domains/multimodal-and-media.md`](../04_Architecture/01_Domains/multimodal-and-media.md) | D4 | Camera/gallery image capture (§2.4), preflight downscaling, EXIF stripping, conditional qualified local Vision, approved Host/Cloud routes, durable offline attachment persistence. |
 | [`docs/04_Architecture/01_Domains/characters-personality-and-emotion.md`](../04_Architecture/01_Domains/characters-personality-and-emotion.md) | D4 | Typed bounded Emotion Events with Host D11 reconciliation (§2.3), lightweight expression fallback, zero arbitrary canonical Mood writes from Mobile. |
 | [`docs/05_Design/08_Mobile_Companion_Shell_and_UX.md`](../05_Design/08_Mobile_Companion_Shell_and_UX.md) | D4 | Canonical Mobile UX spec (§2–§8): portrait navigation, hybrid visual language (Minimalist foundation, selective Neumorphic controls, contextual Glass), check-in surfaces, language decoupling. |
-| [`docs/02_Planning/00_Master/MOBILE_CHECKLIST.md`](../02_Planning/00_Master/MOBILE_CHECKLIST.md) | D5–D5.4 | Rebuilt Mobile Golden Readiness Checklist: MG1–MG18 audit matrix with granular qualification classes and auditable sub-assertions. |
-| [`docs/02_Planning/00_Master/MOBILE_WBS.md`](../02_Planning/00_Master/MOBILE_WBS.md) | D5–D5.4 | Granular Mobile WBS expanded to 88 items across 16 streams with validated dependency DAG and normative owner links. |
+| [`docs/02_Planning/00_Master/MOBILE_CHECKLIST.md`](../02_Planning/00_Master/MOBILE_CHECKLIST.md) | D5–D5.5 | Rebuilt Mobile Golden Readiness Checklist: MG1–MG18 audit matrix with granular qualification classes and auditable sub-assertions. |
+| [`docs/02_Planning/00_Master/MOBILE_WBS.md`](../02_Planning/00_Master/MOBILE_WBS.md) | D5–D5.5 | Granular Mobile WBS expanded to 88 items across 16 streams with validated dependency DAG and normative owner links. |
 | [`docs/02_Planning/00_Master/MASTER_CHECKLIST.md`](../02_Planning/00_Master/MASTER_CHECKLIST.md) | D5 | Top-level readiness matrix referencing MG1–MG18 criteria. |
-| [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../02_Planning/00_Master/DECISION_REGISTER.md) | D5–D5.4 | Authoritative decision register indexing all 104 Batch D decisions and unnumbered directions; preserved accepted ADR authority. |
+| [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../02_Planning/00_Master/DECISION_REGISTER.md) | D5–D5.5 | Authoritative decision register indexing all 104 Batch D decisions and unnumbered directions; preserved accepted ADR authority. |
 | [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../02_Planning/00_Master/DECISION_DEBT.md) | D5, D5.1 | Reconciled `DEBT-MOB-10: One Profile → Multiple Mobile Phones Topology & Concurrency`. |
 | [`docs/02_Planning/00_Master/SPRINT_ROADMAP.md`](../02_Planning/00_Master/SPRINT_ROADMAP.md) | D5–D5.4 | Strategic roadmap reflecting Batch D5.4 reconciliation authored; M1 sequenced after reclosure and merge. |
 | [`docs/02_Planning/00_Master/DELIVERY_INDEX.md`](../02_Planning/00_Master/DELIVERY_INDEX.md) | D5, D5.1 | Master delivery index updated with 88-item WBS, active plan link, and MG1–MG18 links. |
@@ -91,7 +91,7 @@ The following table details all files touched across the MOBILE-ARCH promotion d
 - **Gate 1 (Batch D2 Review):** PASSED after narrow correction pass D2.1 (`19116d99`).
 - **Gate 2 (Batch D3 Review):** PASSED after narrow correction passes D3.1 and D3.2 (`5d860625`).
 - **Gate 3 (Batch D4 Review):** PASSED after narrow correction passes D4.1 and D4.2 (`ed1c71b7`).
-- **Closure Gate (Batch D5):** Initial result: `CORRECTIONS REQUIRED`. Batch D5.4 final semantic owner reference correction authored and verified; awaiting independent human and GPT closure re-review.
+- **Closure Gate (Batch D5):** Initial result: `CORRECTIONS REQUIRED`. Batch D5.5 final six traceability corrections authored and verified; awaiting independent human and GPT closure re-review.
 
 ### 3.2 Mechanical Verification Results
 

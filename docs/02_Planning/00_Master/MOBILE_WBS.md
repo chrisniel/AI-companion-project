@@ -436,7 +436,7 @@
 - **`MOB-INFER-004`**: Engine-Independent Local Inference Adapter
   - *Scope:* Build pluggable inference runtime abstraction for candidate mobile engines (e.g., llama.cpp Android / ExecuTorch), enforcing prompt evaluation timeouts.
   - *Responsibility:* Mobile
-  - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §2.2
+  - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §2.3
   - *Principal Dependencies:* `MOB-INFER-003`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
