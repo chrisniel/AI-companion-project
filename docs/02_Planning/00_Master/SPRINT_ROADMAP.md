@@ -1,7 +1,7 @@
 # AI Companion — PC V1 Strategic Sprint Roadmap
 
-> **Document Role:** High-level strategic milestone sequencing for the AI Companion PC V1 product delivery.  
-> **Status:** Active Canonical Roadmap  
+> **Document Role:** High-level strategic milestone sequencing for the AI Companion PC V1 product delivery.
+> **Status:** Active Canonical Roadmap
 > **Authority Precedence:** Replaces and supersedes historical monolithic roadmaps. Active sprint execution is tracked in [`docs/01_Tracking/task.md`](../../01_Tracking/task.md). Detailed feature steps reside in active plans under [`docs/02_Planning/01_Plans/`](../01_Plans/).
 
 ---

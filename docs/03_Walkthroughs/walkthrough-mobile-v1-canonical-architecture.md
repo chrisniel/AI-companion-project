@@ -22,7 +22,7 @@ The MOBILE-ARCH delivery establishes the complete canonical architecture, synchr
 - **Phase 4 Planning Integration ([`MOBILE_WBS.md`](../02_Planning/00_Master/MOBILE_WBS.md) & [`MOBILE_CHECKLIST.md`](../02_Planning/00_Master/MOBILE_CHECKLIST.md)):** Built a complete 65-item Work Breakdown Structure across 11 streams, linked with the master planning spine, alongside the Mobile readiness audit mapped to MG1–MG12 and verification layers L1–L5 (55 readiness rows).
 
 > [!IMPORTANT]
-> **NO PRODUCTION MOBILE IMPLEMENTATION IS DELIVERED BY MOBILE-ARCH.**  
+> **NO PRODUCTION MOBILE IMPLEMENTATION IS DELIVERED BY MOBILE-ARCH.**
 > This delivery consists strictly of canonical architecture, documentation, and engineering master planning.
 > - The existing Kotlin/Jetpack Compose codebase under `android/` remains an exploratory prototype and reference evidence only.
 > - Production Flutter Mobile implementation is classified as `APPROVED TARGET / NOT STARTED`.
@@ -246,27 +246,27 @@ Future implementation of the Mobile Companion must strictly respect the followin
 
 To ensure that future developers and agents can navigate the Mobile architecture without ambiguity, the 12 semantic questions from the canonical plan are answered below using verified repository truth:
 
-1. **What works when Mobile is offline?**  
+1. **What works when Mobile is offline?**
    Tasks (create, update, status `SET_COMPLETION`, delete with durable outbox logging); replicated Reminder/Alarm occurrences (exact alarms via `AlarmManager.setAlarmClock()` conditional on exact-alarm capability/access, tolerant Reminders); local notification/alarm presentation, snooze, and dismiss; cached history/context viewing; device-local settings; and on qualified Tier 2/3 devices with installed model: local conversational text turns; device-local TTS playback where approved engine installed. What does NOT work offline: Host LLM inference, Host tools, Host memory writes, WebSocket voice streaming to PC, PC-side model management, profile switching.
-2. **What data is authoritative on PC vs Mobile?**  
+2. **What data is authoritative on PC vs Mobile?**
    PC Host is authoritative for: Account/Profile configuration, master conversation history after reconciliation, Memory (FTS5 search index), Task/Reminder/Alarm/Routine canonical entities, PC `SchedulerService` canonical scheduling truth, global entity revisions, and model/tool/runtime authority where assigned by canonical specs. Mobile is authoritative for: device-local settings, device-local third-party provider credentials, local replica/outbox state, and local occurrence delivery state / Android scheduling adapters.
-3. **How are offline writes reconciled?**  
+3. **How are offline writes reconciled?**
    Offline mutations are written to a durable SQLite transactional outbox with UUID `mutation_id` and the entity's `base_revision`. Causal ordering is preserved; pending CREATE dependencies use safe coalescing or explicit ordering. When connection to Host resumes, outbox entries are dispatched. Host checks `base_revision`: if matching current revision, mutation is applied and revision incremented. If mismatch, Host returns typed `CONFLICT_DETECTED` with current entity state. Generic stale edits result in `CONFLICT_DETECTED` unless an explicitly safe/idempotent domain rule applies (such as desired-state task completion `SET_COMPLETION(completed=bool)`). No client Last-Write-Wins. Disconnected conversation turns (local or cloud) import as immutable whole-turn blocks with provenance tags without Host re-generation or tool replay.
-4. **Can Mobile switch Profiles itself?**  
+4. **Can Mobile switch Profiles itself?**
    No. A satellite device binds strictly to one Profile ([`ADR-0018`](../04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)). Profile administration is exclusively performed on the PC Host.
-5. **How is revocation handled while disconnected?**  
+5. **How is revocation handled while disconnected?**
    While fully offline, Mobile cannot know that PC Admin revoked it and may continue operating against cached/local state. On next network contact, authoritative `DEVICE_REVOKED` causes: device credential invalidation/removal, replicated Profile DB/cache erasure, pending Profile outbox cancellation/clearing, and re-enrollment requirement. Third-party user/provider API keys remain preserved. In contrast, `CREDENTIAL_EXPIRED` / `ROTATION_REQUIRED` are non-destructive: pause sync, require re-authentication/token rotation, and preserve Profile data. `PROFILE_INACTIVE` causes quarantine/disabled access, not destructive wipe. `PROFILE_PURGED` causes permanent Profile replica removal.
-6. **Is local inference required for the app?**  
+6. **Is local inference required for the app?**
    No. Local Mobile inference is strictly capability-dependent and optional-auxiliary. The app functions completely without local models.
-7. **Is Health Connect in Mobile V1?**  
+7. **Is Health Connect in Mobile V1?**
    No. Real Health Connect integration and biometric sync are classified as Mobile Later (Post-V1) in [`health-and-wearables.md`](../04_Architecture/03_Integrations/health-and-wearables.md). The mock health UI in the Kotlin prototype is sequestered and non-normative.
-8. **What happens to Alarms after reboot/process death?**  
+8. **What happens to Alarms after reboot/process death?**
    Android OS alarms survive application process death when already registered. Device reboot clears OS alarm registrations. Upon system boot, `ACTION_BOOT_COMPLETED` handling ([`MOB-SCHED-005`](../02_Planning/00_Master/MOBILE_WBS.md)) reloads active occurrence data from durable local SQLite storage, checks `canScheduleExactAlarms()`, and re-registers alarms as permitted.
-9. **Which Reminder/Alarm behavior works disconnected?**  
+9. **Which Reminder/Alarm behavior works disconnected?**
    Alarms: local ringing, dismiss, and snooze operate disconnected. Punctual exact delivery is conditional on exact-alarm capability/access (`canScheduleExactAlarms()`); if unavailable, state must truthfully become degraded/unarmed. Reminders: use best-effort/inexact/tolerant scheduling and may be delayed or batched by Android/Doze. Full-screen intent presentation is conditional, restricted on modern Android, and cannot be guaranteed.
-10. **Which credentials remain permanently device-local?**  
+10. **Which credentials remain permanently device-local?**
     Third-party provider API credentials (e.g. cloud LLM, STT, or TTS keys) are permanently device-local, stored in Android Keystore, and never automatically synced to PC or other devices. Device credentials / tokens are protected locally in Keystore and used to authenticate to the Host; the Host maintains corresponding Device enrollment and validation data.
-11. **What Flutter boundaries are shared vs platform-specific?**  
+11. **What Flutter boundaries are shared vs platform-specific?**
     Shared boundary: stable domain contracts, generated/shared API contracts, reusable design primitives, authentication abstractions, and suitable platform-neutral repository/service interfaces. Platform-specific implementations: Android Keystore, WorkManager, AlarmManager, Android audio/focus HAL, lifecycle/background adapters, and Windows tray/host integrations. The architecture explicitly does NOT mandate identical business/state implementation where platform constraints differ.
-12. **What is implemented today vs approved target?**  
+12. **What is implemented today vs approved target?**
     CURRENT / IMPLEMENTED TODAY includes: existing FastAPI backend, React Web supported client/dev harness, exploratory Kotlin/Compose Android prototype (`android/`), legacy `owner_id`, shared `COMPANION_API_KEY`, and existing `client_message_id` uniqueness. TARGET / NOT IMPLEMENTED includes: production Flutter Mobile application, Profile/Device schema and per-device credentials, client-generated Task identity acceptance, mutation-id dedup, Host entity revisions, cursor/delta sync, disconnected whole-turn import, Mobile local inference production runtime, and Mobile Golden implementation evidence (MG1–MG12 / L1–L5).

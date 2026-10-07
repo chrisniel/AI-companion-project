@@ -1,7 +1,7 @@
 # AI Companion — PC V1 Master Delivery Index
 
-> **Document Role:** Canonical delivery and planning index linking product milestones, work breakdown structure (WBS), active implementation plans, and release gates.  
-> **Status:** Active Canonical Planning Index  
+> **Document Role:** Canonical delivery and planning index linking product milestones, work breakdown structure (WBS), active implementation plans, and release gates.
+> **Status:** Active Canonical Planning Index
 > **Authority Precedence:** This document coordinates delivery sequencing. Normative architecture is owned by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) and focused domain specifications. Active sprint tracking resides in [`docs/01_Tracking/task.md`](../../01_Tracking/task.md). Detailed feature steps reside in active plans under [`docs/02_Planning/01_Plans/`](../01_Plans/).
 
 ---
@@ -19,7 +19,7 @@ docs/02_Planning/00_Master/
 ├── BACKLOG.md             ◄── Categorized backlog (PC V1, PC Later, Mobile, Rejected)
 ├── SPRINT_ROADMAP.md      ◄── Strategic milestone sequence (M0 through M5 + Golden)
 ├── MASTER_CHECKLIST.md    ◄── PC V1 implementation, verification, and Golden checklist
-├── MOBILE_CHECKLIST.md    ◄── Mobile V1 readiness checklist and Golden MG1–MG12
+├── MOBILE_CHECKLIST.md    ◄── Mobile V1 readiness checklist and Golden MG1–MG18
 └── DECISION_DEBT.md       ◄── Open implementation details and evidence-needed items
 ```
 

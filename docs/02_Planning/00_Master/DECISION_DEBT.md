@@ -1,7 +1,7 @@
 # AI Companion — Decision Debt & Open Implementation Details (PC V1 & Mobile V1)
 
-> **Document Role:** Authoritative catalog of approved implementation-open details, benchmark-dependent parameters, and deferred improvement candidates.  
-> **Status:** Active Canonical Planning Baseline  
+> **Document Role:** Authoritative catalog of approved implementation-open details, benchmark-dependent parameters, and deferred improvement candidates.
+> **Status:** Active Canonical Planning Baseline
 > **Governance Invariant:** PC V1 architecture remains FROZEN. Approved Mobile V1 architecture is also indexed here, with Mobile implementation-open details tracked separately under Section 2 (`MOBILE V1 OPEN IMPLEMENTATION DETAIL`). This register captures technical mechanism choices, empirical evidence needs, and implementation parameters that were deliberately left open without reopening agreed architecture.
 
 ---
@@ -136,3 +136,8 @@
   - *Context:* Full-duplex WebSocket audio transport connecting to PC Runtime canonical STT/TTS/VAD providers is mandatory (`mobile-capabilities-and-runtime.md` §3.1).
   - *Open Detail:* Evaluation between Linear PCM 16-bit vs Opus 16 kHz compressed frames for bandwidth and latency optimization.
   - *Resolution Point:* Stream `MOB-VOICE-001` implementation plan.
+- **DEBT-MOB-10: One Profile → Multiple Mobile Phones Concurrency & Reconciliation**
+  - *Context:* The architectural baseline locks that each Mobile Satellite device binds to exactly one Profile, and the PC Host Admin owns device enrollment, profile binding, and revocation ([MOBILE_SYSTEM_BASELINE.md](../../04_Architecture/MOBILE_SYSTEM_BASELINE.md) §2, [profiles-and-devices.md](../../04_Architecture/02_Data_and_Security/profiles-and-devices.md) §3).
+  - *Settled Architecture:* 1 Satellite Phone = 1 Profile binding; PC Host is the authoritative Account/Profile Admin and owns device enrollment, credential rotation, and revocation.
+  - *Open Detail:* Concurrency control, distributed cursor arbitration, and multi-device outbox reconciliation rules when two or more mobile phones concurrently sync mutations, alarms, and disconnected conversation turns against the same Profile.
+  - *Resolution Point:* Post-V1 Mobile synchronization refinement / multi-device concurrency planning.

@@ -1,7 +1,7 @@
 # Documentation Authority Model & Global Navigation Map
 
-> **Document Role:** Canonical entry-point guide and sole global authority map for all human contributors and AI agents.  
-> **Status:** Active Canonical  
+> **Document Role:** Canonical entry-point guide and sole global authority map for all human contributors and AI agents.
+> **Status:** Active Canonical
 > **Last Updated:** 2026-10-04 (Mobile V1 Architecture & Planning Integration)
 
 ---
@@ -79,7 +79,7 @@ Use this matrix to identify the single canonical owner for specific questions:
 | Mobile Work Breakdown Structure, stream IDs, or delivery ownership | [`docs/02_Planning/00_Master/MOBILE_WBS.md`](../02_Planning/00_Master/MOBILE_WBS.md) |
 | Backlog categorization (Committed vs. Later vs. Rejected) | [`docs/02_Planning/00_Master/BACKLOG.md`](../02_Planning/00_Master/BACKLOG.md) |
 | Readiness checklist across specs, code, and Golden Gate | [`docs/02_Planning/00_Master/MASTER_CHECKLIST.md`](../02_Planning/00_Master/MASTER_CHECKLIST.md) |
-| Mobile V1 readiness checklist across architecture, implementation, and MG1–MG12 | [`docs/02_Planning/00_Master/MOBILE_CHECKLIST.md`](../02_Planning/00_Master/MOBILE_CHECKLIST.md) |
+| Mobile V1 readiness checklist across architecture, implementation, and MG1–MG18 (D-MOBILE-VERIFY-01..03) | [`docs/02_Planning/00_Master/MOBILE_CHECKLIST.md`](../02_Planning/00_Master/MOBILE_CHECKLIST.md) |
 | Unresolved implementation details or technical debt | [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../02_Planning/00_Master/DECISION_DEBT.md) |
 | Mobile Companion architecture, baseline, and decision ledger | [`docs/04_Architecture/MOBILE_SYSTEM_BASELINE.md`](../04_Architecture/MOBILE_SYSTEM_BASELINE.md) |
 | Mobile offline operation, sync engine, conflict resolution, or wire protocol | [`docs/04_Architecture/04_Infrastructure/mobile-offline-and-sync.md`](../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) |

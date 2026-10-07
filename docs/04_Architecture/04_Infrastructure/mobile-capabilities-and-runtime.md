@@ -340,9 +340,9 @@ The mobile engine registers an active listener with `PowerManager.OnThermalStatu
 
 ---
 
-## 7. C6: Testing and CI Architecture Boundary
+## 7. C6: Testing and CI Architecture Boundary (`D-CI-01` through `D-CI-04`, `D-MOBILE-VERIFY-01` through `03`)
 
-### 7.1 Five-Layer Verification Matrix
+### 7.1 Tiered Mobile Verification Architecture (`D-CI-03`)
 
 Verification of the Mobile Companion is partitioned into **five explicit testing layers (L1 through L5)**:
 
@@ -354,6 +354,8 @@ Verification of the Mobile Companion is partitioned into **five explicit testing
 | **L4: Hardware & Audio Tests** | Physical Android Hardware | Real audio focus during incoming phone calls, Bluetooth headset disconnect, exact alarm firing out of deep overnight Doze, sustained thermal throttling behavior under local inference load. | PHYSICAL DEVICE / MANUAL GOLDEN (Physical hardware pass) |
 | **L5: Host Integration Tests** | Multi-Process / Local Network | Mobile client communicating with running PC Local AI Runtime FastAPI harness: delta cursor sync, `STALE_CURSOR` re-baseline, `DEVICE_REVOKED` wipe, SSE streaming resilience across disconnects. | FUTURE INTEGRATION AUTOMATION (Integration harness) |
 
+*Cadence & Scope Invariant:* Full L3, L4, and L5 suites are **not** required for every trivial UI or pure Dart change. Hardware-dependent qualification belongs at suitable milestone gates, including thermal behavior, exact alarms, physical audio, Health Connect, and local model capability qualification.
+
 #### 7.1.1 Evidence-Driven L3 Emulator Matrix Specification
 Rather than hardcoding arbitrary fixed emulator versions, the L3 platform lifecycle matrix is governed by observable platform behavioral boundaries:
 1. **Target SDK/API Boundary:** Validates adherence to current target platform policies and runtime contracts (modern target API level).
@@ -364,33 +366,91 @@ Rather than hardcoding arbitrary fixed emulator versions, the L3 platform lifecy
    - *Foreground Services (API 34 / Android 14):* Typed foreground service declaration (`FOREGROUND_SERVICE_MICROPHONE`), while-in-use restrictions, and prohibition of background FGS starts without visible UI initiation.
    - *Process Lifecycle & Timeouts (API 35+ / Android 15+):* Strict foreground service runtime limits, enhanced memory-pressure trimming, and 16 KB page-size compatibility.
 
-### 7.2 CI Boundary Rule
-In accordance with project rules, **Batch C modifies ZERO existing CI workflow files** (`.github/workflows/`, `scripts/ci_policy.py`). The mobile testing architecture defines the verification contract for future mobile implementation tasks without destabilizing current PC V1 CI pipelines.
+### 7.2 Future Path-Scoped CI Routing & Shared Package Fan-Out (`D-CI-01`, `D-CI-02`)
+
+- **Future Path-Scoped CI Routing (`D-CI-01`):** In the unified monorepo, CI runs path filtering across distinct component lanes:
+  ```text
+  classifier
+  ├── backend
+  ├── contract
+  ├── frontend-web
+  ├── docs
+  ├── flutter-shared
+  ├── flutter-desktop
+  └── flutter-mobile
+  ```
+  *Status:* Architecture direction only. Exact workflow YAML, path globs, job names, runner images, and cache keys remain implementation-open.
+- **Shared Package Fan-Out (`D-CI-02`):** Future changes fan out deterministically across affected client boundaries:
+  - Shared Flutter package change (`packages/`) $\to$ triggers both Desktop verification and Mobile verification.
+  - Desktop-only change (`apps/desktop/`) $\to$ triggers Desktop verification.
+  - Mobile-only change (`apps/mobile/`) $\to$ triggers Mobile verification.
+  - Android-native platform adapter change (`apps/mobile/android/`) $\to$ triggers Mobile verification and relevant Android platform tests.
+
+### 7.3 CI Implementation Boundary: No Flutter CI Implementation Yet (`D-CI-04`)
+In accordance with project rules, **Batch D modifies ZERO existing CI workflow files** (`.github/workflows/ci.yml`, `scripts/ci_policy.py`). No active Flutter CI jobs or placeholder jobs are added before the Flutter workspace and real dependencies are established in Milestone M1. This documentation defines future routing only without destabilizing current PC V1 CI pipelines.
 
 ---
 
-## 8. C7: Mobile Golden Acceptance Architecture
+## 8. C7: Mobile Golden Acceptance Architecture (`D-MOBILE-VERIFY-01` through `D-MOBILE-VERIFY-03`)
 
-Analogous to the 14 Golden verification groups for PC V1, the Mobile Companion establishes **12 Mobile Golden Acceptance Groups (MG1 through MG12)** for release qualification:
+Analogous to the 14 Golden verification groups for PC V1, the Mobile Companion establishes **18 Mobile Golden Acceptance Groups (MG1 through MG18)** for release qualification (`D-MOBILE-VERIFY-01`).
 
-- **MG1 — Enrollment & Identity:** Device pairing flow, revocable device token issuance, single-Profile binding enforcement, rejection of arbitrary profile assertions in request payloads.
-- **MG2 — Platform Secure Storage & Transport:** Android Keystore protection for device token and provider API keys, zero plaintext storage, protected transport via TLS/HTTPS or approved encrypted overlay (Tailscale), rejection of direct port forwarding.
-- **MG3 — Connected Host Operation:** Bidirectional communication with PC Local AI Runtime, REST turn submission, SSE token streaming, turn queue completion across transient client disconnects.
-- **MG4 — Offline Durability & Outbox:** Fully functional offline Task creation, modification, and completion (`SET_COMPLETION`); durable outbox persistence surviving process death and OS reboot.
-- **MG5 — Synchronization & Conflict Reconciliation:** Delta cursor synchronization, typed `CONFLICT_DETECTED` handling with user conflict presentation, typed `STALE_CURSOR` full re-baseline, retry idempotency deduplication (`mutation_id`).
-- **MG6 — Punctual Offline Alarms & Reminders:** Alarm scheduling via `AlarmManager.setAlarmClock()`, precise ringing while device is in deep Doze conditional on exact-alarm capability/access, floating timezone recalculation, single-device duplicate firing suppression, and graceful degraded indication when exact alarm access is unavailable.
-- **MG7 — System Lifecycle & Permission Resilience:** Alarm re-registration following `ACTION_BOOT_COMPLETED`, recovery when `SCHEDULE_EXACT_ALARM` or `POST_NOTIFICATIONS` is revoked, graceful degradation warnings.
-- **MG8 — Voice Streaming & Audio Lifecycle:** Native mic capture, full-duplex WebSocket audio streaming to PC Host, immediate local barge-in playback muting, immediate muting on competing audio focus loss (`AUDIOFOCUS_LOSS`), pausing on unsafe route changes (`ACTION_AUDIO_BECOMING_NOISY`), device-local TTS vocalization when offline on qualifying devices, and graceful truthful degradation to text mode when unsupported.
-- **MG9 — Mobile Inference & Hardware Tiers:** Capability detection across Tiers 0–3 based on runtime preflight evidence, clean UI degradation when unsupported, resident model memory budget enforcement, D6 mobile lifecycle integrity.
-- **MG10 — Thermal, Battery & Power Governance:** WorkManager compliance with Doze maintenance windows, thermal throttling backoff under severe thermal state, graceful model unloading under modern `onTrimMemory` and memory pressure signals without process crash.
-- **MG11 — Security, Revocation & Privacy:** Authoritative discovery of `DEVICE_REVOKED` triggering local revocation cleanup, preservation of third-party user keys, backup exclusion verification, quarantine on `PROFILE_INACTIVE`, permanent wipe on `PROFILE_PURGED`.
-- **MG12 — Cross-Device Consistency:** Independent device alarm ringing without premature cancellation by passive PC notifications; cross-device alarm dismissal synchronization upon explicit user dismissal.
+*(Historical Note: The earlier 12-group structure MG1–MG12 defined in Batch C was an interim baseline expanded and superseded by this comprehensive MG1–MG18 architecture).*
+
+### 8.1 Exact Eighteen Golden Acceptance Groups (`D-MOBILE-VERIFY-01`)
+
+- **MG1 — Enrollment, Identity & Profile Isolation:** Device pairing flow, revocable device token issuance, single-Profile binding enforcement (`D-PHONE-01B`), rejection of arbitrary profile assertions, PC Host Account/Profile Admin authority, reauth/revocation lifecycle (`UNENROLLED`, `ENROLLED_ACTIVE`, `ENROLLED_REAUTH_REQUIRED`, `REVOKED`), multi-device profile isolation.
+- **MG2 — Security, Secrets & Protected Transport:** Supported Android platform-protected secure storage backed by Android Keystore, zero plaintext credentials, provider API keys remain device-local, protected transport via TLS/HTTPS or approved encrypted overlay (Tailscale), strict rejection of direct router port forwarding, Android backup/data-extraction exclusion rules (`dataExtractionRules`, `backup_rules.xml`).
+- **MG3 — Connected Companion Operation:** Bidirectional communication with PC Local AI Runtime, authenticated REST endpoints, SSE token streaming, full-duplex WebSocket voice streaming (`D-PHONE-14A`), connected delta synchronization, PC Host canonical scheduler and AI runtime authority.
+- **MG4 — Standalone Mobile Core:** Core companion productivity operating deterministically without requiring local generative LLM (`D-PHONE-02`): Home tab glanceable cards (`D-PHONE-UX-02`), Schedule tab view (`D-PHONE-UX-04`), offline Task CRUD, Mobile-created Reminders (`D-PHONE-10`) and Alarms (`D-PHONE-11`), cached Character/Memory viewing, Activity inbox (`D-PHONE-UX-05`), device-local Settings, model management, local notifications, and truthful capability degradation without blocking modals (`D-PHONE-UX-07`).
+- **MG5 — Durable Offline State & Synchronization:** Relational local persistence (sandbox SQLite `MODE_PRIVATE`), durable outbox surviving process death and device reboot, monotonic revision tracking, client-generated entity UUIDs (`mutation_id`), cursor pagination, typed `CONFLICT_DETECTED` with conflict receipts, typed `STALE_CURSOR` full re-baseline, tombstones, rejection of client timestamp LWW, asymmetric per-domain reconciliation.
+- **MG6 — Conversations, Branches & Turn Control:** REST + SSE turn submission when connected, offline local turns on evidence-qualified devices (`D-PHONE-01`), separately authorized Cloud turns when configured, stable turn message IDs (`client_message_id`), provenance tracking (`MOBILE_LOCAL_INFERENCE`, `MOBILE_CLOUD_INFERENCE`), zero Host re-generation on sync, causal conversation branching without timestamp LWW (`D-SHARED-CONV-01`), branch comparison, turn queue state machine (`QUEUE`, queued edit/remove before execution; `D-SHARED-CONV-03`), `INTERRUPT_AND_SEND`, safe regeneration without side-effect replay (`D-SHARED-CONV-03A`).
+- **MG7 — Context, Memory & Historical Recall:** PC Host canonical D7 Memory authority, pending explicit Memory intent outbox (`D-PHONE-08`), pending local memory overlay (`D-PHONE-08A`), selective offline Memory replica (`D-PHONE-09`), Always Available / pinning, conversation summaries, raw history access with compaction truth (`D-SHARED-AI-02`), Unified Context Retrieval (`D-SHARED-AI-03`), Profile/Character memory isolation, visual observations do not automatically become Memory (`D-SHARED-VISION-01`), Health data distinct from Memory (`D-PHONE-15C`), ordinary offline chat does not silently create canonical Memory.
+- **MG8 — Character, Mood & Companion Continuity:** Shared D11 Character, Personality, and Emotion architecture (`D-PHONE-06`), cached Character instances, Character-bound conversations, shared bounded Mood, typed offline emotion event capture and outbox sync (`D-PHONE-EMO-01`), zero Profile data reattribution on Character switch, lightweight visual mood presence with guaranteed emoji/mood-glyph fallback (`D-PHONE-UX-10`), decoupled Future Presence (`P-SHARED-PRESENCE-01`).
+- **MG9 — Tasks, Reminders, Alarms & Temporal Semantics:** Offline Task CRUD (`D-SHARED-SCHED-01`), Mobile-origin Reminder authoring and local delivery (`D-PHONE-10`), Mobile-origin Alarm authoring and precise delivery (`D-PHONE-11`), Host-origin definition protection offline (read-only definitions; local occurrence dismiss/snooze), stable UUIDs, timezone shift semantics (one-shot, floating wall-clock, fixed-timezone recurrence), temporal intent extraction and deterministic resolution (`D-SHARED-SCHED-04..04E`), conversational clarification for material ambiguities only, parity testing across standard phrases (e.g. *"in 20 minutes"*, *"tomorrow evening"*, *"every weekday at 7"*, *"7 AM or PM?"*, *"next Friday"*).
+- **MG10 — Cross-Device Alert Arbitration:** Cross-device alert arbitration policy (`D-SHARED-SCHED-02`): Reminder arbitration favors duplicate suppression across devices; Alarm arbitration favors reliability (primary device rings, standby devices armed, escalation after grace period, passive display does not equal acknowledgment), explicit dismiss/snooze propagation, disconnected duplicate Alarm preferred over missed Alarm.
+- **MG11 — Routines, Check-ins & Companion Surfaces:** Bounded Host-authorized Routine occurrence replication (`D-PHONE-12`), local enrichment (`D-PHONE-12A`), connected authoring only (`D-PHONE-12B`), local occurrence suppression (`D-PHONE-12C`), zero autonomous recurrence extension offline, missed occurrence handling, deterministic fallback, non-coercive Character-aware check-in tone (`D-PHONE-12D`, `12E`), in-app Home check-in card, rich notification, approved V1 home-screen widget target, optional companion speech enrichment (`D-SHARED-SCHED-03`).
+- **MG12 — Local Tools & Current Information:** Standalone Mobile Tool Gateway under Decision D9 (`D-PHONE-13`), approved local tool execution (Tasks, Mobile Reminders/Alarms, occurrence actions, Schedule reads, cached Memory/history/Character status reads; `D-PHONE-13A`, `13B`), current-information tools (Web Search, WebFetch, Weather; `D-PHONE-13D`), D9 policy enforcement, tool capability qualification and deterministic user confirmations (`D-PHONE-13F`), committed side-effect replay prohibition, internet access decoupled from Cloud LLM authorization (`D-PHONE-13C`), strict exclusion of unrestricted shell/filesystem/admin execution (`D-PHONE-13E`).
+- **MG13 — Voice & Speech Composition:** Composable Mobile Voice architecture (`D-PHONE-04`, `D-PHONE-14`), full-duplex connected WebSocket streaming to PC Runtime (`D-PHONE-14A`), conditional device-local TTS (`D-PHONE-14B`), conditional device-local STT on qualified devices (`D-PHONE-14C`), full offline conversational Voice (`D-PHONE-14D`), Auto route selection (`D-PHONE-14E`), explicit session lifecycle with immediate barge-in muting (`D-PHONE-14F`), whisper.cpp research qualification direction (`D-PHONE-14G`), native platform audio ownership, audio focus protocols (`AUDIOFOCUS_LOSS`, `ACTION_AUDIO_BECOMING_NOISY`), lock-screen continuation under approved foreground-service rules, independently revocable Cloud STT / TTS / LLM permissions, transient audio buffer release, strict prohibition of ambient background listening or eavesdropping.
+- **MG14 — Local Models, Resources & Capability Qualification:** Replaceable local model architecture (`D-PHONE-01C`), five-state lifecycle (`installed`, `loaded / resident`, `active`, `unloaded`, `removed`), single resident generative LLM cap (`--models-max 1`; `D-PHONE-05`), vendor-neutral execution with CPU broad fallback (`D-PHONE-03`), empirical task-scoped qualification, runtime truthfulness (requested vs actual execution backend), Progressive Resource Governor (`D-PHONE-05A`), thermal/battery throttling backoff, graceful model unloading under memory pressure (`onTrimMemory`) without process crash, Shared Context Budget Manager (`D-SHARED-AI-01`), capability qualification records.
+- **MG15 — Health-Aware Companion:** Conditional Mobile V1 Health Connect integration (`D-PHONE-15`), granular metric permissions (`D-PHONE-15A`), read-only ingestion (`D-PHONE-15B`), source and provenance tracking, measurement timestamp preservation, freshness evaluation (stale != zero), metric ingestion (steps, sleep, heart rate, SpO₂, blood pressure, body temperature, distance, active calories where source supplies them), shared normalized PC/Mobile context parity (`D-PHONE-15D`, `D-SHARED-HEALTH-01`), Health Context decoupled from Memory (`D-PHONE-15C`), non-clinical wellness guardrails (`D-SHARED-HEALTH-02`), health-aware check-ins (`D-SHARED-HEALTH-03`), health cloud egress isolation (default deny, separate authorization; `D-SHARED-HEALTH-04`), graceful absence on unsupported devices.
+- **MG16 — Multimodal Vision:** Conditional Mobile V1 multimodal architecture (`D-PHONE-16`), camera still capture and gallery photo selection as input adapters (`D-PHONE-16A`), multimodal route selection (PC Host, qualified Mobile local VLM, separately authorized Cloud multimodal, unavailable; `D-PHONE-16B`), no silent cloud egress, task-family empirical vision qualification (`D-PHONE-16C`), offline attachment and turn persistence without Host re-generation (`D-PHONE-16D`), explicit still-image capture only without background/ambient streaming (`D-PHONE-16E`), visual observations do not automatically become Memory (`D-SHARED-VISION-01`).
+- **MG17 — Mobile UX, Accessibility & Personalization:** Canonical Mobile Companion Shell (`D-PHONE-UX-01`), icon-first navigation with accessibility labels (`D-PHONE-UX-01A`), large-font scaling and screen-reader semantics, hybrid visual design language (Minimalist foundation, selective Neumorphism, contextual Glass / Liquid Glass; `D-PHONE-UX-08`), appearance themes (OLED default, Dark, Light, System), reduced-motion and reduced-effects support, compact truthful capability status presentation (`D-PHONE-UX-06`), graceful standalone UX (`D-PHONE-UX-07`), Companion conversational language decoupled from app UI localization (`D-PHONE-UX-09`), extensible language registry (`D-SHARED-LANG-01`), modality-aware language qualification (`D-SHARED-LANG-02`), code-switching where qualified, lightweight mood presence with guaranteed emoji/mood-glyph fallback (`D-PHONE-UX-10`).
+- **MG18 — Full Companion Journey:** Integrated end-to-end product verification journey (`D-MOBILE-VERIFY-03`) validating cross-subsystem coherence.
+
+### 8.2 Granular Qualification Classes (`D-MOBILE-VERIFY-02`)
+
+Golden assertions establish granular qualification classes rather than simplistic group-wide labels:
+
+| Qualification Class | Architectural Meaning & Release Expectation | Representative Examples |
+| :--- | :--- | :--- |
+| **`REQUIRED`** | Mandatory capability or policy invariant that must execute and pass across all Mobile V1 releases regardless of device tier. | Offline Task CRUD (`D-SHARED-SCHED-01`); local outbox durability; single-Profile binding; Keystore protection; deterministic tool confirmations; Health-to-cloud default-deny policy; production-capable local LLM architecture path (`D-PHONE-01`). |
+| **`CONDITIONAL`** | Capability that executes when hardware/platform tier, required OS services, local models, or explicit user permissions are present. Absences on unsupported/unqualified hardware do **not** fail the Mobile V1 release, provided the client detects qualification truthfully and verifies graceful degraded/unavailable operation. | Device-local LLM execution on qualifying devices; local STT on qualifying devices; Health Connect ingestion on Android devices with Health Connect; local VLM still-image inference. |
+| **`OPTIONAL`** | User-configured, environment-optional, or threat-model dependent features. | Full database encryption at rest (SQLCipher); app-level biometric screen lock. |
+| **`DEFERRED`** | Approved long-term architectural directions or research concepts with zero V1 implementation requirements. | Mobile AR companion presence (`P-PHONE-AR-01..02`); remote expression discovery (`P-PRESENCE-02`); always-on wake word; autonomous local routine authoring. |
+
+### 8.3 Integrated Full Companion Journey (`D-MOBILE-VERIFY-03`, MG18)
+
+MG18 serves as the final integrated product-level verification journey proving that the Mobile Companion behaves as a cohesive, resilient companion rather than an assortment of isolated subsystems:
+
+$$\begin{aligned}
+\text{Enroll Device} &\to \text{Bind Profile} \to \text{Establish Character} \to \text{Connected Sync} \to \text{Connected Turn Streaming} \\
+&\to \text{Disconnect PC Host} \to \text{Standalone Mobile Transition} \to \text{Local Turn (if qualified)} \\
+&\to \text{Create Task} \to \text{Create Mobile-Origin Reminder} \to \text{Routine/Check-In Presentation} \\
+&\to \text{Health Context (if available)} \to \text{Still-Image Vision (if available)} \to \text{Voice Composition} \\
+&\to \text{Reconnect PC Host} \to \text{Sync / Conflict Reconciliation} \to \text{Conversation Continuity} \to \text{Device Revocation}
+\end{aligned}$$
+
+*Verification Invariants:*
+- Conditional capabilities are exercised **when available, authorized, and qualified**; graceful absence or truthful fallback is verified when unavailable.
+- An unqualified mobile device does not fail MG18 simply because Health Connect is absent, local STT is uninstalled, or local VLM is unqualified.
+- Exact test counts, automated harness bindings, and device fleet matrix remain implementation-open.
 
 ---
 
 ## 9. C8: Cross-Domain Consistency Review
 
-A comprehensive coherence check across Batch A, Batch B, and Batch C confirms complete alignment:
+A comprehensive coherence check across Batches A, B, C, and D confirms complete alignment:
 
 1. **Authority Model:** PC Host remains sole Account/Profile Administrator (`ADR-0018`). Mobile operates strictly as an enrolled Satellite bound to 1 Profile.
 2. **Domain Synchronization:** Tasks, Reminders, and Alarms follow the asymmetric replication and revision rules established in `mobile-offline-and-sync.md`.
