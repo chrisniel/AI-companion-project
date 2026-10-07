@@ -597,6 +597,7 @@ def prepare_database_schema(
 
     Executes Alembic migrations in an isolated worker thread so that asyncio.run()
     inside migrations/env.py does not collide with an active event loop.
+    Application logging remains caller-owned during this programmatic upgrade.
     Returns the current Alembic revision string.
     """
     import concurrent.futures
@@ -615,6 +616,7 @@ def prepare_database_schema(
 
     def _run_upgrade():
         cfg = Config(str(ini_path))
+        cfg.attributes["application_owns_logging"] = True
         migrations_dir = ini_path.parent / "migrations"
         cfg.set_main_option("script_location", str(migrations_dir.resolve()))
         cfg.set_main_option("sqlalchemy.url", db_url)

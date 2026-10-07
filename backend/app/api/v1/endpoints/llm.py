@@ -3,6 +3,7 @@
 import json
 import time
 import uuid
+from contextlib import aclosing
 from typing import AsyncGenerator, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -163,26 +164,28 @@ async def create_chat_completion(
 
             # Content token deltas
             try:
-                async for token in provider.generate_stream(
+                async with aclosing(provider.generate_stream(
                     messages=internal_messages,
                     temperature=request.temperature,
                     max_tokens=request.max_tokens or 1024,
-                ):
-                    chunk = ChatCompletionStreamChunk(
-                        id=completion_id,
-                        created=created_ts,
-                        model=model_name,
-                        choices=[
-                            ChatCompletionStreamChoice(
-                                index=0,
-                                delta=ChatCompletionDelta(content=token),
-                            )
-                        ],
-                    )
-                    yield f"data: {chunk.model_dump_json()}\n\n"
-            except Exception as e:
-                error_payload = {"error": {"message": str(e), "type": "runtime_error"}}
+                )) as tokens:
+                    async for token in tokens:
+                        chunk = ChatCompletionStreamChunk(
+                            id=completion_id,
+                            created=created_ts,
+                            model=model_name,
+                            choices=[
+                                ChatCompletionStreamChoice(
+                                    index=0,
+                                    delta=ChatCompletionDelta(content=token),
+                                )
+                            ],
+                        )
+                        yield f"data: {chunk.model_dump_json()}\n\n"
+            except Exception:
+                error_payload = {"error": {"message": "Model generation failed.", "type": "runtime_error"}}
                 yield f"data: {json.dumps(error_payload)}\n\n"
+                return
 
             # Final stop chunk
             stop_chunk = ChatCompletionStreamChunk(
@@ -217,11 +220,11 @@ async def create_chat_completion(
             temperature=request.temperature,
             max_tokens=request.max_tokens or 1024,
         )
-    except Exception as e:
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Inference error: {str(e)}",
-        )
+            detail="Model generation failed.",
+        ) from None
 
     # Approximate token counts
     prompt_chars = sum(len(m.content) for m in request.messages)

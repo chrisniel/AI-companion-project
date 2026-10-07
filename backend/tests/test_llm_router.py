@@ -237,11 +237,14 @@ async def test_set_profile_rejected_during_active_generation(llama_provider):
     Profile changes MUST be rejected if generation is active.
     """
     llama_provider._active_profile = "balanced"
-    llama_provider._generation_active = True
-
-    success = await llama_provider.set_profile("eco")
-    assert success is False, "Profile change must be rejected when generation is active"
-    assert llama_provider._active_profile == "balanced"
+    llama_provider._llm = object()
+    lease = await llama_provider._acquire_generation()
+    try:
+        success = await llama_provider.set_profile("eco")
+        assert success is False, "Profile change must be rejected when generation is active"
+        assert llama_provider._active_profile == "balanced"
+    finally:
+        llama_provider._release_generation(lease)
 
 
 @pytest.mark.asyncio
@@ -856,5 +859,4 @@ async def test_no_regression_in_requested_vs_applied_profile_semantics(llama_pro
         assert active_status.applied_context_size == settings.PROFILE_BALANCED_CTX
         assert active_status.applied_gpu_layers == settings.PROFILE_BALANCED_GPU_LAYERS
         assert active_status.applied_mmproj_offload == settings.PROFILE_BALANCED_MMPROJ_OFFLOAD
-
 

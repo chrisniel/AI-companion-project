@@ -54,11 +54,15 @@ async def test_path_traversal_model_rejected():
 async def test_model_busy_rejects_unload():
     """Verify unload_model rejects while generation is active."""
     provider = LlamaCppProvider()
-    provider._generation_active = True
-    result = await provider.unload_model()
-    assert result is False
-    assert "MODEL_BUSY" in str(provider._last_error)
-    provider._generation_active = False
+    provider._llm = object()
+    lease = await provider._acquire_generation()
+    try:
+        result = await provider.unload_model()
+        assert result is False
+        assert "MODEL_BUSY" in str(provider._last_error)
+    finally:
+        provider._release_generation(lease)
+    assert await provider.unload_model() is True
 
 
 @pytest.mark.anyio

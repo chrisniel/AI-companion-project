@@ -8,6 +8,7 @@ SSE token streaming, idempotency, and concurrency controls.
 import asyncio
 import json
 import logging
+from contextlib import aclosing
 from dataclasses import dataclass
 from typing import Any, AsyncGenerator, List, Optional, Union
 import uuid
@@ -364,22 +365,22 @@ async def orchestrate_chat_stream(
             user_blocks: List[ContentBlock] = [*resolved_images, TextContent(type="text", text=user_text)]
             prompt_messages[-1] = ChatMessage(role="user", content=user_blocks)
 
-        provider._generation_active = True
         prompt_tokens = sum(_estimate_tokens(m.content) for m in prompt_messages)
 
-        async for token in provider.generate_stream(prompt_messages):
-            full_response_text += token
-            chunk_data = json.dumps({
-                "type": "token",
-                "content": token,
-                "choices": [
-                    {
-                        "delta": {"content": token},
-                        "index": 0,
-                    }
-                ],
-            })
-            yield f"data: {chunk_data}\n\n"
+        async with aclosing(provider.generate_stream(prompt_messages)) as tokens:
+            async for token in tokens:
+                full_response_text += token
+                chunk_data = json.dumps({
+                    "type": "token",
+                    "content": token,
+                    "choices": [
+                        {
+                            "delta": {"content": token},
+                            "index": 0,
+                        }
+                    ],
+                })
+                yield f"data: {chunk_data}\n\n"
 
         # Update assistant placeholder upon completion
         completion_tokens = _estimate_tokens(full_response_text)
@@ -442,6 +443,5 @@ async def orchestrate_chat_stream(
         yield f"data: {error_payload}\n\n"
         return
     finally:
-        provider._generation_active = False
         if conversation_lock.locked():
             conversation_lock.release()
