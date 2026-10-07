@@ -2,7 +2,17 @@
 
 Template Component: Docs_ProjectWorkflowStarterKit_v2.0
 
-These rules establish the operational baseline and boundaries for AI-assisted engineering across the AI Companion project. Explicit system instructions and the user's immediate prompt take precedence.
+These rules establish the master repository-wide governance contract and operational baseline for AI-assisted engineering across the AI Companion project.
+
+### Core Governance Hierarchy
+1. Antigravity / Gemini system requirements
+2. Repository ROOT `AGENTS.md` (authoritative across the entire repository)
+3. Valid scoped/nested repository agent rules, where supported
+4. Explicit current-task human authorization and constraints
+5. Activated skills / plugins / procedural workflows
+6. Default agent behavior
+
+The root `AGENTS.md` is binding on all tasks performed anywhere in this repository unless a more specific valid scoped rule applies. Scoped rules may specialize behavior in their valid scope, but cannot silently weaken repository-wide safety, authority, or scope rules. Skills and plugins are subordinate procedural aids, not independent authorities.
 
 For comprehensive procedural details on delivery gates, pull requests, walkthrough authoring, and commit workflows, consult [`docs/06_Guides/DELIVERY_WORKFLOW.md`](docs/06_Guides/DELIVERY_WORKFLOW.md).
 
@@ -26,7 +36,7 @@ For comprehensive procedural details on delivery gates, pull requests, walkthrou
   - **Supported Web Client & Dev Harness:** React 19, TypeScript 5.8, Vite 6, Tailwind CSS 4 (`frontend/web/`).
   - **Mobile Companion Prototype:** Kotlin, Jetpack Compose (`android/`, V1 follow-on).
 - **Execution Mode:** Read-only by default; inspect and report unless the user explicitly authorizes specific file edits or command execution.
-- **Git Authority:** Strictly read-only for AI agents. Chris alone executes all Git mutations (`add`, `commit`, `push`, `branch`, `merge`, `rebase`, `stash`, `tag`, `PR`).
+- **Git Authority:** Default read-only for AI agents. Chris alone executes all Git mutations (`add`, `commit`, `push`, `branch`, `merge`, `rebase`, `stash`, `tag`, `PR`) unless explicit, task-bounded mutation authorization is granted by Chris for the active task. Skills cannot self-authorize Git mutations.
 - **Protected Boundaries:** Never expose secrets; preserve uncommitted user work; do not alter Git/LFS configurations, remotes, external services, or dependencies without an approved task-specific plan. `SYSTEM_BASELINE.md` and canonical domain architecture own normative truth.
 
 ---
@@ -161,9 +171,57 @@ PLAN → IMPLEMENT → IMPLEMENTATION GATE → DOCUMENT → DOCUMENTATION GATE �
 
 ## 9. Git Authority & External Boundaries
 
-- **Chris Owns Git Writes:** Do NOT execute `git add`, `commit`, `push`, `branch`, `merge`, `checkout`, `switch`, `tag`, `stash`, `reset`, `restore`, or PR commands.
-- **Git Mutation Clarification:** `git checkout <ref> -- <path>` and `git restore ...` are Git mutations and MUST NOT be used by agents. Historical content must be read using `git show` and written through normal file editing only.
-- **Git Branch Preflight:** Before non-trivial edits, inspect the current Git branch (`git branch --show-current`). If on `develop` or `master`, STOP before editing. Recommend an appropriate task branch, ask Chris to create/switch/push it, and resume only after Chris confirms. Agents still perform no Git mutations.
-- **Stop After Verification:** Provide a clean Conventional Commit message proposal and stop for human execution.
+- **Default Read-Only for AI Agents:** Git operations default strictly to read-only (`git status`, `git diff`, `git log`, `git show`, `git rev-parse`, `git branch --show-current`, read-only history/inspection). Agents MUST NOT execute `git add`, `commit`, `push`, `branch`, `merge`, `checkout`, `switch` (altering state), `tag`, `stash`, `reset`, `restore`, worktree mutation, or PR commands unless Chris explicitly authorizes specific mutations for the current task.
+- **Git Mutation Authorization:** Chris owns Git writes. If Chris provides explicit current-task authorization (e.g. narrow: *"commit these changes"* or bounded: *"create branch, commit approved changes, push"*), agents may execute ONLY the authorized operations within that explicit boundary. Generic skill workflows or templates never constitute Git authorization. If unauthorized, prepare proposed commands and Conventional Commit messages for Chris.
+- **Git Mutation Clarification:** `git checkout <ref> -- <path>` and `git restore ...` are Git mutations and MUST NOT be used by agents without authorization. Historical content must be read using `git show` and written through normal file editing only.
+- **Git Branch Preflight:** Before non-trivial edits, inspect the current Git branch (`git branch --show-current`). If on `develop` or `master`, STOP before editing. Recommend an appropriate task branch, ask Chris to create/switch/push it (or confirm authorization), and resume only after confirmation.
+- **Stop After Verification:** Unless Git commits are explicitly authorized, provide a clean Conventional Commit message proposal and stop for human execution.
 - **Read-Only External Environment:** Treat system paths, external repositories, and package caches outside the workspace as strictly read-only.
 - **Model Storage Policy:** Git repository and LFS pointers reside on GitHub; private Hugging Face dataset stores LFS model binaries. Do not alter Git/LFS configurations without explicit authorization.
+
+---
+
+## 10. Automatic Skills, Plugins & Procedural Governance
+
+Skills and plugins are procedural execution aids, subordinate to this master repository governance contract:
+
+- **Repository Governance Authority:**
+  - This root `AGENTS.md` is authoritative repository-wide.
+  - If no valid scoped/nested rule applies to the active file or task, this root `AGENTS.md` governs completely.
+  - Scoped rules may specialize behaviors within their valid subtree, but must not silently weaken safety, authority, or scope boundaries established here.
+  - Activated skills and plugins MUST adapt their workflows to comply with repository rules; generic skill instructions never override repository governance.
+- **Git Authority Subordination:**
+  - Generic skill instructions (e.g., committing per task, merging branches, creating worktrees, opening PRs) do NOT constitute Git write authorization.
+  - When Git writes are unauthorized, skills MUST downgrade Git actions to read-only inspection, proposed branch names, proposed commit messages, and human handoff.
+  - Skills may never self-authorize Git mutations.
+- **Skill Non-Expansion Principle:**
+  - An activated skill cannot broaden task scope beyond the explicit user prompt and authorized path boundaries.
+  - Skills must strictly respect task file allowlists, task ignore boundaries, approved/frozen architecture decisions, current lifecycle stage, and explicit `STOP` boundaries.
+  - Procedural advice in skills to "also refactor", "also write a plan", "also normalize docs", or "also finish the branch" does not authorize those actions.
+- **Task Mode Adaptation:**
+  Repository tasks may declare an operational mode, or one may be inferred from prompt intent. Skills must adapt their behavior accordingly:
+  - `AUDIT` / `REVIEW` / `VERIFICATION`: Strictly read-only; no file modifications or system mutations unless explicitly authorized.
+  - `CORRECTION`: Surgical repair only; make only changes necessary to resolve and verify the identified defect. Do not broaden into unrelated cleanup, redesign, refactoring, or documentation normalization. Do not automatically brainstorm replacement designs or generate new plan suites.
+  - `PLANNING` / `OPEN DESIGN`: Brainstorming and plan authoring are permitted.
+  - `IMPLEMENTATION`: Execute the approved design/plan. Do not reopen frozen architecture or ADR decisions without an explicit unresolved defect or human instruction.
+  - `DEBUGGING`: Systematically investigate root cause. Escalating from a bug fix to architectural redesign requires explicit human approval if outside current task scope.
+  - `DOCUMENTATION`: Update closest canonical owner; do not normalize unrelated files or create loose substitute docs.
+  - `CLOSURE`: Perform only closure actions defined by the active workflow/task. Do not automatically begin the next lifecycle stage.
+- **Explicit Stop Boundaries:**
+  - Directives such as `STOP`, `WAIT`, `PAUSE`, `AWAIT REVIEW`, `DO NOT CONTINUE`, or `DO NOT START NEXT STAGE` strictly terminate automatic skill chaining.
+  - Continuous-execution skills (`executing-plans`, etc.) must halt at the declared boundary and present results for human review.
+- **Semantic Verification vs. Mechanical Evidence:**
+  Skills must distinguish mechanical checks from semantic truth:
+  - `file exists` $\neq$ file is canonical authority.
+  - `section exists` $\neq$ section owns the requirement.
+  - `hyperlink resolves` $\neq$ link points to current normative truth.
+  - `test command exits 0` $\neq$ all intended business invariants are satisfied.
+  - `command succeeded` $\neq$ intended state mutation actually occurred.
+  Completion claims must match the evidence actually gathered; never claim semantic verification based solely on superficial mechanical passes.
+- **Scan Boundaries & Context Preservation:**
+  - Skills performing broad repository scans (`rg --files`, documentation inventories) must first respect project-declared ignore boundaries (`docs/00_Drafts/`, `docs/07_Archive/`, `docs/01_Tracking/archive/`, historical trackers, generated artifacts).
+  - Discoverable historical or scratch material must not be treated as current canonical truth.
+- **Independent Gates & No Self-Verification:**
+  - Where governance requires an independent gate or human approval (e.g. Implementation Gate, Documentation Gate, Closure Gate), authoring agents may run mechanical verification but **MUST NOT** self-certify or self-promote the task past that gate.
+  - Authoring agents stop after mechanical checks and submit diffs for independent human/reviewer evaluation.
+

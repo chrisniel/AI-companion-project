@@ -11,7 +11,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # Base directories
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DEFAULT_DATA_DIR = BASE_DIR / "data"
-ENV_FILE = BASE_DIR / ".env"
+# A trusted bootstrap may select disposable configuration before module import.
+ENV_FILE = (
+    Path(os.environ["COMPANION_ENV_FILE"])
+    if os.environ.get("COMPANION_ENV_FILE")
+    else BASE_DIR / ".env"
+)
 
 
 class Settings(BaseSettings):
@@ -220,5 +225,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-# Initialize pairing token on load
-settings.ensure_pairing_token()
+# Pairing credentials are initialized explicitly by the application lifespan.
