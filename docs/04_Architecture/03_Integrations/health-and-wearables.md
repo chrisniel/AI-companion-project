@@ -27,7 +27,7 @@ This specification documents the canonical integration architecture, data contra
 
 - **Conditional Scope:** Health Connect integration (`androidx.health.connect`) is classified as **Conditional Mobile V1** (`D-PHONE-15`). It is an optional, read-only, consent-driven capability for qualified Android environments.
 - **Graceful Absence:** A mobile device, Android version, or user setup lacking Health Connect support or user consent is fully supported and remains a valid Mobile V1 companion device. Health features degrade gracefully to unavailable without impeding core companion functionality.
-- **Aggregation Boundary (`D-PHONE-15E`):** Android Health Connect serves as the canonical V1 mobile aggregation boundary for wearable and biometric sources. Direct vendor-specific wearable SDK integrations (e.g., proprietary watch protocols) are not required in Mobile V1 unless an essential source is inaccessible via Health Connect.
+- **Aggregation Boundary (`D-PHONE-15E`):** Android Health Connect serves as the preferred Mobile V1 aggregation boundary for health and wearable data. Direct vendor-specific wearable SDK integrations (e.g., proprietary watch protocols) are not a normal Mobile V1 requirement unless an essential source is inaccessible via Health Connect.
 
 ### 2.2 Ingestion & Authority Boundaries (`D-PHONE-15A`, `D-PHONE-15B`)
 

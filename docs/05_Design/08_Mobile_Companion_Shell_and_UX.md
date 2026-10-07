@@ -68,7 +68,7 @@ The Home tab is designed as an ambient daily check-in surface rather than a gene
 1. **Companion Presence Banner:**
    - Displays the active companion portrait or mood glyph with subtle breathing animation (`D-PHONE-UX-10`).
    - Contextual greeting adapting to time-of-day, current mood state, and companion personality tone (`D-PHONE-12D`, `D-PHONE-12E`).
-2. **Capability Status Chip:** Compact pill indicator (`[● Host Connected]`, `[⚡ Standalone Local]`, `[☁ Standalone Cloud]`, `[○ Standalone Limited]`) that opens the granular capability drill-down on tap (`D-PHONE-UX-06`).
+2. **Capability Status Chip:** Compact presentation summary chip (`[● PC]`, `[⚡ Local]`, `[☁ Cloud]`, `[○ Limited]`) that opens the granular capability drill-down on tap (`D-PHONE-UX-06`).
 3. **Active Check-In Card:**
    - Appears when an interactive morning greeting, wellness check-in, or evening wrap-up is active (`D-PHONE-12D`).
    - Offers quick response chips (e.g., *"Doing well!"*, *"Tired today"*, *"Need to plan"*). Dismisses cleanly without penalty.
@@ -128,29 +128,32 @@ Mobile companions operate across dynamic network and resource environments. The 
 ┌────────────────────────────────────────────────────────┐
 │  CAPABILITY DETAILS                         [Close ✕]  │
 ├────────────────────────────────────────────────────────┤
-│  Host Connection:     Host Reachable (Connected)       │
-│  Inference Route:     Host model / Local model         │
-│  Speech-to-Text:      Local STT / Host STT             │
-│  Text-to-Speech:      Local TTS / Host TTS             │
+│  Host Reachability:   Reachable / Unreachable          │
+│  Internet:            Available / Unavailable          │
+│  Inference Route:     Host / Mobile Local / Cloud / -- │
+│  STT Route:           Host / Mobile Local / Cloud / -- │
+│  TTS Route:           Host / Mobile Local / Cloud / -- │
 │  Sync Queue:          Up to date (0 pending)           │
-│  Network Route:       LAN / Offline                    │
 │  Thermal / Battery:   Normal state                     │
 │  Permissions:         Notifications ✓, Mic ✓, Health ✓ │
 └────────────────────────────────────────────────────────┘
 ```
 
-#### Primary Status States
+#### Compact Presentation Summaries
 
-1. **Host Connected (`PC`):** Connected to reachable PC Host with full Host model reasoning, speech streaming, and real-time state synchronization.
-2. **Standalone Local (`Local`):** Operating disconnected on mobile device using qualified local LLM (`D-PHONE-01`) and qualified local speech components.
-3. **Standalone Cloud (`Cloud`):** Operating standalone using separately authorized cloud inference when explicitly configured by the user.
-4. **Standalone Limited (`Limited`):** Operating offline or resource-constrained without an active generative LLM; deterministic core productivity (offline task management, alarms, reminders, routine presentation, local settings, and cached conversation viewing) remains fully operational.
+The compact status chip (`PC`, `Local`, `Cloud`, `Limited`) provides a concise **presentation summary** of the active conversational inference or operating condition. It does **not** represent a coupled backend state enum or conflate underlying orthogonal dimensions (`D-PHONE-01A`, `D-PHONE-14`):
+
+1. **PC Summary (`PC`):** Primary generative reasoning/inference is Host-routed or Host-connected context is dominant. Speech components (STT and TTS) remain independently routed and may be Host, Local, Cloud, or unavailable where authorized and qualified.
+2. **Local Summary (`Local`):** Primary generative reasoning uses a qualified Mobile local LLM (`D-PHONE-01`). STT and TTS remain independently routed and may be Local, Host, Cloud, or unavailable according to device capability and qualification.
+3. **Cloud Summary (`Cloud`):** Primary generative reasoning uses a separately authorized Cloud LLM. STT and TTS remain independently routed and separately permissioned.
+4. **Limited Summary (`Limited`):** No active generative reasoning route is available or qualified. Deterministic core Mobile functionality (offline task management, alarms, reminders, routine presentation, local settings, and cached conversation viewing) remains fully operational.
 
 #### Granular Drill-Down Sheet
-Tapping the capability chip opens a bottom sheet detailing each subsystem independently:
-- **Host reachability:** Status of local network discovery, reachability, and secure pairing.
-- **Inference route & model:** Currently executing model name and backend engine.
-- **Speech pipeline routes:** Separate rows for active STT and TTS engines.
+Tapping the capability chip opens a bottom sheet detailing each underlying subsystem independently, preserving orthogonal availability dimensions:
+- **Host reachability:** Status of local network discovery, reachability, and secure pairing (Reachable / Unreachable).
+- **Internet availability:** Public internet connectivity status (Available / Unavailable), independent of Host reachability.
+- **Inference route & model:** Currently executing LLM/reasoning route (Host / Mobile Local / Cloud / None) and active model identifier.
+- **Speech pipeline routes:** Separate independent rows for active STT Route and TTS Route (Host / Mobile Local / Cloud / Unavailable).
 - **Sync queue status:** Count of pending offline mutations and last sync time.
 - **Thermal & battery governor state:** Normal, Warm, Throttled, or Battery Saver.
 - **OS permissions:** Granular checklist (Microphone, Camera, Notifications, Health Connect, Battery Optimization).

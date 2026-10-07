@@ -2,8 +2,8 @@
 
 > **Branch:** `docs/mobile-v1-canonicalization`
 > **Delivery:** MOBILE-ARCH Batch D Canonical Promotion
-> **Status:** D4 CORRECTED / AUTHORED — AWAITING INDEPENDENT GATE 3 RE-REVIEW
-> **Gate 3 Result:** CORRECTIONS REQUIRED (D4.1 correction pass complete)
+> **Status:** D4.2 CORRECTED / AUTHORED — AWAITING INDEPENDENT GATE 3 RE-REVIEW
+> **Gate 3 Re-Review Result:** CORRECTIONS REQUIRED — final semantic cleanup
 > **Approved Plan:** `docs/02_Planning/01_Plans/plan-mobile-v1-batch-d-canonical-promotion.md`
 > **Gate 0 Approved Checkpoint:** `2b0fdbb8f21d6aaeec3e6d3dfdf9ca990d50f53f`
 > **Gate 1 Passed Checkpoint:** `19116d9965e369e2869fbdf1a4d0702ccd730077`
@@ -15,7 +15,7 @@
 ## 1. Governance & Delivery Sequence
 
 - **Git Authority:** Strictly read-only for AI agents. Chris is the sole owner of all Git mutations.
-- **Delivery Lifecycle Stage:** DOCUMENTATION GATE (Batch D4.1 Corrections) — Canonical promotion of Voice, Health, Vision, Character/Emotion, and Mobile UX architecture.
+- **Delivery Lifecycle Stage:** DOCUMENTATION GATE (Batch D4.2 Corrections) — Canonical promotion of Voice, Health, Vision, Character/Emotion, and Mobile UX architecture.
 - **Known CI Blocker:** Historical PR-wide Markdown trailing whitespace; full-PR mechanical cleanup scheduled for Batch D5.
 
 ### Delivery Stages & Batch Sequence
@@ -26,7 +26,7 @@
 | **Plan Authoring** | Batch D Canonical Promotion Plan | APPROVED | Gate 0 Passed (`2b0fdbb8f21d6aaeec3e6d3dfdf9ca990d50f53f`) |
 | **Batch D2** | Core Baseline, Identity, Scheduling & Flutter Boundaries | **APPROVED** | Gate 1 Passed (`19116d9965e369e2869fbdf1a4d0702ccd730077`) |
 | **Batch D3** | AI Runtime, Conversations, Context, Memory & Tools | **APPROVED** | Gate 2 Passed (`5d860625510ffae0437cc9c58662dfe087c3fad9`) |
-| **Batch D4** | Voice, Health, Vision, Character/Presence & Mobile UX | **CORRECTED / AUTHORED** | Gate 3 Result: CORRECTIONS REQUIRED (Awaiting Re-Review) |
+| **Batch D4** | Voice, Health, Vision, Character/Presence & Mobile UX | **D4.2 CORRECTED / AUTHORED** | Gate 3 Re-Review Result: CORRECTIONS REQUIRED (Awaiting Re-Review) |
 | **Batch D5** | Master Planning Spine, Golden Verification, CI & PR Handoff | PENDING | Gate 4 Closure Gate Pending |
 
 ---
@@ -78,7 +78,7 @@
 
 ---
 
-## 5. Completed Work: Batch D4 Voice, Health, Vision, Character/Presence & Mobile UX
+## 5. Authored Work: Batch D4 Voice, Health, Vision, Character/Presence & Mobile UX
 
 **Objective:** Promote Composable Voice architecture (`D-PHONE-04`, `D-PHONE-14` through `14G`), Health Connect integration as Conditional Mobile V1 (`D-PHONE-15` through `15E`, `D-SHARED-HEALTH-01` through `04`), Multimodal Vision architecture (`D-PHONE-16` through `16E`, `D-SHARED-VISION-01`), Character, Emotion & Presence boundaries (`D-PHONE-06`, `D-PHONE-EMO-01`, `D-PHONE-12D`, `12E`, `D-PHONE-UX-10`, `P-SHARED-PRESENCE-01`, `P-PHONE-AR-01..02`, `P-PRESENCE-02`), bounded Location Context direction (`P-PHONE-LOC-01`), and canonical Mobile Companion Shell and UX design specification (`D-PHONE-UX-01` through `10`, `D-SHARED-LANG-01`, `02`).
 

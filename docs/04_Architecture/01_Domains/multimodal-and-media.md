@@ -65,7 +65,7 @@ Multimodal vision understanding is governed by the approved Phase 8B delivery ro
 - **Evidence-Based Qualification (`D-PHONE-16C`):** Mobile vision models must pass empirical task-scoped qualification. Passing basic object recognition does not imply competence in fine OCR, spatial navigation, or high-risk medical/document parsing. Resource Governor limits vision residency to preserve device thermal and memory stability.
 - **Offline Multimodal Persistence & Sync (`D-PHONE-16D`):** When operating disconnected, local image attachments, user turns, and generated local responses persist durably in local SQLite/storage. Upon reconnecting, the turn history and binary attachments synchronize to the PC Host without Host re-generation.
 - **Explicit-Capture Boundary (`D-PHONE-16E`):** Mobile V1 strictly limits vision to explicit, user-initiated still-image capture or gallery file picking. Continuous ambient camera streams, background visual sensing, and automated environmental monitoring are strictly excluded.
-- **Vision vs Memory Decoupling (`D-SHARED-VISION-01`):** Visual observations and image turn contents remain scoped to conversation context and media history. They must **never** automatically generate canonical D7 Memory records without explicit user intent and D7 evaluation.
+- **Vision vs Memory Decoupling (`D-SHARED-VISION-01`):** Visual observations and image turn contents remain scoped to conversation context and media history. Visual observations do not automatically become canonical D7 Memory. Any Memory derived from visual context must pass through the ordinary D7 Memory proposal, acceptance, and reconciliation policy.
 
 ---
 
