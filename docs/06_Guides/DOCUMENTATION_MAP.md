@@ -99,6 +99,8 @@ Use this matrix to identify the single canonical owner for specific questions:
 | Backup, restore verification, or factory reset | [`docs/04_Architecture/04_Infrastructure/backup-recovery-and-diagnostics.md`](../04_Architecture/04_Infrastructure/backup-recovery-and-diagnostics.md) |
 | Gaming mode, Low-Impact profile, or resource limits | [`docs/04_Architecture/04_Infrastructure/performance-and-capacity.md`](../04_Architecture/04_Infrastructure/performance-and-capacity.md) |
 | Desktop UI shell, tray interactions, or visual styling | [`docs/05_Design/`](../05_Design/README.md) |
+| Mobile companion shell, navigation, 5-tab layout, or OLED hybrid design | [`docs/05_Design/08_Mobile_Companion_Shell_and_UX.md`](../05_Design/08_Mobile_Companion_Shell_and_UX.md) |
+| Mobile V1 Batch D canonicalization delivery walkthrough | [`docs/03_Walkthroughs/walkthrough-mobile-v1-batch-d-reconciliation.md`](../03_Walkthroughs/walkthrough-mobile-v1-batch-d-reconciliation.md) |
 | Delivery gates, Git ownership, or walkthrough templates | [`docs/06_Guides/DELIVERY_WORKFLOW.md`](./DELIVERY_WORKFLOW.md) |
 | Developer workstation setup, compilers, or venv | [`docs/06_Guides/DEVELOPMENT_SETUP.md`](./DEVELOPMENT_SETUP.md) |
 | Test execution, CI pipeline design, or Golden Gate | [`docs/06_Guides/TESTING_AND_CI.md`](./TESTING_AND_CI.md) |

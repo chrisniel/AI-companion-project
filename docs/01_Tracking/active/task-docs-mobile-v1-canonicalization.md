@@ -2,21 +2,22 @@
 
 > **Branch:** `docs/mobile-v1-canonicalization`
 > **Delivery:** MOBILE-ARCH Batch D Canonical Promotion
-> **Status:** D5 AUTHORED — AWAITING INDEPENDENT CLOSURE GATE
+> **Status:** D5.1 CORRECTED / AUTHORED — AWAITING INDEPENDENT CLOSURE GATE RE-REVIEW
 > **Approved Plan:** `docs/02_Planning/01_Plans/plan-mobile-v1-batch-d-canonical-promotion.md`
 > **Gate 0 Approved Checkpoint:** `2b0fdbb8f21d6aaeec3e6d3dfdf9ca990d50f53f`
 > **Gate 1 Passed Checkpoint:** `19116d9965e369e2869fbdf1a4d0702ccd730077`
 > **Gate 2 Passed Checkpoint:** `5d860625510ffae0437cc9c58662dfe087c3fad9`
 > **Gate 3 Passed Checkpoint:** `ed1c71b7245324072c4b48dc7a9596c71d717e11`
-> **M1 Status:** NOT ACTIVE / Sequenced after MOBILE-ARCH Batch D re-closure
+> **Closure Gate Result:** CORRECTIONS REQUIRED (Batch D5.1 reconciliation authored; independent Closure Gate re-review pending)
+> **M1 Status:** PENDING / SEQUENCED AFTER RECLOSURE AND MERGE OF BATCH D
 
 ---
 
 ## 1. Governance & Delivery Sequence
 
 - **Git Authority:** Strictly read-only for AI agents. Chris is the sole owner of all Git mutations.
-- **Delivery Lifecycle Stage:** DOCUMENTATION GATE (Batch D5 Authoring) — Master planning spine, Golden verification, CI direction, whitespace cleanup & closure preparation.
-- **Known CI Blocker:** Historical PR-wide Markdown trailing whitespace; full-PR mechanical cleanup scheduled for Batch D5.
+- **Delivery Lifecycle Stage:** DOCUMENTATION GATE (Batch D5.1 Reconciliation) — Master planning spine, Golden verification, CI direction, whitespace cleanup & closure reconciliation.
+- **Historical CI Blocker (Resolved):** PR-wide Markdown trailing whitespace was mechanically cleaned in commit `6ece11c8` and verified clean in PR #21 CI (Run #79 green docs-integrity check; `git diff --check` passes with exit code 0).
 
 ### Delivery Stages & Batch Sequence
 
@@ -27,7 +28,7 @@
 | **Batch D2** | Core Baseline, Identity, Scheduling & Flutter Boundaries | **APPROVED** | Gate 1 Passed (`19116d9965e369e2869fbdf1a4d0702ccd730077`) |
 | **Batch D3** | AI Runtime, Conversations, Context, Memory & Tools | **APPROVED** | Gate 2 Passed (`5d860625510ffae0437cc9c58662dfe087c3fad9`) |
 | **Batch D4** | Voice, Health, Vision, Character/Presence & Mobile UX | **APPROVED** | Gate 3 Passed (`ed1c71b7245324072c4b48dc7a9596c71d717e11`) |
-| **Batch D5** | Master Planning Spine, Golden Verification, CI & PR Handoff | **AUTHORED** | Gate 4 Closure Gate Pending |
+| **Batch D5** | Master Planning Spine, Golden Verification, CI & PR Handoff | **D5.1 CORRECTED / AUTHORED** | Gate 4 Closure Gate Re-Review Pending |
 
 ---
 
@@ -110,32 +111,33 @@
 
 ---
 
-## 6. Completed Work: Batch D5 Master Planning Spine, Golden Verification & Closure Preparation
+## 6. Completed Work: Batch D5 / D5.1 Master Planning Spine, Golden Verification & Closure Reconciliation
 
-**Objective:** Canonicalize tiered mobile verification (L1–L5) and future path-scoped CI architecture, rebuild `MOBILE_CHECKLIST.md` to the locked 18-group structure with granular qualification classes, expand `MOBILE_WBS.md` to 84 items with verified cycle-free DAG, reconcile the Master Planning Spine (`MASTER_CHECKLIST.md`, `DECISION_REGISTER.md`, `DECISION_DEBT.md`, `SPRINT_ROADMAP.md`, `DELIVERY_INDEX.md`, `DOCUMENTATION_MAP.md`), author the point-in-time delivery walkthrough, append the changelog entry, execute mechanical trailing-whitespace cleanup across all text/Markdown files modified by PR #21 until `git diff --check d92b6e...` passes with exit code 0, and prepare PR #21 for independent Closure Gate review.
+**Objective:** Reconcile planning spine, rebuild `MOBILE_CHECKLIST.md` to the locked 18-group structure with granular qualification classes and independently auditable sub-assertions with explicit applicability conditions, expand `MOBILE_WBS.md` to 88 items across 16 streams with verified cycle-free DAG, reconcile Master Planning Spine (`MASTER_CHECKLIST.md`, `DECISION_REGISTER.md` with complete principles and unnumbered directions, `DECISION_DEBT.md` with `DEBT-MOB-10`, `SPRINT_ROADMAP.md` and `DELIVERY_INDEX.md` aligning M1 sequencing after merge, `DOCUMENTATION_MAP.md`), author delivery walkthrough, append changelog entry, verify zero trailing whitespace across PR #21 base `d92b6e...`, and prepare for independent Closure Gate re-review.
 
 ### Targeted Files & Promoted Responsibilities
 
-- [x] `docs/04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md`: Updated Sections 7 and 8 canonicalizing L1–L5 tiered test matrix (`D-CI-03`), path-scoped CI lanes (`D-CI-01`), shared package fan-out rules (`D-CI-02`), CI guardrail without modifying workflow files (`D-CI-04`), locked MG1–MG18 Mobile Golden Gate architecture (`D-MOBILE-VERIFY-01`), granular qualification classes (`D-MOBILE-VERIFY-02`), and the integrated MG18 Companion Journey (`D-MOBILE-VERIFY-03`).
-- [x] `docs/02_Planning/00_Master/MOBILE_CHECKLIST.md`: Completely rebuilt to exact locked MG1–MG18 structure with granular qualification classes (`REQUIRED`, `CONDITIONAL`, `OPTIONAL`, `DEFERRED`) at capability and sub-assertion levels, canonical spec authorities, and release blocker checklist.
-- [x] `docs/02_Planning/00_Master/MOBILE_WBS.md`: Expanded from 65 items to 84 items across 16 streams; preserved all 65 stable IDs; added 19 new items (`MOB-DATA-006`, `MOB-CONV-007..009`, `MOB-INFER-006`, `MOB-VOICE-008`, `MOB-TOOL-001..002`, `MOB-HEALTH-001..002`, `MOB-VISION-001..002`, `MOB-CHAR-001`, `MOB-UX-001..005`, `MOB-VERIFY-007`); validated dependency DAG with zero cycles and zero dangling dependencies.
-- [x] `docs/02_Planning/00_Master/MASTER_CHECKLIST.md`: Updated Line 6 cross-referencing MG1–MG18 criteria (`D-MOBILE-VERIFY-01..03`) and linking to `MOBILE_CHECKLIST.md`.
-- [x] `docs/02_Planning/00_Master/DECISION_REGISTER.md`: Indexed all 104 Batch D decisions and directions from the approved ledger; preserved accepted ADR baseline (ADR-0001..0012, 0017..0019) and historical ADR-0013..0016 guardrail.
-- [x] `docs/02_Planning/00_Master/DECISION_DEBT.md`: Allocated `DEBT-MOB-10: One Profile → Multiple Mobile Phones Concurrency & Reconciliation` as OPEN.
-- [x] `docs/02_Planning/00_Master/SPRINT_ROADMAP.md`: Reconciled MOBILE-ARCH summary reflecting Batch D canonical promotion, expanded WBS, and MG1–MG18 criteria.
-- [x] `docs/02_Planning/00_Master/DELIVERY_INDEX.md`: Updated planning spine navigation to MG1–MG18 and active promotion plan reference.
+- [x] `docs/04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md`: Updated Sections 7 and 8 canonicalizing L1–L5 tiered test matrix (`D-CI-03`), path-scoped CI lanes (`D-CI-01`), shared package fan-out rules (`D-CI-02`), CI guardrail without modifying workflow files (`D-CI-04`), locked MG1–MG18 Mobile Golden Gate architecture (`D-MOBILE-VERIFY-01`), granular qualification classes (`D-MOBILE-VERIFY-02`), and the integrated MG18 Companion Journey (`D-MOBILE-VERIFY-03`). Clarified fan-out paths are illustrative future directions only.
+- [x] `docs/04_Architecture/MOBILE_SYSTEM_BASELINE.md`: Updated line 161 to reference 18 Mobile Golden Acceptance Groups (MG1–MG18, `D-MOBILE-VERIFY-01..03`) and link `MOBILE_CHECKLIST.md`.
+- [x] `docs/02_Planning/00_Master/MOBILE_CHECKLIST.md`: Completely rebuilt to exact locked MG1–MG18 structure with granular qualification classes (`REQUIRED`, `CONDITIONAL`, `OPTIONAL`, `DEFERRED`), split mixed assertions into independently auditable rows with `Applicability Condition`, fixed `entity_id` vs `mutation_id` in MG5, decoupled Memory replica from local LLM qualification in MG7, separated alarm permission degradation from exact delivery in MG9, enforced confirmed adapter results in MG12, CPU fallback only where supported in MG14.
+- [x] `docs/02_Planning/00_Master/MOBILE_WBS.md`: Expanded to 88 items across 16 streams; preserved all 65 stable IDs; added 23 items; resolved cyclic dependencies; validated dependency DAG with zero cycles and zero dangling dependencies.
+- [x] `docs/02_Planning/00_Master/MASTER_CHECKLIST.md`: Cross-referenced MG1–MG18 criteria (`D-MOBILE-VERIFY-01..03`) and verified mobile links.
+- [x] `docs/02_Planning/00_Master/DECISION_REGISTER.md`: Indexed all 104 Batch D decisions and directions from the approved ledger; completed truncated principle cells (`D-PHONE-01`, `D-SHARED-CONV-03`, `D-SHARED-AI-03`, `D-PHONE-UX-08`, `D-CI-01`, etc.); indexed approved unnumbered directions (`Character create/edit authority`, `Gemma 3 1B cross-device qualification`); preserved accepted ADR baseline (ADR-0001..0012, 0017..0019) and historical ADR-0013..0016 guardrail.
+- [x] `docs/02_Planning/00_Master/DECISION_DEBT.md`: Reconciled `DEBT-MOB-10: One Profile → Multiple Mobile Phones Topology & Concurrency` as OPEN.
+- [x] `docs/02_Planning/00_Master/SPRINT_ROADMAP.md`: Reconciled milestone roadmap and MOBILE-ARCH summary reflecting Batch D5.1 reconciliation authored; M1 sequenced after reclosure and merge.
+- [x] `docs/02_Planning/00_Master/DELIVERY_INDEX.md`: Updated milestone status table and added active implementation plan link.
 - [x] `docs/06_Guides/DOCUMENTATION_MAP.md`: Added navigation entries for `08_Mobile_Companion_Shell_and_UX.md` and `walkthrough-mobile-v1-batch-d-reconciliation.md`.
-- [x] `docs/03_Walkthroughs/walkthrough-mobile-v1-batch-d-reconciliation.md`: Authored comprehensive point-in-time delivery walkthrough documenting the Batch D reconciliation pass.
-- [x] `CHANGELOG.md`: Appended concise entry under `## Unreleased` summarizing MOBILE-ARCH Batch D reconciliation and canonical promotion.
-- [x] Mechanical Whitespace Cleanup: Stripped trailing whitespace across `docs/02_Planning/00_Master/WBS.md` and `docs/03_Walkthroughs/walkthrough-mobile-v1-canonical-architecture.md`.
+- [x] `docs/03_Walkthroughs/walkthrough-mobile-v1-batch-d-reconciliation.md`: Updated comprehensive point-in-time delivery walkthrough documenting the Batch D5.1 reconciliation pass.
+- [x] `CHANGELOG.md`: Appended concise entry under `## Unreleased` summarizing MOBILE-ARCH Batch D reconciliation.
+- [x] Mechanical Whitespace Verification: Verified `git diff --check d92b6e4b9b19e957dd419b9968c7ad3ad4cee031` passes with exit code 0.
 
-### Verification Checklist for Batch D5
+### Verification Checklist for Batch D5.1
 
 - [x] `git diff --check d92b6e4b9b19e957dd419b9968c7ad3ad4cee031` passes with exit code 0 and zero warnings.
-- [x] WBS DAG validation confirms 84 items, 0 duplicate IDs, 0 dangling dependencies, 0 cycles.
-- [x] Mobile Golden validation confirms exact 18 MG groups with 0 missing, 0 duplicates, 0 extra.
+- [x] WBS DAG validation confirms 88 items, 0 duplicate IDs, 0 dangling dependencies, 0 cycles.
+- [x] Mobile Golden validation confirms exact 18 MG groups with 0 missing, 0 duplicates, 0 extra, and auditable sub-assertions.
 - [x] Markdown relative links verified across all touched files.
 - [x] Strictly zero Git mutations performed by AI agent.
 - [x] Zero production code, test, or CI workflow changes.
-- [x] Tracker active status: `D5 AUTHORED — AWAITING INDEPENDENT CLOSURE GATE` (not archived; Closure Gate not self-certified).
-- [x] STOP for independent human (Chris) and GPT Closure Gate review.
+- [x] Tracker active status: `D5.1 CORRECTED / AUTHORED — AWAITING INDEPENDENT CLOSURE GATE RE-REVIEW` (not archived; Closure Gate not self-certified).
+- [x] STOP for independent human (Chris) and GPT Closure Gate re-review.

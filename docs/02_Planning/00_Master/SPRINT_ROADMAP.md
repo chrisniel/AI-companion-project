@@ -14,11 +14,11 @@
 └──────────────────────────────┬──────────────────────────────┘
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ MOBILE-ARCH: Phone/Mobile V1 Canonical Architecture Pass    │ ◄── [COMPLETE / APPROVED]
+│ MOBILE-ARCH: Phone/Mobile V1 Canonical Architecture Pass    │ ◄── [AUTHORED / CLOSURE REVIEW PENDING]
 └──────────────────────────────┬──────────────────────────────┘
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ M1: Flutter Desktop Client Foundation                       │ ◄── [NEXT]
+│ M1: Flutter Desktop Client Foundation                       │ ◄── [PENDING / SEQUENCED AFTER MERGE]
 └──────────────────────────────┬──────────────────────────────┘
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -52,23 +52,24 @@
 - **Primary Objective:** Execute the documentation canonicalization handoff, establish the master planning spine (`00_Master/`), update `SYSTEM_BASELINE.md` into a compact cross-cutting anchor, reconcile 18 focused domain specs, codify new ADRs (ADR-0017..0019), author `DELIVERY_WORKFLOW.md`, update setup/testing guides, and verify fresh-agent startup routing.
 - **Exit Criteria:** All validation gates pass; zero stale React-primary or single-user contradictions; clean fresh-agent review report approved by Chris and GPT.
 
-### MOBILE-ARCH: Phone/Mobile V1 Canonical Architecture Pass (COMPLETE / APPROVED)
-- **Primary Objective:** Canonicalize production Phone/Mobile architecture by inheriting shared ecosystem rules and resolving mobile-specific constraints, responsibilities, resource limits, runtime behavior, sync/offline behavior, and Flutter sharing boundaries across Batches A, B, and C.
+### MOBILE-ARCH: Phone/Mobile V1 Canonical Architecture Pass (AUTHORED / CLOSURE REVIEW PENDING)
+- **Primary Objective:** Canonicalize production Phone/Mobile architecture across Batches A–D by inheriting shared ecosystem rules and resolving mobile-specific constraints, responsibilities, resource limits, runtime behavior, sync/offline behavior, local inference, voice, health, vision, and Flutter sharing boundaries. Active promotion plan: [`plan-mobile-v1-batch-d-canonical-promotion.md`](../01_Plans/plan-mobile-v1-batch-d-canonical-promotion.md).
 
 **Approved Mobile Architecture Summary:**
-- **Shared Workspace Topology:** Shared Dart/Flutter monorepo with separate Desktop and Mobile application targets (`MOBILE_SYSTEM_BASELINE.md` §3, `ADR-0004`, `ADR-0017`).
-- **Production Package Identity:** Locked `com.cnl.aicompanion`. The Kotlin Android prototype (`android/`) remains non-production reference evidence only.
-- **Satellite Identity & Authority:** Mobile satellite binds to exactly one Profile; PC Host is sole Account/Profile Admin; Device Token and user API keys stored in Android Keystore (`ADR-0005`, `ADR-0018`).
+- **Shared Workspace Topology:** Shared Dart/Flutter monorepo with separate Desktop and Mobile application targets (`MOBILE_SYSTEM_BASELINE.md` §3, `ADR-0004`, `ADR-0017`, `D-SHARED-FLUTTER-01..08`).
+- **Production Package Identity:** Locked `com.cnl.aicompanion`. The Kotlin Android prototype (`android/`) remains non-production reference evidence only (`D-PHONE-FLUTTER-01`).
+- **Satellite Identity & Authority:** Mobile satellite binds to exactly one Profile; PC Host is sole Account/Profile Admin; Device Token and user API keys stored in Android Keystore (`ADR-0005`, `ADR-0018`, `D-PHONE-01B`).
 - **Offline Persistence & Sync:** Relational SQLite local store with durable transactional outbox journal; client-generated stable entity IDs (UUIDv4); monotonic revision checks with typed `CONFLICT_DETECTED`; host-issued change cursor delta sync with `STALE_CURSOR` re-baseline (`mobile-offline-and-sync.md`).
-- **Disconnected Conversation Reconciliation:** Qualified Tier 2/3 devices support offline local text turns; devices with authorized Cloud LLM support disconnected cloud turns; turns synchronized as atomic whole-turn units with execution-origin provenance (`MOBILE_LOCAL_INFERENCE` / `MOBILE_CLOUD_INFERENCE`) and `client_message_id` deduplication without Host LLM replay or tool replay (`mobile-offline-and-sync.md` §3.2.6).
-- **Native Scheduling & Alarms:** PC `SchedulerService` is canonical schedule truth; precomputed occurrences replicated; local `AlarmManager` exact alarms with `canScheduleExactAlarms()` degradation handling; reboot resilience (`mobile-offline-and-sync.md` §6).
-- **Capability-Dependent Local Inference:** Evidence-driven Tiers 0–3 runtime qualification; optional auxiliary capability in V1 (core app works without local model); single resident model cap (`--models-max 1`); LAN Host-to-Device transfer (`mobile-capabilities-and-runtime.md` §2).
-- **Decoupled Voice & Barge-In:** Connected full-duplex Voice streaming to PC Runtime over WebSocket with mandatory immediate barge-in; local TTS decoupled from local STT and local LLM; cloud voice permissions separate (`mobile-capabilities-and-runtime.md` §3, `ADR-0019`).
-- **Deferred Non-Goals:** Real Health Connect integration (`Mobile Later`), autonomous local Routines (`Mobile Later`), local VLM vision inference (`Post-V1 Candidate`), and always-on wake word are excluded from V1.
-- **Exit Criteria:** SATISFIED (Approved `MOBILE_SYSTEM_BASELINE.md`, `mobile-offline-and-sync.md`, `mobile-capabilities-and-runtime.md`, `MOBILE_WBS.md`, and `MOBILE_CHECKLIST.md`).
-- **Dependency Note:** MOBILE-ARCH is complete and satisfies the architectural prerequisite for M1. Mobile production implementation is cataloged in `MOBILE_WBS.md` as an independent follow-on track that does NOT block PC V1.
+- **Disconnected Conversation Reconciliation:** Qualified devices support offline local text turns; devices with authorized Cloud LLM support disconnected cloud turns; turns synchronized as atomic whole-turn units with execution-origin provenance (`MOBILE_LOCAL_INFERENCE` / `MOBILE_CLOUD_INFERENCE`) and `client_message_id` deduplication without Host LLM replay or tool replay (`mobile-offline-and-sync.md` §3.2.6, `D-SHARED-CONV-01..03A`).
+- **Native Scheduling & Alarms:** Distinct Task, Reminder, Alarm, and Routine lifecycles; Mobile-created Reminders and Alarms authored offline (`D-PHONE-10`, `D-PHONE-11`); Host-created definitions read-only offline; cross-device presentation arbitration (`D-SHARED-SCHED-02`); bounded Routine occurrences presented offline (`D-PHONE-12..12E`); local `AlarmManager` exact alarms with `canScheduleExactAlarms()` degradation handling (`mobile-offline-and-sync.md` §6).
+- **Capability-Dependent Local Inference:** Evidence-driven Tiers 0–3 runtime qualification; required production-capable local LLM execution path for qualified devices (`D-PHONE-01`); core app survives without local model (`D-PHONE-02`); single resident model cap (`--models-max 1`); LAN Host-to-Device transfer (`mobile-capabilities-and-runtime.md` §2).
+- **Decoupled Voice & Barge-In:** Connected full-duplex Voice streaming to PC Runtime over WebSocket with mandatory immediate barge-in; local TTS decoupled from local STT and local LLM; cloud voice permissions separate (`mobile-capabilities-and-runtime.md` §3, `ADR-0019`, `D-PHONE-14..14G`).
+- **Conditional Health & Vision:** Health Connect supported as `CONDITIONAL V1` read-only integration (`D-PHONE-15..15E`, `D-SHARED-HEALTH-01..04`); local still-image Vision supported as `CONDITIONAL V1` on qualified hardware (`D-PHONE-16..16E`, `D-SHARED-VISION-01`).
+- **Deferred Non-Goals:** Autonomous Routine recurrence extension (`D-PHONE-12`), direct proprietary wearable SDKs (`D-PHONE-15E`), continuous ambient camera/microphone (`D-PHONE-16E`), always-on wake word, and phone-to-phone canonical sync authority are excluded from V1.
+- **Exit Criteria:** Batches A–D promoted into canonical specs, 88-item WBS (`MOBILE_WBS.md`), 18 Golden Groups MG1–MG18 (`MOBILE_CHECKLIST.md`). Batch D5.1 reconciliation authored; independent Closure Gate re-review pending.
+- **Dependency Note:** Mobile production implementation is cataloged in `MOBILE_WBS.md` as an independent follow-on track that does NOT block PC V1. M1 Flutter Desktop foundation remains sequenced after re-closure and merge of Batch D.
 
-### Milestone M1: Flutter Desktop Client Foundation (NEXT)
+### Milestone M1: Flutter Desktop Client Foundation (PENDING / SEQUENCED AFTER MERGE)
 - **Primary Objective:** Scaffold the production Flutter Windows Desktop client (`target Flutter path established during PC-CLIENT-001 scaffolding`), establish window lifecycle and system tray integration (minimize-to-tray, close-to-tray), build the SoftGlass design system with dark/light theme tokens, and integrate the OpenAPI-derived Dart API client and SSE token streaming consumer.
 - **Exit Criteria:** Flutter Desktop client runs on Windows, communicates reliably with Local AI Runtime over localhost REST/SSE, displays live streaming text, and maintains visual parity with core desktop requirements. React Web remains fully operational as test oracle.
 

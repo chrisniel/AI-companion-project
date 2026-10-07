@@ -136,8 +136,8 @@
   - *Context:* Full-duplex WebSocket audio transport connecting to PC Runtime canonical STT/TTS/VAD providers is mandatory (`mobile-capabilities-and-runtime.md` §3.1).
   - *Open Detail:* Evaluation between Linear PCM 16-bit vs Opus 16 kHz compressed frames for bandwidth and latency optimization.
   - *Resolution Point:* Stream `MOB-VOICE-001` implementation plan.
-- **DEBT-MOB-10: One Profile → Multiple Mobile Phones Concurrency & Reconciliation**
-  - *Context:* The architectural baseline locks that each Mobile Satellite device binds to exactly one Profile, and the PC Host Admin owns device enrollment, profile binding, and revocation ([MOBILE_SYSTEM_BASELINE.md](../../04_Architecture/MOBILE_SYSTEM_BASELINE.md) §2, [profiles-and-devices.md](../../04_Architecture/02_Data_and_Security/profiles-and-devices.md) §3).
-  - *Settled Architecture:* 1 Satellite Phone = 1 Profile binding; PC Host is the authoritative Account/Profile Admin and owns device enrollment, credential rotation, and revocation.
-  - *Open Detail:* Concurrency control, distributed cursor arbitration, and multi-device outbox reconciliation rules when two or more mobile phones concurrently sync mutations, alarms, and disconnected conversation turns against the same Profile.
-  - *Resolution Point:* Post-V1 Mobile synchronization refinement / multi-device concurrency planning.
+- **`DEBT-MOB-10`: One Profile → Multiple Mobile Phones Topology & Concurrency**
+  - *Context:* Ledger §19 and `D-SHARED-CONV-01` record that whether one Profile supports multiple concurrently enrolled Mobile phones remains an open product/topology question, while settled baseline architecture firmly locks that 1 Satellite Phone binds to at most 1 Profile, and the PC Host is the sole Account/Profile Admin.
+  - *Settled Architecture:* 1 Satellite Phone = 1 Profile binding (`D-PHONE-01B`, [`profiles-and-devices.md`](../../04_Architecture/02_Data_and_Security/profiles-and-devices.md) §3); PC Host is sole Account/Profile Admin owning enrollment, credential rotation, and revocation.
+  - *Open Product & Technical Detail:* Whether multiple concurrently enrolled Mobile phones per Profile are supported in V1 product topology, and if supported, multi-device outbox reconciliation, distributed cursor arbitration, and concurrent branch reconciliation rules.
+  - *Resolution Point:* Mobile V1 product topology review / Post-V1 multi-device concurrency refinement.

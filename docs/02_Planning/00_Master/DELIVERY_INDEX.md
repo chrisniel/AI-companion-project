@@ -35,8 +35,8 @@ docs/02_Planning/00_Master/
 | Milestone ID | Title & Scope | Primary Deliverables | Target Gate / Status |
 | :--- | :--- | :--- | :--- |
 | **M0** | **Docs & Architecture Reset** | Canonicalization handoff execution, master planning spine creation, system baseline update, ADR reconciliation, and CI guide alignment. | **COMPLETE / VERIFIED** |
-| **MOBILE-ARCH** | **Mobile Architecture Pass** | Canonicalize production Mobile Companion architecture across Batches A, B, and C. Freezes shared vs PC-specific vs mobile-specific boundaries. Architecture prerequisite to M1 satisfied. Mobile production implementation remains an independent follow-on track ([`MOBILE_WBS.md`](MOBILE_WBS.md)) and does NOT block PC V1. | **COMPLETE / APPROVED** |
-| **M1** | **Flutter Client Foundation** | Production Flutter Desktop app scaffolding, window/tray management, REST/SSE client, App/Data/Library storage root awareness, and React Web parity checks. (Unblocked by MOBILE-ARCH). | **NEXT** |
+| **MOBILE-ARCH** | **Mobile Architecture Pass** | Canonicalize production Mobile Companion architecture across Batches A–D (standalone core, local inference, offline sync, voice, health, vision, shell UX). Batch D5.1 reconciliation authored; independent Closure Gate re-review pending. Implementation plan: [`plan-mobile-v1-batch-d-canonical-promotion.md`](../01_Plans/plan-mobile-v1-batch-d-canonical-promotion.md). Mobile production implementation remains an independent follow-on track ([`MOBILE_WBS.md`](MOBILE_WBS.md)). | **AUTHORED / CLOSURE REVIEW PENDING** |
+| **M1** | **Flutter Client Foundation** | Production Flutter Desktop app scaffolding, window/tray management, REST/SSE client, App/Data/Library storage root awareness, and React Web parity checks. Sequenced after re-closure and merge of Batch D. | **PENDING / SEQUENCED AFTER MERGE** |
 | **M2** | **PC Companion Foundation** | Windows autostart at login, native desktop notifications, Task Scheduler integration, D6 controlled model import service, and multi-Profile database migration. | **PLANNED** |
 | **M3** | **Intelligence & Productivity** | Character Studio & 8 continuous personality traits, persistent bounded emotion, profile-first selective memory with revalidation, and Task/Reminder/Alarm scheduling. | **PLANNED** |
 | **M4** | **Voice, Tools & Information** | Conversational voice pipeline with mandatory barge-in, WebSocket audio transport, D9 deterministic tool policy engine, and read-only public web/current info. | **PLANNED** |
@@ -48,7 +48,8 @@ docs/02_Planning/00_Master/
 ## 3. Active & Archived Implementation Plans
 
 ### Active Feature Plans (`docs/02_Planning/01_Plans/`)
-- *Plans will be created here per work stream as M1–M5 are unlocked.*
+- [`plan-mobile-v1-batch-d-canonical-promotion.md`](../01_Plans/plan-mobile-v1-batch-d-canonical-promotion.md) — Active approved Mobile V1 canonicalization and Batch D promotion plan (Batch D5.1 reconciliation authored; Closure Gate re-review pending).
+- *Additional feature plans will be created here per work stream as M1–M5 are unlocked.*
 
 ### Planning Templates (`docs/02_Planning/02_Templates/`)
 - [`implementation-plan-template.md`](../02_Templates/implementation-plan-template.md) — Standard template for authoring non-trivial feature implementation plans.

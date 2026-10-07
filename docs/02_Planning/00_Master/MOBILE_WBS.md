@@ -16,15 +16,15 @@
 | **`MOB-IDENTITY`**   | Identity, Enrollment & Transport | Device pairing, 1-Profile binding, Keystore secrets, rotation, D5 transport. |
 | **`MOB-DATA`**       | Local Persistence & Outbox | Relational SQLite store (Drift preferred candidate), transactional outbox journal, offline working state, durability. |
 | **`MOB-SYNC`**       | Sync & Reconciliation Engine | Asymmetric sync, desired-state ops, conflict resolution, re-baseline, whole-turn reconciliation. |
-| **`MOB-SCHED`**      | Scheduling, Reminders & Alarms | Replicated occurrences, AlarmManager exact alarms, permissions, Doze/reboot restoration. |
-| **`MOB-CONV`**       | Conversations & Offline Dialogue | Connected SSE streaming, qualified offline text turns, optional Cloud LLM routing, cached context, multimodal upload. |
+| **`MOB-SCHED`**      | Scheduling, Reminders & Alarms | Mobile-origin Reminders and Alarms, replicated occurrences, exact alarm scheduling & graceful degradation, alert arbitration, temporal intent resolution. |
+| **`MOB-CONV`**       | Conversations & Offline Dialogue | Connected SSE streaming, qualified offline text turns, optional Cloud LLM routing, turn queue, causal branching, multimodal conversations. |
 | **`MOB-INFER`**      | Local Inference & Tiers | Evidence-driven Tiers 0–3, LAN model transfer, single resident model cap, thermal/battery rules. |
-| **`MOB-VOICE`**      | Mobile Voice & Audio Pipeline | Connected WebSocket voice, audio focus, mandatory barge-in, FGS lifecycle, local TTS adapter. |
-| **`MOB-TOOL`**       | Mobile Local Tools & Capabilities | Client tool execution gateway, safe device tools, user confirmation guardrails, turn provenance. |
-| **`MOB-HEALTH`**     | Mobile Health & Biometric Context | Read-only Health Connect integration (steps, sleep, heart rate), opt-in sync envelope, prototype UI cleanup. |
-| **`MOB-VISION`**     | Mobile Multimodal Vision & Media | Camera/gallery image capture, EXIF stripping, downscaling, queued upload to PC Host. |
-| **`MOB-CHAR`**       | Personality, Emotion & Presence | Lightweight Emotion Event model, mood valence/arousal sync, avatar expression fallback. |
-| **`MOB-UX`**         | Companion Shell, Surfaces & UX | Hybrid SoftGlass / Solid theme, portrait-first shell, check-in widgets, language decoupling. |
+| **`MOB-VOICE`**      | Mobile Voice & Audio Pipeline | Connected WebSocket voice, audio focus, mandatory barge-in, FGS lifecycle, local TTS adapter, whisper.cpp research qualification. |
+| **`MOB-TOOL`**       | Mobile Local Tools & Capabilities | Client tool execution gateway under D9, safe productivity/read/internet tools, user confirmation guardrails, turn provenance. |
+| **`MOB-HEALTH`**     | Mobile Health & Biometric Context | Read-only Health Connect integration (granular source metrics), normalized provenance, non-clinical wellness, opt-in sync envelope. |
+| **`MOB-VISION`**     | Mobile Multimodal Vision & Media | Camera/gallery image capture, downscaling, EXIF stripping, multi-route dispatch (Host, qualified local VLM, Cloud), durable turns. |
+| **`MOB-CHAR`**       | Personality, Emotion & Presence | Lightweight Emotion Event model & outbox sync, Host D11 reconciliation, avatar expression & emoji fallback. |
+| **`MOB-UX`**         | Companion Shell, Surfaces & UX | Hybrid design language (Minimalist foundation, selective Neumorphism, contextual Glass / Liquid Glass), 5-tab shell, Activity inbox, language decoupling. |
 | **`MOB-SECURITY`**   | Security, Privacy & Sandboxing | Keystore keys, backup/data-extraction exclusions, sandbox isolation, screen/clipboard privacy. |
 | **`MOB-VERIFY`**     | Verification & Golden Gate | 5-layer test matrix (L1–L5), platform matrix, Mobile Golden qualification (MG1–MG18), CI routing. |
 
@@ -49,7 +49,7 @@
   - *Implementation State:* `APPROVED TARGET / NOT STARTED` *(Note: Kotlin prototype `android/` is reference evidence only)*
 
 - **`MOB-FOUNDATION-003`**: Shared Contracts & Design Primitives Package Integration
-  - *Scope:* Integrate shared packages for domain contracts, OpenAPI-derived models, theme tokens (Hybrid SoftGlass / Solid surfaces per `D-PHONE-UX-08` and `D-SHARED-FLUTTER-06`), and authentication abstractions.
+  - *Scope:* Integrate shared packages for domain contracts, OpenAPI-derived models, theme tokens (Hybrid design language primitives with Minimalist foundation, selective Neumorphism, contextual Glass / Liquid Glass per `D-PHONE-UX-08` and `D-SHARED-FLUTTER-06`), and authentication abstractions.
   - *Responsibility:* Both (Shared Packages)
   - *Architectural Owner:* [`MOBILE_SYSTEM_BASELINE.md`](../../04_Architecture/MOBILE_SYSTEM_BASELINE.md) §3
   - *Principal Dependencies:* `MOB-FOUNDATION-001`, `PC-API-001`
@@ -207,8 +207,8 @@
   - *Principal Dependencies:* `MOB-DATA-001`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
-- **`MOB-DATA-006`**: Mobile Memory Cache Partition, Local Fact Overlay & Memory Candidate Outbox
-  - *Scope:* Implement read-only local memory cache partition, in-memory local fact overlay for active session context, and transactional memory candidate outbox queue to stage extracted user facts for host reconciliation upon reconnection (`D-SHARED-AI-03`, `D-PHONE-08A..C`; zero local vector DB on mobile).
+- **`MOB-DATA-006`**: Mobile Selective Memory Replica, Pending Memory Overlay & Intent Outbox
+  - *Scope:* Implement selective offline memory replica (`D-PHONE-09`, caching pinned and Always Available facts), pending local memory overlay (`D-PHONE-08A`, marked with `PENDING_SYNC` status and provenance), and transactional memory intent outbox (`D-PHONE-08`) staging explicit user memory actions for Host reconciliation upon reconnection (`D-SHARED-AI-01..03`). Note: ordinary offline chat does not autonomously extract facts into canonical Memory; canonical D7 Memory authority remains on PC Host; no local vector DB is required for Mobile V1.
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`memory-and-personalization.md`](../../04_Architecture/01_Domains/memory-and-personalization.md) §6, [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §3.2.6
   - *Principal Dependencies:* `MOB-DATA-001`, `MOB-DATA-003`
@@ -271,22 +271,22 @@
 
 ### Stream: `MOB-SCHED` — Scheduling, Reminders & Alarm Delivery
 
-- **`MOB-SCHED-001`**: Replicated Occurrence Ingestion & Local Persistence
-  - *Scope:* Ingest precomputed Reminder and Alarm occurrences generated by PC `SchedulerService`, storing them with UTC trigger times and floating-time recurrence rules.
+- **`MOB-SCHED-001`**: Replicated Occurrence Ingestion & Host Definition Protection
+  - *Scope:* Ingest precomputed Reminder and Alarm occurrences generated by PC `SchedulerService`, storing them with UTC trigger times and floating-time recurrence rules; enforce read-only protection of Host-origin definitions offline while allowing local occurrence snooze and dismiss actions (`D-PHONE-10`, `D-PHONE-11`).
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §6.1, [`tasks-reminders-alarms-and-routines.md`](../../04_Architecture/01_Domains/tasks-reminders-alarms-and-routines.md)
   - *Principal Dependencies:* `MOB-DATA-003`, `PC-SCHED-001`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-SCHED-002`**: Android Time-Critical Alarm Delivery & Alarm Clock Integration
-  - *Scope:* Integrate Android time-critical Alarm delivery using `AlarmManager.setAlarmClock()` (and exact alarm scheduling subject to active `canScheduleExactAlarms()` capability check) for punctual user-facing Alarms, contrasting with best-effort Reminders (without assuming `USE_EXACT_ALARM` or equating WorkManager to Alarm fidelity).
+  - *Scope:* Integrate Android time-critical Alarm delivery using `AlarmManager.setAlarmClock()` (and exact alarm scheduling subject to active `canScheduleExactAlarms()` capability check) for punctual user-facing Alarms, contrasting with best-effort Reminders; distinguish stable entity UUIDs (`entity_id`) from mutation journal IDs (`mutation_id`).
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §6.2
   - *Principal Dependencies:* `MOB-SCHED-001`, `MOB-FOUNDATION-004`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-SCHED-003`**: Exact Alarm Permission Lifecycle & Degradation Handling
-  - *Scope:* Implement active verification via `AlarmManager.canScheduleExactAlarms()`; truthfully mark alarms as UNARMED / DEGRADED when permission is missing or revoked.
+  - *Scope:* Implement active verification via `AlarmManager.canScheduleExactAlarms()`; fall back gracefully to inexact delivery when exact alarm permission is missing or revoked without crashing or halting the app (`D-PHONE-11`).
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §6.2
   - *Principal Dependencies:* `MOB-SCHED-002`
@@ -300,7 +300,7 @@
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-SCHED-005`**: System Lifecycle Handlers (Reboot, Timezone, Clock Changes)
-  - *Scope:* Implement BroadcastReceivers for `ACTION_BOOT_COMPLETED`, `ACTION_TIMEZONE_CHANGED`, and `ACTION_TIME_CHANGED` to re-arm alarms and re-evaluate floating occurrences.
+  - *Scope:* Implement BroadcastReceivers for `ACTION_BOOT_COMPLETED`, `ACTION_TIMEZONE_CHANGED`, and `ACTION_TIME_CHANGED` to re-arm alarms and re-evaluate one-shot, floating wall-clock, and fixed-timezone recurrence rules (`D-PHONE-10`, `D-PHONE-11`).
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §6.4
   - *Principal Dependencies:* `MOB-SCHED-002`, `MOB-SCHED-003`
@@ -313,11 +313,32 @@
   - *Principal Dependencies:* `MOB-SCHED-001`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
-- **`MOB-SCHED-007`**: Cross-Device Dismissal Semantics & Duplicate Prevention
-  - *Scope:* Prevent passive PC toast notifications from cancelling phone alarms; sync explicit user dismiss/snooze mutations across devices.
+- **`MOB-SCHED-007`**: Cross-Device Alert Arbitration & Dismissal Propagation
+  - *Scope:* Implement cross-device alert arbitration policy (`D-SHARED-SCHED-02`): Reminder arbitration favors duplicate suppression across devices; Alarm arbitration favors reliability (primary device rings, standby devices armed, escalation after grace period, passive display does not equal acknowledgment); explicit dismiss/snooze propagation; disconnected duplicate Alarm preferred over missed Alarm.
   - *Responsibility:* Both
   - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §6.3.2
   - *Principal Dependencies:* `MOB-SCHED-006`, `MOB-SYNC-001`
+  - *Implementation State:* `APPROVED TARGET / NOT STARTED`
+
+- **`MOB-SCHED-008`**: Mobile-Origin Reminder & Alarm Authoring Lifecycle
+  - *Scope:* Implement full offline authoring and CRUD for Mobile-origin Reminders (`D-PHONE-10`) and Mobile-origin Alarms (`D-PHONE-11`) using client-generated entity UUIDs (`entity_id`), distinct mutation IDs (`mutation_id`), and outbox queuing for Host synchronization upon reconnection.
+  - *Responsibility:* Mobile
+  - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §6.1, [`tasks-reminders-alarms-and-routines.md`](../../04_Architecture/01_Domains/tasks-reminders-alarms-and-routines.md)
+  - *Principal Dependencies:* `MOB-DATA-002`, `MOB-DATA-003`
+  - *Implementation State:* `APPROVED TARGET / NOT STARTED`
+
+- **`MOB-SCHED-009`**: Host Routine Occurrence Presentation & Local Suppression
+  - *Scope:* Bounded Host-authorized Routine occurrence replication (`D-PHONE-12`), local presentation in Schedule and Home cards, local occurrence suppression (`D-PHONE-12C`), missed occurrence collapse, zero autonomous recurrence extension offline, non-coercive Character-aware check-in tone (`D-PHONE-12D`, `12E`).
+  - *Responsibility:* Mobile
+  - *Architectural Owner:* [`tasks-reminders-alarms-and-routines.md`](../../04_Architecture/01_Domains/tasks-reminders-alarms-and-routines.md) §5, [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §6.1
+  - *Principal Dependencies:* `MOB-SCHED-001`, `MOB-DATA-003`
+  - *Implementation State:* `APPROVED TARGET / NOT STARTED`
+
+- **`MOB-SCHED-010`**: Natural Language Temporal Intent Resolution & Parity Testing
+  - *Scope:* Implement temporal intent extraction and deterministic resolution parity with PC Host (`D-SHARED-SCHED-04..04E`); parse relative times, dayparts, and recurrence; clarify material ambiguities conversationally; verify parity across standard test phrases (e.g. *"in 20 minutes"*, *"tomorrow evening"*, *"every weekday at 7"*, *"7 AM or PM?"*, *"next Friday"*).
+  - *Responsibility:* Both
+  - *Architectural Owner:* [`tasks-reminders-alarms-and-routines.md`](../../04_Architecture/01_Domains/tasks-reminders-alarms-and-routines.md) §3, [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §4
+  - *Principal Dependencies:* `MOB-SCHED-008`, `MOB-CONV-001`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 ---
@@ -345,18 +366,18 @@
   - *Principal Dependencies:* `MOB-CONV-001`, `MOB-INFER-001`, `MOB-CONV-006`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
-- **`MOB-CONV-004`**: Cached Memory & Context Assembly for Offline Turns
-  - *Scope:* Assemble local prompt context from cached recent thread turns, character persona definition, and replicated read-only memories (no local memory database writes).
+- **`MOB-CONV-004`**: Memory Replica & Context Assembly for Offline Turns
+  - *Scope:* Assemble local prompt context from recent thread turns, Character persona definition, selective offline Memory replica (`D-PHONE-09`), and pending Memory overlay (`D-PHONE-08A`, marked `PENDING_SYNC` with provenance), governed by Shared Context Budget Manager (`D-SHARED-AI-01`) and sliding-window compaction (`D-SHARED-AI-02`) while preserving raw conversation transcripts without destructive truncation; ordinary offline chat does not create canonical Memory.
   - *Responsibility:* Mobile
-  - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §3.2.6
-  - *Principal Dependencies:* `MOB-DATA-003`, `MOB-CONV-002`
+  - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §3.2.6, [`memory-and-personalization.md`](../../04_Architecture/01_Domains/memory-and-personalization.md) §6
+  - *Principal Dependencies:* `MOB-DATA-003`, `MOB-DATA-006`, `MOB-CONV-002`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
-- **`MOB-CONV-005`**: Multimodal Attachment Capture & Upload Coordinator
-  - *Scope:* Implement camera/gallery attachment capture on Mobile and queue files for upload to PC Host upon reconnection (local VLM inference excluded from V1).
+- **`MOB-CONV-005`**: Multimodal Attachment Capture & Multi-Route Conversation Handling
+  - *Scope:* Implement camera/gallery attachment capture on Mobile and multi-route multimodal conversation handling (connected PC Host VLM, qualified device-local VLM on supported hardware per `D-PHONE-16..16E`, separately authorized Cloud VLM, or offline durable persistence and queued sync; `D-SHARED-VISION-01`).
   - *Responsibility:* Mobile
-  - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §3.1, [`MOBILE_SYSTEM_BASELINE.md`](../../04_Architecture/MOBILE_SYSTEM_BASELINE.md) §7
-  - *Principal Dependencies:* `MOB-CONV-001`
+  - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §3.1, [`multimodal-and-media.md`](../../04_Architecture/01_Domains/multimodal-and-media.md) §3, [`MOBILE_SYSTEM_BASELINE.md`](../../04_Architecture/MOBILE_SYSTEM_BASELINE.md) §7
+  - *Principal Dependencies:* `MOB-CONV-001`, `MOB-VISION-001`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-CONV-006`**: Optional Cloud LLM Conversation Routing & Permission Boundary
@@ -367,14 +388,14 @@
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-CONV-007`**: Turn Control, User Message Queueing & Assistant Streaming Cancellation
-  - *Scope:* Implement active conversation turn control semantics: queue or reject user turns while an assistant generation is actively streaming, provide instantaneous user cancellation of streaming responses, and prevent out-of-order turn interleaving (`D-SHARED-CONV-02`, `D-SHARED-CONV-03`, `D-PHONE-09B`, `D-PHONE-09C`).
+  - *Scope:* Implement active conversation turn control semantics: queue user turns while assistant generation is actively streaming, provide queued message editing and removal before execution (`D-SHARED-CONV-03`), support `INTERRUPT_AND_SEND` to stop generation and immediately submit a new turn, instantaneous cancellation of streaming responses (`D-SHARED-CONV-02`), and prevent out-of-order turn interleaving.
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`assistant-and-conversations.md`](../../04_Architecture/01_Domains/assistant-and-conversations.md) §3.1, §3.3
   - *Principal Dependencies:* `MOB-CONV-001`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-CONV-008`**: Causal Branching & Disconnected Branch Fork Representation
-  - *Scope:* Support causal conversation branching for offline turns created on mobile, preserving parent turn references, client-generated conversation UUIDs, and divergence tracking without forcing destructive linear overwrites or host LLM regeneration upon reconnection (`D-SHARED-CONV-01`, `D-SHARED-CONV-03A`, `D-PHONE-09D`).
+  - *Scope:* Support causal conversation branching for turns created on mobile, preserving parent turn references, client-generated conversation UUIDs, branch comparison, divergence tracking, and safe regeneration without side-effect replay (`D-SHARED-CONV-01`, `D-SHARED-CONV-03A`), without forcing destructive linear overwrites or host LLM regeneration upon reconnection.
   - *Responsibility:* Both
   - *Architectural Owner:* [`assistant-and-conversations.md`](../../04_Architecture/01_Domains/assistant-and-conversations.md) §3.3, [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §3.2.6
   - *Principal Dependencies:* `MOB-CONV-002`, `MOB-DATA-004`, `MOB-CONTRACT-007`
@@ -426,8 +447,8 @@
   - *Principal Dependencies:* `MOB-INFER-004`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
-- **`MOB-INFER-006`**: Multi-Model Governance, Storage Pre-Allocation & Capability Tagging
-  - *Scope:* Implement governance metadata catalog for on-device models, requiring pre-flight storage reserve checks before transfer, SHA-256 verification, and minimum tier/RAM tagging per model bundle (`D-PHONE-11A..E`, `D-PHONE-15B`).
+- **`MOB-INFER-006`**: Multi-Model Governance, Storage Pre-Allocation & Capability Qualification
+  - *Scope:* Implement governance metadata catalog for on-device models, requiring pre-flight storage reserve checks before transfer, SHA-256 verification, and minimum tier/RAM tagging per model bundle (`D-PHONE-01C`, `D-PHONE-03`, `D-PHONE-05`, `D-PHONE-05A`); establish empirical qualification records (model artifact + quantization + runtime version + backend + hardware + context config), including the cross-device qualification requirement for Gemma 3 1B and candidate small models.
   - *Responsibility:* Both
   - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §2.3, §2.4
   - *Principal Dependencies:* `MOB-INFER-002`, `MOB-INFER-003`
@@ -472,10 +493,10 @@
   - *Principal Dependencies:* `MOB-VOICE-002`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
-- **`MOB-VOICE-006`**: Independently Capability-Gated Local STT Adapter
-  - *Scope:* Implement independent gating for device-local STT; truthfully degrade to typed text input when heavy local STT is unsupported.
+- **`MOB-VOICE-006`**: Independently Capability-Gated Local STT Adapter & Candidate Qualification
+  - *Scope:* Implement independent gating for device-local STT; truthfully degrade to typed text input when heavy local STT is unsupported (`D-PHONE-14C`); establish research qualification pipeline prioritizing `whisper.cpp` as first candidate on Mobile (`D-PHONE-14G`) to evaluate latency, memory, battery, thermal, noise, barge-in, English, Tagalog, and Taglish performance.
   - *Responsibility:* Mobile
-  - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §3.2
+  - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §3.2, §3.5
   - *Principal Dependencies:* `MOB-VOICE-002`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
@@ -487,7 +508,7 @@
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-VOICE-008`**: Composable Voice Pipeline Orchestration & Transition Indicators
-  - *Scope:* Build composable client voice state machine orchestrating independent selection of STT, LLM, and TTS providers across Connected Host, Standalone Local, and Optional Cloud paths; render unambiguous transition indicators and enforce zero silent provider fallback (`D-SHARED-FLUTTER-05`, `D-PHONE-13A..E`).
+  - *Scope:* Build composable client voice state machine orchestrating independent selection of STT, LLM, and TTS providers across Connected Host, Standalone Local, and Optional Cloud paths; render unambiguous transition indicators and enforce zero silent provider fallback (`D-SHARED-FLUTTER-05`, `D-PHONE-14`, `D-PHONE-14A..F`).
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`voice-and-audio.md`](../../04_Architecture/01_Domains/voice-and-audio.md) §5, [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §3.1
   - *Principal Dependencies:* `MOB-VOICE-001`, `MOB-VOICE-002`, `MOB-VOICE-003`
@@ -497,15 +518,15 @@
 
 ### Stream: `MOB-TOOL` — Mobile Local Tools & Capability Gateway
 
-- **`MOB-TOOL-001`**: Mobile Local Tool Registry & Safe Capability Dispatcher
-  - *Scope:* Implement mobile-local tool registry and execution gateway for safe client capabilities (device time, local alarms, battery status, quick task/note entry); strictly isolate mobile tool execution from Host-level OS/shell access (`D-PHONE-12A`, `D-PHONE-12B`).
+- **`MOB-TOOL-001`**: Mobile Local Tool Gateway, Productivity Adapters & Read Tools
+  - *Scope:* Implement standalone Mobile Tool Gateway under Decision D9 policy (`D-PHONE-13`) for safe productivity tools (Tasks, Mobile Reminders/Alarms, occurrence actions, Schedule reads; `D-PHONE-13A`), local Companion reads (cached Memory, pending Memory intents, cached history, Character info, runtime/sync status; `D-PHONE-13D`), and read-only internet tools (Web Search, WebFetch, Weather; `D-PHONE-13B`) decoupled from Cloud LLM authorization (`D-PHONE-13C`); strictly enforce exclusion of arbitrary shell, raw filesystem, admin, and Profile admin execution (`D-PHONE-13E`).
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`tool-permissions-and-actions.md`](../../04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md) §6, [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §4.1
   - *Principal Dependencies:* `MOB-FOUNDATION-004`, `MOB-CONV-002`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
-- **`MOB-TOOL-002`**: User Confirmation Guardrails, Tool Privacy Envelopes & Offline Execution Provenance
-  - *Scope:* Enforce user confirmation prompts for privacy-impacting local tool invocations, log tool execution results in turn provenance envelopes, and ensure no tool side-effects bypass the security policy (`D-PHONE-12C`, `D-PHONE-12D`).
+- **`MOB-TOOL-002`**: User Confirmation Guardrails, Tool Qualification & Turn Provenance
+  - *Scope:* Enforce tool capability qualification requiring adapter/backend confirmation before claiming success (`D-PHONE-13F`); enforce deterministic user confirmation prompts for privacy-impacting or mutating actions, log tool execution results in turn provenance envelopes, and ensure no tool side-effects bypass D9 policy.
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`tool-permissions-and-actions.md`](../../04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md) §6, [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §4.2
   - *Principal Dependencies:* `MOB-TOOL-001`, `MOB-DATA-004`
@@ -515,15 +536,15 @@
 
 ### Stream: `MOB-HEALTH` — Mobile Health & Biometric Context
 
-- **`MOB-HEALTH-001`**: Android Health Connect Platform Adapter & Permission Lifecycle
-  - *Scope:* Build Android Health Connect client adapter (`androidx.health.connect.client`) supporting read-only aggregation of daily metrics (steps, sleep duration, heart rate rest average); implement runtime permission requests, graceful unavailable handling, and explicit opt-in controls (`D-SHARED-HEALTH-01`, `D-SHARED-HEALTH-03`).
+- **`MOB-HEALTH-001`**: Android Health Connect Platform Adapter & Granular Permission Lifecycle
+  - *Scope:* Build Android Health Connect client adapter (`androidx.health.connect.client`) supporting read-only ingestion of granular metrics as supplied by source (steps, sleep, heart rate, SpO₂, blood pressure, body temperature, distance, active calories; `D-PHONE-15A`, `D-PHONE-15B`); implement runtime permission requests, graceful unavailable handling, measurement timestamp preservation, freshness evaluation (`stale != zero`), and explicit opt-in controls (`D-PHONE-15`, `D-PHONE-15E`, `D-SHARED-HEALTH-01`).
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`health-and-wearables.md`](../../04_Architecture/03_Integrations/health-and-wearables.md) §4, [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §5.2
   - *Principal Dependencies:* `MOB-FOUNDATION-004`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
-- **`MOB-HEALTH-002`**: Biometric Context Assembly, Opt-In Sync Envelope & Sequestered UI Replacement
-  - *Scope:* Assemble compact health context summaries for companion conversation injection, implement explicit user opt-in sync envelope to transmit health metrics to Host PC, and remove/replace legacy prototype mock health UI with production consent surfaces (`D-SHARED-HEALTH-02`, `D-SHARED-HEALTH-04`).
+- **`MOB-HEALTH-002`**: Biometric Context Assembly, Opt-In Sync Envelope & Non-Clinical Guardrails
+  - *Scope:* Assemble compact normalized health context summaries for companion conversation injection, distinct from D7 Memory (`D-PHONE-15C`); enforce non-clinical wellness guardrails (`D-SHARED-HEALTH-02`), health-aware check-ins (`D-SHARED-HEALTH-03`), and health cloud egress isolation (separate explicit authorization, default deny; `D-SHARED-HEALTH-04`); implement opt-in sync envelope to transmit normalized health context to Host PC (`D-PHONE-15D`).
   - *Responsibility:* Both
   - *Architectural Owner:* [`health-and-wearables.md`](../../04_Architecture/03_Integrations/health-and-wearables.md) §4, §5
   - *Principal Dependencies:* `MOB-HEALTH-001`, `MOB-DATA-003`, `MOB-SYNC-001`
@@ -534,14 +555,14 @@
 ### Stream: `MOB-VISION` — Mobile Multimodal Vision & Media
 
 - **`MOB-VISION-001`**: Mobile Camera/Gallery Image Ingestion, Downscaling & EXIF Stripping
-  - *Scope:* Implement image attachment capture via camera and photo picker, apply pre-flight image compression/downscaling, strip sensitive EXIF GPS metadata, and persist images in private app sandbox storage (`D-SHARED-VISION-01`, `D-PHONE-14A`).
+  - *Scope:* Implement image attachment capture via camera and photo picker input adapters (`D-PHONE-16A`), apply pre-flight image compression/downscaling, strip sensitive EXIF GPS metadata, and persist images in private app sandbox storage; enforce explicit still-image capture boundary (`D-PHONE-16E`: ambient/background camera streaming excluded).
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`multimodal-and-media.md`](../../04_Architecture/01_Domains/multimodal-and-media.md) §3, [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §5.1
-  - *Principal Dependencies:* `MOB-FOUNDATION-004`, `MOB-CONV-005`
+  - *Principal Dependencies:* `MOB-FOUNDATION-004`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
-- **`MOB-VISION-002`**: Offline Vision Attachment Outbox & Reconnect Transfer Pipeline
-  - *Scope:* Queue image attachments in the local outbox journal for transactional upload to PC Host upon reconnection; support direct image dispatch to user-configured Cloud VLM when permitted (`D-SHARED-VISION-01`, `D-PHONE-14B`).
+- **`MOB-VISION-002`**: Multimodal Route Dispatch, Offline Turn Persistence & Memory Boundary
+  - *Scope:* Implement multimodal route selection (`D-PHONE-16B`: PC Host local VLM, qualified Mobile local VLM per `D-PHONE-16` and `D-PHONE-16C`, separately authorized Cloud multimodal, or offline persistence); durably persist offline image turns and attachments without Host regeneration (`D-PHONE-16D`); enforce that visual observations do not automatically create Memory (`D-SHARED-VISION-01`).
   - *Responsibility:* Both
   - *Architectural Owner:* [`multimodal-and-media.md`](../../04_Architecture/01_Domains/multimodal-and-media.md) §3, [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §3.1
   - *Principal Dependencies:* `MOB-VISION-001`, `MOB-SYNC-001`
@@ -551,8 +572,8 @@
 
 ### Stream: `MOB-CHAR` — Companion Personality, Emotion & Presence
 
-- **`MOB-CHAR-001`**: Character Mood, Lightweight Emotion Event Sync & Avatar Expression Fallback
-  - *Scope:* Implement lightweight Emotion Event data model (`valence`, `arousal`, `expression_tag`), consume mood state updates from Host, support local emotion expression rendering, and provide guaranteed emoji / mood-glyph fallback when rich assets are unavailable (`D-PHONE-EMO-01`, `D-SHARED-FLUTTER-08`, `D-PHONE-UX-10`).
+- **`MOB-CHAR-001`**: Typed Bounded Emotion Event Sync & Avatar Expression Fallback
+  - *Scope:* Implement typed bounded Emotion Event data model staged in durable outbox (`D-PHONE-EMO-01`), optional provisional local client presentation, Host D11 reconciliation upon reconnection (`D-SHARED-FLUTTER-08`), and guaranteed emoji / mood-glyph fallback when rich expression assets are unavailable (`D-PHONE-UX-10`); Mobile does not sync arbitrary canonical Mood state to Host.
   - *Responsibility:* Both
   - *Architectural Owner:* [`characters-personality-and-emotion.md`](../../04_Architecture/01_Domains/characters-personality-and-emotion.md) §5, [`docs/05_Design/08_Mobile_Companion_Shell_and_UX.md`](../../05_Design/08_Mobile_Companion_Shell_and_UX.md) §4
   - *Principal Dependencies:* `MOB-FOUNDATION-003`, `MOB-DATA-003`, `MOB-SYNC-001`
@@ -562,15 +583,15 @@
 
 ### Stream: `MOB-UX` — Mobile Companion Shell, Design System & Surfaces
 
-- **`MOB-UX-001`**: Hybrid SoftGlass / Solid Surface Theme System & Accessible Design Primitives
-  - *Scope:* Build responsive Flutter theme system implementing hybrid SoftGlass (frosted backdrop blur) and Solid surface fallbacks based on device performance; ensure minimum 48x48dp touch targets and high-contrast text accessibility (`D-PHONE-UX-07`, `D-PHONE-UX-08`, `D-SHARED-FLUTTER-06`).
+- **`MOB-UX-001`**: Hybrid Visual Design Language & Accessible Design Primitives
+  - *Scope:* Build responsive Flutter theme system implementing the hybrid design language (Minimalist foundation, selective Neumorphism, contextual Glass / Liquid Glass; `D-PHONE-UX-08`, `D-SHARED-FLUTTER-06`); support OLED-first default appearance, Dark, Light, and System themes, accessible 48x48dp touch targets, and reduced-motion / reduced-effects modes.
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`docs/05_Design/08_Mobile_Companion_Shell_and_UX.md`](../../05_Design/08_Mobile_Companion_Shell_and_UX.md) §2, §6
   - *Principal Dependencies:* `MOB-FOUNDATION-003`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
-- **`MOB-UX-002`**: Portrait-First Companion Navigation Shell, Quick Actions & Header Summary
-  - *Scope:* Construct portrait-first mobile navigation shell featuring compact companion status header, responsive conversation body, and quick-action companion bottom sheet (`D-PHONE-UX-01`, `D-PHONE-UX-02`, `D-PHONE-UX-03`, `D-PHONE-UX-04`).
+- **`MOB-UX-002`**: Five-Tab Companion Navigation Shell & Unified Surfaces
+  - *Scope:* Construct 5-tab mobile navigation shell (`Home / Schedule / COMPANION / Activity / More`; `D-PHONE-UX-01`), with icon-first navigation and accessible labels (`D-PHONE-UX-01A`), emphasized center Companion action (`D-PHONE-UX-03`), contextual Companion Home (`D-PHONE-UX-02`), and unified Schedule surface (`D-PHONE-UX-04`).
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`docs/05_Design/08_Mobile_Companion_Shell_and_UX.md`](../../05_Design/08_Mobile_Companion_Shell_and_UX.md) §3
   - *Principal Dependencies:* `MOB-UX-001`, `MOB-FOUNDATION-005`
@@ -590,11 +611,18 @@
   - *Principal Dependencies:* `MOB-UX-001`, `MOB-CONV-001`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
-- **`MOB-UX-005`**: Companion Presence, Mood Glyphs & Connectivity Status Surfaces
-  - *Scope:* Render companion presence indicators, connectivity state banners (Connected / Standalone / Disconnected), and fallback mood glyphs across the mobile application shell (`D-PHONE-UX-10`, `P-SHARED-PRESENCE-01`, `P-PRESENCE-02`).
+- **`MOB-UX-005`**: Companion Presence, Mood Glyphs & Truthful Capability Status
+  - *Scope:* Render companion presence indicators, compact truthful capability status presentation (`D-PHONE-UX-06`), graceful standalone UX (`D-PHONE-UX-07`), and fallback mood glyphs across the mobile shell (`D-PHONE-UX-10`, `P-SHARED-PRESENCE-01`, `P-PRESENCE-02`).
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`docs/05_Design/08_Mobile_Companion_Shell_and_UX.md`](../../05_Design/08_Mobile_Companion_Shell_and_UX.md) §3, §4
   - *Principal Dependencies:* `MOB-UX-002`, `MOB-CHAR-001`
+  - *Implementation State:* `APPROVED TARGET / NOT STARTED`
+
+- **`MOB-UX-006`**: Activity & Reconciliation Inbox Surface
+  - *Scope:* Build human-readable Activity inbox surface (`D-PHONE-UX-05`) displaying missed alerts, Routine check-ins, sync completion/conflicts, pending Memory reconciliation, reconnection notices, model/resource degradation notices, and tool action receipts; avoid raw debug log dumps.
+  - *Responsibility:* Mobile
+  - *Architectural Owner:* [`docs/05_Design/08_Mobile_Companion_Shell_and_UX.md`](../../05_Design/08_Mobile_Companion_Shell_and_UX.md) §3, [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §4
+  - *Principal Dependencies:* `MOB-UX-002`, `MOB-SYNC-004`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 ---
@@ -684,12 +712,20 @@
 
 ---
 
-## 3. Explicit Mobile V1 Non-Goals (Deferred / Post-V1)
+## 3. Explicit Mobile V1 Non-Goals (Deferred / Excluded Boundaries)
 
-The following capabilities are explicitly **excluded** from Mobile V1 WBS deliverables:
-1. **Continuous Biometric Sensor Streaming & Diagnostics (`Mobile Later`):** While read-only Health Connect integration (`androidx.health.connect`) for daily aggregations (steps, sleep, heart rate) is supported as `CONDITIONAL V1` per `D-SHARED-HEALTH-01..04`, continuous real-time raw sensor streaming, background telemetry polling without consent, wearable direct pairing, and autonomous clinical diagnostics are strictly deferred post-V1.
-2. **Autonomous Local Routines (`Mobile Later`):** Autonomous local routine execution is deferred post-V1; cached read-only view offline only.
-3. **Local On-Device VLM / Vision Inference (`Post-V1 Candidate`):** Local vision inference is excluded from Mobile V1. Multimodal attachment capture, preflight compression, and queued transfer to PC Host (or optional user-configured Cloud VLM) are supported per `D-SHARED-VISION-01` and `D-PHONE-14A..B`; local on-device VLM execution is deferred post-V1.
-4. **Always-On Wake Word Detection (`Mobile Later`):** Continuous background wake-word listening is prohibited on mobile in V1.
-5. **In-App Public Model Hub / Catalog Downloads (`Post-V1 Candidate`):** In-app browsing and downloading from online model hubs is deferred; V1 uses LAN Host-to-Device model transfer.
-6. **Shared Master Database Secrets (`Permanently Rejected`):** Distributing master database encryption keys or master API secrets to mobile satellite endpoints is permanently rejected.
+The following capabilities are explicitly classified as deferred or rejected across Mobile V1 deliverables:
+
+### 3.1 Deferred Capabilities (Post-V1 Candidates / Mobile Later)
+1. **Continuous Biometric Sensor Streaming & Clinical Diagnostics (`Mobile Later`):** While read-only Health Connect integration (`androidx.health.connect`) for granular metrics is supported as `CONDITIONAL V1` per `D-PHONE-15..15E` and `D-SHARED-HEALTH-01..04`, continuous real-time raw sensor streaming, high-frequency background telemetry polling, direct wearable sensor pairing, and autonomous clinical diagnostics are deferred post-V1.
+2. **Autonomous Local Routine Recurrence (`Mobile Later`):** Autonomous local routine recurrence generation beyond Host-issued occurrences is deferred post-V1; local presentation of Host-authorized occurrences and local suppression are supported in V1 (`D-PHONE-12..12E`).
+3. **In-App Public Model Hub / Catalog Downloads (`Post-V1 Candidate`):** In-app browsing and direct downloading from online model hubs is deferred; V1 uses protected LAN Host-to-Device model transfer with SHA-256 preflight (`D-PHONE-01C`).
+4. **Mobile Augmented Reality (AR) Companion Presence (`Future Direction`):** Mobile AR placement and live scene interaction are approved long-term directions (`P-PHONE-AR-01..02`) deferred beyond V1.
+5. **Direct Wearable Integrations (`Mobile Later`):** Direct proprietary wearable pairing is deferred; Health Connect serves as the aggregation boundary in V1 (`D-PHONE-15E`).
+
+### 3.2 Permanently Excluded / Rejected Invariants
+1. **Ambient Continuous Camera & Surveillance Sensing (`Permanently Excluded`):** Continuous ambient camera streaming, background visual sensing, surveillance-style observation, and continuous live environmental sensing are strictly excluded from V1 (`D-PHONE-16E`, `P-PHONE-AR-02`). In contrast, user-initiated still-image capture and qualified on-device local VLM inference are supported as `CONDITIONAL MOBILE V1` (`D-PHONE-16..16E`, `D-SHARED-VISION-01`).
+2. **Always-On Wake Word Detection & Ambient Eavesdropping (`Permanently Excluded`):** Continuous background wake-word listening and ambient microphone eavesdropping are strictly excluded (`D-PHONE-14F`). All voice sessions require explicit user action.
+3. **Arbitrary Shell, Raw Filesystem & Host Admin Authority (`Permanently Rejected`):** Mobile clients executing arbitrary shell commands, raw filesystem mutations, credential exports, or Host-level administrative actions are permanently rejected (`D-PHONE-13E`).
+4. **Shared Master Database Secrets (`Permanently Rejected`):** Distributing master database encryption keys or master API secrets to mobile satellite endpoints is permanently rejected (`ADR-0018`).
+5. **Autonomous Offline Memory Extraction (`Permanently Excluded`):** Ordinary offline chat silently or autonomously creating canonical Memory facts without explicit user intent is excluded (`D-PHONE-08`, `D-SHARED-AI-01..03`); PC Host owns canonical D7 Memory extraction.
