@@ -16,6 +16,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed (2026-10-07 - MOBILE-ARCH: Batch D5.2 Closure Reconciliation Corrections)
 
 - **Planning & Verification Alignment**: Reconciled AlarmManager exact alarm lifecycle permissions and degraded state handling, removed OOM zero-crash guarantees, established cross-host shared context budgeting assertions, refined composable voice degradation, aligned D9 confirmation vs execution evidence, and reconciled decision register entries to approved ledger source truth.
+- **Reconciliation & Historical Supersession**: Reconciled planning and design specifications supersede earlier interim summary details recorded during initial promotion:
+  - Current reconciled Mobile WBS comprises 88 items across 16 streams, not the earlier interim 84-item snapshot;
+  - Current Mobile visual language is a hybrid aesthetic consisting of a Minimalist foundation + selective Neumorphism + contextual Glass / Liquid Glass, not a SoftGlass/Solid-only design;
+  - Local Vision understanding is Conditional Mobile V1 on qualified hardware (`D-PHONE-16..16E`), with Host, authorized Cloud, and unavailable fallback routes;
+  - The earlier Added entry remains preserved unchanged as historical point-in-time changelog evidence.
 
 ### Added (2026-10-04 - MOBILE-ARCH: Mobile V1 Canonical Architecture & Planning Pass)
 
