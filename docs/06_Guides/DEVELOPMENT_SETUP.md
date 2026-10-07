@@ -16,7 +16,7 @@ Before developing locally, ensure the following prerequisites are installed and 
 | **Python** | 3.11.x 64-bit | Required for FastAPI backend and migration tools (`python --version`). |
 | **Flutter SDK** | Version will be officially pinned when scaffolded (PC-CLIENT-001) | Required for primary Windows Desktop client (`flutter --version`). |
 | **Visual Studio Build Tools** | 2022 (with Desktop C++) | Required by Flutter for compiling native Windows C++/CMake executables. |
-| **Node.js** | 22.x LTS (with npm) | Required for React Web developer harness (`node --version`, `npm --version`). |
+| **Node.js** | 22.x >= 22.22.2 or 24.x >= 24.15.0 (with npm) | Matches the committed web dependency engines. CI selects 22.22.2 (`node --version`, `npm --version`). |
 | **Git & Git LFS** | Latest 64-bit | LFS pointers on GitHub; weights stored on private Hugging Face dataset. |
 | **Android Studio** | Ladybug (2024.2+) or JDK 17+ | Required for Android mobile client reference prototype (`android/`). |
 | **Vulkan Runtime** | Vulkan SDK / Driver | GPU offloading for AMD Radeon RX 580 (Polaris / gfx803). |
@@ -47,14 +47,16 @@ In accordance with Phase 8P persistent storage architecture, repository director
 
 1. `APP_INSTALL_ROOT`: Read-only application distribution binaries, bundled engines, and static assets.
 2. `DATA_ROOT`: Persistent, profile-isolated SQLite database (`companion.db`), user settings, character avatars, and personal attachments. Defaults to `%LOCALAPPDATA%\AI Companion\Data`.
-3. `LIBRARY_ROOT`: Large, relocatable, host-shared assets (GGUF LLM weights, voice models, vision projectors). May be relocated to a secondary drive (e.g. `D:\AI-Models`) via `bootstrap.json`.
+3. `LIBRARY_ROOT`: Large, relocatable, host-shared assets (GGUF LLM weights, voice models, vision projectors). The target design supports independent relocation; the current bootstrap locator selects `DATA_ROOT` only.
 4. `CACHE_ROOT`: Ephemeral working scratchpads, temporary audio buffers, and staging directories. Safe to purge on reboot.
 5. `LOG_ROOT`: Structured application logs, crash diagnostics, and rotation archives.
 
 ### Resolution Precedence for `DATA_ROOT`
 1. **Environment Variable Override:** `COMPANION_DATA_ROOT` (highest precedence, used in CI and isolated testing)
-2. **Bootstrap Locator File:** `%LOCALAPPDATA%\AI Companion\bootstrap.json` containing `{"data_root": "...", "library_root": "..."}`
-3. **Approved OS Default:** `%LOCALAPPDATA%\AI Companion\Data` on Windows
+2. **Bootstrap Locator File:** `%LOCALAPPDATA%\AI Companion\bootstrap.json` containing `{"schema_version": 1, "data_root": "<absolute path>"}`
+3. **Approved OS Default:** `%LOCALAPPDATA%\AI Companion\Data` on Windows, when the locator is absent on first installation
+
+An existing invalid locator fails closed rather than selecting a different database. Malformed JSON, unsupported schema values, missing fields, and relative roots are rejected. A valid absolute target may not exist yet. An explicit `COMPANION_DATA_ROOT` override takes precedence, including over an invalid locator; no automatic locator repair is performed.
 
 ### Key Canonical Subpaths (under `DATA_ROOT` and `LIBRARY_ROOT`)
 - `DATABASE_PATH`: `<DATA_ROOT>/database/companion.db` — SQLite persistent database (WAL mode, foreign keys enabled)
@@ -80,8 +82,8 @@ From repository root:
 # 1. Navigate to backend
 cd backend
 
-# 2. Create and activate Python virtual environment
-python -m venv .venv
+# 2. Create a NEW Python 3.11 environment; preserve any existing .venv
+py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
 # 3. Upgrade pip and install dependencies
@@ -92,9 +94,17 @@ python -m pip install -r requirements.txt
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
+Verify the selected interpreter is Python 3.11 before creating the environment. If `.venv` already exists with another interpreter, use a separately named qualification environment and its explicit executable; do not overwrite or downgrade the existing environment. The dependency inputs in `requirements.txt` and `pyproject.toml` agree, but their version ranges are not a complete transitive/hash lock. Target Windows/Python 3.11 dependency resolution and qualification remain open; local Python 3.13 regression results do not qualify that baseline.
+
+`COMPANION_ENV_FILE` selects an alternate local configuration file; otherwise configuration uses the backend `.env`. Importing configuration does not create or persist a pairing credential. Explicit application startup initializes missing credentials in the selected configuration. Tests and contract verification select disposable configuration and storage before importing the application; see [TESTING_AND_CI.md](TESTING_AND_CI.md).
+
 - **Interactive API Documentation:** `http://127.0.0.1:8000/docs` (Swagger UI; available when `ENVIRONMENT=development`)
 - **OpenAPI JSON Specification:** `http://127.0.0.1:8000/openapi.json`
 - **Public Health Endpoint:** `http://127.0.0.1:8000/api/v1/health` (unauthenticated liveness probe)
+
+### Standalone Retention
+
+From `backend/`, `python -m app.services.retention --days 30` purges expired soft-deleted Tasks in the selected storage. The CLI initializes and disposes its own database runtime and requires an already prepared, compatible schema. It does not migrate a database during purge. Session-based callers retain ownership of their sessions/runtime. Retention verification uses disposable synthetic databases; periodic scheduling remains future work.
 
 ---
 
@@ -132,7 +142,7 @@ In a separate terminal:
 cd frontend/web
 
 # 2. Install dependencies
-npm install
+npm ci
 
 # 3. Start Vite development server
 npm run dev

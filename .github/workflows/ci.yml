@@ -13,6 +13,7 @@ on:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
+  # Every replacement develop/master push requires all lanes for its integrated tree.
   cancel-in-progress: true
 
 permissions:
@@ -54,8 +55,9 @@ jobs:
             target_branch=""
           fi
           
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            python scripts/ci_policy.py classify --event workflow_dispatch --target-branch "$target_branch"
+          # Integration pushes and explicit full runs do not depend on a path diff.
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] || [ "$target_branch" == "master" ] || { [ "${{ github.event_name }}" == "push" ] && [ "$target_branch" == "develop" ]; }; then
+            python scripts/ci_policy.py classify --event ${{ github.event_name }} --target-branch "$target_branch"
           else
             diff_success="false"
             if [ "${{ github.event_name }}" == "pull_request" ]; then
@@ -131,15 +133,29 @@ jobs:
         run: |
           $dataRoot = Join-Path $env:RUNNER_TEMP "ai-companion-ci"
           New-Item -ItemType Directory -Force -Path $dataRoot | Out-Null
+          $selectedConfig = Join-Path $dataRoot "synthetic.env"
+          Set-Content -LiteralPath $selectedConfig -Value "" -NoNewline
           "COMPANION_DATA_ROOT=$dataRoot" >> $env:GITHUB_ENV
+          "COMPANION_ENV_FILE=$selectedConfig" >> $env:GITHUB_ENV
+          "LOCALAPPDATA=$dataRoot" >> $env:GITHUB_ENV
 
       - name: Install backend dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r backend/requirements.txt
 
+      - name: Record Python qualification inputs
+        run: |
+          python -VV
+          python -m pip --version
+          python -m pip check
+          python -c "import importlib.metadata as m; print({name: m.version(name) for name in ('fastapi', 'pydantic', 'sqlalchemy', 'alembic', 'httpx', 'pytest')})"
+
+      - name: Verify import and collection isolation before the suite
+        run: python -I -B backend/tests/test_import_isolation.py -v
+
       - name: Run backend pytest suite
-        run: python -m pytest backend/tests -q
+        run: python -B -m pytest backend/tests -q -p no:cacheprovider -o log_file=NUL
 
   contract:
     name: Contract Verification (Windows / Python 3.11)
@@ -159,16 +175,34 @@ jobs:
           cache: 'pip'
           cache-dependency-path: 'backend/requirements.txt'
 
+      - name: Configure isolated contract inputs
+        shell: pwsh
+        run: |
+          $dataRoot = Join-Path $env:RUNNER_TEMP "ai-companion-contract-ci"
+          New-Item -ItemType Directory -Force -Path $dataRoot | Out-Null
+          $selectedConfig = Join-Path $dataRoot "synthetic.env"
+          Set-Content -LiteralPath $selectedConfig -Value "" -NoNewline
+          "COMPANION_DATA_ROOT=$dataRoot" >> $env:GITHUB_ENV
+          "COMPANION_ENV_FILE=$selectedConfig" >> $env:GITHUB_ENV
+          "LOCALAPPDATA=$dataRoot" >> $env:GITHUB_ENV
+
       - name: Install backend dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r backend/requirements.txt
 
+      - name: Record Python contract qualification inputs
+        run: |
+          python -VV
+          python -m pip --version
+          python -m pip check
+          python -c "import importlib.metadata as m; print({name: m.version(name) for name in ('fastapi', 'pydantic', 'sqlalchemy', 'alembic', 'httpx', 'pytest')})"
+
       - name: Verify OpenAPI contract and route integrity
-        run: python scripts/check_openapi_contract.py
+        run: python -B scripts/check_openapi_contract.py --check
 
   frontend:
-    name: Frontend Verification (Windows / Node 22)
+    name: Frontend Verification (Windows / Node 22.22.2)
     needs: classifier
     if: needs.classifier.outputs.needs_frontend == 'true'
     runs-on: windows-latest
@@ -176,12 +210,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Set up Node.js 22
+      - name: Set up Node.js 22.22.2
         uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '22.22.2'
           cache: 'npm'
           cache-dependency-path: 'frontend/web/package-lock.json'
+
+      - name: Record Node qualification inputs
+        run: |
+          node --version
+          npm --version
 
       - name: Install frontend dependencies
         run: npm --prefix frontend/web ci

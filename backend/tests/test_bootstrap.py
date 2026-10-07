@@ -54,32 +54,28 @@ def test_bootstrap_takes_precedence_over_default(monkeypatch, tmp_path):
     assert resolved == bootstrap_root.resolve()
 
 
-def test_corrupt_bootstrap_falls_back_to_default(monkeypatch, tmp_path):
-    """Corrupt or malformed bootstrap.json logs warning and falls back to default root."""
+def test_corrupt_bootstrap_fails_closed(monkeypatch, tmp_path):
+    """An existing malformed locator cannot select another persistent root."""
     monkeypatch.delenv("COMPANION_DATA_ROOT", raising=False)
     bootstrap_file = tmp_path / "bootstrap.json"
     bootstrap_file.write_text("{ this is corrupt json !!!")
 
     default_root = tmp_path / "DefaultRoot"
-    resolved = resolve_data_root(
-        bootstrap_path=bootstrap_file,
-        default_root=default_root,
-    )
-    assert resolved == default_root.resolve()
+    with pytest.raises(BootstrapCorruptError):
+        resolve_data_root(bootstrap_path=bootstrap_file, default_root=default_root)
+    assert not default_root.exists()
 
 
-def test_bootstrap_missing_data_root_falls_back(monkeypatch, tmp_path):
-    """Valid JSON missing 'data_root' key falls back to default root."""
+def test_bootstrap_missing_data_root_fails_closed(monkeypatch, tmp_path):
+    """Valid JSON without the required root is an invalid existing locator."""
     monkeypatch.delenv("COMPANION_DATA_ROOT", raising=False)
     bootstrap_file = tmp_path / "bootstrap.json"
     bootstrap_file.write_text(json.dumps({"schema_version": 1}))
 
     default_root = tmp_path / "DefaultRoot"
-    resolved = resolve_data_root(
-        bootstrap_path=bootstrap_file,
-        default_root=default_root,
-    )
-    assert resolved == default_root.resolve()
+    with pytest.raises(BootstrapCorruptError):
+        resolve_data_root(bootstrap_path=bootstrap_file, default_root=default_root)
+    assert not default_root.exists()
 
 
 def test_pure_resolution_has_no_side_effects(monkeypatch, tmp_path):
@@ -180,3 +176,40 @@ def test_write_bootstrap_rejects_relative_data_root(tmp_path):
         )
     assert "absolute" in str(exc_info.value).lower()
     assert not bootstrap_target.exists()
+
+
+@pytest.mark.parametrize("payload", [
+    [], None, {}, {"data_root": "ROOT"}, {"schema_version": 2, "data_root": "ROOT"},
+    {"schema_version": True, "data_root": "ROOT"}, {"schema_version": 1.0, "data_root": "ROOT"},
+    {"schema_version": 1, "data_root": None}, {"schema_version": 1, "data_root": 123},
+    {"schema_version": 1, "data_root": ""}, {"schema_version": 1, "data_root": "   "},
+])
+def test_invalid_existing_locator_schema_fails_closed(payload, monkeypatch, tmp_path):
+    monkeypatch.delenv("COMPANION_DATA_ROOT", raising=False)
+    if isinstance(payload, dict) and payload.get("data_root") == "ROOT":
+        payload = {**payload, "data_root": str(tmp_path / "configured")}
+    locator = tmp_path / "bootstrap.json"
+    locator.write_text(json.dumps(payload), encoding="utf-8")
+    default = tmp_path / "alternate"
+    with pytest.raises(BootstrapCorruptError):
+        resolve_data_root(bootstrap_path=locator, default_root=default)
+    assert not default.exists()
+
+
+def test_locator_directory_fails_closed(monkeypatch, tmp_path):
+    monkeypatch.delenv("COMPANION_DATA_ROOT", raising=False)
+    locator = tmp_path / "bootstrap.json"
+    locator.mkdir()
+    with pytest.raises(BootstrapCorruptError):
+        resolve_data_root(bootstrap_path=locator, default_root=tmp_path / "alternate")
+
+
+def test_explicit_override_preserves_precedence_over_corrupt_locator(monkeypatch, tmp_path):
+    locator = tmp_path / "bootstrap.json"
+    locator.write_text("broken", encoding="utf-8")
+    explicit = tmp_path / "explicit"
+    environment = tmp_path / "environment"
+    monkeypatch.setenv("COMPANION_DATA_ROOT", str(environment))
+    assert resolve_data_root(bootstrap_path=locator) == environment.resolve()
+    assert resolve_data_root(env_override=str(explicit), bootstrap_path=locator) == explicit.resolve()
+    assert not explicit.exists() and not environment.exists()

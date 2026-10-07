@@ -171,10 +171,10 @@ async def update_task(
             setattr(task, field, value.value if hasattr(value, "value") else value)
 
     # Recompute reminder_at if reminder offset or due_date changed and reminder_at wasn't explicitly supplied
-    if "reminder_at" not in update_data:
+    if "reminder_at" not in update_data and {"due_date", "reminder_minutes_before"} & update_data.keys():
         if task.reminder_minutes_before is not None and task.due_date is not None:
             task.reminder_at = task.due_date - timedelta(minutes=task.reminder_minutes_before)
-        elif task.reminder_minutes_before is None:
+        else:
             task.reminder_at = None
 
     await db.commit()

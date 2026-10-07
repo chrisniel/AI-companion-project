@@ -52,11 +52,13 @@ class TaskCreate(BaseSchema):
 class TaskUpdate(BaseSchema):
     """Payload to update an existing task. Fields omitted remain unchanged."""
 
-    title: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    # Omission uses an internal placeholder excluded by model_fields_set. Supplied
+    # values remain non-nullable, including in the generated request contract.
+    title: str = Field(default_factory=lambda: None, min_length=1, max_length=255)
     notes: Optional[str] = Field(default=None)
-    category: Optional[TaskCategory] = Field(default=None)
-    status: Optional[TaskStatus] = Field(default=None)
-    priority: Optional[TaskPriority] = Field(default=None)
+    category: TaskCategory = Field(default_factory=lambda: None)
+    status: TaskStatus = Field(default_factory=lambda: None)
+    priority: TaskPriority = Field(default_factory=lambda: None)
     due_date: Optional[datetime] = Field(default=None)
     reminder_minutes_before: Optional[int] = Field(default=None, ge=0)
     reminder_at: Optional[datetime] = Field(default=None)

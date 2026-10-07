@@ -25,7 +25,7 @@ The AI Companion project maintains a strict test-first verification discipline. 
 
 The project distinguishes two complementary verification tiers:
 
-- **Level 1 — Automated Scoped CI (Code, Contract & Build Gatekeeper):** Fast, deterministic automated checks running at configured integration boundaries. Covers unit tests, component tests, static typing, build verification, and OpenAPI contract drift detection. Automated CI provides repeatable code-level protection, but cannot substitute for integrated release acceptance.
+- **Level 1 — Automated CI (Code, Contract & Build Gatekeeper):** Pull requests to `develop` use scoped checks; every push to `develop` runs all existing lanes against the integrated tree. Covers unit tests, component tests, static typing, build verification, and OpenAPI contract drift detection. Automated CI provides repeatable code-level protection, but cannot substitute for integrated release acceptance.
 - **Level 2 — Golden PC V1 Acceptance Checklist (Release Gatekeeper):** Comprehensive, end-to-end companion verification path proving seamless operation across the **14 Golden Acceptance Checkpoint Groups** covering all mandatory PC V1 capabilities (defined in [`SYSTEM_BASELINE.md §5`](../04_Architecture/SYSTEM_BASELINE.md#5-golden-pc-v1-acceptance-gate-14-verification-groups)). Evaluates real Windows host processes, physical/virtual audio devices, native OS notifications, user interactive journeys, and restart/restore persistence that headless CI environments cannot fully simulate. Passing the Golden Gate is the mandatory prerequisite for tagging a PC V1 release.
 
 - G1 Installation / startup / process lifecycle
@@ -53,23 +53,33 @@ Run these commands locally before opening pull requests or handing over tasks:
 From repository root (with active virtual environment):
 
 ```powershell
-# Set ephemeral testing configuration (prevents modifying local user database)
+# Select disposable configuration and storage BEFORE application imports
+$testRoot = Join-Path $env:TEMP ([guid]::NewGuid().ToString())
+New-Item -ItemType Directory -Path $testRoot | Out-Null
+$env:COMPANION_ENV_FILE = Join-Path $testRoot "synthetic.env"
+New-Item -ItemType File -Path $env:COMPANION_ENV_FILE | Out-Null
 $env:COMPANION_API_KEY = "ci-ephemeral-test-key"
-$env:COMPANION_DATA_ROOT = Join-Path $env:TEMP "ai-companion-test"
+$env:COMPANION_DATA_ROOT = Join-Path $testRoot "data"
+$env:LOCALAPPDATA = Join-Path $testRoot "local-appdata"
+
+# Prove import/collection isolation before running the application suite
+python -I -B backend/tests/test_import_isolation.py -v
 
 # Run full backend test suite
-python -m pytest backend/tests -q
+python -B -m pytest backend/tests -q -p no:cacheprovider -o log_file=NUL
 ```
 
+Use the selected Python 3.11 environment executable. The isolation regression installs guards around real imports and collection; `backend/tests/conftest.py` establishes synthetic authentication/configuration before application imports. Local Python 3.13 results are secondary regression evidence. Python 3.11 qualification and a verified transitive/hash dependency input remain pending; the current declaration ranges are not a complete lock.
+
 ### B. OpenAPI Contract Drift Verification
-FastAPI routes must strictly match the committed OpenAPI specification:
+FastAPI routes must strictly match the committed OpenAPI specification. Use the disposable configuration/storage above before importing the application:
 
 ```powershell
 # Check mode: Exit code 0 if synchronized; exit code 1 if drift detected
-python scripts/check_openapi_contract.py
+python -B scripts/check_openapi_contract.py --check
 
 # Write mode: Regenerates contracts/openapi/openapi.json to match current FastAPI definitions
-python scripts/check_openapi_contract.py --write
+python -B scripts/check_openapi_contract.py --write
 ```
 
 ### C. Flutter Desktop Verification (Primary Client)
@@ -111,13 +121,13 @@ cd android
 
 ### 3.1 Implemented Workflow Reality
 The automated GitHub Actions workflow is defined in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) and relies on a script-driven classification architecture.
-- **Concurrency:** `cancel-in-progress: true` prevents redundant in-flight runs.
+- **Concurrency:** `cancel-in-progress: true` cancels superseded runs. Every replacement `develop` push runs all existing lanes against its integrated tree, including docs-only pushes, so cancellation cannot replace earlier required backend verification with a scoped docs-only green gate. Cancellation alone does not establish cumulative coverage.
 - **Active Jobs:**
-  1. **`classifier` (Ubuntu):** Executes static tests for `scripts/ci_policy.py`, then evaluates Git diffs (PR or Push) against a deterministic matrix to output boolean requirements (`needs_backend`, `needs_frontend`, etc.).
+  1. **`classifier` (Ubuntu):** Executes static tests for `scripts/ci_policy.py`, then classifies PR diffs to output boolean requirements (`needs_backend`, `needs_frontend`, etc.). Pushes to `develop`, events targeting `master`, and manual dispatch require all lanes without relying on a path diff.
   2. **`docs-integrity` (Ubuntu):** Conditionally executed if `needs_docs` is true. Performs fast file-presence and diff-formatting checks.
-  3. **`backend` (Windows / Python 3.11):** Conditionally executed if `needs_backend` is true. Ephemeral data root, dependency installation, and backend pytest suite.
-  4. **`contract` (Windows / Python 3.11):** Conditionally executed if `needs_contract` is true. Verifies OpenAPI contract equality.
-  5. **`frontend` (Windows / Node 22):** Conditionally executed if `needs_frontend` is true. Clean npm ci, Vitest suite, TypeScript compilation check, and Vite production bundle build.
+  3. **`backend` (Windows / Python 3.11):** Conditionally executed if `needs_backend` is true. Disposable authentication/configuration and storage, dependency installation, interpreter/package metadata and `pip check`, guarded import/collection isolation, then the backend pytest suite.
+  4. **`contract` (Windows / Python 3.11):** Conditionally executed if `needs_contract` is true. Disposable configuration/storage, interpreter/package metadata and `pip check`, then OpenAPI contract equality.
+  5. **`frontend` (Windows / Node 22.22.2):** Conditionally executed if `needs_frontend` is true. Records Node/npm versions, then clean npm ci, Vitest suite, TypeScript compilation check, and Vite production bundle build.
   6. **`ci-gate` (Ubuntu):** Downstream aggregation job that provides the aggregate status intended to serve as the single required CI status when/if repository branch protection requires it.
 
 *Note: Future Flutter desktop verification will be added as an independent Windows job lane.*
@@ -130,17 +140,22 @@ To eliminate redundant runner minute consumption while hardening release integri
 | :--- | :--- | :--- |
 | **Push ordinary short-lived branch** (`feature/**`, `chore/**`, `docs/**`, `fix/**`, `refactor/**`, etc.) | **No automatic CI workflow.** | Primary verification occurs locally. Prevents burning expensive runner minutes on rapid, WIP branch commits. |
 | **Pull Request → `develop`** | **Path-aware / scoped CI.** | Targets verification strictly to the subsystems modified in the PR diff (e.g., frontend only, backend only). |
-| **Push to `develop`** | **Scoped integration CI.** | Primary integration gatekeeper for merged code, verifying interacting subsystems modified since the last passing baseline. |
+| **Push to `develop`** | **Full integration CI: all existing lanes.** | Each integrated tree is verified cumulatively, including a later docs-only push replacing a cancelled backend run. |
 | **Pull Request → `master`** | **Full PC V1 CI.** | Critical release boundary. Must pass completely before merge approval. Target branch extraction overrides diff scopes. |
 | **Push to `master`** | **Full PC V1 CI.** | Production baseline verification. Required before any release packaging. |
 | **`workflow_dispatch`** | **Full CI anywhere.** | Allows manual, explicit invocation of the full pipeline on any branch via strict parameter override. |
 | **Docs-only PR → `develop`** | **classifier + docs-integrity + ci-gate** | Fast validation for `.md`/repo docs. `backend`, `frontend`, and `contract` are intentionally skipped. |
 
 ### 3.3 Path Mapping Rules
+These rules scope PRs to `develop`; integration pushes retain full verification.
 - **Backend changes** (`backend/**`) require both `backend` and `contract` lanes.
 - **Contract changes** (`contracts/**`, `scripts/check_openapi_contract.py`) independently require the `contract` lane.
 - **Mixed changes** (e.g., frontend + docs) correctly trigger both `frontend` and `docs-integrity`.
 - **Unknown/Shared changes** (e.g., `.github/**`, `android/**`, unmapped `scripts/**`) trigger conservative **Full Verification** (all lanes active).
+
+### 3.4 Qualification Evidence Boundaries
+
+After human publication, review the actual candidate's hosted Windows Python 3.11 backend and contract results and Node 22.22.2 frontend result (a PR or explicit full `workflow_dispatch`). Review full `develop` integration CI separately after merge. Authored workflow policy and local classifier tests do not prove hosted execution. Python 3.13 local tests and contract generation do not replace Python 3.11 qualification; successful installation from version ranges also does not establish a complete dependency lock.
 
 ---
 

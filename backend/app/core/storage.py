@@ -150,6 +150,8 @@ def resolve_data_root(
     3. Approved OS default (%LOCALAPPDATA%\\AI Companion\\Data)
 
     This function is strictly pure and has no database or filesystem creation side effects.
+    Only a missing first-install locator permits default selection. An invalid
+    existing locator fails closed to prevent switching persistent databases.
     """
     # 1. Environment override
     override = env_override if env_override is not None else os.environ.get("COMPANION_DATA_ROOT")
@@ -162,24 +164,22 @@ def resolve_data_root(
 
     # 2. Bootstrap locator file
     b_path = bootstrap_path if bootstrap_path is not None else get_bootstrap_path()
-    if b_path.exists() and b_path.is_file():
+    if os.path.lexists(b_path):
         try:
+            if not b_path.is_file():
+                raise BootstrapCorruptError("Existing bootstrap locator is not a readable file.")
             content = b_path.read_text(encoding="utf-8")
             data = json.loads(content)
-            if isinstance(data, dict) and "data_root" in data and isinstance(data["data_root"], str):
-                target_str = data["data_root"].strip()
-                if target_str:
-                    target_p = Path(target_str)
-                    if not target_p.is_absolute():
-                        raise StorageError(
-                            f"Bootstrap data_root must be an absolute path, got relative path: '{target_str}' in {b_path}"
-                        )
-                    return target_p.resolve()
-            logger.warning(f"Bootstrap file {b_path} is missing valid 'data_root'; falling back to default.")
-        except StorageError:
-            raise
-        except Exception as exc:
-            logger.warning(f"Failed to parse bootstrap file {b_path} ({exc}); falling back to default.")
+            if (not isinstance(data, dict) or type(data.get("schema_version")) is not int
+                    or data["schema_version"] != 1 or not isinstance(data.get("data_root"), str)
+                    or not data["data_root"].strip()):
+                raise BootstrapCorruptError("Existing bootstrap locator has invalid schema or data_root.")
+            target_p = Path(data["data_root"].strip())
+            if not target_p.is_absolute():
+                raise BootstrapCorruptError("Bootstrap data_root must be an absolute path.")
+            return target_p.resolve()
+        except (OSError, ValueError, TypeError):
+            raise BootstrapCorruptError("Existing bootstrap locator is unreadable or malformed; root selection refused.") from None
 
     # 3. Default root
     def_root = default_root if default_root is not None else get_default_data_root()

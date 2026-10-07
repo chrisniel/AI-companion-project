@@ -3,23 +3,24 @@
 - Branch: `fix/pre-m1-audit-corrections` (human-prepared).
 - Audit baseline: `28c43320c54cd3333ad2f7b3f842a7a6c1db3f75`.
 - Reviewed B1 publication / B2 starting checkpoint: `61766939e7eb529537519bae6f9a4dc04006ae98`.
+- Reviewed B2 publication / consolidated authoring starting checkpoint: `8dfd9df9822e4f80fbd1e089bf63b465ec47f947`.
 - Plan: [supplied-scope record](../../02_Planning/01_Plans/plan-pre-m1-audit-corrections.md).
-- Current authorization: B2 F01/F02/F07 source/test corrections; B1 remains PARTIAL for F04/F12 qualification. No Git mutations; no B3 or M1.
+- Current authorization: Chris authorized consolidated B3 → B4 → B6 → remaining B1 → B5 authoring, with explicit Task, CI, retention and locator policies. No Git mutations, installations, new audit/plan or M1.
 - Governance publication: root `AGENTS.md` hardening was independently reviewed, the fresh-session Gemini canary passed, and Chris intentionally published it in the B1 checkpoint above. Codex must not modify it during product corrections.
-- Current stage: B2 AUTHORED / AWAITING INDEPENDENT IMPLEMENTATION REVIEW. Available-environment mechanical verification completed; no self-approval.
+- Current stage: Remaining corrections AUTHORED / AWAITING INDEPENDENT IMPLEMENTATION AND DOCUMENTATION REVIEW. B2 passed independent source-level review per Chris's instruction; Python 3.11/hosted qualification and F04 reproducibility remain open. No self-approval or delivery closure.
 
 ## Finding / Batch Evidence Record
 
 | Batch | Findings | Execution / evidence state |
 | --- | --- | --- |
-| B1 | F09 | Independent safety checkpoint PASSED at the published B1 checkpoint; final B2 rerun: 4 passed, 364 tests safely collected |
-| B1 | F04 | BLOCKED: approved Python 3.11 identity/path unavailable; no dependency input changed |
-| B1 | F12 | Node 24.18.0 compatible with committed engines; input edits/web qualification pending |
-| B2 | F01, F02, F07 | AUTHORED / AWAITING INDEPENDENT IMPLEMENTATION REVIEW; initial focused set 80 passed; final boundary file 26 passed; final broader suite 364 passed under Python 3.13; Python 3.11 qualification pending |
-| B3 | F05 | Pending execution / Task-semantics approval |
-| B4 | F03 | Pending execution / cumulative CI-policy approval |
-| B5 | F10, F11, F13 | Pending execution; closest-owner reconciliation only |
-| B6 | F06, F08 | Pending execution / retention and locator policies |
+| B1 | F09 | Independent safety checkpoint PASSED at B1 publication; consolidated rerun: 4 passed, 408 tests safely collected |
+| B1 | F04 | PARTIAL / BLOCKED: declarations aligned; no selected local Python 3.11 or target-qualified transitive/hash input; hosted qualification pending |
+| B1 | F12 | AUTHORED: Node engine declaration aligned; compatible local Node 24.18.0 web tests/typecheck/build passed; hosted Node 22.22.2 pending |
+| B2 | F01, F02, F07 | Independent source-level review PASSED at B2 publication, per Chris; preserved by consolidated regressions; Python 3.11/hosted qualification pending |
+| B3 | F05 | AUTHORED: approved omission/null/reminder semantics; HTTP/Pydantic/ORM regression evidence and TaskUpdate-only contract change; independent review pending |
+| B4 | F03 | AUTHORED: all existing lanes on each develop push; PR classification retained; 21 policy tests passed; hosted/independent review pending |
+| B5 | F10, F11, F13 | AUTHORED: closest-owner reconciliation and verified setup/CI wording; independent documentation gate pending |
+| B6 | F06, F08 | AUTHORED: prepared-schema CLI runtime ownership and invalid-existing-locator fail-closed policy; disposable regressions passed; independent review pending |
 
 ## Checkpoints & Boundaries
 
@@ -29,7 +30,7 @@
 - [x] Chris + independent reviewer approved the F09 isolation checkpoint.
 - [ ] Exact environment/resolver/install operations approved where required.
 - [ ] Windows Python 3.11 backend/OpenAPI qualification executed.
-- [ ] Approved Node web tests/typecheck/build executed.
+- [x] Compatible installed Node web tests/typecheck/build executed; no installation.
 - [ ] B1 implementation independently approved; documentation/closure gates pending.
 
 ## Command Evidence — Historical B1 Authoring Checkpoint
@@ -135,7 +136,107 @@ regression file, and the two existing governance evidence records. Core logging
 implementation and published AGENTS.md remained unchanged. Proposed Conventional
 Commit for Chris: `fix(runtime): harden streaming lifecycle and startup logging`.
 
-STOP at independent implementation review after final mechanical verification. F04/F12,
+Historical B2 stop: independent implementation review after final mechanical verification. F04/F12,
 qualified Python 3.11 integration, hosted CI and delivery closure remain open.
 No installation, real-model execution, real authentication/user-data access,
 master-tracker/debt expansion, Git mutation, B3 or M1 execution occurred.
+
+## Consolidated Authoring Evidence — B3 / B4 / B6 / Remaining B1 / B5
+
+Starting branch/HEAD matched `fix/pre-m1-audit-corrections` /
+`8dfd9df9822e4f80fbd1e089bf63b465ec47f947`. Status, tracked diff and staged diff
+were empty. Chris supplied B2 independent source-level approval; hosted/Python
+3.11 acceptance remains pending. Published AGENTS.md and B1/B2 fixes were preserved.
+
+- **F05 / B3:** Actual PATCH validation rejects explicit null for required DB fields
+  before ORM mutation; omission and nullable clears are distinct. Only supplied
+  derivation inputs recompute/clear reminders; explicit reminder_at wins, including
+  null. Twenty new HTTP/Pydantic/ORM cases use synthetic in-memory state.
+- **F03 / B4:** Every develop push requires backend/frontend/contract/docs, including
+  sequential backend then docs-only pushes. Master/dispatch stay full; develop PRs
+  retain scopes. Failure of classification or any required lane fails the gate.
+  Cancellation is retained; full replacement-tree coverage establishes the invariant.
+- **F06 / B6:** Actual module/argparse CLI runs in guarded subprocesses against
+  disposable schema/records. It reads schema metadata before initialization,
+  requires current Alembic heads and Task columns, never migrates during purge,
+  and disposes its owned runtime after success/failure. Existing runtimes and
+  caller-owned sessions retain ownership. Expired Tasks across owners are purged;
+  recent/active records and unrelated data remain, and owner-filtered calls stay scoped.
+- **F08 / B6:** Missing locator alone permits the first-install default. Existing
+  malformed/invalid/non-file locators fail closed; overrides retain precedence,
+  relative roots remain rejected, and valid absolute nonexistent roots remain valid.
+  Actual Settings/database-runtime regression proves corruption initializes no
+  alternate database. Two old fallback assertions were replaced with the approved policy.
+- **F04 / B1:** `pyproject.toml` now agrees with requirements: SQLAlchemy asyncio
+  extra and existing httpx runtime dependency. No version upgrade, frozen local
+  environment or manufactured lock. Selected Windows CPython 3.11 and a qualified
+  transitive/hash input are still unavailable. Checked PATH/registered interpreters
+  and standard locations did not locate 3.11; this is not an incompatibility claim.
+- **F12 / B1:** Declared Node engines are `^22.22.2 || ^24.15.0`; npm lock changes
+  only root engine metadata. Installed Node 24.18.0/npm 11.18.0 are compatible;
+  all 21 direct installed dependencies match the lock, with no installed-lock
+  version discrepancy. CI selects Node 22.22.2 and records versions.
+- **F10/F11/F13 / B5:** Decision Debt retains the open Flutter native Toast adapter
+  choice with Runtime durable scheduling/event ownership. Android owner/README
+  reflect Conditional Mobile V1 read-only, consent-driven, hardware-qualified
+  Health Connect and Kotlin prototype versus Flutter target. React README is a
+  supported web harness; actual persistent attachment history is recorded in its
+  conversation owner without claiming Flutter parity. Setup/CI guides reflect
+  disposable config, locator/retention policies and evidenced toolchain boundaries.
+
+### Commands and Results
+
+Backend commands used cwd `backend`, existing Windows Python **3.13.14**; they
+are local regression evidence, NOT Python 3.11 qualification. No package installed.
+
+| Exact command / checkpoint | Exit | Result |
+| --- | --- | --- |
+| `& ./.venv/Scripts/python.exe -B -m pytest tests/test_task_update_contract.py -q -p no:cacheprovider -o log_file=NUL --tb=line` — RED | 1 | 14 failed / 6 passed before source correction |
+| `& ./.venv/Scripts/python.exe -B -m pytest tests/test_tasks.py tests/test_task_update_contract.py -q -p no:cacheprovider -o log_file=NUL --tb=short` | 0 | 29 passed |
+| `& ./.venv/Scripts/python.exe -B -m pytest tests/test_bootstrap.py tests/test_storage_engine_lifecycle.py -q -p no:cacheprovider -o log_file=NUL --tb=line --show-capture=no` — RED | 1 | 15 failed / 17 passed before locator correction |
+| Same bootstrap/lifecycle targets with `--tb=short` | 0 | 32 passed |
+| `& ./.venv/Scripts/python.exe -B -m pytest tests/test_retention_entrypoint.py -q -p no:cacheprovider -o log_file=NUL --tb=short` — RED / final GREEN | 1 / 0 | Meaningful RED 8 failed / 1 passed; final 10 passed. Harness corrections allowed only Windows stdlib socketpair and explicitly closed fixture SQLite connections; assertions retained |
+| `& ./.venv/Scripts/python.exe -I -B tests/test_import_isolation.py -v` — final | 0 | 4 passed; guarded actual collection returned 0 with 408 items |
+| `& ./.venv/Scripts/python.exe -B -m pytest tests/test_runtime_boundary_regressions.py tests/test_security_hardening.py tests/test_tasks.py tests/test_task_update_contract.py tests/test_bootstrap.py tests/test_storage_engine_lifecycle.py tests/test_retention_entrypoint.py -q -p no:cacheprovider -o log_file=NUL --tb=short` | 0 | 110 passed in 16.27 seconds; preserved F01/F02/F07 included |
+| `& ./.venv/Scripts/python.exe -B -m pytest tests -q -p no:cacheprovider -o log_file=NUL --tb=short` | 0 | 408 passed in 51.34 seconds |
+
+Repository-root commands:
+
+| Exact command / mechanism | Exit | Result |
+| --- | --- | --- |
+| `& ./backend/.venv/Scripts/python.exe -B -m unittest scripts/tests/test_ci_policy.py` — RED / GREEN and final recheck | 1 / 0 / 0 | RED five expected develop-policy subtest failures; both GREEN runs 21 passed; negative gate FAIL messages are expected assertions |
+| `& ./backend/.venv/Scripts/python.exe --version` | 0 | Python 3.13.14 |
+| `& ./backend/.venv/Scripts/python.exe -B -m pip --version` | 0 | pip 26.1.2 |
+| `& ./backend/.venv/Scripts/python.exe -B -m pip check` | 0 | No broken requirements found in the existing 3.13 environment |
+| `npm --logs-max=0 --update-notifier=false --prefix frontend/web test` | 0 | 229 tests / 12 files passed |
+| `npm --logs-max=0 --update-notifier=false --prefix frontend/web run lint` | 0 | TypeScript check passed |
+| `npm --logs-max=0 --update-notifier=false --prefix frontend/web run build` | 0 | Vite 6.4.3 build passed; 1,736 modules |
+| `& ./backend/.venv/Scripts/python.exe -I -B -c $taskContractCode` — guarded in-memory wrapper invoking `scripts/check_openapi_contract.py --write`, then `--check` through runpy | 0 | Actual approved generator: 23 routes, required model routes present. Pre-write comparison rejected any non-TaskUpdate change; only four required-field null alternatives/defaults changed |
+| `& ./backend/.venv/Scripts/python.exe -I -B -c $contractCheckCode` — final wrapper using existing ImportIsolationTests guard and actual generator `--check` | 0 | Contract synchronized; database runtime remained uninitialized; selected disposable config unchanged |
+| `& ./backend/.venv/Scripts/python.exe -I -B -c $staticCheckCode` | 0 | 10 Python ASTs, declaration parity, YAML parse, TaskUpdate-only contract/root-engine-only lock comparisons, 7 added local links, allowlist and new-file whitespace checks passed |
+| `git diff --check` | 0 | Authored tracked whitespace clean; root AGENTS.md diff empty |
+
+Wrappers ran from PowerShell here-strings and created no helper files. The first
+whole-file whitespace harness exited 1 on pre-existing retention.py whitespace;
+it was narrowed to new files plus `git diff --check`, leaving unrelated lines intact.
+Git reported existing CRLF normalization for generated OpenAPI; no Git config changed.
+Vitest emitted a jsdom performance hint, with no failures. Hosted CI was not executed.
+
+### Remaining Qualification and Gates
+
+After human publication, review hosted **Windows Python 3.11** backend and OpenAPI
+lanes and **Node 22.22.2** frontend on the actual candidate (PR or full manual dispatch),
+then review full develop integration CI separately after merge. Workflow records
+interpreter/package versions and pip health, uses disposable auth/storage, and runs
+F09 before the application suite. These changes do not supply a transitive/hash lock.
+F04 requires an explicitly selected target interpreter/resolver and approved isolated
+resolution/install operations before a verified reproducible input can be produced.
+
+Independent implementation review of B3/B4/B6/B1 changes and independent B5
+documentation review remain pending. No gate is self-approved, tracker archived,
+delivery closed or M1 started. Tests used synthetic credentials, temporary storage,
+in-memory databases and isolated inference doubles; CLI/import/collection guards
+denied real authentication/databases and external side effects. No real model,
+user database/configuration, package install, network resolution or Git mutation.
+
+Proposed Conventional Commit: `fix: complete bounded pre-m1 audit corrections`.

@@ -2,10 +2,10 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: B1 PARTIAL (F04/F12 qualification open); F09 independent safety checkpoint PASSED; B2 AUTHORED / AWAITING INDEPENDENT IMPLEMENTATION REVIEW.
+- Status: Remaining corrections AUTHORED / independent implementation and documentation review pending. B1 F04 remains PARTIAL; Python 3.11/hosted qualification open. F09 safety and B2 source-level independent reviews PASSED.
 - Scope Mode: Surgical Fix — supplied audit disposition B1–B6, not M1.
 - Planning basis: Chris's supplied F01–F13 disposition and B1–B6 corrective plan.
-- Approval: Chris authorized B1 source/test corrections, then explicitly authorized B2 after independent F09 safety review at checkpoint `61766939e7eb529537519bae6f9a4dc04006ae98`. B3–B6 remain pending execution.
+- Approval: Chris authorized B1 and B2; F09 independent safety review passed at `61766939e7eb529537519bae6f9a4dc04006ae98`. B2 independent source-level review passed at `8dfd9df9822e4f80fbd1e089bf63b465ec47f947`. Chris subsequently authorized consolidated remaining authoring and the explicit policies below; no Git/installation/M1 authority.
 - Execution/evidence owner: [branch tracker](../../01_Tracking/active/task-fix-pre-m1-audit-corrections.md).
 
 ## 1. Request Understanding & Goals
@@ -14,16 +14,18 @@ Persist the supplied delivery scope once, without a competing plan. Establish sa
 verification bootstrap and reproducible toolchain inputs in B1. The F09 isolation
 checkpoint passed independent review. Chris subsequently authorized B2 authoring
 and safe Python 3.13 local regressions while F04/F12 qualification remains open.
-B3–B6 remain pending execution authorization; their policy proposals remain unapproved.
+Chris's consolidated instruction subsequently approved B3/B4/B6 policies and B5
+corrections without approving independent delivery gates. It preserves the supplied
+plan and finding IDs; this record does not introduce a replacement plan.
 
 | Batch | Findings | Supplied scope | Authorization |
 | --- | --- | --- | --- |
-| B1 | F09, F04, F12 | Import/collection isolation; Python 3.11 dependency qualification; compatible Node inputs | Source/test corrections authorized; installations and broad qualification gated |
-| B2 | F01, F02, F07 | Error terminals; provider-owned active work; logging across startup migrations | Explicit source/test authorization; no Git, installation, B3 or M1 authority; independent implementation review required |
-| B3 | F05 | Task omission/null semantics and generated contract | Pending execution and semantics approval |
-| B4 | F03 | Cumulative integration coverage invariant | Pending execution and CI-policy approval |
-| B5 | F10, F11, F13 | Closest-owner documentation reconciliation and resulting setup guidance | Pending execution |
-| B6 | F06, F08 | Retention CLI lifecycle; existing-locator integrity | Pending execution and policy approval |
+| B1 | F09, F04, F12 | Import/collection isolation; Python 3.11 dependency qualification; compatible Node inputs | Declaration alignment and installed-tool verification authorized; new installation/resolution not authorized |
+| B2 | F01, F02, F07 | Error terminals; provider-owned active work; logging across startup migrations | Independent source-level review passed; qualified integration pending |
+| B3 | F05 | Task omission/null semantics and generated contract | Explicit semantics approved; authoring authorized, independent review pending |
+| B4 | F03 | Cumulative integration coverage invariant | Every develop push full; develop PRs scoped; master/dispatch full; authoring authorized |
+| B5 | F10, F11, F13 | Closest-owner documentation reconciliation and resulting setup guidance | Bounded owner edits authorized; independent documentation review pending |
+| B6 | F06, F08 | Retention CLI lifecycle; existing-locator integrity | Prepared-schema-only CLI ownership and invalid-existing-locator fail-closed policies approved |
 
 ## 2. Supplied Findings & Technical Root Cause
 
@@ -48,9 +50,14 @@ OpenAPI regeneration to conceal drift, unrelated upgrades, or M1 implementation.
 Root governance hardening was independently reviewed and fresh-session Gemini
 canary-tested; Chris intentionally published AGENTS.md in checkpoint
 `61766939e7eb529537519bae6f9a4dc04006ae98`. The previous commit-exclusion constraint
-is superseded by this publication truth. Codex must not modify AGENTS.md in B2.
+is superseded by this publication truth. Codex must not modify AGENTS.md during
+the consolidated corrections either.
 
-## 4. Supplied Execution Sequence
+## 4. Supplied Execution Sequence and Subsequent Authorization
+
+The numbered sequence below records the historical B1 authorization. Chris later
+approved B2 and then one consolidated authoring run in this order: B3 → B4 → B6 →
+remaining B1 → B5 → final scoped verification. No automatic M1 or delivery closure.
 
 1. Verify branch/baseline and user changes; safely reproduce F09 before source edits.
 2. Make configuration import non-persisting; select disposable configuration and
@@ -72,8 +79,34 @@ to migrate obsolete private-state assertions to public status/count checks. Init
 focused evidence was 80 passed; the final boundary regression file was 26 passed;
 the broader checkpoint after the assertion migration was 362 passed. The final
 broader suite passed all 364 tests under Python 3.13.14; F09 rerun passed all four
-checks with guarded collection of 364 items. Do not independently approve B2, start B3, or claim Python
-3.11/integration qualification from these results.
+checks with guarded collection of 364 items. These are historical B2 results;
+Chris subsequently supplied independent source-level approval and B3–B6 execution
+authority. Do not infer Python 3.11/integration qualification or final closure.
+
+### Approved Remaining Policies and File Boundaries
+
+- **B3 / F05:** Omitted fields preserve values; explicit null is rejected for title,
+  category, status and priority before mutation. Nullable fields may clear. Explicit
+  reminder_at wins; otherwise changed derivation inputs recompute or clear, while
+  unrelated updates preserve reminders. Only Task schema/endpoint, Task tests and
+  the generated OpenAPI contract are authorized; no scheduler or provenance schema.
+- **B4 / F03:** All existing lanes run on every develop push, master event and
+  dispatch. Develop PRs retain path scopes; classifier failure or skipped required
+  jobs fail the gate. Only ci.yml, ci_policy.py and its tests; no new Flutter lane.
+- **B6 / F06:** Standalone retention owns initialization/disposal and requires an
+  already prepared compatible schema without migrations. Caller sessions remain
+  caller-owned. Only retention.py and its entrypoint/lifecycle tests.
+- **B6 / F08:** Missing locator permits first-install default; invalid existing
+  locator fails closed. Overrides and valid absolute targets remain supported.
+  Only storage.py and bootstrap/lifecycle tests; no recovery UI or repair workflow.
+- **B1 / F04/F12:** Align existing declarations and compatible Node engines without
+  unrelated version changes or lock regeneration. No manufactured Python lock.
+  Hosted Windows Python 3.11 and Node 22.22.2 qualification follows human publication.
+- **B5 / F10/F11/F13:** Correct only Decision Debt, Android/conversation domain
+  owners, subsystem READMEs, DEVELOPMENT_SETUP and TESTING_AND_CI. Preserve accepted
+  Flutter/runtime ownership, Conditional Mobile V1 Health Connect and target tense.
+- Evidence remains in this plan and the existing branch tracker. No new tracker,
+  branch, PR, architecture, excluded-document sweep or master WBS expansion.
 
 ## 5. Acceptance & Verification
 
