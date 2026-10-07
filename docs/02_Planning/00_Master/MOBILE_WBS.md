@@ -286,7 +286,7 @@
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-SCHED-003`**: Exact Alarm Permission Lifecycle & Degradation Handling
-  - *Scope:* Implement active verification via `AlarmManager.canScheduleExactAlarms()`; fall back gracefully to inexact delivery when exact alarm permission is missing or revoked without crashing or halting the app (`D-PHONE-11`).
+  - *Scope:* Implement active verification via `AlarmManager.canScheduleExactAlarms()` before scheduling/re-arming and at lifecycle transitions (reboot, foreground return); mark affected alarms visibly as `DEGRADED / UNARMED LOCALLY` without claiming inexact alarms or WorkManager provide alarm fidelity; re-arm still-valid occurrences when exact alarm permission returns; guide user to platform settings without assuming `USE_EXACT_ALARM` policy eligibility (`D-PHONE-11`).
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §6.2
   - *Principal Dependencies:* `MOB-SCHED-002`
@@ -328,7 +328,7 @@
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-SCHED-009`**: Host Routine Occurrence Presentation & Local Suppression
-  - *Scope:* Bounded Host-authorized Routine occurrence replication (`D-PHONE-12`), local presentation in Schedule and Home cards, local occurrence suppression (`D-PHONE-12C`), missed occurrence collapse, zero autonomous recurrence extension offline, non-coercive Character-aware check-in tone (`D-PHONE-12D`, `12E`).
+  - *Scope:* Bounded Host-authorized Routine occurrence replication (`D-PHONE-12`), local presentation in Schedule and Home cards, device-local occurrence suppression without rewriting canonical Routine definition (`D-PHONE-12C`), queuing separately requested disable-everywhere actions as pending Host mutations under approved authority rules, missed occurrence collapse, zero autonomous recurrence extension offline, non-coercive Character-aware check-in tone (`D-PHONE-12D`, `12E`).
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`tasks-reminders-alarms-and-routines.md`](../../04_Architecture/01_Domains/tasks-reminders-alarms-and-routines.md) §5, [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §6.1
   - *Principal Dependencies:* `MOB-SCHED-001`, `MOB-DATA-003`
@@ -526,7 +526,7 @@
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-TOOL-002`**: User Confirmation Guardrails, Tool Qualification & Turn Provenance
-  - *Scope:* Enforce tool capability qualification requiring adapter/backend confirmation before claiming success (`D-PHONE-13F`); enforce deterministic user confirmation prompts for privacy-impacting or mutating actions, log tool execution results in turn provenance envelopes, and ensure no tool side-effects bypass D9 policy.
+  - *Scope:* Enforce deterministic user confirmation prompts when required by deterministic D9 policy rules (Risk 2 actions) without requiring redundant confirmation for non-qualifying mutations; strictly separate user approval from execution proof, claiming execution success only after adapter/backend confirmation (`D-PHONE-13F`); log tool execution results in turn provenance envelopes, and ensure no tool side-effects bypass D9 policy.
   - *Responsibility:* Mobile
   - *Architectural Owner:* [`tool-permissions-and-actions.md`](../../04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md) §6, [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §4.2
   - *Principal Dependencies:* `MOB-TOOL-001`, `MOB-DATA-004`

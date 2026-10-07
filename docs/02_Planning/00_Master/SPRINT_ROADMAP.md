@@ -66,7 +66,7 @@
 - **Decoupled Voice & Barge-In:** Connected full-duplex Voice streaming to PC Runtime over WebSocket with mandatory immediate barge-in; local TTS decoupled from local STT and local LLM; cloud voice permissions separate (`mobile-capabilities-and-runtime.md` §3, `ADR-0019`, `D-PHONE-14..14G`).
 - **Conditional Health & Vision:** Health Connect supported as `CONDITIONAL V1` read-only integration (`D-PHONE-15..15E`, `D-SHARED-HEALTH-01..04`); local still-image Vision supported as `CONDITIONAL V1` on qualified hardware (`D-PHONE-16..16E`, `D-SHARED-VISION-01`).
 - **Deferred Non-Goals:** Autonomous Routine recurrence extension (`D-PHONE-12`), direct proprietary wearable SDKs (`D-PHONE-15E`), continuous ambient camera/microphone (`D-PHONE-16E`), always-on wake word, and phone-to-phone canonical sync authority are excluded from V1.
-- **Exit Criteria:** Batches A–D promoted into canonical specs, 88-item WBS (`MOBILE_WBS.md`), 18 Golden Groups MG1–MG18 (`MOBILE_CHECKLIST.md`). Batch D5.1 reconciliation authored; independent Closure Gate re-review pending.
+- **Exit Criteria:** Batches A–D promoted into canonical specs, 88-item WBS (`MOBILE_WBS.md`), 18 Golden Groups MG1–MG18 (`MOBILE_CHECKLIST.md`). Batch D5.2 reconciliation authored; independent Closure Gate re-review pending.
 - **Dependency Note:** Mobile production implementation is cataloged in `MOBILE_WBS.md` as an independent follow-on track that does NOT block PC V1. M1 Flutter Desktop foundation remains sequenced after re-closure and merge of Batch D.
 
 ### Milestone M1: Flutter Desktop Client Foundation (PENDING / SEQUENCED AFTER MERGE)

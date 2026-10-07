@@ -8,10 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added (2026-10-07 - MOBILE-ARCH: Mobile V1 Batch D Reconciliation & Canonical Promotion)
 
-- **Mobile Batch D Canonical Promotion**: Promoted 104 approved product and architecture decisions and unnumbered directions across core baseline, conversation branching, memory overlays, local tool gateway, composable voice, conditional Health Connect, multimodal vision, and mobile companion UX.
+- **Mobile Batch D Canonical Promotion**: Promoted 104 approved product and architecture decisions across core baseline, conversation branching, memory overlays, local tool gateway, composable voice, conditional Health Connect, multimodal vision, and mobile companion UX.
 - **Mobile Design & UX Baseline**: Authored `docs/05_Design/08_Mobile_Companion_Shell_and_UX.md` defining portrait-first shell navigation, hybrid SoftGlass / solid surface theme, companion check-in surfaces, and interaction language decoupling.
-- **Golden Verification & CI Architecture**: Rebuilt `MOBILE_CHECKLIST.md` to exact locked MG1–MG18 structure with granular qualification classes and independently auditable sub-assertions; canonicalized tiered L1–L5 verification and future path-scoped CI direction in `mobile-capabilities-and-runtime.md`.
-- **Master Planning & WBS Expansion**: Expanded `MOBILE_WBS.md` to 88 items across 16 streams with verified DAG integrity; updated master planning spine (`MASTER_CHECKLIST.md`, `DECISION_REGISTER.md`, `DECISION_DEBT.md`, `SPRINT_ROADMAP.md`, `DELIVERY_INDEX.md`, `DOCUMENTATION_MAP.md`); authored delivery walkthrough.
+- **Golden Verification & CI Architecture**: Rebuilt `MOBILE_CHECKLIST.md` to exact locked MG1–MG18 structure with granular qualification classes; canonicalized tiered L1–L5 verification and future path-scoped CI direction in `mobile-capabilities-and-runtime.md`.
+- **Master Planning & WBS Expansion**: Expanded `MOBILE_WBS.md` to 84 items across 16 streams with verified DAG integrity; updated master planning spine (`MASTER_CHECKLIST.md`, `DECISION_REGISTER.md`, `DECISION_DEBT.md`, `SPRINT_ROADMAP.md`, `DELIVERY_INDEX.md`, `DOCUMENTATION_MAP.md`); authored delivery walkthrough.
+
+### Changed (2026-10-07 - MOBILE-ARCH: Batch D5.2 Closure Reconciliation Corrections)
+
+- **Planning & Verification Alignment**: Reconciled AlarmManager exact alarm lifecycle permissions and degraded state handling, removed OOM zero-crash guarantees, established cross-host shared context budgeting assertions, refined composable voice degradation, aligned D9 confirmation vs execution evidence, and reconciled decision register entries to approved ledger source truth.
 
 ### Added (2026-10-04 - MOBILE-ARCH: Mobile V1 Canonical Architecture & Planning Pass)
 
