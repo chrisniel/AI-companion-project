@@ -2,13 +2,13 @@
 
 > **Branch:** `docs/mobile-v1-canonicalization`
 > **Delivery:** MOBILE-ARCH Batch D Canonical Promotion
-> **Status:** D5.3 CORRECTED / AUTHORED — AWAITING INDEPENDENT CLOSURE GATE RE-REVIEW
+> **Status:** D5.4 CORRECTED / AUTHORED — AWAITING INDEPENDENT CLOSURE GATE RE-REVIEW
 > **Approved Plan:** `docs/02_Planning/01_Plans/plan-mobile-v1-batch-d-canonical-promotion.md`
 > **Gate 0 Approved Checkpoint:** `2b0fdbb8f21d6aaeec3e6d3dfdf9ca990d50f53f`
 > **Gate 1 Passed Checkpoint:** `19116d9965e369e2869fbdf1a4d0702ccd730077`
 > **Gate 2 Passed Checkpoint:** `5d860625510ffae0437cc9c58662dfe087c3fad9`
 > **Gate 3 Passed Checkpoint:** `ed1c71b7245324072c4b48dc7a9596c71d717e11`
-> **Closure Gate Result:** CORRECTIONS REQUIRED — final ownership / traceability cleanup authored; re-review pending.
+> **Closure Gate Result:** CORRECTIONS REQUIRED — final semantic owner-reference correction authored; re-review pending.
 > **M1 Status:** PENDING / SEQUENCED AFTER RECLOSURE AND MERGE OF BATCH D
 
 ---
@@ -16,7 +16,7 @@
 ## 1. Governance & Delivery Sequence
 
 - **Git Authority:** Strictly read-only for AI agents. Chris is the sole owner of all Git mutations.
-- **Delivery Lifecycle Stage:** DOCUMENTATION GATE (Batch D5.3 Reconciliation) — Final ownership, traceability & handoff cleanup.
+- **Delivery Lifecycle Stage:** DOCUMENTATION GATE (Batch D5.4 Reconciliation) — Final semantic owner reference correction.
 - **Historical CI Blocker (Resolved):** PR-wide Markdown trailing whitespace was mechanically cleaned in commit `6ece11c8` and verified clean in PR #21 CI (Run #79 green docs-integrity check; `git diff --check` passes with exit code 0).
 
 ### Delivery Stages & Batch Sequence
@@ -28,7 +28,7 @@
 | **Batch D2** | Core Baseline, Identity, Scheduling & Flutter Boundaries | **APPROVED** | Gate 1 Passed (`19116d9965e369e2869fbdf1a4d0702ccd730077`) |
 | **Batch D3** | AI Runtime, Conversations, Context, Memory & Tools | **APPROVED** | Gate 2 Passed (`5d860625510ffae0437cc9c58662dfe087c3fad9`) |
 | **Batch D4** | Voice, Health, Vision, Character/Presence & Mobile UX | **APPROVED** | Gate 3 Passed (`ed1c71b7245324072c4b48dc7a9596c71d717e11`) |
-| **Batch D5** | Master Planning Spine, Golden Verification, CI & PR Handoff | **D5.3 CORRECTED / AUTHORED** | Gate 4 Closure Gate Re-Review Pending |
+| **Batch D5** | Master Planning Spine, Golden Verification, CI & PR Handoff | **D5.4 CORRECTED / AUTHORED** | Gate 4 Closure Gate Re-Review Pending |
 
 ---
 
@@ -111,29 +111,27 @@
 
 ---
 
-## 6. Authored Work: Batch D5 / D5.3 Final Ownership, Traceability & Handoff Cleanup
+## 6. Authored Work: Batch D5 / D5.4 Final Semantic Owner Reference Correction
 
-**Objective:** Execute narrow Closure Gate cleanup following D5.2 independent re-review: correct WBS normative owner section citations across `MOBILE_WBS.md`, clean up `MOBILE_CHECKLIST.md` MG11/MG13 authorities and `D-PHONE-14G` research dimensions, correct Routine suppression wording in `DECISION_REGISTER.md` for `D-PHONE-12C`, refine Deferred Non-Goals precision in `SPRINT_ROADMAP.md`, reconcile walkthrough body and owner citations in `walkthrough-mobile-v1-batch-d-reconciliation.md`, append clarification bullets under existing Changed block in `CHANGELOG.md`, verify zero trailing whitespace and DAG consistency, and prepare for independent Closure Gate re-review.
+**Objective:** Execute narrow Closure Gate semantic correction following D5.3 independent re-review: correct remaining semantic architectural owner references across `MOBILE_WBS.md` (ensuring every section citation aligns with the specific sub-topic such as Audio Focus §3.1 vs Barge-In §3.3, Thermal Throttling §6.2 vs Memory Pressure §6.3, and Hardware Abstraction §2.2, §2.3, §6.3 vs Multimodal Vision §2.4) and `MOBILE_CHECKLIST.md` (correcting MG13.2 to §3.1 Audio Focus and MG14.2 to §6.2, §6.3 Thermal + Memory Pressure); purge surviving stale summaries in `walkthrough-mobile-v1-batch-d-reconciliation.md` ("mood valence/arousal sync" and "mobile auxiliary inference boundary"); update walkthrough and active tracking state to D5.4; verify zero trailing whitespace and valid WBS DAG; and prepare for independent Closure Gate re-review.
 
 ### Targeted Files & Promoted Responsibilities
 
-- [x] `docs/02_Planning/00_Master/MOBILE_WBS.md`: Corrected normative owner section citations across 17 WBS items (`MOB-DATA-006`, `MOB-SCHED-009`, `MOB-SCHED-010`, `MOB-CONV-004`, `MOB-CONV-005`, `MOB-VOICE-008`, `MOB-TOOL-001`, `MOB-TOOL-002`, `MOB-HEALTH-001`, `MOB-HEALTH-002`, `MOB-VISION-001`, `MOB-VISION-002`, `MOB-CHAR-001`, `MOB-UX-001` through `MOB-UX-006`); updated scopes for vision routes, `D-PHONE-EMO-01`, and `P-PRESENCE-02` (labeled explicitly as out of V1 scope); confirmed 88 items with zero cyclic dependencies.
-- [x] `docs/02_Planning/00_Master/MOBILE_CHECKLIST.md`: Cleaned MG11.2 authorities (replaced `D-PHONE-UX-06` with `D-PHONE-12D`, `D-PHONE-12E`), updated MG11.3 citations (`D-SHARED-SCHED-03`, `D-PHONE-12D`, `D-PHONE-14B`), expanded MG13.4 qualification research dimensions to include all `D-PHONE-14G` criteria (English, Filipino / Tagalog, Taglish, dates/numbers/times, latency, memory, battery, thermals, noise robustness, barge-in, candidate `whisper.cpp`), and updated release blocker audit reference.
-- [x] `docs/02_Planning/00_Master/DECISION_REGISTER.md`: Corrected `D-PHONE-12C` summary to explicitly reflect Routine suppression scope (device-local suppression remains local on reconnect; only optional pending disable-everywhere Host mutations reconcile on reconnect).
-- [x] `docs/02_Planning/00_Master/SPRINT_ROADMAP.md`: Refined Deferred Non-Goals precision to separately cite camera (`D-PHONE-16E`) and microphone (`D-PHONE-14F`), clarified preferred Health Connect integration vs deferred direct vendor protocols, and updated exit criteria to reference Batch D5.3.
-- [x] `docs/03_Walkthroughs/walkthrough-mobile-v1-batch-d-reconciliation.md`: Reconciled walkthrough body, document audit table rows, and Closure Gate status to reflect D5.3 normative owner sections and exact Health/Vision/Voice/Routine architecture.
-- [x] `CHANGELOG.md`: Appended concise clarification bullets under existing `### Changed (2026-10-07 - MOBILE-ARCH: Batch D5.2 Closure Reconciliation Corrections)` block documenting WBS 88 items, hybrid visual language, and local vision route supersession.
+- [x] `docs/02_Planning/00_Master/MOBILE_WBS.md`: Corrected semantic normative owner citations across 15 WBS items (`MOB-FOUNDATION-005`, `MOB-CONV-001`, `MOB-CONV-006`, `MOB-CONV-007`, `MOB-CONV-008`, `MOB-CONV-009`, `MOB-INFER-003`, `MOB-INFER-005`, `MOB-INFER-006`, `MOB-VOICE-001`, `MOB-VOICE-002`, `MOB-VOICE-003`, `MOB-VOICE-005`, `MOB-VOICE-006`, `MOB-VOICE-007`, `MOB-VOICE-008`, `MOB-SECURITY-004`) ensuring exact topic-to-section semantic alignment; expanded `MOB-VOICE-006` scope to include all 11 `D-PHONE-14G` empirical research dimensions; confirmed 88 items with zero cyclic dependencies.
+- [x] `docs/02_Planning/00_Master/MOBILE_CHECKLIST.md`: Corrected MG13.2 authority to `D-PHONE-14A`, `mobile-capabilities-and-runtime.md §3.1` (Audio Focus; removed Barge-In §3.3); corrected MG14.2 authority to `D-PHONE-05A`, `mobile-capabilities-and-runtime.md §6.2, §6.3` (Thermal Escalation + Memory Pressure/Low-Storage); verified MG13.4 qualification research dimensions.
+- [x] `docs/03_Walkthroughs/walkthrough-mobile-v1-batch-d-reconciliation.md`: Purged surviving stale summaries in Section 2 table: replaced "mobile auxiliary inference boundary" with production-capable device-local LLM path on qualified devices (`D-PHONE-01`), single resident model policy (`D-PHONE-05`), and core Companion survival without local generative AI (`D-PHONE-02`); replaced "mood valence/arousal sync" with typed bounded Emotion Events with Host D11 reconciliation (§2.3), lightweight expression fallback, zero arbitrary canonical Mood writes from Mobile; updated status and checklist references to D5.4.
+- [x] `docs/01_Tracking/active/task-docs-mobile-v1-canonicalization.md`: Reconciled tracker header, lifecycle stage, batch table, authored summary, and checklist to D5.4.
 - [x] Mechanical Whitespace Verification: Verified `git diff --check d92b6e4b9b19e957dd419b9968c7ad3ad4cee031` and working tree diff pass with exit code 0.
 
-### Verification Checklist for Batch D5.3
+### Verification Checklist for Batch D5.4
 
 - [x] `git diff --check d92b6e4b9b19e957dd419b9968c7ad3ad4cee031` passes with exit code 0 and zero warnings.
-- [x] WBS DAG validation confirms exactly 88 items, 0 duplicate IDs, 0 dangling dependencies, 0 cycles (topological sort valid).
-- [x] All cited WBS owner files and sections exist and point to normative architecture design contracts.
-- [x] Mobile Golden validation confirms exact 18 MG groups with 0 missing, 0 duplicates, 0 extra, and auditable sub-assertions.
+- [x] WBS DAG validation confirms exactly 88 items, 0 duplicate IDs, 0 dangling dependencies, 0 cycles (topological sort valid), and all 65 pre-D5 IDs preserved.
+- [x] All changed WBS owner references semantically match their cited section titles and contents (100% semantic verification).
+- [x] Mobile Golden validation confirms exact 18 MG groups with MG13.2 (§3.1) and MG14.2 (§6.2, §6.3) semantically corrected.
+- [x] Walkthrough audit confirms 0 occurrences of "mood valence/arousal sync" and "mobile auxiliary inference boundary".
 - [x] Markdown relative links verified across all touched files.
-- [x] Zero forbidden stale active phrases found in modified documentation.
 - [x] Strictly zero Git mutations performed by AI agent.
 - [x] Zero production code, test, or CI workflow changes.
-- [x] Tracker active status: `D5.3 CORRECTED / AUTHORED — AWAITING INDEPENDENT CLOSURE GATE RE-REVIEW` (not archived; Closure Gate not self-certified).
+- [x] Tracker active status: `D5.4 CORRECTED / AUTHORED — AWAITING INDEPENDENT CLOSURE GATE RE-REVIEW` (not archived; Closure Gate not self-certified).
 - [x] STOP for independent human (Chris) and Closure Gate re-review.

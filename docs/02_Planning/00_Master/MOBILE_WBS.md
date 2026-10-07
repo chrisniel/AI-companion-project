@@ -65,7 +65,7 @@
 - **`MOB-FOUNDATION-005`**: Mobile Navigation Shell & Lifecycle Coordinator
   - *Scope:* Build mobile UI shell, navigation stack, app foreground/background lifecycle observers, and Flutter state restoration.
   - *Responsibility:* Mobile
-  - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §2.1, [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §6.1
+  - *Architectural Owner:* [`08_Mobile_Companion_Shell_and_UX.md`](../../05_Design/08_Mobile_Companion_Shell_and_UX.md) §2, §3, [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §6.1
   - *Principal Dependencies:* `MOB-FOUNDATION-002`, `MOB-FOUNDATION-003`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
@@ -348,7 +348,7 @@
 - **`MOB-CONV-001`**: Connected Conversation Client & SSE Token Streaming
   - *Scope:* Build Mobile conversation view consuming Host REST endpoints and Server-Sent Events (SSE) token stream with Markdown rendering and turn retry.
   - *Responsibility:* Mobile
-  - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §3.1, [`assistant-and-conversations.md`](../../04_Architecture/01_Domains/assistant-and-conversations.md)
+  - *Architectural Owner:* [`assistant-and-conversations.md`](../../04_Architecture/01_Domains/assistant-and-conversations.md) §2.2, §2.6, [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §3.1
   - *Principal Dependencies:* `MOB-FOUNDATION-003`, `PC-API-002`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
@@ -383,28 +383,28 @@
 - **`MOB-CONV-006`**: Optional Cloud LLM Conversation Routing & Permission Boundary
   - *Scope:* Implement direct Mobile conversational routing to a configured external Cloud LLM provider when PC Host is unavailable, explicitly persisting Cloud-generated whole-turn results into the durable disconnected conversation working state; require explicit user opt-in and device-local provider API credentials stored in Android Keystore; ensure Cloud LLM permission is independently revocable from Cloud STT and Cloud TTS; enforce zero silent cloud fallback, truthful unavailable/error state, zero Host tool authority, and zero transmission without explicit user authorization (exact provider SDK remains implementation-open).
   - *Responsibility:* Mobile
-  - *Architectural Owner:* [`MOBILE_SYSTEM_BASELINE.md`](../../04_Architecture/MOBILE_SYSTEM_BASELINE.md) §5.1, [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §3.2, [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §3.2.6
+  - *Architectural Owner:* [`MOBILE_SYSTEM_BASELINE.md`](../../04_Architecture/MOBILE_SYSTEM_BASELINE.md) §5.1, §5.3, [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §3.2.6
   - *Principal Dependencies:* `MOB-FOUNDATION-004`, `MOB-IDENTITY-002`, `MOB-DATA-004`, `MOB-CONV-001`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-CONV-007`**: Turn Control, User Message Queueing & Assistant Streaming Cancellation
   - *Scope:* Implement active conversation turn control semantics: queue user turns while assistant generation is actively streaming, provide queued message editing and removal before execution (`D-SHARED-CONV-03`), support `INTERRUPT_AND_SEND` to stop generation and immediately submit a new turn, instantaneous cancellation of streaming responses (`D-SHARED-CONV-02`), and prevent out-of-order turn interleaving.
   - *Responsibility:* Mobile
-  - *Architectural Owner:* [`assistant-and-conversations.md`](../../04_Architecture/01_Domains/assistant-and-conversations.md) §3.1, §3.3
+  - *Architectural Owner:* [`assistant-and-conversations.md`](../../04_Architecture/01_Domains/assistant-and-conversations.md) §2.7, §2.6
   - *Principal Dependencies:* `MOB-CONV-001`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-CONV-008`**: Causal Branching & Disconnected Branch Fork Representation
   - *Scope:* Support causal conversation branching for turns created on mobile, preserving parent turn references, client-generated conversation UUIDs, branch comparison, divergence tracking, and safe regeneration without side-effect replay (`D-SHARED-CONV-01`, `D-SHARED-CONV-03A`), without forcing destructive linear overwrites or host LLM regeneration upon reconnection.
   - *Responsibility:* Both
-  - *Architectural Owner:* [`assistant-and-conversations.md`](../../04_Architecture/01_Domains/assistant-and-conversations.md) §3.3, [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §3.2.6
+  - *Architectural Owner:* [`assistant-and-conversations.md`](../../04_Architecture/01_Domains/assistant-and-conversations.md) §2.6, §2.7, [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §3.2.6
   - *Principal Dependencies:* `MOB-CONV-002`, `MOB-DATA-004`, `MOB-CONTRACT-007`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-CONV-009`**: Tiered Context Window Budgeting & Sliding Window Compaction
   - *Scope:* Implement deterministic token budget partitioning across system persona, character traits, retrieved memory facts, recent dialogue turns, and completion reserve; apply sliding-window pruning and compaction when prompt size exceeds device budget (`D-SHARED-AI-01`, `D-SHARED-AI-02`).
   - *Responsibility:* Mobile
-  - *Architectural Owner:* [`assistant-and-conversations.md`](../../04_Architecture/01_Domains/assistant-and-conversations.md) §2.4, §2.5, [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §2.1
+  - *Architectural Owner:* [`assistant-and-conversations.md`](../../04_Architecture/01_Domains/assistant-and-conversations.md) §2.4, §2.5
   - *Principal Dependencies:* `MOB-CONV-004`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
@@ -429,7 +429,7 @@
 - **`MOB-INFER-003`**: Single Resident Model Lifecycle Controller
   - *Scope:* Enforce single resident model cap (`--models-max 1`) on mobile, handling explicit load, unload, purge, and pre-allocation memory checks.
   - *Responsibility:* Mobile
-  - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §2.3, §6.2
+  - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §2.3, §6.3
   - *Principal Dependencies:* `MOB-INFER-001`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
@@ -443,14 +443,14 @@
 - **`MOB-INFER-005`**: Battery-Saver & Thermal Throttling Coordinator
   - *Scope:* Integrate `PowerManager.isPowerSaveMode()` and Android thermal status listeners to disable model pre-loading and throttle inference under thermal pressure.
   - *Responsibility:* Mobile
-  - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §6.1, §6.3
+  - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §6.1, §6.2
   - *Principal Dependencies:* `MOB-INFER-004`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-INFER-006`**: Multi-Model Governance, Storage Pre-Allocation & Capability Qualification
   - *Scope:* Implement governance metadata catalog for on-device models, requiring pre-flight storage reserve checks before transfer, SHA-256 verification, and minimum tier/RAM tagging per model bundle (`D-PHONE-01C`, `D-PHONE-03`, `D-PHONE-05`, `D-PHONE-05A`); establish empirical qualification records (model artifact + quantization + runtime version + backend + hardware + context config), including the cross-device qualification requirement for Gemma 3 1B and candidate small models.
   - *Responsibility:* Both
-  - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §2.3, §2.4
+  - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §2.2, §2.3, §6.3
   - *Principal Dependencies:* `MOB-INFER-002`, `MOB-INFER-003`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
@@ -461,21 +461,21 @@
 - **`MOB-VOICE-001`**: Connected Voice Streaming Client over WebSocket
   - *Scope:* Build full-duplex WebSocket audio client connecting to PC Runtime canonical STT/TTS/VAD providers with full-duplex audio-frame streaming (exact frame encoding/codec evaluated during implementation planning).
   - *Responsibility:* Both
-  - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §3.1, [`voice-and-audio.md`](../../04_Architecture/01_Domains/voice-and-audio.md)
+  - *Architectural Owner:* [`voice-and-audio.md`](../../04_Architecture/01_Domains/voice-and-audio.md) §2.9, [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §3.2, §3.1
   - *Principal Dependencies:* `MOB-IDENTITY-005`, `PC-VOICE-005`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-VOICE-002`**: Android Audio Hardware & Focus Platform Adapter
   - *Scope:* Build Flutter audio capture/playback adapter integrating Android `AudioManager` and `AudioFocusRequest` with transient ducking handling.
   - *Responsibility:* Mobile
-  - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §3.3
+  - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §3.1
   - *Principal Dependencies:* `MOB-FOUNDATION-004`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-VOICE-003`**: Mandatory Voice Barge-In State Machine
   - *Scope:* Implement instant playback cancellation, audio buffer flush, and stale audio chunk invalidation upon user speech detection.
   - *Responsibility:* Both
-  - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §3.1
+  - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §3.3, [`voice-and-audio.md`](../../04_Architecture/01_Domains/voice-and-audio.md) §2.5
   - *Principal Dependencies:* `MOB-VOICE-001`, `MOB-VOICE-002`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
@@ -489,28 +489,28 @@
 - **`MOB-VOICE-005`**: Device-Local TTS Provider Adapter
   - *Scope:* Implement capability-dependent device-local TTS adapter (engine-independent) for vocalizing alarms and text when an approved local TTS provider is installed.
   - *Responsibility:* Mobile
-  - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §3.2, [`MOBILE_SYSTEM_BASELINE.md`](../../04_Architecture/MOBILE_SYSTEM_BASELINE.md) §5.1
+  - *Architectural Owner:* [`voice-and-audio.md`](../../04_Architecture/01_Domains/voice-and-audio.md) §2.9, [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §3.2, [`MOBILE_SYSTEM_BASELINE.md`](../../04_Architecture/MOBILE_SYSTEM_BASELINE.md) §5.1
   - *Principal Dependencies:* `MOB-VOICE-002`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-VOICE-006`**: Independently Capability-Gated Local STT Adapter & Candidate Qualification
-  - *Scope:* Implement independent gating for device-local STT; truthfully degrade to typed text input when heavy local STT is unsupported (`D-PHONE-14C`); establish research qualification pipeline prioritizing `whisper.cpp` as first candidate on Mobile (`D-PHONE-14G`) to evaluate latency, memory, battery, thermal, noise, barge-in, English, Tagalog, and Taglish performance.
+  - *Scope:* Implement independent gating for device-local STT; truthfully degrade to typed text input when heavy local STT is unsupported (`D-PHONE-14C`); establish research qualification pipeline evaluating `whisper.cpp` as first research candidate (not permanent engine) on Mobile (`D-PHONE-14G`) across English, Filipino / Tagalog, Taglish, dates, numbers, times, latency, memory, battery, thermal behavior, noise robustness, and barge-in behavior.
   - *Responsibility:* Mobile
-  - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §3.2, §3.5
+  - *Architectural Owner:* [`voice-and-audio.md`](../../04_Architecture/01_Domains/voice-and-audio.md) §2.9, [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §3.2
   - *Principal Dependencies:* `MOB-VOICE-002`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-VOICE-007`**: Optional Cloud Voice Provider Routing
   - *Scope:* Provide separate, opt-in cloud STT and cloud TTS routing using Keystore-stored user API keys; strictly no silent cloud fallback.
   - *Responsibility:* Mobile
-  - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §3.2, [`MOBILE_SYSTEM_BASELINE.md`](../../04_Architecture/MOBILE_SYSTEM_BASELINE.md) §5.1
+  - *Architectural Owner:* [`voice-and-audio.md`](../../04_Architecture/01_Domains/voice-and-audio.md) §2.9, [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §3.2, [`MOBILE_SYSTEM_BASELINE.md`](../../04_Architecture/MOBILE_SYSTEM_BASELINE.md) §5.1, §5.3
   - *Principal Dependencies:* `MOB-IDENTITY-002`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-VOICE-008`**: Composable Voice Pipeline Orchestration & Transition Indicators
   - *Scope:* Build composable client voice state machine orchestrating independent selection of STT, LLM, and TTS providers across Connected Host, Standalone Local, and Optional Cloud paths; render unambiguous transition indicators and enforce zero silent provider fallback (`D-SHARED-FLUTTER-05`, `D-PHONE-14`, `D-PHONE-14A..F`).
   - *Responsibility:* Mobile
-  - *Architectural Owner:* [`voice-and-audio.md`](../../04_Architecture/01_Domains/voice-and-audio.md) §2.9, [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §3, §3.1
+  - *Architectural Owner:* [`voice-and-audio.md`](../../04_Architecture/01_Domains/voice-and-audio.md) §2.9, [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §3.2
   - *Principal Dependencies:* `MOB-VOICE-001`, `MOB-VOICE-002`, `MOB-VOICE-003`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
@@ -653,7 +653,7 @@
 - **`MOB-SECURITY-004`**: Memory Pressure & Storage Eviction Handlers
   - *Scope:* Implement `ComponentCallbacks2.onTrimMemory()` handler (`TRIM_MEMORY_UI_HIDDEN`, background trim) and cache eviction to release volatile buffers before OS termination.
   - *Responsibility:* Mobile
-  - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §6.2
+  - *Architectural Owner:* [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §6.3
   - *Principal Dependencies:* `MOB-DATA-001`, `MOB-INFER-003`
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
