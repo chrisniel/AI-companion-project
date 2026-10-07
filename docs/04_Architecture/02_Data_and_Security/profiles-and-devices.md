@@ -1,7 +1,7 @@
 # Profiles and Devices Architecture
 
-> **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0005, ADR-0018)  
+> **Document Role:** Canonical domain architecture specification.
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0005, ADR-0018)
 > **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for profiles, identity, and client device enrollment.
 
 
@@ -34,10 +34,11 @@ The following constraints are permanently locked for PC V1:
 
 - **Account to Profile:** One local Account → multiple strictly isolated Profiles.
 - **Human to Profile:** One human = one Profile.
-- **Administration:** Local PC Flutter admin is the only V1 surface for Profile create/rename/delete/restore/device assignment/privacy/security administration. (Remote/mobile clients cannot create or switch Profiles.)
-- **Device Binding:** A normal satellite/mobile device binds to exactly one Profile.
-- **Remote Constraints:** Remote/mobile clients cannot create or switch Profiles.
-- **Session:** Authenticated session determines Profile; payload cannot assert arbitrary profile_id.
+- **Administration:** Local PC Flutter admin is the only V1 surface for Profile create/rename/delete/restore/device assignment/privacy/security administration. (Remote/mobile clients cannot create, delete, or switch Profiles.)
+- **Device Binding (`D-PHONE-01B`):** A normal satellite/mobile device binds to **exactly one Profile**.
+- **Device Enrollment Lifecycle (`D-PHONE-01B`):** Explicit conceptual states: `UNENROLLED`, `ENROLLED_ACTIVE`, `ENROLLED_REAUTH_REQUIRED`, `REVOKED`. App reinstall or credential wipe returns the client to `UNENROLLED`.
+- **Remote Constraints:** Remote/mobile clients cannot create, delete, or switch Profiles.
+- **Session:** Authenticated session determines Profile; payload cannot assert arbitrary `profile_id`.
 - **Profile Switch Lifecycle:** Profile switch is an auth/session transition and clears Profile-scoped caches/subscriptions.
 - **Scheduler Continuity:** The scheduler continues across all Profiles regardless of the active visible Profile.
 - **Host Ownership:** Runtime, providers, model library, and hardware are host/Account-owned, not Profile-owned.
@@ -68,17 +69,20 @@ In accordance with `ADR-0018`, superseding historical D8 / ADR-0009:
   - Database schema transitions from legacy `owner_id` to `profile_id`.
   - Existing legacy `default_user` records migrate into a newly created Profile with a stable UUID. "Default Profile" may be an initial display name; the display name is not identity.
 
-### 3.2 Profile vs. Device Separation (Decision D4)
+### 3.2 Profile vs. Device Separation (Decision D4 & D-PHONE-01B)
 
-In accordance with Decision D4:
+In accordance with Decision D4 and Decision D-PHONE-01B:
 - **Profile Represents User Context:** A Profile models the companion user identity and owns all personal data.
 - **Device Represents Client Endpoint:** Device = enrolled endpoint/device identity, such as the Windows host installation or an enrolled mobile device. Browser tabs and authenticated browser connections operate through Sessions and are not durable Device identities.
-- **Satellite Device Profile Binding:**
+- **Satellite Device Profile Binding (`D-PHONE-01B`):**
   - A normal mobile satellite device (e.g., Android Companion) is enrolled and paired to **exactly one Profile**.
   - The mobile device interacts with data strictly within its bound profile context; it cannot switch profiles or inspect other profiles on the PC host.
+  - Conceptual enrollment lifecycle progresses through `UNENROLLED`, `ENROLLED_ACTIVE`, `ENROLLED_REAUTH_REQUIRED`, and `REVOKED`.
+  - App reinstall or local credential storage loss returns the client to `UNENROLLED`; old authority is never silently recreated from local data.
 - **Independent Device Credentials:**
   - Devices receive independent, revocable credentials (`ADR-0005`).
   - Revoking or resetting a Device does **not** alter or destroy the underlying Profile data.
+  - PC Host is the sole authority able to revoke device credentials.
 
 ---
 
@@ -111,6 +115,7 @@ The normative architecture for D4 and ADR-0018 is frozen. The following implemen
 - **Pairing & Enrollment UX:** User interaction flow for introducing a new client device (camera-scanned QR code vs. short numeric code entered on PC; `DEBT-V1-013`).
 - **Device Credential Format:** Token structure (cryptographically signed JWT device token vs. high-entropy random token hash).
 - **Profile Deletion Cascade:** Exact cascade/cleanup implementation during the hard purge phase (ACTIVE -> 7-day recoverable deletion -> hard purge).
+- **One Profile to Multiple Mobile Phones:** Binding a single Profile across multiple concurrently enrolled mobile phones remains **`OPEN / DECISION DEBT`** (to be formally registered and assigned an exact debt identifier in Batch D5; it is strictly NOT classified as deferred or post-V1).
 
 ---
 
@@ -125,6 +130,8 @@ The normative architecture for D4 and ADR-0018 is frozen. The following implemen
 ## 8. Canonical Relationships & Cross-Links
 
 - **Canonical System Baseline:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decision D4, ADR-0018)
+- **Mobile System Baseline:** [`docs/04_Architecture/MOBILE_SYSTEM_BASELINE.md`](../MOBILE_SYSTEM_BASELINE.md) (§4 Mobile Identity, Enrollment & Transport, §7 Decision Ledger)
+- **Mobile Offline & Sync Specification:** [`docs/04_Architecture/04_Infrastructure/mobile-offline-and-sync.md`](../04_Infrastructure/mobile-offline-and-sync.md) (§2 State Classification, §7 Revocation & Purge)
 - **Multi-Profile Ownership ADR:** [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md)
 - **Device Authentication ADR:** [`docs/04_Architecture/decisions/ADR-0005-d4-profile-device-credential-boundary.md`](../decisions/ADR-0005-d4-profile-device-credential-boundary.md)
 - **Master Planning Spine:** [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../../02_Planning/00_Master/DECISION_REGISTER.md) (Decision D4, ADR-0018), [`WBS.md`](../../02_Planning/00_Master/WBS.md) (`PC-IDENTITY-001`, `PC-IDENTITY-002`)

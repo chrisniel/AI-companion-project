@@ -1,7 +1,7 @@
 # Web and Current Information Integration Architecture
 
-> **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0010)  
+> **Document Role:** Canonical domain architecture specification.
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0010)
 > **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for read-only web information, search, fetch, and weather integrations.
 
 ---
@@ -14,8 +14,9 @@ This specification defines the integration architecture, security constraints, p
 - Treatment of retrieved external data as untrusted input.
 - Separation of read-only information retrieval from interactive browser automation.
 - Phased delivery boundaries distinguishing PC V1 read-only capabilities from post-V1 browser interaction.
+- Architectural decoupling of internet connectivity and web information tools from Cloud LLM authorization (`D-PHONE-13C`, `D-PHONE-01A`).
 
-It governs all outbound network requests initiated by or on behalf of the assistant to retrieve current real-world information.
+It governs all outbound network requests initiated by or on behalf of the assistant to retrieve current real-world information across PC Desktop, Web, and Mobile Companion clients.
 
 ---
 
@@ -54,6 +55,14 @@ All content ingested from external web sources is untrusted:
 In accordance with Decision D9:
 - **Deferred Capability:** Interactive browser automation (e.g., programmatic form submission, automated checkout, authenticated portal sessions, complex DOM traversal, headless browser orchestration via engines like Playwright or Selenium) is classified as `APPROVED / PC LATER`.
 - **Strict Separation:** Interactive automation is architecturally and operationally distinct from read-only search and fetch. It is **not** part of PC V1 and must not be conflated with read-only retrieval capabilities.
+
+### 2.5 Internet Connectivity Decoupled from Cloud AI Permission (D-PHONE-13C, D-PHONE-01A)
+
+In accordance with Decisions `D-PHONE-13C` and `D-PHONE-01A`:
+- **Architectural Decoupling:** Internet availability and public web tool execution are strictly decoupled from Cloud LLM authorization.
+- **No Implicit Cloud AI Egress:** The presence of active internet connectivity, and the user's permission to execute read-only web tools (WebSearch, WebFetch, Weather), do **NOT** grant authorization to route conversational turns, prompts, or personal user context to external third-party Cloud LLMs.
+- **Local Synthesis of Web Context:** A local companion (running on the PC Host or on qualified Standalone Mobile) may retrieve public web snippets or weather data over the internet and synthesize responses using its local on-device language model, without transmitting user conversation prompts to cloud generative AI providers.
+- **Independent Authorization Boundary:** Cloud LLM usage remains an independent, explicit, user-opt-in capability requiring user-supplied API credentials. Enabling public internet retrieval never implicitly enables or authorizes Cloud LLM routing.
 
 ---
 
@@ -102,7 +111,15 @@ The following functional and technical mechanisms remain open design for future 
 
 - **Network Trust Tiers (Decision D5):** Web information retrieval operates across the boundary between the trusted Local AI Runtime and the untrusted Public Internet.
 - **Tool Policy Resolution (Decision D9):** Read-only web queries represent Risk 0 (low-risk information access) operations. Under the system's `DEFAULT DENY` capability architecture, read-only web tools **MAY** auto-execute (`ALLOW`) only when the capability is explicitly enabled and deterministic profile/device policy permits it. They do not unconditionally evaluate to `ALLOW` by default.
-- **Credential Isolation:** API keys required for external provider access (e.g., third-party search engine tokens) are stored in secure host configuration, never exposed to client-side code, and never injected into conversational prompt context.
+- **Credential Isolation & Device-Local Storage:**
+  - In accordance with [`authentication-and-secrets.md`](../02_Data_and_Security/authentication-and-secrets.md) and [`MOBILE_SYSTEM_BASELINE.md`](../MOBILE_SYSTEM_BASELINE.md), provider and API credentials (e.g., external search engine tokens, weather service API keys) are **device-local secrets**.
+  - A PC-hosted adapter obtains any required provider credentials from approved secure Host secret storage.
+  - A Standalone Mobile adapter requiring a provider credential obtains it from approved platform-protected device-local secret storage (using Android Keystore or an approved secure Flutter storage abstraction backed by it). Plaintext credential storage is prohibited.
+  - Raw credentials never automatically synchronize between PC, Mobile, or other devices; PC-configured credentials stay on PC, and Mobile-configured credentials stay on Mobile.
+  - Raw credentials MUST NOT be exposed to the language model, prompt context, tool-intent payloads, ordinary tool results, or remote browser clients.
+  - A narrow approved adapter MAY internally use its local secured credential solely within its bounded execution environment to execute its specific capability.
+  - *Decoupled Permission Boundaries (`D-PHONE-13C`):* Utilizing an API credential for a bounded Web Search, Web Fetch, or Weather adapter does **NOT** authorize or constitute Cloud LLM access. The permission boundaries remain strictly decoupled:
+    $$\text{Public Internet / Web Retrieval} \neq \text{Cloud LLM} \neq \text{Cloud STT} \neq \text{Cloud TTS}$$
 - **Privacy Minimization:** Search queries generated by the assistant must minimize the transmission of identifying user personal context or sensitive profile lore to external search providers.
 
 ---
@@ -115,3 +132,4 @@ The following functional and technical mechanisms remain open design for future 
 - **Assistant Domain Specification:** [`docs/04_Architecture/01_Domains/assistant-and-conversations.md`](../01_Domains/assistant-and-conversations.md)
 - **Tool Permissions & Actions Spec:** [`docs/04_Architecture/02_Data_and_Security/tool-permissions-and-actions.md`](../02_Data_and_Security/tool-permissions-and-actions.md)
 - **Authentication & Secrets Spec:** [`docs/04_Architecture/02_Data_and_Security/authentication-and-secrets.md`](../02_Data_and_Security/authentication-and-secrets.md)
+- **Mobile Capabilities & Local Runtime:** [`docs/04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md`](../04_Infrastructure/mobile-capabilities-and-runtime.md)

@@ -1,8 +1,9 @@
 # AI Companion — PC V1 Work Breakdown Structure (WBS)
 
-> **Document Role:** Canonical granular work breakdown structure cataloging stable work IDs across all PC V1 implementation streams.  
-> **Status:** Active Canonical Planning Baseline  
+> **Document Role:** Canonical granular work breakdown structure cataloging stable work IDs across all PC V1 implementation streams.
+> **Status:** Active Canonical Planning Baseline
 > **Batching Principle:** Use the largest tightly related task or batch that preserves reliable first-pass accuracy, reviewability, and bounded correction cost. Do not enforce arbitrary LOC or file quotas.
+> **Mobile Companion Reference:** This WBS tracks PC V1 work streams (`DOC`, `PC-*`). For Mobile V1 companion implementation work streams (`MOB-FOUNDATION` through `MOB-VERIFY`), consult [`MOBILE_WBS.md`](./MOBILE_WBS.md).
 
 ---
 

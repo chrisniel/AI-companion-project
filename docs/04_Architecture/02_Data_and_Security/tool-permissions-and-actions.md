@@ -1,7 +1,7 @@
 # Tool Permissions and Actions Architecture
 
-> **Document Role:** Canonical domain architecture specification.  
-> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0010, ADR-0018)  
+> **Document Role:** Canonical domain architecture specification.
+> **Status:** Active Canonical (Aligned with Decisions D1-D11, ADR-0010, ADR-0018)
 > **Authority Precedence:** Source code, generated API schemas, and automated test suites remain authoritative for implemented reality. [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) owns cross-cutting product architecture, ecosystem boundaries, and Decisions D1-D11. Master release planning is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). This focused specification owns normative architecture for tool permissions, deterministic policy, and action execution.
 
 ---
@@ -15,6 +15,8 @@ This specification defines the execution governance, deterministic policy gates,
 - Strict rejection of unrestricted generic shell, PowerShell, and OS administration tools.
 - Boundaries for narrow, typed privileged actions and deferred interactive browser automation.
 - Tiered emergency action controls, cancellation boundaries, and global kill-switch capability.
+- Standalone Mobile Tool Gateway and local execution policy (`D-PHONE-13` through `D-PHONE-13F`).
+- Side effect replay prohibition during regeneration and sync reconciliation (`D-SHARED-CONV-03A`).
 
 ---
 
@@ -98,6 +100,42 @@ The following semantics codify the frozen D9 execution requirements for PC V1:
 - **Success Criteria:** Success may be claimed only after backend-confirmed execution (not immediately upon intent generation).
 - **Open Design:** The exact API, DB, and UI representation of these policies remains open.
 
+### 2.8 Standalone Mobile Tool Gateway & Local Execution Policy (Mobile V1)
+
+In accordance with Decisions `D-PHONE-13` through `D-PHONE-13F` and `D-SHARED-CONV-03A`:
+
+- **Execution Pipeline (`D-PHONE-13`):**
+  When disconnected from the PC Host (`STANDALONE_MOBILE`), qualified device-local models may invoke approved typed tools through the Mobile Tool Gateway. The execution pipeline strictly enforces the Decision D9 security model:
+  $$\text{Local Mobile LLM} \longrightarrow \text{Typed Tool Intent} \longrightarrow \text{Mobile Tool Gateway} \longrightarrow \text{Deterministic D9 Policy} \longrightarrow \text{Narrow Adapter} \longrightarrow \text{Confirmed Result} \longrightarrow \text{Response}$$
+  *Architectural Invariant:* The local language model possesses **zero inherent execution authority**. It cannot directly access device APIs, files, or network sockets; it can only propose typed tool intent.
+- **Approved Standalone Mobile Tool Scope:**
+  1. *Local Productivity Tools (`D-PHONE-13A`):*
+     - Tasks within approved authority (listing tasks, creating/completing tasks).
+     - Mobile-origin Reminders and Alarms (creating, updating, deleting client-authored items).
+     - Alert occurrence actions (dismissing, snoozing active alerts).
+     - Schedule read access.
+  2. *Read-Only Internet Tools (`D-PHONE-13B`):*
+     - When internet connectivity is available, standalone mobile models may invoke bounded public Web Search, public webpage fetch/read, and Weather adapters.
+     - *Internet is NOT Cloud AI (`D-PHONE-13C`):* Internet availability and public web tool usage do **NOT** imply or grant authorization to send prompts to third-party Cloud LLMs. Local reasoning may utilize internet retrieval.
+  3. *Local Companion Read Tools (`D-PHONE-13D`):*
+     - Bounded local reads: cached Memory replica, pending Memory intents, cached/local conversation history, active Character metadata, device capabilities, model/runtime status, sync state, and resource state.
+- **Explicitly Excluded & Prohibited Authority (`D-PHONE-13E`):**
+  The following capabilities are strictly **REJECTED** and prohibited on mobile:
+  - NO arbitrary shell execution (`sh`, `bash`, `cmd`, PowerShell, terminal emulation).
+  - NO raw, unrestricted filesystem access (restricted strictly to scoped app storage).
+  - NO credential access: The local model, prompt context, tool intent payload, and ordinary tool result must NEVER receive or expose raw secret material, including device credentials, pairing secrets, API keys, cloud provider credentials, tokens, encryption keys, or other secret material. A narrow approved adapter MAY internally use a securely stored credential when required for its bounded capability, but raw secret material must not be exposed to the model, tool intent payload, prompt context, or ordinary tool result.
+  - NO PC Host or Profile administration (creating, deleting, or switching Profiles).
+  - NO mobile device pairing reassignment or security boundary reconfiguration.
+  - NO unrestricted interactive browser automation.
+  - NO Host-only privileged administrative actions.
+- **Tool Capability Qualification & Deterministic Confirmation (`D-PHONE-13F`):**
+  - Conversational tool invocation on mobile requires empirical qualification of the exact installed model and runtime configuration for structured JSON/tool syntax accuracy.
+  - *Confirmation Invariant:* Action success is reported to the user or recorded in conversation **only after deterministic adapter/backend execution confirms success**. Action success must **never** be claimed merely because the generative model emitted prose saying "done" or "I have scheduled the reminder".
+- **Side Effect Replay Invariant (`D-SHARED-CONV-03A`):**
+  - Committed tool side effects (e.g., tasks created, alarms set) are immutable historical actions.
+  - They are **never** silently replayed during turn regeneration, causal branch switching, or synchronization reconciliation. Re-executing state-changing actions requires explicit new user intent.
+
+---
 
 ## 3. Current Verified Implementation
 
@@ -154,3 +192,4 @@ The following technical mechanisms remain open design for future technical speci
 - **Assistant Domain Specification:** [`docs/04_Architecture/01_Domains/assistant-and-conversations.md`](../01_Domains/assistant-and-conversations.md)
 - **Privacy & Audit Specification:** [`docs/04_Architecture/02_Data_and_Security/privacy-retention-and-audit.md`](privacy-retention-and-audit.md)
 - **Web Integrations Specification:** [`docs/04_Architecture/03_Integrations/web-current-information.md`](../03_Integrations/web-current-information.md)
+- **Mobile Capabilities & Runtime Spec:** [`docs/04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md`](../04_Infrastructure/mobile-capabilities-and-runtime.md)

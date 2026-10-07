@@ -1,9 +1,9 @@
 # AI Companion — Canonical System Baseline & Architecture Core
 
-> **Document Role:** High-level normative system architecture, ecosystem topology, release boundaries, cross-cutting invariants, and decision index for the AI Companion project.  
-> **Status:** Active Canonical (Decisions D1-D11 Aligned)  
-> **Last Updated:** 2026-10-02 (PC V1 Canonicalization Pass)  
-> **Authority Precedence:** Normative cross-cutting anchor. Detailed technical domain standards are owned by the 18 focused specifications under [`docs/04_Architecture/`](./README.md). Milestone delivery tracking is owned by [`docs/02_Planning/00_Master/`](../../02_Planning/00_Master/). Active sprint state is tracked in [`docs/01_Tracking/task.md`](../01_Tracking/task.md).
+> **Document Role:** High-level normative system architecture, ecosystem topology, release boundaries, cross-cutting invariants, and decision index for the AI Companion project.
+> **Status:** Active Canonical (Decisions D1-D11 Aligned)
+> **Last Updated:** 2026-10-04 (Mobile V1 Planning & Documentation Integration)
+> **Authority Precedence:** Normative cross-cutting anchor. Detailed technical domain standards are owned by the 20 focused specifications under [`docs/04_Architecture/`](./README.md). Milestone delivery tracking is owned by [`docs/02_Planning/00_Master/`](../02_Planning/00_Master/). Active sprint state is tracked in [`docs/01_Tracking/task.md`](../01_Tracking/task.md).
 
 ---
 
@@ -45,7 +45,7 @@ The AI Companion ecosystem is centered around an independent, persistent Windows
 - **Local AI Runtime:** Persistent FastAPI background process (`backend/`). The single authority for state, multi-turn queue, SQLite+FTS5 persistence, model execution, deterministic action policies, and speech engines.
 - **Flutter Desktop (Windows):** Primary production client for PC V1 (`ADR-0017`). Owns desktop window lifecycle, system tray integration, native Windows notifications, and physical audio capture/playback.
 - **React Web Client:** Supported web client and development / regression harness (`frontend/web/`). Provides browser-based testing, debugging, and administration.
-- **Android Companion:** Dedicated mobile companion prototype (`android/`, `com.cnl.aicompanion`). Scheduled for production delivery in an independent follow-on milestone (`Android V1`).
+- **Android Companion:** CURRENT IMPLEMENTED PROTOTYPE: Kotlin/Compose under `android/` using interim package identifiers. TARGET MOBILE PRODUCTION IDENTITY: Flutter production mobile target using `com.cnl.aicompanion` (D3). Scheduled for production delivery in an independent follow-on milestone (`Android V1`). Mobile V1 includes a production-capable device-local LLM execution path for qualified devices (`D-PHONE-01`, `D-PHONE-03`). Individual supported phones do not all need to qualify; core non-generative companion features (alarms, reminders, schedules, and presence shell) survive completely without a local LLM (`D-PHONE-02`). The PC Host remains the master runtime for complex orchestration and heavy local models.
 
 ---
 
@@ -53,7 +53,7 @@ The AI Companion ecosystem is centered around an independent, persistent Windows
 
 - **`PC V1` (unqualified "AI Companion V1"):** Mandatory delivery milestone for the PC-hosted ecosystem release.
 - **`PC LATER`:** Approved PC capabilities postponed beyond PC V1 (e.g., wake word, vector memory, Live2D/VRM, managed model downloader).
-- **`ANDROID V1`:** Independent follow-on mobile companion release. Does **not** block PC V1.
+- **`ANDROID V1`:** Independent follow-on mobile companion release. Includes a production-capable device-local LLM execution path on qualified devices (`D-PHONE-01`, `D-PHONE-03`), while ensuring full core companion survival on non-qualifying devices (`D-PHONE-02`). Does **not** block PC V1.
 - **`ANDROID LATER` / `FUTURE`:** Post-Android-V1 mobile features and exploratory research.
 - **`REJECTED`:** Explicitly excluded capabilities (e.g., generic shell execution, direct router port forwarding).
 
@@ -83,7 +83,7 @@ The historical product decision spine is D1-D11. Additional accepted ADRs refine
 | **D1** | Scope Boundary | PC V1 mandatory milestone; Android V1 independent follow-on | `SYSTEM_BASELINE.md`, [ADR-0002](decisions/ADR-0002-d1-pc-v1-release-boundary.md) |
 | **D2** | Host Lifecycle | Local AI Runtime independent background service; Task Scheduler at login | [`windows-host-and-notifications.md`](04_Infrastructure/windows-host-and-notifications.md), [ADR-0003](decisions/ADR-0003-d2-windows-host-model.md) |
 | **D3** | Android Identity | Package com.cnl.aicompanion; Android V1 follow-on milestone | [`android-companion.md`](01_Domains/android-companion.md), [ADR-0004](decisions/ADR-0004-d3-android-application-identity.md) |
-| **D4** | Device Auth | Device tokens, Android Keystore, mutual handshake, revocable access | [`authentication-and-secrets.md`](02_Data_and_Security/authentication-and-secrets.md), [ADR-0005](decisions/ADR-0005-d4-profile-device-credential-boundary.md) |
+| **D4** | Device Auth | Profile/Device separation, profile-bound enrollment, revocable credentials, platform-protected local secret storage | [`profiles-and-devices.md`](02_Data_and_Security/profiles-and-devices.md), [ADR-0005](decisions/ADR-0005-d4-profile-device-credential-boundary.md) |
 | **D5** | Remote Access | Loopback default + Tailscale private mesh + Cloudflare Tunnel; no port forwarding | [`authentication-and-secrets.md`](02_Data_and_Security/authentication-and-secrets.md), [ADR-0006](decisions/ADR-0006-d5-remote-access-trust-boundary.md) |
 | **D6** | Model Import | Controlled scan import: inbox → preflight → staging → atomic install → registry | [`runtime-and-models.md`](04_Infrastructure/runtime-and-models.md), [ADR-0007](decisions/ADR-0007-d6-controlled-model-acquisition.md) |
 | **D7** | Memory Model | Profile-first, selective extraction, user-visible & correctable, FTS5 lexical baseline | [`memory-and-personalization.md`](01_Domains/memory-and-personalization.md), [ADR-0008](decisions/ADR-0008-d7-profile-first-memory-ownership.md) |
@@ -115,9 +115,15 @@ Full PC V1 release readiness requires end-to-end evidence across 14 verification
 
 ---
 
-## 6. Canonical Domain Specifications Index
+## 6. Cross-Cutting Mobile Baseline
 
-Detailed normative requirements are defined in the 18 focused specifications:
+- [`MOBILE_SYSTEM_BASELINE.md`](MOBILE_SYSTEM_BASELINE.md) (Mobile Ecosystem Boundary)
+
+---
+
+## 7. Canonical Domain Specifications Index
+
+Detailed normative requirements are defined in the 20 focused specifications:
 
 - **01 Domains:**
   - [`01_Domains/assistant-and-conversations.md`](01_Domains/assistant-and-conversations.md)
@@ -141,3 +147,5 @@ Detailed normative requirements are defined in the 18 focused specifications:
   - [`04_Infrastructure/windows-host-and-notifications.md`](04_Infrastructure/windows-host-and-notifications.md)
   - [`04_Infrastructure/backup-recovery-and-diagnostics.md`](04_Infrastructure/backup-recovery-and-diagnostics.md)
   - [`04_Infrastructure/performance-and-capacity.md`](04_Infrastructure/performance-and-capacity.md)
+  - [`04_Infrastructure/mobile-offline-and-sync.md`](04_Infrastructure/mobile-offline-and-sync.md)
+  - [`04_Infrastructure/mobile-capabilities-and-runtime.md`](04_Infrastructure/mobile-capabilities-and-runtime.md)

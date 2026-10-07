@@ -1,8 +1,9 @@
 # AI Companion — PC V1 Master Readiness Checklist
 
-> **Document Role:** Canonical tracking checklist auditing readiness across architecture, implementation, automated testing, documentation, and Golden PC V1 release evidence.  
-> **Status:** Active Canonical Tracking Matrix  
+> **Document Role:** Canonical tracking checklist auditing readiness across architecture, implementation, automated testing, documentation, and Golden PC V1 release evidence.
+> **Status:** Active Canonical Tracking Matrix
 > **Governance Invariant:** Never claim target architecture is implemented. State categories: `IMPLEMENTED / VERIFIED`, `IN PROGRESS`, `APPROVED TARGET (NOT STARTED)`, `LATER / DEFERRED`.
+> **Mobile Companion Reference:** This checklist tracks PC V1 release readiness. For Mobile Companion readiness across architecture, implementation, and acceptance groups MG1–MG18 (`D-MOBILE-VERIFY-01..03`), consult [`MOBILE_CHECKLIST.md`](./MOBILE_CHECKLIST.md).
 
 ---
 

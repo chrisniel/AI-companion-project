@@ -38,7 +38,7 @@ Documentation must adhere to the zero-padded two-digit numbering scheme under `d
 - `docs/01_Tracking/` (Shared `task.md`, active branch execution in `active/`, historical delivery in `archive/`)
 - `docs/02_Planning/` (Master Spine in `00_Master/`, active plans in `01_Plans/`, templates in `02_Templates/`, archives in `03_Archive/`)
 - `docs/03_Walkthroughs/` (Delivery walkthroughs; ignored during normal startup context)
-- `docs/04_Architecture/` (System Baseline, ADRs in `decisions/`, and 18 focused domain specifications)
+- `docs/04_Architecture/` (System Baseline, ADRs in `decisions/`, and 20 focused canonical specifications)
 - `docs/05_Design/` (Product UI/UX, visual language, and interaction specs)
 - `docs/06_Guides/` (Contributor guides, setup instructions, delivery workflow, testing standards)
 - `docs/07_Archive/` (Superseded legacy drafts, old audits, and historical plans; strictly ignored)

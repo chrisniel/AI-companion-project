@@ -1,8 +1,8 @@
 # Documentation Authority Model & Global Navigation Map
 
-> **Document Role:** Canonical entry-point guide and sole global authority map for all human contributors and AI agents.  
-> **Status:** Active Canonical  
-> **Last Updated:** 2026-10-02 (PC V1 Decision Pass Alignment)
+> **Document Role:** Canonical entry-point guide and sole global authority map for all human contributors and AI agents.
+> **Status:** Active Canonical
+> **Last Updated:** 2026-10-04 (Mobile V1 Architecture & Planning Integration)
 
 ---
 
@@ -19,12 +19,13 @@ docs/06_Guides/DOCUMENTATION_MAP.md  [YOU ARE HERE]
   ▼
 docs/04_Architecture/SYSTEM_BASELINE.md
   │  (Product identity, PC V1 boundary, host topology, locked Decisions D1-D11, Golden Gate)
+  │  [For Mobile tasks: route through docs/04_Architecture/MOBILE_SYSTEM_BASELINE.md §7 Approved Mobile Decision Ledger]
   ▼
 docs/02_Planning/00_Master/DELIVERY_INDEX.md
-  │  (Consulted when milestone sequencing, WBS ID, or backlog status matters)
+  │  (Consulted when milestone sequencing, WBS ID, or backlog status matters; links to MOBILE_WBS.md and MOBILE_CHECKLIST.md)
   ▼
 Relevant Focused Canonical Domain Specification & Accepted ADR(s)
-  │  (Load ONLY the specific domain spec relevant to the active task)
+  │  (Load ONLY the specific domain/infrastructure spec relevant to the active task)
   ▼
 docs/01_Tracking/task.md
     │  (If on develop/master: shared milestone goals and integration state)
@@ -75,9 +76,14 @@ Use this matrix to identify the single canonical owner for specific questions:
 | Architecture decisions, rationale, or ADR numbers | [`docs/02_Planning/00_Master/DECISION_REGISTER.md`](../02_Planning/00_Master/DECISION_REGISTER.md) & [`docs/04_Architecture/decisions/`](../04_Architecture/decisions/README.md) |
 | Delivery milestones, release phases, or schedule | [`docs/02_Planning/00_Master/SPRINT_ROADMAP.md`](../02_Planning/00_Master/SPRINT_ROADMAP.md) |
 | Work Breakdown Structure, task IDs, or milestone owners | [`docs/02_Planning/00_Master/WBS.md`](../02_Planning/00_Master/WBS.md) |
+| Mobile Work Breakdown Structure, stream IDs, or delivery ownership | [`docs/02_Planning/00_Master/MOBILE_WBS.md`](../02_Planning/00_Master/MOBILE_WBS.md) |
 | Backlog categorization (Committed vs. Later vs. Rejected) | [`docs/02_Planning/00_Master/BACKLOG.md`](../02_Planning/00_Master/BACKLOG.md) |
 | Readiness checklist across specs, code, and Golden Gate | [`docs/02_Planning/00_Master/MASTER_CHECKLIST.md`](../02_Planning/00_Master/MASTER_CHECKLIST.md) |
+| Mobile V1 readiness checklist across architecture, implementation, and MG1–MG18 (D-MOBILE-VERIFY-01..03) | [`docs/02_Planning/00_Master/MOBILE_CHECKLIST.md`](../02_Planning/00_Master/MOBILE_CHECKLIST.md) |
 | Unresolved implementation details or technical debt | [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../02_Planning/00_Master/DECISION_DEBT.md) |
+| Mobile Companion architecture, baseline, and decision ledger | [`docs/04_Architecture/MOBILE_SYSTEM_BASELINE.md`](../04_Architecture/MOBILE_SYSTEM_BASELINE.md) |
+| Mobile offline operation, sync engine, conflict resolution, or wire protocol | [`docs/04_Architecture/04_Infrastructure/mobile-offline-and-sync.md`](../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) |
+| Mobile capabilities, local runtime, audio/voice, security, or testing | [`docs/04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md`](../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) |
 | Assistant turns, SSE stream, or conversation state | [`docs/04_Architecture/01_Domains/assistant-and-conversations.md`](../04_Architecture/01_Domains/assistant-and-conversations.md) |
 | Characters, continuous personality traits, or moods | [`docs/04_Architecture/01_Domains/characters-personality-and-emotion.md`](../04_Architecture/01_Domains/characters-personality-and-emotion.md) |
 | Memory extraction, lexical search, or memory scopes | [`docs/04_Architecture/01_Domains/memory-and-personalization.md`](../04_Architecture/01_Domains/memory-and-personalization.md) |
@@ -93,6 +99,8 @@ Use this matrix to identify the single canonical owner for specific questions:
 | Backup, restore verification, or factory reset | [`docs/04_Architecture/04_Infrastructure/backup-recovery-and-diagnostics.md`](../04_Architecture/04_Infrastructure/backup-recovery-and-diagnostics.md) |
 | Gaming mode, Low-Impact profile, or resource limits | [`docs/04_Architecture/04_Infrastructure/performance-and-capacity.md`](../04_Architecture/04_Infrastructure/performance-and-capacity.md) |
 | Desktop UI shell, tray interactions, or visual styling | [`docs/05_Design/`](../05_Design/README.md) |
+| Mobile companion shell, navigation, 5-tab layout, or OLED hybrid design | [`docs/05_Design/08_Mobile_Companion_Shell_and_UX.md`](../05_Design/08_Mobile_Companion_Shell_and_UX.md) |
+| Mobile V1 Batch D canonicalization delivery walkthrough | [`docs/03_Walkthroughs/walkthrough-mobile-v1-batch-d-reconciliation.md`](../03_Walkthroughs/walkthrough-mobile-v1-batch-d-reconciliation.md) |
 | Delivery gates, Git ownership, or walkthrough templates | [`docs/06_Guides/DELIVERY_WORKFLOW.md`](./DELIVERY_WORKFLOW.md) |
 | Developer workstation setup, compilers, or venv | [`docs/06_Guides/DEVELOPMENT_SETUP.md`](./DEVELOPMENT_SETUP.md) |
 | Test execution, CI pipeline design, or Golden Gate | [`docs/06_Guides/TESTING_AND_CI.md`](./TESTING_AND_CI.md) |
@@ -108,7 +116,7 @@ Use this matrix to identify the single canonical owner for specific questions:
 | `docs/01_Tracking/` | Canonical (Execution) | Shared `task.md`, active branch execution in `active/`, historical delivery in `archive/`. | `task.md` read on develop; `active/` on branch. |
 | `docs/02_Planning/` | Canonical (Planning) | Master Planning Spine (`00_Master/`), active plans (`01_Plans/`), templates, and historical archives. | `DELIVERY_INDEX.md` consulted on startup; active plan during execution. |
 | `docs/03_Walkthroughs/` | Historical Evidence | Point-in-time delivery records and handovers. | Ignored during normal startup. |
-| `docs/04_Architecture/` | Canonical (Normative) | System Baseline, ADRs (`decisions/`), and 18 focused domain specifications. | Consulted on demand per active domain. |
+| `docs/04_Architecture/` | Canonical (Normative) | System Baseline, Mobile System Baseline, ADRs (`decisions/`), and 20 focused canonical specifications. | Consulted on demand per active domain. |
 | `docs/05_Design/` | Canonical (Design) | UI/UX design specifications and visual presence specs. | Consulted on demand when modifying UI. |
 | `docs/06_Guides/` | Canonical (Guides) | Onboarding, workflow, setup, testing, and navigation guides. | Read on demand for process/setup guidance. |
 | `docs/07_Archive/` | Historical Reference | Superseded legacy audits, deprecated drafts, and historical plans. | **Strictly ignored.** |

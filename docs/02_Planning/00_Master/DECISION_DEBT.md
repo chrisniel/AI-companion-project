@@ -1,8 +1,8 @@
-# AI Companion — PC V1 Decision Debt & Open Implementation Details
+# AI Companion — Decision Debt & Open Implementation Details (PC V1 & Mobile V1)
 
-> **Document Role:** Authoritative catalog of approved implementation-open details, benchmark-dependent parameters, and deferred improvement candidates.  
-> **Status:** Active Canonical Planning Baseline  
-> **Governance Invariant:** PC V1 architecture is FROZEN. Do not use Decision Debt to casually reopen agreed architecture. This register captures technical mechanism choices, empirical evidence needs, and implementation parameters that were deliberately left open.
+> **Document Role:** Authoritative catalog of approved implementation-open details, benchmark-dependent parameters, and deferred improvement candidates.
+> **Status:** Active Canonical Planning Baseline
+> **Governance Invariant:** PC V1 architecture remains FROZEN. Approved Mobile V1 architecture is also indexed here, with Mobile implementation-open details tracked separately under Section 2 (`MOBILE V1 OPEN IMPLEMENTATION DETAIL`). This register captures technical mechanism choices, empirical evidence needs, and implementation parameters that were deliberately left open without reopening agreed architecture.
 
 ---
 
@@ -12,6 +12,7 @@
 | :--- | :--- | :--- |
 | **`V1 BLOCKER`** | Implementation detail that must be resolved before a specific PC V1 milestone can finish. | Resolve during respective milestone planning. |
 | **`V1 OPEN DETAIL`** | Approved functional requirement where the exact code mechanism is intentionally flexible. | Design during feature implementation. |
+| **`MOBILE V1 OPEN DETAIL`** | Approved Mobile V1 functional requirement where the code mechanism or parameter is open design. | Design during respective Mobile feature implementation. |
 | **`PC-LATER / V2`** | Valid architectural enhancement explicitly deferred to post-PC-V1 releases. | Revisit during V2 planning. |
 | **`EXPERIMENT NEEDED`**| Parameter or threshold that requires empirical workstation benchmarking. | Execute benchmark spike to tune values. |
 
@@ -87,5 +88,56 @@
   - *Context:* Interactive animated 2D/3D avatars and floating desktop widgets.
 - **`DEBT-LATER-004`: Interactive Browser Automation (Playwright)**
   - *Context:* Automated web form completion and multi-step web transactions.
-- **`DEBT-LATER-005`: Mobile-to-PC Full Bidirectional State Synchronization**
-  - *Context:* Mobile-to-PC state synchronization; exact persistence/outbox mechanism deferred to the Mobile Architecture Pass.
+- **`DEBT-LATER-005`: Mobile-to-PC Full Bidirectional State Synchronization [RESOLVED / SUPERSEDED]**
+  - *Resolution:* Superseded and resolved by approved Mobile synchronization architecture in [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) (asymmetric per-domain sync, durable outbox, client-generated stable entity IDs, monotonic revision checks, typed `CONFLICT_DETECTED` and `STALE_CURSOR` outcomes).
+
+### Category: `MOBILE V1 OPEN IMPLEMENTATION DETAIL`
+- **`DEBT-MOB-01`: Mobile Device Credential Expiry & Rotation Timing/Handshake**
+  - *Context:* Independent rotation of Device Token without profile alteration is approved (`MOBILE_SYSTEM_BASELINE.md` §4.3, `mobile-capabilities-and-runtime.md` §5.3).
+  - *Open Detail:* Exact expiry periods, token format, overlap/grace windows, and automated refresh protocol.
+  - *Resolution Point:* Stream `MOB-IDENTITY-003` implementation plan.
+
+- **`DEBT-MOB-02`: Synchronization Change-History Retention Horizon**
+  - *Context:* Host maintains bounded change-history retention for delta sync and tombstone propagation (`mobile-offline-and-sync.md` §3.2.5).
+  - *Open Detail:* Exact retention horizon duration (decoupled from user-facing 30-day recycle bin).
+  - *Resolution Point:* Stream `MOB-CONTRACT-004` / `MOB-SYNC-005` implementation plan.
+
+- **`DEBT-MOB-03`: Flutter/Android Secure Storage Adapter Selection**
+  - *Context:* Platform-protected Keystore-backed storage is mandatory; unencrypted SharedPreferences is prohibited (`mobile-offline-and-sync.md` §2.2, `mobile-capabilities-and-runtime.md` §5.1).
+  - *Open Detail:* Exact Dart package abstraction (`flutter_secure_storage` with Keystore vs custom platform channel).
+  - *Resolution Point:* Stream `MOB-IDENTITY-002` implementation plan.
+
+- **`DEBT-MOB-04`: Mobile Local Inference Runtime & Container Selection**
+  - *Context:* Pluggable mobile inference engine on qualified Tier 2/3 hardware (`mobile-capabilities-and-runtime.md` §2.2).
+  - *Open Detail:* Specific library/container runtime (e.g. ExecuTorch vs llama.cpp Android) and compilation flags.
+  - *Resolution Point:* Stream `MOB-INFER-004` implementation plan.
+
+- **`DEBT-MOB-05`: Mobile Local TTS Provider Selection**
+  - *Context:* Capability-dependent device-local TTS for alarm/text vocalization (`mobile-capabilities-and-runtime.md` §3.2).
+  - *Open Detail:* Candidate reference Kokoro-82M vs Sherpa-ONNX vs Android system TTS provider.
+  - *Resolution Point:* Stream `MOB-VOICE-005` implementation plan.
+
+- **`DEBT-MOB-06`: Disconnected Conversation Branch Review/Merge UX and Batch Turn Import Schema**
+  - *Context:* Atomic whole-turn sync and causal thread branching upon reconnection are approved (`mobile-offline-and-sync.md` §3.2.6).
+  - *Open Detail:* Exact FastAPI endpoint DTO schema and user-facing branch merge/inspection UI design.
+  - *Resolution Point:* Stream `MOB-CONTRACT-006` / `MOB-SYNC-007` implementation plan.
+
+- **`DEBT-MOB-07`: Mobile Evidence-Driven L3 Emulator & Device Test Matrix Configuration**
+  - *Context:* 5-layer test matrix L1–L5 and evidence-driven emulator matrix spanning target SDK/API (e.g. API 36 prototype target evidence), supported lower boundaries, and behavioral transition boundaries (notifications at API 33, exact alarms & while-in-use FGS at API 34, process lifecycle & timeouts at API 35+) per [`mobile-capabilities-and-runtime.md`](../../04_Architecture/04_Infrastructure/mobile-capabilities-and-runtime.md) §7.1.1.
+  - *Open Detail:* Exact CI headless emulator runner configuration, supported lower boundary pin, and hardware testbed setup.
+  - *Resolution Point:* Stream `MOB-VERIFY-003` / `MOB-VERIFY-006` implementation plan.
+
+- **`DEBT-MOB-08`: Flutter Relational Persistence Abstraction Library Selection**
+  - *Context:* Relational SQLite-backed durable persistence is mandatory (`mobile-offline-and-sync.md` §2.2). Drift is the preferred/recommended Flutter candidate.
+  - *Open Detail:* Final library confirmation between Drift vs alternative SQLite abstractions (e.g. sqflite) during Flutter scaffolding.
+  - *Resolution Point:* Stream `MOB-DATA-001` implementation plan.
+
+- **`DEBT-MOB-09`: Mobile WebSocket Audio Frame Codec Selection**
+  - *Context:* Full-duplex WebSocket audio transport connecting to PC Runtime canonical STT/TTS/VAD providers is mandatory (`mobile-capabilities-and-runtime.md` §3.1).
+  - *Open Detail:* Evaluation between Linear PCM 16-bit vs Opus 16 kHz compressed frames for bandwidth and latency optimization.
+  - *Resolution Point:* Stream `MOB-VOICE-001` implementation plan.
+- **`DEBT-MOB-10`: One Profile → Multiple Mobile Phones Topology & Concurrency**
+  - *Context:* Ledger §19 and `D-SHARED-CONV-01` record that whether one Profile supports multiple concurrently enrolled Mobile phones remains an open product/topology question, while settled baseline architecture firmly locks that 1 Satellite Phone binds to at most 1 Profile, and the PC Host is the sole Account/Profile Admin.
+  - *Settled Architecture:* 1 Satellite Phone = 1 Profile binding (`D-PHONE-01B`, [`profiles-and-devices.md`](../../04_Architecture/02_Data_and_Security/profiles-and-devices.md) §3); PC Host is sole Account/Profile Admin owning enrollment, credential rotation, and revocation.
+  - *Open Product & Technical Detail:* Whether multiple concurrently enrolled Mobile phones per Profile are supported in V1 product topology, and if supported, multi-device outbox reconciliation, distributed cursor arbitration, and concurrent branch reconciliation rules.
+  - *Resolution Point:* Mobile V1 product topology review / Post-V1 multi-device concurrency refinement.

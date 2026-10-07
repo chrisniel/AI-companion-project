@@ -1,25 +1,32 @@
 # AI Companion — PC V1 Master Delivery Index
 
-> **Document Role:** Canonical delivery and planning index linking product milestones, work breakdown structure (WBS), active implementation plans, and release gates.  
-> **Status:** Active Canonical Planning Index  
+> **Document Role:** Canonical delivery and planning index linking product milestones, work breakdown structure (WBS), active implementation plans, and release gates.
+> **Status:** Active Canonical Planning Index
 > **Authority Precedence:** This document coordinates delivery sequencing. Normative architecture is owned by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) and focused domain specifications. Active sprint tracking resides in [`docs/01_Tracking/task.md`](../../01_Tracking/task.md). Detailed feature steps reside in active plans under [`docs/02_Planning/01_Plans/`](../01_Plans/).
 
 ---
 
 ## 1. Planning Spine Navigation
 
-The AI Companion PC V1 planning spine consists of seven dedicated master documents under `docs/02_Planning/00_Master/`:
+The AI Companion PC V1 planning spine consists of dedicated master documents under `docs/02_Planning/00_Master/`:
 
 ```text
 docs/02_Planning/00_Master/
 ├── DELIVERY_INDEX.md      ◄── [YOU ARE HERE] Delivery hub, milestones, release gates
 ├── DECISION_REGISTER.md   ◄── Frozen architectural decisions and owner mapping
-├── WBS.md                 ◄── Granular stable work breakdown structure (work IDs)
+├── WBS.md                 ◄── PC V1 granular work breakdown structure (work IDs)
+├── MOBILE_WBS.md          ◄── Mobile V1 granular work breakdown structure (work IDs)
 ├── BACKLOG.md             ◄── Categorized backlog (PC V1, PC Later, Mobile, Rejected)
 ├── SPRINT_ROADMAP.md      ◄── Strategic milestone sequence (M0 through M5 + Golden)
-├── MASTER_CHECKLIST.md    ◄── Implementation, verification, and documentation checklist
+├── MASTER_CHECKLIST.md    ◄── PC V1 implementation, verification, and Golden checklist
+├── MOBILE_CHECKLIST.md    ◄── Mobile V1 readiness checklist and Golden MG1–MG18
 └── DECISION_DEBT.md       ◄── Open implementation details and evidence-needed items
 ```
+
+> **Mobile Architecture & Delivery Hub Links:**
+> - System Architecture: [`MOBILE_SYSTEM_BASELINE.md`](../../04_Architecture/MOBILE_SYSTEM_BASELINE.md) (especially §7 Approved Mobile Decision Ledger)
+> - Implementation Breakdown: [`MOBILE_WBS.md`](MOBILE_WBS.md)
+> - Readiness Checklist: [`MOBILE_CHECKLIST.md`](MOBILE_CHECKLIST.md)
 
 ---
 
@@ -28,8 +35,8 @@ docs/02_Planning/00_Master/
 | Milestone ID | Title & Scope | Primary Deliverables | Target Gate / Status |
 | :--- | :--- | :--- | :--- |
 | **M0** | **Docs & Architecture Reset** | Canonicalization handoff execution, master planning spine creation, system baseline update, ADR reconciliation, and CI guide alignment. | **COMPLETE / VERIFIED** |
-| **MOBILE-ARCH** | **Mobile Architecture Pass** | Canonicalize production Android architecture. Prerequisite to M1 to freeze shared vs PC-specific vs mobile-specific boundaries. Mobile IMPLEMENTATION does not block PC V1. | **NEXT** |
-| **M1** | **Flutter Client Foundation** | Production Flutter Desktop app scaffolding, window/tray management, REST/SSE client, App/Data/Library storage root awareness, and React Web parity checks. | **PLANNED** |
+| **MOBILE-ARCH** | **Mobile Architecture Pass** | Canonicalize production Mobile Companion architecture across Batches A–D (standalone core, local inference, offline sync, voice, health, vision, shell UX). Batch D canonical promotion complete; D2–D5 independently reviewed; Closure Gate passed; 88-item Mobile WBS; MG1–MG18; PR #21 merge pending; production Mobile implementation remains future work. Implementation plan: [`plan-mobile-v1-batch-d-canonical-promotion.md`](../01_Plans/plan-mobile-v1-batch-d-canonical-promotion.md). Mobile production implementation remains an independent follow-on track ([`MOBILE_WBS.md`](MOBILE_WBS.md)). | **COMPLETE / VERIFIED** |
+| **M1** | **Flutter Client Foundation** | Production Flutter Desktop app scaffolding, window/tray management, REST/SSE client, App/Data/Library storage root awareness, and React Web parity checks. Sequenced after merge of PR #21. | **PENDING / SEQUENCED AFTER MERGE** |
 | **M2** | **PC Companion Foundation** | Windows autostart at login, native desktop notifications, Task Scheduler integration, D6 controlled model import service, and multi-Profile database migration. | **PLANNED** |
 | **M3** | **Intelligence & Productivity** | Character Studio & 8 continuous personality traits, persistent bounded emotion, profile-first selective memory with revalidation, and Task/Reminder/Alarm scheduling. | **PLANNED** |
 | **M4** | **Voice, Tools & Information** | Conversational voice pipeline with mandatory barge-in, WebSocket audio transport, D9 deterministic tool policy engine, and read-only public web/current info. | **PLANNED** |
@@ -41,7 +48,8 @@ docs/02_Planning/00_Master/
 ## 3. Active & Archived Implementation Plans
 
 ### Active Feature Plans (`docs/02_Planning/01_Plans/`)
-- *Plans will be created here per work stream as M1–M5 are unlocked.*
+- [`plan-mobile-v1-batch-d-canonical-promotion.md`](../01_Plans/plan-mobile-v1-batch-d-canonical-promotion.md) — Completed and verified Mobile V1 canonicalization and Batch D promotion plan (Gate 4 Closure Gate passed; PR #21 merge pending).
+- *Additional feature plans will be created here per work stream as M1–M5 are unlocked.*
 
 ### Planning Templates (`docs/02_Planning/02_Templates/`)
 - [`implementation-plan-template.md`](../02_Templates/implementation-plan-template.md) — Standard template for authoring non-trivial feature implementation plans.

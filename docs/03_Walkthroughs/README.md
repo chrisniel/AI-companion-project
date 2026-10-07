@@ -62,6 +62,7 @@ Cross-cutting system verification, Web dashboard, and process handovers:
 
 | Walkthrough Document | Delivery Date | Scope & Verified Deliverables | Related Archived Plan |
 | :--- | :--- | :--- | :--- |
+| [`walkthrough-mobile-v1-canonical-architecture.md`](./walkthrough-mobile-v1-canonical-architecture.md) | 2026-10-04 | Point-in-time Mobile V1 canonical architecture, sync protocol, and 65-item WBS planning handover. | [`plan-mobile-v1-canonicalization.md`](../02_Planning/03_Archive/plan-mobile-v1-canonicalization.md) |
 | [`walkthrough-phase8b-closure.md`](./walkthrough-phase8b-closure.md) | 2026-09-30 | Phase 8B.7 & 8B.8 persistent message attachment rendering and full PC V1 integration closure. | [`plan-phase8-pc-frontend-architecture-ux.md`](../02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md) |
 | [`walkthrough-phase8b-multimodal-attachments-foundation.md`](./walkthrough-phase8b-multimodal-attachments-foundation.md) | 2026-09-25 | Phase 8B multimodal image attachment foundation (Slices 8B.0–8B.6: migration 006, contracts, secure API, transactional binding, vision provider, web composer). | [`plan-phase8-pc-frontend-architecture-ux.md`](../02_Planning/phase-08/plan-phase8-pc-frontend-architecture-ux.md) |
 | [`walkthrough-phase7-pc-integration-verification.md`](./walkthrough-phase7-pc-integration-verification.md) | 2026-09-14 | Phase 7 end-to-end PC integration, hardware benchmarks, full-stack test suite. | [`plan-pc-runtime-web-assistant-stabilization.md`](../07_Archive/plans/plan-pc-runtime-web-assistant-stabilization.md) |
