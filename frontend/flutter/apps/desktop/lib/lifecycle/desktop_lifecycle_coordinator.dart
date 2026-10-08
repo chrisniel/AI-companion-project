@@ -46,11 +46,14 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
   bool get isDisposed => _isDisposed;
 
   /// Initializes window constraints, close interception, and system tray.
-  Future<void> initialize({bool showImmediately = true}) async {
+  Future<void> initialize({
+    bool showImmediately = true,
+    Size? initialWindowSize,
+  }) async {
     if (_isInitialized || _isDisposed) return;
 
     await windowAdapter.ensureInitialized();
-    await windowAdapter.setSize(defaultWindowSize);
+    await windowAdapter.setSize(initialWindowSize ?? defaultWindowSize);
     await windowAdapter.setMinimumSize(minimumWindowSize);
     await windowAdapter.center();
     await windowAdapter.setPreventClose(true);

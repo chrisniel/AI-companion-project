@@ -53,7 +53,7 @@ void main() {
     });
   });
 
-  group('isAbsolutePath', () {
+  group('isAbsolutePath and isWindowsAbsolutePath', () {
     test('identifies absolute paths across formats', () {
       expect(isAbsolutePath(r'C:\Users\Admin\Data'), isTrue);
       expect(isAbsolutePath('D:/AI-companion-project'), isTrue);
@@ -65,16 +65,35 @@ void main() {
       expect(isAbsolutePath('../relative'), isFalse);
       expect(isAbsolutePath(''), isFalse);
     });
+
+    test('validates Windows-specific absolute paths correctly', () {
+      expect(isWindowsAbsolutePath(r'C:\Users\Admin\Data'), isTrue);
+      expect(isWindowsAbsolutePath('D:/AI-companion-project'), isTrue);
+      expect(isWindowsAbsolutePath(r'\\server\share\data'), isTrue);
+
+      // POSIX root is not a valid Windows absolute path
+      expect(isWindowsAbsolutePath('/home/user/companion'), isFalse);
+      expect(isWindowsAbsolutePath('/data'), isFalse);
+      expect(isWindowsAbsolutePath('relative/path'), isFalse);
+    });
   });
 
   group('evaluateBootstrapLocatorContent', () {
-    test('returns absent when fileExists is false or rawJson is null', () {
+    test('returns absent when fileExists is false', () {
       final res1 = evaluateBootstrapLocatorContent(fileExists: false, rawJson: null);
       expect(res1.locatorStatus, equals(LocatorStatus.absent));
       expect(res1.resolvedPath, isNull);
+      expect(res1.details, contains('not found on disk'));
 
       final res2 = evaluateBootstrapLocatorContent(fileExists: false, rawJson: '{"schema_version": 1}');
       expect(res2.locatorStatus, equals(LocatorStatus.absent));
+    });
+
+    test('returns corrupt (fail closed) when file exists but read fails (rawJson == null)', () {
+      final res = evaluateBootstrapLocatorContent(fileExists: true, rawJson: null);
+      expect(res.locatorStatus, equals(LocatorStatus.corrupt));
+      expect(res.resolvedPath, isNull);
+      expect(res.details, contains('could not be read'));
     });
 
     test('returns corrupt when JSON is invalid, empty, or wrong type', () {
@@ -122,10 +141,31 @@ void main() {
       expect(resRelative.locatorStatus, equals(LocatorStatus.corrupt));
     });
 
+    test('rejects POSIX path on Windows when isWindows is true', () {
+      final res = evaluateBootstrapLocatorContent(
+        fileExists: true,
+        rawJson: '{"schema_version": 1, "data_root": "/home/user/companion"}',
+        isWindows: true,
+      );
+      expect(res.locatorStatus, equals(LocatorStatus.corrupt));
+      expect(res.details, contains('valid absolute Windows path'));
+    });
+
+    test('accepts POSIX path in platform-neutral mode (isWindows is false)', () {
+      final res = evaluateBootstrapLocatorContent(
+        fileExists: true,
+        rawJson: '{"schema_version": 1, "data_root": "/home/user/companion"}',
+        isWindows: false,
+        pathExistsChecker: (p) => true,
+      );
+      expect(res.locatorStatus, equals(LocatorStatus.validAvailable));
+    });
+
     test('returns validAvailable when path is absolute and directory exists', () {
       final res = evaluateBootstrapLocatorContent(
         fileExists: true,
         rawJson: '{"schema_version": 1, "data_root": "D:\\\\CompanionData"}',
+        isWindows: true,
         pathExistsChecker: (p) => p == r'D:\CompanionData',
       );
       expect(res.locatorStatus, equals(LocatorStatus.validAvailable));
@@ -137,6 +177,7 @@ void main() {
       final res = evaluateBootstrapLocatorContent(
         fileExists: true,
         rawJson: '{"schema_version": 1, "data_root": "D:\\\\NonExistentData"}',
+        isWindows: true,
         pathExistsChecker: (p) => false,
       );
       expect(res.locatorStatus, equals(LocatorStatus.validUnavailable));

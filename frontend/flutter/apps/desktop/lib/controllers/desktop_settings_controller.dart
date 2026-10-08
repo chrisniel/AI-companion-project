@@ -35,24 +35,35 @@ class DesktopSettingsController extends ChangeNotifier {
     AccentPreset initialAccentPreset = AccentPreset.oceanSky,
     bool initialRailCollapsed = false,
     DesktopNavDestination initialDestination = DesktopNavDestination.chat,
+    bool initialScrollToDiagnostics = false,
     StorageDiagnosticReader? diagnosticReader,
   })  : _themeMode = initialThemeMode,
         _accentPreset = initialAccentPreset,
         _isRailCollapsed = initialRailCollapsed,
         _currentDestination = initialDestination,
+        _scrollToDiagnostics = initialScrollToDiagnostics,
         _diagnosticReader = diagnosticReader ?? WindowsStorageDiagnosticReader();
 
   ThemeMode _themeMode;
   AccentPreset _accentPreset;
   bool _isRailCollapsed;
   DesktopNavDestination _currentDestination;
+  bool _scrollToDiagnostics;
   final StorageDiagnosticReader _diagnosticReader;
 
   ThemeMode get themeMode => _themeMode;
   AccentPreset get accentPreset => _accentPreset;
   bool get isRailCollapsed => _isRailCollapsed;
   DesktopNavDestination get currentDestination => _currentDestination;
+  bool get scrollToDiagnostics => _scrollToDiagnostics;
   StorageDiagnosticReader get diagnosticReader => _diagnosticReader;
+
+  void setScrollToDiagnostics(bool scroll) {
+    if (_scrollToDiagnostics != scroll) {
+      _scrollToDiagnostics = scroll;
+      notifyListeners();
+    }
+  }
 
   void setThemeMode(ThemeMode mode) {
     if (_themeMode != mode) {

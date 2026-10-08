@@ -77,8 +77,22 @@ class StorageDiagnosticInfo {
       'StorageDiagnosticInfo(rootType: $rootType, resolvedPath: $resolvedPath, status: $locatorStatus, source: $source)';
 }
 
+/// Checks whether a given path string is an absolute Windows path (drive letter or UNC format).
+bool isWindowsAbsolutePath(String path) {
+  final trimmed = path.trim();
+  if (trimmed.isEmpty) return false;
+  if (trimmed.startsWith(r'\\') && trimmed.length >= 3) return true;
+  if (trimmed.length >= 3 && RegExp(r'^[a-zA-Z]:[/\\]').hasMatch(trimmed)) {
+    return true;
+  }
+  return false;
+}
+
 /// Checks whether a given path string is absolute across Windows, POSIX, and UNC formats.
-bool isAbsolutePath(String path) {
+bool isAbsolutePath(String path, {bool windowsOnly = false}) {
+  if (windowsOnly) {
+    return isWindowsAbsolutePath(path);
+  }
   final trimmed = path.trim();
   if (trimmed.isEmpty) return false;
   if (trimmed.startsWith('/') || trimmed.startsWith(r'\\')) return true;
@@ -94,15 +108,25 @@ StorageDiagnosticInfo evaluateBootstrapLocatorContent({
   required bool fileExists,
   String? rawJson,
   bool Function(String path)? pathExistsChecker,
+  bool isWindows = false,
   StorageRootType rootType = StorageRootType.data,
   StorageRootSource source = StorageRootSource.localDiagnostic,
 }) {
-  if (!fileExists || rawJson == null) {
+  if (!fileExists) {
     return StorageDiagnosticInfo(
       rootType: rootType,
       locatorStatus: LocatorStatus.absent,
       source: source,
       details: 'Bootstrap locator file not found on disk.',
+    );
+  }
+
+  if (rawJson == null) {
+    return StorageDiagnosticInfo(
+      rootType: rootType,
+      locatorStatus: LocatorStatus.corrupt,
+      source: source,
+      details: 'Existing bootstrap locator could not be read.',
     );
   }
 
@@ -147,12 +171,18 @@ StorageDiagnosticInfo evaluateBootstrapLocatorContent({
     }
 
     final trimmedPath = dataRoot.trim();
-    if (!isAbsolutePath(trimmedPath)) {
+    final isValidAbsolute = isWindows
+        ? isWindowsAbsolutePath(trimmedPath)
+        : isAbsolutePath(trimmedPath);
+
+    if (!isValidAbsolute) {
       return StorageDiagnosticInfo(
         rootType: rootType,
         locatorStatus: LocatorStatus.corrupt,
         source: source,
-        details: 'Configured data_root must be an absolute path: "$trimmedPath"',
+        details: isWindows
+            ? 'Configured data_root must be a valid absolute Windows path (e.g. C:\\... or \\\\server\\share): "$trimmedPath"'
+            : 'Configured data_root must be an absolute path: "$trimmedPath"',
       );
     }
 

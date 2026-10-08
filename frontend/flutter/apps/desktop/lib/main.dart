@@ -6,12 +6,45 @@ import 'package:flutter/material.dart';
 import 'package:tray_manager/tray_manager.dart';
 
 import 'controllers/desktop_settings_controller.dart';
+import 'harness/visual_evidence_runner.dart';
 import 'lifecycle/desktop_lifecycle_coordinator.dart';
 import 'lifecycle/live_desktop_adapters.dart';
 import 'shell/desktop_shell.dart';
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  ThemeMode initialThemeMode = ThemeMode.system;
+  AccentPreset initialPreset = AccentPreset.oceanSky;
+  bool initialRailCollapsed = false;
+  DesktopNavDestination initialDestination = DesktopNavDestination.chat;
+  bool initialScrollDiagnostics = false;
+  Size? initialSize;
+
+  if (kDebugMode) {
+    if (args.contains('--theme-light')) {
+      initialThemeMode = ThemeMode.light;
+    } else if (args.contains('--theme-dark')) {
+      initialThemeMode = ThemeMode.dark;
+    }
+    if (args.contains('--accent-amethyst')) {
+      initialPreset = AccentPreset.amethystViolet;
+    } else if (args.contains('--accent-oceansky')) {
+      initialPreset = AccentPreset.oceanSky;
+    }
+    if (args.contains('--rail-collapsed')) {
+      initialRailCollapsed = true;
+    }
+    if (args.contains('--nav-settings')) {
+      initialDestination = DesktopNavDestination.settings;
+    }
+    if (args.contains('--scroll-diagnostics')) {
+      initialScrollDiagnostics = true;
+    }
+    if (args.contains('--size-1024x640')) {
+      initialSize = const Size(1024, 640);
+    }
+  }
 
   final coordinator = DesktopLifecycleCoordinator(
     windowAdapter: const LiveDesktopWindowAdapter(),
@@ -21,9 +54,32 @@ void main(List<String> args) async {
     },
   );
 
-  await coordinator.initialize();
+  await coordinator.initialize(initialWindowSize: initialSize);
 
-  final settingsController = DesktopSettingsController();
+  if (kDebugMode && args.contains('--capture-visual-evidence')) {
+    final outputDirArg = args.firstWhere(
+      (a) => a.startsWith('--output-dir='),
+      orElse: () => '--output-dir=${Platform.environment['TEMP']}\\ai_companion_visual_review',
+    );
+    final outputDir = outputDirArg.substring('--output-dir='.length);
+    Directory(outputDir).createSync(recursive: true);
+
+    runApp(
+      VisualEvidenceCaptureApp(
+        outputDirectory: outputDir,
+        coordinator: coordinator,
+      ),
+    );
+    return;
+  }
+
+  final settingsController = DesktopSettingsController(
+    initialThemeMode: initialThemeMode,
+    initialAccentPreset: initialPreset,
+    initialRailCollapsed: initialRailCollapsed,
+    initialDestination: initialDestination,
+    initialScrollToDiagnostics: initialScrollDiagnostics,
+  );
 
   runApp(
     AiCompanionDesktopApp(

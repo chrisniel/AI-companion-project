@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:companion_core/companion_core.dart';
 import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
@@ -5,7 +7,7 @@ import 'package:flutter/material.dart';
 import '../controllers/desktop_settings_controller.dart';
 import '../lifecycle/desktop_lifecycle_coordinator.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
     required this.controller,
@@ -16,11 +18,45 @@ class SettingsScreen extends StatelessWidget {
   final DesktopLifecycleCoordinator? coordinator;
 
   @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  late final ScrollController _scrollController;
+
+  DesktopSettingsController get controller => widget.controller;
+  DesktopLifecycleCoordinator? get coordinator => widget.coordinator;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+    if (widget.controller.scrollToDiagnostics) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            320,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final ext = Theme.of(context).extension<CompanionThemeExtension>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return SingleChildScrollView(
+      controller: _scrollController,
       padding: const EdgeInsets.all(CompanionSpacing.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -223,7 +259,7 @@ class SettingsScreen extends StatelessWidget {
               const SizedBox(height: CompanionSpacing.md),
               Text(
                 'Inspecting canonical Windows persistent storage roots. '
-                'When the backend runtime is active, authoritative storage telemetry is reported by the server.',
+                'Backend storage telemetry is not available in M1 standalone mode.',
                 style: CompanionTypography.bodySmall.copyWith(color: ext?.textSecondary),
               ),
               const SizedBox(height: CompanionSpacing.lg),
@@ -238,14 +274,25 @@ class SettingsScreen extends StatelessWidget {
                   details: locatorInfo.details ?? 'Evaluated',
                 ),
                 const SizedBox(height: CompanionSpacing.md),
+                if (locatorInfo.resolvedPath != null) ...[
+                  _buildDiagnosticItem(
+                    ext: ext,
+                    isDark: isDark,
+                    label: 'Configured Storage Root (DATA)',
+                    path: locatorInfo.resolvedPath,
+                    status: locatorInfo.locatorStatus,
+                    details: locatorInfo.details ?? '',
+                  ),
+                  const SizedBox(height: CompanionSpacing.md),
+                ],
               ],
 
               for (final root in roots.skip(1)) ...[
                 _buildDiagnosticItem(
                   ext: ext,
                   isDark: isDark,
-                  label: 'Default Root (${root.rootType.name.toUpperCase()})',
-                  path: root.resolvedPath ?? 'Not configured',
+                  label: _labelForRootType(root.rootType),
+                  path: root.resolvedPath,
                   status: root.locatorStatus,
                   details: root.details ?? '',
                 ),
@@ -258,11 +305,50 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  String _labelForRootType(StorageRootType type, {bool isConfigured = false}) {
+    switch (type) {
+      case StorageRootType.appInstall:
+        return 'Application Install (APP_INSTALL)';
+      case StorageRootType.data:
+        return isConfigured
+            ? 'Configured Storage Root (DATA)'
+            : 'Default Storage Root (DATA)';
+      case StorageRootType.library:
+        return 'Model & Library Root (LIBRARY)';
+      case StorageRootType.cache:
+        return 'Cache Root (CACHE)';
+      case StorageRootType.log:
+        return 'Log Root (LOG)';
+    }
+  }
+
+  String _sanitizePathForDisplay(String? path) {
+    if (path == null || path.isEmpty) {
+      return 'Not reported by backend';
+    }
+    var sanitized = path;
+    try {
+      final localAppData = Platform.environment['LOCALAPPDATA'];
+      if (localAppData != null && localAppData.isNotEmpty) {
+        if (sanitized.toLowerCase().startsWith(localAppData.toLowerCase())) {
+          sanitized = '%LOCALAPPDATA%${sanitized.substring(localAppData.length)}';
+        }
+      }
+      final userProfile = Platform.environment['USERPROFILE'];
+      if (userProfile != null && userProfile.isNotEmpty) {
+        if (sanitized.toLowerCase().startsWith(userProfile.toLowerCase())) {
+          sanitized = '%USERPROFILE%${sanitized.substring(userProfile.length)}';
+        }
+      }
+    } catch (_) {}
+    return sanitized;
+  }
+
   Widget _buildDiagnosticItem({
     required CompanionThemeExtension? ext,
     required bool isDark,
     required String label,
-    required String path,
+    required String? path,
     required LocatorStatus status,
     required String details,
   }) {
@@ -287,6 +373,8 @@ class SettingsScreen extends StatelessWidget {
         statusLabel = 'Absent (Default OS Path)';
         break;
     }
+
+    final displayPath = _sanitizePathForDisplay(path);
 
     return Container(
       padding: const EdgeInsets.all(CompanionSpacing.md),
@@ -330,13 +418,13 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: CompanionSpacing.xs),
           SelectableText(
-            path,
+            displayPath,
             style: CompanionTypography.bodySmall.copyWith(
               color: ext?.textSecondary,
               fontFamily: 'monospace',
             ),
           ),
-          if (details.isNotEmpty) ...[
+          if (details.isNotEmpty && details != displayPath) ...[
             const SizedBox(height: CompanionSpacing.xs),
             Text(
               details,

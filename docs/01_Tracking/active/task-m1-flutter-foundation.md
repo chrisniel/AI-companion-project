@@ -57,17 +57,19 @@
 - [x] Expand `companion_design` tokens: light/dark palettes, glass opacity & blur (16px), 4 accent presets (Ocean Sky, Cobalt Indigo, Emerald Teal, Amethyst Violet), typography scale, spacing/radius/shadows.
 - [x] Implement `SoftGlassPanel` widget with backdrop blur and physical borders/shadows.
 - [x] Implement `CompanionThemeExtension` and theme factory (`CompanionTheme.light`, `CompanionTheme.dark`).
-- [x] Implement pure-Dart `evaluateBootstrapLocatorContent` and `isAbsolutePath` in `companion_core`.
-- [x] Implement `WindowsStorageDiagnosticReader` inspecting `%LOCALAPPDATA%\AI Companion\bootstrap.json` in a fail-closed, read-only manner.
-- [x] Implement `DesktopSettingsController` for theme mode, accent preset, rail state, navigation, and storage diagnostics.
+- [x] Implement pure-Dart `evaluateBootstrapLocatorContent` and `isAbsolutePath` in `companion_core` with strict fail-closed semantics (unreadable file fails closed as corrupt, POSIX paths rejected on Windows).
+- [x] Implement `WindowsStorageDiagnosticReader` inspecting `%LOCALAPPDATA%\AI Companion\bootstrap.json` in a fail-closed, read-only manner with full root awareness (`APP_INSTALL`, `DATA`, `LIBRARY` marked "Not reported by backend").
+- [x] Implement `DesktopSettingsController` for theme mode, accent preset, rail state, navigation, diagnostic scroll, and storage diagnostics.
 - [x] Implement `DesktopNavigationRail` (collapsible 240px / 72px) with Chat, Voice (Planned M4), Schedule (Planned M3), Memory (Planned M3), Studio (Planned M3), Settings.
 - [x] Truthful runtime status: "Runtime: Standalone (Unconnected)".
 - [x] Implement destination screens: `ChatScreen`, `VoiceScreen`, `ScheduleScreen`, `MemoryScreen`, `StudioScreen`, `SettingsScreen`.
 - [x] Implement keyboard shortcuts: `Ctrl+,` (open settings), `Esc` (hide to tray only if tray available).
-- [x] Implement automated test suites: `desktop_shell_test.dart`, `desktop_settings_test.dart`, `desktop_shortcuts_test.dart`, `windows_storage_diagnostic_reader_test.dart`, `typography_and_theme_test.dart`, `soft_glass_panel_test.dart`, updated `widget_test.dart`.
-- [x] Verify complete workspace test suite (51/51 tests pass across all 4 packages: 28 desktop + 10 core + 10 design + 3 api).
+- [x] Implement responsive layout verification test suite: `desktop_layout_responsive_test.dart` verifying 1280×800 and 1024×640 viewports across Chat (expanded/collapsed), Settings appearance, Settings diagnostics, and text scaling (1.2x/1.3x) with zero RenderFlex overflows.
+- [x] Implement automated test suites: `desktop_shell_test.dart`, `desktop_settings_test.dart`, `desktop_shortcuts_test.dart`, `desktop_layout_responsive_test.dart`, `windows_storage_diagnostic_reader_test.dart`, `storage_diagnostic_test.dart`, `soft_glass_panel_test.dart`, `widget_test.dart`.
+- [x] Verify complete workspace test suite (65/65 tests pass across all 4 packages: 38 desktop + 14 core + 10 design + 3 api).
 - [x] Verify `dart analyze .` (0 issues).
 - [x] Verify `flutter build windows --debug` (clean build).
 - [x] Verify native Windows lifecycle harness (`scripts/verify_native_windows_lifecycle.ps1` all 3 tests pass).
 - [x] Verify Python CI policy regression suite (`test_ci_policy.py` 23 tests pass).
-- [x] Stop at independent review gate before Batch 4.
+- [x] Implement visual evidence capture harness (`scripts/capture_windows_visual_evidence.ps1`) executing real binary and verifying all 8 views in `$env:TEMP\ai_companion_visual_review` outside Git.
+- [x] Await independent human visual review of screenshots before Batch 4. Stop at gate.
