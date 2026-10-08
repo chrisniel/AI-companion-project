@@ -288,5 +288,119 @@ void main() {
 
       await robustCoordinator.dispose();
     });
+
+    test('when tray is unavailable, onWindowClose does not hide window and triggers graceful exit', () async {
+      var exitTriggered = false;
+      final failingTray = FailingDesktopTrayAdapter();
+      final robustCoordinator = DesktopLifecycleCoordinator(
+        windowAdapter: windowAdapter,
+        trayAdapter: failingTray,
+        onExitRequested: () async {
+          exitTriggered = true;
+        },
+      );
+
+      await robustCoordinator.initialize();
+      expect(windowAdapter.visible, isTrue);
+
+      robustCoordinator.onWindowClose();
+      await pumpEventQueue();
+
+      // Window must NOT have been hidden into an unrecoverable state
+      expect(windowAdapter.hideCallCount, equals(0));
+      expect(exitTriggered, isTrue);
+
+      await robustCoordinator.dispose();
+    });
+
+    test('when tray is unavailable, hideToTray returns false and does not hide window', () async {
+      final failingTray = FailingDesktopTrayAdapter();
+      final robustCoordinator = DesktopLifecycleCoordinator(
+        windowAdapter: windowAdapter,
+        trayAdapter: failingTray,
+      );
+
+      await robustCoordinator.initialize();
+      expect(windowAdapter.visible, isTrue);
+
+      final didHide = await robustCoordinator.hideToTray();
+
+      expect(didHide, isFalse);
+      expect(windowAdapter.hideCallCount, equals(0));
+      expect(robustCoordinator.isWindowVisible, isTrue);
+
+      await robustCoordinator.dispose();
+    });
+
+    test('partially initialized tray cleans up resources and avoids orphaned tray icon', () async {
+      final partialTray = PartialFailureTrayAdapter();
+      final robustCoordinator = DesktopLifecycleCoordinator(
+        windowAdapter: windowAdapter,
+        trayAdapter: partialTray,
+      );
+
+      await robustCoordinator.initialize();
+
+      expect(robustCoordinator.isTrayAvailable, isFalse);
+      expect(partialTray.isDestroyed, isTrue);
+      expect(partialTray.listeners.contains(robustCoordinator), isFalse);
+
+      await robustCoordinator.dispose();
+    });
+
+    test('disposed coordinator ignores subsequent window and tray events', () async {
+      await coordinator.initialize();
+      await coordinator.handleExitRequested();
+
+      expect(coordinator.isDisposed, isTrue);
+      final initialHideCount = windowAdapter.hideCallCount;
+      final initialShowCount = windowAdapter.showCallCount;
+
+      // Dispatch events to disposed coordinator
+      coordinator.onWindowClose();
+      coordinator.onTrayIconMouseDown();
+      coordinator.onTrayMenuItemClick(MenuItem(key: 'open', label: 'Open'));
+      await pumpEventQueue();
+
+      expect(windowAdapter.hideCallCount, equals(initialHideCount));
+      expect(windowAdapter.showCallCount, equals(initialShowCount));
+    });
   });
+}
+
+class PartialFailureTrayAdapter implements DesktopTrayAdapter {
+  String? iconPath;
+  bool isDestroyed = false;
+  final List<TrayListener> listeners = [];
+
+  @override
+  Future<void> setIcon(String path) async {
+    iconPath = path;
+  }
+
+  @override
+  Future<void> setToolTip(String tip) async {
+    throw Exception('Failed setting tooltip on host platform');
+  }
+
+  @override
+  Future<void> setContextMenu(Menu menu) async {
+    throw Exception('Failed setting context menu');
+  }
+
+  @override
+  Future<void> destroy() async {
+    isDestroyed = true;
+    iconPath = null;
+  }
+
+  @override
+  void addListener(TrayListener listener) {
+    listeners.add(listener);
+  }
+
+  @override
+  void removeListener(TrayListener listener) {
+    listeners.remove(listener);
+  }
 }

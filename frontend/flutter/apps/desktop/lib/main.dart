@@ -6,14 +6,13 @@ import 'package:flutter/material.dart';
 import 'lifecycle/desktop_lifecycle_coordinator.dart';
 import 'lifecycle/live_desktop_adapters.dart';
 
-void main() async {
+void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final coordinator = DesktopLifecycleCoordinator(
     windowAdapter: const LiveDesktopWindowAdapter(),
     trayAdapter: const LiveDesktopTrayAdapter(),
     onExitRequested: () async {
-      // Clean exit: leave independent Python runtime executing
       exit(0);
     },
   );
@@ -21,6 +20,13 @@ void main() async {
   await coordinator.initialize();
 
   runApp(AiCompanionDesktopApp(coordinator: coordinator));
+
+  // Automated native test harness for graceful process shutdown
+  if (args.contains('--test-graceful-exit')) {
+    Future<void>.delayed(const Duration(milliseconds: 1500), () async {
+      await coordinator.handleExitRequested();
+    });
+  }
 }
 
 class AiCompanionDesktopApp extends StatelessWidget {
@@ -80,6 +86,8 @@ class DesktopFoundationScreen extends StatelessWidget {
     final subtitleColor = isDark
         ? CompanionColors.darkTextSecondary
         : CompanionColors.lightTextSecondary;
+
+    final isTrayAvailable = coordinator?.isTrayAvailable ?? false;
 
     return Scaffold(
       body: Center(
@@ -177,7 +185,9 @@ class DesktopFoundationScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Close Intercept: Hides to System Tray (Backend Unmanaged)',
+                      isTrayAvailable
+                          ? 'System Tray: Active (Close-to-Tray Active)'
+                          : 'System Tray: Unavailable (Close Exits App)',
                       style: TextStyle(
                         fontSize: 11,
                         color: subtitleColor.withValues(alpha: 0.8),
@@ -191,9 +201,11 @@ class DesktopFoundationScreen extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   OutlinedButton.icon(
-                    onPressed: () {
-                      coordinator?.hideToTray();
-                    },
+                    onPressed: isTrayAvailable
+                        ? () {
+                            coordinator?.hideToTray();
+                          }
+                        : null,
                     icon: const Icon(Icons.arrow_downward_rounded, size: 16),
                     label: const Text('Hide to Tray'),
                   ),

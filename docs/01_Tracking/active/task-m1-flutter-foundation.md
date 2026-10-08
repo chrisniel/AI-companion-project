@@ -14,7 +14,7 @@
 | Batch | Work Item | Status | Verification & Deliverables |
 | :--- | :--- | :--- | :--- |
 | **B1** | `PC-CLIENT-001` | `VERIFIED` | Pub Workspace (`frontend/flutter/`), `companion_core`, `companion_api`, `companion_design`, `apps/desktop` Windows runner, CI policy and workflow integration. |
-| **B2** | `PC-CLIENT-002` | **VERIFIED / AWAITING REVIEW** | Window framing (1280×800 / 1024×640), close-to-tray lifecycle, native tray menu, clean shutdown, 18 workspace tests, native WM_CLOSE interception verified. |
+| **B2** | `PC-CLIENT-002` | **VERIFIED / AWAITING REVIEW** | Window framing (1280×800 / 1024×640), close-to-tray lifecycle, native tray menu, clean shutdown, 23 workspace tests, native WM_CLOSE interception verified. |
 | **B3** | `PC-CLIENT-003` | `PLANNED` | SoftGlass tokens, dark/light theme presets, desktop shell rail, read-only storage root diagnostics. |
 | **B4** | `PC-CLIENT-004` | `PLANNED` | Typed REST client, real-world SSE parser, live conversation UI, contract parity tests, React Web parity. |
 
@@ -44,8 +44,8 @@
 - [x] Implement close interception (`setPreventClose(true)`) and hide-to-tray behavior.
 - [x] Implement tray restore/focus and context menu with M1 actions and disabled M2 items.
 - [x] Implement safe controlled shutdown disposing listeners and tray/window native resources while leaving Python backend running.
-- [x] Implement automated test suite covering initialization, close interception, tray routing, repeated cycles, cleanup, and missing tray fallback (10 tests in `apps/desktop`).
-- [x] Verify full workspace test suite (18/18 tests pass across all packages).
+- [x] Implement automated test suite covering initialization, close interception, tray routing, repeated cycles, cleanup, missing tray fallback, partial initialization teardown, and UI controls (15 tests in `apps/desktop`).
+- [x] Verify full workspace test suite (23/23 tests pass across all packages: 15 desktop + 3 core + 3 api + 2 design).
 - [x] Verify `dart analyze .` (0 issues).
 - [x] Verify `flutter build windows --debug` and execute native empirical `WM_CLOSE` interception test.
 - [x] Batch 2 independent review handoff.

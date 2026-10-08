@@ -11,7 +11,8 @@ import 'desktop_window_adapter.dart';
 /// - Default window dimensions: 1280 x 800.
 /// - Minimum window dimensions: 1024 x 640.
 /// - Centered window placement.
-/// - Close button interception and hide-to-tray.
+/// - Close button interception and hide-to-tray when tray is available.
+/// - Fallback graceful exit when system tray is unavailable (does not trap user).
 /// - System tray context menu routing and window restoration.
 /// - Controlled UI exit without affecting independent backend runtime.
 class DesktopLifecycleCoordinator with WindowListener, TrayListener {
@@ -46,7 +47,7 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
 
   /// Initializes window constraints, close interception, and system tray.
   Future<void> initialize({bool showImmediately = true}) async {
-    if (_isInitialized) return;
+    if (_isInitialized || _isDisposed) return;
 
     await windowAdapter.ensureInitialized();
     await windowAdapter.setSize(defaultWindowSize);
@@ -66,6 +67,12 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
       // Tray may be unsupported or unavailable in headless/virtualized environments.
       _isTrayAvailable = false;
       debugPrint('DesktopLifecycleCoordinator: System tray unavailable: $e');
+
+      // Avoid orphaned native tray resources after partial initialization failure
+      try {
+        await trayAdapter.destroy();
+      } catch (_) {}
+      trayAdapter.removeListener(this);
     }
 
     if (showImmediately) {
@@ -104,15 +111,24 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
 
   /// Restores the window from hidden/minimized state and requests focus.
   Future<void> restoreAndFocusWindow() async {
+    if (_isDisposed) return;
     await windowAdapter.show();
     await windowAdapter.focus();
     _isWindowVisible = true;
   }
 
   /// Intercepts the window close action and hides to tray.
-  Future<void> hideToTray() async {
+  ///
+  /// Returns `true` if hidden to tray, or `false` if tray is unavailable or coordinator is disposed.
+  Future<bool> hideToTray() async {
+    if (_isDisposed) return false;
+    if (!_isTrayAvailable) {
+      // Do not hide the only usable application window when tray is unavailable
+      return false;
+    }
     await windowAdapter.hide();
     _isWindowVisible = false;
+    return true;
   }
 
   /// Performs controlled shutdown of Flutter UI, tray, and event listeners.
@@ -122,9 +138,18 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
     if (_isDisposed) return;
     _isDisposed = true;
 
+    // 1. Unsubscribe event listeners to prevent event re-entry
     windowAdapter.removeListener(this);
     trayAdapter.removeListener(this);
 
+    // 2. Release close interception so platform window can terminate
+    try {
+      await windowAdapter.setPreventClose(false);
+    } catch (e) {
+      debugPrint('DesktopLifecycleCoordinator: Error releasing preventClose: $e');
+    }
+
+    // 3. Destroy tray icon to prevent ghost tray icons in taskbar
     if (_isTrayAvailable) {
       try {
         await trayAdapter.destroy();
@@ -133,12 +158,14 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
       }
     }
 
+    // 4. Destroy native window resources
     try {
       await windowAdapter.destroy();
     } catch (e) {
       debugPrint('DesktopLifecycleCoordinator: Error destroying window: $e');
     }
 
+    // 5. Invoke application exit callback
     if (onExitRequested != null) {
       await onExitRequested!();
     }
@@ -157,18 +184,27 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
 
   @override
   void onWindowClose() {
-    hideToTray();
+    if (_isDisposed) return;
+    if (_isTrayAvailable) {
+      hideToTray();
+    } else {
+      // Fallback: When system tray is unavailable, closing the window triggers
+      // graceful exit rather than hiding the only accessible application window.
+      handleExitRequested();
+    }
   }
 
   // --- TrayListener Overrides ---
 
   @override
   void onTrayIconMouseDown() {
+    if (_isDisposed) return;
     restoreAndFocusWindow();
   }
 
   @override
   void onTrayMenuItemClick(MenuItem menuItem) {
+    if (_isDisposed) return;
     if (menuItem.key == 'open') {
       restoreAndFocusWindow();
     } else if (menuItem.key == 'exit') {
