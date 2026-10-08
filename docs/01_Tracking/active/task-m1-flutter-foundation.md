@@ -47,5 +47,5 @@
 - [x] Implement automated test suite covering initialization, close interception, tray routing, repeated cycles, cleanup, missing tray fallback, partial initialization teardown, and UI controls (15 tests in `apps/desktop`).
 - [x] Verify full workspace test suite (23/23 tests pass across all packages: 15 desktop + 3 core + 3 api + 2 design).
 - [x] Verify `dart analyze .` (0 issues).
-- [x] Verify `flutter build windows --debug` and execute native empirical `WM_CLOSE` interception test.
+- [x] Verify `flutter build windows --debug` and execute native empirical live HWND `WM_CLOSE` interception, window restore, and tray termination harness (`scripts/verify_native_windows_lifecycle.ps1`).
 - [x] Batch 2 independent review handoff.

@@ -1,7 +1,9 @@
 import 'dart:io';
 
 import 'package:companion_design/companion_design.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:tray_manager/tray_manager.dart';
 
 import 'lifecycle/desktop_lifecycle_coordinator.dart';
 import 'lifecycle/live_desktop_adapters.dart';
@@ -21,11 +23,17 @@ void main(List<String> args) async {
 
   runApp(AiCompanionDesktopApp(coordinator: coordinator));
 
-  // Automated native test harness for graceful process shutdown
-  if (args.contains('--test-graceful-exit')) {
-    Future<void>.delayed(const Duration(milliseconds: 1500), () async {
-      await coordinator.handleExitRequested();
-    });
+  // Automated native test harness restricted strictly to debug mode
+  if (kDebugMode) {
+    if (args.contains('--test-graceful-exit')) {
+      Future<void>.delayed(const Duration(milliseconds: 1500), () async {
+        await coordinator.handleExitRequested();
+      });
+    } else if (args.contains('--test-tray-exit')) {
+      Future<void>.delayed(const Duration(milliseconds: 1500), () async {
+        coordinator.onTrayMenuItemClick(MenuItem(key: 'exit'));
+      });
+    }
   }
 }
 
