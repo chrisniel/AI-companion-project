@@ -9,20 +9,20 @@
 - Autonomous qualification starting checkpoint: `8962166c2da2771cfc907097f0c8cc72ac6bfc87` (clean working/staged tree).
 - Current authorization: Chris explicitly approved isolated official tooling/package setup, remaining F04/F12 and combined qualification, task-owned Git add/commit/push on this branch and exact-candidate workflow dispatch. No PR, merge, force push, system-Python replacement, existing-environment writes, new audit/plan or M1.
 - Governance publication: root `AGENTS.md` hardening was independently reviewed, the fresh-session Gemini canary passed, and Chris intentionally published it in the B1 checkpoint above. Codex must not modify it during product corrections.
-- Current stage: previous source corrections independently reviewed per Chris; new dependency/CI/harness corrections AUTHORED with Windows CPython 3.11.9 local qualification. Full hosted candidate qualification pending publication/dispatch. New implementation review, independent documentation and human closure gates remain pending; no self-approval or delivery closure.
+- Current stage: previous source corrections independently reviewed per Chris; new dependency/CI/harness corrections AUTHORED with local and full hosted Windows CPython 3.11.9 / Node 22.22.2 qualification at the recorded technical candidate. Final evidence-only publication is checked separately against its own SHA in the handoff. New implementation review, independent documentation and human closure gates remain pending; no self-approval or delivery closure.
 
 ## Finding / Batch Evidence Record
 
 | Batch | Findings | Execution / evidence state |
 | --- | --- | --- |
 | B1 | F09 | Independent safety checkpoint PASSED at B1 publication; Windows CPython 3.11.9 rerun: 4 passed, 409 tests safely collected |
-| B1 | F04 | Target-qualified lock AUTHORED/locally verified: native Windows x64 CPython 3.11.9, pip 26.1.2, 39 exact wheel hashes/extras/markers; repeated clean installs and full 409-test application suite pass; new review/hosted candidate pending |
-| B1 | F12 | Source-reviewed declaration alignment preserved; historical compatible Node 24.18.0 web checks passed; hosted Node 22.22.2 pending |
-| B2 | F01, F02, F07 | Independent source-level review PASSED at B2 publication, per Chris; preserved by Windows CPython 3.11.9 full regressions; hosted candidate pending |
-| B3 | F05 | Independent source review supplied at consolidated checkpoint; approved HTTP/Pydantic/ORM semantics pass under CPython 3.11.9, unchanged generated contract equality passes; hosted candidate pending |
-| B4 | F03 | Independent source review supplied at consolidated checkpoint; cumulative integration policy and historical 21-test evidence preserved; hosted execution pending |
+| B1 | F04 | Target-qualified lock AUTHORED/verified: native Windows x64 CPython 3.11.9, pip 26.1.2, 39 exact wheel hashes/extras/markers; repeated clean installs and local/hosted 409-test application suites pass; new independent review pending |
+| B1 | F12 | Source-reviewed declaration alignment preserved; local Node 24.18.0 and hosted Node 22.22.2 / npm 10.9.7 pass 229 tests, typecheck and build |
+| B2 | F01, F02, F07 | Independent source-level review PASSED at B2 publication, per Chris; preserved by local/hosted Windows CPython 3.11.9 full regressions |
+| B3 | F05 | Independent source review supplied at consolidated checkpoint; approved HTTP/Pydantic/ORM semantics and unchanged contract equality pass locally and hosted under CPython 3.11.9 |
+| B4 | F03 | Independent source review supplied at consolidated checkpoint; 21 policy tests and full hosted dispatch pass all six jobs including strict gate; develop post-merge execution remains separate |
 | B5 | F10, F11, F13 | AUTHORED: closest-owner reconciliation and verified setup/CI wording; independent documentation gate pending |
-| B6 | F06, F08 | Independent source review supplied at consolidated checkpoint; prepared-schema CLI and fail-closed locator regressions pass under CPython 3.11.9; hosted candidate pending |
+| B6 | F06, F08 | Independent source review supplied at consolidated checkpoint; prepared-schema CLI and fail-closed locator regressions pass locally/hosted under CPython 3.11.9 |
 
 ## Checkpoints & Boundaries
 
@@ -372,7 +372,7 @@ backend fixtures use synthetic/in-memory storage and mock inference.
 | `-B -m pytest tests/test_retention_entrypoint.py tests/test_security_hardening.py -q -p no:cacheprovider -o log_file=NUL --tb=short` (cwd backend), after guard corrections | 0 | **24 passed**; actual CLI/startup plus denied application network/subprocess probes |
 | `& $qualificationPython -B -m pytest backend/tests -q -p no:cacheprovider -o log_file=NUL --tb=short`, after F09 | 0 | **409 passed in 86.70 s**; preserved F01/F02/F05/F06/F07/F08/F09 actual boundaries |
 | `& $qualificationPython -B -m unittest scripts/tests/test_ci_policy.py` | 0 | **21 passed**; expected negative gate messages are asserted fail-closed cases |
-| `& $taskRoot/verify-b/Scripts/python.exe -I -B scripts/check_openapi_contract.py --check` | 0 | Exact existing OpenAPI equality; **23 routes**; no regeneration/source/contract drift |
+| `& "$taskRoot/verify-b/Scripts/python.exe" -I -B scripts/check_openapi_contract.py --check` | 0 | Exact existing OpenAPI equality; **23 routes**; no regeneration/source/contract drift |
 | `node --version`; `npm --version`; `npm --prefix frontend/web test -- --run`; `npm --prefix frontend/web run lint`; `npm --prefix frontend/web run build` | 0 each | Node **24.18.0**, npm **11.18.0**; **229 tests / 12 files**; typecheck/build pass; hosted 22.22.2 still separate |
 | Stdlib AST/trailing-whitespace checks of the five authored Python files | 0 | All parse; no bytecode or application imports |
 | Scoped YAML/input assertions and PowerShell parsing of all 11 CI scripts | 0 | CI input/bootstrap syntax valid; hosted execution pending |
@@ -401,3 +401,33 @@ implementation and independent documentation review remain pending.
 Local technical checks passed. Authorized task-owned commit/push and full dispatch
 will publish/qualify a candidate next. Exact SHA/run evidence is recorded as a
 point-in-time checkpoint; no PR, merge, tracker archiving, M1 or closure is performed.
+
+### Published Technical Candidate / Hosted Qualification Checkpoint
+
+Task-owned commit: **`cc2b4d489da1498e9b2c91b51c227148cf16a1f9`**,
+`fix(build): qualify Windows Python 3.11 dependencies and verification`.
+Exactly 11 task-owned files were staged after diff/scope/secret-artifact review;
+no AGENTS.md, environment, wheel/cache binary, real configuration or user data was
+included. Non-force push to the existing fix branch succeeded, and read-only
+`ls-remote` confirmed the matching SHA. Existing remote/global configuration was
+preserved; the existing authenticated HTTPS helper was selected per command because
+the unchanged SSH route reported public-key denial. No credentials were displayed.
+
+Full `workflow_dispatch` run **[37767309007](https://github.com/chrisniel/AI-companion-project/actions/runs/37767309007)**
+reported `head_sha=cc2b4d489da1498e9b2c91b51c227148cf16a1f9`, conclusion **SUCCESS**
+on 2026-10-08. Actual job logs, not merely workflow authoring, verified:
+
+| Hosted job | Result / actual evidence |
+| --- | --- |
+| Path Classification | SUCCESS; **21 policy tests**; full dispatch requires every existing lane |
+| Docs Integrity | SUCCESS; mechanical presence checks, not independent documentation approval |
+| Backend / Windows x64 | SUCCESS; CPython **3.11.9**, pip **26.1.2**, exact **39**-distribution lock and `pip check`; **6 lock tests**, **4 F09 tests / 409 guarded collection items**; **409 pytest tests passed in 105.65 s** |
+| Contract / Windows x64 | SUCCESS; same exact target lock/versions and `pip check`; **4 F09 tests / 409 guarded collection items**; unchanged OpenAPI equality, **23 routes** |
+| Frontend / Windows | SUCCESS; Node **22.22.2**, npm **10.9.7**, clean `npm ci`; **229 tests / 12 files**; TypeScript check and Vite build pass |
+| CI Gate | SUCCESS; actual gate output `PASS: all lanes matched requirements`; none of the required lanes skipped |
+
+This evidence-only update preserves that exact point-in-time technical candidate.
+Its own published HEAD receives a final full dispatch, whose exact SHA/run/conclusion
+is included in the final handoff without creating a self-referential evidence commit.
+Technical checks do not approve the new implementation/documentation/closure gates.
+PR creation, merge, post-merge develop verification and M1 remain unperformed.

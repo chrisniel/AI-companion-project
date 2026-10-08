@@ -2,7 +2,7 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: Previous F01–F13 source corrections independently reviewed per Chris; final target qualification authorized from `8962166c2da2771cfc907097f0c8cc72ac6bfc87`. F04's target lock and repeated clean installations verified locally; full application/hosted evidence and independent documentation/closure gates are recorded in the branch tracker.
+- Status: Previous F01–F13 source corrections independently reviewed per Chris; final target qualification authorized from `8962166c2da2771cfc907097f0c8cc72ac6bfc87`. F04's target lock, repeated clean installs and combined local/hosted application qualification pass at the technical candidate recorded below. New implementation/documentation/closure gates remain independent and pending.
 - Scope Mode: Surgical Fix — supplied audit disposition B1–B6, not M1.
 - Planning basis: Chris's supplied F01–F13 disposition and B1–B6 corrective plan.
 - Approval: Chris authorized B1 and B2; F09 independent safety review passed at `61766939e7eb529537519bae6f9a4dc04006ae98`. B2 independent source-level review passed at `8dfd9df9822e4f80fbd1e089bf63b465ec47f947`. Subsequent consolidated source authoring/review preserved the policies below. The later autonomous qualification authorization explicitly permits isolated tooling/package setup, scoped edits, task-owned add/commit/push and workflow dispatch; it excludes PR creation, merge and M1.
@@ -178,3 +178,11 @@ evidence and hosted candidate revisions belong in the existing branch tracker.
 After technical qualification/publication, stop for independent review. New lock/CI
 implementation review, documentation gate, PR/candidate review, post-merge integration
 and human closure remain separate; this plan does not certify those gates.
+
+Published technical candidate `cc2b4d489da1498e9b2c91b51c227148cf16a1f9` passed full
+hosted dispatch [37767309007](https://github.com/chrisniel/AI-companion-project/actions/runs/37767309007):
+all six jobs succeeded, including 409 backend tests, guarded F09 collection,
+39-distribution lock verification, unchanged OpenAPI equality, 21 CI policy tests,
+and Node 22.22.2's 229 tests/typecheck/build. The evidence-only publication receives
+its own final exact-SHA hosted check in the handoff. Independent gate approval,
+PR/merge and post-merge integration are not inferred from either run.
