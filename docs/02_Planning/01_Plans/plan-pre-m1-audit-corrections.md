@@ -2,11 +2,12 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: Remaining corrections AUTHORED / independent implementation and documentation review pending. B1 F04 remains PARTIAL; Python 3.11/hosted qualification open. F09 safety and B2 source-level independent reviews PASSED.
+- Status: Previous source corrections independently reviewed per Chris at `4e934ab058b2ad6043f50c94cd06dd70bbd9c24e`; safe setup correction AUTHORED / documentation review pending. F04 OPEN; dependency reproducibility, Python 3.11 and hosted qualification unresolved.
 - Scope Mode: Surgical Fix — supplied audit disposition B1–B6, not M1.
 - Planning basis: Chris's supplied F01–F13 disposition and B1–B6 corrective plan.
 - Approval: Chris authorized B1 and B2; F09 independent safety review passed at `61766939e7eb529537519bae6f9a4dc04006ae98`. B2 independent source-level review passed at `8dfd9df9822e4f80fbd1e089bf63b465ec47f947`. Chris subsequently authorized consolidated remaining authoring and the explicit policies below; no Git/installation/M1 authority.
 - Execution/evidence owner: [branch tracker](../../01_Tracking/active/task-fix-pre-m1-audit-corrections.md).
+- Final bounded authorization: correct existing setup/verification guides and prepare target qualification; no installation/network approval, Git mutations, system-Python changes, existing-environment writes or M1. Preserve the supplied plan and all source corrections.
 
 ## 1. Request Understanding & Goals
 
@@ -22,10 +23,10 @@ plan and finding IDs; this record does not introduce a replacement plan.
 | --- | --- | --- | --- |
 | B1 | F09, F04, F12 | Import/collection isolation; Python 3.11 dependency qualification; compatible Node inputs | Declaration alignment and installed-tool verification authorized; new installation/resolution not authorized |
 | B2 | F01, F02, F07 | Error terminals; provider-owned active work; logging across startup migrations | Independent source-level review passed; qualified integration pending |
-| B3 | F05 | Task omission/null semantics and generated contract | Explicit semantics approved; authoring authorized, independent review pending |
-| B4 | F03 | Cumulative integration coverage invariant | Every develop push full; develop PRs scoped; master/dispatch full; authoring authorized |
+| B3 | F05 | Task omission/null semantics and generated contract | Independent source review supplied at consolidated checkpoint; target qualification pending |
+| B4 | F03 | Cumulative integration coverage invariant | Approved policy preserved; independent source review supplied; hosted execution pending |
 | B5 | F10, F11, F13 | Closest-owner documentation reconciliation and resulting setup guidance | Bounded owner edits authorized; independent documentation review pending |
-| B6 | F06, F08 | Retention CLI lifecycle; existing-locator integrity | Prepared-schema-only CLI ownership and invalid-existing-locator fail-closed policies approved |
+| B6 | F06, F08 | Retention CLI lifecycle; existing-locator integrity | Approved policies preserved; independent source review supplied; target qualification pending |
 
 ## 2. Supplied Findings & Technical Root Cause
 
@@ -123,3 +124,24 @@ Failing reproductions must deny real local-state access before importing the fau
 module. Existing environment/configuration changes are prohibited. Missing Python
 3.11 or unresolved installation choices are blockers, not permission to substitute
 an interpreter, freeze a local environment, or attempt speculative installation.
+
+## 7. Final Qualification Authorization and Blocker
+
+Chris's final instruction narrows remaining work to safe setup examples and F04.
+The refreshed inventory did not locate Windows CPython 3.11. Documentation now
+checks the interpreter before creating a unique temporary environment and uses
+its explicit executable throughout; backend/.venv is never an output target.
+Only the existing setup/testing guides and these evidence records changed.
+
+F04 stays OPEN until a human-supplied interpreter identity and consolidated
+installation/network permission allow two fresh target environments. Proposed
+resolver: verified pip 26.1.2; resolve native Windows x64/CPython 3.11 wheel closure
+from approved declarations, derive pins/SHA256 from downloaded metadata/bytes,
+and prove a clean offline hash-checked install. Preserve extras and target conditions;
+do not copy the Python 3.13 environment or change CI to an unverified input.
+Detailed evidence and permission boundaries remain in the existing branch tracker.
+
+Source review, new documentation review, Python 3.11 test qualification, verified
+dependency input, candidate PR CI and post-merge develop CI remain separate gates.
+No independent documentation/closure gate is self-approved; no tracker archiving,
+PR creation, Git write, system install, unrelated correction or M1 follows this task.

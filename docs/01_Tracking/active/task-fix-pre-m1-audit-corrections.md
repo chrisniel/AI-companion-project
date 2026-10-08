@@ -4,23 +4,24 @@
 - Audit baseline: `28c43320c54cd3333ad2f7b3f842a7a6c1db3f75`.
 - Reviewed B1 publication / B2 starting checkpoint: `61766939e7eb529537519bae6f9a4dc04006ae98`.
 - Reviewed B2 publication / consolidated authoring starting checkpoint: `8dfd9df9822e4f80fbd1e089bf63b465ec47f947`.
+- Consolidated source-review / final qualification starting checkpoint: `4e934ab058b2ad6043f50c94cd06dd70bbd9c24e` (independent source review supplied by Chris).
 - Plan: [supplied-scope record](../../02_Planning/01_Plans/plan-pre-m1-audit-corrections.md).
-- Current authorization: Chris authorized consolidated B3 → B4 → B6 → remaining B1 → B5 authoring, with explicit Task, CI, retention and locator policies. No Git mutations, installations, new audit/plan or M1.
+- Current authorization: final bounded setup correction and F04 qualification preparation. Separate target environments/resolution require the missing interpreter and consolidated human installation/network approval. No Git mutations, system-Python replacement, existing-environment writes, new audit/plan or M1.
 - Governance publication: root `AGENTS.md` hardening was independently reviewed, the fresh-session Gemini canary passed, and Chris intentionally published it in the B1 checkpoint above. Codex must not modify it during product corrections.
-- Current stage: Remaining corrections AUTHORED / AWAITING INDEPENDENT IMPLEMENTATION AND DOCUMENTATION REVIEW. B2 passed independent source-level review per Chris's instruction; Python 3.11/hosted qualification and F04 reproducibility remain open. No self-approval or delivery closure.
+- Current stage: previous source corrections independently reviewed per Chris; setup correction AUTHORED / independent documentation review pending. F04 OPEN: target interpreter, dependency reproducibility and Python 3.11/hosted qualification remain unresolved. No self-approval or delivery closure.
 
 ## Finding / Batch Evidence Record
 
 | Batch | Findings | Execution / evidence state |
 | --- | --- | --- |
 | B1 | F09 | Independent safety checkpoint PASSED at B1 publication; consolidated rerun: 4 passed, 408 tests safely collected |
-| B1 | F04 | PARTIAL / BLOCKED: declarations aligned; no selected local Python 3.11 or target-qualified transitive/hash input; hosted qualification pending |
-| B1 | F12 | AUTHORED: Node engine declaration aligned; compatible local Node 24.18.0 web tests/typecheck/build passed; hosted Node 22.22.2 pending |
+| B1 | F04 | OPEN / BLOCKED: reviewed declaration alignment preserved; refreshed inventory still lacks selected local Python 3.11; no target-qualified transitive/hash input or installation/network approval |
+| B1 | F12 | Source-reviewed declaration alignment preserved; historical compatible Node 24.18.0 web checks passed; hosted Node 22.22.2 pending |
 | B2 | F01, F02, F07 | Independent source-level review PASSED at B2 publication, per Chris; preserved by consolidated regressions; Python 3.11/hosted qualification pending |
-| B3 | F05 | AUTHORED: approved omission/null/reminder semantics; HTTP/Pydantic/ORM regression evidence and TaskUpdate-only contract change; independent review pending |
-| B4 | F03 | AUTHORED: all existing lanes on each develop push; PR classification retained; 21 policy tests passed; hosted/independent review pending |
+| B3 | F05 | Independent source review supplied at consolidated checkpoint; approved semantics and historical HTTP/Pydantic/ORM/contract evidence preserved; target qualification pending |
+| B4 | F03 | Independent source review supplied at consolidated checkpoint; cumulative integration policy and historical 21-test evidence preserved; hosted execution pending |
 | B5 | F10, F11, F13 | AUTHORED: closest-owner reconciliation and verified setup/CI wording; independent documentation gate pending |
-| B6 | F06, F08 | AUTHORED: prepared-schema CLI runtime ownership and invalid-existing-locator fail-closed policy; disposable regressions passed; independent review pending |
+| B6 | F06, F08 | Independent source review supplied at consolidated checkpoint; prepared-schema CLI and locator behavior/regressions preserved; target qualification pending |
 
 ## Checkpoints & Boundaries
 
@@ -240,3 +241,61 @@ denied real authentication/databases and external side effects. No real model,
 user database/configuration, package install, network resolution or Git mutation.
 
 Proposed Conventional Commit: `fix: complete bounded pre-m1 audit corrections`.
+
+## Final F04 Qualification Preparation — 2026-10-08
+
+Preflight matched branch `fix/pre-m1-audit-corrections` and HEAD
+`4e934ab058b2ad6043f50c94cd06dd70bbd9c24e`; working/staged diffs were empty.
+Chris reported independent source review of the previously authored corrections.
+This does not establish independent documentation closure, dependency reproducibility,
+Python 3.11 qualification, candidate PR CI or post-merge develop CI.
+
+Only DEVELOPMENT_SETUP, TESTING_AND_CI and the two existing evidence records changed.
+The setup example now verifies Windows x64 CPython 3.11 before allocating a uniquely
+named temporary environment outside the repository. It never targets backend/.venv,
+does not activate an environment, and uses explicit executable paths for installation,
+verification and optional normal development startup. Missing Python stops before
+environment creation. Testing guidance retains synthetic config/storage and F09-first
+execution. The previous unsafe example could reuse .venv despite its preservation text.
+
+Read-only metadata refresh: PATH, `py -0p`, registered Python and checked standard
+locations exposed Windows x64 Python 3.13.14 at `D:\Applications\Python\python.exe`,
+with no located 3.11. Existing backend/root environments remain 3.13.14/pip 26.1.2;
+global pip is 26.2.1. pip-tools/uv were absent in inspected metadata/PATH. No environment
+was changed. The available pip 26.1.2 distribution declares Requires-Python >=3.10.
+
+F04 remains **OPEN**. Smallest proposed solution, pending consolidated approval:
+human supplies an existing full CPython 3.11 x64 executable/version/provenance;
+use pip 26.1.2 in a separate native-target resolver environment, download only wheels
+from approved declarations, and derive pins/hashes from actual wheel METADATA/bytes
+while preserving direct extras. Verify offline hash-required installation in a second
+clean target environment. Scope covers runtime + test dependency closure for Windows
+x64/CPython 3.11; no universal-platform/source-build/model-binary claim. Stop on missing
+compatible wheels, declaration mismatch or unrelated OpenAPI drift. No input was
+generated, system interpreter installed, existing environment frozen or CI switched.
+
+Planned temporary paths: `%TEMP%\ai-companion-f04-<fresh UUID>\resolver`, `verify`,
+`wheelhouse`, and `requirements-win-amd64-cp311.lock`; package access limited to
+`https://pypi.org/simple` and HTTPS wheel downloads on `files.pythonhosted.org`.
+Resolver installation/download and offline install commands are proposed in the
+human handoff, not executed. A repository lock/CI consumption change awaits verified
+resolution and installation evidence. Hosted Python 3.11 pass alone is not a lock.
+
+Mechanical checks executed with installed PowerShell only:
+- `System.Management.Automation.Language.Parser::ParseInput` on all nine PowerShell
+  fences in the two guides: exit 0; no syntax errors. Static guard/order checks rejected
+  .venv targeting, activation dependence and bare-Python verification commands.
+- Actual setup discovery/probe prefix (stopped before `# 3. Create`): exit 0 for the
+  harness, with the expected missing-Python-3.11 throw; no directory/environment created.
+- Scoped documentation link/scope checks: exit 0, exactly four allowed files and
+  12 local links. `git diff --check`: exit 0; staged and AGENTS.md diffs empty.
+- `py -0p`: exit 0, only registered Python 3.13 at the path above. Existing backend
+  `python.exe -I -B -c` using only sys/struct/importlib.metadata: exit 0, confirmed
+  Python 3.13.14 x64, pip 26.1.2 and its Requires-Python >=3.10. No application import.
+
+No application suite, application import, OpenAPI generator, package/network operation
+or hosted CI ran in this documentation-only correction. Historical Python 3.13 results
+remain historical evidence. Previous source implementations/manifests/workflow/AGENTS.md
+are unchanged. No secrets/user database/model access, Git mutation, M1 or closure.
+The branch can receive candidate CI evidence after human publication, but is not
+F04-resolved or ready for final integration acceptance. New documentation review pending.

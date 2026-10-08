@@ -50,7 +50,7 @@ The project distinguishes two complementary verification tiers:
 Run these commands locally before opening pull requests or handing over tasks:
 
 ### A. Backend Verification
-From repository root (with active virtual environment):
+From repository root, use `$qualificationPython` from [DEVELOPMENT_SETUP.md §4](DEVELOPMENT_SETUP.md#4-backend-development-startup-fastapi), pointing to the separate temporary Python 3.11 environment. No activation is required:
 
 ```powershell
 # Select disposable configuration and storage BEFORE application imports
@@ -63,23 +63,30 @@ $env:COMPANION_DATA_ROOT = Join-Path $testRoot "data"
 $env:LOCALAPPDATA = Join-Path $testRoot "local-appdata"
 
 # Prove import/collection isolation before running the application suite
-python -I -B backend/tests/test_import_isolation.py -v
+& $qualificationPython -I -B backend/tests/test_import_isolation.py -v
+if ($LASTEXITCODE -ne 0) { throw "Import/collection isolation failed; do not run the suite." }
 
 # Run full backend test suite
-python -B -m pytest backend/tests -q -p no:cacheprovider -o log_file=NUL
+& $qualificationPython -B -m pytest backend/tests -q -p no:cacheprovider -o log_file=NUL
+if ($LASTEXITCODE -ne 0) { throw "Backend verification failed." }
+
+# Verify existing CI coverage policy separately
+& $qualificationPython -B -m unittest scripts/tests/test_ci_policy.py
+if ($LASTEXITCODE -ne 0) { throw "CI policy verification failed." }
 ```
 
-Use the selected Python 3.11 environment executable. The isolation regression installs guards around real imports and collection; `backend/tests/conftest.py` establishes synthetic authentication/configuration before application imports. Local Python 3.13 results are secondary regression evidence. Python 3.11 qualification and a verified transitive/hash dependency input remain pending; the current declaration ranges are not a complete lock.
+Use the explicit selected Python 3.11 environment executable for every command. The isolation regression installs guards around real imports and collection; `backend/tests/conftest.py` establishes synthetic authentication/configuration before application imports. Local Python 3.13 results are secondary regression evidence. **F04 remains OPEN:** target qualification and a verified transitive/hash dependency input remain pending; the current declaration ranges are not a complete lock.
 
 ### B. OpenAPI Contract Drift Verification
 FastAPI routes must strictly match the committed OpenAPI specification. Use the disposable configuration/storage above before importing the application:
 
 ```powershell
 # Check mode: Exit code 0 if synchronized; exit code 1 if drift detected
-python -B scripts/check_openapi_contract.py --check
+& $qualificationPython -B scripts/check_openapi_contract.py --check
+if ($LASTEXITCODE -ne 0) { throw "OpenAPI contract verification failed." }
 
 # Write mode: Regenerates contracts/openapi/openapi.json to match current FastAPI definitions
-python -B scripts/check_openapi_contract.py --write
+& $qualificationPython -B scripts/check_openapi_contract.py --write
 ```
 
 ### C. Flutter Desktop Verification (Primary Client)
