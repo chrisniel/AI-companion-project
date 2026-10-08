@@ -2,12 +2,12 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: Previous source corrections independently reviewed per Chris at `4e934ab058b2ad6043f50c94cd06dd70bbd9c24e`; safe setup correction AUTHORED / documentation review pending. F04 OPEN; dependency reproducibility, Python 3.11 and hosted qualification unresolved.
+- Status: Previous F01–F13 source corrections independently reviewed per Chris; final target qualification authorized from `8962166c2da2771cfc907097f0c8cc72ac6bfc87`. F04's target lock and repeated clean installations verified locally; full application/hosted evidence and independent documentation/closure gates are recorded in the branch tracker.
 - Scope Mode: Surgical Fix — supplied audit disposition B1–B6, not M1.
 - Planning basis: Chris's supplied F01–F13 disposition and B1–B6 corrective plan.
-- Approval: Chris authorized B1 and B2; F09 independent safety review passed at `61766939e7eb529537519bae6f9a4dc04006ae98`. B2 independent source-level review passed at `8dfd9df9822e4f80fbd1e089bf63b465ec47f947`. Chris subsequently authorized consolidated remaining authoring and the explicit policies below; no Git/installation/M1 authority.
+- Approval: Chris authorized B1 and B2; F09 independent safety review passed at `61766939e7eb529537519bae6f9a4dc04006ae98`. B2 independent source-level review passed at `8dfd9df9822e4f80fbd1e089bf63b465ec47f947`. Subsequent consolidated source authoring/review preserved the policies below. The later autonomous qualification authorization explicitly permits isolated tooling/package setup, scoped edits, task-owned add/commit/push and workflow dispatch; it excludes PR creation, merge and M1.
 - Execution/evidence owner: [branch tracker](../../01_Tracking/active/task-fix-pre-m1-audit-corrections.md).
-- Final bounded authorization: correct existing setup/verification guides and prepare target qualification; no installation/network approval, Git mutations, system-Python changes, existing-environment writes or M1. Preserve the supplied plan and all source corrections.
+- Current bounded authorization: complete target resolution/reproducibility and local/hosted qualification using separate owned temporary environments; preserve existing environments, real configuration/data, AGENTS.md and source corrections. Publish only on the existing fix branch, without force push, PR, merge or closure. Earlier restrictions below remain historical checkpoint evidence where superseded explicitly.
 
 ## 1. Request Understanding & Goals
 
@@ -21,7 +21,7 @@ plan and finding IDs; this record does not introduce a replacement plan.
 
 | Batch | Findings | Supplied scope | Authorization |
 | --- | --- | --- | --- |
-| B1 | F09, F04, F12 | Import/collection isolation; Python 3.11 dependency qualification; compatible Node inputs | Declaration alignment and installed-tool verification authorized; new installation/resolution not authorized |
+| B1 | F09, F04, F12 | Import/collection isolation; Python 3.11 dependency qualification; compatible Node inputs | Isolated native-target resolution, clean hash-checked installs and hosted qualification now explicitly authorized |
 | B2 | F01, F02, F07 | Error terminals; provider-owned active work; logging across startup migrations | Independent source-level review passed; qualified integration pending |
 | B3 | F05 | Task omission/null semantics and generated contract | Independent source review supplied at consolidated checkpoint; target qualification pending |
 | B4 | F03 | Cumulative integration coverage invariant | Approved policy preserved; independent source review supplied; hosted execution pending |
@@ -46,7 +46,8 @@ dependency engine minimum. Python 3.13 observations do not prove incompatibility
   expressly authorized by Chris where required by the delivery workflow.
 
 Preserve AGENTS.md and all existing environments, real authentication files and
-user data. No Git mutations, system interpreter replacement, real-model runtime,
+user data. Earlier B1 authority excluded Git writes; current authority permits only
+task-owned add/commit/push on the existing fix branch. No system interpreter replacement, real-model runtime,
 OpenAPI regeneration to conceal drift, unrelated upgrades, or M1 implementation.
 Root governance hardening was independently reviewed and fresh-session Gemini
 canary-tested; Chris intentionally published AGENTS.md in checkpoint
@@ -121,11 +122,15 @@ branch tracker; no self-approval or hosted-CI claims.
 ## 6. Risks & Recovery
 
 Failing reproductions must deny real local-state access before importing the faulty
-module. Existing environment/configuration changes are prohibited. Missing Python
-3.11 or unresolved installation choices are blockers, not permission to substitute
-an interpreter, freeze a local environment, or attempt speculative installation.
+module. Existing environment/configuration changes are prohibited. Earlier missing
+Python 3.11/install authority blocked resolution; subsequent explicit authorization
+permits verified official tooling in isolated paths, never a local-environment freeze.
 
-## 7. Final Qualification Authorization and Blocker
+## 7. Historical Qualification Preparation and Blocker
+
+This records the documentation-only checkpoint preceding `8962166c2da2771cfc907097f0c8cc72ac6bfc87`.
+Its missing-interpreter/installation/Git restrictions were superseded by the
+autonomous qualification authorization in §8; the point-in-time evidence is preserved.
 
 Chris's final instruction narrows remaining work to safe setup examples and F04.
 The refreshed inventory did not locate Windows CPython 3.11. Documentation now
@@ -145,3 +150,31 @@ Source review, new documentation review, Python 3.11 test qualification, verifie
 dependency input, candidate PR CI and post-merge develop CI remain separate gates.
 No independent documentation/closure gate is self-approved; no tracker archiving,
 PR creation, Git write, system install, unrelated correction or M1 follows this task.
+
+## 8. Autonomous Final Qualification — Approved Execution, Not a Replacement Plan
+
+Chris authorized the remaining F04/F12 and combined F01–F13 qualification end-to-end,
+including official isolated interpreter provisioning, PyPI resolution, task-owned
+Git add/commit/push and exact-candidate workflow dispatch. Existing environments,
+credentials, user data, global Git configuration and AGENTS.md remain protected.
+No PR, merge, force push, new branch/worktree, M1 or independent gate self-approval.
+
+Resolution used actual native Windows x64 CPython 3.11.9 and pip 26.1.2, from the
+aligned requirements/pyproject runtime+dev declarations. The committed
+`backend/requirements.lock` covers 39 exact runtime/test/installer distributions,
+recursive extras, target markers and downloaded wheel SHA-256 values. Two fresh
+environments installed the input with hash checking and normal dependency resolution,
+then matched its complete installed closure and passed `pip check`. No source builds,
+existing-environment freeze or other-platform/build-system coverage is claimed.
+
+Narrow added tooling: `scripts/python_dependency_lock.py` and its tests. Normal CI
+consumes the same verified lock in fresh Windows environments, preserving F03
+coverage/gate semantics, Node 22.22.2 and F09-first synthetic-state protection.
+Actual Python 3.11 qualification exposed test-guard assumptions about Windows OS
+metadata and stdlib socketpair names; bounded harness corrections retain full
+application auth/data/network/subprocess restrictions. Commands, failures, corrective
+evidence and hosted candidate revisions belong in the existing branch tracker.
+
+After technical qualification/publication, stop for independent review. New lock/CI
+implementation review, documentation gate, PR/candidate review, post-merge integration
+and human closure remain separate; this plan does not certify those gates.

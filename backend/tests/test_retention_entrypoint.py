@@ -22,12 +22,16 @@ BACKEND = Path(__file__).resolve().parents[1]
 CLI_BOOTSTRAP = r'''
 import os
 from pathlib import Path
+import platform
 import runpy
 import socket
 import sys
 root = Path(os.environ["COMPANION_DATA_ROOT"]).parent.resolve()
 selected_env = Path(os.environ["COMPANION_ENV_FILE"]).resolve()
 selected_db = root / "data" / "database" / "companion.db"
+# Cache CPython 3.11's read-only Windows version query before denying all
+# subprocesses/file writes outside the disposable application boundary.
+platform.uname()
 def inside(path):
     return path == root or root in path.parents
 def guard(event, args):
@@ -47,9 +51,10 @@ def guard(event, args):
             raise AssertionError("Foreign database access")
     if event == "socket.connect":
         # Windows asyncio creates a local socketpair to wake its event loop.
+        # CPython 3.11 names this socketpair; newer CPython uses the fallback name.
         frame = sys._getframe()
         while frame:
-            if frame.f_code.co_name == "_fallback_socketpair" and frame.f_code.co_filename == socket.__file__:
+            if frame.f_code.co_name in ("socketpair", "_fallback_socketpair") and frame.f_code.co_filename == socket.__file__:
                 if args[1][0] in ("127.0.0.1", "::1"):
                     return
             frame = frame.f_back
@@ -57,6 +62,14 @@ def guard(event, args):
     if event in ("subprocess.Popen", "os.system"):
         raise AssertionError("Unexpected external side effect")
 sys.addaudithook(guard)
+# This exemption must never allow an application-level network connection.
+with socket.socket() as probe:
+    try:
+        probe.connect(("127.0.0.1", 9))
+    except AssertionError as error:
+        assert str(error) == "Unexpected network access"
+    else:
+        raise AssertionError("CLI guard permitted application network access")
 try:
     runpy.run_module("app.services.retention", run_name="__main__")
 finally:

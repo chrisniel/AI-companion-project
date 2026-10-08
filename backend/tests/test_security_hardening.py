@@ -192,12 +192,17 @@ def _run_disposable_startup_boundary(tmp_path: Path, body: str) -> None:
     guard = textwrap.dedent(f"""
         import os
         from pathlib import Path
+        import platform
         import socket
         import sys
 
         sandbox = Path({str(tmp_path)!r}).resolve()
         backend = Path({str(backend)!r}).resolve()
         configuration = Path({str(configuration)!r}).resolve()
+
+        # Cache CPython 3.11's read-only Windows version query before the guard.
+        # Application startup retains the full subprocess/auth/data restrictions.
+        platform.uname()
 
         class ForbiddenLocalState(BaseException):
             pass
@@ -211,7 +216,7 @@ def _run_disposable_startup_boundary(tmp_path: Path, body: str) -> None:
             if event == "socket.connect":
                 caller = sys._getframe(1).f_code
                 address = arguments[1]
-                if (caller.co_name == "_fallback_socketpair"
+                if (caller.co_name in ("socketpair", "_fallback_socketpair")
                         and caller.co_filename == socket.__file__
                         and address[0] in ("127.0.0.1", "::1")):
                     return
@@ -246,6 +251,25 @@ def _run_disposable_startup_boundary(tmp_path: Path, body: str) -> None:
     # Child assertions avoid printing generated credentials; redact captured output
     # as a second boundary if a migration/startup failure includes a log message.
     assert result.returncode == 0, sanitize_message(result.stdout[-3000:] + result.stderr[-5000:])
+
+
+def test_startup_guard_rejects_application_network_and_subprocess(tmp_path):
+    _run_disposable_startup_boundary(tmp_path, """
+        import subprocess
+        with socket.socket() as probe:
+            try:
+                probe.connect(("127.0.0.1", 9))
+            except ForbiddenLocalState:
+                pass
+            else:
+                raise AssertionError("Startup guard permitted application network access")
+        try:
+            subprocess.run([sys.executable, "-c", "pass"], check=True)
+        except ForbiddenLocalState:
+            pass
+        else:
+            raise AssertionError("Startup guard permitted application subprocess execution")
+    """)
 
 
 def test_programmatic_schema_preparation_preserves_logging_ownership(tmp_path):

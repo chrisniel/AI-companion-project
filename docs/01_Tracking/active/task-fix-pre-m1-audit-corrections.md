@@ -6,22 +6,23 @@
 - Reviewed B2 publication / consolidated authoring starting checkpoint: `8dfd9df9822e4f80fbd1e089bf63b465ec47f947`.
 - Consolidated source-review / final qualification starting checkpoint: `4e934ab058b2ad6043f50c94cd06dd70bbd9c24e` (independent source review supplied by Chris).
 - Plan: [supplied-scope record](../../02_Planning/01_Plans/plan-pre-m1-audit-corrections.md).
-- Current authorization: final bounded setup correction and F04 qualification preparation. Separate target environments/resolution require the missing interpreter and consolidated human installation/network approval. No Git mutations, system-Python replacement, existing-environment writes, new audit/plan or M1.
+- Autonomous qualification starting checkpoint: `8962166c2da2771cfc907097f0c8cc72ac6bfc87` (clean working/staged tree).
+- Current authorization: Chris explicitly approved isolated official tooling/package setup, remaining F04/F12 and combined qualification, task-owned Git add/commit/push on this branch and exact-candidate workflow dispatch. No PR, merge, force push, system-Python replacement, existing-environment writes, new audit/plan or M1.
 - Governance publication: root `AGENTS.md` hardening was independently reviewed, the fresh-session Gemini canary passed, and Chris intentionally published it in the B1 checkpoint above. Codex must not modify it during product corrections.
-- Current stage: previous source corrections independently reviewed per Chris; setup correction AUTHORED / independent documentation review pending. F04 OPEN: target interpreter, dependency reproducibility and Python 3.11/hosted qualification remain unresolved. No self-approval or delivery closure.
+- Current stage: previous source corrections independently reviewed per Chris; new dependency/CI/harness corrections AUTHORED with Windows CPython 3.11.9 local qualification. Full hosted candidate qualification pending publication/dispatch. New implementation review, independent documentation and human closure gates remain pending; no self-approval or delivery closure.
 
 ## Finding / Batch Evidence Record
 
 | Batch | Findings | Execution / evidence state |
 | --- | --- | --- |
-| B1 | F09 | Independent safety checkpoint PASSED at B1 publication; consolidated rerun: 4 passed, 408 tests safely collected |
-| B1 | F04 | OPEN / BLOCKED: reviewed declaration alignment preserved; refreshed inventory still lacks selected local Python 3.11; no target-qualified transitive/hash input or installation/network approval |
+| B1 | F09 | Independent safety checkpoint PASSED at B1 publication; Windows CPython 3.11.9 rerun: 4 passed, 409 tests safely collected |
+| B1 | F04 | Target-qualified lock AUTHORED/locally verified: native Windows x64 CPython 3.11.9, pip 26.1.2, 39 exact wheel hashes/extras/markers; repeated clean installs and full 409-test application suite pass; new review/hosted candidate pending |
 | B1 | F12 | Source-reviewed declaration alignment preserved; historical compatible Node 24.18.0 web checks passed; hosted Node 22.22.2 pending |
-| B2 | F01, F02, F07 | Independent source-level review PASSED at B2 publication, per Chris; preserved by consolidated regressions; Python 3.11/hosted qualification pending |
-| B3 | F05 | Independent source review supplied at consolidated checkpoint; approved semantics and historical HTTP/Pydantic/ORM/contract evidence preserved; target qualification pending |
+| B2 | F01, F02, F07 | Independent source-level review PASSED at B2 publication, per Chris; preserved by Windows CPython 3.11.9 full regressions; hosted candidate pending |
+| B3 | F05 | Independent source review supplied at consolidated checkpoint; approved HTTP/Pydantic/ORM semantics pass under CPython 3.11.9, unchanged generated contract equality passes; hosted candidate pending |
 | B4 | F03 | Independent source review supplied at consolidated checkpoint; cumulative integration policy and historical 21-test evidence preserved; hosted execution pending |
 | B5 | F10, F11, F13 | AUTHORED: closest-owner reconciliation and verified setup/CI wording; independent documentation gate pending |
-| B6 | F06, F08 | Independent source review supplied at consolidated checkpoint; prepared-schema CLI and locator behavior/regressions preserved; target qualification pending |
+| B6 | F06, F08 | Independent source review supplied at consolidated checkpoint; prepared-schema CLI and fail-closed locator regressions pass under CPython 3.11.9; hosted candidate pending |
 
 ## Checkpoints & Boundaries
 
@@ -242,7 +243,11 @@ user database/configuration, package install, network resolution or Git mutation
 
 Proposed Conventional Commit: `fix: complete bounded pre-m1 audit corrections`.
 
-## Final F04 Qualification Preparation — 2026-10-08
+## Historical F04 Qualification Preparation — 2026-10-08
+
+This preceding documentation-only checkpoint is preserved as point-in-time evidence.
+Its missing-interpreter/install/Git blockers were superseded by the authorization
+and actual qualification below; it does not describe the current environment.
 
 Preflight matched branch `fix/pre-m1-audit-corrections` and HEAD
 `4e934ab058b2ad6043f50c94cd06dd70bbd9c24e`; working/staged diffs were empty.
@@ -299,3 +304,100 @@ remain historical evidence. Previous source implementations/manifests/workflow/A
 are unchanged. No secrets/user database/model access, Git mutation, M1 or closure.
 The branch can receive candidate CI evidence after human publication, but is not
 F04-resolved or ready for final integration acceptance. New documentation review pending.
+
+## Autonomous Final Qualification — 2026-10-08
+
+Preflight matched `fix/pre-m1-audit-corrections` / `8962166c2da2771cfc907097f0c8cc72ac6bfc87`,
+with no working/staged changes. Chris explicitly authorized the remaining technical
+qualification, official isolated tooling/package operations, task-owned commit/push
+and workflow dispatch, without PR/merge/M1 or independent gate self-approval.
+
+### F04 Interpreter, Resolution and Reproducibility
+
+Owned temporary root: `%TEMP%\ai-companion-f04-56d57b3422664411bc5765407f84920e`.
+Let `$taskRoot` resolve that directory; `$basePython` is
+`$taskRoot\python-nuget\tools\python.exe`, `$resolverPython` is
+`$taskRoot\resolver\Scripts\python.exe`, and `$qualificationPython` is
+`$taskRoot\verify-a\Scripts\python.exe`. A separate `verify-b` proves repeatability.
+
+- Official PSF NuGet `python` 3.11.9 was extracted without running an installer,
+  touching registry/global configuration or requiring elevation. Its published
+  package SHA-512 was compared against the downloaded bytes; the executable's
+  Authenticode signature was Valid, signer Python Software Foundation.
+  Package SHA-512: `e353a7efd159ef98ab9ce1011854a30d5d778f59d96fc9bb11b07ced2990b355f030486b0707f798c73c4420173ab111876a96ead5981718b604c4cdd71c558d`.
+- Actual version: CPython **3.11.9**, native Windows **AMD64/x64**, MSC v.1938;
+  `python.exe -I -B -VV` and sys/struct/platform metadata verified the target.
+  The earlier Actions toolchain archive was hash-verified but its machine-installing
+  setup script was not executed; PSF NuGet provided the bounded extraction route.
+- Resolver **pip 26.1.2** was installed only into the new resolver environment.
+  Both project declaration files agree. Resolution used their runtime+dev ranges,
+  preserving `uvicorn[standard]` and `sqlalchemy[asyncio]`, not either old environment.
+- `backend/requirements.lock` records **39** exact runtime/test/installer versions,
+  recursive extras, Windows/CPython 3.11/AMD64 markers and one actual compatible wheel
+  SHA-256 per package. It includes pip 26.1.2; build-system setuptools, source builds,
+  other platforms/architectures and model assets are outside this input's claim.
+- `scripts/python_dependency_lock.py` uses the pinned pip parser and downloaded wheel
+  metadata/bytes to verify closure, compatibility, declaration fingerprint and hashes.
+  Verification rejects installed packages/versions outside the lock or missing extras.
+- Fresh `verify-a` and `verify-b` environments had only their own bootstrap setuptools
+  removed. Both installed with `--require-hashes`, `--only-binary=:all:`, `--no-index`
+  and the newly downloaded owned wheelhouse. Both matched exactly the same 39-version
+  set and passed `pip check`; no unlocked fallback or existing-environment dependency.
+- Actual pip dry-run using a temporary copy with altered SHA-256 values failed
+  before installation, exit **1**, with the expected hash mismatch. The committed
+  input and installed environments were unchanged by this negative test.
+
+### Commands and Results
+
+Commands below used repository cwd unless specified. All application commands selected
+an empty synthetic `.env`, synthetic authentication, disposable DATA_ROOT/LOCALAPPDATA
+under the owned temporary root before imports. F09 children install audit guards;
+backend fixtures use synthetic/in-memory storage and mock inference.
+
+| Command / boundary | Exit | Evidence |
+| --- | --- | --- |
+| `& $basePython -I -B -m venv <resolver/verify-a/verify-b>` | 0 each | Three separate owned environments; existing environments preserved |
+| `& $resolverPython -I -B -m pip --isolated install --no-cache-dir --index-url https://pypi.org/simple pip==26.1.2` | 0 | Verified selected resolver version |
+| `& $resolverPython -I -B -m pip --isolated download --no-cache-dir --only-binary=:all: --index-url https://pypi.org/simple --dest $taskRoot/wheelhouse -r backend/requirements.txt` and same download for `pip==26.1.2` | 0 each | Complete compatible wheel closure; no source builds |
+| `& $resolverPython -I -B scripts/python_dependency_lock.py generate --wheelhouse $taskRoot/wheelhouse` | 0 | Actual pins/metadata/hashes produced the canonical lock |
+| Each clean environment: `-I -B -m pip --isolated uninstall -y setuptools`; `-I -B -m pip --isolated install --no-cache-dir --require-hashes --only-binary=:all: --no-index --find-links $taskRoot/wheelhouse -r backend/requirements.lock` | 0 each | Hash-required normal dependency installs in both clean targets |
+| Both environments: `-I -B scripts/python_dependency_lock.py verify`; `-I -B -m pip --isolated check` | 0 each | Exact same 39 distributions/versions; no broken requirements |
+| Actual pip install `--dry-run --ignore-installed` with temporary altered hashes and same hash/wheel/offline options | 1 expected | Hash mismatch rejected before install |
+| Initial `-I -B -m unittest scripts/tests/test_python_dependency_lock.py` | 1 | Isolated mode excludes cwd from module search; corrected direct-file invocation below |
+| `& $qualificationPython -I -B scripts/tests/test_python_dependency_lock.py` | 0 | 6 passed; missing/incompatible/transitive/extra distributions and malformed inputs rejected |
+| Initial F09 `-I -B backend/tests/test_import_isolation.py -v` | 1 | 3 passed / 1 failed at guarded stdlib Windows platform query, before unsafe access |
+| Final same F09 command | 0 | 4 passed; actual guarded collection **409** tests |
+| Initial full backend suite | 1 | 399 passed / 9 failed in guarded retention/startup children; same Windows metadata issue |
+| Initial combined runtime/Task/retention/locator/startup focused suite after metadata fix | 1 | 101 passed / 9 failed; exposed Python 3.11 stdlib socketpair name difference |
+| `-B -m pytest tests/test_retention_entrypoint.py tests/test_security_hardening.py -q -p no:cacheprovider -o log_file=NUL --tb=short` (cwd backend), after guard corrections | 0 | **24 passed**; actual CLI/startup plus denied application network/subprocess probes |
+| `& $qualificationPython -B -m pytest backend/tests -q -p no:cacheprovider -o log_file=NUL --tb=short`, after F09 | 0 | **409 passed in 86.70 s**; preserved F01/F02/F05/F06/F07/F08/F09 actual boundaries |
+| `& $qualificationPython -B -m unittest scripts/tests/test_ci_policy.py` | 0 | **21 passed**; expected negative gate messages are asserted fail-closed cases |
+| `& $taskRoot/verify-b/Scripts/python.exe -I -B scripts/check_openapi_contract.py --check` | 0 | Exact existing OpenAPI equality; **23 routes**; no regeneration/source/contract drift |
+| `node --version`; `npm --version`; `npm --prefix frontend/web test -- --run`; `npm --prefix frontend/web run lint`; `npm --prefix frontend/web run build` | 0 each | Node **24.18.0**, npm **11.18.0**; **229 tests / 12 files**; typecheck/build pass; hosted 22.22.2 still separate |
+| Stdlib AST/trailing-whitespace checks of the five authored Python files | 0 | All parse; no bytecode or application imports |
+| Scoped YAML/input assertions and PowerShell parsing of all 11 CI scripts | 0 | CI input/bootstrap syntax valid; hosted execution pending |
+| `git diff --check`; `git diff -- AGENTS.md` | 0 / empty | Whitespace passes; governance untouched |
+
+The two qualification failures were harness compatibility defects, not reasons to
+weaken product assertions or rewrite reviewed Runtime architecture. Guarded children
+now cache Windows OS metadata before installing audit hooks and permit only the
+stdlib socketpair implementation's loopback wake-up connection under its Python
+3.11 or newer function name. Negative actual application connection/subprocess
+probes remain blocked before execution. Real credentials/data/models were never used.
+
+### CI, Documentation and Publication Boundary
+
+Both existing Windows CI lanes pin CPython 3.11.9 x64, create independent fresh venvs,
+install the same hash-checked wheel-only input, verify exact closure and `pip check`,
+then run F09 before application checks. Backend includes six lock regressions.
+F03 routing/cancellation/strict aggregation and Node 22.22.2 are preserved. Official
+v7 tags for checkout/setup-python/setup-node were verified without changing versions.
+
+Closest setup/testing guides now describe the verified lock, isolated tooling
+provenance and CI consumption; F10/F11/F13 reviewed owner corrections are preserved.
+The supplied plan records the superseding authorization, not another plan. New
+implementation and independent documentation review remain pending.
+
+Local technical checks passed. Authorized task-owned commit/push and full dispatch
+will publish/qualify a candidate next. Exact SHA/run evidence is recorded as a
+point-in-time checkpoint; no PR, merge, tracker archiving, M1 or closure is performed.

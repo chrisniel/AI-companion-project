@@ -13,7 +13,7 @@ Before developing locally, ensure the following prerequisites are installed and 
 | Component | Minimum Version | Notes / Verification |
 | :--- | :--- | :--- |
 | **Operating System** | Windows 10/11 64-bit | Primary host platform for Local AI Runtime and hardware acceleration. |
-| **Python** | 3.11.x 64-bit | Required for FastAPI backend and migration tools; verify the selected executable below before creating an environment. |
+| **Python** | 3.11.x 64-bit | Windows x64 CPython 3.11.9 is the qualified dependency target; verify the selected executable below before creating an environment. |
 | **Flutter SDK** | Version will be officially pinned when scaffolded (PC-CLIENT-001) | Required for primary Windows Desktop client (`flutter --version`). |
 | **Visual Studio Build Tools** | 2022 (with Desktop C++) | Required by Flutter for compiling native Windows C++/CMake executables. |
 | **Node.js** | 22.x >= 22.22.2 or 24.x >= 24.15.0 (with npm) | Matches the committed web dependency engines. CI selects 22.22.2 (`node --version`, `npm --version`). |
@@ -107,9 +107,14 @@ $qualificationPython = Join-Path $qualificationEnv "Scripts/python.exe"
 & $qualificationPython -I -B -VV
 if ($LASTEXITCODE -ne 0) { throw "Temporary Python executable is unavailable." }
 
-# 4. Install the declared development/test dependencies after package access is approved
-& $qualificationPython -I -B -m pip --isolated install --no-cache-dir --index-url https://pypi.org/simple -r requirements.txt
+# 4. Remove only the NEW environment's bootstrap setuptools, then install the lock
+# The lock includes pinned pip. Existing environments are never modified.
+& $qualificationPython -I -B -m pip --isolated uninstall --yes setuptools
+if ($LASTEXITCODE -ne 0) { throw "Temporary seed cleanup failed." }
+& $qualificationPython -I -B -m pip --isolated install --require-hashes --only-binary=:all: --no-cache-dir --index-url https://pypi.org/simple -r requirements.lock
 if ($LASTEXITCODE -ne 0) { throw "Dependency installation failed." }
+& $qualificationPython -I -B ../scripts/python_dependency_lock.py verify
+if ($LASTEXITCODE -ne 0) { throw "Installed dependency set differs from the qualified lock." }
 & $qualificationPython -I -B -m pip check
 if ($LASTEXITCODE -ne 0) { throw "Dependency integrity check failed." }
 
@@ -120,7 +125,15 @@ if ($LASTEXITCODE -ne 0) { throw "Dependency integrity check failed." }
 
 The example preserves every existing `backend/.venv`, regardless of its interpreter, and does not require activation. Keep `$qualificationPython` for the explicit test/contract commands in [TESTING_AND_CI.md](TESTING_AND_CI.md). If the launcher cannot locate Python 3.11, stop and arrange an approved interpreter first; these instructions do not install system Python. An approved explicit executable can replace launcher discovery, but must pass the same version/platform/bitness check before environment creation.
 
-The temporary environment can also support ordinary development during the session. Startup uses the selected development configuration/storage and remains separate from qualification against synthetic state. The dependency declarations agree, but installing their version ranges is not deterministic qualification: **F04 remains OPEN** until target-qualified pinned versions/hashes are produced from actual resolution and verified in a second clean Windows/Python 3.11 environment. Do not freeze existing Python 3.13 environments or infer Python 3.11 qualification from their tests.
+The temporary environment can also support ordinary development during the session. Startup uses the selected development configuration/storage and remains separate from qualification against synthetic state. `backend/requirements.lock` pins the Windows x64 / CPython 3.11 runtime/test closure, requested extras and pip 26.1.2, with one compatible wheel SHA-256 per distribution. Its actual resolution target is CPython 3.11.9; it does not claim Linux, ARM, source-build, packaging/build-system or model-binary coverage. The declarations remain the inputs for deliberate re-resolution, not the normal installation input. Do not freeze existing Python 3.13 environments or infer Python 3.11 qualification from their tests.
+
+If a separate interpreter is approved, the [Python Windows guide](https://docs.python.org/3.11/using/windows.html#the-nuget-org-packages) describes the PSF NuGet distribution suitable for isolated CI tooling. The qualification record used [PSF Python 3.11.9](https://www.nuget.org/packages/python/3.11.9), checked its published SHA-512 and the executable's valid PSF Authenticode signature, and extracted it under an owned temporary directory without registry/system installation. Existing developer interpreters and environments were preserved. Tool provisioning remains subject to the active task's installation authorization.
+
+### Maintaining the Qualified Dependency Input
+
+Use a fresh native Windows x64 CPython 3.11.9 resolver environment with pip 26.1.2 and an empty owned wheel directory. After approved package access, resolve with `pip --isolated download --only-binary=:all: --no-cache-dir --index-url https://pypi.org/simple --dest <wheel-directory> -r backend/requirements.txt`, then download `pip==26.1.2` into the same directory. From repository root run `scripts/python_dependency_lock.py generate --wheelhouse <wheel-directory>` using that resolver's explicit Python executable. The generator checks both declarations, compatible wheel metadata, transitive dependencies and recursive extras before recording artifact hashes. A missing compatible wheel or contradictory declaration is a failure, not permission for an unlocked/source-build fallback.
+
+Review the resulting versions and verify hash-checked installation, exact installed closure and `pip check` in two fresh environments before accepting a lock update. Run guarded F09 isolation before application qualification, then the backend suite and unchanged OpenAPI equality. CI consumes the committed lock and repeats closure checks; a generated file alone is not qualification. See the [active corrective evidence record](../01_Tracking/active/task-fix-pre-m1-audit-corrections.md) for commands and results.
 
 `COMPANION_ENV_FILE` selects an alternate local configuration file; otherwise configuration uses the backend `.env`. Importing configuration does not create or persist a pairing credential. Explicit application startup initializes missing credentials in the selected configuration. Tests and contract verification select disposable configuration and storage before importing the application; see [TESTING_AND_CI.md](TESTING_AND_CI.md).
 

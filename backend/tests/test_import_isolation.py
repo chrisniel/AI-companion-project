@@ -45,6 +45,7 @@ class ImportIsolationTests(unittest.TestCase):
             guard = textwrap.dedent(f"""
                 import os
                 from pathlib import Path
+                import platform
                 import sys
 
                 sandbox = Path({str(sandbox)!r}).resolve()
@@ -52,6 +53,11 @@ class ImportIsolationTests(unittest.TestCase):
                 config_file = Path({str(config_file)!r})
                 original_config = config_file.read_text(encoding="utf-8")
                 synthetic_token = {SYNTHETIC_TOKEN!r}
+
+                # CPython 3.11 may query Windows version via cmd.exe's read-only
+                # `ver` command. Cache OS metadata before denying subprocesses;
+                # application imports/collection still run under the full guard.
+                platform.uname()
 
                 class ForbiddenLocalState(BaseException):
                     pass

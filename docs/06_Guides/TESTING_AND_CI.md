@@ -73,9 +73,15 @@ if ($LASTEXITCODE -ne 0) { throw "Backend verification failed." }
 # Verify existing CI coverage policy separately
 & $qualificationPython -B -m unittest scripts/tests/test_ci_policy.py
 if ($LASTEXITCODE -ne 0) { throw "CI policy verification failed." }
+
+# Verify exact dependency closure and lock validation separately
+& $qualificationPython -I -B scripts/python_dependency_lock.py verify
+if ($LASTEXITCODE -ne 0) { throw "Installed dependencies differ from the qualified lock." }
+& $qualificationPython -I -B scripts/tests/test_python_dependency_lock.py
+if ($LASTEXITCODE -ne 0) { throw "Lock validation regressions failed." }
 ```
 
-Use the explicit selected Python 3.11 environment executable for every command. The isolation regression installs guards around real imports and collection; `backend/tests/conftest.py` establishes synthetic authentication/configuration before application imports. Local Python 3.13 results are secondary regression evidence. **F04 remains OPEN:** target qualification and a verified transitive/hash dependency input remain pending; the current declaration ranges are not a complete lock.
+Use the explicit selected Python 3.11 environment executable for every command. The isolation regression installs guards around real imports and collection; `backend/tests/conftest.py` establishes synthetic authentication/configuration before application imports. On CPython 3.11, guarded children cache read-only Windows platform metadata before installing the guard; application imports retain the subprocess, authentication and database restrictions. Local Python 3.13 results remain secondary evidence. Install `backend/requirements.lock` as described in the setup guide: it contains the qualified Windows x64 CPython 3.11.9 runtime/test wheel closure and pinned installer, rather than unconstrained declaration ranges. Exact installed-set verification and `pip check` are required in addition to hash-checked installation.
 
 ### B. OpenAPI Contract Drift Verification
 FastAPI routes must strictly match the committed OpenAPI specification. Use the disposable configuration/storage above before importing the application:
@@ -132,8 +138,8 @@ The automated GitHub Actions workflow is defined in [`.github/workflows/ci.yml`]
 - **Active Jobs:**
   1. **`classifier` (Ubuntu):** Executes static tests for `scripts/ci_policy.py`, then classifies PR diffs to output boolean requirements (`needs_backend`, `needs_frontend`, etc.). Pushes to `develop`, events targeting `master`, and manual dispatch require all lanes without relying on a path diff.
   2. **`docs-integrity` (Ubuntu):** Conditionally executed if `needs_docs` is true. Performs fast file-presence and diff-formatting checks.
-  3. **`backend` (Windows / Python 3.11):** Conditionally executed if `needs_backend` is true. Disposable authentication/configuration and storage, dependency installation, interpreter/package metadata and `pip check`, guarded import/collection isolation, then the backend pytest suite.
-  4. **`contract` (Windows / Python 3.11):** Conditionally executed if `needs_contract` is true. Disposable configuration/storage, interpreter/package metadata and `pip check`, then OpenAPI contract equality.
+  3. **`backend` (Windows x64 / CPython 3.11.9):** Conditionally executed if `needs_backend` is true. Disposable authentication/configuration and storage, a fresh runner-temporary environment, hash-checked wheel-only installation from `backend/requirements.lock`, exact dependency closure, interpreter metadata and `pip check`, lock regressions, guarded import/collection isolation, then the backend pytest suite.
+  4. **`contract` (Windows x64 / CPython 3.11.9):** Conditionally executed if `needs_contract` is true. Its own fresh environment and disposable configuration/storage, the same locked installation/closure checks and `pip check`, guarded import/collection isolation, then OpenAPI contract equality.
   5. **`frontend` (Windows / Node 22.22.2):** Conditionally executed if `needs_frontend` is true. Records Node/npm versions, then clean npm ci, Vitest suite, TypeScript compilation check, and Vite production bundle build.
   6. **`ci-gate` (Ubuntu):** Downstream aggregation job that provides the aggregate status intended to serve as the single required CI status when/if repository branch protection requires it.
 
@@ -162,7 +168,7 @@ These rules scope PRs to `develop`; integration pushes retain full verification.
 
 ### 3.4 Qualification Evidence Boundaries
 
-After human publication, review the actual candidate's hosted Windows Python 3.11 backend and contract results and Node 22.22.2 frontend result (a PR or explicit full `workflow_dispatch`). Review full `develop` integration CI separately after merge. Authored workflow policy and local classifier tests do not prove hosted execution. Python 3.13 local tests and contract generation do not replace Python 3.11 qualification; successful installation from version ranges also does not establish a complete dependency lock.
+After authorized publication, review the actual candidate SHA's hosted Windows CPython 3.11.9 backend and contract results and Node 22.22.2 frontend result (a PR or explicit full `workflow_dispatch`). Review full `develop` integration CI separately after merge. Authored workflow policy and local classifier tests do not prove hosted execution. Python 3.13 local tests and contract generation do not replace Python 3.11 qualification; successful installation from version ranges also does not establish a complete dependency lock. Local and hosted results, published revisions and independent gates remain separate evidence in the active delivery record.
 
 ---
 
