@@ -1,12 +1,35 @@
+import 'dart:io';
+
 import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
 
-void main() {
-  runApp(const AiCompanionDesktopApp());
+import 'lifecycle/desktop_lifecycle_coordinator.dart';
+import 'lifecycle/live_desktop_adapters.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final coordinator = DesktopLifecycleCoordinator(
+    windowAdapter: const LiveDesktopWindowAdapter(),
+    trayAdapter: const LiveDesktopTrayAdapter(),
+    onExitRequested: () async {
+      // Clean exit: leave independent Python runtime executing
+      exit(0);
+    },
+  );
+
+  await coordinator.initialize();
+
+  runApp(AiCompanionDesktopApp(coordinator: coordinator));
 }
 
 class AiCompanionDesktopApp extends StatelessWidget {
-  const AiCompanionDesktopApp({super.key});
+  const AiCompanionDesktopApp({
+    super.key,
+    this.coordinator,
+  });
+
+  final DesktopLifecycleCoordinator? coordinator;
 
   @override
   Widget build(BuildContext context) {
@@ -32,13 +55,18 @@ class AiCompanionDesktopApp extends StatelessWidget {
         useMaterial3: true,
       ),
       themeMode: ThemeMode.system,
-      home: const DesktopFoundationScreen(),
+      home: DesktopFoundationScreen(coordinator: coordinator),
     );
   }
 }
 
 class DesktopFoundationScreen extends StatelessWidget {
-  const DesktopFoundationScreen({super.key});
+  const DesktopFoundationScreen({
+    super.key,
+    this.coordinator,
+  });
+
+  final DesktopLifecycleCoordinator? coordinator;
 
   @override
   Widget build(BuildContext context) {
@@ -56,7 +84,7 @@ class DesktopFoundationScreen extends StatelessWidget {
     return Scaffold(
       body: Center(
         child: Container(
-          width: 540,
+          width: 580,
           padding: const EdgeInsets.all(32),
           decoration: BoxDecoration(
             color: surfaceColor,
@@ -105,42 +133,79 @@ class DesktopFoundationScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Desktop Client Foundation (M1 Batch 1)',
+                'Windows Window & Tray Lifecycle (M1 Batch 2)',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                   color: subtitleColor,
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.black.withValues(alpha: 0.03),
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.04)
+                      : Colors.black.withValues(alpha: 0.03),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+                child: Column(
                   children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: CompanionColors.success,
-                        shape: BoxShape.circle,
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: CompanionColors.success,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            'Window Constraints: 1280x800 (1024x640 min)',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: subtitleColor,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(height: 6),
                     Text(
-                      'Windows Native Scaffolding Active',
+                      'Close Intercept: Hides to System Tray (Backend Unmanaged)',
                       style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: subtitleColor,
+                        fontSize: 11,
+                        color: subtitleColor.withValues(alpha: 0.8),
                       ),
                     ),
                   ],
                 ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      coordinator?.hideToTray();
+                    },
+                    icon: const Icon(Icons.arrow_downward_rounded, size: 16),
+                    label: const Text('Hide to Tray'),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton.tonalIcon(
+                    onPressed: () {
+                      coordinator?.handleExitRequested();
+                    },
+                    icon: const Icon(Icons.power_settings_new_rounded, size: 16),
+                    label: const Text('Exit Companion'),
+                  ),
+                ],
               ),
             ],
           ),
