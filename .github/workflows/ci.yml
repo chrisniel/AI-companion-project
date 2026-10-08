@@ -28,6 +28,7 @@ jobs:
       needs_frontend: ${{ steps.classify.outputs.needs_frontend }}
       needs_contract: ${{ steps.classify.outputs.needs_contract }}
       needs_docs: ${{ steps.classify.outputs.needs_docs }}
+      needs_flutter: ${{ steps.classify.outputs.needs_flutter }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -275,10 +276,53 @@ jobs:
       - name: Run Vite production build
         run: npm --prefix frontend/web run build
 
+  flutter:
+    name: Flutter Desktop Verification (Windows / Flutter 3.47.1)
+    needs: classifier
+    if: needs.classifier.outputs.needs_flutter == 'true'
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Flutter 3.47.1
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          flutter-version: '3.47.1'
+          cache: true
+
+      - name: Record Flutter qualification inputs
+        run: |
+          flutter --version
+          dart --version
+
+      - name: Verify Flutter workspace dependencies
+        working-directory: frontend/flutter
+        run: |
+          flutter pub get
+          dart pub workspace list
+
+      - name: Static analysis
+        working-directory: frontend/flutter
+        run: dart analyze .
+
+      - name: Run unit and widget tests
+        working-directory: frontend/flutter
+        run: |
+          flutter test packages/companion_core/test
+          flutter test packages/companion_api/test
+          flutter test packages/companion_design/test
+          flutter test apps/desktop/test
+
+      - name: Build Windows desktop debug runner
+        working-directory: frontend/flutter/apps/desktop
+        run: flutter build windows --debug
+
   ci-gate:
     name: CI Gate
     if: always()
-    needs: [classifier, backend, frontend, contract, docs-integrity]
+    needs: [classifier, backend, frontend, contract, docs-integrity, flutter]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -293,5 +337,5 @@ jobs:
         run: |
           python scripts/ci_policy.py gate \
             --classifier-status "${{ needs.classifier.result }}" \
-            --requirements-json '{"needs_backend": "${{ needs.classifier.outputs.needs_backend }}", "needs_frontend": "${{ needs.classifier.outputs.needs_frontend }}", "needs_contract": "${{ needs.classifier.outputs.needs_contract }}", "needs_docs": "${{ needs.classifier.outputs.needs_docs }}"}' \
-            --results-json '{"backend": "${{ needs.backend.result }}", "frontend": "${{ needs.frontend.result }}", "contract": "${{ needs.contract.result }}", "docs_integrity": "${{ needs.docs-integrity.result }}"}'
+            --requirements-json '{"needs_backend": "${{ needs.classifier.outputs.needs_backend }}", "needs_frontend": "${{ needs.classifier.outputs.needs_frontend }}", "needs_contract": "${{ needs.classifier.outputs.needs_contract }}", "needs_docs": "${{ needs.classifier.outputs.needs_docs }}", "needs_flutter": "${{ needs.classifier.outputs.needs_flutter }}"}' \
+            --results-json '{"backend": "${{ needs.backend.result }}", "frontend": "${{ needs.frontend.result }}", "contract": "${{ needs.contract.result }}", "docs_integrity": "${{ needs.docs-integrity.result }}", "flutter": "${{ needs.flutter.result }}"}'

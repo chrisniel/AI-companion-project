@@ -1,0 +1,24 @@
+name: ai_companion_desktop
+description: AI Companion Primary Windows Desktop Client.
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.6.0 <4.0.0'
+  flutter: '>=3.27.0'
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  companion_core:
+  companion_api:
+  companion_design:
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

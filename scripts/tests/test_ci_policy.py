@@ -17,6 +17,7 @@ class TestCIPolicy(unittest.TestCase):
     FULL_REQUIREMENTS = {
         "needs_backend": "true", "needs_frontend": "true",
         "needs_contract": "true", "needs_docs": "true",
+        "needs_flutter": "true",
     }
 
     def test_develop_pushes_always_require_all_lanes(self):
@@ -37,6 +38,7 @@ class TestCIPolicy(unittest.TestCase):
                 results_json=json.dumps({
                     "backend": "skipped", "frontend": "skipped",
                     "contract": "skipped", "docs_integrity": "success",
+                    "flutter": "skipped",
                 }),
             )))
 
@@ -47,17 +49,20 @@ class TestCIPolicy(unittest.TestCase):
         self.assertEqual(out["needs_frontend"], "true")
         self.assertEqual(out["needs_contract"], "true")
         self.assertEqual(out["needs_docs"], "true")
+        self.assertEqual(out["needs_flutter"], "true")
         
     def test_master_target_forces_full_ci(self):
         # PR to master
         args = DummyArgs(event="pull_request", target_branch="master", files_json=json.dumps(["docs/file.md"]))
         out = ci_policy.classify(args)
         self.assertEqual(out["needs_backend"], "true")
+        self.assertEqual(out["needs_flutter"], "true")
         
         # Push to master
         args2 = DummyArgs(event="push", target_branch="master", files_json=json.dumps(["docs/file.md"]))
         out2 = ci_policy.classify(args2)
         self.assertEqual(out2["needs_backend"], "true")
+        self.assertEqual(out2["needs_flutter"], "true")
         
     def test_docs_only_develop(self):
         args = DummyArgs(event="pull_request", target_branch="develop", files_json=json.dumps(["docs/file.md", "AGENTS.md"]))
@@ -66,6 +71,7 @@ class TestCIPolicy(unittest.TestCase):
         self.assertEqual(out["needs_backend"], "false")
         self.assertEqual(out["needs_frontend"], "false")
         self.assertEqual(out["needs_contract"], "false")
+        self.assertEqual(out["needs_flutter"], "false")
         
     def test_backend_only_develop(self):
         args = DummyArgs(event="pull_request", target_branch="develop", files_json=json.dumps(["backend/main.py"]))
@@ -74,7 +80,26 @@ class TestCIPolicy(unittest.TestCase):
         self.assertEqual(out["needs_contract"], "true")
         self.assertEqual(out["needs_frontend"], "false")
         self.assertEqual(out["needs_docs"], "false")
+        self.assertEqual(out["needs_flutter"], "false")
         
+    def test_flutter_only_develop(self):
+        args = DummyArgs(event="pull_request", target_branch="develop", files_json=json.dumps(["frontend/flutter/pubspec.yaml", "frontend/flutter/packages/companion_core/pubspec.yaml"]))
+        out = ci_policy.classify(args)
+        self.assertEqual(out["needs_flutter"], "true")
+        self.assertEqual(out["needs_frontend"], "false")
+        self.assertEqual(out["needs_backend"], "false")
+        self.assertEqual(out["needs_contract"], "false")
+        self.assertEqual(out["needs_docs"], "false")
+
+    def test_web_does_not_trigger_flutter(self):
+        args = DummyArgs(event="pull_request", target_branch="develop", files_json=json.dumps(["frontend/web/src/App.tsx"]))
+        out = ci_policy.classify(args)
+        self.assertEqual(out["needs_frontend"], "true")
+        self.assertEqual(out["needs_flutter"], "false")
+        self.assertEqual(out["needs_backend"], "false")
+        self.assertEqual(out["needs_contract"], "false")
+        self.assertEqual(out["needs_docs"], "false")
+
     def test_unknown_forces_full_ci(self):
         # .github config file -> Full CI
         args = DummyArgs(event="pull_request", target_branch="develop", files_json=json.dumps([".github/workflows/ci.yml"]))
@@ -83,11 +108,13 @@ class TestCIPolicy(unittest.TestCase):
         self.assertEqual(out["needs_frontend"], "true")
         self.assertEqual(out["needs_contract"], "true")
         self.assertEqual(out["needs_docs"], "true")
+        self.assertEqual(out["needs_flutter"], "true")
 
         # Unknown scripts -> Full CI
         args2 = DummyArgs(event="pull_request", target_branch="develop", files_json=json.dumps(["scripts/deploy.sh"]))
         out2 = ci_policy.classify(args2)
         self.assertEqual(out2["needs_backend"], "true")
+        self.assertEqual(out2["needs_flutter"], "true")
         
     def test_mixed_code_and_docs(self):
         args = DummyArgs(event="pull_request", target_branch="develop", files_json=json.dumps(["frontend/src/App.tsx", "README.md"]))
@@ -95,47 +122,50 @@ class TestCIPolicy(unittest.TestCase):
         self.assertEqual(out["needs_frontend"], "true")
         self.assertEqual(out["needs_docs"], "true")
         self.assertEqual(out["needs_backend"], "false")
+        self.assertEqual(out["needs_flutter"], "false")
 
     def test_contract_only(self):
         args = DummyArgs(event="pull_request", target_branch="develop", files_json=json.dumps(["scripts/check_openapi_contract.py"]))
         out = ci_policy.classify(args)
         self.assertEqual(out["needs_contract"], "true")
         self.assertEqual(out["needs_backend"], "false")
+        self.assertEqual(out["needs_flutter"], "false")
 
     def test_invalid_json_fallback(self):
         args = DummyArgs(event="pull_request", target_branch="develop", files_json="{invalid")
         out = ci_policy.classify(args)
         self.assertEqual(out["needs_backend"], "true")
+        self.assertEqual(out["needs_flutter"], "true")
 
     def test_gate_pass(self):
         args = DummyArgs(
             classifier_status="success",
-            requirements_json=json.dumps({"needs_backend": "true", "needs_frontend": "false", "needs_contract": "true", "needs_docs": "false"}),
-            results_json=json.dumps({"backend": "success", "frontend": "skipped", "contract": "success", "docs_integrity": "skipped"})
+            requirements_json=json.dumps({"needs_backend": "true", "needs_frontend": "false", "needs_contract": "true", "needs_docs": "false", "needs_flutter": "false"}),
+            results_json=json.dumps({"backend": "success", "frontend": "skipped", "contract": "success", "docs_integrity": "skipped", "flutter": "skipped"})
         )
         self.assertTrue(ci_policy.gate(args))
 
     def test_gate_fail_required_skipped(self):
         args = DummyArgs(
             classifier_status="success",
-            requirements_json=json.dumps({"needs_backend": "true", "needs_frontend": "false", "needs_contract": "false", "needs_docs": "false"}),
-            results_json=json.dumps({"backend": "skipped", "frontend": "skipped", "contract": "skipped", "docs_integrity": "skipped"})
+            requirements_json=json.dumps({"needs_backend": "true", "needs_frontend": "false", "needs_contract": "false", "needs_docs": "false", "needs_flutter": "false"}),
+            results_json=json.dumps({"backend": "skipped", "frontend": "skipped", "contract": "skipped", "docs_integrity": "skipped", "flutter": "skipped"})
         )
         self.assertFalse(ci_policy.gate(args))
         
     def test_gate_fail_unrequired_success(self):
         args = DummyArgs(
             classifier_status="success",
-            requirements_json=json.dumps({"needs_backend": "true", "needs_frontend": "false", "needs_contract": "false", "needs_docs": "false"}),
-            results_json=json.dumps({"backend": "success", "frontend": "success", "contract": "skipped", "docs_integrity": "skipped"})
+            requirements_json=json.dumps({"needs_backend": "true", "needs_frontend": "false", "needs_contract": "false", "needs_docs": "false", "needs_flutter": "false"}),
+            results_json=json.dumps({"backend": "success", "frontend": "success", "contract": "skipped", "docs_integrity": "skipped", "flutter": "skipped"})
         )
         self.assertFalse(ci_policy.gate(args))
         
     def test_gate_fail_classifier_failed(self):
         args = DummyArgs(
             classifier_status="failure",
-            requirements_json=json.dumps({"needs_backend": "true", "needs_frontend": "false", "needs_contract": "false", "needs_docs": "false"}),
-            results_json=json.dumps({"backend": "success", "frontend": "skipped", "contract": "skipped", "docs_integrity": "skipped"})
+            requirements_json=json.dumps({"needs_backend": "true", "needs_frontend": "false", "needs_contract": "false", "needs_docs": "false", "needs_flutter": "false"}),
+            results_json=json.dumps({"backend": "success", "frontend": "skipped", "contract": "skipped", "docs_integrity": "skipped", "flutter": "skipped"})
         )
         self.assertFalse(ci_policy.gate(args))
 
@@ -148,6 +178,7 @@ class TestCIPolicy(unittest.TestCase):
                     results_json=json.dumps({
                         "backend": "success", "frontend": "success",
                         "contract": "success", "docs_integrity": "success",
+                        "flutter": "success",
                     }),
                 )
                 self.assertFalse(ci_policy.gate(args))
@@ -156,6 +187,7 @@ class TestCIPolicy(unittest.TestCase):
         successes = {
             "backend": "success", "frontend": "success",
             "contract": "success", "docs_integrity": "success",
+            "flutter": "success",
         }
         for lane in successes:
             for status in ("skipped", "failure", "cancelled", "", None):
@@ -186,6 +218,7 @@ class TestCIPolicy(unittest.TestCase):
         results = {
             "backend": "success", "frontend": "success",
             "contract": "success", "docs_integrity": "success",
+            "flutter": "success",
         }
         scenarios = [("success", results, 0), ("failure", results, 1)]
         for lane in results:
@@ -203,16 +236,16 @@ class TestCIPolicy(unittest.TestCase):
     def test_gate_fail_missing_requirement(self):
         args = DummyArgs(
             classifier_status="success",
-            requirements_json=json.dumps({"needs_backend": "true", "needs_frontend": "false", "needs_contract": "false"}), # missing needs_docs
-            results_json=json.dumps({"backend": "success", "frontend": "skipped", "contract": "skipped", "docs_integrity": "skipped"})
+            requirements_json=json.dumps({"needs_backend": "true", "needs_frontend": "false", "needs_contract": "false", "needs_flutter": "false"}), # missing needs_docs
+            results_json=json.dumps({"backend": "success", "frontend": "skipped", "contract": "skipped", "docs_integrity": "skipped", "flutter": "skipped"})
         )
         self.assertFalse(ci_policy.gate(args))
 
     def test_gate_fail_invalid_requirement_value(self):
         args = DummyArgs(
             classifier_status="success",
-            requirements_json=json.dumps({"needs_backend": "True", "needs_frontend": "false", "needs_contract": "false", "needs_docs": "false"}), # "True" instead of "true"
-            results_json=json.dumps({"backend": "success", "frontend": "skipped", "contract": "skipped", "docs_integrity": "skipped"})
+            requirements_json=json.dumps({"needs_backend": "True", "needs_frontend": "false", "needs_contract": "false", "needs_docs": "false", "needs_flutter": "false"}), # "True" instead of "true"
+            results_json=json.dumps({"backend": "success", "frontend": "skipped", "contract": "skipped", "docs_integrity": "skipped", "flutter": "skipped"})
         )
         self.assertFalse(ci_policy.gate(args))
 

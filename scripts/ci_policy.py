@@ -19,26 +19,51 @@ def classify(args):
     # whose run may have been cancelled. Develop PRs retain path-scoped verification.
     if (event == "workflow_dispatch" or args.target_branch == "master"
             or (event == "push" and args.target_branch == "develop")):
-        return {"needs_backend": "true", "needs_frontend": "true", "needs_contract": "true", "needs_docs": "true"}
+        return {
+            "needs_backend": "true",
+            "needs_frontend": "true",
+            "needs_contract": "true",
+            "needs_docs": "true",
+            "needs_flutter": "true",
+        }
         
     if not args.files_json:
         # Fallback to Full Verification
-        return {"needs_backend": "true", "needs_frontend": "true", "needs_contract": "true", "needs_docs": "true"}
+        return {
+            "needs_backend": "true",
+            "needs_frontend": "true",
+            "needs_contract": "true",
+            "needs_docs": "true",
+            "needs_flutter": "true",
+        }
         
     try:
         files = json.loads(args.files_json)
     except Exception:
         # Fallback to Full Verification
-        return {"needs_backend": "true", "needs_frontend": "true", "needs_contract": "true", "needs_docs": "true"}
+        return {
+            "needs_backend": "true",
+            "needs_frontend": "true",
+            "needs_contract": "true",
+            "needs_docs": "true",
+            "needs_flutter": "true",
+        }
         
     if not files:
         # No files (or empty diff) - Fallback to Full Verification to be safe
-        return {"needs_backend": "true", "needs_frontend": "true", "needs_contract": "true", "needs_docs": "true"}
+        return {
+            "needs_backend": "true",
+            "needs_frontend": "true",
+            "needs_contract": "true",
+            "needs_docs": "true",
+            "needs_flutter": "true",
+        }
         
     needs_backend = False
     needs_frontend = False
     needs_contract = False
     needs_docs = False
+    needs_flutter = False
     
     all_docs = True
     
@@ -52,22 +77,37 @@ def classify(args):
         if f.startswith("backend/"):
             needs_backend = True
             needs_contract = True
+        elif f.startswith("frontend/flutter/"):
+            needs_flutter = True
         elif f.startswith("frontend/"):
             needs_frontend = True
         elif f.startswith("contracts/") or f == "scripts/check_openapi_contract.py":
             needs_contract = True
         elif not is_docs_only_file(f):
             # Unknown unmapped (e.g. .github/**, android/**, scripts/**) forces Full Verification
-            return {"needs_backend": "true", "needs_frontend": "true", "needs_contract": "true", "needs_docs": "true"}
+            return {
+                "needs_backend": "true",
+                "needs_frontend": "true",
+                "needs_contract": "true",
+                "needs_docs": "true",
+                "needs_flutter": "true",
+            }
             
     if all_docs:
-        return {"needs_backend": "false", "needs_frontend": "false", "needs_contract": "false", "needs_docs": "true"}
+        return {
+            "needs_backend": "false",
+            "needs_frontend": "false",
+            "needs_contract": "false",
+            "needs_docs": "true",
+            "needs_flutter": "false",
+        }
         
     return {
         "needs_backend": "true" if needs_backend else "false",
         "needs_frontend": "true" if needs_frontend else "false",
         "needs_contract": "true" if needs_contract else "false",
         "needs_docs": "true" if needs_docs else "false",
+        "needs_flutter": "true" if needs_flutter else "false",
     }
 
 def gate(args):
@@ -87,7 +127,8 @@ def gate(args):
         "backend": "needs_backend",
         "frontend": "needs_frontend",
         "contract": "needs_contract",
-        "docs_integrity": "needs_docs"
+        "docs_integrity": "needs_docs",
+        "flutter": "needs_flutter",
     }
     
     all_passed = True

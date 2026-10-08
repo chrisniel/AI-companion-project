@@ -1,0 +1,15 @@
+name: companion_core
+description: Platform-neutral domain contracts, DTOs, and error types.
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: '>=3.6.0 <4.0.0'
+
+resolution: workspace
+
+dependencies:
+  meta: ^1.15.0
+
+dev_dependencies:
+  test: ^1.25.8
