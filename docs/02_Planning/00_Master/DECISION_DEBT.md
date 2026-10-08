@@ -26,9 +26,9 @@
   - *Current Direction:* Task Scheduler configured for `At log on` is preferred because it runs decoupled from console windows and supports auto-restart on unexpected exit.
   - *Resolution Point:* Milestone M2 planning.
 
-- **`DEBT-V1-02`: Windows Native Toast Library Selection in Python**
-  - *Context:* Closed-browser native notification delivery is required for PC V1. Python backend needs a reliable Windows Toast dispatcher.
-  - *Candidates:* `windows-toasts` (modern WinRT toast library with button callbacks) vs. direct WinRT bindings (`winsdk`) vs. decoupled notification worker.
+- **`DEBT-V1-02`: Flutter Windows Native Toast Adapter Selection**
+  - *Context:* The Local AI Runtime owns durable scheduling, due-event truth, and backlog. Flutter Desktop owns native Windows Toast presentation, including catch-up after client relaunch ([canonical boundary](../../04_Architecture/04_Infrastructure/windows-host-and-notifications.md)).
+  - *Decision Needed:* Select the Flutter Windows notification plugin or platform-channel/native adapter and verify activation callbacks and presentation behavior. The implementation choice remains OPEN; Python does not own native Toast presentation.
   - *Resolution Point:* Milestone M2 planning.
 
 - **`DEBT-V1-03`: Multi-Profile Database Migration Schema Design**

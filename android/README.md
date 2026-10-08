@@ -6,7 +6,7 @@
 > **Canonical Setup Guide:** [`docs/06_Guides/DEVELOPMENT_SETUP.md`](../docs/06_Guides/DEVELOPMENT_SETUP.md).
 > **Canonical Verification Guide:** [`docs/06_Guides/TESTING_AND_CI.md`](../docs/06_Guides/TESTING_AND_CI.md).
 
-Native Android companion client for the **Local AI Runtime** ecosystem, built with Kotlin, Jetpack Compose, and the mobile-adapted Soft Glass design language.
+Kotlin/Jetpack Compose Android prototype and reference client for the **Local AI Runtime** ecosystem, using the mobile-adapted Soft Glass design language. Flutter is the Mobile V1 production target; this prototype does not establish that production implementation.
 
 ---
 
@@ -19,15 +19,16 @@ Native Android companion client for the **Local AI Runtime** ecosystem, built wi
 - **Connection Configuration:** Host IP/hostname, port, and pairing token stored persistently in `SharedPreferences` (`SharedPreferencesConnectionRepository`).
 - **Package Identity:** Currently uses template/prototype namespace (`namespace = "com.example"`, `applicationId = "com.aistudio.localcore.swbjtu"` in `app/build.gradle.kts`).
 
-### Strategic Post-V1 Production Target
-- **Package Migration (Decision D3):** Refactor namespace and application ID to canonical `com.cnl.aicompanion`.
+### Mobile V1 Production Target (Flutter; Independent of PC V1)
+- **Production Identity (Decision D3):** The Flutter production target uses canonical `com.cnl.aicompanion`; the current Kotlin prototype identifiers remain reference-only.
 - **Hardened Authentication (Decision D4):** Per-device revocable credentials backed by Android Keystore instead of plaintext `SharedPreferences`.
-- **Durable Offline Persistence & Queue:** Room database persistence with mutation queue for full offline operation.
+- **Durable Offline Persistence & Queue:** Production persistence and mutation-queue boundaries follow [`mobile-offline-and-sync.md`](../docs/04_Architecture/04_Infrastructure/mobile-offline-and-sync.md); the Kotlin prototype is not production offline-sync evidence.
 - **Complete State Synchronization:** Synchronization of conversations, profile state, and long-term memory with the PC Local AI Runtime.
-- **Offline Inference & Deep Integrations:** Local on-device GGUF inference (tested ~0.27B–1.24B models on reference hardware), Health Connect synchronization, and voice/audio pipeline.
+- **Offline Inference & Voice:** Production device-local inference and voice/audio follow the accepted Mobile capability architecture and require hardware qualification.
+- **Health Connect:** Conditional Mobile V1, read-only and consent-driven on qualified Android environments (`D-PHONE-15`). Unsupported devices or absent consent remain valid companion installations; Kotlin mock health UI remains non-production reference ([canonical owner](../docs/04_Architecture/03_Integrations/health-and-wearables.md)).
 
 > [!NOTE]
-> The current prototype networking layer is functional for live task synchronization and connection verification, but is **not** production-hardened multi-device sync. In V1, the primary client is the PC React Web application.
+> The current prototype networking layer is functional for live task synchronization and connection verification, but is **not** production-hardened multi-device sync. Flutter Desktop is the approved primary PC V1 production client; React remains the supported web/development harness.
 
 ---
 

@@ -13,6 +13,7 @@ on:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
+  # Every replacement develop/master push requires all lanes for its integrated tree.
   cancel-in-progress: true
 
 permissions:
@@ -54,8 +55,9 @@ jobs:
             target_branch=""
           fi
           
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            python scripts/ci_policy.py classify --event workflow_dispatch --target-branch "$target_branch"
+          # Integration pushes and explicit full runs do not depend on a path diff.
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] || [ "$target_branch" == "master" ] || { [ "${{ github.event_name }}" == "push" ] && [ "$target_branch" == "develop" ]; }; then
+            python scripts/ci_policy.py classify --event ${{ github.event_name }} --target-branch "$target_branch"
           else
             diff_success="false"
             if [ "${{ github.event_name }}" == "pull_request" ]; then
@@ -109,7 +111,7 @@ jobs:
           test -f "docs/06_Guides/DOCUMENTATION_MAP.md" || { echo "Missing DOCUMENTATION_MAP.md"; exit 1; }
 
   backend:
-    name: Backend Verification (Windows / Python 3.11)
+    name: Backend Verification (Windows x64 / Python 3.11.9)
     needs: classifier
     if: needs.classifier.outputs.needs_backend == 'true'
     runs-on: windows-latest
@@ -119,30 +121,65 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.11.9 x64
         uses: actions/setup-python@v7
         with:
-          python-version: '3.11'
+          python-version: '3.11.9'
+          architecture: 'x64'
           cache: 'pip'
-          cache-dependency-path: 'backend/requirements.txt'
+          cache-dependency-path: 'backend/requirements.lock'
 
       - name: Configure isolated runtime root
         shell: pwsh
         run: |
           $dataRoot = Join-Path $env:RUNNER_TEMP "ai-companion-ci"
           New-Item -ItemType Directory -Force -Path $dataRoot | Out-Null
+          $selectedConfig = Join-Path $dataRoot "synthetic.env"
+          Set-Content -LiteralPath $selectedConfig -Value "" -NoNewline
           "COMPANION_DATA_ROOT=$dataRoot" >> $env:GITHUB_ENV
+          "COMPANION_ENV_FILE=$selectedConfig" >> $env:GITHUB_ENV
+          "LOCALAPPDATA=$dataRoot" >> $env:GITHUB_ENV
 
-      - name: Install backend dependencies
+      - name: Install and verify locked backend dependencies in a fresh environment
+        shell: pwsh
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r backend/requirements.txt
+          $qualificationRoot = Join-Path $env:RUNNER_TEMP "ai-companion-backend-qualification"
+          if (Test-Path -LiteralPath $qualificationRoot) { throw "Qualification environment must be fresh" }
+          python -I -B -m venv $qualificationRoot
+          if ($LASTEXITCODE -ne 0) { throw "Qualification environment creation failed" }
+          $qualificationPython = Join-Path $qualificationRoot "Scripts/python.exe"
+          & $qualificationPython -I -B -m pip --isolated uninstall --yes setuptools
+          if ($LASTEXITCODE -ne 0) { throw "Seed distribution removal failed" }
+          & $qualificationPython -I -B -m pip --isolated install --require-hashes --only-binary=:all: --no-cache-dir --index-url https://pypi.org/simple -r backend/requirements.lock
+          if ($LASTEXITCODE -ne 0) { throw "Locked dependency installation failed" }
+          & $qualificationPython -I -B scripts/python_dependency_lock.py verify
+          if ($LASTEXITCODE -ne 0) { throw "Locked dependency closure verification failed" }
+          "QUALIFICATION_PYTHON=$qualificationPython" >> $env:GITHUB_ENV
+
+      - name: Record Python qualification inputs
+        shell: pwsh
+        run: |
+          & $env:QUALIFICATION_PYTHON -VV
+          if ($LASTEXITCODE -ne 0) { throw "Interpreter evidence failed" }
+          & $env:QUALIFICATION_PYTHON -I -B -m pip --version
+          if ($LASTEXITCODE -ne 0) { throw "Installer evidence failed" }
+          & $env:QUALIFICATION_PYTHON -I -B -m pip check
+          if ($LASTEXITCODE -ne 0) { throw "Installed dependency integrity failed" }
+
+      - name: Verify dependency lock validation regressions
+        shell: pwsh
+        run: '& $env:QUALIFICATION_PYTHON -I -B scripts/tests/test_python_dependency_lock.py'
+
+      - name: Verify import and collection isolation before the suite
+        shell: pwsh
+        run: '& $env:QUALIFICATION_PYTHON -I -B backend/tests/test_import_isolation.py -v'
 
       - name: Run backend pytest suite
-        run: python -m pytest backend/tests -q
+        shell: pwsh
+        run: '& $env:QUALIFICATION_PYTHON -B -m pytest backend/tests -q -p no:cacheprovider -o log_file=NUL'
 
   contract:
-    name: Contract Verification (Windows / Python 3.11)
+    name: Contract Verification (Windows x64 / Python 3.11.9)
     needs: classifier
     if: needs.classifier.outputs.needs_contract == 'true'
     runs-on: windows-latest
@@ -152,23 +189,61 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.11.9 x64
         uses: actions/setup-python@v7
         with:
-          python-version: '3.11'
+          python-version: '3.11.9'
+          architecture: 'x64'
           cache: 'pip'
-          cache-dependency-path: 'backend/requirements.txt'
+          cache-dependency-path: 'backend/requirements.lock'
 
-      - name: Install backend dependencies
+      - name: Configure isolated contract inputs
+        shell: pwsh
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r backend/requirements.txt
+          $dataRoot = Join-Path $env:RUNNER_TEMP "ai-companion-contract-ci"
+          New-Item -ItemType Directory -Force -Path $dataRoot | Out-Null
+          $selectedConfig = Join-Path $dataRoot "synthetic.env"
+          Set-Content -LiteralPath $selectedConfig -Value "" -NoNewline
+          "COMPANION_DATA_ROOT=$dataRoot" >> $env:GITHUB_ENV
+          "COMPANION_ENV_FILE=$selectedConfig" >> $env:GITHUB_ENV
+          "LOCALAPPDATA=$dataRoot" >> $env:GITHUB_ENV
+
+      - name: Install and verify locked contract dependencies in a fresh environment
+        shell: pwsh
+        run: |
+          $qualificationRoot = Join-Path $env:RUNNER_TEMP "ai-companion-contract-qualification"
+          if (Test-Path -LiteralPath $qualificationRoot) { throw "Qualification environment must be fresh" }
+          python -I -B -m venv $qualificationRoot
+          if ($LASTEXITCODE -ne 0) { throw "Qualification environment creation failed" }
+          $qualificationPython = Join-Path $qualificationRoot "Scripts/python.exe"
+          & $qualificationPython -I -B -m pip --isolated uninstall --yes setuptools
+          if ($LASTEXITCODE -ne 0) { throw "Seed distribution removal failed" }
+          & $qualificationPython -I -B -m pip --isolated install --require-hashes --only-binary=:all: --no-cache-dir --index-url https://pypi.org/simple -r backend/requirements.lock
+          if ($LASTEXITCODE -ne 0) { throw "Locked dependency installation failed" }
+          & $qualificationPython -I -B scripts/python_dependency_lock.py verify
+          if ($LASTEXITCODE -ne 0) { throw "Locked dependency closure verification failed" }
+          "QUALIFICATION_PYTHON=$qualificationPython" >> $env:GITHUB_ENV
+
+      - name: Record Python contract qualification inputs
+        shell: pwsh
+        run: |
+          & $env:QUALIFICATION_PYTHON -VV
+          if ($LASTEXITCODE -ne 0) { throw "Interpreter evidence failed" }
+          & $env:QUALIFICATION_PYTHON -I -B -m pip --version
+          if ($LASTEXITCODE -ne 0) { throw "Installer evidence failed" }
+          & $env:QUALIFICATION_PYTHON -I -B -m pip check
+          if ($LASTEXITCODE -ne 0) { throw "Installed dependency integrity failed" }
+
+      - name: Verify import and collection isolation before contract generation
+        shell: pwsh
+        run: '& $env:QUALIFICATION_PYTHON -I -B backend/tests/test_import_isolation.py -v'
 
       - name: Verify OpenAPI contract and route integrity
-        run: python scripts/check_openapi_contract.py
+        shell: pwsh
+        run: '& $env:QUALIFICATION_PYTHON -B scripts/check_openapi_contract.py --check'
 
   frontend:
-    name: Frontend Verification (Windows / Node 22)
+    name: Frontend Verification (Windows / Node 22.22.2)
     needs: classifier
     if: needs.classifier.outputs.needs_frontend == 'true'
     runs-on: windows-latest
@@ -176,12 +251,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Set up Node.js 22
+      - name: Set up Node.js 22.22.2
         uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '22.22.2'
           cache: 'npm'
           cache-dependency-path: 'frontend/web/package-lock.json'
+
+      - name: Record Node qualification inputs
+        run: |
+          node --version
+          npm --version
 
       - name: Install frontend dependencies
         run: npm --prefix frontend/web ci

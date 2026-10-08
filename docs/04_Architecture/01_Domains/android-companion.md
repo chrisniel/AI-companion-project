@@ -63,6 +63,6 @@ Under the shared monorepo workspace topology (`D-SHARED-FLUTTER-01`), shared Flu
 
 ## 3. Explicit Subsystem Boundaries
 
-- **Health & Biometrics:** Real Health Connect integration and biometric synchronization are classified as **Mobile Later (Post-V1)**; prototype mock health UI in `android/` is sequestered. Real health sync must not be implemented until explicitly scheduled ([`health-and-wearables.md`](../03_Integrations/health-and-wearables.md)).
+- **Health & Biometrics:** Health Connect is **Conditional Mobile V1** (`D-PHONE-15`): optional, read-only, consent-driven ingestion on qualified Android environments. Missing platform support or consent leaves a fully valid Mobile V1 installation. The Kotlin mock health prototype remains non-production reference; Flutter production delivery and hardware qualification follow [`health-and-wearables.md`](../03_Integrations/health-and-wearables.md).
 - **Voice Platform Adapters:** Voice foreground service lifecycles (`FOREGROUND_SERVICE_MICROPHONE`), audio focus arbitration, and microphone streaming operate under the dedicated Voice architecture defined in [`mobile-capabilities-and-runtime.md`](../04_Infrastructure/mobile-capabilities-and-runtime.md) §3.4.
 - **Autonomous Local Routines:** Autonomous recurrence generation and routine execution on the phone are deferred post-V1; Mobile presents bounded Host-authorized occurrences replicated from the PC Host (`D-PHONE-12`).

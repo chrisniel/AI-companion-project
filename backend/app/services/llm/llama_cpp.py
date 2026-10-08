@@ -23,6 +23,72 @@ from app.services.model_registry import build_model_list, resolve_runtime_model_
 logger = logging.getLogger("app.services.llm.llama_cpp")
 
 
+class ProviderGenerationError(RuntimeError):
+    """Internal generation failure with a safe diagnostic code, never upstream data."""
+
+
+def _decode_stream_event(event: str, data: str) -> tuple[str, bool]:
+    """Decode llama-server's OpenAI-compatible SSE payload and explicit errors."""
+    if event == "error":
+        raise ProviderGenerationError("UPSTREAM_GENERATION_ERROR")
+    if data == "[DONE]":
+        return "", True
+    try:
+        chunk = json.loads(data)
+    except (ValueError, TypeError):
+        raise ProviderGenerationError("UPSTREAM_PROTOCOL_ERROR") from None
+    if not isinstance(chunk, dict):
+        raise ProviderGenerationError("UPSTREAM_PROTOCOL_ERROR")
+    if "error" in chunk:
+        raise ProviderGenerationError("UPSTREAM_GENERATION_ERROR")
+    choices = chunk.get("choices")
+    # Usage-only frames and role-only deltas carry no text, but are valid protocol.
+    if choices == [] and isinstance(chunk.get("usage"), dict):
+        return "", False
+    if not isinstance(choices, list) or len(choices) != 1 or not isinstance(choices[0], dict):
+        raise ProviderGenerationError("UPSTREAM_PROTOCOL_ERROR")
+    choice = choices[0]
+    delta = choice.get("delta")
+    reason = choice.get("finish_reason")
+    if reason is not None and reason not in ("stop", "length", "tool_calls", "function_call", "content_filter"):
+        raise ProviderGenerationError("UPSTREAM_PROTOCOL_ERROR")
+    if not isinstance(delta, dict):
+        raise ProviderGenerationError("UPSTREAM_PROTOCOL_ERROR")
+    token = delta.get("content")
+    if token is not None and not isinstance(token, str):
+        raise ProviderGenerationError("UPSTREAM_PROTOCOL_ERROR")
+    return token or "", False
+
+
+async def _server_stream_tokens(response: httpx.Response) -> AsyncGenerator[str, None]:
+    if not response.is_success:
+        raise ProviderGenerationError("UPSTREAM_HTTP_ERROR")
+    event = ""
+    data: list[str] = []
+    async for line in response.aiter_lines():
+        if not line:
+            if data or event == "error":
+                token, done = _decode_stream_event(event, "\n".join(data))
+                if token:
+                    yield token
+                if done:
+                    return
+            event, data = "", []
+        elif line.startswith("data:"):
+            data.append(line[5:].removeprefix(" "))
+        elif line.startswith("event:"):
+            event = line[6:].strip()
+        # SSE comments, id and retry fields are non-terminal metadata.
+    if data or event == "error":
+        token, done = _decode_stream_event(event, "\n".join(data))
+        if token:
+            yield token
+        if done:
+            return
+    # EOF without the protocol completion marker is truncation, even after tokens.
+    raise ProviderGenerationError("UPSTREAM_PROTOCOL_ERROR")
+
+
 def _translate_messages(messages: List[ChatMessage]) -> list[dict[str, Any]]:
     """Translate internal ChatMessage objects to llama.cpp OpenAI-compatible wire payload.
 
@@ -88,8 +154,64 @@ class LlamaCppProvider(BaseLLMProvider):
         self._idle_check_task: Optional[asyncio.Task] = None
         self._lock = asyncio.Lock()
         self._runtime_state: LLMRuntimeState = LLMRuntimeState.SERVER_STOPPED
-        self._generation_active: bool = False
+        self._active_generations: set[object] = set()
+        self._active_work_drained = asyncio.Event()
+        self._active_work_drained.set()
+        self._worker_tasks: set[asyncio.Task] = set()
+        self._closing = False
+        self._shutdown_drain_timeout = 120.0
         self._custom_engine_version: Optional[str] = None
+
+    @property
+    def active_generation_count(self) -> int:
+        return len(self._active_generations)
+
+    @property
+    def has_active_generation(self) -> bool:
+        return bool(self._active_generations)
+
+    async def _acquire_generation(self) -> object:
+        if self._closing:
+            raise ProviderGenerationError("PROVIDER_SHUTTING_DOWN")
+        await self._ensure_loaded()
+        async with self._lock:
+            if self._closing:
+                raise ProviderGenerationError("PROVIDER_SHUTTING_DOWN")
+            if not self.is_loaded():
+                raise ProviderGenerationError("MODEL_NOT_READY")
+            lease = object()
+            self._active_generations.add(lease)
+            self._active_work_drained.clear()
+            self._last_active_at = datetime.now(timezone.utc)
+            return lease
+
+    def _release_generation(self, lease: object) -> None:
+        # All accounting runs on the event loop. A worker schedules its release
+        # only from its actual completion, independently of awaiting-task lifetime.
+        self._active_generations.discard(lease)
+        if not self._active_generations:
+            self._last_active_at = datetime.now(timezone.utc)
+            self._active_work_drained.set()
+
+    def _start_owned_worker(self, worker, lease: object) -> asyncio.Task:
+        loop = asyncio.get_running_loop()
+
+        def owned_worker():
+            try:
+                return worker()
+            finally:
+                loop.call_soon_threadsafe(self._release_generation, lease)
+
+        task = asyncio.create_task(asyncio.to_thread(owned_worker))
+        self._worker_tasks.add(task)
+
+        def completed(task):
+            self._worker_tasks.discard(task)
+            if not task.cancelled():
+                task.exception()  # Retrieve failures even after the caller disconnects.
+
+        task.add_done_callback(completed)
+        return task
 
     @property
     def _engine_version(self) -> str:
@@ -243,12 +365,16 @@ class LlamaCppProvider(BaseLLMProvider):
     async def load_model(self, model_name: Optional[str] = None, profile: Optional[str] = None) -> bool:
         async with self._lock:
             self._last_error = None
+            if self._closing or self.has_active_generation:
+                self._last_error = (
+                    "CANNOT_CHANGE_PROFILE_DURING_GENERATION"
+                    if profile and profile.lower() != self._active_profile and self.has_active_generation
+                    else "MODEL_BUSY"
+                )
+                return False
             if profile and profile.lower() in ("eco", "balanced", "maximum"):
                 requested_p = profile.lower()
                 if requested_p != self._active_profile:
-                    if self._generation_active:
-                        self._last_error = "CANNOT_CHANGE_PROFILE_DURING_GENERATION"
-                        return False
                     logger.info(f"Switching profile from {self._active_profile} to {requested_p} during load_model")
                     if self._managed_by_core and self._server_process and self._server_process.poll() is None:
                         if self._active_model_name and self._server_is_active:
@@ -469,7 +595,7 @@ class LlamaCppProvider(BaseLLMProvider):
 
     async def unload_model(self) -> bool:
         async with self._lock:
-            if self._generation_active:
+            if self.has_active_generation:
                 self._last_error = "MODEL_BUSY: active generation"
                 return False
 
@@ -511,7 +637,6 @@ class LlamaCppProvider(BaseLLMProvider):
             self._managed_by_core = False
             self._server_is_active = False
             self._active_model_name = None
-            self._generation_active = False
             self._applied_profile = None
             self._applied_context_size = None
             self._applied_gpu_layers = None
@@ -528,7 +653,7 @@ class LlamaCppProvider(BaseLLMProvider):
             p = profile.lower()
             if p not in ("eco", "balanced", "maximum"):
                 return False
-            if self._generation_active:
+            if self.has_active_generation or self._closing:
                 logger.warning(f"Cannot change profile to '{p}' while generation is active")
                 return False
 
@@ -720,7 +845,7 @@ class LlamaCppProvider(BaseLLMProvider):
             requested_mmproj_offload=requested_mmproj_offload,
             applied_mmproj_offload=effective_applied_mmproj,
             mmproj_offload=compat_mmproj_offload,
-            generation_active=self._generation_active,
+            generation_active=self.has_active_generation,
             last_runtime_error=self._last_error,
             # Backward-compatibility fields
             is_loaded=is_loaded,
@@ -752,9 +877,8 @@ class LlamaCppProvider(BaseLLMProvider):
         **kwargs
     ) -> str:
         formatted_messages = _translate_messages(messages)
-        await self._ensure_loaded()
-        self._last_active_at = datetime.now(timezone.utc)
-        self._generation_active = True
+        lease = await self._acquire_generation()
+        worker_owns_lease = False
 
         try:
             # Route A: Standalone llama-server via HTTP
@@ -768,23 +892,31 @@ class LlamaCppProvider(BaseLLMProvider):
                         "stream": False,
                     }
                     resp = await client.post(f"{settings.LLAMA_SERVER_URL}/chat/completions", json=payload)
-                    resp.raise_for_status()
+                    if not resp.is_success:
+                        raise ProviderGenerationError("UPSTREAM_HTTP_ERROR")
                     data = resp.json()
                     return data["choices"][0]["message"]["content"]
 
             # Route B: In-process llama_cpp
+            native_model = self._llm
+
             def _infer():
-                return self._llm.create_chat_completion(
+                return native_model.create_chat_completion(
                     messages=formatted_messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
                     stream=False,
                 )
 
-            output = await asyncio.to_thread(_infer)
+            worker = self._start_owned_worker(_infer, lease)
+            worker_owns_lease = True
+            output = await asyncio.shield(worker)
             return output["choices"][0]["message"]["content"]
+        except httpx.HTTPError:
+            raise ProviderGenerationError("UPSTREAM_TRANSPORT_ERROR") from None
         finally:
-            self._generation_active = False
+            if not worker_owns_lease:
+                self._release_generation(lease)
 
     async def generate_stream(
         self,
@@ -794,9 +926,8 @@ class LlamaCppProvider(BaseLLMProvider):
         **kwargs
     ) -> AsyncGenerator[str, None]:
         formatted_messages = _translate_messages(messages)
-        await self._ensure_loaded()
-        self._last_active_at = datetime.now(timezone.utc)
-        self._generation_active = True
+        lease = await self._acquire_generation()
+        worker_owns_lease = False
 
         try:
             # Route A: Standalone llama-server streaming
@@ -810,29 +941,18 @@ class LlamaCppProvider(BaseLLMProvider):
                 }
                 async with httpx.AsyncClient(timeout=120.0) as client:
                     async with client.stream("POST", f"{settings.LLAMA_SERVER_URL}/chat/completions", json=payload) as response:
-                        async for line in response.aiter_lines():
-                            if not line or not line.startswith("data: "):
-                                continue
-                            raw = line[6:].strip()
-                            if raw == "[DONE]":
-                                break
-                            try:
-                                chunk = json.loads(raw)
-                                delta = chunk["choices"][0].get("delta", {})
-                                token = delta.get("content")
-                                if token:
-                                    yield token
-                            except Exception:
-                                continue
+                        async for token in _server_stream_tokens(response):
+                            yield token
                 return
 
             # Route B: In-process llama_cpp streaming
             queue: asyncio.Queue = asyncio.Queue()
             loop = asyncio.get_running_loop()
+            native_model = self._llm
 
             def _worker():
                 try:
-                    stream = self._llm.create_chat_completion(
+                    stream = native_model.create_chat_completion(
                         messages=formatted_messages,
                         temperature=temperature,
                         max_tokens=max_tokens,
@@ -848,7 +968,8 @@ class LlamaCppProvider(BaseLLMProvider):
                 finally:
                     loop.call_soon_threadsafe(queue.put_nowait, None)
 
-            asyncio.create_task(asyncio.to_thread(_worker))
+            self._start_owned_worker(_worker, lease)
+            worker_owns_lease = True
 
             while True:
                 item = await queue.get()
@@ -857,10 +978,23 @@ class LlamaCppProvider(BaseLLMProvider):
                 if isinstance(item, Exception):
                     raise item
                 yield item
+        except httpx.HTTPError:
+            raise ProviderGenerationError("UPSTREAM_TRANSPORT_ERROR") from None
         finally:
-            self._generation_active = False
+            if not worker_owns_lease:
+                self._release_generation(lease)
 
     async def shutdown(self) -> None:
         """Drain in-flight generation, unload model, stop router."""
-        self._generation_active = False
+        async with self._lock:
+            self._closing = True
+        if self.has_active_generation:
+            try:
+                # Match the existing HTTP generation timeout; native work cannot
+                # be forcibly stopped. A deadline preserves ownership and model.
+                await asyncio.wait_for(self._active_work_drained.wait(), self._shutdown_drain_timeout)
+            except asyncio.TimeoutError:
+                self._last_error = "SHUTDOWN_BUSY"
+                logger.warning("Shutdown drain deadline reached; active model retained")
+                return
         await self.unload_model()

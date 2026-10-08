@@ -1,0 +1,82 @@
+# Windows x64 / CPython 3.11 runtime + tests + pinned installer.
+# Generated on CPython 3.11.9 with pip 26.1.2.
+# One compatible wheel SHA256 per distribution; no source-build or other-platform claim.
+# declarations-sha256: 1d2bfcd6e225d8b247866e9ee24b09dc7920a33761536cb79e30bf4b32aae218
+# aiosqlite-0.22.1-py3-none-any.whl
+aiosqlite==0.22.1 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:21c002eb13823fad740196c5a2e9d8e62f6243bd9e7e4a1f87fb5e44ecb4fceb
+# alembic-1.20.0-py3-none-any.whl
+alembic==1.20.0 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:77eb101048d95f982c0353e9233404889dcd7a6fc244c107836c0e2fc9cf7d9d
+# annotated_doc-0.0.5-py3-none-any.whl
+annotated-doc==0.0.5 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:117bac03a25ede5df5440e855b32d556049ca169ead221505badf432fed4b101
+# annotated_types-0.8.0-py3-none-any.whl
+annotated-types==0.8.0 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:f072f4d804ea359e4eaf198b1af7a8b0943881a87f31bb764f8bf219bb9419e0
+# anyio-4.15.1-py3-none-any.whl
+anyio==4.15.1 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:6152fdbbf9a77fdec97731721bebf7c4c44f7c29b424b0065826173efc7ed101
+# certifi-2026.7.22-py3-none-any.whl
+certifi==2026.7.22 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775
+# click-8.5.0-py3-none-any.whl
+click==8.5.0 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360
+# colorama-0.4.6-py2.py3-none-any.whl
+colorama==0.4.6 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6
+# fastapi-0.142.4-py3-none-any.whl
+fastapi==0.142.4 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:8a651aa071a9f92c8217cca1d0b044bf9c326f336578be0a728a1a1f22ec52d2
+# greenlet-3.5.6-cp311-cp311-win_amd64.whl
+greenlet==3.5.6 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:a6b4ff33f7e011bbaa148238d131c4fd4f8afbab3c104ddfbdb2b12b74ff7016
+# h11-0.16.0-py3-none-any.whl
+h11==0.16.0 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86
+# httpcore-1.0.9-py3-none-any.whl
+httpcore==1.0.9 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55
+# httptools-0.8.0-cp311-cp311-win_amd64.whl
+httptools==0.8.0 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:a1b4c8e7a489a0d750d91894e9a8cdc295838f1924c0ca903ae993456fddec07
+# httpx-0.28.1-py3-none-any.whl
+httpx==0.28.1 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad
+# idna-3.20-py3-none-any.whl
+idna==3.20 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c
+# iniconfig-2.3.1-py3-none-any.whl
+iniconfig==2.3.1 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:9121e2c1fdb355232495be3194c8dfe87ccc2d5dee45947b78e68f499790d7a7
+# mako-1.4.3-py3-none-any.whl
+mako==1.4.3 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:723296007c870bfd6b3f0c3230dba7198096e5269297ebf5e4eff9e7ffa39d4f
+# markupsafe-3.0.4-cp311-cp311-win_amd64.whl
+markupsafe==3.0.4 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:fdb4ca07ab75ffadab4a8b135ad59cdbb3156b99310f3d565370da74a15d6bd3
+# opentelemetry_api-1.45.1-py3-none-any.whl
+opentelemetry-api==1.45.1 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:b31553efa588ae44bc306f863c785c5333a9ecc091248c6ee68b4b6c87fdedfb
+# packaging-26.3-py3-none-any.whl
+packaging==26.3 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
+# pillow-12.3.0-cp311-cp311-win_amd64.whl
+pillow==12.3.0 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:8e95e1385e4998ae9694eeaa4730ba5457ff61185b3a55e2e7bea0880aef452a
+# pip-26.1.2-py3-none-any.whl
+pip==26.1.2 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:382ff9f685ee3bc25864f820aa50505825f10f5458ffff07e30a6d96e5715cab
+# pluggy-1.6.0-py3-none-any.whl
+pluggy==1.6.0 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746
+# pydantic-2.13.5-py3-none-any.whl
+pydantic==2.13.5 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:346a034f080da3755d8e9cb5e00e8b07de1d39e4f6e2c87d8ab7cafa0b269a73
+# pydantic_core-2.46.5-cp311-cp311-win_amd64.whl
+pydantic-core==2.46.5 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:40375c2d05acec10323e45dfe2077ac44bc74659008614af5069034e2cfc781c
+# pydantic_settings-2.15.0-py3-none-any.whl
+pydantic-settings==2.15.0 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:0ba092c291c94baceb5eff768aa0d56400a457585bc0175925a5a5510303da42
+# pygments-2.21.0-py3-none-any.whl
+pygments==2.21.0 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9
+# pytest-9.1.1-py3-none-any.whl
+pytest==9.1.1 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:37a86b45efb9a47a61a36449063e8e18d0cab3161329fc099eb21783169c4f0c
+# pytest_asyncio-1.4.0-py3-none-any.whl
+pytest-asyncio==1.4.0 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:933ca923a23075a87fb7070c0ec272a6848489824d887c85c812670932835aa1
+# python_dotenv-1.2.4-py3-none-any.whl
+python-dotenv==1.2.4 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:42269a8a5b3fd54ffa6f3d84b18abed50064717576b4ecf03dc4a55d8aa04fdc
+# python_multipart-0.0.32-py3-none-any.whl
+python-multipart==0.0.32 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:ff6d3f776f16878c894e52e107296ffc890e913c611b1a4ec6c44e2821fe2e23
+# pyyaml-6.0.3-cp311-cp311-win_amd64.whl
+pyyaml==6.0.3 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:9f3bfb4965eb874431221a3ff3fdcddc7e74e3b07799e0e84ca4a0f867d449bf
+# sqlalchemy-2.1.4-cp311-cp311-win_amd64.whl
+sqlalchemy[asyncio]==2.1.4 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:3c998d70e60fc95e93e5971395818c50f8a34396a6352075256fefac6b5cf81b
+# starlette-1.7.0-py3-none-any.whl
+starlette==1.7.0 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:67f8e99895493dd2911a03f11314af6ceebeae4e704bb9f43dfc6a9db151c93e
+# typing_extensions-4.16.0-py3-none-any.whl
+typing-extensions==4.16.0 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
+# typing_inspection-0.4.4-py3-none-any.whl
+typing-inspection==0.4.4 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:65b8397ba37ccbce054456aaccddfc91e6e3083c92824df348d96ca832f3f147
+# uvicorn-0.54.0-py3-none-any.whl
+uvicorn[standard]==0.54.0 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:505bdb0f318731d45f1f712071fc781a8981f6847a31c902c9f5e652d4f67faf
+# watchfiles-1.3.0-cp310-abi3-win_amd64.whl
+watchfiles==1.3.0 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:1acabde19b67e673274e89a04d613b7fb1f122e2c4b8ec9a581e59c149264b61
+# websockets-17.2-cp311-cp311-win_amd64.whl
+websockets==17.2 ; python_version == "3.11" and sys_platform == "win32" and platform_machine == "AMD64" and platform_python_implementation == "CPython" --hash=sha256:55c5b9eab079540bfb639b40b07b7b467e5c5a7ecf97a65cc8665781381c9856

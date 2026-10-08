@@ -166,7 +166,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if settings.ENVIRONMENT == "development":
         logger.info(f"Interactive Swagger Docs: http://{settings.HOST}:{settings.PORT}/docs")
     logger.info("Pairing credential verified successfully.")
-    logger.info("Credential stored in backend/.env (never committed or logged).")
+    logger.info("Pairing credential initialized using selected local configuration.")
     logger.info("==================================================================")
 
     yield

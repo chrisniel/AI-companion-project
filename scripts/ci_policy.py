@@ -15,8 +15,10 @@ def is_docs_only_file(filepath):
 def classify(args):
     event = args.event
     
-    # workflow_dispatch and master targets force Full CI override
-    if event == "workflow_dispatch" or args.target_branch == "master":
+    # Every integration push verifies its complete tree, including earlier changes
+    # whose run may have been cancelled. Develop PRs retain path-scoped verification.
+    if (event == "workflow_dispatch" or args.target_branch == "master"
+            or (event == "push" and args.target_branch == "develop")):
         return {"needs_backend": "true", "needs_frontend": "true", "needs_contract": "true", "needs_docs": "true"}
         
     if not args.files_json:

@@ -1,7 +1,46 @@
 """Pytest fixtures for in-memory SQLite database and async HTTP client."""
 
+import atexit
 import asyncio
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import AsyncGenerator
+
+# Fixtures run after collection. Isolate configuration, authentication and storage
+# before importing any application module, including app.api.deps and app.main.
+TEST_TOKEN = "companion_sec_test_token_abcdef1234567890"
+_collection_directory = TemporaryDirectory(prefix="companion-test-collection-")
+_collection_root = Path(_collection_directory.name)
+_collection_env_file = _collection_root / ".env"
+_collection_env_file.write_text("", encoding="utf-8")
+_collection_environment = {
+    "COMPANION_ENV_FILE": str(_collection_env_file),
+    "COMPANION_API_KEY": TEST_TOKEN,
+    "COMPANION_DATA_ROOT": str(_collection_root / "data"),
+    "LOCALAPPDATA": str(_collection_root / "localappdata"),
+}
+_previous_environment = {name: os.environ.get(name) for name in _collection_environment}
+os.environ.update(_collection_environment)
+
+
+def _cleanup_collection_environment():
+    for name, previous_value in _previous_environment.items():
+        if previous_value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = previous_value
+    _collection_directory.cleanup()
+
+
+atexit.register(_cleanup_collection_environment)
+
+
+def pytest_unconfigure(config):
+    _cleanup_collection_environment()
+    atexit.unregister(_cleanup_collection_environment)
+
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -13,8 +52,6 @@ from app.main import app
 
 from app.services.llm.manager import llm_manager
 from app.services.llm.mock import MockLLMProvider
-
-TEST_TOKEN = "companion_sec_test_token_abcdef1234567890"
 
 # Use in-memory SQLite for high-speed isolated tests
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"

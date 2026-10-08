@@ -4087,16 +4087,9 @@
       "TaskUpdate": {
         "properties": {
           "title": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 255,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
             "title": "Title"
           },
           "notes": {
@@ -4111,34 +4104,13 @@
             "title": "Notes"
           },
           "category": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/TaskCategory"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/TaskCategory"
           },
           "status": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/TaskStatus"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/TaskStatus"
           },
           "priority": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/TaskPriority"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/TaskPriority"
           },
           "due_date": {
             "anyOf": [

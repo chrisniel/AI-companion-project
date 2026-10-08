@@ -24,8 +24,9 @@ custom_url = config.get_main_option("sqlalchemy.url")
 if not custom_url or custom_url == "sqlite+aiosqlite:///./data/companion.db":
     config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
-# Interpret config file for logging
-if config.config_file_name is not None:
+# Standalone Alembic owns its CLI logging. Programmatic application upgrades
+# preserve the caller's handlers, logger enablement and sanitizing formatter.
+if config.config_file_name is not None and not config.attributes.get("application_owns_logging", False):
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata

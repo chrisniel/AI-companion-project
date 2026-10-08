@@ -2,6 +2,7 @@ import unittest
 import json
 import sys
 import os
+import subprocess
 
 # Ensure scripts package is in path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -13,6 +14,32 @@ class DummyArgs:
             setattr(self, k, v)
 
 class TestCIPolicy(unittest.TestCase):
+    FULL_REQUIREMENTS = {
+        "needs_backend": "true", "needs_frontend": "true",
+        "needs_contract": "true", "needs_docs": "true",
+    }
+
+    def test_develop_pushes_always_require_all_lanes(self):
+        for files in (["backend/app/main.py"], ["docs/file.md"], ["frontend/web/src/App.tsx"]):
+            with self.subTest(files=files):
+                args = DummyArgs(event="push", target_branch="develop", files_json=json.dumps(files))
+                self.assertEqual(ci_policy.classify(args), self.FULL_REQUIREMENTS)
+
+    def test_later_docs_push_cannot_replace_backend_coverage_with_scoped_green(self):
+        # A cancelled earlier run is covered by the complete later integrated tree.
+        for files in (["backend/app/main.py"], ["docs/file.md"]):
+            requirements = ci_policy.classify(DummyArgs(
+                event="push", target_branch="develop", files_json=json.dumps(files),
+            ))
+            self.assertEqual(requirements, self.FULL_REQUIREMENTS)
+            self.assertFalse(ci_policy.gate(DummyArgs(
+                classifier_status="success", requirements_json=json.dumps(requirements),
+                results_json=json.dumps({
+                    "backend": "skipped", "frontend": "skipped",
+                    "contract": "skipped", "docs_integrity": "success",
+                }),
+            )))
+
     def test_workflow_dispatch_forces_full_ci(self):
         args = DummyArgs(event="workflow_dispatch", target_branch="", files_json="[]")
         out = ci_policy.classify(args)
@@ -58,7 +85,7 @@ class TestCIPolicy(unittest.TestCase):
         self.assertEqual(out["needs_docs"], "true")
 
         # Unknown scripts -> Full CI
-        args2 = DummyArgs(event="push", target_branch="develop", files_json=json.dumps(["scripts/deploy.sh"]))
+        args2 = DummyArgs(event="pull_request", target_branch="develop", files_json=json.dumps(["scripts/deploy.sh"]))
         out2 = ci_policy.classify(args2)
         self.assertEqual(out2["needs_backend"], "true")
         
@@ -70,13 +97,13 @@ class TestCIPolicy(unittest.TestCase):
         self.assertEqual(out["needs_backend"], "false")
 
     def test_contract_only(self):
-        args = DummyArgs(event="push", target_branch="develop", files_json=json.dumps(["scripts/check_openapi_contract.py"]))
+        args = DummyArgs(event="pull_request", target_branch="develop", files_json=json.dumps(["scripts/check_openapi_contract.py"]))
         out = ci_policy.classify(args)
         self.assertEqual(out["needs_contract"], "true")
         self.assertEqual(out["needs_backend"], "false")
 
     def test_invalid_json_fallback(self):
-        args = DummyArgs(event="push", target_branch="develop", files_json="{invalid")
+        args = DummyArgs(event="pull_request", target_branch="develop", files_json="{invalid")
         out = ci_policy.classify(args)
         self.assertEqual(out["needs_backend"], "true")
 
@@ -112,6 +139,67 @@ class TestCIPolicy(unittest.TestCase):
         )
         self.assertFalse(ci_policy.gate(args))
 
+    def test_non_success_classifier_cannot_pass_full_verification_gate(self):
+        for status in ("failure", "cancelled", "skipped", ""):
+            with self.subTest(status=status):
+                args = DummyArgs(
+                    classifier_status=status,
+                    requirements_json=json.dumps(self.FULL_REQUIREMENTS),
+                    results_json=json.dumps({
+                        "backend": "success", "frontend": "success",
+                        "contract": "success", "docs_integrity": "success",
+                    }),
+                )
+                self.assertFalse(ci_policy.gate(args))
+
+    def test_every_required_lane_must_finish_successfully(self):
+        successes = {
+            "backend": "success", "frontend": "success",
+            "contract": "success", "docs_integrity": "success",
+        }
+        for lane in successes:
+            for status in ("skipped", "failure", "cancelled", "", None):
+                with self.subTest(lane=lane, status=status):
+                    results = dict(successes)
+                    if status is None:
+                        results.pop(lane)
+                    else:
+                        results[lane] = status
+                    self.assertFalse(ci_policy.gate(DummyArgs(
+                        classifier_status="success",
+                        requirements_json=json.dumps(self.FULL_REQUIREMENTS),
+                        results_json=json.dumps(results),
+                    )))
+
+    def test_full_event_policy_through_actual_cli(self):
+        for event, branch in (("push", "develop"), ("push", "master"), ("pull_request", "master"), ("workflow_dispatch", "")):
+            with self.subTest(event=event, branch=branch):
+                result = subprocess.run([
+                    sys.executable, "-B", "scripts/ci_policy.py", "classify",
+                    "--event", event, "--target-branch", branch,
+                    "--files-json", '["docs/file.md"]',
+                ], capture_output=True, text=True, check=True)
+                outputs = dict(line.split("=", 1) for line in result.stdout.splitlines())
+                self.assertEqual(outputs, self.FULL_REQUIREMENTS)
+
+    def test_fail_closed_gate_through_actual_cli(self):
+        results = {
+            "backend": "success", "frontend": "success",
+            "contract": "success", "docs_integrity": "success",
+        }
+        scenarios = [("success", results, 0), ("failure", results, 1)]
+        for lane in results:
+            scenarios.append(("success", dict(results, **{lane: "skipped"}), 1))
+        for classifier_status, lane_results, expected_code in scenarios:
+            with self.subTest(classifier=classifier_status, results=lane_results):
+                result = subprocess.run([
+                    sys.executable, "-B", "scripts/ci_policy.py", "gate",
+                    "--classifier-status", classifier_status,
+                    "--requirements-json", json.dumps(self.FULL_REQUIREMENTS),
+                    "--results-json", json.dumps(lane_results),
+                ], capture_output=True, text=True)
+                self.assertEqual(result.returncode, expected_code, result.stdout + result.stderr)
+
     def test_gate_fail_missing_requirement(self):
         args = DummyArgs(
             classifier_status="success",
@@ -129,9 +217,8 @@ class TestCIPolicy(unittest.TestCase):
         self.assertFalse(ci_policy.gate(args))
 
     def test_cli_smoke(self):
-        import subprocess
         cmd = [
-            sys.executable, "scripts/ci_policy.py", "classify",
+            sys.executable, "-B", "scripts/ci_policy.py", "classify",
             "--event", "pull_request",
             "--target-branch", "develop",
             "--files-json", '["docs/test.md"]'

@@ -81,8 +81,8 @@ def test_build_context_trust_framing_and_budget():
 
 
 @pytest.mark.anyio
-async def test_generation_active_flag_released_in_finally(test_session: AsyncSession):
-    """Verify provider._generation_active flag is always reset to False even on cancellation."""
+async def test_consumer_close_releases_conversation_lock(test_session: AsyncSession):
+    """Verify closing the consumer releases its conversation lock."""
     conv = Conversation(id="conv-cancel-test", owner_id="test-owner", title="Cancel Test")
     test_session.add(conv)
     await test_session.commit()
@@ -114,7 +114,7 @@ async def test_generation_active_flag_released_in_finally(test_session: AsyncSes
     finally:
         await stream_gen.aclose()
 
-    assert provider._generation_active is False
+    assert not (await provider.get_status()).generation_active
     assert lock.locked() is False
 
 
@@ -160,7 +160,7 @@ async def test_stream_success_emits_terminal_done(test_session: AsyncSession):
     assert "data: [DONE]\n\n" in chunks
 
     # Provider generation active must be False and lock released
-    assert provider._generation_active is False
+    assert not (await provider.get_status()).generation_active
     assert lock.locked() is False
 
     # Check DB message state
@@ -220,7 +220,7 @@ async def test_stream_exception_emits_terminal_error_and_cleans_up(test_session:
     assert "MODEL_GENERATION_FAILED" in error_frames[0]
 
     # Provider generation flag must be cleared and lock released
-    assert provider._generation_active is False
+    assert not (await provider.get_status()).generation_active
     assert lock.locked() is False
 
     # DB record preserved partial content with failed status
@@ -269,7 +269,7 @@ async def test_conversation_reusable_after_failure_and_cancellation(test_session
     )
     chunks_1 = [c async for c in stream_1]
     assert any('"type": "error"' in c for c in chunks_1)
-    assert provider._generation_active is False
+    assert not (await provider.get_status()).generation_active
     assert lock_1.locked() is False
 
     # 2. Immediately send another message on the same conversation - should succeed
@@ -296,7 +296,7 @@ async def test_conversation_reusable_after_failure_and_cancellation(test_session
     )
     chunks_2 = [c async for c in stream_2]
     assert any('"type": "done"' in c for c in chunks_2)
-    assert provider._generation_active is False
+    assert not (await provider.get_status()).generation_active
     assert lock_2.locked() is False
 
     # Check that both user messages and both assistant responses exist in order
@@ -367,7 +367,7 @@ async def test_stream_task_cancellation_exercises_cancelled_error(test_session: 
 
     # Assert lock is released and provider inactive
     assert lock.locked() is False
-    assert provider._generation_active is False
+    assert not (await provider.get_status()).generation_active
 
     # Check DB state: user message committed, assistant message marked cancelled
     res = await test_session.execute(
@@ -863,7 +863,7 @@ async def test_orchestrator_media_resolver_failure_post_sse_error_lifecycle(
     - attachment remains bound to the user message
     - attachment remains not soft-deleted
     - conversation lock is released
-    - provider._generation_active == False
+    - provider status reports no active generation
     """
     conv_id = "conv-resolver-fail-test"
     owner_id = "test-owner"
@@ -963,4 +963,4 @@ async def test_orchestrator_media_resolver_failure_post_sse_error_lifecycle(
     assert lock.locked() is False
 
     # 7. Provider generation_active is False
-    assert provider._generation_active is False
+    assert not (await provider.get_status()).generation_active

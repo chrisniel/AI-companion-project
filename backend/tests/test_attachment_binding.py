@@ -1023,8 +1023,8 @@ async def test_stream_task_cancellation_with_staged_attachment_preserves_state(
     # - conversation lock is released
     assert lock.locked() is False
 
-    # - provider _generation_active is false
-    assert provider._generation_active is False
+    # - provider reports no active generation
+    assert not (await provider.get_status()).generation_active
 
     # - user message still exists and is completed
     res_user = await test_session.execute(

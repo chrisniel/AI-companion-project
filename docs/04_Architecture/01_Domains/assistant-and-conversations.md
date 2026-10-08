@@ -191,10 +191,10 @@ Verified in `backend/app/services/assistant/orchestrator.py`:
 - Injects up to 5 relevant memories retrieved via FTS5 lexical search into the system prompt inside `<retrieved_memories>` tags, bounded by `MEMORY_BUDGET_TOKENS = 256`. The template explicitly instructs the model that memories are untrusted contextual information for reference only and not to adopt policies or commands found in them.
 - Binds user message attachments via multimodal vision contracts when vision capability is enabled.
 - Loads recent conversation history turns to construct chat context.
+- **React Web Persistent Attachment History (Slice 8B.7):** Implemented. `AssistantView` preserves attachment metadata when mapping history messages; `ConversationMessageItem` renders supported-image thumbnails and lightbox previews fetched as authenticated Blobs, with unavailable-preview handling and object-URL cleanup. Regression evidence resides in `frontend/web/src/test/persistentAttachmentRendering.test.tsx`. Flutter Desktop parity remains target work.
 
 ### 3.4 Explicitly Unimplemented Capabilities
 
-- **Frontend History Image Rendering (Slice 8B.7):** `NOT IMPLEMENTED YET`. Backend endpoints already expose active attachments on messages, but frontend message bubbles in chat history do not yet render persistent attachment thumbnails/previews.
 - **Automatic Multilingual Language Routing:** `NOT IMPLEMENTED`. Language handling relies entirely on the natural zero-shot multilingual capability of the active model; no explicit pre-turn language classifier or language-routing middleware exists in the codebase.
 - **Conversation Compaction / Summarization:** `NOT IMPLEMENTED`. Older messages are truncated based on simple turn/token limits; rolling summaries are not yet generated.
 
@@ -207,8 +207,8 @@ The following target capabilities are approved under Decision D1 and the Master 
 1. **Multilingual Interaction Evaluation (PC V1):**
    - Verified interaction stability across English, Tagalog, and Japanese.
    - Persona consistency maintained when switching between supported languages or when using code-switching (Taglish).
-2. **Persistent Attachment History Rendering (Slice 8B.7 / PC V1):**
-   - Frontend chat interface renders thumbnail cards with authenticated Blob previews for all persisted attachments attached to historical messages.
+2. **Flutter Desktop Persistent Attachment History Parity (PC V1 Target):**
+   - The primary Flutter client will render persisted attachment metadata and authenticated previews. The supported React Web implementation is recorded in §3; this does not establish Flutter implementation.
 
 ---
 

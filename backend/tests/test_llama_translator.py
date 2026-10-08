@@ -172,9 +172,9 @@ def test_translate_unsupported_message_content_type_raises_type_error():
 
 @pytest.mark.anyio
 async def test_sync_generate_translation_failure_resets_generation_active():
-    """If _translate_messages raises during sync generate, _generation_active remains False."""
+    """Translation failure admits no active generation during sync generate."""
     provider = LlamaCppProvider()
-    assert provider._generation_active is False
+    assert provider.active_generation_count == 0
 
     invalid_messages = [
         ChatMessage(
@@ -188,14 +188,14 @@ async def test_sync_generate_translation_failure_resets_generation_active():
     with pytest.raises(ValueError):
         await provider.generate(invalid_messages)
 
-    assert provider._generation_active is False
+    assert provider.active_generation_count == 0
 
 
 @pytest.mark.anyio
 async def test_stream_generate_translation_failure_resets_generation_active():
-    """If _translate_messages raises during generate_stream, _generation_active remains False."""
+    """Translation failure admits no active generation during generate_stream."""
     provider = LlamaCppProvider()
-    assert provider._generation_active is False
+    assert provider.active_generation_count == 0
 
     invalid_messages = [
         ChatMessage(
@@ -210,4 +210,4 @@ async def test_stream_generate_translation_failure_resets_generation_active():
         async for _ in provider.generate_stream(invalid_messages):
             pass
 
-    assert provider._generation_active is False
+    assert provider.active_generation_count == 0

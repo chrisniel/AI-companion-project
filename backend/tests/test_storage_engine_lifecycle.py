@@ -88,3 +88,24 @@ async def test_database_runtime_lifecycle_and_pragmas(tmp_path):
     await db_session.dispose_database_runtime()
     with pytest.raises(RuntimeError):
         db_session.get_engine()
+
+
+@pytest.mark.asyncio
+async def test_corrupt_locator_prevents_alternate_runtime_initialization(monkeypatch, tmp_path):
+    from app.core.config import Settings
+    from app.core.storage import BootstrapCorruptError
+
+    monkeypatch.delenv("COMPANION_DATA_ROOT", raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    locator = tmp_path / "AI Companion" / "bootstrap.json"
+    locator.parent.mkdir()
+    locator.write_text("{broken", encoding="utf-8")
+    assert db_session._engine is None
+    try:
+        with pytest.raises(BootstrapCorruptError):
+            configured = Settings()
+            db_session.initialize_database_runtime(database_url=configured.DATABASE_URL)
+        assert db_session._engine is None
+        assert not (tmp_path / "AI Companion" / "Data").exists()
+    finally:
+        await db_session.dispose_database_runtime()
