@@ -224,4 +224,3 @@ Skills and plugins are procedural execution aids, subordinate to this master rep
 - **Independent Gates & No Self-Verification:**
   - Where governance requires an independent gate or human approval (e.g. Implementation Gate, Documentation Gate, Closure Gate), authoring agents may run mechanical verification but **MUST NOT** self-certify or self-promote the task past that gate.
   - Authoring agents stop after mechanical checks and submit diffs for independent human/reviewer evaluation.
-
