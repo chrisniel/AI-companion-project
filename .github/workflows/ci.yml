@@ -293,27 +293,40 @@ jobs:
           cache: true
 
       - name: Record Flutter qualification inputs
+        shell: pwsh
         run: |
           flutter --version
+          if ($LASTEXITCODE -ne 0) { throw "Flutter version check failed" }
           dart --version
+          if ($LASTEXITCODE -ne 0) { throw "Dart version check failed" }
 
-      - name: Verify Flutter workspace dependencies
+      - name: Resolve Flutter workspace dependencies
         working-directory: frontend/flutter
-        run: |
-          flutter pub get
-          dart pub workspace list
+        run: flutter pub get
+
+      - name: Verify workspace member layout
+        working-directory: frontend/flutter
+        run: dart pub workspace list
 
       - name: Static analysis
         working-directory: frontend/flutter
         run: dart analyze .
 
-      - name: Run unit and widget tests
+      - name: Run companion_core unit tests
         working-directory: frontend/flutter
-        run: |
-          flutter test packages/companion_core/test
-          flutter test packages/companion_api/test
-          flutter test packages/companion_design/test
-          flutter test apps/desktop/test
+        run: flutter test packages/companion_core/test
+
+      - name: Run companion_api unit tests
+        working-directory: frontend/flutter
+        run: flutter test packages/companion_api/test
+
+      - name: Run companion_design unit tests
+        working-directory: frontend/flutter
+        run: flutter test packages/companion_design/test
+
+      - name: Run desktop application widget tests
+        working-directory: frontend/flutter
+        run: flutter test apps/desktop/test
 
       - name: Build Windows desktop debug runner
         working-directory: frontend/flutter/apps/desktop
