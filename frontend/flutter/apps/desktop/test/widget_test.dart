@@ -1,3 +1,4 @@
+import 'package:ai_companion_desktop/controllers/desktop_settings_controller.dart';
 import 'package:ai_companion_desktop/lifecycle/desktop_lifecycle_coordinator.dart';
 import 'package:ai_companion_desktop/main.dart';
 import 'package:flutter/material.dart';
@@ -6,17 +7,30 @@ import 'package:flutter_test/flutter_test.dart';
 import 'desktop_lifecycle_test.dart';
 
 void main() {
-  testWidgets('renders AI Companion desktop Batch 2 foundation screen', (WidgetTester tester) async {
+  void setupDesktopViewport(WidgetTester tester) {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(1280, 800);
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+  }
+
+  testWidgets('renders AI Companion desktop shell with SoftGlass navigation rail and chat screen', (tester) async {
+    setupDesktopViewport(tester);
+
     await tester.pumpWidget(const AiCompanionDesktopApp());
 
-    expect(find.text('AI Companion'), findsOneWidget);
-    expect(find.text('Windows Window & Tray Lifecycle (M1 Batch 2)'), findsOneWidget);
-    expect(find.textContaining('Window Constraints: 1280x800'), findsOneWidget);
-    expect(find.text('Hide to Tray'), findsOneWidget);
-    expect(find.text('Exit Companion'), findsOneWidget);
+    expect(find.text('AI Companion'), findsWidgets);
+    expect(find.text('Chat'), findsWidgets);
+    expect(find.text('Voice'), findsOneWidget);
+    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Runtime: Standalone (Unconnected)'), findsWidgets);
   });
 
-  testWidgets('routes UI action buttons through DesktopLifecycleCoordinator when tray is active', (WidgetTester tester) async {
+  testWidgets('routes UI action buttons through DesktopLifecycleCoordinator on Settings screen when tray is active', (tester) async {
+    setupDesktopViewport(tester);
+
     final windowAdapter = FakeDesktopWindowAdapter();
     final trayAdapter = FakeDesktopTrayAdapter();
     var exitHandled = false;
@@ -31,24 +45,38 @@ void main() {
 
     await coordinator.initialize();
 
-    await tester.pumpWidget(AiCompanionDesktopApp(coordinator: coordinator));
+    final controller = DesktopSettingsController(
+      initialDestination: DesktopNavDestination.settings,
+    );
+
+    await tester.pumpWidget(
+      AiCompanionDesktopApp(
+        coordinator: coordinator,
+        settingsController: controller,
+      ),
+    );
+    await tester.pumpAndSettle();
 
     expect(find.text('System Tray: Active (Close-to-Tray Active)'), findsOneWidget);
 
     // Tap "Hide to Tray"
+    await tester.ensureVisible(find.text('Hide to Tray'));
     await tester.tap(find.text('Hide to Tray'));
     await tester.pump();
     expect(windowAdapter.visible, isFalse);
     expect(windowAdapter.hideCallCount, equals(1));
 
     // Tap "Exit Companion"
+    await tester.ensureVisible(find.text('Exit Companion'));
     await tester.tap(find.text('Exit Companion'));
     await tester.pump();
     expect(exitHandled, isTrue);
     expect(windowAdapter.isDestroyed, isTrue);
   });
 
-  testWidgets('disables Hide to Tray button when tray is unavailable', (WidgetTester tester) async {
+  testWidgets('disables Hide to Tray button on Settings screen when tray is unavailable', (tester) async {
+    setupDesktopViewport(tester);
+
     final windowAdapter = FakeDesktopWindowAdapter();
     final failingTray = FailingDesktopTrayAdapter();
     var exitHandled = false;
@@ -64,7 +92,17 @@ void main() {
     await coordinator.initialize();
     expect(coordinator.isTrayAvailable, isFalse);
 
-    await tester.pumpWidget(AiCompanionDesktopApp(coordinator: coordinator));
+    final controller = DesktopSettingsController(
+      initialDestination: DesktopNavDestination.settings,
+    );
+
+    await tester.pumpWidget(
+      AiCompanionDesktopApp(
+        coordinator: coordinator,
+        settingsController: controller,
+      ),
+    );
+    await tester.pumpAndSettle();
 
     expect(find.text('System Tray: Unavailable (Close Exits App)'), findsOneWidget);
 
@@ -75,6 +113,7 @@ void main() {
     expect(hideButton.onPressed, isNull);
 
     // Tap Exit Companion (should remain enabled)
+    await tester.ensureVisible(find.text('Exit Companion'));
     await tester.tap(find.text('Exit Companion'));
     await tester.pump();
     expect(exitHandled, isTrue);
