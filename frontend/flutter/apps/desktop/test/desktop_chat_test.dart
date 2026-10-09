@@ -56,19 +56,31 @@ class MockCompanionClient extends CompanionClient {
     return const AuthVerifyResponse(authenticated: true, tokenType: 'Bearer', message: 'Token verified.');
   }
 
+  bool deleteConvCalled = false;
+  String? lastDeletedConvId;
+  ModelStatusResponse? customModelStatus;
+
   @override
   Future<ModelStatusResponse> getModelStatus() async {
     modelStatusCalled = true;
     if (!shouldModelSucceed) {
       throw const CompanionApiException(statusCode: 503, message: 'Model unavailable.');
     }
-    return const ModelStatusResponse(
-      provider: 'llama.cpp',
-      activeModel: 'qwen2.5-7b',
-      modelLoaded: true,
-      modelAwake: true,
-      modelResident: true,
-    );
+    return customModelStatus ??
+        const ModelStatusResponse(
+          provider: 'llama.cpp',
+          activeModel: 'qwen2.5-7b',
+          modelLoaded: true,
+          modelAwake: true,
+          modelResident: true,
+          runtimeState: 'MODEL_READY',
+        );
+  }
+
+  @override
+  Future<void> deleteConversation(String conversationId) async {
+    deleteConvCalled = true;
+    lastDeletedConvId = conversationId;
   }
 
   @override
@@ -249,13 +261,15 @@ void main() {
 
     test('createNewConversation throws on server failure without fabricating local fake ID', () async {
       await controller.checkConnection();
+      expect(controller.conversations, hasLength(1));
       mockClient.shouldCreateConvSucceed = false;
 
       await expectLater(
         () => controller.createNewConversation(title: 'Failed Thread'),
         throwsA(isA<CompanionApiException>()),
       );
-      expect(controller.conversations, isEmpty);
+      expect(controller.conversations, hasLength(1));
+      expect(controller.conversations.where((c) => c.title == 'Failed Thread'), isEmpty);
       expect(controller.errorMessage, contains('Internal database error'));
     });
 
@@ -326,6 +340,115 @@ void main() {
       final lastMsg = controller.messages.last;
       expect(lastMsg.sender, 'assistant');
       expect(lastMsg.content, 'Hello world!');
+    });
+    test('deleteConversation removes conversation and updates selection', () async {
+      await controller.checkConnection();
+      expect(controller.conversations, hasLength(1));
+      expect(controller.activeConversation?.id, 'mock-conv-1');
+
+      await controller.deleteConversation('mock-conv-1');
+      expect(mockClient.deleteConvCalled, isTrue);
+      expect(mockClient.lastDeletedConvId, 'mock-conv-1');
+      expect(controller.conversations, isEmpty);
+      expect(controller.activeConversation, isNull);
+    });
+
+    test('modelStateCategory reflects authoritative runtime telemetry', () async {
+      expect(controller.modelStateCategory, ModelRuntimeStateCategory.unreachable);
+      expect(controller.modelStatusLabel, 'Offline');
+
+      mockClient.customModelStatus = const ModelStatusResponse(
+        provider: 'llama.cpp',
+        activeModel: 'qwen2.5-7b',
+        modelLoaded: true,
+        modelAwake: true,
+        runtimeState: 'MODEL_READY',
+      );
+      await controller.checkConnection();
+      expect(controller.modelStateCategory, ModelRuntimeStateCategory.modelReady);
+      expect(controller.modelStatusLabel, 'qwen2.5-7b');
+
+      mockClient.customModelStatus = const ModelStatusResponse(
+        provider: 'llama.cpp',
+        activeModel: 'qwen2.5-7b',
+        modelLoaded: true,
+        modelAwake: false,
+        runtimeState: 'MODEL_SLEEPING',
+      );
+      await controller.checkConnection();
+      expect(controller.modelStateCategory, ModelRuntimeStateCategory.modelSleeping);
+      expect(controller.modelStatusLabel, contains('Sleeping'));
+
+      mockClient.customModelStatus = const ModelStatusResponse(
+        provider: 'llama.cpp',
+        activeModel: null,
+        modelLoaded: false,
+        modelAwake: false,
+        runtimeState: 'MODEL_UNLOADED',
+      );
+      await controller.checkConnection();
+      expect(controller.modelStateCategory, ModelRuntimeStateCategory.modelUnloaded);
+      expect(controller.modelStatusLabel, 'Unloaded');
+
+      mockClient.customModelStatus = const ModelStatusResponse(
+        provider: 'llama.cpp',
+        activeModel: 'qwen2.5-7b',
+        modelLoaded: false,
+        modelAwake: false,
+        runtimeState: 'LOAD_FAILED',
+        lastRuntimeError: 'Vulkan out of memory',
+      );
+      await controller.checkConnection();
+      expect(controller.modelStateCategory, ModelRuntimeStateCategory.modelLoadFailed);
+      expect(controller.modelStatusLabel, 'Load Failed');
+      expect(controller.modelStatusDescription, 'Vulkan out of memory');
+    });
+
+    test('sendMessage handles HTTP 503 LLM_UNAVAILABLE with explanatory error message', () async {
+      await controller.checkConnection();
+
+      final streamCtrl = StreamController<SseEvent>();
+      mockClient.customEventStream = streamCtrl.stream;
+
+      final sendFuture = controller.sendMessage('Hello model');
+      streamCtrl.addError(
+        const CompanionApiException(
+          statusCode: 503,
+          code: 'LLM_UNAVAILABLE',
+          message: 'Local inference engine unavailable',
+        ),
+      );
+      await streamCtrl.close();
+      await sendFuture;
+
+      expect(controller.generationState, ChatGenerationState.error);
+      expect(controller.errorMessage, contains('Local AI model unavailable (503)'));
+    });
+
+    test('E2E lifecycle: create -> send -> stream tokens -> done -> restore history', () async {
+      final e2eClient = MockCompanionClient();
+      final e2eController = DesktopChatController(client: e2eClient);
+
+      await e2eController.checkConnection();
+      expect(e2eController.isConnected, isTrue);
+
+      // Create new conversation
+      await e2eController.createNewConversation(title: 'E2E Test Session');
+      expect(e2eController.activeConversation, isNotNull);
+
+      // Send prompt and consume tokens
+      await e2eController.sendMessage('Hi there!');
+      expect(e2eController.isGenerating, isFalse);
+      expect(e2eController.messages, hasLength(greaterThanOrEqualTo(2)));
+      expect(e2eController.messages.last.content, 'Hello world!');
+
+      // Reload conversations and restore active selection
+      await e2eController.loadConversations();
+      expect(e2eController.conversations.isNotEmpty, isTrue);
+      await e2eController.selectConversation(e2eController.conversations.first);
+      expect(e2eController.messages.isNotEmpty, isTrue);
+
+      e2eController.dispose();
     });
   });
 
@@ -401,6 +524,48 @@ void main() {
 
       // TextField still contains the draft text
       expect(find.text('Preserve this draft message'), findsOneWidget);
+
+      controller.dispose();
+    });
+
+    testWidgets('opens and closes conversation history drawer via header button and escape key', (tester) async {
+      final mockClient = MockCompanionClient();
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // History button exists
+      final historyBtn = find.byIcon(Icons.history_rounded);
+      expect(historyBtn, findsOneWidget);
+
+      // Tap history button to open drawer
+      await tester.tap(historyBtn);
+      await tester.pumpAndSettle();
+
+      // Drawer is open
+      expect(find.text('Conversation History'), findsOneWidget);
+      expect(find.text('1 Local Sessions'), findsOneWidget);
+      expect(find.text('Search past conversations...'), findsOneWidget);
+
+      // Close button exists in drawer
+      final closeBtn = find.byIcon(Icons.close_rounded);
+      expect(closeBtn, findsOneWidget);
+
+      // Tap close button
+      await tester.tap(closeBtn);
+      await tester.pumpAndSettle();
+
+      // Drawer is closed
+      expect(find.text('Conversation History'), findsNothing);
 
       controller.dispose();
     });

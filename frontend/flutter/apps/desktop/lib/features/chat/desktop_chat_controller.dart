@@ -21,6 +21,18 @@ enum ChatGenerationState {
   error,
 }
 
+/// Categorized model availability for truthful UI telemetry.
+enum ModelRuntimeStateCategory {
+  unreachable,
+  pairingRequired,
+  authenticatedNoModel,
+  modelUnloaded,
+  modelLoading,
+  modelReady,
+  modelSleeping,
+  modelLoadFailed,
+}
+
 typedef CompanionClientFactory = CompanionClient Function({
   required String baseUrl,
   CredentialStore? credentialStore,
@@ -39,7 +51,10 @@ class DesktopChatController extends ChangeNotifier {
   List<MessageOut> _messages = [];
   String _streamingText = '';
   String? _activeModelName;
+  ModelStatusResponse? _modelStatus;
   String? _errorMessage;
+  bool _isLoadingConversations = false;
+  String? _conversationError;
 
   StreamSubscription<SseEvent>? _currentStreamSubscription;
   Completer<void>? _turnCompleter;
@@ -62,11 +77,103 @@ class DesktopChatController extends ChangeNotifier {
   List<MessageOut> get messages => List.unmodifiable(_messages);
   String get streamingText => _streamingText;
   String? get activeModelName => _activeModelName;
+  ModelStatusResponse? get modelStatus => _modelStatus;
   String? get errorMessage => _errorMessage;
+  bool get isLoadingConversations => _isLoadingConversations;
+  String? get conversationError => _conversationError;
 
   bool get isGenerating => _generationState == ChatGenerationState.generating;
   bool get isConnected => _connectionStatus == RuntimeConnectionStatus.connected;
   bool get canSend => isConnected && !isGenerating;
+
+  ModelRuntimeStateCategory get modelStateCategory {
+    if (_connectionStatus == RuntimeConnectionStatus.unconnected) {
+      return ModelRuntimeStateCategory.unreachable;
+    }
+    if (_connectionStatus == RuntimeConnectionStatus.unauthorized) {
+      return ModelRuntimeStateCategory.pairingRequired;
+    }
+    if (_connectionStatus != RuntimeConnectionStatus.connected) {
+      return ModelRuntimeStateCategory.unreachable;
+    }
+
+    final ms = _modelStatus;
+    if (ms == null) {
+      return ModelRuntimeStateCategory.authenticatedNoModel;
+    }
+
+    if (ms.lastRuntimeError != null && ms.lastRuntimeError!.isNotEmpty) {
+      return ModelRuntimeStateCategory.modelLoadFailed;
+    }
+
+    final state = ms.runtimeState.toUpperCase();
+    if (state == 'MODEL_READY') {
+      return ModelRuntimeStateCategory.modelReady;
+    }
+    if (state == 'MODEL_SLEEPING') {
+      return ModelRuntimeStateCategory.modelSleeping;
+    }
+    if (state == 'MODEL_LOADING' || state == 'SERVER_STARTING') {
+      return ModelRuntimeStateCategory.modelLoading;
+    }
+    if (state == 'MODEL_ERROR' || state == 'SERVER_ERROR' || state == 'LOAD_FAILED') {
+      return ModelRuntimeStateCategory.modelLoadFailed;
+    }
+    if (state == 'MODEL_UNLOADED' || state == 'SERVER_STOPPED') {
+      return ModelRuntimeStateCategory.modelUnloaded;
+    }
+
+    if (ms.modelLoaded && ms.modelAwake) {
+      return ModelRuntimeStateCategory.modelReady;
+    }
+    if (ms.modelLoaded && !ms.modelAwake) {
+      return ModelRuntimeStateCategory.modelSleeping;
+    }
+
+    return ModelRuntimeStateCategory.modelUnloaded;
+  }
+
+  String get modelStatusLabel {
+    switch (modelStateCategory) {
+      case ModelRuntimeStateCategory.unreachable:
+        return 'Offline';
+      case ModelRuntimeStateCategory.pairingRequired:
+        return 'Pairing Required';
+      case ModelRuntimeStateCategory.authenticatedNoModel:
+        return _activeModelName ?? 'No Model';
+      case ModelRuntimeStateCategory.modelReady:
+        return _modelStatus?.activeModel ?? _activeModelName ?? 'Ready';
+      case ModelRuntimeStateCategory.modelSleeping:
+        return '${_modelStatus?.activeModel ?? _activeModelName ?? "Model"} (Sleeping)';
+      case ModelRuntimeStateCategory.modelLoading:
+        return 'Loading...';
+      case ModelRuntimeStateCategory.modelUnloaded:
+        return 'Unloaded';
+      case ModelRuntimeStateCategory.modelLoadFailed:
+        return 'Load Failed';
+    }
+  }
+
+  String get modelStatusDescription {
+    switch (modelStateCategory) {
+      case ModelRuntimeStateCategory.unreachable:
+        return 'Cannot connect to Local AI Runtime.';
+      case ModelRuntimeStateCategory.pairingRequired:
+        return 'Pairing token required. Configure credentials in Settings.';
+      case ModelRuntimeStateCategory.authenticatedNoModel:
+        return 'Authenticated with runtime. No active model configured.';
+      case ModelRuntimeStateCategory.modelReady:
+        return 'Local model is active in memory and ready for generation.';
+      case ModelRuntimeStateCategory.modelSleeping:
+        return 'Model is sleeping to preserve VRAM; wakes on next prompt.';
+      case ModelRuntimeStateCategory.modelLoading:
+        return 'Model weights are currently loading into memory.';
+      case ModelRuntimeStateCategory.modelUnloaded:
+        return 'No model is currently loaded in memory. Turns trigger on-demand load.';
+      case ModelRuntimeStateCategory.modelLoadFailed:
+        return _modelStatus?.lastRuntimeError ?? 'Failed to load local model weights.';
+    }
+  }
 
   String get connectionStatusLabel {
     switch (_connectionStatus) {
@@ -156,11 +263,17 @@ class DesktopChatController extends ChangeNotifier {
             try {
               final modelStatus = await _client.getModelStatus();
               if (_configEpoch != epoch || _isDisposed) return;
+              _modelStatus = modelStatus;
               _activeModelName = modelStatus.activeModel ?? 'default';
             } catch (_) {
               if (_configEpoch != epoch || _isDisposed) return;
               // Valid auth + unavailable model: retain connected/authorized status
+              _modelStatus = null;
               _activeModelName = 'Unavailable';
+            }
+
+            if (!_isDisposed && _configEpoch == epoch) {
+              await loadConversations();
             }
           } else {
             _connectionStatus = RuntimeConnectionStatus.unauthorized;
@@ -198,6 +311,10 @@ class DesktopChatController extends ChangeNotifier {
   /// Loads available conversations from backend.
   Future<void> loadConversations() async {
     if (_isDisposed || !isConnected) return;
+    _isLoadingConversations = true;
+    _conversationError = null;
+    notifyListeners();
+
     try {
       final res = await _client.listConversations();
       if (_isDisposed) return;
@@ -206,10 +323,15 @@ class DesktopChatController extends ChangeNotifier {
       if (_conversations.isNotEmpty && _activeConversation == null) {
         await selectConversation(_conversations.first);
       }
-    } catch (_) {
-      // Retain existing list on network glitch
+    } catch (e) {
+      if (_isDisposed) return;
+      _conversationError = e.toString();
+    } finally {
+      if (!_isDisposed) {
+        _isLoadingConversations = false;
+        notifyListeners();
+      }
     }
-    if (!_isDisposed) notifyListeners();
   }
 
   /// Switches active conversation thread and loads its authoritative message history.
@@ -243,6 +365,43 @@ class DesktopChatController extends ChangeNotifier {
       await selectConversation(created);
     } catch (e) {
       _errorMessage = 'Failed to create conversation: $e';
+      if (!_isDisposed) notifyListeners();
+      rethrow;
+    }
+  }
+
+  /// Deletes a conversation thread by ID.
+  ///
+  /// Fails closed if runtime is not connected, or if deleting active thread during generation.
+  Future<void> deleteConversation(String conversationId) async {
+    if (_isDisposed) return;
+    if (!isConnected) {
+      _errorMessage = 'Cannot delete conversation: Runtime is not connected and authorized.';
+      notifyListeners();
+      throw StateError('Runtime is not connected.');
+    }
+    if (isGenerating && _activeConversation?.id == conversationId) {
+      throw StateError('Cannot delete active conversation while turn generation is active.');
+    }
+
+    try {
+      await _client.deleteConversation(conversationId);
+      _conversations = _conversations.where((c) => c.id != conversationId).toList();
+      if (_activeConversation?.id == conversationId) {
+        if (_conversations.isNotEmpty) {
+          await selectConversation(_conversations.first);
+        } else {
+          _activeConversation = null;
+          _messages = [];
+          _streamingText = '';
+          _generationState = ChatGenerationState.idle;
+          notifyListeners();
+        }
+      } else {
+        notifyListeners();
+      }
+    } catch (e) {
+      _errorMessage = 'Failed to delete conversation: $e';
       if (!_isDisposed) notifyListeners();
       rethrow;
     }
@@ -360,7 +519,16 @@ class DesktopChatController extends ChangeNotifier {
           if (_isDisposed || _turnSequenceToken != turnToken || _activeConversation?.id != boundConvId) return;
           _generationState = ChatGenerationState.error;
           if (err is CompanionApiException) {
-            _errorMessage = err.message;
+            if (err.statusCode == 503) {
+              final backendReason = _modelStatus?.lastRuntimeError;
+              if (backendReason != null && backendReason.isNotEmpty) {
+                _errorMessage = 'Local AI model unavailable (503): $backendReason';
+              } else {
+                _errorMessage = 'Local AI model unavailable (503): Model engine is not loaded or ready. Start the local LLM router or check model status in Settings.';
+              }
+            } else {
+              _errorMessage = err.message;
+            }
           } else {
             _errorMessage = err.toString();
           }
@@ -378,7 +546,16 @@ class DesktopChatController extends ChangeNotifier {
       );
     } catch (e) {
       _generationState = ChatGenerationState.error;
-      _errorMessage = e.toString();
+      if (e is CompanionApiException && e.statusCode == 503) {
+        final backendReason = _modelStatus?.lastRuntimeError;
+        if (backendReason != null && backendReason.isNotEmpty) {
+          _errorMessage = 'Local AI model unavailable (503): $backendReason';
+        } else {
+          _errorMessage = 'Local AI model unavailable (503): Model engine is not loaded or ready. Start the local LLM router or check model status in Settings.';
+        }
+      } else {
+        _errorMessage = e.toString();
+      }
       _finalizeTurn(boundConvId, turnToken);
     }
 

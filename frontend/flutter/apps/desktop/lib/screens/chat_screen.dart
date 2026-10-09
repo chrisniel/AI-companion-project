@@ -3,6 +3,7 @@ import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../features/chat/conversation_history_drawer.dart';
 import '../features/chat/desktop_chat_controller.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -23,8 +24,23 @@ class _ChatScreenState extends State<ChatScreen> {
   late final ScrollController _scrollController;
   DesktopChatController? _internalController;
   bool _canSend = false;
+  bool _isHistoryOpen = false;
 
   DesktopChatController get _effectiveController => widget.controller ?? _internalController!;
+
+  void _toggleHistoryDrawer() {
+    setState(() {
+      _isHistoryOpen = !_isHistoryOpen;
+    });
+  }
+
+  void _closeHistoryDrawer() {
+    if (_isHistoryOpen) {
+      setState(() {
+        _isHistoryOpen = false;
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -122,32 +138,61 @@ class _ChatScreenState extends State<ChatScreen> {
           _scrollToBottom();
         }
 
-        return Padding(
-          padding: const EdgeInsets.all(CompanionSpacing.xl),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Header Bar
-              _buildHeader(context, chatCtrl, ext, isDark),
-              const SizedBox(height: CompanionSpacing.lg),
+        return CallbackShortcuts(
+          bindings: <ShortcutActivator, VoidCallback>{
+            const SingleActivator(LogicalKeyboardKey.keyH, control: true): _toggleHistoryDrawer,
+            const SingleActivator(LogicalKeyboardKey.escape): _closeHistoryDrawer,
+          },
+          child: Focus(
+            autofocus: true,
+            child: Stack(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(CompanionSpacing.xl),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Header Bar
+                      _buildHeader(context, chatCtrl, ext, isDark),
+                      const SizedBox(height: CompanionSpacing.lg),
 
-              // Central Conversational Stage
-              Expanded(
-                child: chatCtrl.messages.isEmpty
-                    ? _buildWelcomeStage(context, ext)
-                    : _buildMessageList(context, chatCtrl, ext, isDark),
-              ),
+                      // Central Conversational Stage
+                      Expanded(
+                        child: chatCtrl.messages.isEmpty
+                            ? _buildWelcomeStage(context, ext)
+                            : _buildMessageList(context, chatCtrl, ext, isDark),
+                      ),
 
-              if (chatCtrl.errorMessage != null && !chatCtrl.isGenerating) ...[
-                const SizedBox(height: CompanionSpacing.sm),
-                _buildErrorBanner(context, chatCtrl.errorMessage!, ext),
+                      if (chatCtrl.errorMessage != null && !chatCtrl.isGenerating) ...[
+                        const SizedBox(height: CompanionSpacing.sm),
+                        _buildErrorBanner(context, chatCtrl.errorMessage!, ext),
+                      ],
+
+                      const SizedBox(height: CompanionSpacing.lg),
+
+                      // Bottom Composer Bar
+                      _buildComposerBar(context, chatCtrl, ext),
+                    ],
+                  ),
+                ),
+
+                // History Drawer Overlay
+                ConversationHistoryDrawer(
+                  isOpen: _isHistoryOpen,
+                  onClose: _closeHistoryDrawer,
+                  activeConversationId: chatCtrl.activeConversation?.id,
+                  onSelectConversation: (conv) => chatCtrl.selectConversation(conv),
+                  onNewConversation: () => chatCtrl.createNewConversation(),
+                  onDeleteConversation: (convId) => chatCtrl.deleteConversation(convId),
+                  conversations: chatCtrl.conversations,
+                  isLoading: chatCtrl.isLoadingConversations,
+                  errorMessage: chatCtrl.conversationError,
+                  onRetry: () => chatCtrl.loadConversations(),
+                  isActionsDisabled: !chatCtrl.isConnected,
+                  isSwitchingDisabled: chatCtrl.isGenerating,
+                ),
               ],
-
-              const SizedBox(height: CompanionSpacing.lg),
-
-              // Bottom Composer Bar
-              _buildComposerBar(context, chatCtrl, ext),
-            ],
+            ),
           ),
         );
       },
@@ -161,6 +206,8 @@ class _ChatScreenState extends State<ChatScreen> {
     bool isDark,
   ) {
     final statusColor = _statusColor(chatCtrl.connectionStatus, ext);
+    final badgeColor = _modelBadgeColor(chatCtrl.modelStateCategory, ext);
+    final badgeIcon = _modelBadgeIcon(chatCtrl.modelStateCategory);
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -184,6 +231,13 @@ class _ChatScreenState extends State<ChatScreen> {
                   const SizedBox(width: CompanionSpacing.sm),
                   NeumorphicButton(
                     size: NeumorphicButtonSize.sm,
+                    icon: const Icon(Icons.history_rounded, size: 16),
+                    tooltip: 'Conversation History (Ctrl+H)',
+                    onPressed: _toggleHistoryDrawer,
+                  ),
+                  const SizedBox(width: CompanionSpacing.xs),
+                  NeumorphicButton(
+                    size: NeumorphicButtonSize.sm,
                     icon: const Icon(Icons.add_rounded, size: 16),
                     tooltip: 'New Conversation',
                     onPressed: () => chatCtrl.createNewConversation(),
@@ -201,38 +255,41 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ),
         const SizedBox(width: CompanionSpacing.md),
-        // Model badge
-        if (chatCtrl.activeModelName != null) ...[
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: CompanionSpacing.sm,
-              vertical: CompanionSpacing.xs,
-            ),
-            decoration: BoxDecoration(
-              color: (ext?.accent ?? CompanionColors.lightAccent).withValues(alpha: 0.1),
-              borderRadius: CompanionRadius.borderSm,
-              border: Border.all(
-                color: (ext?.accent ?? CompanionColors.lightAccent).withValues(alpha: 0.2),
+        // Model badge with truthful runtime telemetry
+        if (chatCtrl.activeModelName != null || chatCtrl.modelStatus != null) ...[
+          Tooltip(
+            message: chatCtrl.modelStatusDescription,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: CompanionSpacing.sm,
+                vertical: CompanionSpacing.xs,
               ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.auto_awesome_rounded,
-                  size: 12,
-                  color: ext?.accent ?? CompanionColors.lightAccent,
+              decoration: BoxDecoration(
+                color: badgeColor.withValues(alpha: 0.12),
+                borderRadius: CompanionRadius.borderSm,
+                border: Border.all(
+                  color: badgeColor.withValues(alpha: 0.28),
                 ),
-                const SizedBox(width: 4),
-                Text(
-                  chatCtrl.activeModelName!,
-                  style: CompanionTypography.caption.copyWith(
-                    color: ext?.accent ?? CompanionColors.lightAccent,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 11,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    badgeIcon,
+                    size: 12,
+                    color: badgeColor,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 4),
+                  Text(
+                    chatCtrl.modelStatusLabel,
+                    style: CompanionTypography.caption.copyWith(
+                      color: badgeColor,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(width: CompanionSpacing.sm),
@@ -274,6 +331,44 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       ],
     );
+  }
+
+  Color _modelBadgeColor(ModelRuntimeStateCategory category, CompanionThemeExtension? ext) {
+    switch (category) {
+      case ModelRuntimeStateCategory.modelReady:
+        return ext?.success ?? CompanionColors.success;
+      case ModelRuntimeStateCategory.modelSleeping:
+        return const Color(0xFF38BDF8); // Sky blue
+      case ModelRuntimeStateCategory.modelLoading:
+        return ext?.warning ?? CompanionColors.warning;
+      case ModelRuntimeStateCategory.modelLoadFailed:
+        return ext?.danger ?? CompanionColors.danger;
+      case ModelRuntimeStateCategory.pairingRequired:
+        return const Color(0xFFF97316); // Orange
+      case ModelRuntimeStateCategory.modelUnloaded:
+      case ModelRuntimeStateCategory.authenticatedNoModel:
+      case ModelRuntimeStateCategory.unreachable:
+        return ext?.textMuted ?? CompanionColors.lightTextMuted;
+    }
+  }
+
+  IconData _modelBadgeIcon(ModelRuntimeStateCategory category) {
+    switch (category) {
+      case ModelRuntimeStateCategory.modelReady:
+        return Icons.auto_awesome_rounded;
+      case ModelRuntimeStateCategory.modelSleeping:
+        return Icons.bedtime_rounded;
+      case ModelRuntimeStateCategory.modelLoading:
+        return Icons.hourglass_top_rounded;
+      case ModelRuntimeStateCategory.modelLoadFailed:
+        return Icons.error_outline_rounded;
+      case ModelRuntimeStateCategory.pairingRequired:
+        return Icons.key_rounded;
+      case ModelRuntimeStateCategory.modelUnloaded:
+      case ModelRuntimeStateCategory.authenticatedNoModel:
+      case ModelRuntimeStateCategory.unreachable:
+        return Icons.memory_rounded;
+    }
   }
 
   Color _statusColor(RuntimeConnectionStatus status, CompanionThemeExtension? ext) {

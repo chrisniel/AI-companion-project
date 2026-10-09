@@ -130,8 +130,14 @@
   - Strictly verifies `MessageSend` non-null `attachment_ids` semantics.
 - [x] Implement `scripts/run-desktop.ps1` repository root launcher script.
 - [x] Update `frontend/flutter/apps/desktop/README.md`.
-- [x] Run full verification suite (136 workspace tests pass, 0 lints, clean Windows debug build).
-- [ ] Batch 4 independent human review handoff and verification sign-off. Stop at gate.
+- [x] Implement `ConversationHistoryDrawer` and chat history lifecycle:
+  - Left-anchored SoftGlass drawer with backdrop blur scrim and keyboard accessibility (Esc/Ctrl+H).
+  - Search filtering, session count, active conversation highlight, message count badge, and thread deletion.
+  - Startup synchronization: `checkConnection()` auto-loads conversation history upon verified authentication.
+  - Truthful model status telemetry and semantic badges (`modelReady`, `modelSleeping`, `modelLoading`, `modelUnloaded`, `modelLoadFailed`).
+  - Actionable error explanation for HTTP 503 `LLM_UNAVAILABLE` runtime state.
+- [x] Run full verification suite (152 workspace Flutter tests pass, 0 lints, clean Windows debug build, native lifecycle verification pass, OpenAPI parity pass, 37 Python tests pass).
+- [ ] M1 Final Integration independent human review handoff and verification sign-off. Stop at gate.
 
 ---
 
@@ -142,6 +148,7 @@ The reference implementation is `frontend/web/`.
 
 | Component / Feature | Web Reference (`frontend/web/`) | Flutter Desktop (`apps/desktop` / `companion_design`) | Status | Parity Notes |
 | :--- | :--- | :--- | :--- | :--- |
+| **Conversation History Drawer** | `ConversationHistoryDrawer.tsx` | `ConversationHistoryDrawer` in `apps/desktop` | `IMPLEMENTED` | Left-anchored glass drawer with blur scrim, search filter, active highlight, Esc/Ctrl+H. |
 | **Neumorphic Raised Surfaces** | `NeumorphicButton`, `Card` (`shadow-*-raised`) | `NeumorphicSurface` (convex/flat bevel, paired outer shadows) | `IMPLEMENTED` | Directional light/dark outer shadows adapt to light and dark theme modes. |
 | **Neumorphic Recessed Wells** | `TextInput`, Recessed Cards (`shadow-*-inset`) | `NeumorphicSurface(isRecessed: true)` via `_InnerShadowPainter` | `IMPLEMENTED` | Physical donut-mask inner shadow for composer input and diagnostic cards. |
 | **Neumorphic Buttons** | `NeumorphicButton.tsx` (primary, accent, ghost, icon) | `NeumorphicButton` (raised, pressed inset, hover, disabled) | `IMPLEMENTED` | Authentic press animation and state transitions. |
