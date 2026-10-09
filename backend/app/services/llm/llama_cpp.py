@@ -18,7 +18,11 @@ from app.schemas.llm import ChatMessage, ModelStatusResponse
 from app.schemas.multimodal import ContentBlock, ResolvedImageContent, TextContent
 from app.services.llm.base import BaseLLMProvider
 from app.services.llm.runtime_state import LLMRuntimeState
-from app.services.model_registry import build_model_list, resolve_runtime_model_id
+from app.services.model_registry import (
+    build_model_list,
+    find_model_registry_entry,
+    resolve_runtime_model_id,
+)
 
 logger = logging.getLogger("app.services.llm.llama_cpp")
 
@@ -304,14 +308,6 @@ class LlamaCppProvider(BaseLLMProvider):
             if candidate_gguf.exists():
                 return candidate_gguf
 
-        # Fallback to any real .gguf in directory (>100MB)
-        all_ggufs = [
-            f for f in models_dir.rglob("*.gguf")
-            if f.is_file() and f.name != "lfs-test.gguf" and not f.name.startswith("mmproj") and f.stat().st_size > 100 * 1024 * 1024
-        ]
-        if all_ggufs:
-            return all_ggufs[0]
-
         return candidate
 
     def _get_profile_params(self, profile: str) -> Dict[str, Any]:
@@ -407,11 +403,40 @@ class LlamaCppProvider(BaseLLMProvider):
                     self._last_error = "MODEL_PATH_TRAVERSAL"
                     return False
 
-            runtime_id = resolve_runtime_model_id(model_name)
-            if not runtime_id:
-                runtime_id = resolve_runtime_model_id(settings.DEFAULT_MODEL_NAME) or "qwen3-vl-4b-instruct"
+            # Active model reuse (Master Plan / Review requirements):
+            # If server/model is already loaded (ready or sleeping) and no model is specified
+            # or the requested model matches the currently active model, reuse without reload or unload.
+            if self.is_loaded():
+                if model_name is None:
+                    logger.info(f"Reusing active model '{self._active_model_name}' without reload")
+                    self._last_active_at = datetime.now(timezone.utc)
+                    return True
 
-            target_model_name = runtime_id
+                matched_active = find_model_registry_entry(model_name)
+                req_runtime_id = (
+                    (matched_active.runtime_model_id or matched_active.manifest.id)
+                    if matched_active
+                    else resolve_runtime_model_id(model_name)
+                )
+                if req_runtime_id and req_runtime_id == self._active_model_name:
+                    logger.info(
+                        f"Requested model '{model_name}' matches active model '{self._active_model_name}'; reusing without reload"
+                    )
+                    self._last_active_at = datetime.now(timezone.utc)
+                    return True
+
+            # Determine candidate model identifier
+            candidate_identifier = model_name or settings.DEFAULT_MODEL_NAME
+
+            # Enforce verified registry matching
+            registry_entry = find_model_registry_entry(candidate_identifier)
+            if not registry_entry or not registry_entry.library_state.primary_file_exists:
+                self._last_error = f"CONFIGURED_MODEL_NOT_FOUND: {candidate_identifier}"
+                logger.error(self._last_error)
+                self._runtime_state = LLMRuntimeState.MODEL_ERROR
+                return False
+
+            target_model_name = registry_entry.runtime_model_id or registry_entry.manifest.id
 
             # Mode 0: If Core-managed process is already alive, reuse it and NEVER spawn another
             if self._server_process is not None and self._server_process.poll() is None:

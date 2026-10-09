@@ -3,6 +3,7 @@ import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../features/chat/assistant_markdown_view.dart';
 import '../features/chat/conversation_history_drawer.dart';
 import '../features/chat/desktop_chat_controller.dart';
 
@@ -466,6 +467,109 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  static String _formatAttachmentSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  Widget _buildAttachmentCards(
+    List<AttachmentRef> attachments,
+    CompanionThemeExtension? ext, {
+    required bool isUser,
+  }) {
+    return Column(
+      crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: attachments.map((att) {
+        final isImage = att.mimeType.startsWith('image/');
+        return Container(
+          margin: const EdgeInsets.only(bottom: CompanionSpacing.sm),
+          padding: const EdgeInsets.symmetric(
+            horizontal: CompanionSpacing.md,
+            vertical: CompanionSpacing.sm,
+          ),
+          decoration: BoxDecoration(
+            color: ext?.surfaceRecessed ?? Colors.black.withValues(alpha: 0.05),
+            borderRadius: CompanionRadius.borderSm,
+            border: Border.all(
+              color: ext?.borderSubtle ?? Colors.grey.withValues(alpha: 0.2),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: (ext?.accent ?? CompanionColors.lightAccent).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(CompanionRadius.sm),
+                ),
+                child: Icon(
+                  isImage ? Icons.image_outlined : Icons.insert_drive_file_outlined,
+                  size: 18,
+                  color: ext?.accent ?? CompanionColors.lightAccent,
+                ),
+              ),
+              const SizedBox(width: CompanionSpacing.sm),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      att.filenameDisplay,
+                      style: CompanionTypography.bodySmall.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: ext?.textPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _formatAttachmentSize(att.sizeBytes),
+                          style: CompanionTypography.caption.copyWith(
+                            fontSize: 10.5,
+                            color: ext?.textMuted,
+                          ),
+                        ),
+                        const SizedBox(width: CompanionSpacing.xs),
+                        Text(
+                          '•',
+                          style: TextStyle(color: ext?.textMuted, fontSize: 10),
+                        ),
+                        const SizedBox(width: CompanionSpacing.xs),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: ext?.surfaceRecessed ?? Colors.grey.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'Preview unavailable (Planned M2)',
+                            style: CompanionTypography.caption.copyWith(
+                              fontSize: 9.5,
+                              fontStyle: FontStyle.italic,
+                              color: ext?.textMuted,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
   Widget _buildUserBubble(BuildContext context, MessageOut msg, CompanionThemeExtension? ext) {
     return NeumorphicSurface(
       surfaceType: NeumorphicSurfaceType.raised,
@@ -477,12 +581,15 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Text(
-            msg.content,
-            style: CompanionTypography.bodyMedium.copyWith(
-              color: ext?.textPrimary,
+          if (msg.attachments.isNotEmpty)
+            _buildAttachmentCards(msg.attachments, ext, isUser: true),
+          if (msg.content.isNotEmpty)
+            SelectableText(
+              msg.content,
+              style: CompanionTypography.bodyMedium.copyWith(
+                color: ext?.textPrimary,
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -526,12 +633,14 @@ class _ChatScreenState extends State<ChatScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (msg.attachments.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: CompanionSpacing.sm),
+                    child: _buildAttachmentCards(msg.attachments, ext, isUser: false),
+                  ),
                 if (msg.content.isNotEmpty)
-                  Text(
-                    msg.content,
-                    style: CompanionTypography.bodyMedium.copyWith(
-                      color: ext?.textPrimary,
-                    ),
+                  AssistantMarkdownView(
+                    content: msg.content,
                   ),
                 if (isStreaming) ...[
                   if (msg.content.isEmpty)

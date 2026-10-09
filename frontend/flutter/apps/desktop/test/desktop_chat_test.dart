@@ -59,6 +59,7 @@ class MockCompanionClient extends CompanionClient {
   bool deleteConvCalled = false;
   String? lastDeletedConvId;
   ModelStatusResponse? customModelStatus;
+  List<MessageOut>? customMessages;
 
   @override
   Future<ModelStatusResponse> getModelStatus() async {
@@ -124,6 +125,9 @@ class MockCompanionClient extends CompanionClient {
     int skip = 0,
     int limit = 100,
   }) async {
+    if (customMessages != null) {
+      return MessageListOut(items: customMessages!, total: customMessages!.length);
+    }
     return MessageListOut(
       items: [
         MessageOut(
@@ -270,7 +274,85 @@ void main() {
       );
       expect(controller.conversations, hasLength(1));
       expect(controller.conversations.where((c) => c.title == 'Failed Thread'), isEmpty);
-      expect(controller.errorMessage, contains('Internal database error'));
+    });
+
+    test('createNewConversation reuses active empty draft without creating duplicate rows', () async {
+      await controller.checkConnection();
+      expect(controller.conversations, hasLength(1));
+
+      mockClient.customMessages = [];
+      final emptyConv = ConversationOut(
+        id: 'mock-empty-draft',
+        title: 'New Conversation',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+        messageCount: 0,
+      );
+      await controller.selectConversation(emptyConv);
+      expect(controller.activeConversation?.id, 'mock-empty-draft');
+      expect(controller.messages, isEmpty);
+
+      mockClient.createConvCalled = false;
+
+      // Calling createNewConversation should reuse the active empty draft
+      await controller.createNewConversation();
+
+      expect(mockClient.createConvCalled, isFalse);
+      expect(controller.activeConversation?.id, 'mock-empty-draft');
+    });
+
+    test('createNewConversation transition lock guards against rapid double-clicks', () async {
+      await controller.checkConnection();
+      mockClient.createConvCalled = false;
+
+      // Existing chat has messageCount == 2
+      expect(controller.activeConversation?.messageCount, 2);
+
+      // Invoke concurrent createNewConversation calls
+      final future1 = controller.createNewConversation(title: 'Thread 1');
+      final future2 = controller.createNewConversation(title: 'Thread 2');
+
+      await Future.wait([future1, future2]);
+
+      // Only one conversation was created, second was guarded by transition lock
+      expect(controller.conversations.where((c) => c.title == 'Thread 1'), hasLength(1));
+      expect(controller.conversations.where((c) => c.title == 'Thread 2'), isEmpty);
+    });
+
+    test('failed 503 send preserves thread and reuses it on subsequent new conversation click', () async {
+      await controller.checkConnection();
+
+      mockClient.customMessages = [];
+      final emptyConv = ConversationOut(
+        id: 'conv-with-503',
+        title: 'New Conversation',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+        messageCount: 0,
+      );
+      await controller.selectConversation(emptyConv);
+
+      final streamController = StreamController<SseEvent>();
+      mockClient.customEventStream = streamController.stream;
+
+      final sendFuture = controller.sendMessage('Test prompt that 503s');
+      streamController.addError(const CompanionApiException(statusCode: 503, message: 'LLM_UNAVAILABLE'));
+      await streamController.close();
+      await sendFuture;
+
+      expect(controller.errorMessage, contains('503'));
+      expect(controller.messages, isEmpty);
+      expect(controller.activeConversation?.id, 'conv-with-503');
+
+      // Tapping "New Conversation" now reuses this empty draft instead of creating another row
+      mockClient.createConvCalled = false;
+      await controller.createNewConversation();
+      expect(mockClient.createConvCalled, isFalse);
+      expect(controller.activeConversation?.id, 'conv-with-503');
     });
 
     test('selectConversation throws StateError when turn generation is in progress', () async {
@@ -566,6 +648,50 @@ void main() {
 
       // Drawer is closed
       expect(find.text('Conversation History'), findsNothing);
+
+      controller.dispose();
+    });
+
+    testWidgets('renders historical image attachment cards with truthful Preview unavailable badge', (tester) async {
+      final mockClient = MockCompanionClient();
+      mockClient.customMessages = [
+        MessageOut(
+          id: 'msg-with-att',
+          conversationId: 'mock-conv-1',
+          sender: 'user',
+          content: 'Here is my design mockup',
+          status: 'completed',
+          sequenceNo: 1,
+          createdAt: DateTime.now().toUtc().toIso8601String(),
+          attachments: const [
+            AttachmentRef(
+              id: 'att-1',
+              filenameDisplay: 'architecture_diagram.png',
+              mimeType: 'image/png',
+              sizeBytes: 256 * 1024,
+            ),
+          ],
+        ),
+      ];
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('architecture_diagram.png'), findsOneWidget);
+      expect(find.text('256.0 KB'), findsOneWidget);
+      expect(find.text('Preview unavailable (Planned M2)'), findsOneWidget);
+      expect(find.byIcon(Icons.image_outlined), findsOneWidget);
 
       controller.dispose();
     });

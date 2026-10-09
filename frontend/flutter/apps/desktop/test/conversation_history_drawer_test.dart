@@ -8,7 +8,7 @@ import 'package:ai_companion_desktop/features/chat/conversation_history_drawer.d
 
 void main() {
   final sampleConversations = [
-    ConversationOut(
+    const ConversationOut(
       id: 'conv-1',
       title: 'First Chat with Antigravity',
       characterId: 'default',
@@ -17,7 +17,7 @@ void main() {
       updatedAt: '2026-10-09T10:05:00Z',
       messageCount: 5,
     ),
-    ConversationOut(
+    const ConversationOut(
       id: 'conv-2',
       title: 'Debugging Python runtime',
       characterId: 'default',

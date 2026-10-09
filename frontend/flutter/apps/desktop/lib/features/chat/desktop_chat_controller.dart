@@ -62,6 +62,7 @@ class DesktopChatController extends ChangeNotifier {
   int _turnSequenceToken = 0;
   int _loadSequenceToken = 0;
   bool _isDisposed = false;
+  bool _isCreatingConversation = false;
 
   DesktopChatController({
     required CompanionClient client,
@@ -80,6 +81,7 @@ class DesktopChatController extends ChangeNotifier {
   ModelStatusResponse? get modelStatus => _modelStatus;
   String? get errorMessage => _errorMessage;
   bool get isLoadingConversations => _isLoadingConversations;
+  bool get isCreatingConversation => _isCreatingConversation;
   String? get conversationError => _conversationError;
 
   bool get isGenerating => _generationState == ChatGenerationState.generating;
@@ -350,15 +352,36 @@ class DesktopChatController extends ChangeNotifier {
   }
 
   /// Creates a new persistent conversation thread and selects it.
+  /// Creates a new persistent conversation thread and selects it.
   ///
+  /// Reuses existing untouched empty draft conversation if already active (matching Web Phase 8C).
+  /// Enforces synchronous transition lock to prevent duplicate creation on rapid clicks.
   /// Never fabricates fake local conversation records when backend calls fail.
   Future<void> createNewConversation({String title = 'New Conversation'}) async {
     if (_isDisposed) return;
+    if (_isCreatingConversation) return;
     if (!isConnected) {
       _errorMessage = 'Cannot create conversation: Runtime is not connected and authorized.';
       notifyListeners();
       throw StateError('Runtime is not connected.');
     }
+
+    // Replicate React Web AssistantView.tsx (Phase 8C):
+    // If the active conversation is already an untouched empty draft, reuse it rather than POSTing another row.
+    final isCurrentEmptyDraft = _activeConversation != null &&
+        (_activeConversation!.title == 'New Conversation' ||
+            _activeConversation!.title.isEmpty ||
+            _activeConversation!.title == title) &&
+        _messages.isEmpty &&
+        _activeConversation!.messageCount == 0;
+    if (isCurrentEmptyDraft) {
+      _errorMessage = null;
+      notifyListeners();
+      return;
+    }
+
+    _isCreatingConversation = true;
+    notifyListeners();
     try {
       final created = await _client.createConversation(title: title);
       _conversations = [created, ..._conversations];
@@ -367,6 +390,9 @@ class DesktopChatController extends ChangeNotifier {
       _errorMessage = 'Failed to create conversation: $e';
       if (!_isDisposed) notifyListeners();
       rethrow;
+    } finally {
+      _isCreatingConversation = false;
+      if (!_isDisposed) notifyListeners();
     }
   }
 
