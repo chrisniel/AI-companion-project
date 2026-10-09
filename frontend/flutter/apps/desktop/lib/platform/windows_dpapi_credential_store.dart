@@ -183,6 +183,9 @@ class WindowsDpapiCredentialStore implements CredentialStore {
 
   @override
   Future<String?> readToken() async {
+    if (!Platform.isWindows) {
+      return null;
+    }
     try {
       final file = File(_filePath);
       if (!await file.exists()) {
@@ -194,13 +197,8 @@ class WindowsDpapiCredentialStore implements CredentialStore {
         return null;
       }
 
-      if (Platform.isWindows) {
-        final decryptedBytes = _decryptDpapi(encryptedBytes);
-        return utf8.decode(decryptedBytes);
-      } else {
-        // Fallback for non-Windows developer environments
-        return utf8.decode(encryptedBytes);
-      }
+      final decryptedBytes = _decryptDpapi(encryptedBytes);
+      return utf8.decode(decryptedBytes);
     } catch (_) {
       // Fail closed if unreadable or corrupted
       return null;
@@ -209,16 +207,15 @@ class WindowsDpapiCredentialStore implements CredentialStore {
 
   @override
   Future<void> writeToken(String token) async {
+    if (!Platform.isWindows) {
+      throw UnsupportedError('WindowsDpapiCredentialStore requires Windows OS.');
+    }
     final file = File(_filePath);
     await file.parent.create(recursive: true);
 
     final rawBytes = Uint8List.fromList(utf8.encode(token));
-    if (Platform.isWindows) {
-      final encryptedBytes = _encryptDpapi(rawBytes);
-      await file.writeAsBytes(encryptedBytes, flush: true);
-    } else {
-      await file.writeAsBytes(rawBytes, flush: true);
-    }
+    final encryptedBytes = _encryptDpapi(rawBytes);
+    await file.writeAsBytes(encryptedBytes, flush: true);
   }
 
   @override

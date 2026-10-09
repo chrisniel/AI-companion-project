@@ -131,6 +131,15 @@ class TestCIPolicy(unittest.TestCase):
         self.assertEqual(out["needs_backend"], "false")
         self.assertEqual(out["needs_flutter"], "false")
 
+    def test_dart_contract_parity_scripts_trigger_contract_lane(self):
+        for script_file in ("scripts/check_dart_openapi_parity.py", "scripts/tests/test_check_dart_openapi_parity.py"):
+            with self.subTest(file=script_file):
+                args = DummyArgs(event="pull_request", target_branch="develop", files_json=json.dumps([script_file]))
+                out = ci_policy.classify(args)
+                self.assertEqual(out["needs_contract"], "true")
+                self.assertEqual(out["needs_backend"], "false")
+                self.assertEqual(out["needs_flutter"], "false")
+
     def test_invalid_json_fallback(self):
         args = DummyArgs(event="pull_request", target_branch="develop", files_json="{invalid")
         out = ci_policy.classify(args)

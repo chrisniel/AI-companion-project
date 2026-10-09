@@ -81,7 +81,11 @@ def classify(args):
             needs_flutter = True
         elif f.startswith("frontend/"):
             needs_frontend = True
-        elif f.startswith("contracts/") or f == "scripts/check_openapi_contract.py":
+        elif f.startswith("contracts/") or f in (
+            "scripts/check_openapi_contract.py",
+            "scripts/check_dart_openapi_parity.py",
+            "scripts/tests/test_check_dart_openapi_parity.py",
+        ):
             needs_contract = True
         elif not is_docs_only_file(f):
             # Unknown unmapped (e.g. .github/**, android/**, scripts/**) forces Full Verification

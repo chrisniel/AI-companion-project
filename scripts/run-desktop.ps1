@@ -9,9 +9,6 @@
 .PARAMETER HostUrl
     Optional backend host URL (e.g. http://127.0.0.1:8000). Passed as COMPANION_HOST_URL.
 
-.PARAMETER Token
-    Optional pairing token. Passed as COMPANION_PAIRING_TOKEN.
-
 .PARAMETER Config
     Optional custom configuration profile name.
 
@@ -31,7 +28,6 @@
 [CmdletBinding()]
 param(
     [string]$HostUrl = "",
-    [string]$Token = "",
     [string]$Config = "",
     [ValidateSet("debug", "profile", "release")]
     [string]$Mode = "debug",
@@ -67,9 +63,6 @@ Write-Host "`n[1/3] Flutter SDK located: $($flutterCmd.Source)" -ForegroundColor
 $extraArgs = @()
 if ($HostUrl) {
     $extraArgs += "--dart-define=COMPANION_HOST_URL=$HostUrl"
-}
-if ($Token) {
-    $extraArgs += "--dart-define=COMPANION_PAIRING_TOKEN=$Token"
 }
 if ($Config) {
     $extraArgs += "--dart-define=COMPANION_CONFIG=$Config"

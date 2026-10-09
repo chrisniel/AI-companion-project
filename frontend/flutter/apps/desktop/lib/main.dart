@@ -11,6 +11,7 @@ import 'features/chat/desktop_chat_controller.dart';
 import 'harness/visual_evidence_runner.dart';
 import 'lifecycle/desktop_lifecycle_coordinator.dart';
 import 'lifecycle/live_desktop_adapters.dart';
+import 'platform/desktop_client_settings.dart';
 import 'platform/windows_dpapi_credential_store.dart';
 import 'shell/desktop_shell.dart';
 
@@ -136,13 +137,19 @@ class _AiCompanionDesktopAppState extends State<AiCompanionDesktopApp> {
       _chatController = widget.chatController!;
     } else {
       final store = WindowsDpapiCredentialStore();
-      const initialHostUrl = String.fromEnvironment('COMPANION_HOST_URL', defaultValue: 'http://127.0.0.1:8000');
+      const defaultHostUrl = String.fromEnvironment('COMPANION_HOST_URL', defaultValue: 'http://127.0.0.1:8000');
       final client = CompanionClient(
-        baseUrl: initialHostUrl,
+        baseUrl: defaultHostUrl,
         credentialStore: store,
       );
       _chatController = DesktopChatController(client: client);
-      _chatController.checkConnection();
+      DesktopClientSettings().readHostUrl(defaultValue: defaultHostUrl).then((host) {
+        if (host != defaultHostUrl) {
+          _chatController.updateConfiguration(baseUrl: host);
+        } else {
+          _chatController.checkConnection();
+        }
+      });
     }
   }
 

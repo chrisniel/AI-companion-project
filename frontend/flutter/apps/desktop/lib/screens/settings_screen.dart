@@ -6,7 +6,9 @@ import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
 
 import '../controllers/desktop_settings_controller.dart';
+import '../features/chat/desktop_chat_controller.dart';
 import '../lifecycle/desktop_lifecycle_coordinator.dart';
+import '../platform/desktop_client_settings.dart';
 import '../platform/windows_dpapi_credential_store.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -14,10 +16,12 @@ class SettingsScreen extends StatefulWidget {
     super.key,
     required this.controller,
     this.coordinator,
+    this.chatController,
   });
 
   final DesktopSettingsController controller;
   final DesktopLifecycleCoordinator? coordinator;
+  final DesktopChatController? chatController;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -42,6 +46,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       text: const String.fromEnvironment('COMPANION_HOST_URL', defaultValue: 'http://127.0.0.1:8000'),
     );
     _tokenController = TextEditingController();
+
+    DesktopClientSettings().readHostUrl().then((saved) {
+      if (mounted && saved.isNotEmpty) {
+        setState(() {
+          _urlController.text = saved;
+        });
+      }
+    });
 
     try {
       WindowsDpapiCredentialStore().readToken().then((t) {
@@ -627,24 +639,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             runSpacing: CompanionSpacing.sm,
             children: [
               NeumorphicButton(
-                child: const Text('Save Token'),
-                icon: const Icon(Icons.security_rounded, size: 16),
-                size: NeumorphicButtonSize.sm,
-                onPressed: () async {
-                  final token = _tokenController.text.trim();
-                  try {
-                    await WindowsDpapiCredentialStore().writeToken(token);
-                    setState(() {
-                      _testConnectionResult = 'Token saved securely via Windows DPAPI.';
-                    });
-                  } catch (e) {
-                    setState(() {
-                      _testConnectionResult = 'Failed to save token: $e';
-                    });
-                  }
-                },
-              ),
-              NeumorphicButton(
                 child: Text(_isTesting ? 'Testing...' : 'Test Connection'),
                 icon: const Icon(Icons.network_check_rounded, size: 16),
                 size: NeumorphicButtonSize.sm,
@@ -655,25 +649,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           _isTesting = true;
                           _testConnectionResult = null;
                         });
+                        final candidateUrl = _urlController.text.trim();
+                        final candidateToken = _tokenController.text.trim();
                         try {
-                          final store = InMemoryCredentialStore(_tokenController.text.trim());
-                          final client = CompanionClient(
-                            baseUrl: _urlController.text.trim(),
-                            credentialStore: store,
+                          CompanionClient.validateBaseUrl(candidateUrl);
+                          final probeStore = InMemoryCredentialStore(candidateToken);
+                          final probeClient = CompanionClient(
+                            baseUrl: candidateUrl,
+                            credentialStore: probeStore,
                           );
-                          final health = await client.getHealth();
+                          final health = await probeClient.getHealth();
                           if (health.status == 'healthy') {
-                            try {
-                              final auth = await client.verifyAuth();
+                            if (candidateToken.isEmpty) {
                               setState(() {
                                 _testConnectionResult =
-                                    'Connected: Health OK (${health.status}), Auth verified (${auth.tokenType}).';
+                                    'Reachable: Health OK (200), but pairing token is missing.';
                               });
-                            } catch (authErr) {
-                              setState(() {
-                                _testConnectionResult =
-                                    'Health OK (${health.status}), but auth verification failed: $authErr';
-                              });
+                            } else {
+                              try {
+                                final auth = await probeClient.verifyAuth();
+                                setState(() {
+                                  _testConnectionResult =
+                                      'Verified: Health OK (200), pairing token verified (${auth.tokenType}).';
+                                });
+                              } catch (authErr) {
+                                setState(() {
+                                  _testConnectionResult =
+                                      'Reachable: Health OK (200), but authentication verification failed: $authErr';
+                                });
+                              }
                             }
                           } else {
                             setState(() {
@@ -692,6 +696,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           }
                         }
                       },
+              ),
+              NeumorphicButton(
+                child: const Text('Apply & Save'),
+                icon: const Icon(Icons.save_rounded, size: 16),
+                size: NeumorphicButtonSize.sm,
+                onPressed: () async {
+                  final candidateUrl = _urlController.text.trim();
+                  final candidateToken = _tokenController.text.trim();
+                  try {
+                    CompanionClient.validateBaseUrl(candidateUrl);
+                    await DesktopClientSettings().writeHostUrl(candidateUrl);
+                    if (candidateToken.isNotEmpty) {
+                      await WindowsDpapiCredentialStore().writeToken(candidateToken);
+                    }
+                    if (widget.chatController != null) {
+                      await widget.chatController!.updateConfiguration(
+                        baseUrl: candidateUrl,
+                        pairingToken: candidateToken,
+                      );
+                    }
+                    setState(() {
+                      _testConnectionResult = 'Configuration saved and active runtime reconnected.';
+                    });
+                  } catch (e) {
+                    setState(() {
+                      _testConnectionResult = 'Failed to apply configuration: $e';
+                    });
+                  }
+                },
               ),
             ],
           ),

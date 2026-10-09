@@ -139,6 +139,7 @@ class DesktopShell extends StatelessWidget {
           key: const ValueKey('settings_screen'),
           controller: controller,
           coordinator: coordinator,
+          chatController: chatController,
         );
     }
   }

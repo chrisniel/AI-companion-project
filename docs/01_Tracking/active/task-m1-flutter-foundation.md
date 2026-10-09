@@ -161,4 +161,10 @@ The reference implementation is `frontend/web/`.
 | **Rich Markdown in Bubbles** | `react-markdown` with syntax highlighting | Plain text with line break preservation in `_MessageBubble` | `PARTIAL` | Full markdown and syntax-highlighted code blocks deferred to M2. |
 | **Model Selection Dropdown** | Dropdown menu in chat header | Status badge showing active model in chat header | `PARTIAL` | Displays truthful active model; interactive dropdown model switching deferred to M2. |
 | **Notification Toast Banner** | Floating toast notification overlay | In-card connection status pill and inline error banners | `PARTIAL` | Floating toast overlay system deferred to M2. |
+| **Background Presets** | Multi-gradient wallpaper presets (`ThemeContext.tsx`) | Ambient radial glow matching active accent | `DEFERRED` | M1 uses calibrated ambient backdrop; multi-palette wallpaper presets deferred. |
+| **Custom Backgrounds** | Custom image upload and background tinting | Fixed SoftGlass backdrop system | `DEFERRED` | User-uploaded background imagery and custom tints deferred. |
+| **Glass & Effect Controls** | Sliders for blur strength, glass opacity, border intensity | Calibrated design tokens in `companion_design` | `DEFERRED` | Interactive slider tuning for glass opacity and blur deferred. |
+| **UI Density Settings** | Compact vs Spacious density modes | Responsive desktop layout (1280×800 / 1024×640) | `DEFERRED` | Fixed responsive desktop layout; user density toggle deferred. |
+| **Animation Preferences** | In-app reduced motion preference toggle | Smooth AnimatedSwitcher & Flutter animations | `DEFERRED` | Respects platform defaults; explicit in-app animation control deferred. |
+| **Live Appearance Preview** | Dedicated live theme preview card in Settings | Direct live updates across shell upon selection | `DEFERRED` | Settings controls update active UI live; isolated preview canvas deferred. |
 | **Secondary App Destinations** | Voice, Schedule, Memory, Studio modules | Navigation rail stubs with "Planned M3/M4" badge | `DEFERRED` | Shell navigation functional; full screen implementations scheduled for M3/M4. |

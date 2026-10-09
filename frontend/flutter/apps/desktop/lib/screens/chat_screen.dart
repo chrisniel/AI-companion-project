@@ -71,13 +71,25 @@ class _ChatScreenState extends State<ChatScreen> {
   void _handleSend() {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
-    if (_effectiveController.isGenerating) return;
+    if (_effectiveController.isGenerating || !_effectiveController.canSend) return;
 
-    _effectiveController.sendMessage(text);
+    final originalText = _textController.text;
     _textController.clear();
     setState(() {
       _canSend = false;
     });
+
+    try {
+      _effectiveController.sendMessage(text);
+    } catch (_) {
+      if (mounted) {
+        _textController.text = originalText;
+        setState(() {
+          _canSend = true;
+        });
+      }
+      return;
+    }
 
     _scrollToBottom();
     _focusNode.requestFocus();
@@ -271,6 +283,7 @@ class _ChatScreenState extends State<ChatScreen> {
       case RuntimeConnectionStatus.connecting:
       case RuntimeConnectionStatus.reconnecting:
         return ext?.warning ?? CompanionColors.warning;
+      case RuntimeConnectionStatus.unauthorized:
       case RuntimeConnectionStatus.error:
         return ext?.danger ?? CompanionColors.danger;
       case RuntimeConnectionStatus.unconnected:
@@ -554,7 +567,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: CallbackShortcuts(
                   bindings: {
                     const SingleActivator(LogicalKeyboardKey.enter): () {
-                      if (!isBusy && _canSend) {
+                      if (!isBusy && _canSend && chatCtrl.canSend) {
                         _handleSend();
                       }
                     },
@@ -578,7 +591,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       minLines: 1,
                       textInputAction: TextInputAction.send,
                       onSubmitted: (_) {
-                        if (!isBusy && _canSend) {
+                        if (!isBusy && _canSend && chatCtrl.canSend) {
                           _handleSend();
                         }
                       },
@@ -614,7 +627,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   size: NeumorphicButtonSize.sm,
                   icon: const Icon(Icons.send_rounded, size: 18),
                   tooltip: 'Send message (Enter)',
-                  onPressed: _canSend ? _handleSend : null,
+                  onPressed: (_canSend && chatCtrl.canSend) ? _handleSend : null,
                 ),
             ],
           ),
@@ -636,7 +649,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 const SizedBox(width: CompanionSpacing.sm),
                 Text(
-                  'Context buffer: ${chatCtrl.isConnected ? "Connected" : "Standalone"}',
+                  'Context buffer: ${chatCtrl.isConnected ? "Connected" : (chatCtrl.connectionStatus == RuntimeConnectionStatus.unauthorized ? "Unauthorized" : "Standalone")}',
                   style: CompanionTypography.caption.copyWith(
                     color: ext?.textMuted,
                     fontSize: 10,

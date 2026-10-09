@@ -77,6 +77,26 @@ class TestCheckDartOpenApiParity(unittest.TestCase):
         errors, _, _ = checker.verify_route_coverage(fake_openapi)
         self.assertTrue(any("uncataloged route" in err for err in errors))
 
+    def test_verify_companion_client_implementations_passes(self):
+        """CompanionClient must implement all 10 M1 routes with correct path templates."""
+        errors, verified = checker.verify_companion_client_implementations(checker.CLIENT_PATH)
+        self.assertEqual(errors, [])
+        self.assertEqual(len(verified), 10)
+
+    def test_verify_companion_client_implementations_fails_on_missing_method(self):
+        """Missing implementation method must fail closed."""
+        import tempfile
+        with tempfile.NamedTemporaryFile("w+", encoding="utf-8", delete=False) as tf:
+            tf.write("// Empty client without required methods")
+            temp_path = Path(tf.name)
+        try:
+            errors, verified = checker.verify_companion_client_implementations(temp_path)
+            self.assertTrue(len(errors) > 0)
+            self.assertTrue(any("lacks method" in err for err in errors))
+        finally:
+            if temp_path.exists():
+                temp_path.unlink()
+
 
 if __name__ == "__main__":
     unittest.main()

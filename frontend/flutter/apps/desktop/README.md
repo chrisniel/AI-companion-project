@@ -90,9 +90,11 @@ The resulting binaries are output to:
 ## 5. Security & Credential Storage
 
 The desktop client implements zero-plaintext credential persistence:
-- **Windows DPAPI Integration (`dart:ffi`):** All pairing tokens are encrypted via Windows Data Protection API (`CryptProtectData` in `Crypt32.dll`) before being stored on disk.
-- **Decryption:** The user's active login session key (`CryptUnprotectData`) is required to read tokens.
-- **Storage Location:** `%LOCALAPPDATA%\AICompanion\credentials.dat`. Real tokens are never committed or logged.
+- **Windows DPAPI Integration (`dart:ffi`):** All pairing tokens are encrypted via Windows Data Protection API (`CryptProtectData` in `Crypt32.dll`) before being stored on disk. Plaintext tokens never touch persistent storage or logs.
+- **Decryption:** The user's active login session key (`CryptUnprotectData`) is required to decrypt stored tokens.
+- **Storage Location:** `%LOCALAPPDATA%\AI Companion\credentials.bin`.
+- **Non-Secret Client Settings:** Host URL preferences are stored separately in `%LOCALAPPDATA%\AI Companion\client_settings.json`.
+- **No CLI / Compile Secret Injection:** Secrets must never be passed via CLI arguments or `--dart-define` compilation flags; tokens are entered in Settings > Runtime Connection & Pairing and committed directly to DPAPI.
 
 ---
 

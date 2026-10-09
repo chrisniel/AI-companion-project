@@ -10,6 +10,15 @@ fail-closed validation:
   3. Nullability and requiredness contracts.
   4. Specific enforcement: MessageSend.attachment_ids is optional array, NOT nullable.
   5. Route coverage classification: M1 covered routes vs explicitly registered M2-M4 unmapped routes.
+  6. Source code inspection of CompanionClient: verifies each claimed M1 route has
+     an actual Dart method and URL path template.
+
+STATIC SOURCE VERIFICATION LIMITS:
+  Static inspection verifies syntactic and structural conformance: schemas, fields,
+  types, serialization keys, nullability guards, and method/route existence in Dart source.
+  It does NOT replace dynamic integration testing; live network behaviors (timeouts,
+  connection errors, streaming backpressure, TLS verification) are validated by
+  automated unit tests (companion_client_test.dart) and live runtime harnesses.
 
 Usage:
     python scripts/check_dart_openapi_parity.py          # default check mode
@@ -27,6 +36,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONTRACT_PATH = REPO_ROOT / "contracts" / "openapi" / "openapi.json"
 DTO_DIR = REPO_ROOT / "frontend" / "flutter" / "packages" / "companion_api" / "lib" / "dto"
+CLIENT_PATH = REPO_ROOT / "frontend" / "flutter" / "packages" / "companion_api" / "lib" / "client" / "companion_client.dart"
 
 # M1 Covered Routes (method, path) implemented in CompanionClient
 M1_COVERED_ROUTES: Set[Tuple[str, str]] = {
@@ -40,6 +50,20 @@ M1_COVERED_ROUTES: Set[Tuple[str, str]] = {
     ("DELETE", "/api/v1/conversations/{conversation_id}"),
     ("GET", "/api/v1/conversations/{conversation_id}/messages"),
     ("POST", "/api/v1/conversations/{conversation_id}/messages"),
+}
+
+# Mapping of M1 route to expected Dart method name and path template in CompanionClient
+M1_ROUTE_DART_METHODS: Dict[Tuple[str, str], Tuple[str, str]] = {
+    ("GET", "/api/v1/health"): ("getHealth", "/api/v1/health"),
+    ("GET", "/api/v1/system/status"): ("getSystemStatus", "/api/v1/system/status"),
+    ("POST", "/api/v1/auth/verify"): ("verifyAuth", "/api/v1/auth/verify"),
+    ("GET", "/api/v1/models"): ("getModelStatus", "/api/v1/models"),
+    ("POST", "/api/v1/conversations"): ("createConversation", "/api/v1/conversations"),
+    ("GET", "/api/v1/conversations"): ("listConversations", "/api/v1/conversations"),
+    ("GET", "/api/v1/conversations/{conversation_id}"): ("getConversation", "/api/v1/conversations/$conversationId"),
+    ("DELETE", "/api/v1/conversations/{conversation_id}"): ("deleteConversation", "/api/v1/conversations/$conversationId"),
+    ("GET", "/api/v1/conversations/{conversation_id}/messages"): ("listMessages", "/api/v1/conversations/$conversationId/messages"),
+    ("POST", "/api/v1/conversations/{conversation_id}/messages"): ("sendMessageStream", "/api/v1/conversations/$conversationId/messages"),
 }
 
 # Explicitly cataloged M2-M4 future routes to prevent silent omissions
@@ -309,6 +333,38 @@ def verify_route_coverage(openapi_data: Dict[str, Any]) -> Tuple[List[str], List
     return errors, verified_m1, unmapped_cataloged
 
 
+def verify_companion_client_implementations(client_path: Path) -> Tuple[List[str], List[Tuple[str, str, str]]]:
+    """
+    Verifies that CompanionClient in Dart actually implements every M1 covered route
+    with a corresponding method declaration and path template.
+    """
+    errors: List[str] = []
+    verified_impls: List[Tuple[str, str, str]] = []
+
+    if not client_path.exists():
+        return [f"[Client Implementation] CompanionClient file not found: {client_path}"], []
+
+    content = client_path.read_text(encoding="utf-8")
+
+    for (http_method, openapi_path), (method_name, dart_path_template) in sorted(M1_ROUTE_DART_METHODS.items()):
+        method_pattern = rf"\b{re.escape(method_name)}\s*\("
+        if not re.search(method_pattern, content):
+            errors.append(
+                f"[Client Implementation] Route {http_method} {openapi_path} is claimed in M1, but CompanionClient lacks method '{method_name}()'"
+            )
+            continue
+
+        if dart_path_template not in content:
+            errors.append(
+                f"[Client Implementation] Method '{method_name}' does not contain expected path template '{dart_path_template}'"
+            )
+            continue
+
+        verified_impls.append((http_method, openapi_path, method_name))
+
+    return errors, verified_impls
+
+
 def run_checks() -> Tuple[bool, str]:
     if not CONTRACT_PATH.exists():
         return False, f"Contract file not found at {CONTRACT_PATH}"
@@ -372,7 +428,16 @@ def run_checks() -> Tuple[bool, str]:
     for method, path, target in unmapped_future:
         report_lines.append(f"  -    {method:<6} {path:<65} [{target}]")
 
-    # 3. MessageSend Strict Guard Summary
+    # 3. Check CompanionClient Dart Source Implementation
+    client_errors, verified_impls = verify_companion_client_implementations(CLIENT_PATH)
+    if client_errors:
+        all_errors.extend(client_errors)
+
+    report_lines.append(f"\n[Verified CompanionClient Route Methods: {len(verified_impls)}/{len(M1_ROUTE_DART_METHODS)}]")
+    for method, path, dart_method in verified_impls:
+        report_lines.append(f"  [OK] {method:<6} {path:<48} -> {dart_method}()")
+
+    # 4. MessageSend Strict Guard Summary
     report_lines.append("\n[Strict Semantic Enforcements]")
     report_lines.append("  [OK] MessageSend: attachment_ids is optional array, NOT nullable.")
     report_lines.append("  [OK] MessageSend.toJson(): omits attachment_ids when null; never serializes null.")

@@ -25,11 +25,11 @@ class CompanionClient {
     http.Client? httpClient,
     this.credentialStore,
     SseStreamParser? sseParser,
-  })  : baseUri = _validateBaseUrl(baseUrl),
+  })  : baseUri = validateBaseUrl(baseUrl),
         _httpClient = httpClient ?? http.Client(),
         _sseParser = sseParser ?? const SseStreamParser();
 
-  static Uri _validateBaseUrl(String url) {
+  static Uri validateBaseUrl(String url) {
     final uri = Uri.parse(url.endsWith('/') ? url.substring(0, url.length - 1) : url);
     if (!uri.hasScheme || (uri.scheme != 'http' && uri.scheme != 'https')) {
       throw ArgumentError.value(
@@ -40,6 +40,7 @@ class CompanionClient {
     }
     return uri;
   }
+
 
   bool _isLoopback(String host) {
     return host == '127.0.0.1' || host == 'localhost' || host == '::1';
@@ -178,6 +179,33 @@ class CompanionClient {
     _handleErrorResponse(response);
   }
 
+  /// Retrieves a specific conversation thread by ID via GET /api/v1/conversations/{conversation_id}.
+  Future<ConversationOut> getConversation(String conversationId) async {
+    final uri = baseUri.replace(
+      path: '${baseUri.path}/api/v1/conversations/$conversationId',
+    );
+    final headers = await _buildHeaders(requiresAuth: true);
+    final response = await _httpClient.get(uri, headers: headers);
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return ConversationOut.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Deletes a conversation thread by ID via DELETE /api/v1/conversations/{conversation_id}.
+  Future<void> deleteConversation(String conversationId) async {
+    final uri = baseUri.replace(
+      path: '${baseUri.path}/api/v1/conversations/$conversationId',
+    );
+    final headers = await _buildHeaders(requiresAuth: true);
+    final response = await _httpClient.delete(uri, headers: headers);
+    if (response.statusCode == 200 || response.statusCode == 204) {
+      return;
+    }
+    _handleErrorResponse(response);
+  }
+
   /// Lists messages for a conversation via GET /api/v1/conversations/{id}/messages.
   Future<MessageListOut> listMessages(String conversationId,
       {int skip = 0, int limit = 100}) async {
@@ -206,6 +234,13 @@ class CompanionClient {
     late StreamController<SseEvent> outputController;
     http.Client? activeClient;
     StreamSubscription<SseEvent>? parserSubscription;
+    final bool isCustomClient = customClient != null;
+
+    void cleanup() {
+      if (!isCustomClient) {
+        activeClient?.close();
+      }
+    }
 
     outputController = StreamController<SseEvent>(
       onListen: () async {
@@ -225,48 +260,62 @@ class CompanionClient {
           final streamedResponse = await activeClient!.send(request);
 
           if (streamedResponse.statusCode != 200) {
-            final errorBytes = await streamedResponse.stream.toBytes();
-            final errorBody = utf8.decode(errorBytes, allowMalformed: true);
-            String? code;
-            String message = 'HTTP ${streamedResponse.statusCode}';
-            dynamic details;
             try {
-              final dynamic body = jsonDecode(errorBody);
-              if (body is Map) {
-                code = body['code']?.toString() ?? body['detail']?.toString();
-                message = body['message']?.toString() ?? body['detail']?.toString() ?? message;
-                details = body;
+              final errorBytes = await streamedResponse.stream.toBytes();
+              final errorBody = utf8.decode(errorBytes, allowMalformed: true);
+              String? code;
+              String message = 'HTTP ${streamedResponse.statusCode}';
+              dynamic details;
+              try {
+                final dynamic body = jsonDecode(errorBody);
+                if (body is Map) {
+                  code = body['code']?.toString() ?? body['detail']?.toString();
+                  message = body['message']?.toString() ?? body['detail']?.toString() ?? message;
+                  details = body;
+                }
+              } catch (_) {
+                if (errorBody.isNotEmpty) message = errorBody;
               }
-            } catch (_) {
-              if (errorBody.isNotEmpty) message = errorBody;
-            }
 
-            outputController.addError(
-              CompanionApiException(
-                statusCode: streamedResponse.statusCode,
-                code: code,
-                message: message,
-                details: details,
-              ),
-            );
-            await outputController.close();
+              outputController.addError(
+                CompanionApiException(
+                  statusCode: streamedResponse.statusCode,
+                  code: code,
+                  message: message,
+                  details: details,
+                ),
+              );
+            } finally {
+              cleanup();
+              await outputController.close();
+            }
             return;
           }
 
           final eventStream = _sseParser.parseByteStream(streamedResponse.stream);
           parserSubscription = eventStream.listen(
             (event) {
-              outputController.add(event);
+              if (!outputController.isClosed) {
+                outputController.add(event);
+              }
             },
             onError: (Object err, StackTrace st) {
-              outputController.addError(err, st);
+              cleanup();
+              if (!outputController.isClosed) {
+                outputController.addError(err, st);
+                outputController.close();
+              }
             },
             onDone: () {
-              outputController.close();
+              cleanup();
+              if (!outputController.isClosed) {
+                outputController.close();
+              }
             },
             cancelOnError: false,
           );
         } catch (err, st) {
+          cleanup();
           if (!outputController.isClosed) {
             outputController.addError(err, st);
             await outputController.close();
@@ -274,9 +323,11 @@ class CompanionClient {
         }
       },
       onCancel: () async {
-        await parserSubscription?.cancel();
-        // Closing the client drops the active HTTP socket, terminating backend generation
-        activeClient?.close();
+        try {
+          await parserSubscription?.cancel();
+        } finally {
+          cleanup();
+        }
       },
     );
 

@@ -260,5 +260,52 @@ void main() {
             .having((e) => e.isUnavailable, 'isUnavailable', isTrue)),
       );
     });
+
+    test('getConversation retrieves specific conversation by id', () async {
+      final mock = MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/v1/conversations/conv-42');
+        return http.Response(
+          jsonEncode({
+            'id': 'conv-42',
+            'title': 'Specific Thread',
+            'character_id': 'default',
+            'owner_id': 'owner',
+            'created_at': '2026-10-09T12:00:00Z',
+            'updated_at': '2026-10-09T12:00:00Z',
+            'message_count': 5,
+          }),
+          200,
+        );
+      });
+
+      final client = CompanionClient(httpClient: mock);
+      final conv = await client.getConversation('conv-42');
+      expect(conv.id, 'conv-42');
+      expect(conv.title, 'Specific Thread');
+      expect(conv.messageCount, 5);
+    });
+
+    test('deleteConversation deletes conversation by id', () async {
+      final mock = MockClient((request) async {
+        expect(request.method, 'DELETE');
+        expect(request.url.path, '/api/v1/conversations/conv-42');
+        return http.Response('', 204);
+      });
+
+      final client = CompanionClient(httpClient: mock);
+      await expectLater(client.deleteConversation('conv-42'), completes);
+    });
+
+    test('validateBaseUrl parses valid URL and rejects invalid scheme', () {
+      final valid = CompanionClient.validateBaseUrl('http://localhost:8000/');
+      expect(valid.scheme, 'http');
+      expect(valid.port, 8000);
+
+      expect(
+        () => CompanionClient.validateBaseUrl('ftp://localhost:8000'),
+        throwsArgumentError,
+      );
+    });
   });
 }

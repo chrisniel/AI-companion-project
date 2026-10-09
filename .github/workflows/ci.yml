@@ -243,6 +243,14 @@ jobs:
         shell: pwsh
         run: '& $env:QUALIFICATION_PYTHON -B scripts/check_openapi_contract.py --check'
 
+      - name: Verify Dart OpenAPI contract parity and route implementation coverage
+        shell: pwsh
+        run: '& $env:QUALIFICATION_PYTHON -B scripts/check_dart_openapi_parity.py --check'
+
+      - name: Run Dart OpenAPI parity test suite
+        shell: pwsh
+        run: '& $env:QUALIFICATION_PYTHON -B -m unittest scripts/tests/test_check_dart_openapi_parity.py'
+
   frontend:
     name: Frontend Verification (Windows / Node 22.22.2)
     needs: classifier
@@ -307,6 +315,9 @@ jobs:
       - name: Verify workspace member layout
         working-directory: frontend/flutter
         run: dart pub workspace list
+
+      - name: Verify Dart OpenAPI contract parity
+        run: python scripts/check_dart_openapi_parity.py --check
 
       - name: Static analysis
         working-directory: frontend/flutter

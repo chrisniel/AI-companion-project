@@ -8,6 +8,7 @@ enum RuntimeConnectionStatus {
   unconnected,
   connecting,
   connected,
+  unauthorized,
   reconnecting,
   error,
 }
@@ -20,9 +21,15 @@ enum ChatGenerationState {
   error,
 }
 
+typedef CompanionClientFactory = CompanionClient Function({
+  required String baseUrl,
+  CredentialStore? credentialStore,
+});
+
 /// Controller managing desktop conversation state, REST integration, and live SSE streaming.
 class DesktopChatController extends ChangeNotifier {
-  final CompanionClient client;
+  CompanionClient _client;
+  final CompanionClientFactory? _clientFactory;
 
   RuntimeConnectionStatus _connectionStatus = RuntimeConnectionStatus.unconnected;
   ChatGenerationState _generationState = ChatGenerationState.idle;
@@ -36,12 +43,18 @@ class DesktopChatController extends ChangeNotifier {
 
   StreamSubscription<SseEvent>? _currentStreamSubscription;
   Completer<void>? _turnCompleter;
+  int _configEpoch = 0;
+  int _turnSequenceToken = 0;
+  int _loadSequenceToken = 0;
   bool _isDisposed = false;
 
   DesktopChatController({
-    required this.client,
-  });
+    required CompanionClient client,
+    CompanionClientFactory? clientFactory,
+  })  : _client = client,
+        _clientFactory = clientFactory;
 
+  CompanionClient get client => _client;
   RuntimeConnectionStatus get connectionStatus => _connectionStatus;
   ChatGenerationState get generationState => _generationState;
   List<ConversationOut> get conversations => List.unmodifiable(_conversations);
@@ -53,11 +66,14 @@ class DesktopChatController extends ChangeNotifier {
 
   bool get isGenerating => _generationState == ChatGenerationState.generating;
   bool get isConnected => _connectionStatus == RuntimeConnectionStatus.connected;
+  bool get canSend => isConnected && !isGenerating;
 
   String get connectionStatusLabel {
     switch (_connectionStatus) {
       case RuntimeConnectionStatus.connected:
         return 'Runtime: Connected';
+      case RuntimeConnectionStatus.unauthorized:
+        return 'Runtime: Unauthorized';
       case RuntimeConnectionStatus.connecting:
         return 'Runtime: Connecting...';
       case RuntimeConnectionStatus.reconnecting:
@@ -69,55 +85,129 @@ class DesktopChatController extends ChangeNotifier {
     }
   }
 
+  /// Updates runtime configuration authoritatively, discarding in-flight operations.
+  Future<void> updateConfiguration({required String baseUrl, String? pairingToken}) async {
+    if (_isDisposed) return;
+    CompanionClient.validateBaseUrl(baseUrl);
+    final currentEpoch = ++_configEpoch;
+
+    if (isGenerating) {
+      await cancelGeneration();
+    }
+
+    if (pairingToken != null && _client.credentialStore != null) {
+      await _client.credentialStore!.writeToken(pairingToken.trim());
+    }
+
+    _client = _clientFactory != null
+        ? _clientFactory(baseUrl: baseUrl, credentialStore: _client.credentialStore)
+        : CompanionClient(
+            baseUrl: baseUrl,
+            credentialStore: _client.credentialStore,
+          );
+
+    _conversations = [];
+    _activeConversation = null;
+    _messages = [];
+    _streamingText = '';
+    _errorMessage = null;
+    notifyListeners();
+
+    await checkConnection();
+    if (_configEpoch == currentEpoch && isConnected && !_isDisposed) {
+      await loadConversations();
+    }
+  }
+
   /// Probes public health and protected auth to update connection status.
   Future<void> checkConnection() async {
     if (_isDisposed) return;
+    final epoch = _configEpoch;
     _connectionStatus = RuntimeConnectionStatus.connecting;
+    _errorMessage = null;
     notifyListeners();
 
     try {
-      final health = await client.getHealth();
+      final health = await _client.getHealth();
+      if (_configEpoch != epoch || _isDisposed) return;
+
       if (health.status == 'healthy') {
-        try {
-          final auth = await client.verifyAuth();
-          if (auth.authenticated) {
-            _connectionStatus = RuntimeConnectionStatus.connected;
-          } else {
-            _connectionStatus = RuntimeConnectionStatus.error;
-            _errorMessage = 'Authentication verification failed';
-          }
-        } catch (_) {
-          // Public health succeeded, pairing token missing or unverified
-          _connectionStatus = RuntimeConnectionStatus.connected;
+        // Health 200 proves runtime reachability only, NOT authorization.
+        // Check if pairing credentials exist and verify them fail-closed.
+        final token = await _client.credentialStore?.readToken();
+        if (_configEpoch != epoch || _isDisposed) return;
+
+        if (token == null || token.trim().isEmpty) {
+          _connectionStatus = RuntimeConnectionStatus.unauthorized;
+          _errorMessage = 'Pairing token is missing. Configure token in Settings.';
+          _activeModelName = null;
+          notifyListeners();
+          return;
         }
 
         try {
-          final modelStatus = await client.getModelStatus();
-          _activeModelName = modelStatus.activeModel ?? 'default';
-        } catch (_) {}
+          final auth = await _client.verifyAuth();
+          if (_configEpoch != epoch || _isDisposed) return;
+
+          if (auth.authenticated) {
+            _connectionStatus = RuntimeConnectionStatus.connected;
+            _errorMessage = null;
+
+            try {
+              final modelStatus = await _client.getModelStatus();
+              if (_configEpoch != epoch || _isDisposed) return;
+              _activeModelName = modelStatus.activeModel ?? 'default';
+            } catch (_) {
+              if (_configEpoch != epoch || _isDisposed) return;
+              // Valid auth + unavailable model: retain connected/authorized status
+              _activeModelName = 'Unavailable';
+            }
+          } else {
+            _connectionStatus = RuntimeConnectionStatus.unauthorized;
+            _errorMessage = auth.message.isNotEmpty ? auth.message : 'Authentication verification failed.';
+            _activeModelName = null;
+          }
+        } on CompanionApiException catch (authEx) {
+          if (_configEpoch != epoch || _isDisposed) return;
+          _connectionStatus = RuntimeConnectionStatus.unauthorized;
+          _errorMessage = authEx.message.isNotEmpty
+              ? authEx.message
+              : 'Authentication failed (HTTP ${authEx.statusCode}).';
+          _activeModelName = null;
+        } catch (authErr) {
+          if (_configEpoch != epoch || _isDisposed) return;
+          _connectionStatus = RuntimeConnectionStatus.unauthorized;
+          _errorMessage = 'Authentication verification failed: $authErr';
+          _activeModelName = null;
+        }
       } else {
         _connectionStatus = RuntimeConnectionStatus.unconnected;
+        _errorMessage = 'Runtime reported unhealthy status: ${health.status}';
+        _activeModelName = null;
       }
     } catch (e) {
+      if (_configEpoch != epoch || _isDisposed) return;
       _connectionStatus = RuntimeConnectionStatus.unconnected;
       _errorMessage = e.toString();
+      _activeModelName = null;
     }
 
-    if (!_isDisposed) notifyListeners();
+    if (!_isDisposed && _configEpoch == epoch) notifyListeners();
   }
 
   /// Loads available conversations from backend.
   Future<void> loadConversations() async {
-    if (_isDisposed) return;
+    if (_isDisposed || !isConnected) return;
     try {
-      final res = await client.listConversations();
+      final res = await _client.listConversations();
+      if (_isDisposed) return;
       _conversations = res.items;
 
       if (_conversations.isNotEmpty && _activeConversation == null) {
         await selectConversation(_conversations.first);
       }
     } catch (_) {
-      // Offline fallback: keep existing list or stay empty
+      // Retain existing list on network glitch
     }
     if (!_isDisposed) notifyListeners();
   }
@@ -125,6 +215,9 @@ class DesktopChatController extends ChangeNotifier {
   /// Switches active conversation thread and loads its authoritative message history.
   Future<void> selectConversation(ConversationOut conversation) async {
     if (_isDisposed) return;
+    if (isGenerating) {
+      throw StateError('Cannot switch conversation while turn generation is active.');
+    }
     _activeConversation = conversation;
     _messages = [];
     _streamingText = '';
@@ -135,34 +228,39 @@ class DesktopChatController extends ChangeNotifier {
   }
 
   /// Creates a new persistent conversation thread and selects it.
+  ///
+  /// Never fabricates fake local conversation records when backend calls fail.
   Future<void> createNewConversation({String title = 'New Conversation'}) async {
     if (_isDisposed) return;
+    if (!isConnected) {
+      _errorMessage = 'Cannot create conversation: Runtime is not connected and authorized.';
+      notifyListeners();
+      throw StateError('Runtime is not connected.');
+    }
     try {
-      final created = await client.createConversation(title: title);
+      final created = await _client.createConversation(title: title);
       _conversations = [created, ..._conversations];
       await selectConversation(created);
     } catch (e) {
-      // Local fallback in standalone/unconnected mode
-      final fallback = ConversationOut(
-        id: 'local-${UuidUtils.generateV4()}',
-        title: title,
-        characterId: 'default',
-        ownerId: 'local_owner',
-        createdAt: DateTime.now().toUtc().toIso8601String(),
-        updatedAt: DateTime.now().toUtc().toIso8601String(),
-        messageCount: 0,
-      );
-      _conversations = [fallback, ..._conversations];
-      await selectConversation(fallback);
+      _errorMessage = 'Failed to create conversation: $e';
+      if (!_isDisposed) notifyListeners();
+      rethrow;
     }
   }
 
   /// Fetches authoritative message history for a conversation.
-  Future<void> loadMessages(String conversationId) async {
+  Future<void> loadMessages(String conversationId, {int? expectedTurnToken}) async {
     if (_isDisposed) return;
+    final loadToken = ++_loadSequenceToken;
     try {
-      final res = await client.listMessages(conversationId);
-      _messages = res.items;
+      final res = await _client.listMessages(conversationId);
+      if (_isDisposed) return;
+      if (loadToken != _loadSequenceToken) return;
+      if (expectedTurnToken != null && expectedTurnToken != _turnSequenceToken) return;
+
+      if (_activeConversation?.id == conversationId) {
+        _messages = res.items;
+      }
     } catch (_) {}
     if (!_isDisposed) notifyListeners();
   }
@@ -171,6 +269,11 @@ class DesktopChatController extends ChangeNotifier {
   Future<void> sendMessage(String text) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty || isGenerating || _isDisposed) return;
+    if (!isConnected) {
+      _errorMessage = 'Cannot send message: Runtime is not connected and authorized.';
+      notifyListeners();
+      throw StateError('Cannot send message: Runtime is not connected.');
+    }
 
     if (_activeConversation == null) {
       await createNewConversation();
@@ -178,12 +281,14 @@ class DesktopChatController extends ChangeNotifier {
     final activeConv = _activeConversation;
     if (activeConv == null) return;
 
+    final turnToken = ++_turnSequenceToken;
+    final boundConvId = activeConv.id;
     final clientMessageId = UuidUtils.generateV4();
     final nowIso = DateTime.now().toUtc().toIso8601String();
 
     final userMsg = MessageOut(
       id: 'local-user-${UuidUtils.generateV4()}',
-      conversationId: activeConv.id,
+      conversationId: boundConvId,
       sender: 'user',
       content: trimmed,
       status: 'completed',
@@ -194,7 +299,7 @@ class DesktopChatController extends ChangeNotifier {
 
     final assistantMsg = MessageOut(
       id: 'local-asst-${UuidUtils.generateV4()}',
-      conversationId: activeConv.id,
+      conversationId: boundConvId,
       sender: 'assistant',
       content: '',
       status: 'generating',
@@ -212,8 +317,8 @@ class DesktopChatController extends ChangeNotifier {
     _turnCompleter = completer;
 
     try {
-      final stream = client.sendMessageStream(
-        activeConv.id,
+      final stream = _client.sendMessageStream(
+        boundConvId,
         MessageSend(
           userText: trimmed,
           clientMessageId: clientMessageId,
@@ -222,10 +327,9 @@ class DesktopChatController extends ChangeNotifier {
 
       _currentStreamSubscription = stream.listen(
         (event) {
-          if (_isDisposed) return;
+          if (_isDisposed || _turnSequenceToken != turnToken || _activeConversation?.id != boundConvId) return;
           if (event is SseTokenEvent) {
             _streamingText += event.token;
-            // Update live content on placeholder message
             if (_messages.isNotEmpty && _messages.last.sender == 'assistant') {
               final last = _messages.last;
               _messages = [
@@ -245,29 +349,29 @@ class DesktopChatController extends ChangeNotifier {
           } else if (event is SseDoneEvent) {
             _generationState = ChatGenerationState.idle;
             _streamingText = '';
-            _finalizeTurn(activeConv.id);
+            _finalizeTurn(boundConvId, turnToken);
           } else if (event is SseErrorEvent) {
             _generationState = ChatGenerationState.error;
             _errorMessage = event.message;
-            _finalizeTurn(activeConv.id);
+            _finalizeTurn(boundConvId, turnToken);
           }
         },
         onError: (Object err) {
-          if (_isDisposed) return;
+          if (_isDisposed || _turnSequenceToken != turnToken || _activeConversation?.id != boundConvId) return;
           _generationState = ChatGenerationState.error;
           if (err is CompanionApiException) {
             _errorMessage = err.message;
           } else {
             _errorMessage = err.toString();
           }
-          _finalizeTurn(activeConv.id);
+          _finalizeTurn(boundConvId, turnToken);
         },
         onDone: () {
-          if (_isDisposed) return;
+          if (_isDisposed || _turnSequenceToken != turnToken || _activeConversation?.id != boundConvId) return;
           if (_generationState == ChatGenerationState.generating) {
             _generationState = ChatGenerationState.idle;
             _streamingText = '';
-            _finalizeTurn(activeConv.id);
+            _finalizeTurn(boundConvId, turnToken);
           }
         },
         cancelOnError: false,
@@ -275,36 +379,40 @@ class DesktopChatController extends ChangeNotifier {
     } catch (e) {
       _generationState = ChatGenerationState.error;
       _errorMessage = e.toString();
-      _finalizeTurn(activeConv.id);
+      _finalizeTurn(boundConvId, turnToken);
     }
 
     await completer.future;
   }
 
-  void _finalizeTurn(String conversationId) {
+  void _finalizeTurn(String conversationId, int turnToken) {
+    if (_turnSequenceToken != turnToken) return;
     _currentStreamSubscription = null;
     if (_turnCompleter != null && !_turnCompleter!.isCompleted) {
       _turnCompleter!.complete();
     }
-    // Reload authoritative message history from backend to ensure consistent sequence numbers
-    loadMessages(conversationId);
+    loadMessages(conversationId, expectedTurnToken: turnToken);
   }
 
   /// Cancels active stream generation on user demand.
   Future<void> cancelGeneration() async {
     if (!isGenerating) return;
 
-    await _currentStreamSubscription?.cancel();
-    _currentStreamSubscription = null;
+    final turnToken = ++_turnSequenceToken;
     _generationState = ChatGenerationState.cancelled;
     _streamingText = '';
+
+    final sub = _currentStreamSubscription;
+    _currentStreamSubscription = null;
 
     if (_turnCompleter != null && !_turnCompleter!.isCompleted) {
       _turnCompleter!.complete();
     }
 
+    unawaited(sub?.cancel());
+
     if (_activeConversation != null) {
-      await loadMessages(_activeConversation!.id);
+      await loadMessages(_activeConversation!.id, expectedTurnToken: turnToken);
     }
     if (!_isDisposed) notifyListeners();
   }
