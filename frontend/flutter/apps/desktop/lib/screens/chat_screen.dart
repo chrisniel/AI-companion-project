@@ -125,32 +125,104 @@ class ChatScreen extends StatelessWidget {
           ),
           const SizedBox(height: CompanionSpacing.lg),
 
-          // Bottom Input Bar Placeholder (Batch 4 Integration Point)
-          SoftGlassPanel(
-            padding: const EdgeInsets.symmetric(
-              horizontal: CompanionSpacing.lg,
-              vertical: CompanionSpacing.sm,
-            ),
-            child: Row(
+          // Bottom Composer Bar (Neumorphic Liquid Glass + Recessed Input Well)
+          NeumorphicSurface(
+            surfaceType: NeumorphicSurfaceType.glassElevated,
+            borderRadius: BorderRadius.circular(22),
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: TextField(
-                    enabled: false,
-                    decoration: InputDecoration(
-                      hintText: 'Type a message... (Awaiting runtime connection in Batch 4)',
-                      hintStyle: CompanionTypography.bodyMedium.copyWith(
-                        color: ext?.textMuted,
-                      ),
-                      border: InputBorder.none,
-                      isDense: true,
+                Row(
+                  children: [
+                    const NeumorphicButton(
+                      size: NeumorphicButtonSize.sm,
+                      icon: Icon(Icons.attach_file_rounded),
+                      tooltip: 'Attach images or files (Batch 4)',
+                      onPressed: null,
                     ),
-                  ),
+                    const SizedBox(width: CompanionSpacing.sm),
+                    Expanded(
+                      child: NeumorphicSurface(
+                        surfaceType: NeumorphicSurfaceType.recessed,
+                        borderRadius: CompanionRadius.borderMd,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 6,
+                        ),
+                        child: TextField(
+                          enabled: false,
+                          decoration: InputDecoration(
+                            hintText: 'Message AI Companion or run slash commands... (Batch 4)',
+                            hintStyle: CompanionTypography.bodyMedium.copyWith(
+                              color: ext?.textMuted,
+                            ),
+                            border: InputBorder.none,
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: CompanionSpacing.sm),
+                    const NeumorphicButton(
+                      size: NeumorphicButtonSize.sm,
+                      icon: Icon(Icons.mic_none_rounded),
+                      tooltip: 'Voice input (Microphone not connected)',
+                      onPressed: null,
+                    ),
+                    const SizedBox(width: CompanionSpacing.sm),
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            ext?.accent ?? CompanionColors.lightAccent,
+                            ext?.accentSecondary ?? CompanionColors.lightAccentSecondary,
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: CompanionRadius.borderMd,
+                        boxShadow: [
+                          BoxShadow(
+                            color: (ext?.accentGlow ?? Colors.transparent).withValues(alpha: 0.35),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(Icons.send_rounded, size: 18, color: Colors.white),
+                    ),
+                  ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.send_rounded, size: 20),
-                  color: ext?.textMuted,
-                  onPressed: null,
-                  tooltip: 'Send (Inactive in Batch 3)',
+                const SizedBox(height: CompanionSpacing.xs),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: CompanionSpacing.xs),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Press Enter to send • Shift + Enter for newline',
+                          style: CompanionTypography.caption.copyWith(
+                            color: ext?.textMuted,
+                            fontSize: 10,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: CompanionSpacing.sm),
+                      Text(
+                        'Context buffer: Standalone (Batch 4)',
+                        style: CompanionTypography.caption.copyWith(
+                          color: ext?.textMuted,
+                          fontSize: 10,
+                        ),
+                        maxLines: 1,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),

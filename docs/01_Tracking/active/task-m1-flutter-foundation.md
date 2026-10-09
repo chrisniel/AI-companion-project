@@ -15,7 +15,7 @@
 | :--- | :--- | :--- | :--- |
 | **B1** | `PC-CLIENT-001` | `VERIFIED` | Pub Workspace (`frontend/flutter/`), `companion_core`, `companion_api`, `companion_design`, `apps/desktop` Windows runner, CI policy and workflow integration. |
 | **B2** | `PC-CLIENT-002` | `VERIFIED` | Window framing (1280×800 / 1024×640), close-to-tray lifecycle, native tray menu, clean shutdown, 23 workspace tests, native WM_CLOSE interception verified. |
-| **B3** | `PC-CLIENT-003` | **VERIFIED / AWAITING REVIEW** | SoftGlass tokens, 4 accent presets, typography/spacing/shadows scale, `SoftGlassPanel`, collapsible navigation rail, 6 screens (Chat, Voice, Schedule, Memory, Studio, Settings), shortcuts (`Ctrl+,`, conditional `Esc`), read-only fail-closed storage diagnostics, 51 workspace tests. |
+| **B3** | `PC-CLIENT-003` | **VERIFIED / AWAITING VISUAL REVIEW** | SoftGlass tokens, 4 accent presets, neumorphic surface & inner shadow system (`NeumorphicSurface`, `_InnerShadowPainter`), interactive component parity (`DesktopNavigationRail`, `NeumorphicButton`, `NeumorphicSegmentedControl`, recessed chat composer well, recessed diagnostic cards), shortcuts (`Ctrl+,`, conditional `Esc`), read-only fail-closed storage diagnostics, 73 workspace tests, side-by-side Web vs Flutter visual evidence in temp directory. |
 | **B4** | `PC-CLIENT-004` | `PLANNED` | Typed REST client, real-world SSE parser, live conversation UI, contract parity tests, React Web parity. |
 
 ---
@@ -66,10 +66,17 @@
 - [x] Implement keyboard shortcuts: `Ctrl+,` (open settings), `Esc` (hide to tray only if tray available).
 - [x] Implement responsive layout verification test suite: `desktop_layout_responsive_test.dart` verifying 1280×800 and 1024×640 viewports across Chat (expanded/collapsed), Settings appearance, Settings diagnostics, and text scaling (1.2x/1.3x) with zero RenderFlex overflows.
 - [x] Implement automated test suites: `desktop_shell_test.dart`, `desktop_settings_test.dart`, `desktop_shortcuts_test.dart`, `desktop_layout_responsive_test.dart`, `windows_storage_diagnostic_reader_test.dart`, `storage_diagnostic_test.dart`, `soft_glass_panel_test.dart`, `widget_test.dart`.
-- [x] Verify complete workspace test suite (65/65 tests pass across all 4 packages: 38 desktop + 14 core + 10 design + 3 api).
+- [x] Correct visual foundation to Web design identity: Neumorphism + Glassmorphism / Liquid Glass + Minimalism (`frontend/web` reference).
+- [x] Implement `NeumorphicSurface` with directional light/dark outer shadow pairs and custom `_InnerShadowPainter` (evenOdd donut mask + blur filter) for authentic physical inset depth.
+- [x] Implement `NeumorphicButton` with raised, hover, pressed inset, and disabled states.
+- [x] Implement `NeumorphicSegmentedControl` matching Web segmented controls without Material styling conflicts.
+- [x] Align `DesktopNavigationRail` tiles with Web interaction states (embossed selected, inset hover/pressed).
+- [x] Align `ChatScreen` composer with recessed input well and responsive hint layout (`TextOverflow.ellipsis`).
+- [x] Align `SettingsScreen` controls with `NeumorphicSegmentedControl` and recessed diagnostic cards.
+- [x] Verify complete workspace test suite (73/73 tests pass: 38 desktop + 14 core + 18 design + 3 api).
 - [x] Verify `dart analyze .` (0 issues).
 - [x] Verify `flutter build windows --debug` (clean build).
 - [x] Verify native Windows lifecycle harness (`scripts/verify_native_windows_lifecycle.ps1` all 3 tests pass).
-- [x] Verify Python CI policy regression suite (`test_ci_policy.py` 23 tests pass).
-- [x] Implement visual evidence capture harness (`scripts/capture_windows_visual_evidence.ps1`) executing real binary and verifying all 8 views in `$env:TEMP\ai_companion_visual_review` outside Git.
+- [x] Verify Python CI policy regression suite (`test_ci_policy.py` 29 tests pass).
+- [x] Capture visual evidence: Web reference UI and Flutter Desktop UI across 8 required comparisons (A–H) saved in `%LOCALAPPDATA%\Temp\ai_companion_visual_review` outside Git.
 - [x] Await independent human visual review of screenshots before Batch 4. Stop at gate.

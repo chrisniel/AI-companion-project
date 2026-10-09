@@ -118,30 +118,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           const SizedBox(height: CompanionSpacing.sm),
-          SegmentedButton<ThemeMode>(
+          NeumorphicSegmentedControl<ThemeMode>(
+            selected: controller.themeMode,
+            onChanged: (mode) => controller.setThemeMode(mode),
             segments: const [
-              ButtonSegment(
+              NeumorphicSegment(
                 value: ThemeMode.system,
-                label: Text('System'),
-                icon: Icon(Icons.brightness_auto_rounded, size: 16),
+                label: 'System',
+                icon: Icons.brightness_auto_rounded,
               ),
-              ButtonSegment(
+              NeumorphicSegment(
                 value: ThemeMode.light,
-                label: Text('Light'),
-                icon: Icon(Icons.light_mode_rounded, size: 16),
+                label: 'Light',
+                icon: Icons.light_mode_rounded,
               ),
-              ButtonSegment(
+              NeumorphicSegment(
                 value: ThemeMode.dark,
-                label: Text('Dark'),
-                icon: Icon(Icons.dark_mode_rounded, size: 16),
+                label: 'Dark',
+                icon: Icons.dark_mode_rounded,
               ),
             ],
-            selected: {controller.themeMode},
-            onSelectionChanged: (selected) {
-              if (selected.isNotEmpty) {
-                controller.setThemeMode(selected.first);
-              }
-            },
           ),
           const SizedBox(height: CompanionSpacing.xl),
 
@@ -162,18 +158,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
               return InkWell(
                 onTap: () => controller.setAccentPreset(preset),
                 borderRadius: CompanionRadius.borderMd,
-                child: Container(
+                child: NeumorphicSurface(
+                  surfaceType: isSelected
+                      ? NeumorphicSurfaceType.raised
+                      : NeumorphicSurfaceType.flat,
+                  outerShadows: isSelected
+                      ? (isDark
+                          ? CompanionShadows.darkNavEmbossed
+                          : CompanionShadows.lightNavEmbossed)
+                      : const [],
+                  borderColor: isSelected
+                      ? (isDark
+                          ? CompanionColors.darkBorderHighlight
+                          : CompanionColors.lightBorderHighlight)
+                      : (ext?.borderSubtle ?? Colors.transparent),
+                  borderRadius: CompanionRadius.borderMd,
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? preset.primary.withValues(alpha: isDark ? 0.25 : 0.12)
-                        : (isDark ? Colors.white.withValues(alpha: 0.04) : Colors.black.withValues(alpha: 0.03)),
-                    borderRadius: CompanionRadius.borderMd,
-                    border: Border.all(
-                      color: isSelected ? preset.primary : (ext?.borderSubtle ?? Colors.transparent),
-                      width: isSelected ? 1.5 : 1.0,
-                    ),
-                  ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -376,13 +376,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     final displayPath = _sanitizePathForDisplay(path);
 
-    return Container(
+    return NeumorphicSurface(
+      surfaceType: NeumorphicSurfaceType.recessed,
+      borderRadius: CompanionRadius.borderMd,
       padding: const EdgeInsets.all(CompanionSpacing.md),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withValues(alpha: 0.03) : Colors.black.withValues(alpha: 0.02),
-        borderRadius: CompanionRadius.borderMd,
-        border: Border.all(color: ext?.borderSubtle ?? Colors.transparent),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
