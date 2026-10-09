@@ -3,9 +3,9 @@
 - **Branch:** `feature/m1-flutter-foundation` (human-prepared).
 - **Starting Baseline:** `55c6f621a4a931dbac32ecc7f919f608ad2bb669`.
 - **Milestone:** M1 — Flutter Desktop Client Foundation.
-- **Active Work Item:** `PC-CLIENT-003` (SoftGlass Desktop Design System, Navigation Shell & Read-Only Storage Awareness).
+- **Active Work Item:** `PC-CLIENT-004` (Typed Runtime Client, REST/SSE Integration and Functional Desktop Conversation).
 - **Implementation Plan:** [`docs/02_Planning/01_Plans/plan-m1-flutter-desktop-client-foundation.md`](../../02_Planning/01_Plans/plan-m1-flutter-desktop-client-foundation.md).
-- **Current Stage:** Batch 3 Implementation & Verification.
+- **Current Stage:** Batch 4 Implementation Complete — Awaiting Independent Review.
 
 ---
 
@@ -15,8 +15,8 @@
 | :--- | :--- | :--- | :--- |
 | **B1** | `PC-CLIENT-001` | `VERIFIED` | Pub Workspace (`frontend/flutter/`), `companion_core`, `companion_api`, `companion_design`, `apps/desktop` Windows runner, CI policy and workflow integration. |
 | **B2** | `PC-CLIENT-002` | `VERIFIED` | Window framing (1280×800 / 1024×640), close-to-tray lifecycle, native tray menu, clean shutdown, 23 workspace tests, native WM_CLOSE interception verified. |
-| **B3** | `PC-CLIENT-003` | **VERIFIED / AWAITING VISUAL REVIEW** | SoftGlass tokens, 4 accent presets, neumorphic surface & inner shadow system (`NeumorphicSurface`, `_InnerShadowPainter`), interactive component parity (`DesktopNavigationRail`, `NeumorphicButton`, `NeumorphicSegmentedControl`, recessed chat composer well, recessed diagnostic cards), shortcuts (`Ctrl+,`, conditional `Esc`), read-only fail-closed storage diagnostics, 73 workspace tests, side-by-side Web vs Flutter visual evidence in temp directory. |
-| **B4** | `PC-CLIENT-004` | `PLANNED` | Typed REST client, real-world SSE parser, live conversation UI, contract parity tests, React Web parity. |
+| **B3** | `PC-CLIENT-003` | `VERIFIED` | SoftGlass tokens, 4 accent presets, neumorphic surface & inner shadow system (`NeumorphicSurface`, `_InnerShadowPainter`), interactive component parity (`DesktopNavigationRail`, `NeumorphicButton`, `NeumorphicSegmentedControl`, recessed chat composer well, recessed diagnostic cards), shortcuts (`Ctrl+,`, conditional `Esc`), read-only fail-closed storage diagnostics, 73 workspace tests, Windows startup fix. |
+| **B4** | `PC-CLIENT-004` | **VERIFIED / AWAITING INDEPENDENT REVIEW** | Typed OpenAPI DTOs in `companion_api`, pure-Dart RFC 4122 v4 UUID generator in `companion_core`, robust SSE streaming parser (multibyte UTF-8 chunking, CRLF splitting, terminal deduping, cancellation), Windows DPAPI credential store (`dart:ffi` `CryptProtectData`/`CryptUnprotectData`), `DesktopChatController` with optimistic local turns, live `ChatScreen` UI (conversation title, connection pill, model badge, streaming bubbles, Enter to send, Shift+Enter newline, stop generation), `SettingsScreen` Runtime Connection & Pairing controls, contract parity checker (`scripts/check_dart_openapi_parity.py`), root desktop runner (`scripts/run-desktop.ps1`), desktop README, 136 workspace tests passing, 0 lints. |
 
 ---
 
@@ -80,4 +80,85 @@
 - [x] Verify Python CI policy regression suite (`test_ci_policy.py` 29 tests pass).
 - [x] Capture visual evidence: Web reference UI and Flutter Desktop UI across 8 required comparisons (A–H) saved in `%LOCALAPPDATA%\Temp\ai_companion_visual_review` outside Git.
 - [x] Resolve Windows interactive startup defect: unblock runApp() ahead of asynchronous coordinator initialization, adopt supported window_manager waitUntilReadyToShow lifecycle with explicit 'AI Companion' title, align native Win32 main.cpp window creation title to 'AI Companion', and harden LiveDesktopTrayAdapter against silent native tray LoadImage failures.
-- [ ] Await independent human visual review of screenshots and startup verification before Batch 4. Stop at gate.
+- [x] Independent human visual review completed and accepted.
+
+---
+
+## Batch 4 Checkpoints & Boundaries
+
+- [x] Implement cryptographically secure RFC 4122 v4 UUID generator in `companion_core` (`uuid_utils.dart`) and unit test (`uuid_utils_test.dart`).
+- [x] Implement typed DTOs in `companion_api` matching `contracts/openapi/openapi.json`:
+  - `HealthResponse` (`health_dto.dart`)
+  - `AuthVerifyResponse` (`auth_dto.dart`)
+  - `SystemStatusResponse` (`system_status_dto.dart`)
+  - `ModelStatusResponse` (`model_status_dto.dart` — complete 27-field Phase 3 Truthful Telemetry Contract)
+  - `ConversationCreate`, `ConversationOut`, `ConversationListOut` (`conversation_dto.dart`)
+  - `MessageSend`, `MessageOut`, `MessageListOut`, `AttachmentRef` (`message_dto.dart` — strictly enforces `MessageSend.attachment_ids` optional array, NOT nullable; never serializes null)
+  - `SseTokenEvent`, `SseDoneEvent`, `SseErrorEvent`, `SseUnknownEvent` (`sse_event_dto.dart`)
+- [x] Implement `CredentialStore` interface and `InMemoryCredentialStore` in `companion_api`.
+- [x] Implement `SseStreamParser` in `companion_api`:
+  - Multibyte UTF-8 chunk fragmentation handling via `byteStream.cast<List<int>>().transform(utf8.decoder)`.
+  - Split CRLF boundaries (`\r\n\r\n` and `\n\n`).
+  - Terminal event deduping (`type: done` and `data: [DONE]`).
+  - Unexpected EOF and unparsed trailing buffer error handling.
+- [x] Implement `CompanionClient` and `CompanionApiException` in `companion_api`:
+  - Base URL validation restricting non-loopback plaintext HTTP when credentials are used.
+  - Endpoints: `getHealth`, `getSystemStatus`, `verifyAuth`, `getModelStatus`, `createConversation`, `listConversations`, `getConversation`, `deleteConversation`, `listMessages`, `sendMessageStream`.
+  - Active turn cancellation via stream subscription cancellation.
+- [x] Implement `WindowsDpapiCredentialStore` in `apps/desktop` using `dart:ffi` calling `Crypt32.dll` (`CryptProtectData`, `CryptUnprotectData`) and `kernel32.dll` (`LocalAlloc`, `LocalFree`) to ensure zero-plaintext disk persistence.
+- [x] Implement `DesktopChatController` in `apps/desktop`:
+  - Conversation management (creation, listing, active conversation selection).
+  - Optimistic local turn creation with rollback on network/server error.
+  - Live SSE streaming state accumulation (`streamingText`).
+  - Active turn generation cancellation (`stopGeneration`).
+  - Periodic and on-demand connection status probing (`online`, `offline`, `unauthorized`, `connecting`).
+- [x] Upgrade `ChatScreen` from static disabled placeholder to interactive chat UI:
+  - Header: conversation title, live connection status pill, active model badge.
+  - Scrollable message history with distinct user and assistant bubble styling.
+  - Assistant typing / streaming indicator with live token rendering.
+  - Recessed neumorphic composer: multiline TextField, Enter to send, Shift+Enter for newline.
+  - Send button (submits turn) and Stop button (cancels active turn).
+  - Clean disabled states for attachments (paperclip) and voice (microphone).
+- [x] Update `SettingsScreen` with Runtime Connection & Pairing controls:
+  - Backend host URL input with `COMPANION_HOST_URL` environment fallback.
+  - DPAPI-secured pairing token input with obscure toggle.
+  - Live "Test Connection" button providing verified backend feedback.
+- [x] Wire `DesktopChatController` into `DesktopShell` and `main.dart`.
+- [x] Implement `scripts/check_dart_openapi_parity.py` and `scripts/tests/test_check_dart_openapi_parity.py`:
+  - Verifies 11 DTO schemas against OpenAPI components.
+  - Verifies 10 M1 routes and registers 22 unmapped future M2-M4 routes.
+  - Strictly verifies `MessageSend` non-null `attachment_ids` semantics.
+- [x] Implement `scripts/run-desktop.ps1` repository root launcher script.
+- [x] Update `frontend/flutter/apps/desktop/README.md`.
+- [x] Run full verification suite (136 workspace tests pass, 0 lints, clean Windows debug build).
+- [ ] Batch 4 independent human review handoff and verification sign-off. Stop at gate.
+
+---
+
+## Web-to-Flutter Appearance & Feature Parity Checklist
+
+The established product design identity is: **Neumorphism + Glassmorphism / Liquid Glass + Minimalism**.
+The reference implementation is `frontend/web/`.
+
+| Component / Feature | Web Reference (`frontend/web/`) | Flutter Desktop (`apps/desktop` / `companion_design`) | Status | Parity Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| **Neumorphic Raised Surfaces** | `NeumorphicButton`, `Card` (`shadow-*-raised`) | `NeumorphicSurface` (convex/flat bevel, paired outer shadows) | `IMPLEMENTED` | Directional light/dark outer shadows adapt to light and dark theme modes. |
+| **Neumorphic Recessed Wells** | `TextInput`, Recessed Cards (`shadow-*-inset`) | `NeumorphicSurface(isRecessed: true)` via `_InnerShadowPainter` | `IMPLEMENTED` | Physical donut-mask inner shadow for composer input and diagnostic cards. |
+| **Neumorphic Buttons** | `NeumorphicButton.tsx` (primary, accent, ghost, icon) | `NeumorphicButton` (raised, pressed inset, hover, disabled) | `IMPLEMENTED` | Authentic press animation and state transitions. |
+| **Segmented Controls** | `NeumorphicSegmentedControl` (recessed rail, raised thumb) | `NeumorphicSegmentedControl` | `IMPLEMENTED` | Used in Settings for Theme Mode and Accent Preset selection. |
+| **Navigation Rail** | `DesktopNavigationRail` (72px collapsed / 240px expanded) | `DesktopNavigationRail` (72px collapsed / 240px expanded) | `IMPLEMENTED` | Embossed active tile, inset hover, smooth width transition, persistent footer. |
+| **Color Palettes & Accents** | Ocean Sky, Cobalt Indigo, Emerald Teal, Amethyst Violet | `AccentPreset` (Ocean Sky, Cobalt Indigo, Emerald Teal, Amethyst Violet) | `IMPLEMENTED` | Dynamic primary/accent token derivation matching Web tokens. |
+| **Theme Modes** | Dark, Light, System themes in `ThemeContext.tsx` | `CompanionTheme.dark`, `CompanionTheme.light`, `ThemeMode.system` | `IMPLEMENTED` | Seamless switching via Settings and keyboard shortcuts. |
+| **Keyboard Shortcuts** | Desktop Web navigation shortcuts | `DesktopShortcuts` (`Ctrl+,` for Settings, `Esc` for hide-to-tray) | `IMPLEMENTED` | Shortcuts wired into Root FocusScope. |
+| **Recessed Chat Composer** | Recessed input card with action buttons | `ChatScreen` recessed composer well | `IMPLEMENTED` | Inset shadow well, responsive hint text with ellipsis, multiline support. |
+| **Chat Keyboard Handling** | Enter submits, Shift+Enter newline | `HardwareKeyboard` & `RawKeyboardListener` in `ChatScreen` | `IMPLEMENTED` | Enter sends message, Shift+Enter inserts newline without sending. |
+| **Message Bubble Styling** | User (accent-tinted raised) vs Assistant (glass/neutral) | `_MessageBubble` in `ChatScreen` | `IMPLEMENTED` | User message right-aligned with accent styling; Assistant left-aligned with glass surface. |
+| **Streaming Indicator & Stop** | Animated typing pulse & Stop generation button | Assistant typing indicator & `NeumorphicButton` Stop control | `IMPLEMENTED` | Displays live token stream and allows immediate turn interruption. |
+| **Runtime Connection Controls** | Settings pairing input & test connection | Settings "Runtime Connection & Pairing" card | `IMPLEMENTED` | DPAPI-encrypted token input, URL config, live connection test probe. |
+| **Storage Diagnostics** | Storage diagnostic cards in Settings | Recessed diagnostic cards with fail-closed evaluator | `IMPLEMENTED` | Read-only inspection of bootstrap locator; POSIX paths rejected on Windows. |
+| **Attachment Input Control** | Paperclip button opening file picker | Recessed paperclip icon button in `ChatScreen` | `PARTIAL` | Visual UI present in composer; file picker & ingestion deferred to M2. |
+| **Voice Input Control** | Microphone button opening audio capture | Recessed microphone icon button in `ChatScreen` | `PARTIAL` | Visual UI present in composer; audio recording deferred to M4. |
+| **Rich Markdown in Bubbles** | `react-markdown` with syntax highlighting | Plain text with line break preservation in `_MessageBubble` | `PARTIAL` | Full markdown and syntax-highlighted code blocks deferred to M2. |
+| **Model Selection Dropdown** | Dropdown menu in chat header | Status badge showing active model in chat header | `PARTIAL` | Displays truthful active model; interactive dropdown model switching deferred to M2. |
+| **Notification Toast Banner** | Floating toast notification overlay | In-card connection status pill and inline error banners | `PARTIAL` | Floating toast overlay system deferred to M2. |
+| **Secondary App Destinations** | Voice, Schedule, Memory, Studio modules | Navigation rail stubs with "Planned M3/M4" badge | `DEFERRED` | Shell navigation functional; full screen implementations scheduled for M3/M4. |

@@ -1,14 +1,17 @@
 import 'dart:io';
 
+import 'package:companion_api/companion_api.dart';
 import 'package:companion_design/companion_design.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:tray_manager/tray_manager.dart';
 
 import 'controllers/desktop_settings_controller.dart';
+import 'features/chat/desktop_chat_controller.dart';
 import 'harness/visual_evidence_runner.dart';
 import 'lifecycle/desktop_lifecycle_coordinator.dart';
 import 'lifecycle/live_desktop_adapters.dart';
+import 'platform/windows_dpapi_credential_store.dart';
 import 'shell/desktop_shell.dart';
 
 void main(List<String> args) async {
@@ -110,10 +113,12 @@ class AiCompanionDesktopApp extends StatefulWidget {
     super.key,
     this.coordinator,
     this.settingsController,
+    this.chatController,
   });
 
   final DesktopLifecycleCoordinator? coordinator;
   final DesktopSettingsController? settingsController;
+  final DesktopChatController? chatController;
 
   @override
   State<AiCompanionDesktopApp> createState() => _AiCompanionDesktopAppState();
@@ -121,11 +126,24 @@ class AiCompanionDesktopApp extends StatefulWidget {
 
 class _AiCompanionDesktopAppState extends State<AiCompanionDesktopApp> {
   late final DesktopSettingsController _controller;
+  late final DesktopChatController _chatController;
 
   @override
   void initState() {
     super.initState();
     _controller = widget.settingsController ?? DesktopSettingsController();
+    if (widget.chatController != null) {
+      _chatController = widget.chatController!;
+    } else {
+      final store = WindowsDpapiCredentialStore();
+      const initialHostUrl = String.fromEnvironment('COMPANION_HOST_URL', defaultValue: 'http://127.0.0.1:8000');
+      final client = CompanionClient(
+        baseUrl: initialHostUrl,
+        credentialStore: store,
+      );
+      _chatController = DesktopChatController(client: client);
+      _chatController.checkConnection();
+    }
   }
 
   @override
@@ -142,6 +160,7 @@ class _AiCompanionDesktopAppState extends State<AiCompanionDesktopApp> {
           home: DesktopShell(
             controller: _controller,
             coordinator: widget.coordinator,
+            chatController: _chatController,
           ),
         );
       },

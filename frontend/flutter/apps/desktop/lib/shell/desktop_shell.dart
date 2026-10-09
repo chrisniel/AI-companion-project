@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../controllers/desktop_settings_controller.dart';
+import '../features/chat/desktop_chat_controller.dart';
 import '../lifecycle/desktop_lifecycle_coordinator.dart';
 import '../screens/chat_screen.dart';
 import '../screens/memory_screen.dart';
@@ -25,10 +26,12 @@ class DesktopShell extends StatelessWidget {
     super.key,
     required this.controller,
     this.coordinator,
+    this.chatController,
   });
 
   final DesktopSettingsController controller;
   final DesktopLifecycleCoordinator? coordinator;
+  final DesktopChatController? chatController;
 
   @override
   Widget build(BuildContext context) {
@@ -119,7 +122,10 @@ class DesktopShell extends StatelessWidget {
   Widget _buildActiveScreen(DesktopNavDestination destination) {
     switch (destination) {
       case DesktopNavDestination.chat:
-        return const ChatScreen(key: ValueKey('chat_screen'));
+        return ChatScreen(
+          key: const ValueKey('chat_screen'),
+          controller: chatController,
+        );
       case DesktopNavDestination.voice:
         return const VoiceScreen(key: ValueKey('voice_screen'));
       case DesktopNavDestination.schedule:

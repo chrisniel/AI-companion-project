@@ -1,11 +1,13 @@
 import 'dart:io';
 
+import 'package:companion_api/companion_api.dart';
 import 'package:companion_core/companion_core.dart';
 import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
 
 import '../controllers/desktop_settings_controller.dart';
 import '../lifecycle/desktop_lifecycle_coordinator.dart';
+import '../platform/windows_dpapi_credential_store.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
@@ -23,6 +25,11 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late final ScrollController _scrollController;
+  late final TextEditingController _urlController;
+  late final TextEditingController _tokenController;
+  bool _obscureToken = true;
+  String? _testConnectionResult;
+  bool _isTesting = false;
 
   DesktopSettingsController get controller => widget.controller;
   DesktopLifecycleCoordinator? get coordinator => widget.coordinator;
@@ -31,6 +38,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _scrollController = ScrollController();
+    _urlController = TextEditingController(
+      text: const String.fromEnvironment('COMPANION_HOST_URL', defaultValue: 'http://127.0.0.1:8000'),
+    );
+    _tokenController = TextEditingController();
+
+    try {
+      WindowsDpapiCredentialStore().readToken().then((t) {
+        if (mounted && t != null) {
+          setState(() {
+            _tokenController.text = t;
+          });
+        }
+      });
+    } catch (_) {}
+
     if (widget.controller.scrollToDiagnostics) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients) {
@@ -47,6 +69,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _urlController.dispose();
+    _tokenController.dispose();
     super.dispose();
   }
 
@@ -76,11 +100,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildAppearanceCard(context, ext, isDark),
           const SizedBox(height: CompanionSpacing.lg),
 
-          // 2. Storage Diagnostics Section
+          // 2. Runtime Connection & Pairing Section
+          _buildRuntimeConnectionCard(context, ext, isDark),
+          const SizedBox(height: CompanionSpacing.lg),
+
+          // 3. Storage Diagnostics Section
           _buildStorageDiagnosticsCard(context, ext, isDark),
           const SizedBox(height: CompanionSpacing.lg),
 
-          // 3. Window & Tray Lifecycle Section
+          // 4. Window & Tray Lifecycle Section
           _buildLifecycleCard(context, ext, isDark),
         ],
       ),
@@ -492,6 +520,205 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRuntimeConnectionCard(
+    BuildContext context,
+    CompanionThemeExtension? ext,
+    bool isDark,
+  ) {
+    return SoftGlassPanel(
+      padding: const EdgeInsets.all(CompanionSpacing.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.link_rounded, size: 20, color: ext?.accent),
+              const SizedBox(width: CompanionSpacing.sm),
+              Text(
+                'Runtime Connection & Pairing',
+                style: CompanionTypography.titleMedium.copyWith(color: ext?.textPrimary),
+              ),
+            ],
+          ),
+          const SizedBox(height: CompanionSpacing.xs),
+          Text(
+            'Configure Local AI Runtime endpoint URL and DPAPI-protected pairing secret',
+            style: CompanionTypography.caption.copyWith(color: ext?.textSecondary),
+          ),
+          const SizedBox(height: CompanionSpacing.lg),
+
+          Text(
+            'Runtime Host URL',
+            style: CompanionTypography.bodySmall.copyWith(
+              color: ext?.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: CompanionSpacing.xs),
+          NeumorphicSurface(
+            surfaceType: NeumorphicSurfaceType.recessed,
+            borderRadius: CompanionRadius.borderMd,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            child: TextField(
+              controller: _urlController,
+              style: CompanionTypography.bodyMedium.copyWith(color: ext?.textPrimary),
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                isDense: true,
+                hintText: 'http://127.0.0.1:8000',
+                hintStyle: CompanionTypography.bodyMedium.copyWith(color: ext?.textMuted),
+              ),
+            ),
+          ),
+          const SizedBox(height: CompanionSpacing.md),
+
+          Text(
+            'Pairing Token (Protected by Windows DPAPI)',
+            style: CompanionTypography.bodySmall.copyWith(
+              color: ext?.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: CompanionSpacing.xs),
+          NeumorphicSurface(
+            surfaceType: NeumorphicSurfaceType.recessed,
+            borderRadius: CompanionRadius.borderMd,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _tokenController,
+                    obscureText: _obscureToken,
+                    style: CompanionTypography.bodyMedium.copyWith(color: ext?.textPrimary),
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      isDense: true,
+                      hintText: 'Enter pairing token...',
+                      hintStyle: CompanionTypography.bodyMedium.copyWith(color: ext?.textMuted),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(
+                    _obscureToken ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                    size: 18,
+                    color: ext?.textSecondary,
+                  ),
+                  tooltip: _obscureToken ? 'Show token' : 'Hide token',
+                  onPressed: () {
+                    setState(() {
+                      _obscureToken = !_obscureToken;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: CompanionSpacing.md),
+
+          Wrap(
+            spacing: CompanionSpacing.md,
+            runSpacing: CompanionSpacing.sm,
+            children: [
+              NeumorphicButton(
+                child: const Text('Save Token'),
+                icon: const Icon(Icons.security_rounded, size: 16),
+                size: NeumorphicButtonSize.sm,
+                onPressed: () async {
+                  final token = _tokenController.text.trim();
+                  try {
+                    await WindowsDpapiCredentialStore().writeToken(token);
+                    setState(() {
+                      _testConnectionResult = 'Token saved securely via Windows DPAPI.';
+                    });
+                  } catch (e) {
+                    setState(() {
+                      _testConnectionResult = 'Failed to save token: $e';
+                    });
+                  }
+                },
+              ),
+              NeumorphicButton(
+                child: Text(_isTesting ? 'Testing...' : 'Test Connection'),
+                icon: const Icon(Icons.network_check_rounded, size: 16),
+                size: NeumorphicButtonSize.sm,
+                onPressed: _isTesting
+                    ? null
+                    : () async {
+                        setState(() {
+                          _isTesting = true;
+                          _testConnectionResult = null;
+                        });
+                        try {
+                          final store = InMemoryCredentialStore(_tokenController.text.trim());
+                          final client = CompanionClient(
+                            baseUrl: _urlController.text.trim(),
+                            credentialStore: store,
+                          );
+                          final health = await client.getHealth();
+                          if (health.status == 'healthy') {
+                            try {
+                              final auth = await client.verifyAuth();
+                              setState(() {
+                                _testConnectionResult =
+                                    'Connected: Health OK (${health.status}), Auth verified (${auth.tokenType}).';
+                              });
+                            } catch (authErr) {
+                              setState(() {
+                                _testConnectionResult =
+                                    'Health OK (${health.status}), but auth verification failed: $authErr';
+                              });
+                            }
+                          } else {
+                            setState(() {
+                              _testConnectionResult = 'Runtime reported unhealthy status: ${health.status}';
+                            });
+                          }
+                        } catch (e) {
+                          setState(() {
+                            _testConnectionResult = 'Connection failed: $e';
+                          });
+                        } finally {
+                          if (mounted) {
+                            setState(() {
+                              _isTesting = false;
+                            });
+                          }
+                        }
+                      },
+              ),
+            ],
+          ),
+
+          if (_testConnectionResult != null) ...[
+            const SizedBox(height: CompanionSpacing.md),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: CompanionSpacing.md,
+                vertical: CompanionSpacing.sm,
+              ),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.04),
+                borderRadius: CompanionRadius.borderMd,
+                border: Border.all(
+                  color: ext?.borderSubtle ?? Colors.transparent,
+                ),
+              ),
+              child: Text(
+                _testConnectionResult!,
+                style: CompanionTypography.caption.copyWith(
+                  color: ext?.textPrimary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
