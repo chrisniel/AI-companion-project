@@ -73,10 +73,11 @@
 - [x] Align `DesktopNavigationRail` tiles with Web interaction states (embossed selected, inset hover/pressed).
 - [x] Align `ChatScreen` composer with recessed input well and responsive hint layout (`TextOverflow.ellipsis`).
 - [x] Align `SettingsScreen` controls with `NeumorphicSegmentedControl` and recessed diagnostic cards.
-- [x] Verify complete workspace test suite (73/73 tests pass: 38 desktop + 14 core + 18 design + 3 api).
+- [x] Verify complete workspace test suite (74/74 tests pass: 39 desktop + 14 core + 18 design + 3 api).
 - [x] Verify `dart analyze .` (0 issues).
 - [x] Verify `flutter build windows --debug` (clean build).
 - [x] Verify native Windows lifecycle harness (`scripts/verify_native_windows_lifecycle.ps1` all 3 tests pass).
 - [x] Verify Python CI policy regression suite (`test_ci_policy.py` 29 tests pass).
 - [x] Capture visual evidence: Web reference UI and Flutter Desktop UI across 8 required comparisons (A–H) saved in `%LOCALAPPDATA%\Temp\ai_companion_visual_review` outside Git.
-- [x] Await independent human visual review of screenshots before Batch 4. Stop at gate.
+- [x] Resolve Windows interactive startup defect: unblock runApp() ahead of asynchronous coordinator initialization, adopt supported window_manager waitUntilReadyToShow lifecycle with explicit 'AI Companion' title, align native Win32 main.cpp window creation title to 'AI Companion', and harden LiveDesktopTrayAdapter against silent native tray LoadImage failures.
+- [ ] Await independent human visual review of screenshots and startup verification before Batch 4. Stop at gate.

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
@@ -20,6 +21,16 @@ class LiveDesktopWindowAdapter implements DesktopWindowAdapter {
 
   @override
   Future<void> center() => windowManager.center();
+
+  @override
+  Future<void> setTitle(String title) => windowManager.setTitle(title);
+
+  @override
+  Future<void> waitUntilReadyToShow([
+    WindowOptions? options,
+    VoidCallback? callback,
+  ]) =>
+      windowManager.waitUntilReadyToShow(options, callback);
 
   @override
   Future<void> setPreventClose(bool isPreventClose) =>
@@ -56,7 +67,24 @@ class LiveDesktopTrayAdapter implements DesktopTrayAdapter {
   const LiveDesktopTrayAdapter();
 
   @override
-  Future<void> setIcon(String path) => trayManager.setIcon(path);
+  Future<void> setIcon(String path) async {
+    if (Platform.isWindows) {
+      final exe = Platform.resolvedExecutable;
+      final exeDir = exe.contains('\\') ? exe.substring(0, exe.lastIndexOf('\\')) : '.';
+      final normalizedRelPath = path.replaceAll('/', '\\');
+      final assetPath = '$exeDir\\data\\flutter_assets\\$normalizedRelPath';
+      final directFile = File(path);
+      final assetFile = File(assetPath);
+
+      if (!directFile.existsSync() && !assetFile.existsSync()) {
+        throw FileSystemException(
+          'Tray icon file not found at "$path" or "$assetPath"',
+          assetPath,
+        );
+      }
+    }
+    await trayManager.setIcon(path);
+  }
 
   @override
   Future<void> setToolTip(String toolTip) => trayManager.setToolTip(toolTip);

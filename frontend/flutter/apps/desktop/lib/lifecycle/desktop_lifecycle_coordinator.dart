@@ -26,6 +26,7 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
 
   static const Size defaultWindowSize = Size(1280, 800);
   static const Size minimumWindowSize = Size(1024, 640);
+  static const String defaultWindowTitle = 'AI Companion';
   static const String defaultTrayIconPath = 'assets/icons/tray_icon.ico';
   static const String defaultTrayToolTip = 'AI Companion';
 
@@ -53,11 +54,7 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
     if (_isInitialized || _isDisposed) return;
 
     await windowAdapter.ensureInitialized();
-    await windowAdapter.setSize(initialWindowSize ?? defaultWindowSize);
-    await windowAdapter.setMinimumSize(minimumWindowSize);
-    await windowAdapter.center();
     await windowAdapter.setPreventClose(true);
-
     windowAdapter.addListener(this);
 
     try {
@@ -78,7 +75,16 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
       trayAdapter.removeListener(this);
     }
 
-    if (showImmediately) {
+    final windowOptions = WindowOptions(
+      size: initialWindowSize ?? defaultWindowSize,
+      minimumSize: minimumWindowSize,
+      center: true,
+      title: defaultWindowTitle,
+    );
+
+    await windowAdapter.waitUntilReadyToShow(windowOptions);
+
+    if (showImmediately && !_isDisposed) {
       await restoreAndFocusWindow();
     }
 

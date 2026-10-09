@@ -9,6 +9,7 @@ import 'package:ai_companion_desktop/lifecycle/desktop_tray_adapter.dart';
 class FakeDesktopWindowAdapter implements DesktopWindowAdapter {
   Size? size;
   Size? minimumSize;
+  String? title;
   bool isCentered = false;
   bool preventClose = false;
   bool visible = false;
@@ -16,6 +17,7 @@ class FakeDesktopWindowAdapter implements DesktopWindowAdapter {
   bool isDestroyed = false;
   int showCallCount = 0;
   int hideCallCount = 0;
+  WindowOptions? capturedOptions;
   final List<WindowListener> listeners = [];
 
   @override
@@ -34,6 +36,24 @@ class FakeDesktopWindowAdapter implements DesktopWindowAdapter {
   @override
   Future<void> center() async {
     isCentered = true;
+  }
+
+  @override
+  Future<void> setTitle(String newTitle) async {
+    title = newTitle;
+  }
+
+  @override
+  Future<void> waitUntilReadyToShow([
+    WindowOptions? options,
+    VoidCallback? callback,
+  ]) async {
+    capturedOptions = options;
+    if (options?.size != null) size = options!.size;
+    if (options?.minimumSize != null) minimumSize = options!.minimumSize;
+    if (options?.center == true) isCentered = true;
+    if (options?.title != null) title = options!.title;
+    callback?.call();
   }
 
   @override
@@ -174,11 +194,24 @@ void main() {
 
       expect(windowAdapter.size, const Size(1280, 800));
       expect(windowAdapter.minimumSize, const Size(1024, 640));
+      expect(windowAdapter.title, DesktopLifecycleCoordinator.defaultWindowTitle);
+      expect(windowAdapter.capturedOptions?.title, DesktopLifecycleCoordinator.defaultWindowTitle);
+      expect(windowAdapter.capturedOptions?.size, const Size(1280, 800));
+      expect(windowAdapter.capturedOptions?.minimumSize, const Size(1024, 640));
+      expect(windowAdapter.capturedOptions?.center, isTrue);
       expect(windowAdapter.isCentered, isTrue);
       expect(windowAdapter.preventClose, isTrue);
       expect(windowAdapter.visible, isTrue);
       expect(windowAdapter.focused, isTrue);
       expect(coordinator.isWindowVisible, isTrue);
+    });
+
+    test('initializes window with custom initial size when specified', () async {
+      await coordinator.initialize(initialWindowSize: const Size(1024, 640));
+
+      expect(windowAdapter.size, const Size(1024, 640));
+      expect(windowAdapter.capturedOptions?.size, const Size(1024, 640));
+      expect(windowAdapter.title, DesktopLifecycleCoordinator.defaultWindowTitle);
     });
 
     test('initializes system tray with icon, tooltip, and required menu actions', () async {

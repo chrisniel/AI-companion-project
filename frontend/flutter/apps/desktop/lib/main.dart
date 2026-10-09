@@ -54,9 +54,10 @@ void main(List<String> args) async {
     },
   );
 
-  await coordinator.initialize(initialWindowSize: initialSize);
+  final coordinatorInit = coordinator.initialize(initialWindowSize: initialSize);
 
   if (kDebugMode && args.contains('--capture-visual-evidence')) {
+    await coordinatorInit;
     final outputDirArg = args.firstWhere(
       (a) => a.startsWith('--output-dir='),
       orElse: () => '--output-dir=${Platform.environment['TEMP']}\\ai_companion_visual_review',
@@ -87,6 +88,8 @@ void main(List<String> args) async {
       settingsController: settingsController,
     ),
   );
+
+  await coordinatorInit;
 
   // Automated native test harness restricted strictly to debug mode
   if (kDebugMode) {

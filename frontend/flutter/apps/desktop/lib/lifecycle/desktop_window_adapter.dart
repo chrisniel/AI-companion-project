@@ -15,6 +15,15 @@ abstract class DesktopWindowAdapter {
   /// Centers the window on the active screen.
   Future<void> center();
 
+  /// Changes the title of the native window.
+  Future<void> setTitle(String title);
+
+  /// Waits until the native window is ready to show and configures window options.
+  Future<void> waitUntilReadyToShow([
+    WindowOptions? options,
+    VoidCallback? callback,
+  ]);
+
   /// Intercepts native close events instead of automatically destroying the process.
   Future<void> setPreventClose(bool isPreventClose);
 
