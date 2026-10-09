@@ -60,6 +60,27 @@ class MockCompanionClient extends CompanionClient {
   String? lastDeletedConvId;
   ModelStatusResponse? customModelStatus;
   List<MessageOut>? customMessages;
+  List<ConversationOut>? customConversations;
+  List<MessageOut> _storedMessages = [
+    MessageOut(
+      id: 'msg-1',
+      conversationId: 'mock-conv-1',
+      sender: 'user',
+      content: 'Hello Companion',
+      status: 'completed',
+      sequenceNo: 1,
+      createdAt: DateTime.now().toUtc().toIso8601String(),
+    ),
+    MessageOut(
+      id: 'msg-2',
+      conversationId: 'mock-conv-1',
+      sender: 'assistant',
+      content: 'Hello human!',
+      status: 'completed',
+      sequenceNo: 2,
+      createdAt: DateTime.now().toUtc().toIso8601String(),
+    ),
+  ];
 
   @override
   Future<ModelStatusResponse> getModelStatus() async {
@@ -87,6 +108,7 @@ class MockCompanionClient extends CompanionClient {
   @override
   Future<ConversationOut> createConversation({String? title, String? characterId}) async {
     createConvCalled = true;
+    _storedMessages = [];
     if (!shouldCreateConvSucceed) {
       throw const CompanionApiException(statusCode: 500, message: 'Internal database error');
     }
@@ -103,6 +125,12 @@ class MockCompanionClient extends CompanionClient {
 
   @override
   Future<ConversationListOut> listConversations({int skip = 0, int limit = 50}) async {
+    if (customConversations != null) {
+      return ConversationListOut(
+        items: customConversations!,
+        total: customConversations!.length,
+      );
+    }
     return ConversationListOut(
       items: [
         ConversationOut(
@@ -129,27 +157,44 @@ class MockCompanionClient extends CompanionClient {
       return MessageListOut(items: customMessages!, total: customMessages!.length);
     }
     return MessageListOut(
-      items: [
-        MessageOut(
-          id: 'msg-1',
-          conversationId: conversationId,
-          sender: 'user',
-          content: 'Hello Companion',
-          status: 'completed',
-          sequenceNo: 1,
-          createdAt: DateTime.now().toUtc().toIso8601String(),
-        ),
-        MessageOut(
-          id: 'msg-2',
-          conversationId: conversationId,
-          sender: 'assistant',
-          content: 'Hello human!',
-          status: 'completed',
-          sequenceNo: 2,
-          createdAt: DateTime.now().toUtc().toIso8601String(),
-        ),
-      ],
-      total: 2,
+      items: _storedMessages,
+      total: _storedMessages.length,
+    );
+  }
+
+  String? lastRenamedTitle;
+  bool generateTitleCalled = false;
+  bool autoAcceptStream = true;
+
+  @override
+  Future<ConversationOut> renameConversation(String conversationId, String title) async {
+    lastRenamedTitle = title;
+    return ConversationOut(
+      id: conversationId,
+      title: title,
+      characterId: 'default',
+      ownerId: 'owner',
+      createdAt: DateTime.now().toUtc().toIso8601String(),
+      updatedAt: DateTime.now().toUtc().toIso8601String(),
+      messageCount: 1,
+    );
+  }
+
+  @override
+  Future<ConversationOut> generateConversationTitle(
+    String conversationId, {
+    String? currentTitle,
+    String? fallbackTitle,
+  }) async {
+    generateTitleCalled = true;
+    return ConversationOut(
+      id: conversationId,
+      title: 'Model-Generated Title',
+      characterId: 'default',
+      ownerId: 'owner',
+      createdAt: DateTime.now().toUtc().toIso8601String(),
+      updatedAt: DateTime.now().toUtc().toIso8601String(),
+      messageCount: 1,
     );
   }
 
@@ -158,11 +203,44 @@ class MockCompanionClient extends CompanionClient {
     String conversationId,
     MessageSend payload, {
     http.Client? customClient,
+    void Function()? onAccepted,
   }) async* {
     sendMessageCalled = true;
     if (customEventStream != null) {
-      yield* customEventStream!;
+      bool accepted = false;
+      await for (final event in customEventStream!) {
+        if (!accepted && autoAcceptStream) {
+          accepted = true;
+          onAccepted?.call();
+        }
+        yield event;
+      }
     } else {
+      if (autoAcceptStream) {
+        onAccepted?.call();
+      }
+      _storedMessages.add(
+        MessageOut(
+          id: 'msg-u-${DateTime.now().millisecondsSinceEpoch}',
+          conversationId: conversationId,
+          sender: 'user',
+          content: payload.userText,
+          status: 'completed',
+          sequenceNo: _storedMessages.length + 1,
+          createdAt: DateTime.now().toUtc().toIso8601String(),
+        ),
+      );
+      _storedMessages.add(
+        MessageOut(
+          id: 'msg-a-${DateTime.now().millisecondsSinceEpoch}',
+          conversationId: conversationId,
+          sender: 'assistant',
+          content: 'Hello world!',
+          status: 'completed',
+          sequenceNo: _storedMessages.length + 1,
+          createdAt: DateTime.now().toUtc().toIso8601String(),
+        ),
+      );
       yield const SseTokenEvent('Hello');
       yield const SseTokenEvent(' world!');
       yield const SseDoneEvent();
@@ -507,6 +585,155 @@ void main() {
       expect(controller.errorMessage, contains('Local AI model unavailable (503)'));
     });
 
+    test('drawerConversations filters inactive untouched empty drafts while preserving active empty draft and populated sessions', () async {
+      mockClient.customConversations = const [
+        ConversationOut(
+          id: 'conv-active-empty',
+          title: 'New Conversation',
+          characterId: 'default',
+          ownerId: 'owner',
+          createdAt: '2026-03-30T10:00:00Z',
+          updatedAt: '2026-03-30T10:00:00Z',
+          messageCount: 0,
+        ),
+        ConversationOut(
+          id: 'conv-old-empty',
+          title: 'New Conversation',
+          characterId: 'default',
+          ownerId: 'owner',
+          createdAt: '2026-03-29T10:00:00Z',
+          updatedAt: '2026-03-29T10:00:00Z',
+          messageCount: 0,
+        ),
+        ConversationOut(
+          id: 'conv-with-messages',
+          title: 'Project Discussion',
+          characterId: 'default',
+          ownerId: 'owner',
+          createdAt: '2026-03-28T10:00:00Z',
+          updatedAt: '2026-03-28T10:00:00Z',
+          messageCount: 5,
+        ),
+        ConversationOut(
+          id: 'conv-renamed-empty',
+          title: 'Custom Topic',
+          characterId: 'default',
+          ownerId: 'owner',
+          createdAt: '2026-03-27T10:00:00Z',
+          updatedAt: '2026-03-27T10:00:00Z',
+          messageCount: 0,
+        ),
+      ];
+
+      await controller.checkConnection();
+      await controller.loadConversations();
+      final activeConv = controller.conversations.firstWhere((c) => c.id == 'conv-active-empty');
+      await controller.selectConversation(activeConv);
+
+      expect(controller.conversations, hasLength(4));
+      final drawerIds = controller.drawerConversations.map((c) => c.id).toList();
+      expect(drawerIds, hasLength(3));
+      expect(drawerIds, contains('conv-active-empty'));
+      expect(drawerIds, contains('conv-with-messages'));
+      expect(drawerIds, contains('conv-renamed-empty'));
+      expect(drawerIds, isNot(contains('conv-old-empty')));
+    });
+
+    test('first turn generates deterministic title, persists rename, and triggers model refinement', () async {
+      mockClient.customConversations = const [
+        ConversationOut(
+          id: 'conv-new',
+          title: 'New Conversation',
+          characterId: 'default',
+          ownerId: 'owner',
+          createdAt: '2026-03-30T10:00:00Z',
+          updatedAt: '2026-03-30T10:00:00Z',
+          messageCount: 0,
+        ),
+      ];
+
+      mockClient.customMessages = [];
+      await controller.checkConnection();
+      await controller.loadConversations();
+      await controller.selectConversation(controller.conversations.first);
+
+      expect(controller.activeConversation?.title, 'New Conversation');
+
+      const prompt = 'Tell me about quantum computing principles';
+      final expectedDeterministic = deriveDeterministicTitle(prompt);
+
+      await controller.sendMessage(prompt);
+
+      expect(mockClient.lastRenamedTitle, expectedDeterministic);
+      expect(mockClient.generateTitleCalled, isTrue);
+    });
+
+    test('rejected turn (HTTP 503) does not rename conversation or corrupt title', () async {
+      mockClient.customConversations = const [
+        ConversationOut(
+          id: 'conv-new-503',
+          title: 'New Conversation',
+          characterId: 'default',
+          ownerId: 'owner',
+          createdAt: '2026-03-30T10:00:00Z',
+          updatedAt: '2026-03-30T10:00:00Z',
+          messageCount: 0,
+        ),
+      ];
+      mockClient.autoAcceptStream = false;
+
+      final streamCtrl = StreamController<SseEvent>();
+      mockClient.customEventStream = streamCtrl.stream;
+
+      await controller.checkConnection();
+      await controller.loadConversations();
+      await controller.selectConversation(controller.conversations.first);
+
+      final sendFuture = controller.sendMessage('Test rejected message');
+      streamCtrl.addError(
+        const CompanionApiException(
+          statusCode: 503,
+          code: 'LLM_UNAVAILABLE',
+          message: 'Local inference engine unavailable',
+        ),
+      );
+      await streamCtrl.close();
+      final accepted = await sendFuture;
+
+      expect(accepted, isFalse);
+      expect(controller.activeConversation?.title, 'New Conversation');
+      expect(mockClient.lastRenamedTitle, isNull);
+      expect(mockClient.generateTitleCalled, isFalse);
+    });
+
+    test('manually renamed conversation is not overwritten by first-turn title generation', () async {
+      mockClient.customConversations = const [
+        ConversationOut(
+          id: 'conv-manual',
+          title: 'New Conversation',
+          characterId: 'default',
+          ownerId: 'owner',
+          createdAt: '2026-03-30T10:00:00Z',
+          updatedAt: '2026-03-30T10:00:00Z',
+          messageCount: 0,
+        ),
+      ];
+
+      mockClient.customMessages = [];
+      await controller.checkConnection();
+      await controller.loadConversations();
+      await controller.selectConversation(controller.conversations.first);
+
+      await controller.renameConversation('conv-manual', 'My Custom Topic');
+      expect(controller.activeConversation?.title, 'My Custom Topic');
+      expect(mockClient.lastRenamedTitle, 'My Custom Topic');
+
+      await controller.sendMessage('Some prompt text');
+      expect(controller.activeConversation?.title, 'My Custom Topic');
+      expect(mockClient.lastRenamedTitle, 'My Custom Topic');
+      expect(mockClient.generateTitleCalled, isFalse);
+    });
+
     test('E2E lifecycle: create -> send -> stream tokens -> done -> restore history', () async {
       final e2eClient = MockCompanionClient();
       final e2eController = DesktopChatController(client: e2eClient);
@@ -692,6 +919,94 @@ void main() {
       expect(find.text('256.0 KB'), findsOneWidget);
       expect(find.text('Preview unavailable (Planned M2)'), findsOneWidget);
       expect(find.byIcon(Icons.image_outlined), findsOneWidget);
+
+      controller.dispose();
+    });
+
+    testWidgets('preserves draft in composer and restores canSend when connected send is rejected with HTTP 503', (tester) async {
+      final mockClient = MockCompanionClient();
+      mockClient.autoAcceptStream = false;
+
+      final streamCtrl = StreamController<SseEvent>();
+      mockClient.customEventStream = streamCtrl.stream;
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      const draftText = 'Draft message that must not be cleared on 503';
+      await tester.enterText(find.byType(TextField), draftText);
+      await tester.pump();
+
+      await tester.tap(find.byIcon(Icons.send_rounded));
+      await tester.pump();
+
+      streamCtrl.addError(
+        const CompanionApiException(
+          statusCode: 503,
+          code: 'LLM_UNAVAILABLE',
+          message: 'Local inference engine unavailable',
+        ),
+      );
+      await streamCtrl.close();
+      await tester.pumpAndSettle();
+
+      expect(find.text(draftText), findsOneWidget);
+      expect(controller.errorMessage, contains('Local AI model unavailable (503)'));
+      expect(controller.messages.where((m) => m.content == draftText), isEmpty);
+      expect(controller.isGenerating, isFalse);
+      expect(controller.isAwaitingAcceptance, isFalse);
+
+      controller.dispose();
+    });
+
+    testWidgets('disables composer send button while awaiting server acceptance', (tester) async {
+      final mockClient = MockCompanionClient();
+      mockClient.autoAcceptStream = false;
+
+      final streamCtrl = StreamController<SseEvent>();
+      mockClient.customEventStream = streamCtrl.stream;
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), 'First submission in flight');
+      await tester.pump();
+
+      await tester.tap(find.byIcon(Icons.send_rounded));
+      await tester.pump();
+
+      expect(controller.isAwaitingAcceptance, isTrue);
+      expect(controller.canSend, isFalse);
+
+      // While busy/awaiting acceptance, the send button is replaced by stop button, preventing duplicate submits
+      expect(find.byIcon(Icons.send_rounded), findsNothing);
+      expect(find.byIcon(Icons.stop_rounded), findsOneWidget);
+
+      streamCtrl.add(const SseDoneEvent());
+      await streamCtrl.close();
+      await tester.pumpAndSettle();
 
       controller.dispose();
     });

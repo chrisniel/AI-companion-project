@@ -222,6 +222,54 @@ class CompanionClient {
     _handleErrorResponse(response);
   }
 
+  /// Renames a conversation title via PATCH /api/v1/conversations/{conversation_id}.
+  Future<ConversationOut> renameConversation(
+    String conversationId,
+    String title,
+  ) async {
+    final uri = baseUri.replace(
+      path: '${baseUri.path}/api/v1/conversations/$conversationId',
+    );
+    final headers = await _buildHeaders(requiresAuth: true);
+    final payload = ConversationUpdate(title: title);
+    final response = await _httpClient.patch(
+      uri,
+      headers: headers,
+      body: jsonEncode(payload.toJson()),
+    );
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return ConversationOut.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Generates a model-assisted conversation title via POST /api/v1/conversations/{conversation_id}/generate-title.
+  Future<ConversationOut> generateConversationTitle(
+    String conversationId, {
+    String? currentTitle,
+    String? fallbackTitle,
+  }) async {
+    final uri = baseUri.replace(
+      path: '${baseUri.path}/api/v1/conversations/$conversationId/generate-title',
+    );
+    final headers = await _buildHeaders(requiresAuth: true);
+    final payload = GenerateTitleRequest(
+      currentTitle: currentTitle,
+      fallbackTitle: fallbackTitle,
+    );
+    final response = await _httpClient.post(
+      uri,
+      headers: headers,
+      body: jsonEncode(payload.toJson()),
+    );
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return ConversationOut.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
   /// Sends a user turn and consumes streaming assistant tokens via SSE.
   ///
   /// Supports per-request cancellation: cancelling the returned StreamSubscription
@@ -230,6 +278,7 @@ class CompanionClient {
     String conversationId,
     MessageSend payload, {
     http.Client? customClient,
+    void Function()? onAccepted,
   }) {
     late StreamController<SseEvent> outputController;
     http.Client? activeClient;
@@ -291,6 +340,8 @@ class CompanionClient {
             }
             return;
           }
+
+          onAccepted?.call();
 
           final eventStream = _sseParser.parseByteStream(streamedResponse.stream);
           parserSubscription = eventStream.listen(

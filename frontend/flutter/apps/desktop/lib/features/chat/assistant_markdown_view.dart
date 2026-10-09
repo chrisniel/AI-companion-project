@@ -18,7 +18,7 @@ typedef MarkdownLinkTapCallback = void Function(String url);
 /// - Unordered and ordered lists
 /// - Links with strict URL sanitization (only `http:`, `https:`, `mailto:` allowed)
 /// - Blocks raw HTML execution and dangerous schemes (`javascript:`, `file:`)
-class AssistantMarkdownView extends StatelessWidget {
+class AssistantMarkdownView extends StatefulWidget {
   final String content;
   final TextStyle? baseStyle;
   final MarkdownLinkTapCallback? onLinkTap;
@@ -31,16 +31,39 @@ class AssistantMarkdownView extends StatelessWidget {
   });
 
   @override
+  State<AssistantMarkdownView> createState() => _AssistantMarkdownViewState();
+}
+
+class _AssistantMarkdownViewState extends State<AssistantMarkdownView> {
+  final List<TapGestureRecognizer> _recognizers = [];
+
+  void _disposeRecognizers() {
+    for (final r in _recognizers) {
+      r.dispose();
+    }
+    _recognizers.clear();
+  }
+
+  @override
+  void dispose() {
+    _disposeRecognizers();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (content.isEmpty) return const SizedBox.shrink();
+    if (widget.content.isEmpty) return const SizedBox.shrink();
+
+    // Clean up previously allocated recognizers from earlier streaming builds
+    _disposeRecognizers();
 
     final themeExt = Theme.of(context).extension<CompanionThemeExtension>();
-    final defaultStyle = baseStyle ??
+    final defaultStyle = widget.baseStyle ??
         CompanionTypography.bodyMedium.copyWith(
           color: themeExt?.textPrimary,
         );
 
-    final blocks = _parseBlocks(content, defaultStyle, themeExt);
+    final blocks = _parseBlocks(widget.content, defaultStyle, themeExt);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -422,6 +445,16 @@ class AssistantMarkdownView extends StatelessWidget {
           final isSafe = _isSafeUrl(href);
 
           if (isSafe) {
+            final recognizer = TapGestureRecognizer()
+              ..onTap = () {
+                if (widget.onLinkTap != null) {
+                  widget.onLinkTap!(href);
+                } else {
+                  _launchSafeUrl(href);
+                }
+              };
+            _recognizers.add(recognizer);
+
             spans.add(
               TextSpan(
                 text: label,
@@ -430,14 +463,7 @@ class AssistantMarkdownView extends StatelessWidget {
                   decoration: TextDecoration.underline,
                   fontWeight: FontWeight.w500,
                 ),
-                recognizer: TapGestureRecognizer()
-                  ..onTap = () {
-                    if (onLinkTap != null) {
-                      onLinkTap!(href);
-                    } else {
-                      _launchSafeUrl(href);
-                    }
-                  },
+                recognizer: recognizer,
               ),
             );
           } else {

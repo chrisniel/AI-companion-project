@@ -297,6 +297,114 @@ void main() {
       await expectLater(client.deleteConversation('conv-42'), completes);
     });
 
+    test('renameConversation sends PATCH and returns updated ConversationOut', () async {
+      final mock = MockClient((request) async {
+        expect(request.method, 'PATCH');
+        expect(request.url.path, '/api/v1/conversations/conv-42');
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['title'], 'Renamed Chat');
+        return http.Response(
+          jsonEncode({
+            'id': 'conv-42',
+            'title': 'Renamed Chat',
+            'character_id': 'default',
+            'owner_id': 'owner',
+            'created_at': '2026-10-09T12:00:00Z',
+            'updated_at': '2026-10-09T12:05:00Z',
+            'message_count': 3,
+          }),
+          200,
+        );
+      });
+
+      final client = CompanionClient(httpClient: mock);
+      final res = await client.renameConversation('conv-42', 'Renamed Chat');
+      expect(res.id, 'conv-42');
+      expect(res.title, 'Renamed Chat');
+      expect(res.messageCount, 3);
+    });
+
+    test('generateConversationTitle sends POST and returns updated ConversationOut', () async {
+      final mock = MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/v1/conversations/conv-42/generate-title');
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['current_title'], 'Current');
+        expect(body['fallback_title'], 'Fallback');
+        return http.Response(
+          jsonEncode({
+            'id': 'conv-42',
+            'title': 'Model Generated Title',
+            'character_id': 'default',
+            'owner_id': 'owner',
+            'created_at': '2026-10-09T12:00:00Z',
+            'updated_at': '2026-10-09T12:05:00Z',
+            'message_count': 1,
+          }),
+          200,
+        );
+      });
+
+      final client = CompanionClient(httpClient: mock);
+      final res = await client.generateConversationTitle(
+        'conv-42',
+        currentTitle: 'Current',
+        fallbackTitle: 'Fallback',
+      );
+      expect(res.id, 'conv-42');
+      expect(res.title, 'Model Generated Title');
+    });
+
+    test('sendMessageStream triggers onAccepted callback on HTTP 200', () async {
+      final sseLines = [
+        'data: {"type": "token", "content": "Hi"}\n\n',
+        'data: {"type": "done", "finish_reason": "stop"}\n\n',
+      ];
+      final bodyBytes = utf8.encode(sseLines.join());
+
+      final mockStreamClient = MockClient.streaming((request, bodyStream) async {
+        return http.StreamedResponse(Stream.fromIterable([bodyBytes]), 200);
+      });
+
+      bool acceptedCalled = false;
+      final client = CompanionClient();
+      final stream = client.sendMessageStream(
+        'conv-1',
+        const MessageSend(userText: 'Hello'),
+        customClient: mockStreamClient,
+        onAccepted: () {
+          acceptedCalled = true;
+        },
+      );
+
+      final events = await stream.toList();
+      expect(events.length, 2);
+      expect(acceptedCalled, isTrue);
+    });
+
+    test('sendMessageStream does NOT trigger onAccepted callback on HTTP 503', () async {
+      final mockStreamClient = MockClient.streaming((request, bodyStream) async {
+        final errBytes = utf8.encode(jsonEncode({'detail': 'LLM_UNAVAILABLE'}));
+        return http.StreamedResponse(Stream.fromIterable([errBytes]), 503);
+      });
+
+      bool acceptedCalled = false;
+      final client = CompanionClient();
+      final stream = client.sendMessageStream(
+        'conv-1',
+        const MessageSend(userText: 'Turn'),
+        customClient: mockStreamClient,
+        onAccepted: () {
+          acceptedCalled = true;
+        },
+      );
+
+      try {
+        await stream.toList();
+      } catch (_) {}
+      expect(acceptedCalled, isFalse);
+    });
+
     test('validateBaseUrl parses valid URL and rejects invalid scheme', () {
       final valid = CompanionClient.validateBaseUrl('http://localhost:8000/');
       expect(valid.scheme, 'http');

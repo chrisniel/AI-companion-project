@@ -78,10 +78,10 @@ class TestCheckDartOpenApiParity(unittest.TestCase):
         self.assertTrue(any("uncataloged route" in err for err in errors))
 
     def test_verify_companion_client_implementations_passes(self):
-        """CompanionClient must implement all 10 M1 routes with correct path templates."""
+        """CompanionClient must implement all 12 M1 routes with correct path templates."""
         errors, verified = checker.verify_companion_client_implementations(checker.CLIENT_PATH)
         self.assertEqual(errors, [])
-        self.assertEqual(len(verified), 10)
+        self.assertEqual(len(verified), 12)
 
     def test_verify_companion_client_implementations_fails_on_missing_method(self):
         """Missing implementation method must fail closed."""

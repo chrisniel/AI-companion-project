@@ -192,3 +192,95 @@ class ConversationListOut {
   @override
   String toString() => 'ConversationListOut(total: $total, count: ${items.length})';
 }
+
+/// Payload for updating/renaming a conversation via PATCH /api/v1/conversations/{conversation_id}.
+@immutable
+class ConversationUpdate {
+  final String title;
+
+  const ConversationUpdate({
+    required this.title,
+  });
+
+  factory ConversationUpdate.fromJson(Map<String, dynamic> json) {
+    final titleVal = json['title'];
+    if (titleVal is! String) {
+      throw FormatException('ConversationUpdate: title must be a string, got $titleVal');
+    }
+    return ConversationUpdate(title: titleVal);
+  }
+
+  Map<String, dynamic> toJson() => {
+        'title': title,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ConversationUpdate &&
+          runtimeType == other.runtimeType &&
+          title == other.title;
+
+  @override
+  int get hashCode => title.hashCode;
+
+  @override
+  String toString() => 'ConversationUpdate(title: $title)';
+}
+
+/// Payload for requesting model-generated title via POST /api/v1/conversations/{conversation_id}/generate-title.
+@immutable
+class GenerateTitleRequest {
+  final String? currentTitle;
+  final String? fallbackTitle;
+
+  const GenerateTitleRequest({
+    this.currentTitle,
+    this.fallbackTitle,
+  });
+
+  factory GenerateTitleRequest.fromJson(Map<String, dynamic> json) {
+    return GenerateTitleRequest(
+      currentTitle: json['current_title'] as String?,
+      fallbackTitle: json['fallback_title'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        if (currentTitle != null) 'current_title': currentTitle,
+        if (fallbackTitle != null) 'fallback_title': fallbackTitle,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is GenerateTitleRequest &&
+          runtimeType == other.runtimeType &&
+          currentTitle == other.currentTitle &&
+          fallbackTitle == other.fallbackTitle;
+
+  @override
+  int get hashCode => Object.hash(currentTitle, fallbackTitle);
+
+  @override
+  String toString() =>
+      'GenerateTitleRequest(currentTitle: $currentTitle, fallbackTitle: $fallbackTitle)';
+}
+
+/// Derives a clean, concise deterministic fallback title from the initial user query.
+///
+/// Matches Web Phase 8C deriveDeterministicTitle implementation:
+/// Strips markdown characters, normalizes whitespace, truncates to 6 words / 42 chars with ellipsis.
+String deriveDeterministicTitle(String userPrompt) {
+  final cleaned = userPrompt
+      .replaceAll(RegExp(r'[#*`_~\[\]()]'), '')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  if (cleaned.isEmpty) return 'New Conversation';
+  final words = cleaned.split(' ');
+  if (words.length <= 6 && cleaned.length <= 40) {
+    return cleaned;
+  }
+  final truncated = words.take(6).join(' ');
+  return truncated.length > 42 ? '${truncated.substring(0, 42).trim()}…' : '$truncated…';
+}

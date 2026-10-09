@@ -1,5 +1,6 @@
 import 'package:ai_companion_desktop/features/chat/assistant_markdown_view.dart';
 import 'package:companion_design/companion_design.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -223,6 +224,65 @@ def partially_streamed():
 
       expect(find.text('PYTHON'), findsOneWidget);
       expect(find.textContaining('def partially_streamed():'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('properly manages and disposes TapGestureRecognizer across streaming rebuilds and unmount', (tester) async {
+      String content = 'Initial [Link](https://example.com)';
+      String? tappedUrl;
+
+      await tester.pumpWidget(
+        wrapWidget(
+          StatefulBuilder(
+            builder: (context, setState) {
+              return AssistantMarkdownView(
+                content: content,
+                onLinkTap: (url) => tappedUrl = url,
+              );
+            },
+          ),
+        ),
+      );
+
+      final selectable1 = tester.widget<SelectableText>(find.byType(SelectableText));
+      final spans1 = <TextSpan>[];
+      selectable1.textSpan!.visitChildren((child) {
+        if (child is TextSpan) spans1.add(child);
+        return true;
+      });
+      final linkSpan1 = spans1.firstWhere((s) => s.text == 'Link');
+      expect(linkSpan1.recognizer, isA<TapGestureRecognizer>());
+      (linkSpan1.recognizer as TapGestureRecognizer).onTap!();
+      expect(tappedUrl, 'https://example.com');
+
+      // Simulate streaming rebuilds (5 subsequent token updates)
+      for (int i = 1; i <= 5; i++) {
+        content += ' token$i';
+        await tester.pumpWidget(
+          wrapWidget(
+            AssistantMarkdownView(
+              content: content,
+              onLinkTap: (url) => tappedUrl = url,
+            ),
+          ),
+        );
+        expect(tester.takeException(), isNull);
+      }
+
+      final selectableFinal = tester.widget<SelectableText>(find.byType(SelectableText));
+      final spansFinal = <TextSpan>[];
+      selectableFinal.textSpan!.visitChildren((child) {
+        if (child is TextSpan) spansFinal.add(child);
+        return true;
+      });
+      final linkSpanFinal = spansFinal.firstWhere((s) => s.text == 'Link');
+      expect(linkSpanFinal.recognizer, isA<TapGestureRecognizer>());
+      tappedUrl = null;
+      (linkSpanFinal.recognizer as TapGestureRecognizer).onTap!();
+      expect(tappedUrl, 'https://example.com');
+
+      // Unmount the widget entirely and verify clean disposal
+      await tester.pumpWidget(wrapWidget(const SizedBox.shrink()));
       expect(tester.takeException(), isNull);
     });
   });

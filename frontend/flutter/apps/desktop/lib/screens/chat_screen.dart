@@ -26,6 +26,7 @@ class _ChatScreenState extends State<ChatScreen> {
   DesktopChatController? _internalController;
   bool _canSend = false;
   bool _isHistoryOpen = false;
+  bool _isSubmitting = false;
 
   DesktopChatController get _effectiveController => widget.controller ?? _internalController!;
 
@@ -85,31 +86,47 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
-  void _handleSend() {
+  Future<void> _handleSend() async {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
-    if (_effectiveController.isGenerating || !_effectiveController.canSend) return;
-
-    final originalText = _textController.text;
-    _textController.clear();
-    setState(() {
-      _canSend = false;
-    });
-
-    try {
-      _effectiveController.sendMessage(text);
-    } catch (_) {
-      if (mounted) {
-        _textController.text = originalText;
-        setState(() {
-          _canSend = true;
-        });
-      }
+    if (_isSubmitting ||
+        _effectiveController.isGenerating ||
+        _effectiveController.isAwaitingAcceptance ||
+        !_effectiveController.canSend) {
       return;
     }
 
-    _scrollToBottom();
-    _focusNode.requestFocus();
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      await _effectiveController.sendMessage(
+        text,
+        onAccepted: () {
+          if (mounted) {
+            _textController.clear();
+            setState(() {
+              _canSend = false;
+            });
+            _scrollToBottom();
+          }
+        },
+      );
+    } catch (_) {
+      // Pre-acceptance rejection/failure: draft remains intact in _textController!
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+          _canSend = _textController.text.trim().isNotEmpty;
+        });
+      }
+    }
+
+    if (mounted) {
+      _focusNode.requestFocus();
+    }
   }
 
   void _scrollToBottom() {
@@ -185,7 +202,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   onSelectConversation: (conv) => chatCtrl.selectConversation(conv),
                   onNewConversation: () => chatCtrl.createNewConversation(),
                   onDeleteConversation: (convId) => chatCtrl.deleteConversation(convId),
-                  conversations: chatCtrl.conversations,
+                  conversations: chatCtrl.drawerConversations,
                   isLoading: chatCtrl.isLoadingConversations,
                   errorMessage: chatCtrl.conversationError,
                   onRetry: () => chatCtrl.loadConversations(),
@@ -748,7 +765,7 @@ class _ChatScreenState extends State<ChatScreen> {
     DesktopChatController chatCtrl,
     CompanionThemeExtension? ext,
   ) {
-    final isBusy = chatCtrl.isGenerating;
+    final isBusy = chatCtrl.isGenerating || chatCtrl.isAwaitingAcceptance || _isSubmitting;
 
     return NeumorphicSurface(
       surfaceType: NeumorphicSurfaceType.glassElevated,

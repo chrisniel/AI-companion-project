@@ -57,12 +57,14 @@ class DesktopChatController extends ChangeNotifier {
   String? _conversationError;
 
   StreamSubscription<SseEvent>? _currentStreamSubscription;
-  Completer<void>? _turnCompleter;
+  Completer<bool>? _turnCompleter;
   int _configEpoch = 0;
   int _turnSequenceToken = 0;
   int _loadSequenceToken = 0;
   bool _isDisposed = false;
   bool _isCreatingConversation = false;
+  bool _isAwaitingAcceptance = false;
+  final Set<String> _userRenamedConversationIds = <String>{};
 
   DesktopChatController({
     required CompanionClient client,
@@ -82,11 +84,30 @@ class DesktopChatController extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   bool get isLoadingConversations => _isLoadingConversations;
   bool get isCreatingConversation => _isCreatingConversation;
+  bool get isAwaitingAcceptance => _isAwaitingAcceptance;
   String? get conversationError => _conversationError;
 
-  bool get isGenerating => _generationState == ChatGenerationState.generating;
+  bool get isGenerating =>
+      _generationState == ChatGenerationState.generating || _isAwaitingAcceptance;
   bool get isConnected => _connectionStatus == RuntimeConnectionStatus.connected;
-  bool get canSend => isConnected && !isGenerating;
+  bool get canSend =>
+      isConnected && !isGenerating && !_isCreatingConversation;
+
+  /// Filtered conversations for the history drawer matching Web Phase 8C logic:
+  /// Hides old, inactive, untouched empty drafts from the drawer without deleting database records.
+  /// Preserves the currently active empty draft.
+  List<ConversationOut> get drawerConversations {
+    final activeId = _activeConversation?.id;
+    final activeMsgCount = _messages.length;
+    return _conversations.where((c) {
+      final count = c.id == activeId ? activeMsgCount : c.messageCount;
+      final isUntouchedTitle = c.title.isEmpty ||
+          c.title == 'New Conversation' ||
+          c.title.startsWith('New Conversation');
+      final isOldEmptyDraft = isUntouchedTitle && count == 0 && c.id != activeId;
+      return !isOldEmptyDraft;
+    }).toList();
+  }
 
   ModelRuntimeStateCategory get modelStateCategory {
     if (_connectionStatus == RuntimeConnectionStatus.unconnected) {
@@ -450,21 +471,55 @@ class DesktopChatController extends ChangeNotifier {
     if (!_isDisposed) notifyListeners();
   }
 
-  /// Submits a user prompt, adds optimistic turns, and consumes streaming tokens.
-  Future<void> sendMessage(String text) async {
+  /// Submits a user prompt, adds optimistic turns upon server acceptance, and consumes streaming tokens.
+  ///
+  /// Returns `true` if the turn was accepted by the runtime and streaming commenced/completed;
+  /// returns `false` if rejected before acceptance (preserving the user's draft in the composer).
+  Future<bool> sendMessage(
+    String text, {
+    void Function()? onAccepted,
+  }) async {
     final trimmed = text.trim();
-    if (trimmed.isEmpty || isGenerating || _isDisposed) return;
+    if (trimmed.isEmpty || isGenerating || _isAwaitingAcceptance || _isDisposed) {
+      return false;
+    }
     if (!isConnected) {
       _errorMessage = 'Cannot send message: Runtime is not connected and authorized.';
       notifyListeners();
       throw StateError('Cannot send message: Runtime is not connected.');
     }
 
-    if (_activeConversation == null) {
-      await createNewConversation();
+    _isAwaitingAcceptance = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      if (_activeConversation == null) {
+        await createNewConversation();
+      }
+    } catch (e) {
+      _isAwaitingAcceptance = false;
+      _errorMessage = 'Failed to prepare conversation: $e';
+      if (!_isDisposed) notifyListeners();
+      return false;
     }
+
     final activeConv = _activeConversation;
-    if (activeConv == null) return;
+    if (activeConv == null) {
+      _isAwaitingAcceptance = false;
+      _errorMessage = 'No active conversation available.';
+      if (!_isDisposed) notifyListeners();
+      return false;
+    }
+
+    // Phase 8C First-turn automatic conversation naming with deterministic fallback
+    final isFirstTurn = _messages.isEmpty && (activeConv.messageCount == 0);
+    final isUntouched = (activeConv.title.isEmpty ||
+            activeConv.title == 'New Conversation' ||
+            activeConv.title.startsWith('New Conversation')) &&
+        !_userRenamedConversationIds.contains(activeConv.id);
+    final String? deterministicTitle =
+        (isFirstTurn && isUntouched) ? deriveDeterministicTitle(trimmed) : null;
 
     final turnToken = ++_turnSequenceToken;
     final boundConvId = activeConv.id;
@@ -492,14 +547,46 @@ class DesktopChatController extends ChangeNotifier {
       createdAt: nowIso,
     );
 
-    _messages = [..._messages, userMsg, assistantMsg];
-    _streamingText = '';
-    _generationState = ChatGenerationState.generating;
-    _errorMessage = null;
-    notifyListeners();
-
-    final completer = Completer<void>();
+    final completer = Completer<bool>();
     _turnCompleter = completer;
+    bool hasBeenAccepted = false;
+
+    void commitAcceptance() {
+      if (hasBeenAccepted ||
+          _isDisposed ||
+          _turnSequenceToken != turnToken ||
+          _activeConversation?.id != boundConvId) {
+        return;
+      }
+      hasBeenAccepted = true;
+      _isAwaitingAcceptance = false;
+      _generationState = ChatGenerationState.generating;
+      _errorMessage = null;
+
+      // Commit messages to UI upon verified server acceptance
+      _messages = [..._messages, userMsg, assistantMsg];
+      _streamingText = '';
+
+      // Optimistically apply deterministic fallback title if first turn
+      if (deterministicTitle != null) {
+        _activeConversation = ConversationOut(
+          id: activeConv.id,
+          title: deterministicTitle,
+          characterId: activeConv.characterId,
+          ownerId: activeConv.ownerId,
+          createdAt: activeConv.createdAt,
+          updatedAt: DateTime.now().toUtc().toIso8601String(),
+          messageCount: _messages.length,
+        );
+        _conversations = _conversations
+            .map((c) => c.id == boundConvId ? _activeConversation! : c)
+            .toList();
+        unawaited(_persistDeterministicTitle(boundConvId, deterministicTitle));
+      }
+
+      onAccepted?.call();
+      notifyListeners();
+    }
 
     try {
       final stream = _client.sendMessageStream(
@@ -508,11 +595,20 @@ class DesktopChatController extends ChangeNotifier {
           userText: trimmed,
           clientMessageId: clientMessageId,
         ),
+        onAccepted: commitAcceptance,
       );
 
       _currentStreamSubscription = stream.listen(
         (event) {
-          if (_isDisposed || _turnSequenceToken != turnToken || _activeConversation?.id != boundConvId) return;
+          if (_isDisposed ||
+              _turnSequenceToken != turnToken ||
+              _activeConversation?.id != boundConvId) {
+            return;
+          }
+          if (!hasBeenAccepted) {
+            commitAcceptance();
+          }
+
           if (event is SseTokenEvent) {
             _streamingText += event.token;
             if (_messages.isNotEmpty && _messages.last.sender == 'assistant') {
@@ -534,67 +630,154 @@ class DesktopChatController extends ChangeNotifier {
           } else if (event is SseDoneEvent) {
             _generationState = ChatGenerationState.idle;
             _streamingText = '';
-            _finalizeTurn(boundConvId, turnToken);
+            _finalizeTurn(boundConvId, turnToken, hasBeenAccepted: hasBeenAccepted);
+            _maybeGenerateModelTitle(boundConvId, deterministicTitle);
+            if (!completer.isCompleted) completer.complete(true);
           } else if (event is SseErrorEvent) {
             _generationState = ChatGenerationState.error;
             _errorMessage = event.message;
-            _finalizeTurn(boundConvId, turnToken);
+            _finalizeTurn(boundConvId, turnToken, hasBeenAccepted: hasBeenAccepted);
+            if (!completer.isCompleted) completer.complete(hasBeenAccepted);
           }
         },
         onError: (Object err) {
-          if (_isDisposed || _turnSequenceToken != turnToken || _activeConversation?.id != boundConvId) return;
+          if (_isDisposed ||
+              _turnSequenceToken != turnToken ||
+              _activeConversation?.id != boundConvId) {
+            return;
+          }
+          _isAwaitingAcceptance = false;
           _generationState = ChatGenerationState.error;
+
           if (err is CompanionApiException) {
             if (err.statusCode == 503) {
               final backendReason = _modelStatus?.lastRuntimeError;
               if (backendReason != null && backendReason.isNotEmpty) {
                 _errorMessage = 'Local AI model unavailable (503): $backendReason';
               } else {
-                _errorMessage = 'Local AI model unavailable (503): Model engine is not loaded or ready. Start the local LLM router or check model status in Settings.';
+                _errorMessage =
+                    'Local AI model unavailable (503): Model engine is not loaded or ready. Start the local LLM router or check model status in Settings.';
               }
             } else {
               _errorMessage = err.message;
             }
           } else {
-            _errorMessage = err.toString();
+            // Transport error before HTTP response or mid-stream
+            if (!hasBeenAccepted) {
+              _errorMessage =
+                  'Connection interrupted before server confirmed message acceptance: $err. Please check connection and reload conversation before retrying.';
+              // Reconcile uncertain outcome without blindly retrying
+              loadMessages(boundConvId, expectedTurnToken: turnToken);
+            } else {
+              _errorMessage = err.toString();
+            }
           }
-          _finalizeTurn(boundConvId, turnToken);
+
+          _finalizeTurn(boundConvId, turnToken, hasBeenAccepted: hasBeenAccepted);
+          if (!completer.isCompleted) completer.complete(hasBeenAccepted);
         },
         onDone: () {
-          if (_isDisposed || _turnSequenceToken != turnToken || _activeConversation?.id != boundConvId) return;
+          if (_isDisposed ||
+              _turnSequenceToken != turnToken ||
+              _activeConversation?.id != boundConvId) {
+            return;
+          }
           if (_generationState == ChatGenerationState.generating) {
             _generationState = ChatGenerationState.idle;
             _streamingText = '';
-            _finalizeTurn(boundConvId, turnToken);
+            _finalizeTurn(boundConvId, turnToken, hasBeenAccepted: hasBeenAccepted);
+            _maybeGenerateModelTitle(boundConvId, deterministicTitle);
           }
+          if (!completer.isCompleted) completer.complete(hasBeenAccepted);
         },
         cancelOnError: false,
       );
     } catch (e) {
+      _isAwaitingAcceptance = false;
       _generationState = ChatGenerationState.error;
       if (e is CompanionApiException && e.statusCode == 503) {
         final backendReason = _modelStatus?.lastRuntimeError;
         if (backendReason != null && backendReason.isNotEmpty) {
           _errorMessage = 'Local AI model unavailable (503): $backendReason';
         } else {
-          _errorMessage = 'Local AI model unavailable (503): Model engine is not loaded or ready. Start the local LLM router or check model status in Settings.';
+          _errorMessage =
+              'Local AI model unavailable (503): Model engine is not loaded or ready. Start the local LLM router or check model status in Settings.';
         }
       } else {
         _errorMessage = e.toString();
       }
-      _finalizeTurn(boundConvId, turnToken);
+      _finalizeTurn(boundConvId, turnToken, hasBeenAccepted: false);
+      if (!completer.isCompleted) completer.complete(false);
     }
 
-    await completer.future;
+    return await completer.future;
   }
 
-  void _finalizeTurn(String conversationId, int turnToken) {
+  void _finalizeTurn(String conversationId, int turnToken, {bool hasBeenAccepted = true}) {
     if (_turnSequenceToken != turnToken) return;
     _currentStreamSubscription = null;
     if (_turnCompleter != null && !_turnCompleter!.isCompleted) {
-      _turnCompleter!.complete();
+      _turnCompleter!.complete(hasBeenAccepted);
     }
-    loadMessages(conversationId, expectedTurnToken: turnToken);
+    if (hasBeenAccepted) {
+      loadMessages(conversationId, expectedTurnToken: turnToken);
+    }
+  }
+
+  Future<void> _persistDeterministicTitle(String conversationId, String title) async {
+    if (_userRenamedConversationIds.contains(conversationId)) return;
+    try {
+      await _client.renameConversation(conversationId, title);
+    } catch (_) {
+      // Graceful fallback: local UI already has the deterministic title
+    }
+  }
+
+  Future<void> _maybeGenerateModelTitle(String conversationId, String? fallbackTitle) async {
+    if (fallbackTitle == null || _userRenamedConversationIds.contains(conversationId)) return;
+    if (!isConnected || _modelStatus?.modelLoaded != true) return;
+    try {
+      final res = await _client.generateConversationTitle(
+        conversationId,
+        currentTitle: fallbackTitle,
+        fallbackTitle: fallbackTitle,
+      );
+      if (_isDisposed || _userRenamedConversationIds.contains(conversationId)) return;
+      if (res.title.isNotEmpty && res.title != 'New Conversation') {
+        _conversations =
+            _conversations.map((c) => c.id == conversationId ? res : c).toList();
+        if (_activeConversation?.id == conversationId) {
+          _activeConversation = res;
+        }
+        notifyListeners();
+      }
+    } catch (_) {
+      // Gracefully keep fallbackTitle
+    }
+  }
+
+  /// Renames a conversation thread by ID.
+  Future<void> renameConversation(String conversationId, String newTitle) async {
+    if (_isDisposed) return;
+    if (!isConnected) {
+      _errorMessage = 'Cannot rename conversation: Runtime is not connected and authorized.';
+      notifyListeners();
+      throw StateError('Runtime is not connected.');
+    }
+    try {
+      final updated = await _client.renameConversation(conversationId, newTitle);
+      _userRenamedConversationIds.add(conversationId);
+      _conversations =
+          _conversations.map((c) => c.id == conversationId ? updated : c).toList();
+      if (_activeConversation?.id == conversationId) {
+        _activeConversation = updated;
+      }
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = 'Failed to rename conversation: $e';
+      if (!_isDisposed) notifyListeners();
+      rethrow;
+    }
   }
 
   /// Cancels active stream generation on user demand.
@@ -602,6 +785,7 @@ class DesktopChatController extends ChangeNotifier {
     if (!isGenerating) return;
 
     final turnToken = ++_turnSequenceToken;
+    _isAwaitingAcceptance = false;
     _generationState = ChatGenerationState.cancelled;
     _streamingText = '';
 
@@ -609,7 +793,7 @@ class DesktopChatController extends ChangeNotifier {
     _currentStreamSubscription = null;
 
     if (_turnCompleter != null && !_turnCompleter!.isCompleted) {
-      _turnCompleter!.complete();
+      _turnCompleter!.complete(true);
     }
 
     unawaited(sub?.cancel());

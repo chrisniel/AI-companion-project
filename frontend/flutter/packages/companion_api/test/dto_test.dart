@@ -143,6 +143,51 @@ void main() {
       expect(dto.items.length, 1);
       expect(dto.items.first.title, 'Chat 1');
     });
+
+    test('ConversationUpdate deserializes and serializes', () {
+      final json = {'title': 'Updated Title'};
+      final dto = ConversationUpdate.fromJson(json);
+      expect(dto.title, 'Updated Title');
+      expect(dto.toJson(), json);
+      expect(dto == const ConversationUpdate(title: 'Updated Title'), isTrue);
+    });
+
+    test('GenerateTitleRequest deserializes and serializes', () {
+      final json = {
+        'current_title': 'Old Title',
+        'fallback_title': 'Fallback Title',
+      };
+      final dto = GenerateTitleRequest.fromJson(json);
+      expect(dto.currentTitle, 'Old Title');
+      expect(dto.fallbackTitle, 'Fallback Title');
+      expect(dto.toJson(), json);
+      expect(
+        dto ==
+            const GenerateTitleRequest(
+              currentTitle: 'Old Title',
+              fallbackTitle: 'Fallback Title',
+            ),
+        isTrue,
+      );
+
+      const emptyReq = GenerateTitleRequest();
+      expect(emptyReq.toJson(), isEmpty);
+    });
+
+    test('deriveDeterministicTitle derives clean concise title', () {
+      expect(deriveDeterministicTitle('   '), 'New Conversation');
+      expect(deriveDeterministicTitle('Hello world'), 'Hello world');
+      expect(
+        deriveDeterministicTitle('## What is the **meaning** of `life`?'),
+        'What is the meaning of life?',
+      );
+      expect(
+        deriveDeterministicTitle(
+          'This is a very long question about artificial intelligence systems and desktop applications that exceeds normal length',
+        ),
+        'This is a very long question…',
+      );
+    });
   });
 
   group('Message DTOs & Binding Correction A', () {

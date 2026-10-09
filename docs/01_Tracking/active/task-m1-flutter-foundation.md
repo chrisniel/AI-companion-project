@@ -141,8 +141,14 @@
   - Chat UX: prevented empty thread duplication by reusing untouched empty drafts and adding synchronous transition lock (`_isCreatingConversation`).
   - Safe Markdown presentation: implemented `AssistantMarkdownView` supporting H1–H4, bold/italic, lists, blockquotes, code blocks with language badge and clipboard copy, and URL scheme sanitization.
   - Historical attachment previews: rendered truthful metadata chips in message bubbles with filename, formatted size, and explicit badge `"Preview unavailable (Planned M2)"`.
-- [x] Run full verification suite (167 workspace Flutter tests pass, 0 lints, clean Windows debug build, native lifecycle verification pass [3/3], OpenAPI parity pass, 35 backend pytest tests pass, 37 Python unittest tests pass).
-- [ ] M1 Final Corrections independent human review handoff and verification sign-off. Stop at gate.
+- [x] Implement M1 Final Chat Polish (Async Send, History Drawer Filter, Link Lifecycle, First-Turn Titles):
+  - Async send & draft preservation: `ChatScreen._handleSend()` properly awaits `sendMessage(text)` and only clears composer text upon confirmed server acceptance (`onAccepted` / HTTP 200); preserves draft in `_textController` on HTTP 503 or conversation creation error; prevents duplicate submissions via `_isSubmitting`, `isAwaitingAcceptance`, and button replacement (`Icons.stop_rounded`); reconciles uncertain transport outcomes without blind retries.
+  - Unused empty conversation filtering: matched React Web `AssistantView.tsx` `drawerConversations` logic; filters inactive untouched empty drafts from the history drawer without deleting database records, while preserving active empty draft and rapid double-click creation lock.
+  - Markdown link gesture lifecycle: converted `AssistantMarkdownView` to `StatefulWidget` tracking active `TapGestureRecognizer` instances, disposing them on widget unmount and before subsequent rebuilds to prevent memory and gesture arena leaks during streaming token updates.
+  - First-turn conversation titles: implemented Web Phase 8C auto-titling; generates deterministic fallback title (`deriveDeterministicTitle`, 6 words / 42 chars) on the first accepted turn; persists title via backend `PATCH /api/v1/conversations/{conversation_id}`; asynchronously triggers model refinement via `POST /api/v1/conversations/{conversation_id}/generate-title` when local model is ready; preserves manual renames; skips auto-naming on rejected 503 turns.
+  - OpenAPI & client route parity: added `ConversationUpdate` and `GenerateTitleRequest` DTOs; added `renameConversation` and `generateConversationTitle` methods to `CompanionClient`; updated `check_dart_openapi_parity.py` and test suite to 12/12 verified M1 routes (13/13 DTOs).
+- [x] Run full verification suite (181 workspace Flutter tests pass: 96 desktop, 51 api, 16 core, 18 design; 0 lints; clean Windows debug build; native lifecycle verification pass [3/3]; OpenAPI parity pass [13/13 DTOs, 12/12 routes]; 37 Python unittest tests pass; git diff clean).
+- [ ] M1 Final Chat Polish independent human review handoff and verification sign-off. Stop at gate.
 
 ---
 
