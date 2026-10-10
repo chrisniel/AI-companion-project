@@ -5,7 +5,14 @@
 - **Milestone:** M1 — Flutter Desktop Client Foundation.
 - **Active Work Item:** `PC-CLIENT-004` (Typed Runtime Client, REST/SSE Integration and Functional Desktop Conversation).
 - **Implementation Plan:** [`docs/02_Planning/01_Plans/plan-m1-flutter-desktop-client-foundation.md`](../../02_Planning/01_Plans/plan-m1-flutter-desktop-client-foundation.md).
-- **Current Stage:** Stage 4/5 (Implementation Complete, Verified Locally, Documentation Reconciled; Awaiting Hosted PR CI & Independent Review for Closure Gate).
+- **Current Stage:** Stage 7 (COMPLETE / SQUASH-MERGED via PR #23 at commit `7c1d1a2ddb5c57ddaae9bbacbcab2e25f9938fe1`; Closure Gate Approved with Documented Post-Merge Archival Exception; Archived).
+
+> **POST-MERGE ARCHIVAL EXCEPTION NOTE:**
+> Milestone M1 implementation was squash-merged into `develop` at commit `7c1d1a2ddb5c57ddaae9bbacbcab2e25f9938fe1` (PR #23).
+> Due to an operational oversight, this tracker was not moved from `docs/01_Tracking/active/` to `docs/01_Tracking/archive/` prior to the PR #23 squash merge.
+> Human approval for the M1 Closure Gate was explicitly granted with a documented post-merge archival exception authorized by Chris.
+> This file was moved to `docs/01_Tracking/archive/` on branch `feature/m2-windows-runtime-supervision` during M2 startup reconciliation, without creating a separate cleanup-only PR.
+> Archival is truthfully recorded as occurring post-merge.
 
 ---
 
@@ -16,7 +23,7 @@
 | **B1** | `PC-CLIENT-001` | `VERIFIED` | Pub Workspace (`frontend/flutter/`), `companion_core`, `companion_api`, `companion_design`, `apps/desktop` Windows runner, CI policy and workflow integration. |
 | **B2** | `PC-CLIENT-002` | `VERIFIED` | Window framing (1280×800 / 1024×640), close-to-tray lifecycle, native tray menu, clean shutdown, 23 workspace tests, native WM_CLOSE interception verified. |
 | **B3** | `PC-CLIENT-003` | `VERIFIED` | SoftGlass tokens, 4 accent presets, neumorphic surface & inner shadow system (`NeumorphicSurface`, `_InnerShadowPainter`), interactive component parity (`DesktopNavigationRail`, `NeumorphicButton`, `NeumorphicSegmentedControl`, recessed chat composer well, recessed diagnostic cards), shortcuts (`Ctrl+,`, conditional `Esc`), read-only fail-closed storage diagnostics, 73 workspace tests, Windows startup fix. |
-| **B4** | `PC-CLIENT-004` | **VERIFIED (PR CANDIDATE)** | Typed OpenAPI DTOs in `companion_api`, pure-Dart RFC 4122 v4 UUID generator in `companion_core`, robust SSE streaming parser, Windows DPAPI credential store, `DesktopChatController` with draft reuse & double-click protection, live `ChatScreen` UI with `ConversationHistoryDrawer`, safe Markdown renderer (`AssistantMarkdownView`) with GFM tables, post-turn AI title parity, truthful attachment placeholders, backend model registry matching with fail-closed behavior, contract parity checker, 193 workspace tests passing, 0 lints. |
+| **B4** | `PC-CLIENT-004` | **VERIFIED (DELIVERED IN PR #23)** | Typed OpenAPI DTOs in `companion_api`, pure-Dart RFC 4122 v4 UUID generator in `companion_core`, robust SSE streaming parser, Windows DPAPI credential store, `DesktopChatController` with draft reuse & double-click protection, live `ChatScreen` UI with `ConversationHistoryDrawer`, safe Markdown renderer (`AssistantMarkdownView`) with GFM tables, post-turn AI title parity, truthful attachment placeholders, backend model registry matching with fail-closed behavior, contract parity checker, 193 workspace tests passing, 0 lints. |
 
 ---
 
