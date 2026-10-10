@@ -24,7 +24,7 @@ class MockResilienceProcessSupervisor extends WindowsRuntimeProcessSupervisor {
 class ControllableSpawningSupervisor extends WindowsRuntimeProcessSupervisor {
   final List<String> spawnArgs = [];
   final List<int> spawnedPids = [];
-  final List<int> terminatedPids = [];
+  final List<RuntimeLockfileData> writtenDescriptors = [];
   final Completer<void> spawnDelayCompleter = Completer<void>();
   bool isListening = false;
   RandomAccessFile? mockHandle;
@@ -46,7 +46,12 @@ class ControllableSpawningSupervisor extends WindowsRuntimeProcessSupervisor {
   Future<RuntimeLockfileData?> readDescriptorThroughHandle(RandomAccessFile lockHandle) async => null;
 
   @override
-  Future<void> writeDescriptorThroughHandle(RandomAccessFile lockHandle, RuntimeLockfileData data) async {}
+  Future<int?> findActiveRuntimeProcess({required int port, required String expectedExecutable}) async => null;
+
+  @override
+  Future<void> writeDescriptorThroughHandle(RandomAccessFile lockHandle, RuntimeLockfileData data) async {
+    writtenDescriptors.add(data);
+  }
 
   @override
   Future<int> spawnDetachedRuntime({
@@ -62,11 +67,52 @@ class ControllableSpawningSupervisor extends WindowsRuntimeProcessSupervisor {
     spawnedPids.add(pid);
     return pid;
   }
+}
+
+class CrashWindowMockSupervisor extends WindowsRuntimeProcessSupervisor {
+  bool isListening = false;
+  int findActiveCallCount = 0;
+  int spawnCallCount = 0;
+  RuntimeLockfileData? writtenDescriptor;
+  RandomAccessFile? mockHandle;
 
   @override
-  Future<bool> terminateSpawnedProcess(int pid) async {
-    terminatedPids.add(pid);
-    return true;
+  Future<bool> isPortListening(String host, int port, {Duration timeout = const Duration(milliseconds: 500)}) async {
+    return isListening;
+  }
+
+  @override
+  Future<RandomAccessFile?> acquireStartupLock(File lockFile, {Duration timeout = const Duration(seconds: 5)}) async {
+    return mockHandle;
+  }
+
+  @override
+  Future<void> releaseStartupLock(RandomAccessFile lockHandle) async {}
+
+  @override
+  Future<RuntimeLockfileData?> readDescriptorThroughHandle(RandomAccessFile lockHandle) async => null;
+
+  @override
+  Future<void> writeDescriptorThroughHandle(RandomAccessFile lockHandle, RuntimeLockfileData data) async {
+    writtenDescriptor = data;
+  }
+
+  @override
+  Future<int?> findActiveRuntimeProcess({required int port, required String expectedExecutable}) async {
+    findActiveCallCount++;
+    return 8888;
+  }
+
+  @override
+  Future<int> spawnDetachedRuntime({
+    required String executable,
+    required List<String> args,
+    required String workingDirectory,
+    required String logFilePath,
+    Map<String, String>? environment,
+  }) async {
+    spawnCallCount++;
+    return 9999;
   }
 }
 
@@ -249,7 +295,7 @@ void main() {
       coordinator.dispose();
     });
 
-    test('In-flight local startup superseded by remote reconfiguration terminates spawned process and never binds uvicorn to remote host', () async {
+    test('In-flight local startup superseded by remote reconfiguration preserves runtime independence and records lockfile descriptor without process termination', () async {
       final tempDir = await Directory.systemTemp.createTemp('race_test_');
       final tempLockFile = File('${tempDir.path}\\runtime.lock');
       await tempLockFile.writeAsString('');
@@ -284,14 +330,58 @@ void main() {
 
       // 1. Process was spawned during generation 0
       expect(supervisor.spawnedPids, contains(4242));
-      // 2. But generation changed, so supervisor.terminateSpawnedProcess MUST have been called!
-      expect(supervisor.terminatedPids, contains(4242));
-      // 3. Uvicorn was NEVER bound to the remote host!
+      // 2. Lockfile descriptor was safely written for the spawned process (preserving runtime independence)
+      expect(supervisor.writtenDescriptors.map((d) => d.pid), contains(4242));
+      // 4. Uvicorn was NEVER bound to the remote host!
       expect(supervisor.spawnArgs, isNot(contains('192.168.1.100')));
       expect(supervisor.spawnArgs, contains('127.0.0.1'));
-      // 4. Coordinator state reflects the new remote host configuration, not the stale generation
+      // 5. Coordinator state reflects the new remote host configuration, not the stale generation
       expect(coordinator.currentState.port, equals(9000));
       expect(coordinator.currentState.supervisionMode, equals(SupervisionMode.remoteHost));
+
+      coordinator.dispose();
+      await realHandle.close();
+      await tempDir.delete(recursive: true);
+    });
+
+    test('Crash window recovery: unrecorded active runtime process prevents duplicate spawn and recovers descriptor in lockfile', () async {
+      final tempDir = await Directory.systemTemp.createTemp('crash_window_test_');
+      final tempLockFile = File('${tempDir.path}\\runtime.lock');
+      await tempLockFile.writeAsString('');
+      final realHandle = await tempLockFile.open(mode: FileMode.append);
+
+      final supervisor = CrashWindowMockSupervisor();
+      supervisor.mockHandle = realHandle;
+
+      final fastClient = DelayedAuthClient(authDelay: Duration.zero);
+
+      final coordinator = DesktopRuntimeCoordinator(
+        baseUrl: 'http://127.0.0.1:8000',
+        supervisor: supervisor,
+        client: fastClient,
+        customLockFile: tempLockFile,
+        customExecutablePath: Platform.resolvedExecutable,
+      );
+
+      // On first check, port is not listening.
+      // After lock acquisition and crash window recovery, the process binds and port starts listening:
+      Future.delayed(const Duration(milliseconds: 50), () {
+        supervisor.isListening = true;
+      });
+
+      final result = await coordinator.ensureRuntimeReady(timeout: const Duration(seconds: 5));
+
+      // 1. Double-checked locking found active process: spawnDetachedRuntime was NEVER called!
+      expect(supervisor.spawnCallCount, equals(0));
+      // 2. Active process query was performed
+      expect(supervisor.findActiveCallCount, greaterThan(0));
+      // 3. Descriptor was recovered and written through lock handle with adopted PID 8888
+      expect(supervisor.writtenDescriptor, isNotNull);
+      expect(supervisor.writtenDescriptor?.pid, equals(8888));
+      expect(supervisor.writtenDescriptor?.port, equals(8000));
+      // 4. Coordinator adopted the process and transitioned to readyAndAuthenticated
+      expect(result.status, equals(RuntimeStatus.readyAndAuthenticated));
+      expect(result.pid, equals(8888));
 
       coordinator.dispose();
       await realHandle.close();

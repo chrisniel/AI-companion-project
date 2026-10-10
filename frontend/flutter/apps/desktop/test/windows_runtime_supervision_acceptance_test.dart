@@ -11,12 +11,14 @@ class AcceptanceSpawnRecord {
   final int port;
   final String logPath;
   final DateTime spawnTime;
+  final Process? processHandle;
 
   AcceptanceSpawnRecord({
     required this.pid,
     required this.port,
     required this.logPath,
     required this.spawnTime,
+    this.processHandle,
   });
 }
 
@@ -33,13 +35,32 @@ class AcceptanceTrackingSupervisor extends WindowsRuntimeProcessSupervisor {
     required String logFilePath,
     Map<String, String>? environment,
   }) async {
-    final pid = await super.spawnDetachedRuntime(
-      executable: executable,
-      args: args,
+    final exeFile = File(executable);
+    if (!await exeFile.exists()) {
+      throw FileSystemException('Runtime executable not found', executable);
+    }
+
+    final logFile = File(logFilePath);
+    await logFile.parent.create(recursive: true);
+
+    final env = Map<String, String>.from(Platform.environment);
+    if (environment != null) {
+      env.addAll(environment);
+    }
+    env['COMPANION_LOG_FILE'] = logFilePath;
+    env['PYTHONUNBUFFERED'] = '1';
+
+    final spawnTime = DateTime.now().toUtc();
+    final process = await Process.start(
+      executable,
+      args,
       workingDirectory: workingDirectory,
-      logFilePath: logFilePath,
-      environment: environment,
+      environment: env,
+      includeParentEnvironment: true,
+      runInShell: false,
+      mode: ProcessStartMode.detached,
     );
+
     int port = 0;
     final portIdx = args.indexOf('--port');
     if (portIdx != -1 && portIdx + 1 < args.length) {
@@ -47,13 +68,14 @@ class AcceptanceTrackingSupervisor extends WindowsRuntimeProcessSupervisor {
     }
     spawnedRecords.add(
       AcceptanceSpawnRecord(
-        pid: pid,
+        pid: process.pid,
         port: port,
         logPath: logFilePath,
-        spawnTime: DateTime.now().toUtc(),
+        spawnTime: spawnTime,
+        processHandle: process,
       ),
     );
-    return pid;
+    return process.pid;
   }
 }
 
@@ -121,7 +143,7 @@ void main() {
           );
           if (!isMatching) continue;
 
-          // 2. Verify command line provenance via Win32_Process
+          // 2. Verify command line provenance and creation time via Win32_Process
           if (Platform.isWindows) {
             final procQuery = await Process.run(
               'powershell',
@@ -129,7 +151,9 @@ void main() {
                 '-NoProfile',
                 '-NonInteractive',
                 '-Command',
-                "Get-CimInstance Win32_Process -Filter 'ProcessId = $pid' | Select-Object -Property ProcessId, CommandLine | ConvertTo-Json",
+                "Get-CimInstance Win32_Process -Filter 'ProcessId = $pid' | "
+                    "Select-Object -Property ProcessId, CommandLine, @{Name='StartTime';Expression={\$_.CreationDate.ToUniversalTime().ToString('o')}} | "
+                    'ConvertTo-Json',
               ],
               runInShell: false,
             );
@@ -139,19 +163,50 @@ void main() {
               if (jsonStr.isNotEmpty && jsonStr.startsWith('{')) {
                 final dynamic data = jsonDecode(jsonStr);
                 final cmdLine = (data['CommandLine'] ?? '').toString();
-                // Fail-closed: only terminate if command line proves ownership
+                final startTimeStr = (data['StartTime'] ?? '').toString();
+
+                // Fail-closed check: command line provenance MUST prove our uvicorn companion
                 final isOurUvicorn = cmdLine.contains('uvicorn') &&
                     cmdLine.contains('app.main:app') &&
                     (record.port == 0 || cmdLine.contains('${record.port}'));
-                if (isOurUvicorn) {
+                if (!isOurUvicorn) continue;
+
+                // Fail-closed check: creation time MUST match recorded spawnTime within tolerance
+                if (startTimeStr.isNotEmpty) {
+                  final procStartTime = DateTime.tryParse(startTimeStr);
+                  if (procStartTime != null) {
+                    final diff = procStartTime.difference(record.spawnTime).abs();
+                    if (diff.inSeconds > 10) {
+                      // PID reuse detected! Fail closed.
+                      continue;
+                    }
+                  }
+                }
+
+                // 3. Terminate strictly verified test process using retained Process handle if available
+                if (record.processHandle != null) {
+                  record.processHandle!.kill();
+                } else {
                   Process.killPid(pid);
-                  continue;
                 }
               }
             }
             // If Win32_Process provenance cannot be verified, fail closed: do NOT kill
           } else {
-            Process.killPid(pid);
+            // Non-Windows: verify command line via /proc or retained handle
+            final procCmdLineFile = File('/proc/$pid/cmdline');
+            if (procCmdLineFile.existsSync()) {
+              final cmd = procCmdLineFile.readAsStringSync();
+              if (cmd.contains('uvicorn') && cmd.contains('app.main:app')) {
+                if (record.processHandle != null) {
+                  record.processHandle!.kill();
+                } else {
+                  Process.killPid(pid);
+                }
+              }
+            } else if (record.processHandle != null) {
+              record.processHandle!.kill();
+            }
           }
         } catch (_) {}
       }

@@ -655,61 +655,84 @@ class DesktopRuntimeCoordinator {
             generation: generation,
           );
         }
-      }
-
-      // 5. Safe spawn: verify executable existence
-      if (generation != _activeGeneration || _isDisposed) return _currentState;
-      final exe = File(targetExecutablePath);
-      if (!await exe.exists()) {
-        return _updateState(
-          RuntimeProcessState(
-            supervisionMode: SupervisionMode.localLoopback,
-            status: RuntimeStatus.executableNotFound,
-            port: targetPort,
-            diagnosticMessage: 'Runtime executable not found at ${exe.path}',
-          ),
-          generation: generation,
+      } else {
+        // Crash window recovery: if descriptor was not recorded (e.g. earlier launcher crashed
+        // after spawn before recording descriptor), check for an unrecorded active runtime process.
+        final unrecordedPid = await _supervisor.findActiveRuntimeProcess(
+          port: targetPort,
+          expectedExecutable: targetExecutablePath,
         );
-      }
-
-      if (generation != _activeGeneration || _isDisposed) return _currentState;
-
-      if (remainingTime() <= Duration.zero) {
-        return _updateState(
-          RuntimeProcessState(
-            supervisionMode: SupervisionMode.localLoopback,
-            status: RuntimeStatus.startupTimeout,
+        if (generation != _activeGeneration || _isDisposed) return _currentState;
+        if (unrecordedPid != null && unrecordedPid > 0) {
+          final recoveredDesc = RuntimeLockfileData(
+            schemaVersion: 1,
+            instanceId: UuidUtils.generateV4(),
+            pid: unrecordedPid,
             port: targetPort,
-            diagnosticMessage: 'Timeout before spawning detached runtime',
-          ),
-          generation: generation,
+            startedAt: DateTime.now().toUtc(),
+            executablePath: targetExecutablePath,
+          );
+          await _supervisor.writeDescriptorThroughHandle(lockHandle, recoveredDesc);
+          _activeRuntimeInfo = recoveredDesc;
+        }
+      }
+
+      // If active runtime was not recovered, proceed to safe spawn
+      if (_activeRuntimeInfo == null || _activeRuntimeInfo!.pid <= 0) {
+        // 5. Safe spawn: verify executable existence
+        if (generation != _activeGeneration || _isDisposed) return _currentState;
+        final exe = File(targetExecutablePath);
+        if (!await exe.exists()) {
+          return _updateState(
+            RuntimeProcessState(
+              supervisionMode: SupervisionMode.localLoopback,
+              status: RuntimeStatus.executableNotFound,
+              port: targetPort,
+              diagnosticMessage: 'Runtime executable not found at ${exe.path}',
+            ),
+            generation: generation,
+          );
+        }
+
+        if (generation != _activeGeneration || _isDisposed) return _currentState;
+
+        if (remainingTime() <= Duration.zero) {
+          return _updateState(
+            RuntimeProcessState(
+              supervisionMode: SupervisionMode.localLoopback,
+              status: RuntimeStatus.startupTimeout,
+              port: targetPort,
+              diagnosticMessage: 'Timeout before spawning detached runtime',
+            ),
+            generation: generation,
+          );
+        }
+
+        final spawnedPid = await _supervisor.spawnDetachedRuntime(
+          executable: exe.path,
+          args: ['-m', 'uvicorn', 'app.main:app', '--host', targetHost, '--port', '$targetPort'],
+          workingDirectory: targetWorkingDirectory,
+          logFilePath: targetLogFilePath,
+          environment: _customEnvironment,
         );
+
+        final newDesc = RuntimeLockfileData(
+          schemaVersion: 1,
+          instanceId: UuidUtils.generateV4(),
+          pid: spawnedPid,
+          port: targetPort,
+          startedAt: DateTime.now().toUtc(),
+          executablePath: exe.path,
+        );
+        await _supervisor.writeDescriptorThroughHandle(lockHandle, newDesc);
+        _activeRuntimeInfo = newDesc;
+
+        // If attempt was superseded or coordinator disposed during spawn, do not destroy runtime.
+        // Option A preserves runtime independence.
+        if (generation != _activeGeneration || _isDisposed) {
+          return _currentState;
+        }
       }
-
-      final spawnedPid = await _supervisor.spawnDetachedRuntime(
-        executable: exe.path,
-        args: ['-m', 'uvicorn', 'app.main:app', '--host', targetHost, '--port', '$targetPort'],
-        workingDirectory: targetWorkingDirectory,
-        logFilePath: targetLogFilePath,
-        environment: _customEnvironment,
-      );
-
-      // Clean up test or in-flight process if attempt was superseded or coordinator disposed during spawn
-      if (generation != _activeGeneration || _isDisposed) {
-        await _supervisor.terminateSpawnedProcess(spawnedPid);
-        return _currentState;
-      }
-
-      final newDesc = RuntimeLockfileData(
-        schemaVersion: 1,
-        instanceId: UuidUtils.generateV4(),
-        pid: spawnedPid,
-        port: targetPort,
-        startedAt: DateTime.now().toUtc(),
-        executablePath: exe.path,
-      );
-      await _supervisor.writeDescriptorThroughHandle(lockHandle, newDesc);
-      _activeRuntimeInfo = newDesc;
     } finally {
       await _supervisor.releaseStartupLock(lockHandle);
     }

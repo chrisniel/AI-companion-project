@@ -221,16 +221,39 @@ class WindowsRuntimeProcessSupervisor {
     return process.pid;
   }
 
-  /// Terminates a spawned process by [pid] safely.
+  /// Finds an active runtime process running on [port] and matching [expectedExecutable].
   ///
-  /// Used for cleanup of processes spawned by an attempt that was subsequently
-  /// superseded or cancelled.
-  Future<bool> terminateSpawnedProcess(int pid) async {
-    if (pid <= 0) return false;
+  /// Used to recover from crashes that occur between child spawn and descriptor recording.
+  /// Uses a non-destructive Win32_Process query to inspect process command lines.
+  /// Returns the PID if found, or null otherwise. Never modifies process state.
+  Future<int?> findActiveRuntimeProcess({
+    required int port,
+    required String expectedExecutable,
+  }) async {
+    if (port <= 0) return null;
     try {
-      return await _launcher.killPid(pid);
+      final exeBase = expectedExecutable.split(RegExp(r'[\\/]')).last.toLowerCase();
+      final exeNamePrefix = exeBase.replaceAll('.exe', '').replaceAll("'", "''");
+      final filter = "Name LIKE '$exeNamePrefix%'";
+      final result = await _launcher.run(
+        'powershell',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          'Get-CimInstance Win32_Process -Filter "$filter" | '
+              'Where-Object { \$_.ProcessId -ne \$PID -and \$_.CommandLine -like "*uvicorn*" -and \$_.CommandLine -like "*$port*" } | '
+              'Select-Object -ExpandProperty ProcessId',
+        ],
+        runInShell: false,
+      );
+      if (result.exitCode != 0) return null;
+      final output = result.stdout.toString().trim();
+      if (output.isEmpty) return null;
+      final firstLine = output.split(RegExp(r'\r?\n')).first.trim();
+      return int.tryParse(firstLine);
     } catch (_) {
-      return false;
+      return null;
     }
   }
 }
