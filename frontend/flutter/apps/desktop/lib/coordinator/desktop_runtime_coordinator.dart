@@ -11,18 +11,19 @@ import '../platform/windows_runtime_process_supervisor.dart';
 /// supervision mode modeling (`localLoopback` vs `remoteHost`), decoupled health
 /// and authentication verification, and non-destructive PID handling.
 class DesktopRuntimeCoordinator {
-  final String baseUrl;
+  String baseUrl;
   final WindowsRuntimeProcessSupervisor _supervisor;
-  final CompanionClient _client;
+  CompanionClient _client;
   final File? _customLockFile;
   final String? _customExecutablePath;
   final String? _customLogFilePath;
   final String? _customWorkingDirectory;
+  final Map<String, String>? _customEnvironment;
 
-  late final Uri _uri;
-  late final SupervisionMode _supervisionMode;
-  late final String _host;
-  late final int _port;
+  late Uri _uri;
+  late SupervisionMode _supervisionMode;
+  late String _host;
+  late int _port;
 
   final StreamController<RuntimeProcessState> _stateController =
       StreamController<RuntimeProcessState>.broadcast();
@@ -39,6 +40,7 @@ class DesktopRuntimeCoordinator {
     String? customExecutablePath,
     String? customLogFilePath,
     String? customWorkingDirectory,
+    Map<String, String>? customEnvironment,
   })  : _supervisor = supervisor ?? WindowsRuntimeProcessSupervisor(),
         _client = client ??
             CompanionClient(
@@ -49,6 +51,7 @@ class DesktopRuntimeCoordinator {
         _customExecutablePath = customExecutablePath,
         _customLogFilePath = customLogFilePath,
         _customWorkingDirectory = customWorkingDirectory,
+        _customEnvironment = customEnvironment,
         _currentState = RuntimeProcessState(
           supervisionMode: _isLoopbackHost(baseUrl)
               ? SupervisionMode.localLoopback
@@ -62,6 +65,34 @@ class DesktopRuntimeCoordinator {
     _supervisionMode = _isLoopbackHost(_host)
         ? SupervisionMode.localLoopback
         : SupervisionMode.remoteHost;
+  }
+
+  void updateConfiguration({
+    required String newBaseUrl,
+    CompanionClient? newClient,
+    CredentialStore? credentialStore,
+  }) {
+    baseUrl = newBaseUrl;
+    _uri = Uri.parse(newBaseUrl);
+    _host = _uri.host.isNotEmpty ? _uri.host : '127.0.0.1';
+    _port = _uri.port != 0 ? _uri.port : 8000;
+    _supervisionMode = _isLoopbackHost(_host)
+        ? SupervisionMode.localLoopback
+        : SupervisionMode.remoteHost;
+    if (newClient != null) {
+      _client = newClient;
+    } else {
+      _client = CompanionClient(
+        baseUrl: newBaseUrl,
+        credentialStore: credentialStore,
+      );
+    }
+    _activeRuntimeInfo = null;
+    _updateState(RuntimeProcessState(
+      supervisionMode: _supervisionMode,
+      status: RuntimeStatus.dormant,
+      port: _port,
+    ));
   }
 
   static bool _isLoopbackHost(String hostOrUrl) {
@@ -91,6 +122,10 @@ class DesktopRuntimeCoordinator {
   File get _lockFile {
     final custom = _customLockFile;
     if (custom != null) return custom;
+    final envLock = Platform.environment['COMPANION_LOCK_FILE'];
+    if (envLock != null && envLock.trim().isNotEmpty) {
+      return File(envLock.trim());
+    }
     final localAppData = Platform.environment['LOCALAPPDATA'];
     if (localAppData == null || localAppData.trim().isEmpty) {
       return File('runtime.lock');
@@ -101,6 +136,10 @@ class DesktopRuntimeCoordinator {
   String _resolveLogFilePath() {
     final custom = _customLogFilePath;
     if (custom != null) return custom;
+    final envLog = Platform.environment['COMPANION_LOG_FILE'];
+    if (envLog != null && envLog.trim().isNotEmpty) {
+      return envLog.trim();
+    }
     final localAppData = Platform.environment['LOCALAPPDATA'];
     if (localAppData == null || localAppData.trim().isEmpty) {
       return 'runtime.log';
@@ -114,35 +153,70 @@ class DesktopRuntimeCoordinator {
     final envExe = Platform.environment['COMPANION_RUNTIME_EXE'];
     if (envExe != null && envExe.isNotEmpty) return envExe;
 
-    final candidates = [
-      r'backend\.venv\Scripts\python.exe',
-      r'..\..\..\backend\.venv\Scripts\python.exe',
-      r'D:\OtherProjects\AI-companion-project\backend\.venv\Scripts\python.exe',
+    final searchBases = <Directory>[
+      Directory.current,
+      File(Platform.resolvedExecutable).parent,
     ];
-    for (final c in candidates) {
-      if (File(c).existsSync()) {
-        return File(c).absolute.path;
+
+    final relativeSubPaths = [
+      Platform.isWindows
+          ? r'backend\.venv\Scripts\python.exe'
+          : 'backend/.venv/bin/python',
+      Platform.isWindows
+          ? r'.venv\Scripts\python.exe'
+          : '.venv/bin/python',
+    ];
+
+    for (final base in searchBases) {
+      Directory current = base.absolute;
+      for (var i = 0; i < 5; i++) {
+        for (final sub in relativeSubPaths) {
+          final candidate = File('${current.path}${Platform.pathSeparator}$sub');
+          if (candidate.existsSync()) {
+            return candidate.path;
+          }
+        }
+        final parent = current.parent;
+        if (parent.path == current.path) break;
+        current = parent;
       }
     }
-    return candidates.first;
+
+    return Platform.isWindows
+        ? r'backend\.venv\Scripts\python.exe'
+        : 'backend/.venv/bin/python';
   }
 
   String _resolveWorkingDirectory() {
     final custom = _customWorkingDirectory;
     if (custom != null) return custom;
-    final candidates = [
-      'backend',
-      '..\\..\\..\\backend',
-      r'D:\OtherProjects\AI-companion-project\backend',
+    final envWd = Platform.environment['COMPANION_RUNTIME_DIR'];
+    if (envWd != null && envWd.isNotEmpty) return envWd;
+
+    final searchBases = <Directory>[
+      Directory.current,
+      File(Platform.resolvedExecutable).parent,
     ];
-    for (final c in candidates) {
-      if (Directory(c).existsSync()) {
-        return Directory(c).absolute.path;
+
+    for (final base in searchBases) {
+      Directory current = base.absolute;
+      for (var i = 0; i < 5; i++) {
+        final mainPy = File('${current.path}${Platform.pathSeparator}backend${Platform.pathSeparator}app${Platform.pathSeparator}main.py');
+        if (mainPy.existsSync()) {
+          return File('${current.path}${Platform.pathSeparator}backend').path;
+        }
+        final directMainPy = File('${current.path}${Platform.pathSeparator}app${Platform.pathSeparator}main.py');
+        if (directMainPy.existsSync()) {
+          return current.path;
+        }
+        final parent = current.parent;
+        if (parent.path == current.path) break;
+        current = parent;
       }
     }
+
     return Directory.current.path;
   }
-
 
   RuntimeProcessState _updateState(RuntimeProcessState newState) {
     _currentState = newState;
@@ -173,8 +247,9 @@ class DesktopRuntimeCoordinator {
       port: _port,
     ));
 
+    final healthTimeout = timeout < const Duration(seconds: 3) ? timeout : const Duration(seconds: 3);
     try {
-      await _client.getHealth(timeout: const Duration(seconds: 3));
+      await _client.getHealth(timeout: healthTimeout);
     } catch (e) {
       return _updateState(RuntimeProcessState(
         supervisionMode: SupervisionMode.remoteHost,
@@ -220,10 +295,11 @@ class DesktopRuntimeCoordinator {
     required Duration timeout,
   }) async {
     // 1. Initial check: is port already listening?
+    final initialHealthTimeout = timeout < const Duration(seconds: 2) ? timeout : const Duration(seconds: 2);
     final alreadyListening = await _supervisor.isPortListening(_host, _port);
     if (alreadyListening) {
       try {
-        await _client.getHealth(timeout: const Duration(seconds: 2));
+        await _client.getHealth(timeout: initialHealthTimeout);
       } catch (e) {
         return _updateState(RuntimeProcessState(
           supervisionMode: SupervisionMode.localLoopback,
@@ -280,17 +356,45 @@ class DesktopRuntimeCoordinator {
       final listeningNow = await _supervisor.isPortListening(_host, _port);
       if (listeningNow) {
         try {
-          await _client.getHealth(timeout: const Duration(seconds: 2));
+          await _client.getHealth(timeout: initialHealthTimeout);
+        } catch (e) {
+          return _updateState(RuntimeProcessState(
+            supervisionMode: SupervisionMode.localLoopback,
+            status: RuntimeStatus.alienPortConflict,
+            port: _port,
+            diagnosticMessage: 'Port $_port is occupied by another process and did not respond with companion health: $e',
+          ));
+        }
+
+        final desc = await _supervisor.readDescriptorThroughHandle(lockHandle);
+        if (desc != null) _activeRuntimeInfo = desc;
+
+        try {
           await _client.verifyAuth();
-          final desc = await _supervisor.readDescriptorThroughHandle(lockHandle);
-          if (desc != null) _activeRuntimeInfo = desc;
           return _updateState(RuntimeProcessState(
             supervisionMode: SupervisionMode.localLoopback,
             status: RuntimeStatus.readyAndAuthenticated,
             pid: _activeRuntimeInfo?.pid,
             port: _port,
           ));
-        } catch (_) {}
+        } on CompanionApiException catch (e) {
+          if (e.statusCode == 401) {
+            return _updateState(RuntimeProcessState(
+              supervisionMode: SupervisionMode.localLoopback,
+              status: RuntimeStatus.reachableUnauthenticated,
+              pid: _activeRuntimeInfo?.pid,
+              port: _port,
+              diagnosticMessage: 'Local runtime reachable under lock but unauthenticated: ${e.message}',
+            ));
+          }
+          return _updateState(RuntimeProcessState(
+            supervisionMode: SupervisionMode.localLoopback,
+            status: RuntimeStatus.unreachable,
+            pid: _activeRuntimeInfo?.pid,
+            port: _port,
+            diagnosticMessage: 'Local runtime verification error: ${e.message}',
+          ));
+        }
       }
 
       // 4. Validate existing descriptor and check process liveness
@@ -328,6 +432,7 @@ class DesktopRuntimeCoordinator {
         args: ['-m', 'uvicorn', 'app.main:app', '--host', _host, '--port', '$_port'],
         workingDirectory: _resolveWorkingDirectory(),
         logFilePath: _resolveLogFilePath(),
+        environment: _customEnvironment,
       );
 
       final newDesc = RuntimeLockfileData(
@@ -349,10 +454,15 @@ class DesktopRuntimeCoordinator {
     var delayMs = 100;
 
     while (stopwatch.elapsed < timeout) {
+      final remaining = timeout - stopwatch.elapsed;
+      final checkTimeout = remaining < const Duration(milliseconds: 500)
+          ? remaining
+          : const Duration(milliseconds: 500);
+
       try {
-        final isListening = await _supervisor.isPortListening(_host, _port, timeout: const Duration(milliseconds: 200));
+        final isListening = await _supervisor.isPortListening(_host, _port, timeout: checkTimeout);
         if (isListening) {
-          await _client.getHealth(timeout: const Duration(milliseconds: 500));
+          await _client.getHealth(timeout: checkTimeout);
           try {
             await _client.verifyAuth();
             return _updateState(RuntimeProcessState(

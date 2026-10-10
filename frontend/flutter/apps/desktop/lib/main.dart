@@ -1,12 +1,15 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:companion_api/companion_api.dart';
+import 'package:companion_core/companion_core.dart';
 import 'package:companion_design/companion_design.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:tray_manager/tray_manager.dart';
 
 import 'controllers/desktop_settings_controller.dart';
+import 'coordinator/desktop_runtime_coordinator.dart';
 import 'features/chat/desktop_chat_controller.dart';
 import 'harness/visual_evidence_runner.dart';
 import 'lifecycle/desktop_lifecycle_coordinator.dart';
@@ -115,11 +118,15 @@ class AiCompanionDesktopApp extends StatefulWidget {
     this.coordinator,
     this.settingsController,
     this.chatController,
+    this.runtimeCoordinator,
+    this.credentialStore,
   });
 
   final DesktopLifecycleCoordinator? coordinator;
   final DesktopSettingsController? settingsController;
   final DesktopChatController? chatController;
+  final DesktopRuntimeCoordinator? runtimeCoordinator;
+  final CredentialStore? credentialStore;
 
   @override
   State<AiCompanionDesktopApp> createState() => _AiCompanionDesktopAppState();
@@ -128,29 +135,79 @@ class AiCompanionDesktopApp extends StatefulWidget {
 class _AiCompanionDesktopAppState extends State<AiCompanionDesktopApp> {
   late final DesktopSettingsController _controller;
   late final DesktopChatController _chatController;
+  DesktopRuntimeCoordinator? _runtimeCoordinator;
+  StreamSubscription<RuntimeProcessState>? _runtimeSubscription;
+  bool _ownsRuntimeCoordinator = false;
 
   @override
   void initState() {
     super.initState();
     _controller = widget.settingsController ?? DesktopSettingsController();
+    final store = widget.credentialStore ?? WindowsDpapiCredentialStore();
+    const defaultHostUrl = String.fromEnvironment('COMPANION_HOST_URL', defaultValue: 'http://127.0.0.1:8000');
+
     if (widget.chatController != null) {
       _chatController = widget.chatController!;
     } else {
-      final store = WindowsDpapiCredentialStore();
-      const defaultHostUrl = String.fromEnvironment('COMPANION_HOST_URL', defaultValue: 'http://127.0.0.1:8000');
       final client = CompanionClient(
         baseUrl: defaultHostUrl,
         credentialStore: store,
       );
       _chatController = DesktopChatController(client: client);
+    }
+
+    _initializeRuntime(defaultHostUrl, store);
+  }
+
+  void _initializeRuntime(String defaultHostUrl, CredentialStore store) {
+    if (widget.runtimeCoordinator != null) {
+      _runtimeCoordinator = widget.runtimeCoordinator!;
+      _ownsRuntimeCoordinator = false;
+      _wireRuntimeCoordinator();
+    } else {
+      _ownsRuntimeCoordinator = true;
       DesktopClientSettings().readHostUrl(defaultValue: defaultHostUrl).then((host) {
-        if (host != defaultHostUrl) {
+        if (!mounted) return;
+        if (host != defaultHostUrl && widget.chatController == null) {
           _chatController.updateConfiguration(baseUrl: host);
-        } else {
-          _chatController.checkConnection();
         }
+        _runtimeCoordinator = DesktopRuntimeCoordinator(
+          baseUrl: host,
+          credentialStore: store,
+        );
+        _wireRuntimeCoordinator();
       });
     }
+  }
+
+  void _wireRuntimeCoordinator() {
+    if (_runtimeCoordinator == null) return;
+    final rc = _runtimeCoordinator!;
+
+    // Feed current state immediately
+    _controller.updateRuntimeState(rc.currentState, rc.activeRuntimeInfo);
+    widget.coordinator?.updateRuntimeStatus(rc.currentState);
+
+    _runtimeSubscription = rc.stateStream.listen((state) {
+      if (!mounted) return;
+      _controller.updateRuntimeState(state, rc.activeRuntimeInfo);
+      widget.coordinator?.updateRuntimeStatus(state);
+      if (state.isOperational) {
+        _chatController.checkConnection();
+      }
+    });
+
+    // Run bounded ensureRuntimeReady automatically in the background
+    unawaited(rc.ensureRuntimeReady());
+  }
+
+  @override
+  void dispose() {
+    _runtimeSubscription?.cancel();
+    if (_ownsRuntimeCoordinator) {
+      _runtimeCoordinator?.dispose();
+    }
+    super.dispose();
   }
 
   @override
@@ -168,6 +225,7 @@ class _AiCompanionDesktopAppState extends State<AiCompanionDesktopApp> {
             controller: _controller,
             coordinator: widget.coordinator,
             chatController: _chatController,
+            runtimeCoordinator: _runtimeCoordinator,
           ),
         );
       },

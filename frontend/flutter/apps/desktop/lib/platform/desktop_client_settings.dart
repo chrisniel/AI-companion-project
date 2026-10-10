@@ -13,6 +13,10 @@ class DesktopClientSettings {
 
   String get _filePath {
     if (customFilePath != null) return customFilePath!;
+    final envSettings = Platform.environment['COMPANION_CLIENT_SETTINGS_FILE'];
+    if (envSettings != null && envSettings.trim().isNotEmpty) {
+      return envSettings.trim();
+    }
     final localAppData = Platform.environment['LOCALAPPDATA'];
     if (localAppData == null || localAppData.trim().isEmpty) {
       return 'client_settings.json';

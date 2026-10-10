@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../controllers/desktop_settings_controller.dart';
+import '../coordinator/desktop_runtime_coordinator.dart';
 import '../features/chat/desktop_chat_controller.dart';
 import '../lifecycle/desktop_lifecycle_coordinator.dart';
 import '../screens/chat_screen.dart';
@@ -27,11 +28,13 @@ class DesktopShell extends StatelessWidget {
     required this.controller,
     this.coordinator,
     this.chatController,
+    this.runtimeCoordinator,
   });
 
   final DesktopSettingsController controller;
   final DesktopLifecycleCoordinator? coordinator;
   final DesktopChatController? chatController;
+  final DesktopRuntimeCoordinator? runtimeCoordinator;
 
   @override
   Widget build(BuildContext context) {
@@ -140,6 +143,7 @@ class DesktopShell extends StatelessWidget {
           controller: controller,
           coordinator: coordinator,
           chatController: chatController,
+          runtimeCoordinator: runtimeCoordinator,
         );
     }
   }

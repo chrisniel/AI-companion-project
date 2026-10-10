@@ -160,5 +160,20 @@ void main() {
       final statusItemConflict = itemsConflict.firstWhere((i) => i.key == 'status');
       expect(statusItemConflict.label, contains('Conflict'));
     });
+
+    test('buildTrayMenuItems gates quit_ui_dev on includeDevTestActions', () {
+      final window = MockWindowAdapter();
+      final tray = MockTrayAdapter();
+      final coordinator = DesktopLifecycleCoordinator(
+        windowAdapter: window,
+        trayAdapter: tray,
+      );
+
+      final itemsWithDev = coordinator.buildTrayMenuItems(null, true);
+      expect(itemsWithDev.any((i) => i.key == 'quit_ui_dev'), isTrue);
+
+      final itemsWithoutDev = coordinator.buildTrayMenuItems(null, false);
+      expect(itemsWithoutDev.any((i) => i.key == 'quit_ui_dev'), isFalse);
+    });
   });
 }

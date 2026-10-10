@@ -1,4 +1,5 @@
 import 'package:companion_core/companion_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
@@ -108,8 +109,12 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
   }
 
   /// Builds the tray context menu items reflecting runtime supervision state.
-  List<MenuItem> buildTrayMenuItems([RuntimeProcessState? state]) {
+  List<MenuItem> buildTrayMenuItems([
+    RuntimeProcessState? state,
+    bool? includeDevTestActions,
+  ]) {
     final runtime = state ?? _runtimeProcessState;
+    final allowDevActions = includeDevTestActions ?? kDebugMode;
     String statusLabel;
     if (runtime == null) {
       statusLabel = 'Runtime: Standalone';
@@ -149,7 +154,7 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
       }
     }
 
-    return [
+    final items = <MenuItem>[
       MenuItem(
         key: 'open',
         label: 'Open AI Companion',
@@ -163,22 +168,35 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
         key: 'hide_to_tray',
         label: 'Hide Window to Tray',
       ),
-      MenuItem(
-        key: 'quit_ui_dev',
-        label: 'Close UI Only (Dev Test)',
-      ),
+    ];
+
+    if (allowDevActions) {
+      items.add(
+        MenuItem(
+          key: 'quit_ui_dev',
+          label: 'Close UI Only (Dev Test)',
+        ),
+      );
+    }
+
+    items.addAll([
       MenuItem.separator(),
       MenuItem(
         key: 'exit_full',
         label: 'Exit Companion (Full Shutdown - Planned PC-HOST-005)',
         disabled: true,
       ),
-    ];
+    ]);
+
+    return items;
   }
 
   /// Builds the tray context menu with truthful supervision actions and disabled future actions.
-  Menu buildTrayContextMenu([RuntimeProcessState? state]) {
-    return Menu(items: buildTrayMenuItems(state));
+  Menu buildTrayContextMenu([
+    RuntimeProcessState? state,
+    bool? includeDevTestActions,
+  ]) {
+    return Menu(items: buildTrayMenuItems(state, includeDevTestActions));
   }
 
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:companion_api/companion_api.dart';
@@ -6,6 +7,7 @@ import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
 
 import '../controllers/desktop_settings_controller.dart';
+import '../coordinator/desktop_runtime_coordinator.dart';
 import '../features/chat/desktop_chat_controller.dart';
 import '../lifecycle/desktop_lifecycle_coordinator.dart';
 import '../platform/desktop_client_settings.dart';
@@ -17,11 +19,13 @@ class SettingsScreen extends StatefulWidget {
     required this.controller,
     this.coordinator,
     this.chatController,
+    this.runtimeCoordinator,
   });
 
   final DesktopSettingsController controller;
   final DesktopLifecycleCoordinator? coordinator;
   final DesktopChatController? chatController;
+  final DesktopRuntimeCoordinator? runtimeCoordinator;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -817,11 +821,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     if (candidateToken.isNotEmpty) {
                       await WindowsDpapiCredentialStore().writeToken(candidateToken);
                     }
-                    if (widget.chatController != null) {
-                      await widget.chatController!.updateConfiguration(
-                        baseUrl: candidateUrl,
-                        pairingToken: candidateToken,
+                    if (widget.runtimeCoordinator != null) {
+                      widget.runtimeCoordinator!.updateConfiguration(
+                        newBaseUrl: candidateUrl,
+                        credentialStore: WindowsDpapiCredentialStore(),
                       );
+                      unawaited(widget.runtimeCoordinator!.ensureRuntimeReady());
+                    }
+                    if (widget.chatController != null) {
+                      try {
+                        await widget.chatController!.updateConfiguration(
+                          baseUrl: candidateUrl,
+                          pairingToken: candidateToken,
+                        );
+                      } catch (_) {}
                     }
                     setState(() {
                       _testConnectionResult = 'Configuration saved and active runtime reconnected.';
