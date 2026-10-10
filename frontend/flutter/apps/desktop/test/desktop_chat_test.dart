@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'package:companion_api/companion_api.dart';
 import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
@@ -342,6 +344,105 @@ void main() {
       expect(ctrl.canSend, isTrue);
 
       ctrl.dispose();
+    });
+
+    test('production-style controller begins on Host A, updates to Host B, and subsequent requests target B never A', () async {
+      final prevOverrides = HttpOverrides.current;
+      HttpOverrides.global = null;
+      final serverA = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final serverB = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+
+      final requestsA = <String>[];
+      final requestsB = <String>[];
+
+      void handleRequest(HttpRequest request, List<String> log) {
+        log.add(request.uri.path);
+        final response = request.response
+          ..statusCode = 200
+          ..headers.contentType = ContentType.json;
+        if (request.uri.path == '/api/v1/health') {
+          response.write(jsonEncode({'status': 'healthy'}));
+        } else if (request.uri.path == '/api/v1/auth/verify') {
+          response.write(jsonEncode({'authenticated': true, 'token_type': 'Bearer'}));
+        } else if (request.uri.path == '/api/v1/models') {
+          response.write(jsonEncode({
+            'active_model': 'test-model',
+            'model_loaded': true,
+            'model_awake': true,
+            'runtime_state': 'MODEL_READY',
+          }));
+        } else if (request.uri.path == '/api/v1/conversations') {
+          response.write(jsonEncode([]));
+        } else {
+          response.write(jsonEncode({'status': 'ok'}));
+        }
+        response.close();
+      }
+
+      serverA.listen((request) => handleRequest(request, requestsA));
+      serverB.listen((request) => handleRequest(request, requestsB));
+
+      try {
+        final initialClient = CompanionClient(
+          baseUrl: 'http://127.0.0.1:${serverA.port}',
+          credentialStore: InMemoryCredentialStore('token-a'),
+        );
+
+        // Production-style instantiation: NO clientFactory provided!
+        final controller = DesktopChatController(client: initialClient);
+        expect(controller.client.baseUri.port, equals(serverA.port));
+
+        await controller.checkConnection();
+        expect(requestsA, contains('/api/v1/health'));
+        expect(requestsB, isEmpty);
+
+        // Reconfigure to Host B
+        await controller.updateConfiguration(
+          baseUrl: 'http://127.0.0.1:${serverB.port}',
+          pairingToken: 'token-b',
+        );
+
+        // Actual client endpoint must be replaced to Host B!
+        expect(controller.client.baseUri.port, equals(serverB.port));
+        expect(controller.client.baseUri.toString(), equals('http://127.0.0.1:${serverB.port}'));
+
+        final aCountAfterReconfig = requestsA.length;
+        expect(requestsB, contains('/api/v1/health'));
+
+        // Subsequent checkConnection targets B, never A
+        await controller.checkConnection();
+        expect(requestsA.length, equals(aCountAfterReconfig));
+        expect(requestsB.length, greaterThan(1));
+
+        controller.dispose();
+      } finally {
+        HttpOverrides.global = prevOverrides;
+        await serverA.close(force: true);
+        await serverB.close(force: true);
+      }
+    });
+
+    test('injected test clientFactory remains supported and is called on updateConfiguration', () async {
+      final mockA = MockCompanionClient(token: 'token-a');
+      final mockB = MockCompanionClient(token: 'token-b');
+      var factoryCalledWithUrl = '';
+
+      final controller = DesktopChatController(
+        client: mockA,
+        clientFactory: ({required baseUrl, credentialStore}) {
+          factoryCalledWithUrl = baseUrl;
+          return mockB;
+        },
+      );
+
+      await controller.updateConfiguration(
+        baseUrl: 'http://127.0.0.1:9999',
+        pairingToken: 'token-b',
+      );
+
+      expect(factoryCalledWithUrl, equals('http://127.0.0.1:9999'));
+      expect(controller.client, same(mockB));
+      controller.dispose();
     });
 
     test('sendMessage throws StateError when runtime is not connected', () async {

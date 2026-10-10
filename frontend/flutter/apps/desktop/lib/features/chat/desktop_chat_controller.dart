@@ -73,7 +73,7 @@ class DesktopChatController extends ChangeNotifier {
     required CompanionClient client,
     CompanionClientFactory? clientFactory,
   })  : _client = client,
-        _clientFactory = clientFactory ?? (({required baseUrl, credentialStore}) => client);
+        _clientFactory = clientFactory;
 
   CompanionClient get client => _client;
   RuntimeConnectionStatus get connectionStatus => _connectionStatus;

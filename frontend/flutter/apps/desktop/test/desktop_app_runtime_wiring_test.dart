@@ -199,7 +199,10 @@ void main() {
 
       final settingsController = DesktopSettingsController();
       final fakeClient = FakeChatClient();
-      final chatController = DesktopChatController(client: fakeClient);
+      final chatController = DesktopChatController(
+        client: fakeClient,
+        clientFactory: ({required baseUrl, credentialStore}) => fakeClient,
+      );
       final fakeSupervisor = FakeProcessSupervisor();
 
       final runtimeCoordinator = DesktopRuntimeCoordinator(
@@ -240,7 +243,10 @@ void main() {
         initialDestination: DesktopNavDestination.settings,
       );
       final fakeClient = FakeChatClient();
-      final chatController = DesktopChatController(client: fakeClient);
+      final chatController = DesktopChatController(
+        client: fakeClient,
+        clientFactory: ({required baseUrl, credentialStore}) => fakeClient,
+      );
       final fakeSupervisor = FakeProcessSupervisor();
 
       final runtimeCoordinator = DesktopRuntimeCoordinator(

@@ -6,6 +6,57 @@ import 'package:companion_api/companion_api.dart';
 import 'package:companion_core/companion_core.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+class AcceptanceSpawnRecord {
+  final int pid;
+  final int port;
+  final String logPath;
+  final DateTime spawnTime;
+
+  AcceptanceSpawnRecord({
+    required this.pid,
+    required this.port,
+    required this.logPath,
+    required this.spawnTime,
+  });
+}
+
+class AcceptanceTrackingSupervisor extends WindowsRuntimeProcessSupervisor {
+  final List<AcceptanceSpawnRecord> spawnedRecords;
+
+  AcceptanceTrackingSupervisor({required this.spawnedRecords});
+
+  @override
+  Future<int> spawnDetachedRuntime({
+    required String executable,
+    required List<String> args,
+    required String workingDirectory,
+    required String logFilePath,
+    Map<String, String>? environment,
+  }) async {
+    final pid = await super.spawnDetachedRuntime(
+      executable: executable,
+      args: args,
+      workingDirectory: workingDirectory,
+      logFilePath: logFilePath,
+      environment: environment,
+    );
+    int port = 0;
+    final portIdx = args.indexOf('--port');
+    if (portIdx != -1 && portIdx + 1 < args.length) {
+      port = int.tryParse(args[portIdx + 1]) ?? 0;
+    }
+    spawnedRecords.add(
+      AcceptanceSpawnRecord(
+        pid: pid,
+        port: port,
+        logPath: logFilePath,
+        spawnTime: DateTime.now().toUtc(),
+      ),
+    );
+    return pid;
+  }
+}
+
 void main() {
   group('Windows Runtime Supervision Acceptance (End-to-End)', () {
     late Directory tempRoot;
@@ -19,7 +70,7 @@ void main() {
     late String testToken;
 
     int? launchedPid;
-    final Set<int> testSpawnedPids = <int>{};
+    final List<AcceptanceSpawnRecord> trackedSpawnRecords = <AcceptanceSpawnRecord>[];
 
     setUpAll(() async {
       final envPort = Platform.environment['COMPANION_TEST_PORT'];
@@ -58,18 +109,51 @@ void main() {
 
     tearDownAll(() async {
       final supervisor = WindowsRuntimeProcessSupervisor();
-      for (final pid in testSpawnedPids) {
-        if (pid > 0) {
-          try {
-            final isMatching = await supervisor.isProcessActiveAndMatching(
-              pid,
-              expectedExecutable: 'python.exe',
+      for (final record in trackedSpawnRecords) {
+        final pid = record.pid;
+        if (pid <= 0) continue;
+
+        try {
+          // 1. Verify process is active and image name matches python.exe
+          final isMatching = await supervisor.isProcessActiveAndMatching(
+            pid,
+            expectedExecutable: 'python.exe',
+          );
+          if (!isMatching) continue;
+
+          // 2. Verify command line provenance via Win32_Process
+          if (Platform.isWindows) {
+            final procQuery = await Process.run(
+              'powershell',
+              [
+                '-NoProfile',
+                '-NonInteractive',
+                '-Command',
+                "Get-CimInstance Win32_Process -Filter 'ProcessId = $pid' | Select-Object -Property ProcessId, CommandLine | ConvertTo-Json",
+              ],
+              runInShell: false,
             );
-            if (isMatching) {
-              Process.killPid(pid);
+
+            if (procQuery.exitCode == 0) {
+              final jsonStr = procQuery.stdout.toString().trim();
+              if (jsonStr.isNotEmpty && jsonStr.startsWith('{')) {
+                final dynamic data = jsonDecode(jsonStr);
+                final cmdLine = (data['CommandLine'] ?? '').toString();
+                // Fail-closed: only terminate if command line proves ownership
+                final isOurUvicorn = cmdLine.contains('uvicorn') &&
+                    cmdLine.contains('app.main:app') &&
+                    (record.port == 0 || cmdLine.contains('${record.port}'));
+                if (isOurUvicorn) {
+                  Process.killPid(pid);
+                  continue;
+                }
+              }
             }
-          } catch (_) {}
-        }
+            // If Win32_Process provenance cannot be verified, fail closed: do NOT kill
+          } else {
+            Process.killPid(pid);
+          }
+        } catch (_) {}
       }
       if (Platform.environment['COMPANION_TEST_TEMP_ROOT'] == null) {
         try {
@@ -79,7 +163,7 @@ void main() {
     });
 
     test('Scenario A: Launches detached runtime through coordinator, verifies lockfile and rotating log', () async {
-      final supervisor = WindowsRuntimeProcessSupervisor();
+      final supervisor = AcceptanceTrackingSupervisor(spawnedRecords: trackedSpawnRecords);
       final coordinator = DesktopRuntimeCoordinator(
         baseUrl: 'http://127.0.0.1:$testPort',
         supervisor: supervisor,
@@ -95,9 +179,6 @@ void main() {
       expect(state.pid, greaterThan(0));
 
       launchedPid = state.pid;
-      if (launchedPid != null) {
-        testSpawnedPids.add(launchedPid!);
-      }
 
       // Verify lockfile exists with Schema v1 descriptor
       expect(lockFile.existsSync(), isTrue);
@@ -200,9 +281,10 @@ void main() {
       expect(staleDataBefore?.pid, equals(deadPid));
 
       // 2. Instantiate coordinator against stale lockfile and execute recovery
+      final recoverySupervisor = AcceptanceTrackingSupervisor(spawnedRecords: trackedSpawnRecords);
       final recoveryCoordinator = DesktopRuntimeCoordinator(
         baseUrl: 'http://127.0.0.1:$testPortD',
-        supervisor: supervisor,
+        supervisor: recoverySupervisor,
         credentialStore: InMemoryCredentialStore(testToken),
         customLockFile: staleLockFile,
         customLogFilePath: staleLogFile.path,
@@ -216,8 +298,6 @@ void main() {
       expect(recoveryState.pid, isNotNull);
       expect(recoveryState.pid, greaterThan(0));
       expect(recoveryState.pid, isNot(equals(deadPid)));
-
-      testSpawnedPids.add(recoveryState.pid!);
 
       // 3. Verify descriptor in stale lockfile was overwritten with the recovered live PID
       final staleDataAfter = await supervisor.readDescriptorDirect(staleLockFile);

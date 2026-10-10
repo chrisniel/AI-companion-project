@@ -96,7 +96,7 @@ class DesktopRuntimeCoordinator {
     if (newClient != null) {
       _client = newClient;
     } else if (_clientFactory != null) {
-      _client = _clientFactory!(newBaseUrl, credentialStore);
+      _client = _clientFactory(newBaseUrl, credentialStore);
     } else {
       _client = CompanionClient(
         baseUrl: newBaseUrl,
@@ -342,13 +342,24 @@ class DesktopRuntimeCoordinator {
         : const Duration(seconds: 5);
 
     try {
-      await _client.verifyAuth(timeout: authTimeout);
+      await _client.verifyAuth(timeout: authTimeout).timeout(authTimeout);
       if (generation != _activeGeneration || _isDisposed) return _currentState;
       return _updateState(
         RuntimeProcessState(
           supervisionMode: SupervisionMode.remoteHost,
           status: RuntimeStatus.readyAndAuthenticated,
           port: _port,
+        ),
+        generation: generation,
+      );
+    } on TimeoutException {
+      if (generation != _activeGeneration || _isDisposed) return _currentState;
+      return _updateState(
+        RuntimeProcessState(
+          supervisionMode: SupervisionMode.remoteHost,
+          status: RuntimeStatus.startupTimeout,
+          port: _port,
+          diagnosticMessage: 'Remote host authentication verification timed out',
         ),
         generation: generation,
       );
@@ -398,12 +409,31 @@ class DesktopRuntimeCoordinator {
       return r.isNegative ? Duration.zero : r;
     }
 
+    final targetHost = _host;
+    final targetPort = _port;
+    final targetLockFile = _lockFile;
+    final targetExecutablePath = _resolveExecutablePath();
+    final targetWorkingDirectory = _resolveWorkingDirectory();
+    final targetLogFilePath = _resolveLogFilePath();
+
+    if (!_isLoopbackHost(targetHost)) {
+      return _updateState(
+        RuntimeProcessState(
+          supervisionMode: SupervisionMode.remoteHost,
+          status: RuntimeStatus.unreachable,
+          port: targetPort,
+          diagnosticMessage: 'Cannot perform local loopback launch on non-loopback host $targetHost',
+        ),
+        generation: generation,
+      );
+    }
+
     // 1. Initial check: is port already listening?
     final initialRemaining = remainingTime();
     final initialHealthTimeout = initialRemaining < const Duration(seconds: 2)
         ? initialRemaining
         : const Duration(seconds: 2);
-    final alreadyListening = await _supervisor.isPortListening(_host, _port, timeout: initialHealthTimeout);
+    final alreadyListening = await _supervisor.isPortListening(targetHost, targetPort, timeout: initialHealthTimeout);
     if (generation != _activeGeneration || _isDisposed) return _currentState;
 
     if (alreadyListening) {
@@ -415,8 +445,8 @@ class DesktopRuntimeCoordinator {
           RuntimeProcessState(
             supervisionMode: SupervisionMode.localLoopback,
             status: RuntimeStatus.alienPortConflict,
-            port: _port,
-            diagnosticMessage: 'Port $_port responded with non-companion payload: $e',
+            port: targetPort,
+            diagnosticMessage: 'Port $targetPort responded with non-companion payload: $e',
           ),
           generation: generation,
         );
@@ -424,21 +454,33 @@ class DesktopRuntimeCoordinator {
 
       if (generation != _activeGeneration || _isDisposed) return _currentState;
 
-      final desc = await _supervisor.readDescriptorDirect(_lockFile);
+      final desc = await _supervisor.readDescriptorDirect(targetLockFile);
       if (desc != null) _activeRuntimeInfo = desc;
 
       final authTimeout = remainingTime() < const Duration(seconds: 5)
           ? remainingTime()
           : const Duration(seconds: 5);
       try {
-        await _client.verifyAuth(timeout: authTimeout);
+        await _client.verifyAuth(timeout: authTimeout).timeout(authTimeout);
         if (generation != _activeGeneration || _isDisposed) return _currentState;
         return _updateState(
           RuntimeProcessState(
             supervisionMode: SupervisionMode.localLoopback,
             status: RuntimeStatus.readyAndAuthenticated,
             pid: _activeRuntimeInfo?.pid,
-            port: _port,
+            port: targetPort,
+          ),
+          generation: generation,
+        );
+      } on TimeoutException {
+        if (generation != _activeGeneration || _isDisposed) return _currentState;
+        return _updateState(
+          RuntimeProcessState(
+            supervisionMode: SupervisionMode.localLoopback,
+            status: RuntimeStatus.startupTimeout,
+            pid: _activeRuntimeInfo?.pid,
+            port: targetPort,
+            diagnosticMessage: 'Local runtime authentication verification timed out',
           ),
           generation: generation,
         );
@@ -450,7 +492,7 @@ class DesktopRuntimeCoordinator {
               supervisionMode: SupervisionMode.localLoopback,
               status: RuntimeStatus.reachableUnauthenticated,
               pid: _activeRuntimeInfo?.pid,
-              port: _port,
+              port: targetPort,
               diagnosticMessage: 'Local runtime reachable but unauthenticated: ${e.message}',
             ),
             generation: generation,
@@ -462,7 +504,7 @@ class DesktopRuntimeCoordinator {
               supervisionMode: SupervisionMode.localLoopback,
               status: RuntimeStatus.startupTimeout,
               pid: _activeRuntimeInfo?.pid,
-              port: _port,
+              port: targetPort,
               diagnosticMessage: 'Local runtime authentication verification timed out',
             ),
             generation: generation,
@@ -477,7 +519,7 @@ class DesktopRuntimeCoordinator {
       RuntimeProcessState(
         supervisionMode: SupervisionMode.localLoopback,
         status: RuntimeStatus.launching,
-        port: _port,
+        port: targetPort,
       ),
       generation: generation,
     );
@@ -490,14 +532,14 @@ class DesktopRuntimeCoordinator {
         RuntimeProcessState(
           supervisionMode: SupervisionMode.localLoopback,
           status: RuntimeStatus.startupTimeout,
-          port: _port,
+          port: targetPort,
           diagnosticMessage: 'Timeout before acquiring startup lock',
         ),
         generation: generation,
       );
     }
 
-    final lockHandle = await _supervisor.acquireStartupLock(_lockFile, timeout: lockWait);
+    final lockHandle = await _supervisor.acquireStartupLock(targetLockFile, timeout: lockWait);
     if (generation != _activeGeneration || _isDisposed) {
       if (lockHandle != null) await _supervisor.releaseStartupLock(lockHandle);
       return _currentState;
@@ -508,8 +550,8 @@ class DesktopRuntimeCoordinator {
         RuntimeProcessState(
           supervisionMode: SupervisionMode.localLoopback,
           status: RuntimeStatus.startupTimeout,
-          port: _port,
-          diagnosticMessage: 'Timed out acquiring exclusive startup lock on ${_lockFile.path}',
+          port: targetPort,
+          diagnosticMessage: 'Timed out acquiring exclusive startup lock on ${targetLockFile.path}',
         ),
         generation: generation,
       );
@@ -517,7 +559,7 @@ class DesktopRuntimeCoordinator {
 
     try {
       // 3. Double-checked recheck under exclusive guard:
-      final listeningNow = await _supervisor.isPortListening(_host, _port, timeout: const Duration(milliseconds: 500));
+      final listeningNow = await _supervisor.isPortListening(targetHost, targetPort, timeout: const Duration(milliseconds: 500));
       if (generation != _activeGeneration || _isDisposed) return _currentState;
 
       if (listeningNow) {
@@ -531,8 +573,8 @@ class DesktopRuntimeCoordinator {
             RuntimeProcessState(
               supervisionMode: SupervisionMode.localLoopback,
               status: RuntimeStatus.alienPortConflict,
-              port: _port,
-              diagnosticMessage: 'Port $_port is occupied by another process and did not respond with companion health: $e',
+              port: targetPort,
+              diagnosticMessage: 'Port $targetPort is occupied by another process and did not respond with companion health: $e',
             ),
             generation: generation,
           );
@@ -545,13 +587,24 @@ class DesktopRuntimeCoordinator {
             ? remainingTime()
             : const Duration(seconds: 5);
         try {
-          await _client.verifyAuth(timeout: recheckAuthTimeout);
+          await _client.verifyAuth(timeout: recheckAuthTimeout).timeout(recheckAuthTimeout);
           return _updateState(
             RuntimeProcessState(
               supervisionMode: SupervisionMode.localLoopback,
               status: RuntimeStatus.readyAndAuthenticated,
               pid: _activeRuntimeInfo?.pid,
-              port: _port,
+              port: targetPort,
+            ),
+            generation: generation,
+          );
+        } on TimeoutException {
+          return _updateState(
+            RuntimeProcessState(
+              supervisionMode: SupervisionMode.localLoopback,
+              status: RuntimeStatus.startupTimeout,
+              pid: _activeRuntimeInfo?.pid,
+              port: targetPort,
+              diagnosticMessage: 'Local runtime authentication verification timed out',
             ),
             generation: generation,
           );
@@ -562,7 +615,7 @@ class DesktopRuntimeCoordinator {
                 supervisionMode: SupervisionMode.localLoopback,
                 status: RuntimeStatus.reachableUnauthenticated,
                 pid: _activeRuntimeInfo?.pid,
-                port: _port,
+                port: targetPort,
                 diagnosticMessage: 'Local runtime reachable under lock but unauthenticated: ${e.message}',
               ),
               generation: generation,
@@ -573,7 +626,7 @@ class DesktopRuntimeCoordinator {
               supervisionMode: SupervisionMode.localLoopback,
               status: RuntimeStatus.unreachable,
               pid: _activeRuntimeInfo?.pid,
-              port: _port,
+              port: targetPort,
               diagnosticMessage: 'Local runtime verification error: ${e.message}',
             ),
             generation: generation,
@@ -596,8 +649,8 @@ class DesktopRuntimeCoordinator {
               supervisionMode: SupervisionMode.localLoopback,
               status: RuntimeStatus.processUnresponsive,
               pid: desc.pid,
-              port: _port,
-              diagnosticMessage: 'Runtime PID ${desc.pid} is alive in process table but unresponsive on port $_port',
+              port: targetPort,
+              diagnosticMessage: 'Runtime PID ${desc.pid} is alive in process table but unresponsive on port $targetPort',
             ),
             generation: generation,
           );
@@ -605,25 +658,28 @@ class DesktopRuntimeCoordinator {
       }
 
       // 5. Safe spawn: verify executable existence
-      final exe = File(_resolveExecutablePath());
+      if (generation != _activeGeneration || _isDisposed) return _currentState;
+      final exe = File(targetExecutablePath);
       if (!await exe.exists()) {
         return _updateState(
           RuntimeProcessState(
             supervisionMode: SupervisionMode.localLoopback,
             status: RuntimeStatus.executableNotFound,
-            port: _port,
+            port: targetPort,
             diagnosticMessage: 'Runtime executable not found at ${exe.path}',
           ),
           generation: generation,
         );
       }
 
+      if (generation != _activeGeneration || _isDisposed) return _currentState;
+
       if (remainingTime() <= Duration.zero) {
         return _updateState(
           RuntimeProcessState(
             supervisionMode: SupervisionMode.localLoopback,
             status: RuntimeStatus.startupTimeout,
-            port: _port,
+            port: targetPort,
             diagnosticMessage: 'Timeout before spawning detached runtime',
           ),
           generation: generation,
@@ -632,17 +688,23 @@ class DesktopRuntimeCoordinator {
 
       final spawnedPid = await _supervisor.spawnDetachedRuntime(
         executable: exe.path,
-        args: ['-m', 'uvicorn', 'app.main:app', '--host', _host, '--port', '$_port'],
-        workingDirectory: _resolveWorkingDirectory(),
-        logFilePath: _resolveLogFilePath(),
+        args: ['-m', 'uvicorn', 'app.main:app', '--host', targetHost, '--port', '$targetPort'],
+        workingDirectory: targetWorkingDirectory,
+        logFilePath: targetLogFilePath,
         environment: _customEnvironment,
       );
+
+      // Clean up test or in-flight process if attempt was superseded or coordinator disposed during spawn
+      if (generation != _activeGeneration || _isDisposed) {
+        await _supervisor.terminateSpawnedProcess(spawnedPid);
+        return _currentState;
+      }
 
       final newDesc = RuntimeLockfileData(
         schemaVersion: 1,
         instanceId: UuidUtils.generateV4(),
         pid: spawnedPid,
-        port: _port,
+        port: targetPort,
         startedAt: DateTime.now().toUtc(),
         executablePath: exe.path,
       );
@@ -666,7 +728,7 @@ class DesktopRuntimeCoordinator {
           : const Duration(milliseconds: 500);
 
       try {
-        final isListening = await _supervisor.isPortListening(_host, _port, timeout: checkTimeout);
+        final isListening = await _supervisor.isPortListening(targetHost, targetPort, timeout: checkTimeout);
         if (generation != _activeGeneration || _isDisposed) return _currentState;
 
         if (isListening) {
@@ -677,17 +739,19 @@ class DesktopRuntimeCoordinator {
               ? remainingTime()
               : const Duration(seconds: 3);
           try {
-            await _client.verifyAuth(timeout: authTimeout);
+            await _client.verifyAuth(timeout: authTimeout).timeout(authTimeout);
             if (generation != _activeGeneration || _isDisposed) return _currentState;
             return _updateState(
               RuntimeProcessState(
                 supervisionMode: SupervisionMode.localLoopback,
                 status: RuntimeStatus.readyAndAuthenticated,
                 pid: _activeRuntimeInfo?.pid,
-                port: _port,
+                port: targetPort,
               ),
               generation: generation,
             );
+          } on TimeoutException {
+            // Continues polling until overall timeout
           } on CompanionApiException catch (e) {
             if (generation != _activeGeneration || _isDisposed) return _currentState;
             if (e.statusCode == 401) {
@@ -696,7 +760,7 @@ class DesktopRuntimeCoordinator {
                   supervisionMode: SupervisionMode.localLoopback,
                   status: RuntimeStatus.reachableUnauthenticated,
                   pid: _activeRuntimeInfo?.pid,
-                  port: _port,
+                  port: targetPort,
                   diagnosticMessage: 'Runtime reachable but token unauthenticated: ${e.message}',
                 ),
                 generation: generation,
@@ -719,7 +783,7 @@ class DesktopRuntimeCoordinator {
         supervisionMode: SupervisionMode.localLoopback,
         status: RuntimeStatus.startupTimeout,
         pid: _activeRuntimeInfo?.pid,
-        port: _port,
+        port: targetPort,
         diagnosticMessage: 'Runtime failed to become ready within ${timeout.inSeconds} seconds',
       ),
       generation: generation,

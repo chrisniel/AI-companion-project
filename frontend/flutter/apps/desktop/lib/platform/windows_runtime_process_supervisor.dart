@@ -220,4 +220,17 @@ class WindowsRuntimeProcessSupervisor {
 
     return process.pid;
   }
+
+  /// Terminates a spawned process by [pid] safely.
+  ///
+  /// Used for cleanup of processes spawned by an attempt that was subsequently
+  /// superseded or cancelled.
+  Future<bool> terminateSpawnedProcess(int pid) async {
+    if (pid <= 0) return false;
+    try {
+      return await _launcher.killPid(pid);
+    } catch (_) {
+      return false;
+    }
+  }
 }

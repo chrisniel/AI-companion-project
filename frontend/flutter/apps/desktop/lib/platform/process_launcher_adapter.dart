@@ -20,6 +20,8 @@ abstract class ProcessLauncherAdapter {
     bool includeParentEnvironment = true,
     bool runInShell = false,
   });
+
+  Future<bool> killPid(int pid, [ProcessSignal signal = ProcessSignal.sigterm]);
 }
 
 /// Default launcher delegating directly to `dart:io` Process methods.
@@ -64,5 +66,10 @@ class DefaultProcessLauncherAdapter implements ProcessLauncherAdapter {
       includeParentEnvironment: includeParentEnvironment,
       runInShell: runInShell,
     );
+  }
+
+  @override
+  Future<bool> killPid(int pid, [ProcessSignal signal = ProcessSignal.sigterm]) async {
+    return Process.killPid(pid, signal);
   }
 }
