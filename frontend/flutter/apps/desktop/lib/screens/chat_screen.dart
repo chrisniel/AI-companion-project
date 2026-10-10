@@ -92,6 +92,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_isSubmitting ||
         _effectiveController.isGenerating ||
         _effectiveController.isAwaitingAcceptance ||
+        _effectiveController.isCreatingConversation ||
         !_effectiveController.canSend) {
       return;
     }
@@ -765,7 +766,10 @@ class _ChatScreenState extends State<ChatScreen> {
     DesktopChatController chatCtrl,
     CompanionThemeExtension? ext,
   ) {
-    final isBusy = chatCtrl.isGenerating || chatCtrl.isAwaitingAcceptance || _isSubmitting;
+    final isBusy = chatCtrl.isGenerating ||
+        chatCtrl.isAwaitingAcceptance ||
+        chatCtrl.isCreatingConversation ||
+        _isSubmitting;
 
     return NeumorphicSurface(
       surfaceType: NeumorphicSurfaceType.glassElevated,

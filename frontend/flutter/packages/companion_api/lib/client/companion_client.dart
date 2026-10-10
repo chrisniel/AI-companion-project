@@ -284,6 +284,7 @@ class CompanionClient {
     http.Client? activeClient;
     StreamSubscription<SseEvent>? parserSubscription;
     final bool isCustomClient = customClient != null;
+    bool isCancelled = false;
 
     void cleanup() {
       if (!isCustomClient) {
@@ -298,6 +299,10 @@ class CompanionClient {
             path: '${baseUri.path}/api/v1/conversations/$conversationId/messages',
           );
           final headers = await _buildHeaders(requiresAuth: true);
+          if (isCancelled) {
+            cleanup();
+            return;
+          }
           headers['Accept'] = 'text/event-stream';
           headers['Cache-Control'] = 'no-cache';
 
@@ -305,8 +310,18 @@ class CompanionClient {
           request.headers.addAll(headers);
           request.body = jsonEncode(payload.toJson());
 
+          if (isCancelled) {
+            cleanup();
+            return;
+          }
+
           activeClient = customClient ?? http.Client();
           final streamedResponse = await activeClient!.send(request);
+
+          if (isCancelled) {
+            cleanup();
+            return;
+          }
 
           if (streamedResponse.statusCode != 200) {
             try {
@@ -326,18 +341,27 @@ class CompanionClient {
                 if (errorBody.isNotEmpty) message = errorBody;
               }
 
-              outputController.addError(
-                CompanionApiException(
-                  statusCode: streamedResponse.statusCode,
-                  code: code,
-                  message: message,
-                  details: details,
-                ),
-              );
+              if (!isCancelled && !outputController.isClosed) {
+                outputController.addError(
+                  CompanionApiException(
+                    statusCode: streamedResponse.statusCode,
+                    code: code,
+                    message: message,
+                    details: details,
+                  ),
+                );
+              }
             } finally {
               cleanup();
-              await outputController.close();
+              if (!outputController.isClosed) {
+                await outputController.close();
+              }
             }
+            return;
+          }
+
+          if (isCancelled) {
+            cleanup();
             return;
           }
 
@@ -346,13 +370,13 @@ class CompanionClient {
           final eventStream = _sseParser.parseByteStream(streamedResponse.stream);
           parserSubscription = eventStream.listen(
             (event) {
-              if (!outputController.isClosed) {
+              if (!isCancelled && !outputController.isClosed) {
                 outputController.add(event);
               }
             },
             onError: (Object err, StackTrace st) {
               cleanup();
-              if (!outputController.isClosed) {
+              if (!isCancelled && !outputController.isClosed) {
                 outputController.addError(err, st);
                 outputController.close();
               }
@@ -367,13 +391,14 @@ class CompanionClient {
           );
         } catch (err, st) {
           cleanup();
-          if (!outputController.isClosed) {
+          if (!isCancelled && !outputController.isClosed) {
             outputController.addError(err, st);
             await outputController.close();
           }
         }
       },
       onCancel: () async {
+        isCancelled = true;
         try {
           await parserSubscription?.cancel();
         } finally {

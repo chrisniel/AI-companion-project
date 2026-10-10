@@ -165,10 +165,15 @@ class MockCompanionClient extends CompanionClient {
   String? lastRenamedTitle;
   bool generateTitleCalled = false;
   bool autoAcceptStream = true;
+  Future<void> Function(String id, String title)? onRename;
+  Future<void> Function(String id)? onGenerateTitle;
 
   @override
   Future<ConversationOut> renameConversation(String conversationId, String title) async {
     lastRenamedTitle = title;
+    if (onRename != null) {
+      await onRename!(conversationId, title);
+    }
     return ConversationOut(
       id: conversationId,
       title: title,
@@ -187,6 +192,9 @@ class MockCompanionClient extends CompanionClient {
     String? fallbackTitle,
   }) async {
     generateTitleCalled = true;
+    if (onGenerateTitle != null) {
+      await onGenerateTitle!(conversationId);
+    }
     return ConversationOut(
       id: conversationId,
       title: 'Model-Generated Title',
@@ -663,6 +671,7 @@ void main() {
       final expectedDeterministic = deriveDeterministicTitle(prompt);
 
       await controller.sendMessage(prompt);
+      await Future<void>.delayed(const Duration(milliseconds: 10));
 
       expect(mockClient.lastRenamedTitle, expectedDeterministic);
       expect(mockClient.generateTitleCalled, isTrue);
@@ -1007,6 +1016,180 @@ void main() {
       streamCtrl.add(const SseDoneEvent());
       await streamCtrl.close();
       await tester.pumpAndSettle();
+
+      controller.dispose();
+    });
+
+    testWidgets('authenticated user with zero conversations sends first prompt: creates conversation and sends message without deadlock or duplicate threads', (tester) async {
+      final mockClient = MockCompanionClient();
+      mockClient.customConversations = []; // Zero conversations initially
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      expect(controller.conversations, isEmpty);
+      expect(controller.activeConversation, isNull);
+
+      final result = await controller.sendMessage('Hello from first turn');
+
+      expect(result, isTrue);
+      expect(mockClient.createConvCalled, isTrue);
+      expect(controller.conversations.length, 1);
+      expect(controller.activeConversation, isNotNull);
+      expect(controller.activeConversation!.id, 'mock-conv-1');
+      expect(mockClient.sendMessageCalled, isTrue);
+      expect(controller.errorMessage, isNull);
+      expect(controller.isGenerating, isFalse);
+
+      controller.dispose();
+    });
+
+    test('title refinement strictly awaits delayed deterministic PATCH before requesting model title', () async {
+      final mockClient = MockCompanionClient();
+      mockClient.customConversations = [
+        ConversationOut(
+          id: 'mock-conv-1',
+          title: 'New Conversation',
+          characterId: 'default',
+          ownerId: 'mock-owner',
+          createdAt: DateTime.now().toUtc().toIso8601String(),
+          updatedAt: DateTime.now().toUtc().toIso8601String(),
+          messageCount: 0,
+        ),
+      ];
+      mockClient.customMessages = [];
+
+      final executionLog = <String>[];
+      final renameCompleter = Completer<void>();
+
+      mockClient.onRename = (id, title) async {
+        executionLog.add('rename:start');
+        await renameCompleter.future;
+        executionLog.add('rename:end');
+      };
+
+      mockClient.onGenerateTitle = (id) async {
+        executionLog.add('generateTitle');
+      };
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      final sendFuture = controller.sendMessage('What is the architecture of this system?');
+
+      // Allow streaming tokens to complete
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+
+      // At this point, rename is still in progress, so generateTitle MUST NOT have fired yet
+      expect(executionLog, contains('rename:start'));
+      expect(executionLog, isNot(contains('generateTitle')));
+
+      // Now complete the rename PATCH
+      renameCompleter.complete();
+      await sendFuture;
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+
+      expect(executionLog, ['rename:start', 'rename:end', 'generateTitle']);
+      expect(controller.activeConversation?.title, 'Model-Generated Title');
+
+      controller.dispose();
+    });
+
+    test('delayed deterministic PATCH does not overwrite manual user rename', () async {
+      final mockClient = MockCompanionClient();
+      mockClient.customConversations = [
+        ConversationOut(
+          id: 'mock-conv-1',
+          title: 'New Conversation',
+          characterId: 'default',
+          ownerId: 'mock-owner',
+          createdAt: DateTime.now().toUtc().toIso8601String(),
+          updatedAt: DateTime.now().toUtc().toIso8601String(),
+          messageCount: 0,
+        ),
+      ];
+      mockClient.customMessages = [];
+
+      final renameCompleter = Completer<void>();
+      int renameCallCount = 0;
+
+      mockClient.onRename = (id, title) async {
+        renameCallCount++;
+        if (renameCallCount == 1) {
+          // First rename is the deterministic title PATCH
+          await renameCompleter.future;
+        }
+      };
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      final sendFuture = controller.sendMessage('Some query');
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+
+      // User manually renames the conversation while deterministic PATCH is pending
+      await controller.renameConversation('mock-conv-1', 'User Hand-Crafted Title');
+
+      // Now complete the delayed deterministic PATCH
+      renameCompleter.complete();
+      await sendFuture;
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+
+      expect(controller.activeConversation?.title, 'User Hand-Crafted Title');
+      expect(controller.conversations.first.title, 'User Hand-Crafted Title');
+
+      controller.dispose();
+    });
+
+    testWidgets('cancelling generation while awaiting acceptance leaves draft in composer and prevents late events from committing turns', (tester) async {
+      final mockClient = MockCompanionClient();
+      mockClient.autoAcceptStream = false;
+      final streamCtrl = StreamController<SseEvent>();
+      mockClient.customEventStream = streamCtrl.stream;
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), 'Draft before cancel');
+      await tester.pump();
+
+      await tester.tap(find.byIcon(Icons.send_rounded));
+      await tester.pump();
+
+      expect(controller.isAwaitingAcceptance, isTrue);
+
+      // User presses Stop (or Esc) while awaiting acceptance
+      await tester.tap(find.byIcon(Icons.stop_rounded));
+      await tester.pumpAndSettle();
+
+      // Late tokens arrive from server after cancellation
+      streamCtrl.add(const SseTokenEvent('Late token arrived'));
+      streamCtrl.add(const SseDoneEvent());
+      await streamCtrl.close();
+      await tester.pumpAndSettle();
+
+      expect(controller.isAwaitingAcceptance, isFalse);
+      expect(controller.isGenerating, isFalse);
+      expect(controller.canSend, isTrue);
+      // Draft must be preserved
+      expect(find.text('Draft before cancel'), findsOneWidget);
+      // Turns must not be committed to UI
+      expect(controller.messages.where((m) => m.content == 'Draft before cancel'), isEmpty);
+      expect(controller.messages.where((m) => m.content.contains('Late token')), isEmpty);
 
       controller.dispose();
     });

@@ -405,6 +405,39 @@ void main() {
       expect(acceptedCalled, isFalse);
     });
 
+    test('cancellation before HTTP response arrives prevents onAccepted from firing', () async {
+      final responseCompleter = Completer<http.StreamedResponse>();
+      final mockStreamClient = MockClient.streaming((request, bodyStream) async {
+        return await responseCompleter.future;
+      });
+
+      bool acceptedCalled = false;
+      final client = CompanionClient();
+      final stream = client.sendMessageStream(
+        'conv-1',
+        const MessageSend(userText: 'Hello'),
+        customClient: mockStreamClient,
+        onAccepted: () {
+          acceptedCalled = true;
+        },
+      );
+
+      final subscription = stream.listen((_) {});
+      // Cancel the stream subscription while HTTP send is pending
+      await subscription.cancel();
+
+      // Now complete the response late with 200 OK
+      final sseLines = [
+        'data: {"type": "token", "content": "Hi"}\n\n',
+        'data: {"type": "done", "finish_reason": "stop"}\n\n',
+      ];
+      final bodyBytes = utf8.encode(sseLines.join());
+      responseCompleter.complete(http.StreamedResponse(Stream.fromIterable([bodyBytes]), 200));
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(acceptedCalled, isFalse);
+    });
+
     test('validateBaseUrl parses valid URL and rejects invalid scheme', () {
       final valid = CompanionClient.validateBaseUrl('http://localhost:8000/');
       expect(valid.scheme, 'http');

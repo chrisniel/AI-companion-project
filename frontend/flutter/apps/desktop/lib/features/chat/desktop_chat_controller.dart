@@ -65,6 +65,7 @@ class DesktopChatController extends ChangeNotifier {
   bool _isCreatingConversation = false;
   bool _isAwaitingAcceptance = false;
   final Set<String> _userRenamedConversationIds = <String>{};
+  final Map<String, Future<void>> _pendingRenameFutures = <String, Future<void>>{};
 
   DesktopChatController({
     required CompanionClient client,
@@ -480,7 +481,11 @@ class DesktopChatController extends ChangeNotifier {
     void Function()? onAccepted,
   }) async {
     final trimmed = text.trim();
-    if (trimmed.isEmpty || isGenerating || _isAwaitingAcceptance || _isDisposed) {
+    if (trimmed.isEmpty ||
+        isGenerating ||
+        _isAwaitingAcceptance ||
+        _isDisposed ||
+        _isCreatingConversation) {
       return false;
     }
     if (!isConnected) {
@@ -489,28 +494,29 @@ class DesktopChatController extends ChangeNotifier {
       throw StateError('Cannot send message: Runtime is not connected.');
     }
 
-    _isAwaitingAcceptance = true;
-    _errorMessage = null;
-    notifyListeners();
-
-    try {
-      if (_activeConversation == null) {
+    // If no active conversation exists, create and select one BEFORE entering
+    // the turn-awaiting phase to prevent self-deadlock with selectConversation's
+    // isGenerating guard.
+    if (_activeConversation == null) {
+      try {
         await createNewConversation();
+      } catch (e) {
+        _errorMessage = 'Failed to prepare conversation: $e';
+        if (!_isDisposed) notifyListeners();
+        return false;
       }
-    } catch (e) {
-      _isAwaitingAcceptance = false;
-      _errorMessage = 'Failed to prepare conversation: $e';
-      if (!_isDisposed) notifyListeners();
-      return false;
     }
 
     final activeConv = _activeConversation;
     if (activeConv == null) {
-      _isAwaitingAcceptance = false;
       _errorMessage = 'No active conversation available.';
       if (!_isDisposed) notifyListeners();
       return false;
     }
+
+    _isAwaitingAcceptance = true;
+    _errorMessage = null;
+    notifyListeners();
 
     // Phase 8C First-turn automatic conversation naming with deterministic fallback
     final isFirstTurn = _messages.isEmpty && (activeConv.messageCount == 0);
@@ -581,7 +587,8 @@ class DesktopChatController extends ChangeNotifier {
         _conversations = _conversations
             .map((c) => c.id == boundConvId ? _activeConversation! : c)
             .toList();
-        unawaited(_persistDeterministicTitle(boundConvId, deterministicTitle));
+        _pendingRenameFutures[boundConvId] =
+            _persistDeterministicTitle(boundConvId, deterministicTitle);
       }
 
       onAccepted?.call();
@@ -727,7 +734,15 @@ class DesktopChatController extends ChangeNotifier {
   Future<void> _persistDeterministicTitle(String conversationId, String title) async {
     if (_userRenamedConversationIds.contains(conversationId)) return;
     try {
-      await _client.renameConversation(conversationId, title);
+      final updated = await _client.renameConversation(conversationId, title);
+      if (!_userRenamedConversationIds.contains(conversationId)) {
+        _conversations =
+            _conversations.map((c) => c.id == conversationId ? updated : c).toList();
+        if (_activeConversation?.id == conversationId) {
+          _activeConversation = updated;
+        }
+        if (!_isDisposed) notifyListeners();
+      }
     } catch (_) {
       // Graceful fallback: local UI already has the deterministic title
     }
@@ -736,6 +751,18 @@ class DesktopChatController extends ChangeNotifier {
   Future<void> _maybeGenerateModelTitle(String conversationId, String? fallbackTitle) async {
     if (fallbackTitle == null || _userRenamedConversationIds.contains(conversationId)) return;
     if (!isConnected || _modelStatus?.modelLoaded != true) return;
+
+    // Await the deterministic title persistence PATCH if still in flight
+    final pendingPatch = _pendingRenameFutures[conversationId];
+    if (pendingPatch != null) {
+      try {
+        await pendingPatch;
+      } catch (_) {}
+    }
+
+    if (_isDisposed || _userRenamedConversationIds.contains(conversationId)) return;
+    if (!isConnected || _modelStatus?.modelLoaded != true) return;
+
     try {
       final res = await _client.generateConversationTitle(
         conversationId,
@@ -753,6 +780,8 @@ class DesktopChatController extends ChangeNotifier {
       }
     } catch (_) {
       // Gracefully keep fallbackTitle
+    } finally {
+      _pendingRenameFutures.remove(conversationId);
     }
   }
 
@@ -764,9 +793,9 @@ class DesktopChatController extends ChangeNotifier {
       notifyListeners();
       throw StateError('Runtime is not connected.');
     }
+    _userRenamedConversationIds.add(conversationId);
     try {
       final updated = await _client.renameConversation(conversationId, newTitle);
-      _userRenamedConversationIds.add(conversationId);
       _conversations =
           _conversations.map((c) => c.id == conversationId ? updated : c).toList();
       if (_activeConversation?.id == conversationId) {
@@ -785,6 +814,7 @@ class DesktopChatController extends ChangeNotifier {
     if (!isGenerating) return;
 
     final turnToken = ++_turnSequenceToken;
+    final wasAwaitingAcceptance = _isAwaitingAcceptance;
     _isAwaitingAcceptance = false;
     _generationState = ChatGenerationState.cancelled;
     _streamingText = '';
@@ -793,7 +823,7 @@ class DesktopChatController extends ChangeNotifier {
     _currentStreamSubscription = null;
 
     if (_turnCompleter != null && !_turnCompleter!.isCompleted) {
-      _turnCompleter!.complete(true);
+      _turnCompleter!.complete(!wasAwaitingAcceptance);
     }
 
     unawaited(sub?.cancel());
