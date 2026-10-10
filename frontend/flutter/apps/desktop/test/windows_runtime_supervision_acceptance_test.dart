@@ -166,21 +166,21 @@ void main() {
                 final startTimeStr = (data['StartTime'] ?? '').toString();
 
                 // Fail-closed check: command line provenance MUST prove our uvicorn companion
+                final hasExactPort = record.port == 0 ||
+                    WindowsRuntimeProcessSupervisor.matchesExactPort(cmdLine, record.port);
                 final isOurUvicorn = cmdLine.contains('uvicorn') &&
                     cmdLine.contains('app.main:app') &&
-                    (record.port == 0 || cmdLine.contains('${record.port}'));
+                    hasExactPort;
                 if (!isOurUvicorn) continue;
 
-                // Fail-closed check: creation time MUST match recorded spawnTime within tolerance
-                if (startTimeStr.isNotEmpty) {
-                  final procStartTime = DateTime.tryParse(startTimeStr);
-                  if (procStartTime != null) {
-                    final diff = procStartTime.difference(record.spawnTime).abs();
-                    if (diff.inSeconds > 10) {
-                      // PID reuse detected! Fail closed.
-                      continue;
-                    }
-                  }
+                // Fail-closed check: valid creation time evidence is REQUIRED and MUST match recorded spawnTime
+                if (startTimeStr.isEmpty) continue;
+                final procStartTime = DateTime.tryParse(startTimeStr);
+                if (procStartTime == null) continue;
+                final diff = procStartTime.difference(record.spawnTime).abs();
+                if (diff.inSeconds > 10) {
+                  // PID reuse detected or creation time mismatch! Fail closed.
+                  continue;
                 }
 
                 // 3. Terminate strictly verified test process using retained Process handle if available

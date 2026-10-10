@@ -655,26 +655,58 @@ class DesktopRuntimeCoordinator {
             generation: generation,
           );
         }
-      } else {
-        // Crash window recovery: if descriptor was not recorded (e.g. earlier launcher crashed
-        // after spawn before recording descriptor), check for an unrecorded active runtime process.
-        final unrecordedPid = await _supervisor.findActiveRuntimeProcess(
-          port: targetPort,
-          expectedExecutable: targetExecutablePath,
-        );
-        if (generation != _activeGeneration || _isDisposed) return _currentState;
-        if (unrecordedPid != null && unrecordedPid > 0) {
+        // desc.pid is dead in process table. We must inspect the process table for an unrecorded
+        // genuine runtime process before attempting to spawn, handling crash/interruption recovery.
+      }
+
+      // 5. Evaluate OS process candidates on targetPort under exclusive lock
+      final discovery = await _supervisor.discoverRuntimeProcesses(
+        port: targetPort,
+        expectedExecutable: targetExecutablePath,
+      );
+      if (generation != _activeGeneration || _isDisposed) return _currentState;
+
+      switch (discovery.status) {
+        case ProcessDiscoveryStatus.verified:
+          final verified = discovery.verifiedProcess!;
           final recoveredDesc = RuntimeLockfileData(
             schemaVersion: 1,
             instanceId: UuidUtils.generateV4(),
-            pid: unrecordedPid,
+            pid: verified.pid,
             port: targetPort,
-            startedAt: DateTime.now().toUtc(),
-            executablePath: targetExecutablePath,
+            startedAt: verified.creationTime,
+            executablePath: verified.executablePath,
           );
           await _supervisor.writeDescriptorThroughHandle(lockHandle, recoveredDesc);
           _activeRuntimeInfo = recoveredDesc;
-        }
+          break;
+
+        case ProcessDiscoveryStatus.multipleCandidates:
+        case ProcessDiscoveryStatus.unverifiedCandidate:
+          return _updateState(
+            RuntimeProcessState(
+              supervisionMode: SupervisionMode.localLoopback,
+              status: RuntimeStatus.alienPortConflict,
+              port: targetPort,
+              diagnosticMessage: 'Port $targetPort has ambiguous or unverified candidate process: ${discovery.diagnostic}',
+            ),
+            generation: generation,
+          );
+
+        case ProcessDiscoveryStatus.inspectionUnavailable:
+          return _updateState(
+            RuntimeProcessState(
+              supervisionMode: SupervisionMode.localLoopback,
+              status: RuntimeStatus.startupTimeout,
+              port: targetPort,
+              diagnosticMessage: 'OS process inspection unavailable on port $targetPort: ${discovery.diagnostic}',
+            ),
+            generation: generation,
+          );
+
+        case ProcessDiscoveryStatus.noProcess:
+          // Clean slate: proceed to safe spawn below!
+          break;
       }
 
       // If active runtime was not recovered, proceed to safe spawn

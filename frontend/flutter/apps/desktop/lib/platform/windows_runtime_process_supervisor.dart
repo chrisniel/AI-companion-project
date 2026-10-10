@@ -221,20 +221,60 @@ class WindowsRuntimeProcessSupervisor {
     return process.pid;
   }
 
-  /// Finds an active runtime process running on [port] and matching [expectedExecutable].
+  /// Evaluates whether [commandLine] contains an exact argument matching `--port <port>`.
   ///
-  /// Used to recover from crashes that occur between child spawn and descriptor recording.
-  /// Uses a non-destructive Win32_Process query to inspect process command lines.
-  /// Returns the PID if found, or null otherwise. Never modifies process state.
-  Future<int?> findActiveRuntimeProcess({
+  /// Prevents false matches where [port] appears as a substring in another port number
+  /// (e.g. searching for 8000 matching 80000 or 18000), a timeout, or a file path.
+  static bool matchesExactPort(String commandLine, int port) {
+    if (port <= 0 || commandLine.isEmpty) return false;
+    final regex = RegExp(
+      r'(?:^|\s)--port(?:\s+|=)["\x27]?(\d+)["\x27]?(?:\s|"|\x27|$)',
+      caseSensitive: false,
+    );
+    final matches = regex.allMatches(commandLine);
+    for (final match in matches) {
+      final matchedStr = match.group(1);
+      if (matchedStr != null && int.tryParse(matchedStr) == port) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Verifies whether [actualPath] matches [expectedPath] on Windows filesystem.
+  static bool isExecutablePathMatch(String actualPath, String expectedPath) {
+    if (actualPath.isEmpty || expectedPath.isEmpty) return false;
+    final normActual = File(actualPath).absolute.path.replaceAll('/', '\\').toLowerCase();
+    final normExpected = File(expectedPath).absolute.path.replaceAll('/', '\\').toLowerCase();
+    if (normActual == normExpected) return true;
+
+    final expectedBase = expectedPath.split(RegExp(r'[\\/]')).last.toLowerCase();
+    final actualBase = actualPath.split(RegExp(r'[\\/]')).last.toLowerCase();
+    if (actualBase != expectedBase) return false;
+
+    final expectedRel = expectedPath.replaceAll('/', '\\').toLowerCase();
+    return normActual.endsWith(expectedRel);
+  }
+
+  /// Discovers and evaluates candidate runtime processes configured for [port].
+  ///
+  /// Uses a non-destructive Win32_Process query to inspect process table entries.
+  /// Fails closed on ambiguity (multiple candidates or unverified provenance).
+  Future<ProcessDiscoveryResult> discoverRuntimeProcesses({
     required int port,
     required String expectedExecutable,
   }) async {
-    if (port <= 0) return null;
+    if (port <= 0) {
+      return const ProcessDiscoveryResult(
+        status: ProcessDiscoveryStatus.noProcess,
+      );
+    }
+
     try {
       final exeBase = expectedExecutable.split(RegExp(r'[\\/]')).last.toLowerCase();
       final exeNamePrefix = exeBase.replaceAll('.exe', '').replaceAll("'", "''");
       final filter = "Name LIKE '$exeNamePrefix%'";
+
       final result = await _launcher.run(
         'powershell',
         [
@@ -242,18 +282,178 @@ class WindowsRuntimeProcessSupervisor {
           '-NonInteractive',
           '-Command',
           'Get-CimInstance Win32_Process -Filter "$filter" | '
-              'Where-Object { \$_.ProcessId -ne \$PID -and \$_.CommandLine -like "*uvicorn*" -and \$_.CommandLine -like "*$port*" } | '
-              'Select-Object -ExpandProperty ProcessId',
+              'Select-Object -Property ProcessId, ExecutablePath, CommandLine, @{Name=\x27CreationDate\x27;Expression={\$_.CreationDate.ToUniversalTime().ToString(\x27o\x27)}} | '
+              'ConvertTo-Json',
         ],
         runInShell: false,
       );
-      if (result.exitCode != 0) return null;
-      final output = result.stdout.toString().trim();
-      if (output.isEmpty) return null;
-      final firstLine = output.split(RegExp(r'\r?\n')).first.trim();
-      return int.tryParse(firstLine);
-    } catch (_) {
-      return null;
+
+      if (result.exitCode != 0) {
+        return ProcessDiscoveryResult(
+          status: ProcessDiscoveryStatus.inspectionUnavailable,
+          diagnostic: 'Process inspection query exited with code ${result.exitCode}: ${result.stderr}',
+        );
+      }
+
+      final jsonStr = result.stdout.toString().trim();
+      final List<dynamic> rawList;
+      if (jsonStr.isEmpty) {
+        rawList = const [];
+      } else if (jsonStr.startsWith('[')) {
+        rawList = jsonDecode(jsonStr) as List<dynamic>;
+      } else if (jsonStr.startsWith('{')) {
+        rawList = [jsonDecode(jsonStr)];
+      } else {
+        rawList = const [];
+      }
+
+      final candidates = <DiscoveredProcessIdentity>[];
+      for (final raw in rawList) {
+        if (raw is! Map) continue;
+        final candPid = int.tryParse('${raw['ProcessId']}') ?? 0;
+        if (candPid <= 0 || candPid == pid) continue;
+
+        final cmdLine = (raw['CommandLine'] ?? '').toString();
+        if (!matchesExactPort(cmdLine, port)) {
+          continue;
+        }
+
+        final execPath = (raw['ExecutablePath'] ?? '').toString();
+        final creationDateStr = (raw['CreationDate'] ?? '').toString();
+        final creationTime = DateTime.tryParse(creationDateStr);
+
+        candidates.add(
+          DiscoveredProcessIdentity(
+            pid: candPid,
+            executablePath: execPath,
+            commandLine: cmdLine,
+            creationTime: creationTime ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+          ),
+        );
+      }
+
+      if (candidates.isEmpty) {
+        return const ProcessDiscoveryResult(
+          status: ProcessDiscoveryStatus.noProcess,
+        );
+      }
+
+      if (candidates.length > 1) {
+        return ProcessDiscoveryResult(
+          status: ProcessDiscoveryStatus.multipleCandidates,
+          candidates: candidates,
+          diagnostic: 'Found ${candidates.length} candidate processes configured for port $port',
+        );
+      }
+
+      final candidate = candidates.first;
+
+      // 1. Creation time must be genuinely present and valid
+      if (candidate.creationTime.millisecondsSinceEpoch == 0) {
+        return ProcessDiscoveryResult(
+          status: ProcessDiscoveryStatus.unverifiedCandidate,
+          candidates: candidates,
+          diagnostic: 'Candidate PID ${candidate.pid} is missing valid OS creation-time evidence',
+        );
+      }
+
+      // 2. Command line must contain companion application module
+      if (!candidate.commandLine.contains('uvicorn') || !candidate.commandLine.contains('app.main:app')) {
+        return ProcessDiscoveryResult(
+          status: ProcessDiscoveryStatus.unverifiedCandidate,
+          candidates: candidates,
+          diagnostic: 'Candidate PID ${candidate.pid} is running foreign or non-companion application module',
+        );
+      }
+
+      // 3. Executable path must match expected executable provenance
+      if (!isExecutablePathMatch(candidate.executablePath, expectedExecutable)) {
+        return ProcessDiscoveryResult(
+          status: ProcessDiscoveryStatus.unverifiedCandidate,
+          candidates: candidates,
+          diagnostic: 'Candidate PID ${candidate.pid} executable (${candidate.executablePath}) does not match expected executable ($expectedExecutable)',
+        );
+      }
+
+      return ProcessDiscoveryResult(
+        status: ProcessDiscoveryStatus.verified,
+        verifiedProcess: candidate,
+        candidates: candidates,
+      );
+    } catch (e) {
+      return ProcessDiscoveryResult(
+        status: ProcessDiscoveryStatus.inspectionUnavailable,
+        diagnostic: 'Exception during process inspection: $e',
+      );
     }
   }
+
+  /// Finds an active verified runtime process running on [port] and matching [expectedExecutable].
+  ///
+  /// Used to recover from crashes that occur between child spawn and descriptor recording.
+  /// Uses a non-destructive Win32_Process query to inspect process command lines.
+  /// Returns the verified PID if found, or null otherwise. Never modifies process state.
+  Future<int?> findActiveRuntimeProcess({
+    required int port,
+    required String expectedExecutable,
+  }) async {
+    final result = await discoverRuntimeProcesses(
+      port: port,
+      expectedExecutable: expectedExecutable,
+    );
+    return result.status == ProcessDiscoveryStatus.verified ? result.verifiedProcess?.pid : null;
+  }
+}
+
+/// Status of candidate process discovery on a target port.
+enum ProcessDiscoveryStatus {
+  /// Exactly one process matched all provenance criteria:
+  /// - Exact executable path match
+  /// - Command line contains app.main:app and uvicorn
+  /// - Exact port match (--port <port>)
+  /// - Genuine OS creation time obtained
+  verified,
+
+  /// No process was found configured for or running on the target port.
+  noProcess,
+
+  /// One or more candidate processes exist for the port, but fail provenance verification
+  /// (foreign executable, foreign application module, or missing parameters).
+  unverifiedCandidate,
+
+  /// Multiple candidate processes were found matching the port (ambiguous ownership).
+  multipleCandidates,
+
+  /// OS process table inspection was unavailable, timed out, or threw an error.
+  inspectionUnavailable,
+}
+
+/// Verified or candidate process discovered in the OS process table.
+class DiscoveredProcessIdentity {
+  final int pid;
+  final String executablePath;
+  final String commandLine;
+  final DateTime creationTime;
+
+  const DiscoveredProcessIdentity({
+    required this.pid,
+    required this.executablePath,
+    required this.commandLine,
+    required this.creationTime,
+  });
+}
+
+/// Result of evaluating candidate processes for a target port.
+class ProcessDiscoveryResult {
+  final ProcessDiscoveryStatus status;
+  final DiscoveredProcessIdentity? verifiedProcess;
+  final List<DiscoveredProcessIdentity> candidates;
+  final String? diagnostic;
+
+  const ProcessDiscoveryResult({
+    required this.status,
+    this.verifiedProcess,
+    this.candidates = const [],
+    this.diagnostic,
+  });
 }
