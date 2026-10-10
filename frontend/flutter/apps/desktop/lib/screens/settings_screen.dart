@@ -116,12 +116,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildRuntimeConnectionCard(context, ext, isDark),
           const SizedBox(height: CompanionSpacing.lg),
 
+          // 2B. Runtime Process Supervision Section
+          _buildRuntimeSupervisionCard(context, ext, isDark),
+          const SizedBox(height: CompanionSpacing.lg),
+
           // 3. Storage Diagnostics Section
           _buildStorageDiagnosticsCard(context, ext, isDark),
           const SizedBox(height: CompanionSpacing.lg),
 
           // 4. Window & Tray Lifecycle Section
           _buildLifecycleCard(context, ext, isDark),
+
         ],
       ),
     );
@@ -537,11 +542,113 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _buildRuntimeSupervisionCard(
+    BuildContext context,
+    CompanionThemeExtension? ext,
+    bool isDark,
+  ) {
+    final runtime = widget.controller.runtimeProcessState;
+    final lockfile = widget.controller.runtimeLockfileData;
+
+    final isLoopback = runtime?.isLocalSupervised ?? true;
+    final modeLabel = isLoopback ? 'Local Loopback (Supervised)' : 'Remote Host (Unmanaged)';
+    final statusLabel = runtime?.status.name ?? 'Dormant / Standalone';
+    final pidLabel = runtime?.pid != null
+        ? '${runtime!.pid}'
+        : (lockfile?.pid != null ? '${lockfile!.pid}' : 'None');
+    final portLabel = '${runtime?.port ?? 8000}';
+
+    final localAppData = Platform.environment['LOCALAPPDATA'] ?? r'C:\Users\<user>\AppData\Local';
+    final lockPath = '$localAppData\\AI Companion\\runtime.lock';
+    final logPath = '$localAppData\\AI Companion\\Logs\\runtime.log';
+
+    return SoftGlassPanel(
+      padding: const EdgeInsets.all(CompanionSpacing.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.developer_board_rounded, size: 20, color: ext?.accent),
+              const SizedBox(width: CompanionSpacing.sm),
+              Text(
+                'Runtime Process Supervision',
+                style: CompanionTypography.titleMedium.copyWith(color: ext?.textPrimary),
+              ),
+            ],
+          ),
+          const SizedBox(height: CompanionSpacing.xs),
+          Text(
+            'Local process lifecycle, kernel file lock synchronization, and process provenance',
+            style: CompanionTypography.caption.copyWith(color: ext?.textSecondary),
+          ),
+          const SizedBox(height: CompanionSpacing.lg),
+          NeumorphicSurface(
+            surfaceType: NeumorphicSurfaceType.recessed,
+            borderRadius: CompanionRadius.borderMd,
+            padding: const EdgeInsets.all(CompanionSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildDiagnosticRow('Supervision Mode', modeLabel, ext),
+                const Divider(height: CompanionSpacing.md),
+                _buildDiagnosticRow('Supervision Status', statusLabel, ext),
+                const Divider(height: CompanionSpacing.md),
+                _buildDiagnosticRow('Process ID (PID)', pidLabel, ext),
+                const Divider(height: CompanionSpacing.md),
+                _buildDiagnosticRow('Bound Port', portLabel, ext),
+                const Divider(height: CompanionSpacing.md),
+                _buildDiagnosticRow('Kernel Lockfile', lockPath, ext),
+                const Divider(height: CompanionSpacing.md),
+                _buildDiagnosticRow('Detached Logfile', logPath, ext),
+              ],
+            ),
+          ),
+          const SizedBox(height: CompanionSpacing.sm),
+          Text(
+            'Lifecycle Invariant: Closing or exiting the Flutter UI client leaves the detached background runtime process running.',
+            style: CompanionTypography.caption.copyWith(
+              color: ext?.textMuted,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDiagnosticRow(String label, String value, CompanionThemeExtension? ext) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: CompanionTypography.bodySmall.copyWith(
+            color: ext?.textSecondary,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: CompanionTypography.bodySmall.copyWith(
+              color: ext?.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildRuntimeConnectionCard(
     BuildContext context,
     CompanionThemeExtension? ext,
     bool isDark,
   ) {
+
     return SoftGlassPanel(
       padding: const EdgeInsets.all(CompanionSpacing.xl),
       child: Column(

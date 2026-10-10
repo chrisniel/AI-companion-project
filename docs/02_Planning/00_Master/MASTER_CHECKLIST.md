@@ -59,9 +59,10 @@
 
 ## 2. Release Blocker Audit
 
-- [x] **M0 Docs & Architecture Reset Pass:** Complete canonicalization, verify fresh-agent startup, and obtain Chris approval.
 - [x] **M1 Flutter Scaffolding:** Flutter Desktop app foundation operational, connecting to Local AI Runtime, delivered via PR #23 (commit `7c1d1a2ddb5c57ddaae9bbacbcab2e25f9938fe1`) with all 193 workspace tests, 0 analyzer issues, Win32 debug build, and hosted PR CI passed.
-- [ ] **M2 Host Autostart & Notifications:** Proved working without open browser tab.
+- [ ] **M2 Host Launch & Supervision (PC-HOST-001):** Proved working with single-instance kernel locking, detached rotating logging, process provenance, and crash survival.
+- [ ] **M2 Host Lifecycle & Autostart (PC-HOST-005 / PC-HOST-002):** Proved working with secure graceful full exit, model process draining, and login autostart for runtime and Flutter.
+- [ ] **M2 Native Desktop Notifications (PC-HOST-003):** Proved working without open browser tab.
 - [ ] **M2 Multi-Profile Migration:** Database schema updated with full privacy isolation.
 - [ ] **M2 D6 Model Import:** Proved working with GGUF + mmproj paired bundle.
 - [ ] **M3 Character Studio & 8 Traits:** Proved modulating prompt without functional corruption.

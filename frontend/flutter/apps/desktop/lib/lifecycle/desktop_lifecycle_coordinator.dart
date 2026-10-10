@@ -1,3 +1,4 @@
+import 'package:companion_core/companion_core.dart';
 import 'package:flutter/material.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
@@ -91,32 +92,95 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
     _isInitialized = true;
   }
 
-  /// Builds the tray context menu with M1-supported items and disabled future actions.
-  Menu buildTrayContextMenu() {
-    return Menu(
-      items: [
-        MenuItem(
-          key: 'open',
-          label: 'Open AI Companion',
-        ),
-        MenuItem(
-          key: 'status',
-          label: 'Runtime Status: Standalone',
-          disabled: true,
-        ),
-        MenuItem(
-          key: 'stop',
-          label: 'Stop Runtime (Planned M2)',
-          disabled: true,
-        ),
-        MenuItem.separator(),
-        MenuItem(
-          key: 'exit',
-          label: 'Exit Companion',
-        ),
-      ],
-    );
+  RuntimeProcessState? _runtimeProcessState;
+  RuntimeProcessState? get runtimeProcessState => _runtimeProcessState;
+
+  /// Updates the runtime process state and dynamically refreshes the system tray menu.
+  Future<void> updateRuntimeStatus(RuntimeProcessState state) async {
+    _runtimeProcessState = state;
+    if (_isTrayAvailable && !_isDisposed) {
+      try {
+        await trayAdapter.setContextMenu(buildTrayContextMenu(state));
+      } catch (e) {
+        debugPrint('DesktopLifecycleCoordinator: Error updating tray context menu: $e');
+      }
+    }
   }
+
+  /// Builds the tray context menu items reflecting runtime supervision state.
+  List<MenuItem> buildTrayMenuItems([RuntimeProcessState? state]) {
+    final runtime = state ?? _runtimeProcessState;
+    String statusLabel;
+    if (runtime == null) {
+      statusLabel = 'Runtime: Standalone';
+    } else {
+      switch (runtime.status) {
+        case RuntimeStatus.readyAndAuthenticated:
+          if (runtime.isLocalSupervised) {
+            statusLabel = 'Runtime: Active (PID ${runtime.pid ?? 'Local'})';
+          } else {
+            statusLabel = 'Runtime: Remote Host (Active)';
+          }
+          break;
+        case RuntimeStatus.reachableUnauthenticated:
+          statusLabel = 'Runtime: Pairing Required';
+          break;
+        case RuntimeStatus.alienPortConflict:
+          statusLabel = 'Runtime: Alien Port Conflict';
+          break;
+        case RuntimeStatus.processUnresponsive:
+          statusLabel = 'Runtime: Unresponsive (PID ${runtime.pid})';
+          break;
+        case RuntimeStatus.unreachable:
+          statusLabel = 'Runtime: Unreachable';
+          break;
+        case RuntimeStatus.startupTimeout:
+          statusLabel = 'Runtime: Startup Timeout';
+          break;
+        case RuntimeStatus.executableNotFound:
+          statusLabel = 'Runtime: Executable Missing';
+          break;
+        case RuntimeStatus.launching:
+          statusLabel = 'Runtime: Launching...';
+          break;
+        case RuntimeStatus.dormant:
+          statusLabel = 'Runtime: Dormant';
+          break;
+      }
+    }
+
+    return [
+      MenuItem(
+        key: 'open',
+        label: 'Open AI Companion',
+      ),
+      MenuItem(
+        key: 'status',
+        label: statusLabel,
+        disabled: true,
+      ),
+      MenuItem(
+        key: 'hide_to_tray',
+        label: 'Hide Window to Tray',
+      ),
+      MenuItem(
+        key: 'quit_ui_dev',
+        label: 'Close UI Only (Dev Test)',
+      ),
+      MenuItem.separator(),
+      MenuItem(
+        key: 'exit_full',
+        label: 'Exit Companion (Full Shutdown - Planned PC-HOST-005)',
+        disabled: true,
+      ),
+    ];
+  }
+
+  /// Builds the tray context menu with truthful supervision actions and disabled future actions.
+  Menu buildTrayContextMenu([RuntimeProcessState? state]) {
+    return Menu(items: buildTrayMenuItems(state));
+  }
+
 
   /// Restores the window from hidden/minimized state and requests focus.
   Future<void> restoreAndFocusWindow() async {
@@ -216,8 +280,11 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
     if (_isDisposed) return;
     if (menuItem.key == 'open') {
       restoreAndFocusWindow();
-    } else if (menuItem.key == 'exit') {
+    } else if (menuItem.key == 'hide_to_tray') {
+      hideToTray();
+    } else if (menuItem.key == 'quit_ui_dev' || menuItem.key == 'exit') {
       handleExitRequested();
     }
   }
+
 }

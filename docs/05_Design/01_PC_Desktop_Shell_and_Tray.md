@@ -1,7 +1,7 @@
 # PC Desktop Shell & System Tray Design
 
-> **Document Role:** UX/UI presentation and interaction design specification.  
-> **Status:** Active Baseline (PC V1).  
+> **Document Role:** UX/UI presentation and interaction design specification.<br>
+> **Status:** Active Baseline (PC V1).<br>
 > **Normative Architectural Authority:** [`docs/04_Architecture/04_Infrastructure/windows-host-and-notifications.md`](../04_Architecture/04_Infrastructure/windows-host-and-notifications.md), [`ADR-0017`](../04_Architecture/decisions/ADR-0017-flutter-production-windows-client.md).
 
 ---
@@ -45,15 +45,14 @@ The desktop shell utilizes a compact, collapsible left navigation rail:
 - **Disconnected / Offline:** Grayscale icon with warning indicator.
 
 ### 3.2 System Tray Context Menu (Right-Click)
-1. **Open AI Companion** *(Default double-click action)* — Restores and focuses the main window.
+1. **Open AI Companion** *(Default click / double-click action)* — Restores and focuses the main window.
 2. **Active Profile:** Shows current profile name with quick flyout to switch profiles.
 3. --- (Separator) ---
 4. **Mute Audio:** Immediate toggle to silence speech output and chime alerts.
 5. **Performance Mode:** Quick toggle (`Normal` / `Low-Impact` / `Auto`).
 6. --- (Separator) ---
-7. **Runtime Status:** Informational label (e.g., *"Runtime: Active (PID 14220)"*).
-8. **Stop Runtime:** Stops the background Python runtime service and model server.
-9. **Exit Companion:** Quits the Flutter desktop UI application while keeping the background runtime running, with an explicit confirmation dialog if the user also wants to stop the runtime.
+7. **Runtime Status:** Informational label (e.g., *"Runtime: Active (PID 14220)"* or *"Runtime: Remote Host"*).
+8. **Exit Companion (`PC-HOST-005` Target):** Triggers explicit confirmation dialog: *"Exit Companion will stop the AI Companion and all scheduled reminders and alarms on this PC. Continue?"*. Upon confirmation, gracefully stops the verified local runtime, its owned model processes, and Flutter. *(Note: Disabled / planned in M2-H1 until PC-HOST-005 is delivered; interim testing provides a developer-only "Quit UI Only" action clearly labeled as non-production).*
 
 ---
 

@@ -37,12 +37,16 @@ class DesktopSettingsController extends ChangeNotifier {
     DesktopNavDestination initialDestination = DesktopNavDestination.chat,
     bool initialScrollToDiagnostics = false,
     StorageDiagnosticReader? diagnosticReader,
+    RuntimeProcessState? initialRuntimeProcessState,
+    RuntimeLockfileData? initialRuntimeLockfileData,
   })  : _themeMode = initialThemeMode,
         _accentPreset = initialAccentPreset,
         _isRailCollapsed = initialRailCollapsed,
         _currentDestination = initialDestination,
         _scrollToDiagnostics = initialScrollToDiagnostics,
-        _diagnosticReader = diagnosticReader ?? WindowsStorageDiagnosticReader();
+        _diagnosticReader = diagnosticReader ?? WindowsStorageDiagnosticReader(),
+        _runtimeProcessState = initialRuntimeProcessState,
+        _runtimeLockfileData = initialRuntimeLockfileData;
 
   ThemeMode _themeMode;
   AccentPreset _accentPreset;
@@ -50,6 +54,8 @@ class DesktopSettingsController extends ChangeNotifier {
   DesktopNavDestination _currentDestination;
   bool _scrollToDiagnostics;
   final StorageDiagnosticReader _diagnosticReader;
+  RuntimeProcessState? _runtimeProcessState;
+  RuntimeLockfileData? _runtimeLockfileData;
 
   ThemeMode get themeMode => _themeMode;
   AccentPreset get accentPreset => _accentPreset;
@@ -57,6 +63,17 @@ class DesktopSettingsController extends ChangeNotifier {
   DesktopNavDestination get currentDestination => _currentDestination;
   bool get scrollToDiagnostics => _scrollToDiagnostics;
   StorageDiagnosticReader get diagnosticReader => _diagnosticReader;
+  RuntimeProcessState? get runtimeProcessState => _runtimeProcessState;
+  RuntimeLockfileData? get runtimeLockfileData => _runtimeLockfileData;
+
+  void updateRuntimeState(RuntimeProcessState state, [RuntimeLockfileData? lockfileData]) {
+    _runtimeProcessState = state;
+    if (lockfileData != null) {
+      _runtimeLockfileData = lockfileData;
+    }
+    notifyListeners();
+  }
+
 
   void setScrollToDiagnostics(bool scroll) {
     if (_scrollToDiagnostics != scroll) {

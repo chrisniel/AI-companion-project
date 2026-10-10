@@ -225,8 +225,10 @@ void main() {
       expect(items, isNotNull);
       expect(items!.any((item) => item.key == 'open' && item.label == 'Open AI Companion'), isTrue);
       expect(items.any((item) => item.key == 'status' && item.disabled), isTrue);
-      expect(items.any((item) => item.key == 'stop' && item.disabled), isTrue);
-      expect(items.any((item) => item.key == 'exit' && item.label == 'Exit Companion'), isTrue);
+      expect(items.any((item) => item.key == 'hide_to_tray'), isTrue);
+      expect(items.any((item) => item.key == 'quit_ui_dev'), isTrue);
+      expect(items.any((item) => item.key == 'exit_full' && item.disabled), isTrue);
+
     });
 
     test('intercepts window close and hides to tray without process destruction', () async {

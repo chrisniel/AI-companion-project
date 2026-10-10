@@ -454,9 +454,10 @@ Commit: `feat(desktop): implement desktop runtime coordinator with double-checke
 - Consumes: `DesktopRuntimeCoordinator`, `DesktopLifecycleCoordinator`, `DesktopSettingsController`.
 - Produces:
   - System Tray context menu:
-    - `key: 'status'`: displays dynamic label (`Runtime: Active (PID 1234)`, `Runtime: Remote`, `Runtime: Alien Conflict`, `Runtime: Unresponsive`).
-    - `key: 'stop'`: disabled with clear label `"Stop Runtime (Managed by Host)"` — explicitly conveying that host termination requires local OS session administration.
-    - `key: 'exit'`: remains *Exit Companion* (terminates UI only; leaves detached background runtime running: "Quit UI != Stop Runtime").
+    - `key: 'status'`: displays dynamic label (`Runtime: Active (PID 1234)`, `Runtime: Remote Host`, `Runtime: Alien Conflict`, `Runtime: Unresponsive`).
+    - `key: 'exit_full'`: disabled with clear label `"Exit Companion (Full Shutdown - Planned PC-HOST-005)"` — explicitly conveying that full runtime shutdown requires secure local lifecycle authority.
+    - `key: 'hide_to_tray'`: label `"Hide Window to Tray"` — hides visual shell to tray while runtime continues.
+    - `key: 'quit_ui_dev'`: label `"Close UI Only (Dev Test)"` — developer-only UI termination for testing unexpected UI exit and crash survival without killing the background runtime.
   - Settings screen:
     - Recessed diagnostic card for Runtime Supervision: displays supervision mode (Local Loopback vs Remote Host), connection state badge, PID, port, and lockfile path.
 
@@ -469,13 +470,19 @@ import 'package:companion_core/companion_core.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test('closing window to tray or clicking exit terminates UI only, leaving runtime process running', () async {
+  test('closing window to tray hides UI while leaving runtime process running', () async {
     final coordinator = DesktopLifecycleCoordinator(/* mock window & tray adapters */);
-    await coordinator.handleExitRequested();
+    await coordinator.handleCloseToTrayRequested();
+    // Verify window hidden to tray without any process termination
+  });
+
+  test('quit UI only terminates UI without stopping runtime process', () async {
+    final coordinator = DesktopLifecycleCoordinator(/* mock window & tray adapters */);
+    await coordinator.handleDevQuitUiRequested();
     // Verify window and tray adapters disposed cleanly without any process kill calls
   });
 
-  test('tray menu keeps stop action disabled with host-managed label', () {
+  test('tray menu keeps full exit action disabled with PC-HOST-005 planned label', () {
     final coordinator = DesktopLifecycleCoordinator(/* mock window & tray adapters */);
     final items = coordinator.buildTrayMenuItems(
       RuntimeProcessState(
@@ -485,9 +492,9 @@ void main() {
         port: 8000,
       ),
     );
-    final stopItem = items.firstWhere((i) => i.key == 'stop');
-    expect(stopItem.disabled, isTrue);
-    expect(stopItem.label, contains('Managed by Host'));
+    final exitFullItem = items.firstWhere((i) => i.key == 'exit_full');
+    expect(exitFullItem.disabled, isTrue);
+    expect(exitFullItem.label, contains('PC-HOST-005'));
   });
 }
 ```
@@ -501,8 +508,8 @@ Expected: FAIL.
 
 In `DesktopLifecycleCoordinator`:
 - Add `updateRuntimeStatus(RuntimeProcessState state)` updating tray label dynamically.
-- Keep `MenuItem(key: 'stop', label: 'Stop Runtime (Managed by Host)', disabled: true)`.
-- Ensure `handleExitRequested()` disposes UI resources cleanly while leaving detached runtime untouched.
+- Implement truthful tray menu: `open`, `status`, `hide_to_tray`, `quit_ui_dev` (dev test only), and `exit_full` (disabled, planned for `PC-HOST-005`).
+- Ensure neither window hide nor `quit_ui_dev` stops or signals the detached runtime.
 In `DesktopSettingsController`:
 - Expose runtime coordinator state, PID, port, and lockfile path.
 In `SettingsScreen`:
@@ -600,7 +607,8 @@ Commit: `test(windows): add empirical Windows runtime supervision verification h
 ### Manual Windows Verification Steps
 
 1. **Single-Instance Enforcement:** Start the desktop client -> verify backend process launches detached in background -> launch client a second time -> verify second client binds to the existing backend instance without duplicate process spawn.
-2. **"Quit UI != Stop Runtime" Verification:** Close the desktop window to tray -> verify backend continues running -> select *Exit Companion* from tray -> verify Flutter UI exits while backend process remains running at `127.0.0.1:8000` (verified via `netstat -ano | findstr 8000`).
+2. **Lifecycle & Crash Survival Verification:** Close the desktop window (`×`) -> verify window hides to tray while backend continues running -> trigger dev UI exit (or terminate Flutter UI) -> verify Flutter UI exits while backend process remains running at `127.0.0.1:8000` (verified via `netstat -ano | findstr 8000`) -> relaunch Flutter UI -> verify client cleanly re-attaches to the running backend without spawning a second process.
 3. **Alien Port Conflict Handling:** Run a dummy TCP listener on port 8000 -> launch Flutter client -> verify client surfaces `PORT_CONFLICT_ALIEN_PROCESS` diagnostic badge without crashing, hanging, or terminating the foreign listener.
 4. **Stale Lock Recovery:** Create a synthetic `runtime.lock` with dead PID 99999999 -> launch Flutter client -> verify supervisor detects dead PID, cleanly removes stale lockfile, and spawns runtime without error.
 5. **Remote Host URL Bypass:** Set `HostUrl` to a remote address (e.g. `http://192.168.1.100:8000`) -> launch desktop client -> verify client operates in `remoteHost` supervision mode without attempting local process spawning or lockfile creation.
+6. **Full Exit Menu Disclosure:** Inspect system tray context menu -> verify "Exit Companion (Full Shutdown - Planned PC-HOST-005)" is present and disabled, clearly indicating that confirmed host shutdown belongs to follow-on PC-HOST-005.
