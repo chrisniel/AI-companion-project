@@ -1193,5 +1193,54 @@ void main() {
 
       controller.dispose();
     });
+
+    test('model initially unloaded at connection time, then ready post-turn, probes status and triggers AI title refinement', () async {
+      final mockClient = MockCompanionClient();
+      // At connection time, model is unloaded
+      mockClient.customModelStatus = const ModelStatusResponse(
+        provider: 'llama.cpp',
+        activeModel: null,
+        modelLoaded: false,
+        modelAwake: false,
+        modelResident: false,
+        runtimeState: 'MODEL_UNLOADED',
+      );
+      mockClient.customConversations = [
+        ConversationOut(
+          id: 'conv-unloaded',
+          title: 'New Conversation',
+          characterId: 'default',
+          ownerId: 'mock-owner',
+          createdAt: DateTime.now().toUtc().toIso8601String(),
+          updatedAt: DateTime.now().toUtc().toIso8601String(),
+          messageCount: 0,
+        ),
+      ];
+      mockClient.customMessages = [];
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      expect(controller.modelStatus?.modelLoaded, isFalse);
+
+      // Now model is loaded on demand during inference
+      mockClient.customModelStatus = const ModelStatusResponse(
+        provider: 'llama.cpp',
+        activeModel: 'qwen2.5-7b',
+        modelLoaded: true,
+        modelAwake: true,
+        modelResident: true,
+        runtimeState: 'MODEL_READY',
+      );
+
+      await controller.sendMessage('Tell me about the universe');
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+
+      expect(mockClient.generateTitleCalled, isTrue);
+      expect(controller.activeConversation?.title, 'Model-Generated Title');
+
+      controller.dispose();
+    });
   });
 }

@@ -285,5 +285,87 @@ def partially_streamed():
       await tester.pumpWidget(wrapWidget(const SizedBox.shrink()));
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('renders GFM table with headers, alignment, and cells', (tester) async {
+      const markdown = '''
+| Name | Role | Status |
+| :--- | :---: | ---: |
+| Alice | Admin | Active |
+| Bob | Member | Pending |
+''';
+      await tester.pumpWidget(wrapWidget(const AssistantMarkdownView(content: markdown)));
+      expect(find.byType(Table), findsOneWidget);
+      expect(find.text('Name'), findsOneWidget);
+      expect(find.text('Role'), findsOneWidget);
+      expect(find.text('Status'), findsOneWidget);
+      expect(find.text('Alice'), findsOneWidget);
+      expect(find.text('Bob'), findsOneWidget);
+    });
+
+    testWidgets('handles escaped pipes and inline code inside table cells', (tester) async {
+      const markdown = '''
+| Tool | Command | Notes |
+| --- | --- | --- |
+| Git | `git log | head` | Escaped \\| pipe |
+''';
+      await tester.pumpWidget(wrapWidget(const AssistantMarkdownView(content: markdown)));
+      expect(find.byType(Table), findsOneWidget);
+      expect(find.text('Git'), findsOneWidget);
+      expect(find.text('git log | head'), findsOneWidget);
+      expect(find.text('Escaped | pipe'), findsOneWidget);
+    });
+
+    testWidgets('renders inline formatting inside table cells', (tester) async {
+      const markdown = '''
+| Feature | Status | Link |
+| --- | --- | --- |
+| **Bold Feature** | *In Progress* | [Docs](https://example.com) |
+''';
+      String? tappedUrl;
+      await tester.pumpWidget(wrapWidget(AssistantMarkdownView(
+        content: markdown,
+        onLinkTap: (url) => tappedUrl = url,
+      )));
+      expect(find.byType(Table), findsOneWidget);
+      expect(find.text('Bold Feature'), findsOneWidget);
+      expect(find.text('In Progress'), findsOneWidget);
+      expect(find.text('Docs'), findsOneWidget);
+      expect(tappedUrl, isNull);
+    });
+
+    testWidgets('ordinary text containing pipes is not treated as a table', (tester) async {
+      const markdown = '''
+Run this command in shell: cat file.txt | grep error | sort
+And another line of text.
+''';
+      await tester.pumpWidget(wrapWidget(const AssistantMarkdownView(content: markdown)));
+      expect(find.byType(Table), findsNothing);
+      expect(find.textContaining('cat file.txt | grep error | sort'), findsOneWidget);
+    });
+
+    testWidgets('incomplete streaming table does not crash', (tester) async {
+      const markdown = '| Header 1 | Header 2 |';
+      await tester.pumpWidget(wrapWidget(const AssistantMarkdownView(content: markdown)));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('renders table within horizontal scroll view without overflow on narrow viewport', (tester) async {
+      tester.view.physicalSize = const Size(1024, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      const markdown = '''
+| Col 1 | Col 2 | Col 3 | Col 4 | Col 5 | Col 6 | Col 7 | Col 8 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Data 1 | Data 2 | Data 3 | Data 4 | Data 5 | Data 6 | Data 7 | Data 8 |
+''';
+      await tester.pumpWidget(wrapWidget(const AssistantMarkdownView(content: markdown)));
+      expect(find.byType(Table), findsOneWidget);
+      expect(find.byType(SingleChildScrollView), findsWidgets);
+      expect(tester.takeException(), isNull);
+    });
   });
 }

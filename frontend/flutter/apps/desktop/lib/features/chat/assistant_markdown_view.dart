@@ -314,13 +314,73 @@ class _AssistantMarkdownViewState extends State<AssistantMarkdownView> {
         continue;
       }
 
-      // 7. Empty line
+      // 7. Table Block
+      if (line.contains('|') && i + 1 < lines.length) {
+        final headerCells = _splitTableRow(line);
+        final sepCells = _splitTableRow(lines[i + 1]);
+        if (headerCells.isNotEmpty &&
+            _isSeparatorRow(sepCells) &&
+            sepCells.length >= headerCells.length) {
+          final alignments = sepCells.map(_parseCellAlignment).toList();
+          final colCount = headerCells.length;
+          final normalizedAlignments = List<TextAlign>.generate(
+            colCount,
+            (idx) => idx < alignments.length ? alignments[idx] : TextAlign.left,
+          );
+
+          final rows = <List<String>>[];
+          i += 2;
+
+          while (i < lines.length) {
+            final curLine = lines[i];
+            if (curLine.trim().isEmpty) {
+              break;
+            }
+            if (curLine.trim().startsWith('```') ||
+                RegExp(r'^(#{1,4})\s+').hasMatch(curLine) ||
+                curLine.trim().startsWith('>') ||
+                RegExp(r'^\s*[-*]\s+').hasMatch(curLine) ||
+                RegExp(r'^\s*\d+\.\s+').hasMatch(curLine) ||
+                RegExp(r'^(\s*[-*_]\s*){3,}$').hasMatch(curLine)) {
+              break;
+            }
+            if (!curLine.contains('|')) {
+              break;
+            }
+            var rowCells = _splitTableRow(curLine);
+            if (rowCells.length < colCount) {
+              rowCells = [
+                ...rowCells,
+                ...List.filled(colCount - rowCells.length, ''),
+              ];
+            } else if (rowCells.length > colCount) {
+              rowCells = rowCells.sublist(0, colCount);
+            }
+            rows.add(rowCells);
+            i++;
+          }
+
+          widgets.add(
+            _MarkdownTableWidget(
+              headers: headerCells,
+              rows: rows,
+              alignments: normalizedAlignments,
+              defaultStyle: defaultStyle,
+              themeExt: themeExt,
+              renderInline: (text, style) => _renderInline(text, style, themeExt),
+            ),
+          );
+          continue;
+        }
+      }
+
+      // 8. Empty line
       if (line.trim().isEmpty) {
         i++;
         continue;
       }
 
-      // 8. Normal Paragraph
+      // 9. Normal Paragraph
       final paragraphLines = <String>[line];
       i++;
       while (i < lines.length &&
@@ -330,7 +390,8 @@ class _AssistantMarkdownViewState extends State<AssistantMarkdownView> {
           !lines[i].trim().startsWith('>') &&
           !RegExp(r'^\s*[-*]\s+').hasMatch(lines[i]) &&
           !RegExp(r'^\s*\d+\.\s+').hasMatch(lines[i]) &&
-          !RegExp(r'^(\s*[-*_]\s*){3,}$').hasMatch(lines[i])) {
+          !RegExp(r'^(\s*[-*_]\s*){3,}$').hasMatch(lines[i]) &&
+          !(i + 1 < lines.length && _isPossibleTableStart(lines[i], lines[i + 1]))) {
         paragraphLines.add(lines[i]);
         i++;
       }
@@ -517,6 +578,93 @@ class _AssistantMarkdownViewState extends State<AssistantMarkdownView> {
       // Non-critical background failure
     }
   }
+
+  static List<String> _splitTableRow(String rawLine) {
+    var line = rawLine.trim();
+    if (line.isEmpty) return [];
+
+    if (line.startsWith('|')) {
+      line = line.substring(1);
+    }
+    if (line.endsWith('|') && !line.endsWith(r'\|')) {
+      line = line.substring(0, line.length - 1);
+    }
+
+    final cells = <String>[];
+    final current = StringBuffer();
+    bool inCode = false;
+    bool isEscaped = false;
+
+    for (int i = 0; i < line.length; i++) {
+      final char = line[i];
+      if (isEscaped) {
+        if (char == '|') {
+          current.write('|');
+        } else {
+          current.write('\\');
+          current.write(char);
+        }
+        isEscaped = false;
+        continue;
+      }
+
+      if (char == '\\') {
+        isEscaped = true;
+        continue;
+      }
+
+      if (char == '`') {
+        inCode = !inCode;
+        current.write('`');
+        continue;
+      }
+
+      if (char == '|' && !inCode) {
+        cells.add(current.toString().trim());
+        current.clear();
+        continue;
+      }
+
+      current.write(char);
+    }
+
+    if (isEscaped) {
+      current.write('\\');
+    }
+    cells.add(current.toString().trim());
+    return cells;
+  }
+
+  static bool _isSeparatorRow(List<String> cells) {
+    if (cells.isEmpty) return false;
+    final separatorPattern = RegExp(r'^\s*:?-{1,}:?\s*$');
+    for (final cell in cells) {
+      if (!separatorPattern.hasMatch(cell)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  static TextAlign _parseCellAlignment(String sepCell) {
+    final trimmed = sepCell.trim();
+    final startsWithColon = trimmed.startsWith(':');
+    final endsWithColon = trimmed.endsWith(':');
+    if (startsWithColon && endsWithColon) {
+      return TextAlign.center;
+    } else if (endsWithColon) {
+      return TextAlign.right;
+    } else {
+      return TextAlign.left;
+    }
+  }
+
+  static bool _isPossibleTableStart(String line, String nextLine) {
+    if (!line.contains('|')) return false;
+    final headers = _splitTableRow(line);
+    final seps = _splitTableRow(nextLine);
+    return headers.isNotEmpty && _isSeparatorRow(seps) && seps.length >= headers.length;
+  }
 }
 
 /// Styled Code Block with syntax header and Copy button mirroring Web CodeBlock
@@ -654,6 +802,103 @@ class _CodeBlockWidgetState extends State<_CodeBlockWidget> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _MarkdownTableWidget extends StatelessWidget {
+  final List<String> headers;
+  final List<List<String>> rows;
+  final List<TextAlign> alignments;
+  final TextStyle defaultStyle;
+  final CompanionThemeExtension? themeExt;
+  final List<InlineSpan> Function(String text, TextStyle style) renderInline;
+
+  const _MarkdownTableWidget({
+    required this.headers,
+    required this.rows,
+    required this.alignments,
+    required this.defaultStyle,
+    required this.themeExt,
+    required this.renderInline,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = themeExt?.borderSubtle ?? Colors.grey.withValues(alpha: 0.2);
+    final headerBg = themeExt?.surfaceElevated ?? Colors.black.withValues(alpha: 0.05);
+    final stripeBg = themeExt?.surfaceRecessed ?? Colors.black.withValues(alpha: 0.02);
+
+    final headerStyle = defaultStyle.copyWith(
+      fontWeight: FontWeight.bold,
+      color: themeExt?.textPrimary,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: CompanionSpacing.sm),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(CompanionRadius.sm),
+          border: Border.all(color: borderColor, width: 1),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Table(
+            defaultColumnWidth: const IntrinsicColumnWidth(),
+            border: TableBorder(
+              horizontalInside: BorderSide(color: borderColor, width: 1),
+              verticalInside: BorderSide(color: borderColor, width: 1),
+            ),
+            children: [
+              TableRow(
+                decoration: BoxDecoration(color: headerBg),
+                children: List.generate(headers.length, (colIdx) {
+                  final alignment = colIdx < alignments.length ? alignments[colIdx] : TextAlign.left;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: CompanionSpacing.md,
+                      vertical: CompanionSpacing.sm,
+                    ),
+                    child: SelectableText.rich(
+                      TextSpan(
+                        style: headerStyle,
+                        children: renderInline(headers[colIdx], headerStyle),
+                      ),
+                      textAlign: alignment,
+                    ),
+                  );
+                }),
+              ),
+              ...rows.asMap().entries.map((entry) {
+                final rowIdx = entry.key;
+                final row = entry.value;
+                final isEven = rowIdx % 2 == 1;
+                return TableRow(
+                  decoration: isEven ? BoxDecoration(color: stripeBg) : null,
+                  children: List.generate(headers.length, (colIdx) {
+                    final cellText = colIdx < row.length ? row[colIdx] : '';
+                    final alignment = colIdx < alignments.length ? alignments[colIdx] : TextAlign.left;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: CompanionSpacing.md,
+                        vertical: CompanionSpacing.sm,
+                      ),
+                      child: SelectableText.rich(
+                        TextSpan(
+                          style: defaultStyle,
+                          children: renderInline(cellText, defaultStyle),
+                        ),
+                        textAlign: alignment,
+                      ),
+                    );
+                  }),
+                );
+              }),
+            ],
+          ),
+        ),
       ),
     );
   }

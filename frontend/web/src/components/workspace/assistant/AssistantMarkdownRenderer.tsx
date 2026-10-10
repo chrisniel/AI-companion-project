@@ -147,6 +147,139 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, code }) => {
   );
 };
 
+function splitTableRow(rawLine: string): string[] {
+  let line = rawLine.trim();
+  if (!line) return [];
+
+  if (line.startsWith('|')) {
+    line = line.slice(1);
+  }
+  if (line.endsWith('|') && !line.endsWith('\\|')) {
+    line = line.slice(0, -1);
+  }
+
+  const cells: string[] = [];
+  let current = '';
+  let inCode = false;
+  let isEscaped = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (isEscaped) {
+      if (char === '|') {
+        current += '|';
+      } else {
+        current += '\\' + char;
+      }
+      isEscaped = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      isEscaped = true;
+      continue;
+    }
+
+    if (char === '`') {
+      inCode = !inCode;
+      current += '`';
+      continue;
+    }
+
+    if (char === '|' && !inCode) {
+      cells.push(current.trim());
+      current = '';
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (isEscaped) {
+    current += '\\';
+  }
+  cells.push(current.trim());
+  return cells;
+}
+
+function isSeparatorRow(cells: string[]): boolean {
+  if (cells.length === 0) return false;
+  const separatorPattern = /^\s*:?-{1,}:?\s*$/;
+  return cells.every(cell => separatorPattern.test(cell));
+}
+
+function parseCellAlignment(sepCell: string): 'left' | 'center' | 'right' {
+  const trimmed = sepCell.trim();
+  const startsWithColon = trimmed.startsWith(':');
+  const endsWithColon = trimmed.endsWith(':');
+  if (startsWithColon && endsWithColon) {
+    return 'center';
+  } else if (endsWithColon) {
+    return 'right';
+  } else {
+    return 'left';
+  }
+}
+
+function isPossibleTableStart(line: string, nextLine: string): boolean {
+  if (!line.includes('|')) return false;
+  const headers = splitTableRow(line);
+  const seps = splitTableRow(nextLine);
+  return headers.length > 0 && isSeparatorRow(seps) && seps.length >= headers.length;
+}
+
+interface TableBlockProps {
+  headers: string[];
+  rows: string[][];
+  alignments: ('left' | 'center' | 'right')[];
+}
+
+const TableBlock: React.FC<TableBlockProps> = ({ headers, rows, alignments }) => {
+  const alignClass = (align: 'left' | 'center' | 'right') => {
+    if (align === 'center') return 'text-center';
+    if (align === 'right') return 'text-right';
+    return 'text-left';
+  };
+
+  return (
+    <div className="my-3 overflow-x-auto rounded-xl border border-[var(--color-surface-glass-border)] bg-[var(--color-surface-recessed)] shadow-sm">
+      <table className="w-full border-collapse text-xs text-[var(--color-text-primary)]">
+        <thead>
+          <tr className="border-b border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)]">
+            {headers.map((header, idx) => (
+              <th
+                key={`th-${idx}`}
+                className={`px-3.5 py-2 font-semibold text-[var(--color-text-primary)] ${alignClass(
+                  alignments[idx] || 'left'
+                )}`}
+              >
+                {renderInline(header)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-[var(--color-border-subtle)]">
+          {rows.map((row, rowIdx) => (
+            <tr
+              key={`tr-${rowIdx}`}
+              className={rowIdx % 2 === 1 ? 'bg-[var(--color-surface-subtle)]' : undefined}
+            >
+              {headers.map((_, colIdx) => (
+                <td
+                  key={`td-${rowIdx}-${colIdx}`}
+                  className={`px-3.5 py-2 ${alignClass(alignments[colIdx] || 'left')}`}
+                >
+                  {renderInline(row[colIdx] || '')}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
 export const AssistantMarkdownRenderer: React.FC<AssistantMarkdownRendererProps> = ({
   content,
   className = '',
@@ -287,13 +420,72 @@ export const AssistantMarkdownRenderer: React.FC<AssistantMarkdownRendererProps>
       continue;
     }
 
-    // 7. Empty line spacer
+    // 7. Table Block
+    if (line.includes('|') && i + 1 < lines.length) {
+      const headerCells = splitTableRow(line);
+      const sepCells = splitTableRow(lines[i + 1]);
+      if (
+        headerCells.length > 0 &&
+        isSeparatorRow(sepCells) &&
+        sepCells.length >= headerCells.length
+      ) {
+        const alignments = sepCells.map(parseCellAlignment);
+        const colCount = headerCells.length;
+        const normalizedAlignments = Array.from(
+          { length: colCount },
+          (_, idx) => alignments[idx] || 'left'
+        );
+
+        const rows: string[][] = [];
+        i += 2;
+
+        while (i < lines.length) {
+          const curLine = lines[i];
+          if (!curLine.trim()) break;
+          if (
+            curLine.trim().startsWith('```') ||
+            curLine.match(/^(#{1,4})\s+/) ||
+            curLine.trim().startsWith('>') ||
+            /^\s*[-*]\s+/.test(curLine) ||
+            /^\s*\d+\.\s+/.test(curLine) ||
+            /^(\s*[-*_]\s*){3,}$/.test(curLine)
+          ) {
+            break;
+          }
+          if (!curLine.includes('|')) break;
+
+          let rowCells = splitTableRow(curLine);
+          if (rowCells.length < colCount) {
+            rowCells = [
+              ...rowCells,
+              ...Array(colCount - rowCells.length).fill(''),
+            ];
+          } else if (rowCells.length > colCount) {
+            rowCells = rowCells.slice(0, colCount);
+          }
+          rows.push(rowCells);
+          i++;
+        }
+
+        blocks.push(
+          <TableBlock
+            key={`table-${i}`}
+            headers={headerCells}
+            rows={rows}
+            alignments={normalizedAlignments}
+          />
+        );
+        continue;
+      }
+    }
+
+    // 8. Empty line spacer
     if (!line.trim()) {
       i++;
       continue;
     }
 
-    // 8. Normal Paragraph
+    // 9. Normal Paragraph
     const paragraphLines: string[] = [line];
     i++;
     while (
@@ -304,7 +496,8 @@ export const AssistantMarkdownRenderer: React.FC<AssistantMarkdownRendererProps>
       !lines[i].trim().startsWith('>') &&
       !/^\s*[-*]\s+/.test(lines[i]) &&
       !/^\s*\d+\.\s+/.test(lines[i]) &&
-      !/^(\s*[-*_]\s*){3,}$/.test(lines[i])
+      !/^(\s*[-*_]\s*){3,}$/.test(lines[i]) &&
+      !(i + 1 < lines.length && isPossibleTableStart(lines[i], lines[i + 1]))
     ) {
       paragraphLines.push(lines[i]);
       i++;

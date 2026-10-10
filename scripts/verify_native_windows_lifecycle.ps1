@@ -88,13 +88,20 @@ $initialVis = [Win32Helper]::IsWindowVisible($targetHwnd)
 Write-Host "[1.3] Initial window visibility: $initialVis (Must be True)"
 Write-Host "[1.4] Initial process running: $(-not $proc.HasExited) (Must be True)"
 
+# Allow Flutter runtime and coordinator.initialize() to complete in debug mode
+Start-Sleep -Milliseconds 2500
+
 Write-Host "`n[1.5] Delivering native WM_CLOSE (0x0010) message directly to HWND $targetHwnd..."
 $postResult = [Win32Helper]::PostMessage($targetHwnd, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)
 Write-Host "[1.6] PostMessage returned: $postResult"
 
-Start-Sleep -Milliseconds 1500
-
-$visAfterClose = [Win32Helper]::IsWindowVisible($targetHwnd)
+# Poll for window to hide to tray
+$visAfterClose = $true
+for ($k = 0; $k -lt 10; $k++) {
+    Start-Sleep -Milliseconds 500
+    $visAfterClose = [Win32Helper]::IsWindowVisible($targetHwnd)
+    if (-not $visAfterClose) { break }
+}
 $procRunningAfterClose = -not $proc.HasExited
 
 Write-Host "[1.7] Window visibility after WM_CLOSE: $visAfterClose (Must be False - hidden to tray)"

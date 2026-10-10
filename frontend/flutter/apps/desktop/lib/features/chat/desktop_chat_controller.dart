@@ -65,6 +65,8 @@ class DesktopChatController extends ChangeNotifier {
   bool _isCreatingConversation = false;
   bool _isAwaitingAcceptance = false;
   final Set<String> _userRenamedConversationIds = <String>{};
+  final Set<String> _titleGenerationInProgress = <String>{};
+  final Set<String> _modelRefinedConversationIds = <String>{};
   final Map<String, Future<void>> _pendingRenameFutures = <String, Future<void>>{};
 
   DesktopChatController({
@@ -749,38 +751,80 @@ class DesktopChatController extends ChangeNotifier {
   }
 
   Future<void> _maybeGenerateModelTitle(String conversationId, String? fallbackTitle) async {
-    if (fallbackTitle == null || _userRenamedConversationIds.contains(conversationId)) return;
-    if (!isConnected || _modelStatus?.modelLoaded != true) return;
-
-    // Await the deterministic title persistence PATCH if still in flight
-    final pendingPatch = _pendingRenameFutures[conversationId];
-    if (pendingPatch != null) {
-      try {
-        await pendingPatch;
-      } catch (_) {}
+    if (fallbackTitle == null ||
+        _userRenamedConversationIds.contains(conversationId) ||
+        _modelRefinedConversationIds.contains(conversationId) ||
+        _titleGenerationInProgress.contains(conversationId)) {
+      return;
     }
+    if (!isConnected) return;
 
-    if (_isDisposed || _userRenamedConversationIds.contains(conversationId)) return;
-    if (!isConnected || _modelStatus?.modelLoaded != true) return;
+    _titleGenerationInProgress.add(conversationId);
 
     try {
-      final res = await _client.generateConversationTitle(
-        conversationId,
-        currentTitle: fallbackTitle,
-        fallbackTitle: fallbackTitle,
-      );
-      if (_isDisposed || _userRenamedConversationIds.contains(conversationId)) return;
-      if (res.title.isNotEmpty && res.title != 'New Conversation') {
-        _conversations =
-            _conversations.map((c) => c.id == conversationId ? res : c).toList();
-        if (_activeConversation?.id == conversationId) {
-          _activeConversation = res;
-        }
-        notifyListeners();
+      // Await the deterministic title persistence PATCH if still in flight
+      final pendingPatch = _pendingRenameFutures[conversationId];
+      if (pendingPatch != null) {
+        try {
+          await pendingPatch;
+        } catch (_) {}
       }
-    } catch (_) {
-      // Gracefully keep fallbackTitle
+
+      if (_isDisposed ||
+          _userRenamedConversationIds.contains(conversationId) ||
+          _modelRefinedConversationIds.contains(conversationId)) {
+        return;
+      }
+      if (!isConnected) return;
+
+      // If model was not loaded at connection time or cached status indicates unloaded,
+      // perform authoritative post-turn readiness probe
+      if (_modelStatus?.modelLoaded != true) {
+        try {
+          final fresh = await _client.getModelStatus();
+          if (!_isDisposed &&
+              !_userRenamedConversationIds.contains(conversationId)) {
+            _modelStatus = fresh;
+            _activeModelName = fresh.activeModel ?? 'default';
+            notifyListeners();
+          }
+        } catch (_) {
+          // Probing failed or backend offline
+        }
+      }
+
+      if (_isDisposed ||
+          _userRenamedConversationIds.contains(conversationId) ||
+          _modelRefinedConversationIds.contains(conversationId)) {
+        return;
+      }
+      if (!isConnected || _modelStatus?.modelLoaded != true) return;
+
+      try {
+        final res = await _client.generateConversationTitle(
+          conversationId,
+          currentTitle: fallbackTitle,
+          fallbackTitle: fallbackTitle,
+        );
+        if (_isDisposed ||
+            _userRenamedConversationIds.contains(conversationId) ||
+            _modelRefinedConversationIds.contains(conversationId)) {
+          return;
+        }
+        if (res.title.isNotEmpty && res.title != 'New Conversation') {
+          _modelRefinedConversationIds.add(conversationId);
+          _conversations =
+              _conversations.map((c) => c.id == conversationId ? res : c).toList();
+          if (_activeConversation?.id == conversationId) {
+            _activeConversation = res;
+          }
+          notifyListeners();
+        }
+      } catch (_) {
+        // Gracefully keep fallbackTitle
+      }
     } finally {
+      _titleGenerationInProgress.remove(conversationId);
       _pendingRenameFutures.remove(conversationId);
     }
   }
