@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:companion_api/companion_api.dart';
@@ -20,12 +19,16 @@ class SettingsScreen extends StatefulWidget {
     this.coordinator,
     this.chatController,
     this.runtimeCoordinator,
+    this.clientSettings,
+    this.credentialStore,
   });
 
   final DesktopSettingsController controller;
   final DesktopLifecycleCoordinator? coordinator;
   final DesktopChatController? chatController;
   final DesktopRuntimeCoordinator? runtimeCoordinator;
+  final DesktopClientSettings? clientSettings;
+  final CredentialStore? credentialStore;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -41,6 +44,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   DesktopSettingsController get controller => widget.controller;
   DesktopLifecycleCoordinator? get coordinator => widget.coordinator;
+  DesktopClientSettings get _clientSettings => widget.clientSettings ?? DesktopClientSettings();
+  CredentialStore get _credentialStore => widget.credentialStore ?? WindowsDpapiCredentialStore();
 
   @override
   void initState() {
@@ -51,7 +56,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     _tokenController = TextEditingController();
 
-    DesktopClientSettings().readHostUrl().then((saved) {
+    _clientSettings.readHostUrl().then((saved) {
       if (mounted && saved.isNotEmpty) {
         setState(() {
           _urlController.text = saved;
@@ -60,7 +65,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
 
     try {
-      WindowsDpapiCredentialStore().readToken().then((t) {
+      _credentialStore.readToken().then((t) {
         if (mounted && t != null) {
           setState(() {
             _tokenController.text = t;
@@ -557,14 +562,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final isLoopback = runtime?.isLocalSupervised ?? true;
     final modeLabel = isLoopback ? 'Local Loopback (Supervised)' : 'Remote Host (Unmanaged)';
     final statusLabel = runtime?.status.name ?? 'Dormant / Standalone';
-    final pidLabel = runtime?.pid != null
-        ? '${runtime!.pid}'
-        : (lockfile?.pid != null ? '${lockfile!.pid}' : 'None');
+    final pidLabel = !isLoopback
+        ? 'N/A (Remote Host)'
+        : (runtime?.pid != null
+            ? '${runtime!.pid}'
+            : (lockfile?.pid != null ? '${lockfile!.pid}' : 'None'));
     final portLabel = '${runtime?.port ?? 8000}';
 
     final localAppData = Platform.environment['LOCALAPPDATA'] ?? r'C:\Users\<user>\AppData\Local';
-    final lockPath = '$localAppData\\AI Companion\\runtime.lock';
-    final logPath = '$localAppData\\AI Companion\\Logs\\runtime.log';
+    final lockPath = !isLoopback ? 'N/A (Remote Host - Unmanaged)' : '$localAppData\\AI Companion\\runtime.lock';
+    final logPath = !isLoopback ? 'N/A (Remote Host - Unmanaged)' : '$localAppData\\AI Companion\\Logs\\runtime.log';
 
     return SoftGlassPanel(
       padding: const EdgeInsets.all(CompanionSpacing.xl),
@@ -817,16 +824,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   final candidateToken = _tokenController.text.trim();
                   try {
                     CompanionClient.validateBaseUrl(candidateUrl);
-                    await DesktopClientSettings().writeHostUrl(candidateUrl);
+                    await _clientSettings.writeHostUrl(candidateUrl);
                     if (candidateToken.isNotEmpty) {
-                      await WindowsDpapiCredentialStore().writeToken(candidateToken);
-                    }
-                    if (widget.runtimeCoordinator != null) {
-                      widget.runtimeCoordinator!.updateConfiguration(
-                        newBaseUrl: candidateUrl,
-                        credentialStore: WindowsDpapiCredentialStore(),
-                      );
-                      unawaited(widget.runtimeCoordinator!.ensureRuntimeReady());
+                      await _credentialStore.writeToken(candidateToken);
                     }
                     if (widget.chatController != null) {
                       try {
@@ -836,13 +836,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         );
                       } catch (_) {}
                     }
-                    setState(() {
-                      _testConnectionResult = 'Configuration saved and active runtime reconnected.';
-                    });
+                    if (widget.runtimeCoordinator != null) {
+                      setState(() {
+                        _testConnectionResult = 'Settings persisted. Verifying connection to runtime...';
+                      });
+                      widget.runtimeCoordinator!.updateConfiguration(
+                        newBaseUrl: candidateUrl,
+                        credentialStore: _credentialStore,
+                      );
+                      final runtimeState = await widget.runtimeCoordinator!.ensureRuntimeReady(
+                        timeout: const Duration(seconds: 10),
+                      );
+                      if (mounted) {
+                        setState(() {
+                          switch (runtimeState.status) {
+                            case RuntimeStatus.readyAndAuthenticated:
+                              _testConnectionResult = 'Configuration saved: Connected and authenticated.';
+                              break;
+                            case RuntimeStatus.reachableUnauthenticated:
+                              _testConnectionResult = 'Configuration saved: Connected, but authentication failed.';
+                              break;
+                            case RuntimeStatus.alienPortConflict:
+                              _testConnectionResult = 'Configuration saved: Port conflict detected on ${runtimeState.port}.';
+                              break;
+                            default:
+                              final diag = runtimeState.diagnosticMessage;
+                              final suffix = (diag != null && diag.isNotEmpty) ? ': $diag' : '';
+                              _testConnectionResult =
+                                  'Configuration saved, but could not connect to runtime (${runtimeState.status.name})$suffix';
+                              break;
+                          }
+                        });
+                      }
+                    } else {
+                      if (mounted) {
+                        setState(() {
+                          _testConnectionResult = 'Configuration saved.';
+                        });
+                      }
+                    }
                   } catch (e) {
-                    setState(() {
-                      _testConnectionResult = 'Failed to apply configuration: $e';
-                    });
+                    if (mounted) {
+                      setState(() {
+                        _testConnectionResult = 'Failed to apply configuration: $e';
+                      });
+                    }
                   }
                 },
               ),

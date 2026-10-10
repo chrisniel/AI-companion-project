@@ -1,3 +1,4 @@
+import 'package:companion_api/companion_api.dart';
 import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +7,7 @@ import '../controllers/desktop_settings_controller.dart';
 import '../coordinator/desktop_runtime_coordinator.dart';
 import '../features/chat/desktop_chat_controller.dart';
 import '../lifecycle/desktop_lifecycle_coordinator.dart';
+import '../platform/desktop_client_settings.dart';
 import '../screens/chat_screen.dart';
 import '../screens/memory_screen.dart';
 import '../screens/schedule_screen.dart';
@@ -29,12 +31,16 @@ class DesktopShell extends StatelessWidget {
     this.coordinator,
     this.chatController,
     this.runtimeCoordinator,
+    this.clientSettings,
+    this.credentialStore,
   });
 
   final DesktopSettingsController controller;
   final DesktopLifecycleCoordinator? coordinator;
   final DesktopChatController? chatController;
   final DesktopRuntimeCoordinator? runtimeCoordinator;
+  final DesktopClientSettings? clientSettings;
+  final CredentialStore? credentialStore;
 
   @override
   Widget build(BuildContext context) {
@@ -144,6 +150,8 @@ class DesktopShell extends StatelessWidget {
           coordinator: coordinator,
           chatController: chatController,
           runtimeCoordinator: runtimeCoordinator,
+          clientSettings: clientSettings,
+          credentialStore: credentialStore,
         );
     }
   }

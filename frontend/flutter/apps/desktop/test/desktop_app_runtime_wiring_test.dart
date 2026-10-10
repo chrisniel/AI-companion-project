@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:ai_companion_desktop/controllers/desktop_settings_controller.dart';
 import 'package:ai_companion_desktop/coordinator/desktop_runtime_coordinator.dart';
@@ -6,6 +7,7 @@ import 'package:ai_companion_desktop/lifecycle/desktop_lifecycle_coordinator.dar
 import 'package:ai_companion_desktop/lifecycle/desktop_tray_adapter.dart';
 import 'package:ai_companion_desktop/lifecycle/desktop_window_adapter.dart';
 import 'package:ai_companion_desktop/main.dart';
+import 'package:ai_companion_desktop/platform/desktop_client_settings.dart';
 import 'package:ai_companion_desktop/platform/windows_runtime_process_supervisor.dart';
 import 'package:companion_api/companion_api.dart';
 import 'package:companion_core/companion_core.dart';
@@ -80,7 +82,7 @@ class FakeChatClient extends CompanionClient {
   }
 
   @override
-  Future<AuthVerifyResponse> verifyAuth() async {
+  Future<AuthVerifyResponse> verifyAuth({Duration timeout = const Duration(seconds: 5)}) async {
     return const AuthVerifyResponse(
       authenticated: true,
       tokenType: 'Bearer',
@@ -129,6 +131,61 @@ void main() {
   }
 
   group('Desktop App Runtime Wiring', () {
+    late Directory tempSettingsDir;
+    late File tempSettingsFile;
+    late DesktopClientSettings isolatedSettings;
+    late InMemoryCredentialStore isolatedCredentialStore;
+
+    DateTime? prodSettingsModBefore;
+    DateTime? prodCredsModBefore;
+    int? prodSettingsLenBefore;
+    int? prodCredsLenBefore;
+
+    setUp(() {
+      tempSettingsDir = Directory.systemTemp.createTempSync('companion_wiring_test_');
+      tempSettingsFile = File('${tempSettingsDir.path}${Platform.pathSeparator}client_settings.json');
+      isolatedSettings = DesktopClientSettings(customFilePath: tempSettingsFile.path);
+      isolatedCredentialStore = InMemoryCredentialStore('test-token');
+
+      final localAppData = Platform.environment['LOCALAPPDATA'];
+      if (localAppData != null) {
+        final prodSettings = File('$localAppData\\AI Companion\\client_settings.json');
+        if (prodSettings.existsSync()) {
+          prodSettingsModBefore = prodSettings.lastModifiedSync();
+          prodSettingsLenBefore = prodSettings.lengthSync();
+        }
+        final prodCreds = File('$localAppData\\AI Companion\\credentials.bin');
+        if (prodCreds.existsSync()) {
+          prodCredsModBefore = prodCreds.lastModifiedSync();
+          prodCredsLenBefore = prodCreds.lengthSync();
+        }
+      }
+    });
+
+    tearDown(() {
+      if (tempSettingsDir.existsSync()) {
+        try {
+          tempSettingsDir.deleteSync(recursive: true);
+        } catch (_) {}
+      }
+
+      final localAppData = Platform.environment['LOCALAPPDATA'];
+      if (localAppData != null) {
+        final prodSettings = File('$localAppData\\AI Companion\\client_settings.json');
+        if (prodSettingsModBefore != null && prodSettings.existsSync()) {
+          expect(prodSettings.lastModifiedSync(), equals(prodSettingsModBefore),
+              reason: 'Production client_settings.json must not be modified by tests');
+          expect(prodSettings.lengthSync(), equals(prodSettingsLenBefore));
+        }
+        final prodCreds = File('$localAppData\\AI Companion\\credentials.bin');
+        if (prodCredsModBefore != null && prodCreds.existsSync()) {
+          expect(prodCreds.lastModifiedSync(), equals(prodCredsModBefore),
+              reason: 'Production credentials.bin must not be modified by tests');
+          expect(prodCreds.lengthSync(), equals(prodCredsLenBefore));
+        }
+      }
+    });
+
     testWidgets('AiCompanionDesktopApp wires runtime coordinator to settings and lifecycle coordinators', (tester) async {
       setupDesktopViewport(tester);
 
@@ -157,6 +214,8 @@ void main() {
           settingsController: settingsController,
           chatController: chatController,
           runtimeCoordinator: runtimeCoordinator,
+          clientSettings: isolatedSettings,
+          credentialStore: isolatedCredentialStore,
         ),
       );
       await tester.pumpAndSettle();
@@ -195,6 +254,8 @@ void main() {
           settingsController: settingsController,
           chatController: chatController,
           runtimeCoordinator: runtimeCoordinator,
+          clientSettings: isolatedSettings,
+          credentialStore: isolatedCredentialStore,
         ),
       );
       await tester.pumpAndSettle();
@@ -213,10 +274,15 @@ void main() {
       expect(saveFinder, findsOneWidget);
 
       await tester.ensureVisible(saveFinder);
+      await tester.pumpAndSettle();
       await tester.runAsync(() async {
         await tester.tap(saveFinder);
         for (int i = 0; i < 40; i++) {
-          if (runtimeCoordinator.baseUrl == 'http://127.0.0.1:8765') break;
+          await tester.pump(const Duration(milliseconds: 50));
+          if (runtimeCoordinator.baseUrl == 'http://127.0.0.1:8765' &&
+              settingsController.runtimeProcessState?.port == 8765) {
+            break;
+          }
           await Future<void>.delayed(const Duration(milliseconds: 50));
         }
       });
@@ -224,6 +290,11 @@ void main() {
 
       expect(runtimeCoordinator.baseUrl, equals('http://127.0.0.1:8765'));
       expect(settingsController.runtimeProcessState?.port, equals(8765));
+
+      // Verify that isolated file was written and not real AppData
+      expect(tempSettingsFile.existsSync(), isTrue);
+      final savedContent = jsonDecode(tempSettingsFile.readAsStringSync()) as Map<String, dynamic>;
+      expect(savedContent['hostUrl'], equals('http://127.0.0.1:8765'));
 
       runtimeCoordinator.dispose();
     });

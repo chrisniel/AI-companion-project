@@ -45,7 +45,7 @@ class MockCompanionClient extends CompanionClient {
   }
 
   @override
-  Future<AuthVerifyResponse> verifyAuth() async {
+  Future<AuthVerifyResponse> verifyAuth({Duration timeout = const Duration(seconds: 5)}) async {
     verifyAuthCalled = true;
     if (authStatusCode == 401) {
       throw const CompanionApiException(statusCode: 401, message: 'Invalid or expired token.');

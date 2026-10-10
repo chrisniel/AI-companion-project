@@ -19,6 +19,7 @@ void main() {
     late String testToken;
 
     int? launchedPid;
+    final Set<int> testSpawnedPids = <int>{};
 
     setUpAll(() async {
       final envPort = Platform.environment['COMPANION_TEST_PORT'];
@@ -56,10 +57,19 @@ void main() {
     });
 
     tearDownAll(() async {
-      if (launchedPid != null && launchedPid! > 0) {
-        try {
-          Process.killPid(launchedPid!);
-        } catch (_) {}
+      final supervisor = WindowsRuntimeProcessSupervisor();
+      for (final pid in testSpawnedPids) {
+        if (pid > 0) {
+          try {
+            final isMatching = await supervisor.isProcessActiveAndMatching(
+              pid,
+              expectedExecutable: 'python.exe',
+            );
+            if (isMatching) {
+              Process.killPid(pid);
+            }
+          } catch (_) {}
+        }
       }
       if (Platform.environment['COMPANION_TEST_TEMP_ROOT'] == null) {
         try {
@@ -85,6 +95,9 @@ void main() {
       expect(state.pid, greaterThan(0));
 
       launchedPid = state.pid;
+      if (launchedPid != null) {
+        testSpawnedPids.add(launchedPid!);
+      }
 
       // Verify lockfile exists with Schema v1 descriptor
       expect(lockFile.existsSync(), isTrue);
@@ -122,7 +135,7 @@ void main() {
       secondCoordinator.dispose();
     }, timeout: const Timeout(Duration(seconds: 15)));
 
-    test('Scenario C: UI Exit leaves detached runtime process alive and listening', () async {
+    test('Scenario C: Component-level runtime survival - UI exit leaves detached runtime process alive and listening (PC-HOST-001-MANUAL verifies full native OS shell lifecycle)', () async {
       expect(launchedPid, isNotNull);
 
       final supervisor = WindowsRuntimeProcessSupervisor();
@@ -137,7 +150,7 @@ void main() {
       expect(isAlive, isTrue);
     });
 
-    test('Scenario D: Stale lock recovery detects dead PID and recovers cleanly', () async {
+    test('Scenario D: Stale lock recovery detects dead PID, spawns runtime, and overwrites lockfile descriptor with active PID', () async {
       final supervisor = WindowsRuntimeProcessSupervisor();
       const deadPid = 999999;
 
@@ -147,31 +160,81 @@ void main() {
       );
       expect(isAlive, isFalse);
 
+      final testPortD = testPort + 2;
+      final staleDataDir = Directory('${tempRoot.path}\\DataD');
+      await staleDataDir.create(recursive: true);
+      final staleEnvFile = File('${tempRoot.path}\\.envD');
+      await staleEnvFile.writeAsString('COMPANION_API_KEY=$testToken\nPORT=$testPortD\n', flush: true);
       final staleLockFile = File('${tempRoot.path}\\stale.lock');
+      final staleLogFile = File('${tempRoot.path}\\Logs\\stale_runtime.log');
+      await staleLogFile.parent.create(recursive: true);
+
+      final testEnvD = {
+        'COMPANION_API_KEY': testToken,
+        'COMPANION_DATA_ROOT': staleDataDir.path,
+        'COMPANION_ENV_FILE': staleEnvFile.path,
+        'COMPANION_LOCK_FILE': staleLockFile.path,
+        'COMPANION_LOG_FILE': staleLogFile.path,
+        'COMPANION_CLIENT_SETTINGS_FILE': settingsFile.path,
+        'PYTHONUNBUFFERED': '1',
+      };
+
+      // 1. Seed the stale lockfile with dead PID descriptor
       final handle = await supervisor.acquireStartupLock(staleLockFile);
       expect(handle, isNotNull);
-
       await supervisor.writeDescriptorThroughHandle(
         handle!,
         RuntimeLockfileData(
           schemaVersion: 1,
-          instanceId: 'stale-inst',
+          instanceId: 'stale-inst-dead-pid',
           pid: deadPid,
-          port: 8769,
-          startedAt: DateTime.now().toUtc(),
+          port: testPortD,
+          startedAt: DateTime.now().toUtc().subtract(const Duration(hours: 1)),
           executablePath: r'C:\test\python.exe',
         ),
       );
       await supervisor.releaseStartupLock(handle);
 
-      final readBack = await supervisor.readDescriptorDirect(staleLockFile);
-      expect(readBack?.pid, equals(deadPid));
+      // Verify dead PID is present in stale lockfile before recovery
+      final staleDataBefore = await supervisor.readDescriptorDirect(staleLockFile);
+      expect(staleDataBefore?.pid, equals(deadPid));
 
-      // Re-acquiring stale lock succeeds and doesn't crash
-      final newHandle = await supervisor.acquireStartupLock(staleLockFile);
-      expect(newHandle, isNotNull);
-      await supervisor.releaseStartupLock(newHandle!);
-    });
+      // 2. Instantiate coordinator against stale lockfile and execute recovery
+      final recoveryCoordinator = DesktopRuntimeCoordinator(
+        baseUrl: 'http://127.0.0.1:$testPortD',
+        supervisor: supervisor,
+        credentialStore: InMemoryCredentialStore(testToken),
+        customLockFile: staleLockFile,
+        customLogFilePath: staleLogFile.path,
+        customEnvironment: testEnvD,
+      );
+
+      final recoveryState = await recoveryCoordinator.ensureRuntimeReady(
+        timeout: const Duration(seconds: 25),
+      );
+      expect(recoveryState.status, equals(RuntimeStatus.readyAndAuthenticated));
+      expect(recoveryState.pid, isNotNull);
+      expect(recoveryState.pid, greaterThan(0));
+      expect(recoveryState.pid, isNot(equals(deadPid)));
+
+      testSpawnedPids.add(recoveryState.pid!);
+
+      // 3. Verify descriptor in stale lockfile was overwritten with the recovered live PID
+      final staleDataAfter = await supervisor.readDescriptorDirect(staleLockFile);
+      expect(staleDataAfter, isNotNull);
+      expect(staleDataAfter?.pid, equals(recoveryState.pid));
+      expect(staleDataAfter?.pid, isNot(equals(deadPid)));
+      expect(staleDataAfter?.port, equals(testPortD));
+
+      // 4. Verify process is genuinely active
+      final isNewPidAlive = await supervisor.isProcessActiveAndMatching(
+        recoveryState.pid!,
+        expectedExecutable: 'python.exe',
+      );
+      expect(isNewPidAlive, isTrue);
+
+      recoveryCoordinator.dispose();
+    }, timeout: const Timeout(Duration(seconds: 35)));
 
     test('Scenario E: Alien port conflict reports alienPortConflict without terminating foreign listener', () async {
       final alienSocket = await ServerSocket.bind('127.0.0.1', 0);

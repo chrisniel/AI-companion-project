@@ -10,17 +10,17 @@ Write-Host "WINDOWS RUNTIME SUPERVISION ACCEPTANCE HARNESS (M2-H1)"
 Write-Host "============================================================"
 
 # Preflight: Record state of production storage to verify zero-mutation invariant
-$prodDataRoot = $null
+$prodAppDataRoot = $null
 $prodDataSnapshotBefore = @{}
 if ($env:LOCALAPPDATA) {
-    $prodDataRoot = Join-Path $env:LOCALAPPDATA "AI Companion\Data"
-    if (Test-Path $prodDataRoot) {
-        Get-ChildItem -Path $prodDataRoot -Recurse -File | ForEach-Object {
+    $prodAppDataRoot = Join-Path $env:LOCALAPPDATA "AI Companion"
+    if (Test-Path $prodAppDataRoot) {
+        Get-ChildItem -Path $prodAppDataRoot -Recurse -File | ForEach-Object {
             $prodDataSnapshotBefore[$_.FullName] = $_.LastWriteTimeUtc.Ticks
         }
-        Write-Host "[PREFLIGHT] Recorded production Data root state ($($prodDataSnapshotBefore.Count) files): $prodDataRoot"
+        Write-Host "[PREFLIGHT] Recorded production AppData state ($($prodDataSnapshotBefore.Count) files): $prodAppDataRoot"
     } else {
-        Write-Host "[PREFLIGHT] Production Data root does not yet exist ($prodDataRoot)."
+        Write-Host "[PREFLIGHT] Production AppData root does not yet exist ($prodAppDataRoot)."
     }
 }
 
@@ -73,8 +73,8 @@ try {
     Write-Host "SCENARIO VERIFICATION SUMMARY:"
     Write-Host "  [PASS] Scenario A: Real launch through coordinator; lockfile & rotating log created"
     Write-Host "  [PASS] Scenario B: Second coordinator attaches to existing runtime; no duplicate PID"
-    Write-Host "  [PASS] Scenario C: UI exit leaves runtime alive and listening on port $testPort"
-    Write-Host "  [PASS] Scenario D: Stale lock recovery detects dead PID and recovers cleanly"
+    Write-Host "  [PASS] Scenario C: Component-level runtime survival (UI exit leaves detached runtime listening; PC-HOST-001-MANUAL gate noted)"
+    Write-Host "  [PASS] Scenario D: Stale lock recovery detects dead PID, spawns runtime, and overwrites lockfile descriptor with active PID"
     Write-Host "  [PASS] Scenario E: Alien port conflict reports alienPortConflict; foreign listener preserved"
     Write-Host "  [PASS] Scenario F: Cross-process lock contention handled without truncation"
     Write-Host "============================================================"
@@ -88,10 +88,10 @@ try {
         Write-Host "[ISOLATION] Confirmed test runtime wrote to isolated log ($logSize bytes): $testLogFile"
     }
 
-    # Verify production data root was untouched
-    if ($prodDataRoot -and (Test-Path $prodDataRoot)) {
+    # Verify production AppData root (Data, client_settings.json, credentials.bin) was untouched
+    if ($prodAppDataRoot -and (Test-Path $prodAppDataRoot)) {
         $prodDataSnapshotAfter = @{}
-        Get-ChildItem -Path $prodDataRoot -Recurse -File | ForEach-Object {
+        Get-ChildItem -Path $prodAppDataRoot -Recurse -File | ForEach-Object {
             $prodDataSnapshotAfter[$_.FullName] = $_.LastWriteTimeUtc.Ticks
         }
         foreach ($file in $prodDataSnapshotBefore.Keys) {
@@ -107,7 +107,7 @@ try {
                 Write-Error "SAFETY VIOLATION: Production file $file was created during test!"
             }
         }
-        Write-Host "[ISOLATION] PASS: Production Data root (%LOCALAPPDATA%\AI Companion\Data) completely untouched."
+        Write-Host "[ISOLATION] PASS: Production AppData (%LOCALAPPDATA%\AI Companion) completely untouched."
     }
 
     Write-Host "`nALL ACCEPTANCE CRITERIA VERIFIED SUCCESSFULLY."

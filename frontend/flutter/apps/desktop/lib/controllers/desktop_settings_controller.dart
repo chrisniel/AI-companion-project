@@ -68,7 +68,9 @@ class DesktopSettingsController extends ChangeNotifier {
 
   void updateRuntimeState(RuntimeProcessState state, [RuntimeLockfileData? lockfileData]) {
     _runtimeProcessState = state;
-    if (lockfileData != null) {
+    if (state.supervisionMode == SupervisionMode.remoteHost) {
+      _runtimeLockfileData = null;
+    } else if (lockfileData != null) {
       _runtimeLockfileData = lockfileData;
     }
     notifyListeners();

@@ -120,6 +120,7 @@ class AiCompanionDesktopApp extends StatefulWidget {
     this.chatController,
     this.runtimeCoordinator,
     this.credentialStore,
+    this.clientSettings,
   });
 
   final DesktopLifecycleCoordinator? coordinator;
@@ -127,6 +128,7 @@ class AiCompanionDesktopApp extends StatefulWidget {
   final DesktopChatController? chatController;
   final DesktopRuntimeCoordinator? runtimeCoordinator;
   final CredentialStore? credentialStore;
+  final DesktopClientSettings? clientSettings;
 
   @override
   State<AiCompanionDesktopApp> createState() => _AiCompanionDesktopAppState();
@@ -138,6 +140,9 @@ class _AiCompanionDesktopAppState extends State<AiCompanionDesktopApp> {
   DesktopRuntimeCoordinator? _runtimeCoordinator;
   StreamSubscription<RuntimeProcessState>? _runtimeSubscription;
   bool _ownsRuntimeCoordinator = false;
+
+  DesktopClientSettings get _effectiveClientSettings =>
+      widget.clientSettings ?? DesktopClientSettings();
 
   @override
   void initState() {
@@ -166,7 +171,7 @@ class _AiCompanionDesktopAppState extends State<AiCompanionDesktopApp> {
       _wireRuntimeCoordinator();
     } else {
       _ownsRuntimeCoordinator = true;
-      DesktopClientSettings().readHostUrl(defaultValue: defaultHostUrl).then((host) {
+      _effectiveClientSettings.readHostUrl(defaultValue: defaultHostUrl).then((host) {
         if (!mounted) return;
         if (host != defaultHostUrl && widget.chatController == null) {
           _chatController.updateConfiguration(baseUrl: host);
@@ -226,6 +231,8 @@ class _AiCompanionDesktopAppState extends State<AiCompanionDesktopApp> {
             coordinator: widget.coordinator,
             chatController: _chatController,
             runtimeCoordinator: _runtimeCoordinator,
+            clientSettings: widget.clientSettings,
+            credentialStore: widget.credentialStore,
           ),
         );
       },

@@ -112,15 +112,23 @@ class CompanionClient {
   }
 
   /// Verifies pairing token via POST /api/v1/auth/verify.
-  Future<AuthVerifyResponse> verifyAuth() async {
+  Future<AuthVerifyResponse> verifyAuth({Duration timeout = const Duration(seconds: 5)}) async {
     final uri = baseUri.replace(path: '${baseUri.path}/api/v1/auth/verify');
     final headers = await _buildHeaders(requiresAuth: true);
-    final response = await _httpClient.post(uri, headers: headers);
-    if (response.statusCode == 200) {
-      final dynamic json = jsonDecode(response.body);
-      return AuthVerifyResponse.fromJson(Map<String, dynamic>.from(json as Map));
+    try {
+      final response = await _httpClient.post(uri, headers: headers).timeout(timeout);
+      if (response.statusCode == 200) {
+        final dynamic json = jsonDecode(response.body);
+        return AuthVerifyResponse.fromJson(Map<String, dynamic>.from(json as Map));
+      }
+      _handleErrorResponse(response);
+    } on TimeoutException {
+      throw const CompanionApiException(
+        statusCode: 408,
+        code: 'TIMEOUT',
+        message: 'Authentication verification timed out.',
+      );
     }
-    _handleErrorResponse(response);
   }
 
   /// Retrieves host machine hardware profile and runtime status via GET /api/v1/system/status.

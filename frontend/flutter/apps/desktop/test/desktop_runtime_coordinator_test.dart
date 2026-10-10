@@ -38,7 +38,7 @@ class TestMockCompanionClient extends CompanionClient {
   }
 
   @override
-  Future<AuthVerifyResponse> verifyAuth() async {
+  Future<AuthVerifyResponse> verifyAuth({Duration timeout = const Duration(seconds: 5)}) async {
     authCallCount++;
     if (authStatusCode == 401) {
       throw const CompanionApiException(
