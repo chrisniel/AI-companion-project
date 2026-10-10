@@ -4,7 +4,7 @@
 
 **Goal:** Establish reliable, non-elevated single-instance startup, safe local attach, cross-process concurrency synchronization, detached background persistence ("Quit UI != Stop Runtime"), bounded readiness polling, and unambiguous authentication separation for the Local AI Runtime on Windows.
 
-**Architecture:** A native Windows supervisor in the Flutter desktop client coordinates local runtime lifecycle using kernel-enforced file locking (`RandomAccessFile.lock`), detached process creation (`ProcessStartMode.detached`) with redirected logs, loopback port/health probing (`GET /api/v1/health`), DPAPI-backed identity verification (`POST /api/v1/auth/verify`), and safe PID provenance validation. Host-level termination (Stop/Restart) is strictly deferred until dedicated local host-administration controls are approved.
+**Architecture:** A native Windows supervisor in the Flutter desktop client coordinates local runtime lifecycle using kernel-enforced file locking (`RandomAccessFile.lock`), double-checked locking after lock acquisition, detached process creation (`ProcessStartMode.detached`) with internal rotating file logging, loopback port/health probing (`GET /api/v1/health`), DPAPI-backed identity verification (`POST /api/v1/auth/verify`), and two-factor process identity validation without process termination. Host-level termination (Stop/Restart) is strictly deferred until dedicated local host-administration controls are approved.
 
 **Tech Stack:** Dart 3.13 / Flutter 3.47.1, Win32 Process APIs (`dart:io` Process/RandomAccessFile), Windows DPAPI (`Crypt32.dll`), HTTP/REST client.
 
@@ -16,6 +16,7 @@
 
 - **Non-Elevated Execution:** The runtime executes exclusively under standard user account privileges without requesting UAC elevation prompts (`SYSTEM_BASELINE.md` §3).
 - **Loopback Binding Default:** Local runtime management applies strictly to loopback targets (`127.0.0.1` / `localhost`). Remote host URLs strictly disable local process management (`windows-host-and-notifications.md` §6).
+- **Separation of Supervision Mode and Connection State:** `SupervisionMode` (localLoopback vs remoteHost) is modeled orthogonally from `RuntimeStatus` (dormant, launching, readyAndAuthenticated, reachableUnauthenticated, unreachable, etc.). Remote connections never conflate remote management with authentication state.
 - **Invariant "Quit UI != Stop Runtime":** Closing or exiting the Flutter UI client leaves the detached background runtime process running (`windows-host-and-notifications.md` §2.1).
 - **Process Safety & Anti-Kill Invariant:** Never kill an unknown process or trust a PID solely because it appears in a lockfile. If an unverified process occupies the port or lockfile, fail closed with typed diagnostics without process termination.
 - **Authentication Separation:** Public `GET /api/v1/health` (HTTP 200) proves reachability only; the client is marked authenticated only after `POST /api/v1/auth/verify` succeeds with DPAPI credentials.
@@ -27,11 +28,12 @@
 
 ## Review Focus
 
-1. **Port 8000 Occupied by an Alien Process:** `GET /api/v1/health` fails, times out, or returns an unrecognized non-companion payload -> supervisor transitions to `alienPortConflict`, records error diagnostics, and refuses to spawn child processes or kill the alien process.
-2. **Stale Lockfile with Dead or Recycled PID:** `runtime.lock` exists with a recorded PID, but the PID is either dead or points to a non-companion executable -> supervisor detects invalid provenance via OS query, safely removes the stale lockfile without killing the foreign process, and proceeds with launch.
-3. **Rapid Concurrent Launch Triggers:** Multiple simultaneous client launches or double-clicks -> kernel-level atomic lock (`RandomAccessFile.lock(FileLock.exclusive)`) serializes startup; exactly one launch spawns a process, while subsequent callers attach to the healthy instance.
-4. **Runtime Startup Hangs or Exceeds Readiness Timeout:** Spawned runtime process fails to respond to `GET /api/v1/health` within 30 seconds -> supervisor marks `startupTimeout`, records diagnostic log snippet, and notifies the user without corrupting system state.
-5. **Remote Host URL Configuration:** Client is configured to connect to a LAN or Tailscale companion URL -> supervisor disables local process management (`remoteManaged`), bypassing local lockfile and process spawning.
+1. **File Lock Safety & Truncation Prevention:** `runtime.lock` must be opened with `FileMode.append` (never `FileMode.write`, which truncates prior to lock acquisition). The exclusive lock (`RandomAccessFile.lock(FileLock.exclusive)`) must be acquired before any descriptor read/write, descriptor updates must be written through the locked handle (`setPosition(0)`, `truncate(0)`, `writeString(...)`, `flush()`), and locks must be released in `try ... finally` blocks.
+2. **Double-Checked Locking & Recheck Under Guard:** Recheck port responsiveness and descriptor/process status immediately after acquiring the lock guard. If another process completed startup while the lock was pending, attach cleanly without duplicate process spawning.
+3. **Surviving Unresponsive Process Guard:** If a recorded PID is running but port 8000 is not responding, do not blindly spawn a duplicate process or kill the existing process; transition safely to `processUnresponsive` and fail closed.
+4. **Detached Process Logging Independence:** `ProcessStartMode.detached` exposes no stdout/stderr streams. Durable logging is achieved by configuring the runtime process environment (`COMPANION_LOG_FILE`) to log directly to `%LOCALAPPDATA%\AI Companion\Logs\runtime.log` using internal rotating file logging, without shell wrappers (`cmd.exe`), command-line secret exposure, or unmanaged child processes.
+5. **Separation of Service Identity vs. OS Process Identity:** Authenticated service identity is verified over HTTP (`GET /health` + `POST /auth/verify`). OS process identity is checked via image provenance query without killing unverified PIDs.
+6. **Cross-Process Concurrency Testing & Isolated Acceptance:** Verification requires genuine multi-process locking tests (via helper process) and disposable acceptance testing in `$env:TEMP` on non-default ports without touching user data, models, or live port 8000.
 
 ---
 
@@ -39,11 +41,12 @@
 
 | Decision Area | Chosen Architecture | Rejected Alternative & Rationale |
 | :--- | :--- | :--- |
+| **Lockfile Open Mode** | **`FileMode.append` with handle locking** and in-handle write (`setPosition(0)` / `truncate(0)` / `writeString`). | **Rejected: `FileMode.write`.** `FileMode.write` truncates file length to zero on Windows *before* the lock can be acquired, corrupting active descriptors during concurrent launches. |
+| **Double-Checked Locking** | **Recheck port and process state under lock** before initiating process spawn. | **Rejected: Single check before lock.** A concurrent process could finish starting up while this process waits for the lock; without recheck, a duplicate instance would be spawned. |
+| **Detached Logging** | **Direct runtime file logging via environment variable (`COMPANION_LOG_FILE`)** to `%LOCALAPPDATA%\AI Companion\Logs\runtime.log`. | **Rejected: Shell redirection (`cmd.exe /c ... > log`).** Introducing a shell wrapper introduces injection risks, obscures the true Python PID behind a `cmd.exe` parent PID, and leaks shell windows. |
 | **Host Termination** | **Deferred to follow-on host admin design.** H1 focuses on launch, attach, and supervision. Tray "Stop Runtime" remains disabled / informational ("Managed by Host"). | **Rejected: `POST /api/v1/system/shutdown` with bearer auth.** Ordinary pairing credentials must not authorize host termination. Exposing shutdown over API violates host-admin trust boundary (`authentication-and-secrets.md`). |
-| **Concurrency Guard** | **OS-level kernel file locking** via `RandomAccessFile.lock(FileLock.exclusive)` on `runtime.lock`. | **Rejected: Simple file existence checks (`File.existsSync`).** Subject to TOCTOU race conditions during concurrent launches. Kernel lock guarantees mutual exclusion across processes. |
 | **PID Validation** | **Two-factor PID validation:** verify port responsiveness AND executable image name before trusting process identity. | **Rejected: Blind PID killing (`taskkill /PID <pid>`).** Windows aggressively recycles PIDs. Trusting a raw PID from disk could kill an innocent OS or user process. |
-| **Process Detachment** | **`ProcessStartMode.detached` with redirected standard I/O** to `%LOCALAPPDATA%\AI Companion\Logs\runtime.log`. | **Rejected: Inherited I/O pipes.** Orphaned console pipe handles deadlock Windows console subsystems when the parent Flutter process exits. |
-| **Remote URLs** | **Local supervision mode gating:** Loopback enables local supervisor; non-loopback enters `remoteManaged` mode. | **Rejected: Unconditional local spawn.** Spawning local background processes when the user intends to connect to a remote companion wastes resources and causes confusion. |
+| **Remote URLs** | **Orthogonal state modeling:** `SupervisionMode` (`localLoopback` vs `remoteHost`) separate from `RuntimeStatus`. | **Rejected: Conflating remote mode with auth state.** Remote hosts can be authenticated, unauthenticated, or unreachable; coupling these into a single flat enum obscures failure modes. |
 
 ---
 
@@ -61,8 +64,23 @@
 **Interfaces:**
 - Consumes: Pure Dart core utilities.
 - Produces:
-  - Enum `RuntimeProcessState { dormant, launching, readyAndAuthenticated, reachableUnauthenticated, alienPortConflict, startupTimeout, remoteManaged }` with helper predicates (`isOperational`, `isLocalManaged`, `canSendMessages`).
-  - Class `RuntimeLockfileData(schemaVersion: int, instanceId: String, pid: int, port: int, startedAt: DateTime, executablePath: String)` with `toRawJson()` and `fromRawJson()`.
+  - Enum `SupervisionMode { localLoopback, remoteHost }`.
+  - Enum `RuntimeStatus { dormant, launching, readyAndAuthenticated, reachableUnauthenticated, unreachable, alienPortConflict, startupTimeout, processUnresponsive, executableNotFound }`.
+  - Class `RuntimeProcessState`:
+    - `final SupervisionMode supervisionMode;`
+    - `final RuntimeStatus status;`
+    - `final int? pid;`
+    - `final int port;`
+    - `final String? diagnosticMessage;`
+    - Getters: `bool get isOperational => status == RuntimeStatus.readyAndAuthenticated;`, `bool get canSendMessages => isOperational;`, `bool get isLocalSupervised => supervisionMode == SupervisionMode.localLoopback;`.
+  - Class `RuntimeLockfileData`:
+    - `final int schemaVersion;` (must equal 1)
+    - `final String instanceId;` (UUIDv4)
+    - `final int pid;`
+    - `final int port;`
+    - `final DateTime startedAt;` (UTC)
+    - `final String executablePath;`
+    - `String toRawJson()` and `static RuntimeLockfileData fromRawJson(String source)` (fail-closed validation).
 
 - [ ] **Step 1: Write failing tests for RuntimeProcessState and RuntimeLockfileData**
 
@@ -93,10 +111,33 @@ void main() {
       expect(restored.executablePath, equals(r'D:\AI Companion\backend\.venv\Scripts\python.exe'));
     });
 
-    test('fails closed on corrupt, partial, or missing descriptor fields', () {
+    test('fails closed on corrupt, partial, or invalid schema version descriptor', () {
       expect(() => RuntimeLockfileData.fromRawJson('{}'), throwsA(isA<FormatException>()));
       expect(() => RuntimeLockfileData.fromRawJson('{"schema_version": 2}'), throwsA(isA<FormatException>()));
       expect(() => RuntimeLockfileData.fromRawJson('not-json'), throwsA(isA<FormatException>()));
+    });
+  });
+
+  group('RuntimeProcessState', () {
+    test('separates supervision mode from runtime status', () {
+      final remoteUnauthenticated = RuntimeProcessState(
+        supervisionMode: SupervisionMode.remoteHost,
+        status: RuntimeStatus.reachableUnauthenticated,
+        port: 8000,
+      );
+      expect(remoteUnauthenticated.isLocalSupervised, isFalse);
+      expect(remoteUnauthenticated.isOperational, isFalse);
+      expect(remoteUnauthenticated.canSendMessages, isFalse);
+
+      final localReady = RuntimeProcessState(
+        supervisionMode: SupervisionMode.localLoopback,
+        status: RuntimeStatus.readyAndAuthenticated,
+        pid: 1234,
+        port: 8000,
+      );
+      expect(localReady.isLocalSupervised, isTrue);
+      expect(localReady.isOperational, isTrue);
+      expect(localReady.canSendMessages, isTrue);
     });
   });
 }
@@ -109,12 +150,11 @@ Expected: FAIL with compilation error (classes not found).
 
 - [ ] **Step 3: Implement `RuntimeProcessState` and `RuntimeLockfileData` in `companion_core`**
 
-Implement `RuntimeProcessState` enum with clear state definitions and helpers. Implement `RuntimeLockfileData` with strict schema validation (`schemaVersion == 1`), ISO-8601 UTC timestamp parsing, and fail-closed error handling. Export both from `companion_core.dart`.
+Implement `SupervisionMode`, `RuntimeStatus`, and `RuntimeProcessState` in `runtime_process_state.dart`. Implement `RuntimeLockfileData` with strict schema validation (`schemaVersion == 1`), ISO-8601 UTC timestamp parsing, and fail-closed error handling in `runtime_lockfile.dart`. Export both from `companion_core.dart`.
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `dart test frontend/flutter/packages/companion_core/test/runtime_lockfile_test.dart`
-Run: `dart test frontend/flutter/packages/companion_core/test/runtime_process_state_test.dart`
 Expected: PASS.
 
 - [ ] **Step 5: Verify git status and commit**
@@ -124,25 +164,26 @@ Commit: `feat(core): implement runtime process state model and lockfile descript
 
 ---
 
-### Task 2: Native Windows Runtime Process Supervisor with Kernel Locking (`apps/desktop/lib/platform/`)
+### Task 2: Native Windows Runtime Process Supervisor with Kernel Locking & Detached Logging (`apps/desktop/lib/platform/`)
 
 **Files:**
 - Create: `frontend/flutter/apps/desktop/lib/platform/windows_runtime_process_supervisor.dart`
 - Create: `frontend/flutter/apps/desktop/lib/platform/process_launcher_adapter.dart`
 - Test: `frontend/flutter/apps/desktop/test/windows_runtime_process_supervisor_test.dart`
+- Test Helper: `frontend/flutter/apps/desktop/test/helpers/lock_holder_helper.dart`
 
 **Interfaces:**
 - Consumes: `RuntimeLockfileData`, `ProcessLauncherAdapter`.
 - Produces:
   - `WindowsRuntimeProcessSupervisor`:
-    - `Future<bool> isPortListening(String host, int port, {Duration timeout})`
-    - `Future<RandomAccessFile?> tryAcquireStartupLock(File lockfile)`
+    - `Future<bool> isPortListening(String host, int port, {Duration timeout = const Duration(milliseconds: 500)})`
+    - `Future<RandomAccessFile?> acquireStartupLock(File lockFile, {Duration timeout = const Duration(seconds: 5)})`
     - `Future<void> releaseStartupLock(RandomAccessFile lockHandle)`
-    - `Future<RuntimeLockfileData?> readLockfile(File lockfile)`
-    - `Future<void> writeLockfile(File lockfile, RuntimeLockfileData data)`
-    - `Future<void> removeLockfile(File lockfile)`
+    - `Future<void> writeDescriptorThroughHandle(RandomAccessFile lockHandle, RuntimeLockfileData data)`
+    - `Future<RuntimeLockfileData?> readDescriptorThroughHandle(RandomAccessFile lockHandle)`
+    - `Future<RuntimeLockfileData?> readDescriptorDirect(File lockFile)`
     - `Future<bool> isProcessActiveAndMatching(int pid, {required String expectedExecutable})`
-    - `Future<int> spawnDetachedRuntime({required String executable, required List<String> args, required String workingDirectory, required String logFilePath})`
+    - `Future<int> spawnDetachedRuntime({required String executable, required List<String> args, required String workingDirectory, required String logFilePath, Map<String, String>? environment})`
 
 - [ ] **Step 1: Write failing tests for WindowsRuntimeProcessSupervisor**
 
@@ -155,48 +196,82 @@ import 'package:test/test.dart';
 
 void main() {
   group('WindowsRuntimeProcessSupervisor', () {
-    test('acquires exclusive file lock and blocks concurrent acquisition', () async {
+    test('opens lockfile with append mode and writes descriptor through locked handle without truncating on open', () async {
       final tempDir = await Directory.systemTemp.createTemp('lock_test_');
       final lockFile = File('${tempDir.path}\\runtime.lock');
       final supervisor = WindowsRuntimeProcessSupervisor();
 
-      final handle1 = await supervisor.tryAcquireStartupLock(lockFile);
+      // First acquisition
+      final handle1 = await supervisor.acquireStartupLock(lockFile);
       expect(handle1, isNotNull);
 
-      // Second attempt on locked file fails closed
-      final handle2 = await supervisor.tryAcquireStartupLock(lockFile);
-      expect(handle2, isNull);
+      final data = RuntimeLockfileData(
+        schemaVersion: 1,
+        instanceId: 'test-inst-1',
+        pid: 1001,
+        port: 8000,
+        startedAt: DateTime.now().toUtc(),
+        executablePath: r'C:\test\python.exe',
+      );
+      await supervisor.writeDescriptorThroughHandle(handle1!, data);
+      final readBack = await supervisor.readDescriptorThroughHandle(handle1);
+      expect(readBack?.instanceId, equals('test-inst-1'));
 
-      await supervisor.releaseStartupLock(handle1!);
+      await supervisor.releaseStartupLock(handle1);
+
+      // Reopening in append mode must NOT truncate existing descriptor
+      final handle2 = await supervisor.acquireStartupLock(lockFile);
+      expect(handle2, isNotNull);
+      final readAgain = await supervisor.readDescriptorThroughHandle(handle2!);
+      expect(readAgain?.instanceId, equals('test-inst-1'));
+      await supervisor.releaseStartupLock(handle2);
+
       await tempDir.delete(recursive: true);
     });
 
-    test('refuses to kill or touch dead/unverified PID during stale lock recovery', () async {
-      final tempDir = await Directory.systemTemp.createTemp('stale_test_');
+    test('detects cross-process lock contention via helper process', () async {
+      final tempDir = await Directory.systemTemp.createTemp('cross_proc_test_');
       final lockFile = File('${tempDir.path}\\runtime.lock');
       final supervisor = WindowsRuntimeProcessSupervisor();
 
-      // Write stale descriptor pointing to non-existent or foreign PID
-      final data = RuntimeLockfileData(
-        schemaVersion: 1,
-        instanceId: 'test-instance',
-        pid: 99999999,
-        port: 8000,
-        startedAt: DateTime.now().toUtc(),
-        executablePath: r'C:\Windows\System32\notepad.exe', // foreign image
+      // Launch external Dart helper process that holds lock for 2 seconds
+      final helper = await Process.start(
+        Platform.resolvedExecutable,
+        ['run', 'test/helpers/lock_holder_helper.dart', lockFile.path, '2000'],
       );
-      await supervisor.writeLockfile(lockFile, data);
 
-      final isMatching = await supervisor.isProcessActiveAndMatching(
-        data.pid,
+      // Give helper 200ms to acquire lock
+      await Future.delayed(const Duration(milliseconds: 200));
+
+      // Immediate attempt with 100ms timeout must detect lock contention and return null
+      final handle = await supervisor.acquireStartupLock(lockFile, timeout: const Duration(milliseconds: 100));
+      expect(handle, isNull);
+
+      await helper.exitCode;
+      await tempDir.delete(recursive: true);
+    });
+
+    test('refuses to kill or touch foreign or unverified PID', () async {
+      final supervisor = WindowsRuntimeProcessSupervisor();
+      // Probe PID with non-matching executable
+      final isMatch = await supervisor.isProcessActiveAndMatching(
+        1, // System idle or init
         expectedExecutable: 'python.exe',
       );
-      expect(isMatching, isFalse);
+      expect(isMatch, isFalse);
+    });
 
-      // Safe recovery cleans lockfile without killing the foreign process
-      await supervisor.removeLockfile(lockFile);
-      expect(await lockFile.exists(), isFalse);
-      await tempDir.delete(recursive: true);
+    test('fails closed when runtime executable is absent', () async {
+      final supervisor = WindowsRuntimeProcessSupervisor();
+      expect(
+        () => supervisor.spawnDetachedRuntime(
+          executable: r'C:\nonexistent\python.exe',
+          args: [],
+          workingDirectory: r'C:\',
+          logFilePath: r'C:\temp\run.log',
+        ),
+        throwsA(isA<FileSystemException>()),
+      );
     });
   });
 }
@@ -209,11 +284,14 @@ Expected: FAIL with compilation error (classes not found).
 
 - [ ] **Step 3: Implement `WindowsRuntimeProcessSupervisor` and `ProcessLauncherAdapter`**
 
-Implement `ProcessLauncherAdapter` wrapping `Process.start` to allow mock injection. In `WindowsRuntimeProcessSupervisor`:
-- `tryAcquireStartupLock`: opens file with `FileMode.write` and calls `lock(FileLock.exclusive)`. Catches `FileSystemException` and returns `null` on contention.
-- `isPortListening`: tests loopback port connection with a bounded 500ms timeout via `Socket.connect`.
-- `isProcessActiveAndMatching`: queries Windows process table via `tasklist /FI "PID eq <pid>" /FO CSV /NH` or Win32 process probe; checks that image name matches expected executable. If PID is dead or image does not match, returns `false`. Never kills any process.
-- `spawnDetachedRuntime`: ensures log directory exists (`%LOCALAPPDATA%\AI Companion\Logs`), opens log file for append, launches child process with `mode: ProcessStartMode.detached`, and redirects stdout/stderr.
+In `WindowsRuntimeProcessSupervisor`:
+- `acquireStartupLock`: opens `lockFile` with `FileMode.append` (NEVER `FileMode.write`). Loops with exponential backoff up to `timeout` calling `handle.lock(FileLock.exclusive)`. Catches `FileSystemException` during contention. Returns `handle` or `null`.
+- `releaseStartupLock`: calls `await handle.unlock()` and `await handle.close()`.
+- `writeDescriptorThroughHandle`: writes strictly through handle: `await handle.setPosition(0)`, `await handle.truncate(0)`, `await handle.writeString(data.toRawJson())`, `await handle.flush()`.
+- `readDescriptorThroughHandle`: reads string from `handle.setPosition(0)` and parses `RuntimeLockfileData`.
+- `isPortListening`: bounded 500ms `Socket.connect`.
+- `isProcessActiveAndMatching`: queries Windows process table via `tasklist /FI "PID eq <pid>" /FO CSV /NH`. Validates image name matches expected executable. Returns `false` on missing or mismatched PID. Never kills any process.
+- `spawnDetachedRuntime`: checks executable exists on disk. Creates log parent directory. Spawns child with `ProcessStartMode.detached` and passes `environment: {'COMPANION_LOG_FILE': logFilePath, 'PYTHONUNBUFFERED': '1', ...?environment}`. Returns direct process PID without shell wrappers.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -222,12 +300,12 @@ Expected: PASS.
 
 - [ ] **Step 5: Verify git status and commit**
 
-Stage: `frontend/flutter/apps/desktop/lib/platform/` and test file.
-Commit: `feat(desktop): implement Windows native process supervisor with kernel locking and safe PID provenance`
+Stage: `frontend/flutter/apps/desktop/lib/platform/` and test files.
+Commit: `feat(desktop): implement Windows native process supervisor with safe kernel locking and detached logging`
 
 ---
 
-### Task 3: Desktop Runtime Coordinator with Readiness Polling & Auth Separation (`apps/desktop/lib/coordinator/`)
+### Task 3: Desktop Runtime Coordinator with Double-Checked Locking, Double Verification & Readiness Polling (`apps/desktop/lib/coordinator/`)
 
 **Files:**
 - Create: `frontend/flutter/apps/desktop/lib/coordinator/desktop_runtime_coordinator.dart`
@@ -247,36 +325,76 @@ Commit: `feat(desktop): implement Windows native process supervisor with kernel 
 
 ```dart
 // frontend/flutter/apps/desktop/test/desktop_runtime_coordinator_test.dart
+import 'dart:io';
 import 'package:ai_companion_desktop/coordinator/desktop_runtime_coordinator.dart';
+import 'package:ai_companion_desktop/platform/windows_runtime_process_supervisor.dart';
 import 'package:companion_api/companion_api.dart';
 import 'package:companion_core/companion_core.dart';
 import 'package:test/test.dart';
 
 void main() {
   group('DesktopRuntimeCoordinator', () {
-    test('transitions to remoteManaged when baseUrl is non-loopback and bypasses process spawn', () async {
-      // Setup coordinator with remote baseUrl (e.g. https://companion.lan:8000)
-      // Call ensureRuntimeReady() -> verifies local lockfile and spawn are skipped -> state is remoteManaged
+    test('transitions to remoteHost and skips local process spawning when baseUrl is non-loopback', () async {
+      final coordinator = DesktopRuntimeCoordinator(
+        baseUrl: 'http://companion-remote.lan:8000',
+        supervisor: WindowsRuntimeProcessSupervisor(),
+        // mock client with successful reachability and auth
+      );
+      final state = await coordinator.ensureRuntimeReady();
+      expect(state.supervisionMode, equals(SupervisionMode.remoteHost));
+      expect(state.status, equals(RuntimeStatus.readyAndAuthenticated));
+      expect(coordinator.isLocalLoopback, isFalse);
     });
 
     test('attaches to existing running instance without spawning second process', () async {
-      // Setup supervisor with port 8000 listening and health 200
-      // Call ensureRuntimeReady() -> verifies spawnDetachedRuntime was NOT called -> state readyAndAuthenticated
+      // Mock supervisor where port 8000 connects, health returns 200, auth verify returns 200
+      final coordinator = DesktopRuntimeCoordinator(
+        baseUrl: 'http://127.0.0.1:8000',
+        // mock client & mock launcher
+      );
+      final state = await coordinator.ensureRuntimeReady();
+      expect(state.status, equals(RuntimeStatus.readyAndAuthenticated));
+      expect(coordinator.activeRuntimeInfo?.pid, isNotNull);
+      // verify launcher.spawnDetachedRuntime was never called
     });
 
     test('transitions to reachableUnauthenticated when health 200 but auth verify returns 401', () async {
-      // Setup supervisor with port 8000 listening, health 200, but client.verifyAuth() throws 401
-      // Call ensureRuntimeReady() -> verifies state is reachableUnauthenticated and sending remains disabled
+      final coordinator = DesktopRuntimeCoordinator(
+        baseUrl: 'http://127.0.0.1:8000',
+        // mock client where health 200, auth 401
+      );
+      final state = await coordinator.ensureRuntimeReady();
+      expect(state.status, equals(RuntimeStatus.reachableUnauthenticated));
+      expect(state.canSendMessages, isFalse);
     });
 
-    test('transitions to alienPortConflict when port is listening but /health returns non-companion response', () async {
-      // Setup supervisor where port 8000 connects but /health returns 404 or connection reset
-      // Call ensureRuntimeReady() -> verifies state is alienPortConflict and no process is spawned or killed
+    test('transitions to alienPortConflict and refuses to kill process when port responds with non-companion payload', () async {
+      final coordinator = DesktopRuntimeCoordinator(
+        baseUrl: 'http://127.0.0.1:8000',
+        // mock port listening but /health returns 404 or connection reset
+      );
+      final state = await coordinator.ensureRuntimeReady();
+      expect(state.status, equals(RuntimeStatus.alienPortConflict));
+      expect(state.isOperational, isFalse);
     });
 
     test('transitions to startupTimeout when spawned process does not become healthy within 30s', () async {
-      // Setup supervisor where process spawns but /health never responds 200 within timeout
-      // Call ensureRuntimeReady() -> verifies state is startupTimeout
+      final coordinator = DesktopRuntimeCoordinator(
+        baseUrl: 'http://127.0.0.1:8000',
+        // mock process spawns but health polling continuously times out
+      );
+      final state = await coordinator.ensureRuntimeReady(timeout: const Duration(milliseconds: 500));
+      expect(state.status, equals(RuntimeStatus.startupTimeout));
+    });
+
+    test('detects alive but unresponsive process under lock and refuses duplicate spawn', () async {
+      final coordinator = DesktopRuntimeCoordinator(
+        baseUrl: 'http://127.0.0.1:8000',
+        // mock lockfile has PID 5555 which is alive in OS table, but port 8000 is not responding
+      );
+      final state = await coordinator.ensureRuntimeReady();
+      expect(state.status, equals(RuntimeStatus.processUnresponsive));
+      // verify no duplicate spawn occurred
     });
   });
 }
@@ -289,17 +407,27 @@ Expected: FAIL with compilation error (class not found).
 
 - [ ] **Step 3: Implement `DesktopRuntimeCoordinator` in `apps/desktop/lib/coordinator/`**
 
-Implement the coordinator:
-1. `isLocalLoopback`: checks if `baseUrl` host is `127.0.0.1` or `localhost`. If false, set `remoteManaged` and verify network reachability/auth directly without touching local OS processes.
+Implement `DesktopRuntimeCoordinator`:
+1. Check `isLocalLoopback`: if false, supervision mode is `SupervisionMode.remoteHost`. Verify remote reachability and auth over HTTP without touching local files or processes.
 2. If loopback:
-   - Check if port 8000 is listening.
-   - If listening: probe `GET /api/v1/health`. If healthy companion, probe `POST /api/v1/auth/verify`. If auth 200 -> `readyAndAuthenticated`. If auth 401 -> `reachableUnauthenticated`. If health fails -> `alienPortConflict` (fail closed, no spawn, no kill).
-   - If port is free: check for stale `runtime.lock`. If lockfile exists, verify PID. If dead or foreign image, clean up stale lockfile.
-   - Acquire kernel lock (`tryAcquireStartupLock`). If locked by peer, wait up to 2s.
-   - Spawn detached runtime process with redirected logs. Write new lockfile descriptor with instance UUID. Release startup lock.
-   - Poll `GET /api/v1/health` with exponential backoff (500ms initial, capped at 2s interval) up to 30s.
-   - Upon health success, verify DPAPI token via `companionClient.verifyAuth()`. Transition to `readyAndAuthenticated` or `reachableUnauthenticated`.
-   - If timeout expires, transition to `startupTimeout`.
+   - Check if port 8000 is already listening. If listening: check `GET /api/v1/health` and `POST /api/v1/auth/verify`. If healthy and authenticated, attach immediately without lock or spawn.
+   - If port is not listening:
+     - Acquire startup lock (`supervisor.acquireStartupLock`). If null/timed out, mark `startupTimeout` (lock contention).
+     - Under `try { ... }`:
+       - **Double-Checked Recheck under Guard:**
+         - Recheck `isPortListening`. If listening now (peer finished launch), probe health and auth -> attach -> return.
+         - Read descriptor through locked handle. If descriptor exists with PID:
+           - Check `isProcessActiveAndMatching(desc.pid)`.
+           - If PID is alive: do not spawn duplicate! Poll for readiness or transition to `processUnresponsive`.
+           - If PID is dead/mismatched: descriptor is stale; proceed to spawn.
+         - If port free and no active process:
+           - Verify executable path exists. If not, transition to `executableNotFound`.
+           - Spawn detached process with `COMPANION_LOG_FILE` environment.
+           - Write new descriptor through locked handle with generated `instanceId` (UUID).
+     - In `finally`: `await supervisor.releaseStartupLock(handle)`.
+   - Poll `GET /api/v1/health` with exponential backoff (500ms initial, capped at 2s) up to 30s.
+   - Upon health 200, verify DPAPI token via `POST /api/v1/auth/verify`. Transition to `readyAndAuthenticated` or `reachableUnauthenticated`.
+   - If polling exceeds timeout, transition to `startupTimeout`.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -309,7 +437,7 @@ Expected: PASS.
 - [ ] **Step 5: Verify git status and commit**
 
 Stage: `frontend/flutter/apps/desktop/lib/coordinator/` and test file.
-Commit: `feat(desktop): implement desktop runtime coordinator with readiness polling and auth separation`
+Commit: `feat(desktop): implement desktop runtime coordinator with double-checked locking and auth separation`
 
 ---
 
@@ -326,27 +454,40 @@ Commit: `feat(desktop): implement desktop runtime coordinator with readiness pol
 - Consumes: `DesktopRuntimeCoordinator`, `DesktopLifecycleCoordinator`, `DesktopSettingsController`.
 - Produces:
   - System Tray context menu:
-    - `key: 'status'`: displays dynamic label (`Runtime: Active (PID 1234)`, `Runtime: Standalone`, `Runtime: Alien Conflict`, `Runtime: Remote`).
+    - `key: 'status'`: displays dynamic label (`Runtime: Active (PID 1234)`, `Runtime: Remote`, `Runtime: Alien Conflict`, `Runtime: Unresponsive`).
     - `key: 'stop'`: disabled with clear label `"Stop Runtime (Managed by Host)"` — explicitly conveying that host termination requires local OS session administration.
     - `key: 'exit'`: remains *Exit Companion* (terminates UI only; leaves detached background runtime running: "Quit UI != Stop Runtime").
   - Settings screen:
-    - Recessed diagnostic card for Runtime Supervision: displays supervision mode (Local Loopback vs Remote), connection state badge, PID, port, and lockfile path.
+    - Recessed diagnostic card for Runtime Supervision: displays supervision mode (Local Loopback vs Remote Host), connection state badge, PID, port, and lockfile path.
 
 - [ ] **Step 1: Write failing tests for System Tray lifecycle and Settings supervision display**
 
 ```dart
 // frontend/flutter/apps/desktop/test/desktop_lifecycle_runtime_supervision_test.dart
 import 'package:ai_companion_desktop/lifecycle/desktop_lifecycle_coordinator.dart';
+import 'package:companion_core/companion_core.dart';
 import 'package:test/test.dart';
 
 void main() {
   test('closing window to tray or clicking exit terminates UI only, leaving runtime process running', () async {
-    // Verify that handleExitRequested() disposes window and tray adapters
-    // without invoking any runtime termination or killing background process
+    final coordinator = DesktopLifecycleCoordinator(/* mock window & tray adapters */);
+    await coordinator.handleExitRequested();
+    // Verify window and tray adapters disposed cleanly without any process kill calls
   });
 
   test('tray menu keeps stop action disabled with host-managed label', () {
-    // Verify MenuItem(key: 'stop') is disabled and indicates host management
+    final coordinator = DesktopLifecycleCoordinator(/* mock window & tray adapters */);
+    final items = coordinator.buildTrayMenuItems(
+      RuntimeProcessState(
+        supervisionMode: SupervisionMode.localLoopback,
+        status: RuntimeStatus.readyAndAuthenticated,
+        pid: 1234,
+        port: 8000,
+      ),
+    );
+    final stopItem = items.firstWhere((i) => i.key == 'stop');
+    expect(stopItem.disabled, isTrue);
+    expect(stopItem.label, contains('Managed by Host'));
   });
 }
 ```
@@ -359,7 +500,7 @@ Expected: FAIL.
 - [ ] **Step 3: Update `DesktopLifecycleCoordinator`, `DesktopSettingsController`, and `SettingsScreen`**
 
 In `DesktopLifecycleCoordinator`:
-- Add `updateRuntimeStatus(RuntimeProcessState state, int? pid)` updating tray label dynamically.
+- Add `updateRuntimeStatus(RuntimeProcessState state)` updating tray label dynamically.
 - Keep `MenuItem(key: 'stop', label: 'Stop Runtime (Managed by Host)', disabled: true)`.
 - Ensure `handleExitRequested()` disposes UI resources cleanly while leaving detached runtime untouched.
 In `DesktopSettingsController`:
@@ -385,21 +526,29 @@ Commit: `feat(desktop): wire runtime supervision to system tray and settings dia
 
 **Files:**
 - Create: `scripts/verify_windows_runtime_supervision.ps1`
-- Test: Run verification harness covering dormant spawn, attach to existing, UI exit survival, stale lock recovery, and alien port conflict.
+- Test: Run verification harness covering dormant spawn, attach to existing, UI exit survival, stale lock recovery, alien port conflict, and lock contention.
 - Run full automated test matrix.
 
 **Interfaces:**
 - Consumes: Windows PowerShell, compiled Flutter desktop debug executable, backend venv python executable.
-- Produces: Reproducible automated Windows acceptance harness validating all 5 empirical lifecycle scenarios.
+- Produces: Reproducible automated Windows acceptance harness validating all 6 empirical lifecycle scenarios using disposable test roots, ports, and tokens.
 
 - [ ] **Step 1: Implement `scripts/verify_windows_runtime_supervision.ps1`**
 
-Script automates:
-1. Scenario A: Dormant launch -> spawns runtime -> verifies port 8000 listening -> verifies `runtime.lock` created.
+Script isolates test execution completely:
+- Root directory: `$tempRoot = Join-Path $env:TEMP ("ai_companion_test_" + [Guid]::NewGuid().ToString("N"))`
+- Port: Disposable test port (e.g. `8765`), avoiding production port 8000.
+- Token: Disposable test pairing token (`companion_sec_test_verify_token_12345`).
+- Never touches `%LOCALAPPDATA%\AI Companion` production data, models, or SQLite database.
+
+Automates 6 empirical scenarios:
+1. Scenario A: Dormant launch -> spawns runtime on test port -> verifies test port listening -> verifies `runtime.lock` created.
 2. Scenario B: Concurrent launch -> second instance attaches to existing running instance without spawning duplicate PID.
-3. Scenario C: "Quit UI != Stop Runtime" -> terminates Flutter client -> verifies backend runtime process PID remains alive and port 8000 remains responsive.
+3. Scenario C: "Quit UI != Stop Runtime" -> terminates Flutter client -> verifies backend runtime process PID remains alive on test port.
 4. Scenario D: Stale lock recovery -> creates dummy stale lockfile with dead PID -> runs supervisor -> verifies stale lock removed and runtime spawns cleanly.
-5. Scenario E: Alien port conflict -> binds dummy TCP listener on port 8000 -> runs supervisor -> verifies supervisor fails closed with `alienPortConflict` without killing dummy listener.
+5. Scenario E: Alien port conflict -> binds dummy TCP listener on test port -> runs supervisor -> verifies supervisor fails closed with `alienPortConflict` without killing dummy listener.
+6. Scenario F: Cross-process lock contention -> external process holds lock on test lockfile -> supervisor detects contention and handles it without descriptor corruption.
+- Finally: terminates test backend process on test port, cleans up `$tempRoot`.
 
 - [ ] **Step 2: Execute full test matrix and parity checks**
 
@@ -454,4 +603,4 @@ Commit: `test(windows): add empirical Windows runtime supervision verification h
 2. **"Quit UI != Stop Runtime" Verification:** Close the desktop window to tray -> verify backend continues running -> select *Exit Companion* from tray -> verify Flutter UI exits while backend process remains running at `127.0.0.1:8000` (verified via `netstat -ano | findstr 8000`).
 3. **Alien Port Conflict Handling:** Run a dummy TCP listener on port 8000 -> launch Flutter client -> verify client surfaces `PORT_CONFLICT_ALIEN_PROCESS` diagnostic badge without crashing, hanging, or terminating the foreign listener.
 4. **Stale Lock Recovery:** Create a synthetic `runtime.lock` with dead PID 99999999 -> launch Flutter client -> verify supervisor detects dead PID, cleanly removes stale lockfile, and spawns runtime without error.
-5. **Remote Host URL Bypass:** Set `HostUrl` to a remote address (e.g. `http://192.168.1.100:8000`) -> launch desktop client -> verify client operates in `remoteManaged` mode without attempting local process spawning or lockfile creation.
+5. **Remote Host URL Bypass:** Set `HostUrl` to a remote address (e.g. `http://192.168.1.100:8000`) -> launch desktop client -> verify client operates in `remoteHost` supervision mode without attempting local process spawning or lockfile creation.
