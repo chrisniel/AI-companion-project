@@ -31,7 +31,7 @@ frontend/flutter/
 
 ## 2. Prerequisites
 
-- **Flutter SDK:** Flutter 3.29+ with Dart 3.7+
+- **Flutter SDK:** Flutter 3.47.1 (Dart 3.13.1, channel stable)
 - **Windows Toolchain:**
   - Visual Studio 2022 with "Desktop development with C++" workload installed.
   - Windows 10/11 SDK.
@@ -40,6 +40,10 @@ frontend/flutter/
 ---
 
 ## 3. Running the Application
+
+> [!NOTE]
+> **Interactive GUI Testing Requirement:**
+> Running the desktop application for interactive GUI testing (viewing the application window, keyboard/mouse interactions, and system tray integration) requires launching the command from an **external Windows PowerShell or Windows Terminal window**. Headless or non-interactive integrated terminal sessions do not expose the Win32 desktop GUI.
 
 ### Option A: Repository Root Script (Recommended)
 From the repository root, execute the launcher script in PowerShell:
@@ -134,6 +138,6 @@ python scripts/check_dart_openapi_parity.py --check
 - **`MainWindowHandle = 0` or Blank Window:**
   Ensure the latest Visual C++ Redistributable is installed. Verify display drivers support DirectX 11 / OpenGL.
 - **Tray Icon Missing:**
-  The application automatically falls back to standard taskbar minimizing if system tray initialization fails. Verify the tray icon asset exists under `assets/icons/app_icon.ico`.
+  The application automatically falls back to standard taskbar minimizing if system tray initialization fails. Verify the tray icon asset exists under `assets/icons/tray_icon.ico`.
 - **Backend Connection Refused:**
   Ensure the Python FastAPI backend is running (`uvicorn app.main:app --port 8000`). Verify host URL in Settings > Runtime Connection.

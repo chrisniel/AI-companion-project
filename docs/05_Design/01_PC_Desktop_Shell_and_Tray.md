@@ -57,7 +57,19 @@ The desktop shell utilizes a compact, collapsible left navigation rail:
 
 ---
 
-## 4. Theme & Accessibility Invariants
+## 4. Visual Design Identity & Invariants
+
+### 4.1 Approved Product Design Language
+The approved visual design language across the companion ecosystem is:
+**Neumorphism + Glassmorphism / Liquid Glass + Minimalism**, maintaining strict visual parity with the primary `frontend/web/` reference implementation.
+
+- **Neumorphic Raised Surfaces:** Directional dual light/dark outer shadow pairs (`NeumorphicSurface`) providing physical tactile elevation that adapts dynamically to Dark and Light theme modes.
+- **Neumorphic Recessed Wells:** Deep, authentic physical inset depth rendered via inner shadow masks (`NeumorphicSurface(isRecessed: true)`) for input wells (chat composer) and diagnostic cards.
+- **Glassmorphism / Liquid Glass:** Backdrop blur (16px), subtle ambient radial glow matching the active accent color, and translucent border highlights.
+- **Minimalism:** Uncluttered layouts, clean typographic hierarchy, generous padding, and absence of jarring saturated blocks.
+- **Theme Palettes & Accents:** Light and Dark themes with four curated accent presets: *Ocean Sky*, *Cobalt Indigo*, *Emerald Teal*, and *Amethyst Violet*.
+
+### 4.2 Theme & Accessibility Invariants
 
 - **System Theme Synchronization:** Automatic switching between Windows Dark Mode and Light Mode based on OS preference, with manual override in Settings.
 - **Keyboard Navigation:** Full keyboard focus traversal (`Tab` / `Shift+Tab`), shortcut keys (`Ctrl+N` for new conversation, `Ctrl+M` to toggle mute, `Ctrl+,` for settings, `Esc` to hide window).

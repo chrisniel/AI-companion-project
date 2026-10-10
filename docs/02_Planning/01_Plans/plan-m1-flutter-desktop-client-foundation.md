@@ -53,6 +53,11 @@ The implementation plan incorporates the following mandatory architectural corre
 - All member packages declare `resolution: workspace`.
 - Tested dependency versions are pinned in the workspace `pubspec.lock`.
 
+### Correction F: Backend Model Registry Matching & Fail-Closed Selection
+- The backend runtime loader was corrected to eliminate obsolete hardcoded default model fallbacks and arbitrary `all_ggufs[0]` selection.
+- Verified registry matching (`find_model_registry_entry`) evaluates configured/requested model names against authoritative registry entries and disk files, failing closed with typed `CONFIGURED_MODEL_NOT_FOUND` / HTTP 503 when missing.
+- Active in-memory models matching the requested entry are reused without spurious reload cycles.
+
 ---
 
 ## 3. Workspace Structure & Package Boundaries
@@ -99,7 +104,7 @@ frontend/flutter/
 
 ## 4. Delivery Batches
 
-### Batch 1: Workspace Scaffolding & CI Integration (`PC-CLIENT-001`) — CURRENT
+### Batch 1: Workspace Scaffolding & CI Integration (`PC-CLIENT-001`) — VERIFIED
 - Create Pub Workspace (`pubspec.yaml`, `analysis_options.yaml`).
 - Create packages `companion_core`, `companion_api`, `companion_design`.
 - Scaffold `apps/desktop` with Windows desktop runner (`flutter create --platforms=windows`).
@@ -107,7 +112,7 @@ frontend/flutter/
 - Update CI pipeline (`ci_policy.py`, `test_ci_policy.py`, `.github/workflows/ci.yml`) to add a dedicated Windows Flutter verification lane with strict gate accounting.
 - **Exit Criteria:** `dart pub get`, `dart pub workspace list`, `dart analyze`, package tests, and `flutter build windows --debug` pass cleanly. CI regression tests pass.
 
-### Batch 2: Window Management, System Tray & Lifecycle (`PC-CLIENT-002`)
+### Batch 2: Window Management, System Tray & Lifecycle (`PC-CLIENT-002`) — VERIFIED
 - Window initialization: 1280×800 default, 1024×640 minimum, centered.
 - Title bar close interception: `setPreventClose(true)` $\rightarrow$ `windowManager.hide()`.
 - System tray integration: icon, tooltip, double-click restore, context menu.
@@ -115,14 +120,14 @@ frontend/flutter/
 - Safe native cleanup before exiting UI process; Python runtime remains executing.
 - **Exit Criteria:** Window hide/restore verified on Windows; tray exit terminates Flutter process without stopping backend.
 
-### Batch 3: SoftGlass Design System, Shell Layout & Read-Only Roots (`PC-CLIENT-003`)
+### Batch 3: SoftGlass Design System, Shell Layout & Read-Only Roots (`PC-CLIENT-003`) — VERIFIED
 - SoftGlass tokens, blur formulas, and color schemes in `companion_design`.
 - Dark and Light theme modes with 4 accent presets matching `frontend/web/src/index.css`.
 - Desktop shell: custom header bar, left navigation rail (Chat, Voice [M4], Schedule [M3], Memory [M3], Studio [M3], Settings), health indicator.
 - Read-only storage diagnostic adapter in `apps/desktop` inspecting `%LOCALAPPDATA%\AI Companion\bootstrap.json` in a fail-closed manner.
 - **Exit Criteria:** Shell renders with authentic SoftGlass styling; theme toggles work; storage diagnostics report truthfully.
 
-### Batch 4: Typed API Client, SSE Stream Consumer & Conversation UI (`PC-CLIENT-004`)
+### Batch 4: Typed API Client, SSE Stream Consumer & Conversation UI (`PC-CLIENT-004`) — VERIFIED (PR CANDIDATE)
 - Typed REST client with DPAPI credential injection and configurable base URL.
 - Health polling updating shell health indicator (Green = Connected, Yellow = Reconnecting, Red = Stopped).
 - Real-world SSE stream parser handling multi-byte UTF-8 chunks, split lines, token accumulation, `[DONE]`, `type: error`, and per-request stream cancellation.
@@ -130,8 +135,8 @@ frontend/flutter/
 - Turn idempotency via `client_message_id`.
 - Automated OpenAPI contract parity check via `scripts/check_dart_openapi_parity.py`.
 - Minimal `CompanionWebSocketClient` interface stub.
-- Initial Conversation UI: message list, user input composer, streaming response rendering.
-- **Exit Criteria:** End-to-end conversation turn streams live text on Windows; parity verified against React Web test oracle; M1 Exit Criteria satisfied.
+- Initial Conversation UI: message list, user input composer, streaming response rendering, draft reuse, GFM tables, post-turn AI titling parity.
+- **Exit Criteria:** End-to-end conversation turn streams live text on Windows; parity verified against React Web test oracle; M1 Exit Criteria satisfied locally.
 
 ---
 
@@ -145,4 +150,4 @@ frontend/flutter/
 - ❌ **M3 Character Studio & Mood Engine:** No 8-trait sliders or persistent emotion engine.
 - ❌ **M4 Voice Pipeline:** No microphone audio capture, TTS playback, or duplex WebSocket voice.
 - ❌ **Mobile V1 Application:** Zero Android production implementation.
-- ❌ **Backend Business Logic:** Zero backend modifications.
+- ❌ **Backend Business Logic:** Zero backend redesign or storage restructuring; scoped surgical model-matching fix only.

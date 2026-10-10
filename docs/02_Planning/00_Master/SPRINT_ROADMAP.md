@@ -18,7 +18,7 @@
 └──────────────────────────────┬──────────────────────────────┘
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ M1: Flutter Desktop Client Foundation                       │ ◄── [PENDING / SEQUENCED AFTER MERGE]
+│ M1: Flutter Desktop Client Foundation                       │ ◄── [IMPLEMENTED / PR CANDIDATE]
 └──────────────────────────────┬──────────────────────────────┘
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -69,9 +69,9 @@
 - **Exit Criteria:** All validation gates pass; D2–D5 independently reviewed; Gate 4 Closure Gate PASSED at checkpoint `282f3607c6663cb72b34ad8f3596651aaf5ac18f`; PR #21 CI Run #84 green; PR #21 merge pending; active tracker archived; M1 sequenced after merge.
 - **Dependency Note:** Mobile production implementation is cataloged in [`MOBILE_WBS.md`](MOBILE_WBS.md) as an independent follow-on track that does NOT block PC V1. M1 Flutter Desktop foundation remains sequenced after merge of PR #21.
 
-### Milestone M1: Flutter Desktop Client Foundation (PENDING / SEQUENCED AFTER MERGE)
-- **Primary Objective:** Scaffold the production Flutter Windows Desktop client (`target Flutter path established during PC-CLIENT-001 scaffolding`), establish window lifecycle and system tray integration (minimize-to-tray, close-to-tray), build the SoftGlass design system with dark/light theme tokens, and integrate the OpenAPI-derived Dart API client and SSE token streaming consumer.
-- **Exit Criteria:** Flutter Desktop client runs on Windows, communicates reliably with Local AI Runtime over localhost REST/SSE, displays live streaming text, and maintains visual parity with core desktop requirements. React Web remains fully operational as test oracle.
+### Milestone M1: Flutter Desktop Client Foundation (IMPLEMENTED / PR CANDIDATE)
+- **Primary Objective:** Scaffold the production Flutter Windows Desktop client monorepo pub workspace under `frontend/flutter/` (`companion_core`, `companion_api`, `companion_design`, and `apps/desktop`), establish native window lifecycle and system tray integration (minimize-to-tray, close-to-tray, tray restore/exit), build the SoftGlass / Neumorphic design system with dark/light theme tokens, integrate OpenAPI-derived Dart models and fail-closed authentication, implement chat conversation drawer with draft reuse, GFM Markdown tables, attachment placeholders, and post-turn AI title generation parity.
+- **Exit Criteria:** Flutter Desktop client runs on Windows, communicates reliably with Local AI Runtime over localhost REST/SSE, displays live streaming text with Markdown rendering, handles fail-closed auth and model unreadiness, and passes all 193 workspace tests and native Win32 lifecycle checks. PR candidate prepared with hosted PR CI pending. React Web remains fully operational as test oracle.
 
 ### Milestone M2: PC Companion Foundation (Host, Identity & Model Pipeline)
 - **Primary Objective:** Implement Windows Task Scheduler autostart at user login, native Windows Action Center Toast presentation, storage roots manager (`APP_INSTALL`, `DATA`, `LIBRARY`), Account/Multi-Profile DB schema migration (`profile_id`), Profile isolation middleware, and the D6 manual scan / bundle model import service.

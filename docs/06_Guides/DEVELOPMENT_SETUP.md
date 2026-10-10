@@ -14,7 +14,7 @@ Before developing locally, ensure the following prerequisites are installed and 
 | :--- | :--- | :--- |
 | **Operating System** | Windows 10/11 64-bit | Primary host platform for Local AI Runtime and hardware acceleration. |
 | **Python** | 3.11.x 64-bit | Windows x64 CPython 3.11.9 is the qualified dependency target; verify the selected executable below before creating an environment. |
-| **Flutter SDK** | Version will be officially pinned when scaffolded (PC-CLIENT-001) | Required for primary Windows Desktop client (`flutter --version`). |
+| **Flutter SDK** | 3.47.1 (Dart 3.13.1, channel stable) | Required for primary Windows Desktop client (`flutter --version`). |
 | **Visual Studio Build Tools** | 2022 (with Desktop C++) | Required by Flutter for compiling native Windows C++/CMake executables. |
 | **Node.js** | 22.x >= 22.22.2 or 24.x >= 24.15.0 (with npm) | Matches the committed web dependency engines. CI selects 22.22.2 (`node --version`, `npm --version`). |
 | **Git & Git LFS** | Latest 64-bit | LFS pointers on GitHub; weights stored on private Hugging Face dataset. |
@@ -30,7 +30,9 @@ The repository is structured into distinct subsystem trees:
 ```text
 AI-companion-project/
 ├── backend/            # FastAPI Local AI Runtime (Python 3.11, SQLAlchemy 2, Alembic)
-├── frontend/web/       # React 19 Web Client (Supported developer harness and test oracle)
+├── frontend/
+│   ├── flutter/        # Flutter Monorepo Pub Workspace (packages & apps/desktop)
+│   └── web/            # React 19 Web Client (Supported developer harness and test oracle)
 ├── android/            # Android Mobile Companion Client (Prototype / reference client)
 ├── contracts/openapi/  # Canonical OpenAPI contract (openapi.json)
 ├── models/             # GGUF models & registry templates (Git-tracked templates only; dev sources)
@@ -149,21 +151,25 @@ From `backend/`, `& $qualificationPython -B -m app.services.retention --days 30`
 
 ## 5. Primary Client Development (Flutter Desktop)
 
-The primary Windows production client is built with Flutter Desktop.
+The primary Windows production client is built with Flutter Desktop located in the `frontend/flutter/` monorepo workspace.
 
 ### Setup & Startup
 In a separate terminal:
 
 ```powershell
 # 1. Navigate to desktop client directory
-cd [target_flutter_path] # FUTURE/TARGET: Path TBD during PC-CLIENT-001
+cd frontend/flutter/apps/desktop
 
-# 2. Fetch Flutter packages
+# 2. Fetch Flutter packages across the workspace
 flutter pub get
 
 # 3. Launch Windows desktop application in debug mode
 flutter run -d windows
 ```
+
+> [!NOTE]
+> **Interactive GUI Testing Requirement:**
+> Running the desktop application for interactive GUI testing (viewing the application window, keyboard/mouse interactions, and system tray integration) requires launching the command from an **external Windows PowerShell or Windows Terminal window**. Headless or non-interactive integrated terminal sessions do not expose the Win32 desktop GUI.
 
 The Flutter desktop app connects to the running local backend at `http://127.0.0.1:8000`.
 
