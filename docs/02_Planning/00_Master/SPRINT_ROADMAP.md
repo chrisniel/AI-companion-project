@@ -18,7 +18,7 @@
 └──────────────────────────────┬──────────────────────────────┘
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ M1: Flutter Desktop Client Foundation                       │ ◄── [PENDING / SEQUENCED AFTER MERGE]
+│ M1: Flutter Desktop Client Foundation                       │ ◄── [IMPLEMENTED / PR CANDIDATE]
 └──────────────────────────────┬──────────────────────────────┘
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -66,12 +66,12 @@
 - **Decoupled Voice & Barge-In:** Connected full-duplex Voice streaming to PC Runtime over WebSocket with mandatory immediate barge-in; local TTS decoupled from local STT and local LLM; cloud voice permissions separate (`mobile-capabilities-and-runtime.md` §3, `ADR-0019`, `D-PHONE-14..14G`).
 - **Conditional Health & Vision:** Health Connect supported as `CONDITIONAL V1` read-only integration (`D-PHONE-15..15E`, `D-SHARED-HEALTH-01..04`); local still-image Vision supported as `CONDITIONAL V1` on qualified hardware (`D-PHONE-16..16E`, `D-SHARED-VISION-01`).
 - **Deferred Non-Goals:** Autonomous Mobile Routine recurrence extension (`D-PHONE-12`) is excluded from V1; Health Connect is preferred (`D-PHONE-15E`) where direct vendor wearable integration is not normally V1-required but remains possible if Health Connect cannot supply an important approved source; continuous ambient camera streaming is excluded (`D-PHONE-16E`); background microphone eavesdropping / ambient listening is strictly prohibited (`D-PHONE-14F` / Voice privacy invariant); always-on wake word is deferred separately; AR Presence is deferred (`P-PHONE-AR-01`, `P-PHONE-AR-02`); and phone-to-phone canonical sync authority is not currently established (multi-phone topology remains OPEN DEBT).
-- **Exit Criteria:** All validation gates pass; D2–D5 independently reviewed; Gate 4 Closure Gate PASSED at checkpoint `282f3607c6663cb72b34ad8f3596651aaf5ac18f`; PR #21 CI Run #84 green; PR #21 merge pending; active tracker archived; M1 sequenced after merge.
-- **Dependency Note:** Mobile production implementation is cataloged in [`MOBILE_WBS.md`](MOBILE_WBS.md) as an independent follow-on track that does NOT block PC V1. M1 Flutter Desktop foundation remains sequenced after merge of PR #21.
+- **Exit Criteria:** All validation gates pass; D2–D5 independently reviewed; Gate 4 Closure Gate PASSED at checkpoint `282f3607c6663cb72b34ad8f3596651aaf5ac18f`; PR #21 CI Run #84 green; PR #21 merged to develop (commit `28c4332`); active tracker archived; M1 unblocked.
+- **Dependency Note:** Mobile production implementation is cataloged in [`MOBILE_WBS.md`](MOBILE_WBS.md) as an independent follow-on track that does NOT block PC V1. M1 Flutter Desktop foundation unblocked following merge of PR #21.
 
-### Milestone M1: Flutter Desktop Client Foundation (PENDING / SEQUENCED AFTER MERGE)
-- **Primary Objective:** Scaffold the production Flutter Windows Desktop client (`target Flutter path established during PC-CLIENT-001 scaffolding`), establish window lifecycle and system tray integration (minimize-to-tray, close-to-tray), build the SoftGlass design system with dark/light theme tokens, and integrate the OpenAPI-derived Dart API client and SSE token streaming consumer.
-- **Exit Criteria:** Flutter Desktop client runs on Windows, communicates reliably with Local AI Runtime over localhost REST/SSE, displays live streaming text, and maintains visual parity with core desktop requirements. React Web remains fully operational as test oracle.
+### Milestone M1: Flutter Desktop Client Foundation (IMPLEMENTED / PR CANDIDATE)
+- **Primary Objective:** Scaffold the production Flutter Windows Desktop client monorepo pub workspace under `frontend/flutter/` (`companion_core`, `companion_api`, `companion_design`, and `apps/desktop`), establish native window lifecycle and system tray integration (minimize-to-tray, close-to-tray, tray restore/exit), build the SoftGlass / Neumorphic design system with dark/light theme tokens, integrate OpenAPI-derived Dart models and fail-closed authentication, implement chat conversation drawer with draft reuse, GFM Markdown tables, attachment placeholders, and post-turn AI title generation parity.
+- **Exit Criteria:** Flutter Desktop client runs on Windows, communicates reliably with Local AI Runtime over localhost REST/SSE, displays live streaming text with Markdown rendering, handles fail-closed auth and model unreadiness, and passes all 193 workspace tests and native Win32 lifecycle checks. PR candidate prepared with hosted PR CI pending. React Web remains fully operational as test oracle.
 
 ### Milestone M2: PC Companion Foundation (Host, Identity & Model Pipeline)
 - **Primary Objective:** Implement Windows Task Scheduler autostart at user login, native Windows Action Center Toast presentation, storage roots manager (`APP_INSTALL`, `DATA`, `LIBRARY`), Account/Multi-Profile DB schema migration (`profile_id`), Profile isolation middleware, and the D6 manual scan / bundle model import service.

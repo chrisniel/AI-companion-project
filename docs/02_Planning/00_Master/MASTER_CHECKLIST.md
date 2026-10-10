@@ -13,7 +13,7 @@
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Governance** | Human-only Git write authority | `AGENTS.md`, `DELIVERY_WORKFLOW.md` | Process rules | N/A | Human review | **VERIFIED** |
 | **Governance** | Scoped CI Matrix (PC-VERIFY-001) | `TESTING_AND_CI.md` | `ci_policy.py`, CI yaml | Python static tests | N/A | **IMPLEMENTED / VERIFIED** (source/static) |
-| **PC Client** | Flutter Windows Desktop App | `windows-host-and-notifications.md` | Pending Flutter scaffold / target path TBD | Flutter CI lane | G1 | **NOT STARTED** |
+| **PC Client** | Flutter Windows Desktop App | `windows-host-and-notifications.md` | `frontend/flutter/` (193 tests passed, Win32 debug build verified) | Flutter CI lane (`flutter`) | G1 | **IMPLEMENTED (PR CANDIDATE)** |
 | **PC Client** | React Web Supported Client | `SYSTEM_BASELINE.md` §1 | `frontend/web/` | Vitest / Build | G14 | **VERIFIED** |
 | **PC Host** | Task Scheduler Autostart at Login | `windows-host-and-notifications.md` | Pending implementation | Host tests | G1 | **NOT STARTED** |
 | **PC Host** | Native Windows Action Center Toasts| `windows-host-and-notifications.md` | Pending implementation | Adapter tests | G8 | **NOT STARTED** |
@@ -60,7 +60,7 @@
 ## 2. Release Blocker Audit
 
 - [x] **M0 Docs & Architecture Reset Pass:** Complete canonicalization, verify fresh-agent startup, and obtain Chris approval.
-- [ ] **M1 Flutter Scaffolding:** Initial Flutter Windows app operational and connecting to Local AI Runtime.
+- [x] **M1 Flutter Scaffolding:** Flutter Desktop app foundation operational, connecting to Local AI Runtime, with local verification complete (193 workspace tests, 0 analyzer issues, Win32 debug build); hosted PR CI pending.
 - [ ] **M2 Host Autostart & Notifications:** Proved working without open browser tab.
 - [ ] **M2 Multi-Profile Migration:** Database schema updated with full privacy isolation.
 - [ ] **M2 D6 Model Import:** Proved working with GGUF + mmproj paired bundle.

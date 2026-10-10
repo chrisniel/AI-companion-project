@@ -1,0 +1,12 @@
+name: ai_companion_workspace
+description: AI Companion Monorepo Workspace Root
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.6.0 <4.0.0'
+
+workspace:
+  - apps/desktop
+  - packages/companion_core
+  - packages/companion_api
+  - packages/companion_design

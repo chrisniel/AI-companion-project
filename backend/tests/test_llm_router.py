@@ -5,6 +5,7 @@ failed startup cleanup, port conflict prevention, and polling verification.
 """
 
 import asyncio
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
@@ -23,6 +24,49 @@ def llama_provider(tmp_path, monkeypatch):
 
     models_dir = tmp_path / "models"
     models_dir.mkdir(parents=True)
+
+    template_data = {
+        "_schema_version": "1",
+        "models": [
+            {
+                "id": "qwen3-vl-2b-instruct",
+                "display_name": "Qwen3-VL-2B-Instruct",
+                "family": "qwen",
+                "variant": "instruct",
+                "primary_file": "vision/qwen3-vl-2b-instruct/qwen3-vl-2b-instruct.gguf",
+                "companion_files": [],
+                "quantization": "Q4_K_M",
+                "parameters": "2B",
+                "context_limit": 4096,
+                "capabilities": ["chat", "vision"],
+                "input_modalities": ["text", "image"],
+                "runtime_compatibility": ["vulkan", "cpu"],
+                "recommended_profiles": ["balanced", "eco", "maximum"],
+                "runtime_model_id": "qwen3-vl-2b-instruct",
+            },
+            {
+                "id": "qwen3-vl-4b-instruct",
+                "display_name": "Qwen3-VL-4B-Instruct",
+                "family": "qwen",
+                "variant": "instruct",
+                "primary_file": "vision/qwen3-vl-4b-instruct/qwen3-vl-4b-instruct.gguf",
+                "companion_files": [],
+                "quantization": "Q4_K_M",
+                "parameters": "4B",
+                "context_limit": 4096,
+                "capabilities": ["chat", "vision"],
+                "input_modalities": ["text", "image"],
+                "runtime_compatibility": ["vulkan", "cpu"],
+                "recommended_profiles": ["balanced", "eco", "maximum"],
+                "runtime_model_id": "qwen3-vl-4b-instruct",
+            },
+        ],
+    }
+    (models_dir / "registry.template.json").write_text(json.dumps(template_data), encoding="utf-8")
+    for mid in ("qwen3-vl-2b-instruct", "qwen3-vl-4b-instruct"):
+        mpath = models_dir / "vision" / mid / f"{mid}.gguf"
+        mpath.parent.mkdir(parents=True, exist_ok=True)
+        mpath.write_bytes(b"")
 
     data_dir = tmp_path / "data"
     data_dir.mkdir(parents=True)

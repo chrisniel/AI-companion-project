@@ -52,7 +52,7 @@ When seeking the authoritative answer to any question, consult documents and art
 
 | Authority Tier | Canonical Artifact / Document | Authority Scope |
 | :--- | :--- | :--- |
-| **1. Implemented Reality** | **Source Code, Tests, OpenAPI & Migrations** (`backend/`, `frontend/web/`, `contracts/openapi/openapi.json`, Alembic migrations) | **Authoritative for what actually exists.** Code reality always supersedes documentation claims. |
+| **1. Implemented Reality** | **Source Code, Tests, OpenAPI & Migrations** (`backend/`, `frontend/flutter/`, `frontend/web/`, `contracts/openapi/openapi.json`, Alembic migrations) | **Authoritative for what actually exists.** Code reality always supersedes documentation claims. |
 | **2. System Architecture & Release Boundaries** | **System Baseline** ([`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md)) | **Authoritative for cross-cutting ecosystem architecture, platform release boundaries, locked Decisions D1-D11, and the 14-group Golden Gate.** |
 | **3. Normative Domain Architecture** | **Focused Domain Specifications** ([`docs/04_Architecture/`](../04_Architecture/README.md): `01_Domains/`, `02_Data_and_Security/`, `03_Integrations/`, `04_Infrastructure/`) | **Primary normative authority for domain data models, business invariants, security policies, and technical capability specs.** |
 | **4. Architectural Decisions** | **Accepted ADRs** ([`docs/04_Architecture/decisions/`](../04_Architecture/decisions/README.md)) | **Durable decision records containing context, trade-offs, and consequences. ADRs do not compete with domain specs.** |

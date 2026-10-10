@@ -69,7 +69,7 @@ The ecosystem separates the long-running host runtime from client presentation i
 
 ### Component Roles
 - **Local AI Runtime (`backend/`):** Long-running FastAPI daemon owning conversation turn queues, SQLite+FTS5 persistence, model execution, deterministic action policies, and speech engines.
-- **Flutter Desktop:** The approved PC V1 target primary production client (Not Yet Implemented/Scaffolded), providing the desktop shell, system tray integration, native notifications, and audio hardware capture/playback.
+- **Flutter Desktop (`frontend/flutter/apps/desktop/`):** The approved PC V1 target primary production client (M1 foundation implemented, verified locally, PR candidate), providing the desktop shell, system tray integration, fail-closed auth, and chat with streaming/Markdown.
 - **React Web Client (`frontend/web/`):** Supported browser/remote client + dev/regression oracle providing rich inspection dashboards.
 - **Android Companion (`android/`):** Dedicated mobile companion prototype. The Kotlin/Compose repository is reference implementation evidence for V1 boundaries; detailed mobile architecture is a follow-on pass.
 
@@ -97,6 +97,7 @@ AI-companion-project/
 │   ├── alembic/            # SQLite database schema migrations
 │   └── tests/              # Backend test suites (pytest)
 ├── frontend/
+│   ├── flutter/            # Flutter monorepo pub workspace (packages & apps/desktop)
 │   └── web/                # React 19 / Vite / Tailwind web client
 ├── android/                # Native Android companion application (prototype)
 ├── contracts/
@@ -114,7 +115,7 @@ AI-companion-project/
 └── CONTRIBUTING.md         # Git branching and contributor guidelines
 ```
 
-*Target Note:* Flutter Desktop is the approved PC V1 client target; its repository path will be established during PC-CLIENT-001 scaffolding.
+*Target Note:* Flutter Desktop is the approved PC V1 client target; M1 foundation is implemented under `frontend/flutter/` (packages and `apps/desktop`) with local verification complete and hosted PR CI pending.
 
 ---
 
