@@ -34,7 +34,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
   - Keyboard shortcuts wired to `FocusScope`: `Ctrl+,` (open Settings), `Esc` (hide to tray when tray is available; close history drawer).
 
 - **Read-Only Storage Root Diagnostics (`PC-CLIENT-003`):**
-  - Platform adapter (`apps/desktop/lib/platform/storage_diagnostic_adapter.dart`) performing fail-closed, read-only inspection of `%LOCALAPPDATA%\AI Companion\bootstrap.json`.
+  - Storage diagnostic reader (`apps/desktop/lib/diagnostics/windows_storage_diagnostic_reader.dart`) performing fail-closed, read-only inspection of `%LOCALAPPDATA%\AI Companion\bootstrap.json`.
   - Rejection of relative paths and POSIX paths on Windows.
   - Telemetry model truthfully distinguishes local diagnostic candidate paths from authoritative backend-reported storage roots (`APP_INSTALL_ROOT`, `DATA_ROOT`, `LIBRARY_ROOT`).
 
@@ -54,7 +54,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
   - First-message deadlock resolution: eliminated premature awaiting-acceptance locks before conversation creation, enabling seamless first-turn execution.
 
 - **Backend Model Selection Hardening (Surgical Fix):**
-  - Corrected model loader in `backend/app/routers/models.py` and `backend/app/services/llm_runtime.py`.
+  - Corrected model loader in `backend/app/services/llm/llama_cpp.py` and registry lookup in `backend/app/services/model_registry.py`.
   - Eliminated obsolete hardcoded default model fallback and arbitrary `all_ggufs[0]` selection.
   - Implemented fail-closed registry lookup (`find_model_registry_entry`) that verifies configured and requested model entries against disk GGUF files, returning typed `CONFIGURED_MODEL_NOT_FOUND` / HTTP 503 when absent.
 
@@ -78,9 +78,9 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 - `lib/shell/desktop_shell.dart` — Desktop navigation rail, header bar, and content switching.
 - `lib/lifecycle/desktop_lifecycle_coordinator.dart` — Native window framing, close-to-tray interception, and system tray menu.
 - `lib/platform/windows_dpapi_credential_store.dart` — FFI Win32 DPAPI credential persistence (`Crypt32.dll`).
-- `lib/platform/storage_diagnostic_adapter.dart` — Fail-closed read-only locator reader.
+- `lib/diagnostics/windows_storage_diagnostic_reader.dart` — Fail-closed read-only locator reader.
 - `lib/features/chat/desktop_chat_controller.dart` — Conversation state, SSE streaming, draft preservation, auto-titling.
-- `lib/features/chat/chat_screen.dart` — Chat composer, message bubbles, streaming indicator, drawer overlay.
+- `lib/screens/chat_screen.dart` — Chat composer, message bubbles, streaming indicator, drawer overlay.
 - `lib/features/chat/conversation_history_drawer.dart` — Left-anchored history drawer with search and active highlights.
 - `lib/features/chat/assistant_markdown_view.dart` — Safe Markdown renderer with GFM tables and code block copy.
 - `lib/screens/settings_screen.dart` — Theme, accent presets, runtime connection & pairing, storage diagnostics.
@@ -89,9 +89,10 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 - `README.md` — Desktop developer guide, commands, and prerequisites.
 
 ### Backend Surgical Corrections
-- `backend/app/routers/models.py` — Fail-closed model registry matching via `find_model_registry_entry`.
-- `backend/app/services/llm_runtime.py` — Removed hardcoded model fallbacks; reuse active in-memory models.
+- `backend/app/services/llm/llama_cpp.py` — Local model execution loader: removed hardcoded model fallbacks and arbitrary `all_ggufs[0]` selection; reuses active in-memory models; invokes `find_model_registry_entry` for fail-closed validation.
+- `backend/app/services/model_registry.py` — Authoritative Model Registry service: defines `find_model_registry_entry` matching configured/requested models against registered entries and disk files.
 - `backend/tests/test_model_selection_regression.py` — Regression tests for model selection and registry validation.
+- `backend/tests/test_llm_router.py` — Isolated router regression tests verifying fail-closed model loading behavior.
 
 ### Scripts, Contracts & CI
 - `scripts/check_dart_openapi_parity.py` — Parity checker validating 13 DTOs and 12 M1 routes against OpenAPI.
@@ -223,11 +224,11 @@ All automated verification commands executed locally and verified passing:
    ```
    *Result:* **3/3 passed** (Live Win32 HWND `WM_CLOSE` close-to-tray interception, window restore, and tray exit).
 
-5. **OpenAPI Contract Parity Checker:**
+5. **OpenAPI Contract Parity Checker (Scoped M1 Verification):**
    ```powershell
    python scripts/check_dart_openapi_parity.py --check
    ```
-   *Result:* **13/13 DTOs and 12/12 M1 routes verified** in complete parity with `contracts/openapi/openapi.json`.
+   *Result:* **13/13 DTOs and 12/12 M1 active routes verified** against `contracts/openapi/openapi.json`. The checker performs scoped M1 verification (conversations, messages, SSE streaming, health, auth verify, system status, model status, title generation), while explicitly cataloging the 22 unmapped backend routes reserved for future milestone capabilities (M2 models/tasks/reminders, M3 memory/character studio, M4 voice/tools), proving strict M1 boundary compliance rather than complete coverage of all backend endpoints.
 
 6. **Python CI & Parity Script Unit Tests:**
    ```powershell
@@ -308,8 +309,8 @@ All automated verification commands executed locally and verified passing:
   - *Resolution:* Ensure `frontend/flutter/apps/desktop/assets/icons/tray_icon.ico` exists and is declared under `flutter.assets` in `pubspec.yaml`.
 
 - **Symptom: HTTP 503 `LLM_UNAVAILABLE` on message send**
-  - *Likely cause:* Local LLM engine is unloaded or configured model file is not staged in `<DATA_ROOT>/models/llm`.
-  - *Resolution:* Inspect backend log; stage the required GGUF model; verify model status via Settings > Runtime Connection. The composer preserves your draft.
+  - *Likely cause:* Local LLM engine is unloaded or the configured model file is missing from the model library (`settings.MODEL_LIBRARY_DIR` / `<LIBRARY_ROOT>/models/llm`) or factory source (`settings.FACTORY_MODEL_ROOT` / `models/`), failing closed with `CONFIGURED_MODEL_NOT_FOUND`.
+  - *Resolution:* Inspect backend logs; ensure the requested model is registered in `models.json` (or `models/registry.template.json`) and its primary GGUF file exists on disk in the configured model library or factory directory; check model status in Settings > Runtime Connection & Pairing. The composer preserves your message draft.
 
 - **Symptom: DPAPI Decryption Failure Across User Profiles**
   - *Likely cause:* Stored credentials in `%LOCALAPPDATA%\AI Companion\credentials.bin` were encrypted by a different Windows user account.

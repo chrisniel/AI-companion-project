@@ -8,7 +8,7 @@
 - **Phase 8:** COMPLETE / VERIFIED
 - **M0 Documentation & Architecture Reset:** COMPLETE / VERIFIED
 - **MOBILE-ARCH — Mobile V1 Canonical Architecture Pass:** COMPLETE / VERIFIED (Architecture specs, Mobile WBS, and Mobile Checklist completed; Closure Gate passed).
-- **M1 Flutter Client Foundation:** IMPLEMENTED / VERIFIED (Local monorepo pub workspace, Win32 desktop shell, system tray, fail-closed auth, chat streaming, Markdown tables, and post-turn AI title parity; PR integration candidate).
+- **M1 Flutter Client Foundation:** IMPLEMENTED / LOCALLY VERIFIED (Local monorepo pub workspace, Win32 desktop shell, system tray, fail-closed auth, chat streaming, Markdown tables, and post-turn AI title parity; hosted PR CI verification and independent Closure Gate approval pending on PR #23).
 
 ## Next Milestone
 

@@ -1,7 +1,7 @@
 # Milestone M1: Flutter Desktop Client Foundation — Implementation Plan
 
-> **Document Role:** Canonical implementation plan for Milestone M1 (Flutter Desktop Client Foundation).  
-> **Status:** Approved Baseline with Binding Review Corrections.  
+> **Document Role:** Canonical implementation plan for Milestone M1 (Flutter Desktop Client Foundation).
+> **Status:** Approved Baseline with Binding Review Corrections.
 > **Authority Precedence:** Normative cross-cutting architecture is owned by [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md), [`MOBILE_SYSTEM_BASELINE.md` §3](../../04_Architecture/MOBILE_SYSTEM_BASELINE.md#L26), and [`ADR-0017`](../../04_Architecture/decisions/ADR-0017-flutter-production-windows-client.md). Active branch execution is tracked in [`docs/01_Tracking/active/task-m1-flutter-foundation.md`](../../01_Tracking/active/task-m1-flutter-foundation.md).
 
 ---
