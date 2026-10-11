@@ -117,6 +117,12 @@ When implemented for PC V1:
 3. **Distribution Separation:** Windows installer packages separate read-only binaries into `APP_INSTALL_ROOT` (`%ProgramFiles%\AI Companion` or per-user local app dir) and runtime mutable data into `DATA_ROOT`, completely decoupled from git repository working copies.
 4. **Self-Contained Windows Installer & Bundled Runtime (`PC-HOST-006`):**
    - **Consumer Distribution Requirement:** Target end users install AI Companion via a self-contained Windows installer without needing to install Python manually, configure virtual environments, or modify global system paths.
+   - **Three Identifiable Supervised Components:** The Windows installation deploys three distinct, identifiable, and independently supervised components that remain transparently visible in Windows Task Manager for user inspection and diagnostic control:
+     1. `AI Companion.exe`: Flutter Desktop user interface client.
+     2. `AI Companion Runtime.exe`: Dedicated Python host executing the FastAPI Local AI Runtime.
+     3. `AI Companion Inference.exe`: Dedicated native `llama.cpp` inference engine server.
+   - **No Console Windows & No Task Manager Concealment:** Normal application startup operates entirely without visible console windows (e.g. no command prompt or PowerShell shells appearing during runtime execution or model loading). However, processes must never be intentionally concealed from Windows Task Manager; all three components remain clearly named and accountable.
+   - **Process Separation & Crash Isolation:** The UI client, runtime host, and native inference engine run in separate operating system processes. This ensures complete crash isolation: an inference segfault or engine failure does not take down the runtime supervisor or UI, and a client UI exit or restart leaves background runtime tasks unharmed.
    - **Bundled Execution Environment:** The distribution packages a private, isolated Python execution environment, backend dependencies, the Flutter Desktop production client, and required native inference binaries into `APP_INSTALL_ROOT`.
    - **Environment Isolation:** Operates hermetically without global `PATH` modifications or developer virtual environment prerequisites.
    - **Single Windowless Local Runtime:** Operates exactly one independent windowless Local AI Runtime per PC installation, preserving runtime process supervision, kernel lockfile coordination, and file-based rotating diagnostics in `LOG_ROOT`.

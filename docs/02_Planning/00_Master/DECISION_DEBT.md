@@ -66,6 +66,10 @@
 - **`DEBT-V1-09`: Self-Contained Windows Installer & Bundled Runtime Packaging (`PC-HOST-006`)**
   - *Context:* End-user PC V1 distribution requires a self-contained Windows installer bundling private Python runtime, application dependencies, Flutter Desktop, and native inference binaries without requiring developer setup, manual Python installation, or global PATH modifications.
   - *Invariants:*
+    - Three identifiable, independently supervised components visible in Windows Task Manager for user inspection and diagnostic control: `AI Companion.exe` (Flutter Desktop UI), `AI Companion Runtime.exe` (Python FastAPI host), and `AI Companion Inference.exe` (native llama.cpp server).
+    - No visible console windows during ordinary application startup or model execution.
+    - No intentional concealment from Windows Task Manager; processes remain transparent and accountable.
+    - Full process separation and crash isolation: UI, runtime host, and inference engine run in independent processes so that child crashes or UI termination do not corrupt peer components.
     - One independent windowless Local AI Runtime per PC installation.
     - Preserves user `DATA_ROOT` (`companion.db`, profiles, settings) and relocatable `LIBRARY_ROOT` across updates, repairs, and uninstalls.
     - Preserves runtime process supervision, single-instance kernel locking, and file-based rotating diagnostics (`LOG_ROOT`).
