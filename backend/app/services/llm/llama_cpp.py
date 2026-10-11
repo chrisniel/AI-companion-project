@@ -10,6 +10,7 @@ import logging
 import os
 from pathlib import Path
 import subprocess
+import sys
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
 import httpx
@@ -549,12 +550,19 @@ class LlamaCppProvider(BaseLLMProvider):
                 launch_args.append("--no-mmproj-offload")
 
             self._runtime_state = LLMRuntimeState.SERVER_STARTING
+            popen_kwargs: Dict[str, Any] = {
+                "cwd": str(settings.LLAMA_CPP_BIN_DIR.resolve()),
+                "stdout": subprocess.DEVNULL,
+                "stderr": subprocess.DEVNULL,
+            }
+            if sys.platform == "win32":
+                popen_kwargs["creationflags"] = getattr(
+                    subprocess, "CREATE_NO_WINDOW", 0x08000000
+                )
             try:
                 proc = subprocess.Popen(
                     launch_args,
-                    cwd=str(settings.LLAMA_CPP_BIN_DIR.resolve()),
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
+                    **popen_kwargs,
                 )
                 self._server_process = proc
                 self._server_pid = proc.pid

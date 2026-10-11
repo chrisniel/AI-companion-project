@@ -29,6 +29,8 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _canSend = false;
   bool _isHistoryOpen = false;
   bool _isSubmitting = false;
+  String? _currentConversationId;
+  bool _userExplicitlySent = false;
 
   DesktopChatController get _effectiveController => widget.controller ?? _internalController!;
 
@@ -62,11 +64,44 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollController = ScrollController();
 
     _textController.addListener(_onTextChanged);
+    _scrollController.addListener(_onScroll);
+    _effectiveController.addListener(_onChatControllerChanged);
 
-    // Initial load
+    // Initialize current conversation state if already selected
+    final activeId = _effectiveController.activeConversation?.id;
+    if (activeId != null) {
+      _currentConversationId = activeId;
+      final draft = _effectiveController.getDraft(activeId);
+      if (draft.isNotEmpty) {
+        _textController.text = draft;
+      }
+    }
+
+    // Initial load and first layout restoration
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _effectiveController.loadConversations();
+      if (!mounted) return;
+      if (_effectiveController.conversations.isEmpty) {
+        _effectiveController.loadConversations();
+      } else if (_currentConversationId != null && _scrollController.hasClients) {
+        final savedOffset = _effectiveController.getScrollOffset(_currentConversationId!);
+        if (savedOffset != null) {
+          _scrollController.jumpTo(
+            savedOffset.clamp(0.0, _scrollController.position.maxScrollExtent),
+          );
+        } else if (_effectiveController.messages.isNotEmpty) {
+          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+        }
+      }
     });
+  }
+
+  @override
+  void didUpdateWidget(ChatScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller?.removeListener(_onChatControllerChanged);
+      widget.controller?.addListener(_onChatControllerChanged);
+    }
   }
 
   KeyEventResult _handleFocusKeyEvent(FocusNode node, KeyEvent event) {
@@ -124,6 +159,22 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  bool get _isNearBottom {
+    if (!_scrollController.hasClients) return true;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.offset;
+    return (maxScroll - currentScroll) <= 80.0;
+  }
+
+  void _onScroll() {
+    if (_scrollController.hasClients && _currentConversationId != null) {
+      _effectiveController.setScrollOffset(_currentConversationId!, _scrollController.offset);
+    }
+    if (!_isNearBottom) {
+      _userExplicitlySent = false;
+    }
+  }
+
   void _onTextChanged() {
     final hasText = _textController.text.trim().isNotEmpty;
     if (hasText != _canSend) {
@@ -131,11 +182,54 @@ class _ChatScreenState extends State<ChatScreen> {
         _canSend = hasText;
       });
     }
+    if (_currentConversationId != null) {
+      _effectiveController.setDraft(_currentConversationId!, _textController.text);
+    }
+  }
+
+  void _onChatControllerChanged() {
+    final activeId = _effectiveController.activeConversation?.id;
+    if (activeId != _currentConversationId) {
+      // 1. Save state of previous conversation
+      if (_currentConversationId != null) {
+        _effectiveController.setDraft(_currentConversationId!, _textController.text);
+        if (_scrollController.hasClients) {
+          _effectiveController.setScrollOffset(_currentConversationId!, _scrollController.offset);
+        }
+      }
+
+      // 2. Switch to new conversation
+      _currentConversationId = activeId;
+      _userExplicitlySent = false;
+
+      // 3. Restore draft for new conversation
+      final draft = activeId != null ? _effectiveController.getDraft(activeId) : '';
+      if (_textController.text != draft) {
+        _textController.text = draft;
+      }
+
+      // 4. Restore scroll offset or scroll to bottom on first opening
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollController.hasClients) return;
+        if (activeId != null) {
+          final savedOffset = _effectiveController.getScrollOffset(activeId);
+          if (savedOffset != null) {
+            _scrollController.jumpTo(
+              savedOffset.clamp(0.0, _scrollController.position.maxScrollExtent),
+            );
+          } else if (_effectiveController.messages.isNotEmpty) {
+            _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+          }
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
     _textController.removeListener(_onTextChanged);
+    _scrollController.removeListener(_onScroll);
+    _effectiveController.removeListener(_onChatControllerChanged);
     _textController.dispose();
     _focusNode.dispose();
     _scrollController.dispose();
@@ -163,6 +257,7 @@ class _ChatScreenState extends State<ChatScreen> {
         text,
         onAccepted: () {
           if (mounted) {
+            _userExplicitlySent = true;
             _textController.clear();
             setState(() {
               _canSend = false;
@@ -187,14 +282,19 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  void _scrollToBottom() {
+  void _scrollToBottom({bool animate = true}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
-        );
+        final max = _scrollController.position.maxScrollExtent;
+        if (animate) {
+          _scrollController.animateTo(
+            max,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+          );
+        } else {
+          _scrollController.jumpTo(max);
+        }
       }
     });
   }
@@ -209,9 +309,11 @@ class _ChatScreenState extends State<ChatScreen> {
         final ext = Theme.of(context).extension<CompanionThemeExtension>();
         final isDark = Theme.of(context).brightness == Brightness.dark;
 
-        // Auto-scroll when new streaming content arrives
-        if (chatCtrl.isGenerating) {
-          _scrollToBottom();
+        // Auto-follow generation only if near bottom or following explicit user send
+        if (chatCtrl.isGenerating && (_userExplicitlySent || _isNearBottom)) {
+          _scrollToBottom(animate: false);
+        } else if (!chatCtrl.isGenerating) {
+          _userExplicitlySent = false;
         }
 
         return CallbackShortcuts(
@@ -712,11 +814,8 @@ class _ChatScreenState extends State<ChatScreen> {
           if (msg.attachments.isNotEmpty)
             _buildAttachmentCards(msg.attachments, ext, isUser: true),
           if (msg.content.isNotEmpty)
-            SelectableText(
-              msg.content,
-              style: CompanionTypography.bodyMedium.copyWith(
-                color: ext?.textPrimary,
-              ),
+            AssistantMarkdownView(
+              content: msg.content,
             ),
         ],
       ),

@@ -69,6 +69,24 @@ class DesktopChatController extends ChangeNotifier {
   final Set<String> _titleGenerationInProgress = <String>{};
   final Set<String> _modelRefinedConversationIds = <String>{};
   final Map<String, Future<void>> _pendingRenameFutures = <String, Future<void>>{};
+  final Map<String, String> _conversationDrafts = <String, String>{};
+  final Map<String, double> _conversationScrollOffsets = <String, double>{};
+
+  String getDraft(String conversationId) => _conversationDrafts[conversationId] ?? '';
+
+  void setDraft(String conversationId, String draft) {
+    if (draft.isEmpty) {
+      _conversationDrafts.remove(conversationId);
+    } else {
+      _conversationDrafts[conversationId] = draft;
+    }
+  }
+
+  double? getScrollOffset(String conversationId) => _conversationScrollOffsets[conversationId];
+
+  void setScrollOffset(String conversationId, double offset) {
+    _conversationScrollOffsets[conversationId] = offset;
+  }
 
   DesktopChatController({
     required CompanionClient client,

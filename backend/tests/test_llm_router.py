@@ -6,6 +6,8 @@ failed startup cleanup, port conflict prevention, and polling verification.
 
 import asyncio
 import json
+import subprocess
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
@@ -903,4 +905,27 @@ async def test_no_regression_in_requested_vs_applied_profile_semantics(llama_pro
         assert active_status.applied_context_size == settings.PROFILE_BALANCED_CTX
         assert active_status.applied_gpu_layers == settings.PROFILE_BALANCED_GPU_LAYERS
         assert active_status.applied_mmproj_offload == settings.PROFILE_BALANCED_MMPROJ_OFFLOAD
+
+
+@pytest.mark.asyncio
+async def test_router_spawn_windows_no_window_flag(llama_provider):
+    """
+    On Windows, llama-server.exe must be launched with CREATE_NO_WINDOW
+    to prevent visible console windows from appearing.
+    """
+    mock_proc = MagicMock()
+    mock_proc.poll.return_value = None
+    mock_proc.pid = 4321
+
+    with patch.object(llama_provider, "_check_port_listening", return_value=False), \
+         patch.object(llama_provider, "_check_external_server", new_callable=AsyncMock, return_value=True), \
+         patch.object(llama_provider, "_router_load_model", new_callable=AsyncMock, return_value=True), \
+         patch("sys.platform", "win32"), \
+         patch("subprocess.Popen", return_value=mock_proc) as mock_popen:
+
+        result = await llama_provider.load_model("qwen3-vl-2b-instruct")
+        assert result is True
+        assert mock_popen.called
+        kwargs = mock_popen.call_args.kwargs if hasattr(mock_popen.call_args, "kwargs") and mock_popen.call_args.kwargs else mock_popen.call_args[1]
+        assert kwargs.get("creationflags") == getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
 

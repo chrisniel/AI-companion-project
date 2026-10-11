@@ -24,7 +24,7 @@ class HideToTrayIntent extends Intent {
   const HideToTrayIntent();
 }
 
-class DesktopShell extends StatelessWidget {
+class DesktopShell extends StatefulWidget {
   const DesktopShell({
     super.key,
     required this.controller,
@@ -43,10 +43,25 @@ class DesktopShell extends StatelessWidget {
   final CredentialStore? credentialStore;
 
   @override
+  State<DesktopShell> createState() => _DesktopShellState();
+}
+
+class _DesktopShellState extends State<DesktopShell> {
+  final Set<DesktopNavDestination> _visitedDestinations = <DesktopNavDestination>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _visitedDestinations.add(widget.controller.currentDestination);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: controller,
+      listenable: widget.controller,
       builder: (context, _) {
+        _visitedDestinations.add(widget.controller.currentDestination);
+        final currentDest = widget.controller.currentDestination;
         final ext = Theme.of(context).extension<CompanionThemeExtension>();
         final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -59,14 +74,14 @@ class DesktopShell extends StatelessWidget {
         final actions = <Type, Action<Intent>>{
           OpenSettingsIntent: CallbackAction<OpenSettingsIntent>(
             onInvoke: (_) {
-              controller.setDestination(DesktopNavDestination.settings);
+              widget.controller.setDestination(DesktopNavDestination.settings);
               return null;
             },
           ),
           HideToTrayIntent: CallbackAction<HideToTrayIntent>(
             onInvoke: (_) {
-              if (coordinator?.isTrayAvailable == true) {
-                coordinator?.hideToTray();
+              if (widget.coordinator?.isTrayAvailable == true) {
+                widget.coordinator?.hideToTray();
               }
               return null;
             },
@@ -106,13 +121,22 @@ class DesktopShell extends StatelessWidget {
                       child: Row(
                         children: [
                           DesktopNavigationRail(
-                            controller: controller,
-                            coordinator: coordinator,
+                            controller: widget.controller,
+                            coordinator: widget.coordinator,
                           ),
                           Expanded(
-                            child: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 200),
-                              child: _buildActiveScreen(controller.currentDestination),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                for (final destination in _visitedDestinations)
+                                  Offstage(
+                                    offstage: currentDest != destination,
+                                    child: TickerMode(
+                                      enabled: currentDest == destination,
+                                      child: _buildActiveScreen(destination),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                         ],
@@ -133,8 +157,8 @@ class DesktopShell extends StatelessWidget {
       case DesktopNavDestination.chat:
         return ChatScreen(
           key: const ValueKey('chat_screen'),
-          controller: chatController,
-          onNavigateToSettings: () => controller.setDestination(DesktopNavDestination.settings),
+          controller: widget.chatController,
+          onNavigateToSettings: () => widget.controller.setDestination(DesktopNavDestination.settings),
         );
       case DesktopNavDestination.voice:
         return const VoiceScreen(key: ValueKey('voice_screen'));
@@ -147,12 +171,12 @@ class DesktopShell extends StatelessWidget {
       case DesktopNavDestination.settings:
         return SettingsScreen(
           key: const ValueKey('settings_screen'),
-          controller: controller,
-          coordinator: coordinator,
-          chatController: chatController,
-          runtimeCoordinator: runtimeCoordinator,
-          clientSettings: clientSettings,
-          credentialStore: credentialStore,
+          controller: widget.controller,
+          coordinator: widget.coordinator,
+          chatController: widget.chatController,
+          runtimeCoordinator: widget.runtimeCoordinator,
+          clientSettings: widget.clientSettings,
+          credentialStore: widget.credentialStore,
         );
     }
   }

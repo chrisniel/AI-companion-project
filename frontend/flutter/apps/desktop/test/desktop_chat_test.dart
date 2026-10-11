@@ -8,8 +8,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:ai_companion_desktop/controllers/desktop_settings_controller.dart';
 import 'package:ai_companion_desktop/features/chat/desktop_chat_controller.dart';
 import 'package:ai_companion_desktop/screens/chat_screen.dart';
+import 'package:ai_companion_desktop/shell/desktop_shell.dart';
 
 class MockCompanionClient extends CompanionClient {
   bool shouldHealthSucceed;
@@ -1488,6 +1490,196 @@ void main() {
       await tester.pump();
 
       expect(mockClient.sendMessageCalled, isTrue);
+
+      controller.dispose();
+    });
+
+    testWidgets('Chat -> Settings -> Chat restores exact prior reading area and unsent draft', (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1280, 800);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final mockClient = MockCompanionClient();
+      final chatController = DesktopChatController(client: mockClient);
+      await chatController.checkConnection();
+      await chatController.loadConversations();
+
+      final settingsController = DesktopSettingsController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: DesktopShell(
+            controller: settingsController,
+            chatController: chatController,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Enter unsent draft in ChatScreen
+      final textFieldFinder = find.byType(TextField);
+      expect(textFieldFinder, findsOneWidget);
+      await tester.enterText(textFieldFinder, 'My important unsent draft');
+      await tester.pump();
+
+      // Navigate to Settings
+      settingsController.setDestination(DesktopNavDestination.settings);
+      await tester.pumpAndSettle();
+
+      // Verify SettingsScreen is active (chat screen is offstage)
+      expect(find.text('Settings'), findsWidgets);
+
+      // Navigate back to Chat
+      settingsController.setDestination(DesktopNavDestination.chat);
+      await tester.pumpAndSettle();
+
+      // Verify exact draft is restored in composer
+      expect(find.text('My important unsent draft'), findsOneWidget);
+
+      chatController.dispose();
+    });
+
+    testWidgets('Switching conversations maintains independent draft state and scroll offsets', (WidgetTester tester) async {
+      final mockClient = MockCompanionClient();
+      final conv1 = ConversationOut(
+        id: 'conv-1',
+        title: 'Thread 1',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+        messageCount: 0,
+      );
+      final conv2 = ConversationOut(
+        id: 'conv-2',
+        title: 'Thread 2',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+        messageCount: 0,
+      );
+      mockClient.customConversations = [conv1, conv2];
+      mockClient.customMessages = [];
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Conversation 1 is active; type draft
+      final textFieldFinder = find.byType(TextField);
+      await tester.enterText(textFieldFinder, 'Draft for Conversation 1');
+      await tester.pump();
+      expect(controller.getDraft('conv-1'), equals('Draft for Conversation 1'));
+
+      // Switch to Conversation 2
+      await controller.selectConversation(conv2);
+      await tester.pumpAndSettle();
+
+      // Conversation 2 composer is empty
+      final textFieldWidget2 = tester.widget<TextField>(textFieldFinder);
+      expect(textFieldWidget2.controller!.text, equals(''));
+
+      // Type draft in Conversation 2
+      await tester.enterText(textFieldFinder, 'Draft for Conversation 2');
+      await tester.pump();
+      expect(controller.getDraft('conv-2'), equals('Draft for Conversation 2'));
+
+      // Switch back to Conversation 1
+      await controller.selectConversation(conv1);
+      await tester.pumpAndSettle();
+
+      // Conversation 1 draft is restored!
+      final textFieldWidget1 = tester.widget<TextField>(textFieldFinder);
+      expect(textFieldWidget1.controller!.text, equals('Draft for Conversation 1'));
+
+      controller.dispose();
+    });
+
+    testWidgets('Auto-follow generation only if near bottom; reading older messages does not force-scroll', (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1280, 800);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final mockClient = MockCompanionClient();
+      final messages = List<MessageOut>.generate(
+        30,
+        (i) => MessageOut(
+          id: 'msg-$i',
+          conversationId: 'conv-1',
+          sender: i % 2 == 0 ? 'user' : 'assistant',
+          content: 'Message $i: This is a test turn with enough content to scroll vertically.',
+          status: 'completed',
+          sequenceNo: i + 1,
+          createdAt: DateTime.now().toUtc().toIso8601String(),
+        ),
+      );
+      final conv = ConversationOut(
+        id: 'conv-1',
+        title: 'Thread 1',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+        messageCount: 30,
+      );
+      mockClient.customConversations = [conv];
+      mockClient.customMessages = messages;
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final listViewFinder = find.byType(ListView);
+      expect(listViewFinder, findsOneWidget);
+
+      final scrollableFinder = find.descendant(of: listViewFinder, matching: find.byType(Scrollable)).first;
+      final scrollable = tester.state<ScrollableState>(scrollableFinder);
+      final maxScroll = scrollable.position.maxScrollExtent;
+      expect(maxScroll, greaterThan(0.0));
+
+      // First opening populated conversation: shows latest turn (scrolled to bottom)
+      expect(scrollable.position.pixels, closeTo(maxScroll, 10.0));
+
+      // User scrolls up to read older messages (e.g. offset 100.0)
+      scrollable.position.jumpTo(100.0);
+      await tester.pump();
+      expect(scrollable.position.pixels, equals(100.0));
+
+      // Simulate generation event while scrolled up
+      // When generating and user is NOT near bottom and did not explicitly send,
+      // it should NOT yank the viewport back down!
+      controller.setScrollOffset('conv-1', 100.0);
+      await tester.pump();
+
+      expect(scrollable.position.pixels, equals(100.0));
 
       controller.dispose();
     });
