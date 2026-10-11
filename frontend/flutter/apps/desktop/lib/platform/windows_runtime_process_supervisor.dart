@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:companion_core/companion_core.dart';
@@ -263,6 +264,7 @@ class WindowsRuntimeProcessSupervisor {
   Future<ProcessDiscoveryResult> discoverRuntimeProcesses({
     required int port,
     required String expectedExecutable,
+    Duration timeout = const Duration(seconds: 3),
   }) async {
     if (port <= 0) {
       return const ProcessDiscoveryResult(
@@ -275,7 +277,7 @@ class WindowsRuntimeProcessSupervisor {
       final exeNamePrefix = exeBase.replaceAll('.exe', '').replaceAll("'", "''");
       final filter = "Name LIKE '$exeNamePrefix%'";
 
-      final result = await _launcher.run(
+      final process = await _launcher.start(
         'powershell',
         [
           '-NoProfile',
@@ -288,28 +290,69 @@ class WindowsRuntimeProcessSupervisor {
         runInShell: false,
       );
 
-      if (result.exitCode != 0) {
+      final stdoutFuture = utf8.decoder.bind(process.stdout).join();
+      final stderrFuture = utf8.decoder.bind(process.stderr).join();
+
+      int exitCode;
+      String stdoutStr = '';
+      String stderrStr = '';
+      try {
+        exitCode = await process.exitCode.timeout(timeout);
+        stdoutStr = await stdoutFuture;
+        stderrStr = await stderrFuture;
+      } on TimeoutException {
+        process.kill();
         return ProcessDiscoveryResult(
           status: ProcessDiscoveryStatus.inspectionUnavailable,
-          diagnostic: 'Process inspection query exited with code ${result.exitCode}: ${result.stderr}',
+          diagnostic: 'Process inspection query timed out after ${timeout.inMilliseconds}ms',
         );
       }
 
-      final jsonStr = result.stdout.toString().trim();
+      if (exitCode != 0) {
+        return ProcessDiscoveryResult(
+          status: ProcessDiscoveryStatus.inspectionUnavailable,
+          diagnostic: 'Process inspection query exited with code $exitCode: $stderrStr',
+        );
+      }
+
+      final jsonStr = stdoutStr.trim();
       final List<dynamic> rawList;
       if (jsonStr.isEmpty) {
         rawList = const [];
-      } else if (jsonStr.startsWith('[')) {
-        rawList = jsonDecode(jsonStr) as List<dynamic>;
-      } else if (jsonStr.startsWith('{')) {
-        rawList = [jsonDecode(jsonStr)];
+      } else if (jsonStr.startsWith('[') || jsonStr.startsWith('{')) {
+        try {
+          final decoded = jsonDecode(jsonStr);
+          if (decoded is List) {
+            rawList = decoded;
+          } else if (decoded is Map) {
+            rawList = [decoded];
+          } else {
+            return ProcessDiscoveryResult(
+              status: ProcessDiscoveryStatus.inspectionUnavailable,
+              diagnostic: 'Unexpected JSON payload type: ${decoded.runtimeType}',
+            );
+          }
+        } on FormatException catch (e) {
+          return ProcessDiscoveryResult(
+            status: ProcessDiscoveryStatus.inspectionUnavailable,
+            diagnostic: 'Malformed JSON output from process inspection query: $e',
+          );
+        }
       } else {
-        rawList = const [];
+        return ProcessDiscoveryResult(
+          status: ProcessDiscoveryStatus.inspectionUnavailable,
+          diagnostic: 'Non-JSON output from process inspection query: $jsonStr',
+        );
       }
 
       final candidates = <DiscoveredProcessIdentity>[];
       for (final raw in rawList) {
-        if (raw is! Map) continue;
+        if (raw is! Map) {
+          return ProcessDiscoveryResult(
+            status: ProcessDiscoveryStatus.inspectionUnavailable,
+            diagnostic: 'Unexpected non-map entry in process list: ${raw.runtimeType}',
+          );
+        }
         final candPid = int.tryParse('${raw['ProcessId']}') ?? 0;
         if (candPid <= 0 || candPid == pid) continue;
 
@@ -396,10 +439,12 @@ class WindowsRuntimeProcessSupervisor {
   Future<int?> findActiveRuntimeProcess({
     required int port,
     required String expectedExecutable,
+    Duration timeout = const Duration(seconds: 3),
   }) async {
     final result = await discoverRuntimeProcesses(
       port: port,
       expectedExecutable: expectedExecutable,
+      timeout: timeout,
     );
     return result.status == ProcessDiscoveryStatus.verified ? result.verifiedProcess?.pid : null;
   }

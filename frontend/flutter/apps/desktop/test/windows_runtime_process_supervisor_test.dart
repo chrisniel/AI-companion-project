@@ -1,8 +1,76 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:ai_companion_desktop/platform/process_launcher_adapter.dart';
 import 'package:ai_companion_desktop/platform/windows_runtime_process_supervisor.dart';
 import 'package:companion_core/companion_core.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+class FakeProcess implements Process {
+  @override
+  final int pid;
+  @override
+  final Stream<List<int>> stdout;
+  @override
+  final Stream<List<int>> stderr;
+  @override
+  final Future<int> exitCode;
+  bool wasKilled = false;
+
+  FakeProcess({
+    this.pid = 9999,
+    Stream<List<int>>? stdout,
+    Stream<List<int>>? stderr,
+    Future<int>? exitCode,
+  })  : stdout = stdout ?? const Stream.empty(),
+        stderr = stderr ?? const Stream.empty(),
+        exitCode = exitCode ?? Future.value(0);
+
+  @override
+  IOSink get stdin => throw UnimplementedError();
+
+  @override
+  bool kill([ProcessSignal signal = ProcessSignal.sigterm]) {
+    wasKilled = true;
+    return true;
+  }
+}
+
+class FakeProcessLauncher implements ProcessLauncherAdapter {
+  FakeProcess? processToStart;
+  Exception? startException;
+
+  @override
+  Future<Process> start(
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+    bool includeParentEnvironment = true,
+    bool runInShell = false,
+    ProcessStartMode mode = ProcessStartMode.normal,
+  }) async {
+    if (startException != null) throw startException!;
+    return processToStart ?? FakeProcess();
+  }
+
+  @override
+  Future<ProcessResult> run(
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+    bool includeParentEnvironment = true,
+    bool runInShell = false,
+  }) async {
+    throw UnimplementedError('run() should not be used when start() is required for process lifecycle control');
+  }
+
+  @override
+  Future<bool> killPid(int pid, [ProcessSignal signal = ProcessSignal.sigterm]) async {
+    throw UnimplementedError('Arbitrary killPid must not be called during inspection timeout');
+  }
+}
 
 void main() {
   group('WindowsRuntimeProcessSupervisor', () {
@@ -90,6 +158,93 @@ void main() {
         ),
         throwsA(isA<FileSystemException>()),
       );
+    });
+
+    test('discoverRuntimeProcesses: normal empty inspection results return noProcess', () async {
+      final fakeLauncher = FakeProcessLauncher();
+      fakeLauncher.processToStart = FakeProcess(
+        stdout: Stream.value(utf8.encode('')),
+        exitCode: Future.value(0),
+      );
+      final supervisor = WindowsRuntimeProcessSupervisor(launcher: fakeLauncher);
+
+      final result = await supervisor.discoverRuntimeProcesses(
+        port: 8000,
+        expectedExecutable: r'C:\test\python.exe',
+      );
+
+      expect(result.status, equals(ProcessDiscoveryStatus.noProcess));
+    });
+
+    test('discoverRuntimeProcesses: unexpected non-JSON output returns inspectionUnavailable, never noProcess', () async {
+      final fakeLauncher = FakeProcessLauncher();
+      fakeLauncher.processToStart = FakeProcess(
+        stdout: Stream.value(utf8.encode('Get-CimInstance : Invalid namespace or access denied')),
+        exitCode: Future.value(0),
+      );
+      final supervisor = WindowsRuntimeProcessSupervisor(launcher: fakeLauncher);
+
+      final result = await supervisor.discoverRuntimeProcesses(
+        port: 8000,
+        expectedExecutable: r'C:\test\python.exe',
+      );
+
+      expect(result.status, equals(ProcessDiscoveryStatus.inspectionUnavailable));
+      expect(result.diagnostic, contains('Non-JSON output'));
+    });
+
+    test('discoverRuntimeProcesses: malformed JSON output returns inspectionUnavailable, never noProcess', () async {
+      final fakeLauncher = FakeProcessLauncher();
+      fakeLauncher.processToStart = FakeProcess(
+        stdout: Stream.value(utf8.encode('[{ "ProcessId": 1234, "CommandLine": ')),
+        exitCode: Future.value(0),
+      );
+      final supervisor = WindowsRuntimeProcessSupervisor(launcher: fakeLauncher);
+
+      final result = await supervisor.discoverRuntimeProcesses(
+        port: 8000,
+        expectedExecutable: r'C:\test\python.exe',
+      );
+
+      expect(result.status, equals(ProcessDiscoveryStatus.inspectionUnavailable));
+      expect(result.diagnostic, contains('Malformed JSON'));
+    });
+
+    test('discoverRuntimeProcesses: query failure with non-zero exit code returns inspectionUnavailable', () async {
+      final fakeLauncher = FakeProcessLauncher();
+      fakeLauncher.processToStart = FakeProcess(
+        stderr: Stream.value(utf8.encode('WMI service unavailable')),
+        exitCode: Future.value(1),
+      );
+      final supervisor = WindowsRuntimeProcessSupervisor(launcher: fakeLauncher);
+
+      final result = await supervisor.discoverRuntimeProcesses(
+        port: 8000,
+        expectedExecutable: r'C:\test\python.exe',
+      );
+
+      expect(result.status, equals(ProcessDiscoveryStatus.inspectionUnavailable));
+      expect(result.diagnostic, contains('code 1'));
+    });
+
+    test('discoverRuntimeProcesses: query timeout terminates subprocess via retained handle and returns inspectionUnavailable', () async {
+      final fakeProcess = FakeProcess(
+        exitCode: Completer<int>().future, // Never completes
+      );
+      final fakeLauncher = FakeProcessLauncher();
+      fakeLauncher.processToStart = fakeProcess;
+
+      final supervisor = WindowsRuntimeProcessSupervisor(launcher: fakeLauncher);
+
+      final result = await supervisor.discoverRuntimeProcesses(
+        port: 8000,
+        expectedExecutable: r'C:\test\python.exe',
+        timeout: const Duration(milliseconds: 100),
+      );
+
+      expect(result.status, equals(ProcessDiscoveryStatus.inspectionUnavailable));
+      expect(result.diagnostic, contains('timed out'));
+      expect(fakeProcess.wasKilled, isTrue);
     });
   });
 }

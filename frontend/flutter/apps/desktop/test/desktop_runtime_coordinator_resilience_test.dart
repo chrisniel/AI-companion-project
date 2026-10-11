@@ -49,6 +49,7 @@ class ControllableSpawningSupervisor extends WindowsRuntimeProcessSupervisor {
   Future<ProcessDiscoveryResult> discoverRuntimeProcesses({
     required int port,
     required String expectedExecutable,
+    Duration timeout = const Duration(seconds: 3),
   }) async {
     return const ProcessDiscoveryResult(
       status: ProcessDiscoveryStatus.noProcess,
@@ -56,7 +57,11 @@ class ControllableSpawningSupervisor extends WindowsRuntimeProcessSupervisor {
   }
 
   @override
-  Future<int?> findActiveRuntimeProcess({required int port, required String expectedExecutable}) async => null;
+  Future<int?> findActiveRuntimeProcess({
+    required int port,
+    required String expectedExecutable,
+    Duration timeout = const Duration(seconds: 3),
+  }) async => null;
 
   @override
   Future<void> writeDescriptorThroughHandle(RandomAccessFile lockHandle, RuntimeLockfileData data) async {
@@ -81,6 +86,7 @@ class ControllableSpawningSupervisor extends WindowsRuntimeProcessSupervisor {
 
 class DiscoveryControlledMockSupervisor extends WindowsRuntimeProcessSupervisor {
   bool isListening = false;
+  bool listenOnSpawn = false;
   int spawnCallCount = 0;
   List<String> spawnArgs = [];
   RuntimeLockfileData? writtenDescriptor;
@@ -108,6 +114,9 @@ class DiscoveryControlledMockSupervisor extends WindowsRuntimeProcessSupervisor 
   Future<RuntimeLockfileData?> readDescriptorThroughHandle(RandomAccessFile lockHandle) async => existingDescriptor;
 
   @override
+  Future<RuntimeLockfileData?> readDescriptorDirect(File lockFile) async => existingDescriptor;
+
+  @override
   Future<bool> isProcessActiveAndMatching(int pid, {required String expectedExecutable}) async => isProcessActive;
 
   @override
@@ -119,13 +128,18 @@ class DiscoveryControlledMockSupervisor extends WindowsRuntimeProcessSupervisor 
   Future<ProcessDiscoveryResult> discoverRuntimeProcesses({
     required int port,
     required String expectedExecutable,
+    Duration timeout = const Duration(seconds: 3),
   }) async {
     return discoveryResult;
   }
 
   @override
-  Future<int?> findActiveRuntimeProcess({required int port, required String expectedExecutable}) async {
-    final res = await discoverRuntimeProcesses(port: port, expectedExecutable: expectedExecutable);
+  Future<int?> findActiveRuntimeProcess({
+    required int port,
+    required String expectedExecutable,
+    Duration timeout = const Duration(seconds: 3),
+  }) async {
+    final res = await discoverRuntimeProcesses(port: port, expectedExecutable: expectedExecutable, timeout: timeout);
     return res.status == ProcessDiscoveryStatus.verified ? res.verifiedProcess?.pid : null;
   }
 
@@ -139,6 +153,9 @@ class DiscoveryControlledMockSupervisor extends WindowsRuntimeProcessSupervisor 
   }) async {
     spawnCallCount++;
     spawnArgs.addAll(args);
+    if (listenOnSpawn) {
+      isListening = true;
+    }
     return 9999;
   }
 }
@@ -624,6 +641,137 @@ void main() {
       expect(supervisor.writtenDescriptor?.startedAt, equals(genuineCreationTime));
       expect(result.status, equals(RuntimeStatus.readyAndAuthenticated));
       expect(result.pid, equals(8888));
+
+      coordinator.dispose();
+      await realHandle.close();
+      await tempDir.delete(recursive: true);
+    });
+
+    test('Runtime was previously ready, process dies, then recovery launches exactly one replacement', () async {
+      final tempDir = await Directory.systemTemp.createTemp('recovery_stale_pid_test_');
+      final tempLockFile = File('${tempDir.path}\\runtime.lock');
+      await tempLockFile.writeAsString('');
+      final realHandle = await tempLockFile.open(mode: FileMode.append);
+
+      final supervisor = DiscoveryControlledMockSupervisor();
+      supervisor.mockHandle = realHandle;
+
+      // 1. Initial run: runtime is ready with PID 1000
+      supervisor.isListening = true;
+      supervisor.isProcessActive = true;
+      supervisor.existingDescriptor = RuntimeLockfileData(
+        schemaVersion: 1,
+        instanceId: 'initial-inst',
+        pid: 1000,
+        port: 8000,
+        startedAt: DateTime.parse('2026-10-10T10:00:00.000Z'),
+        executablePath: Platform.resolvedExecutable,
+      );
+
+      final fastClient = DelayedAuthClient(authDelay: Duration.zero);
+
+      final coordinator = DesktopRuntimeCoordinator(
+        baseUrl: 'http://127.0.0.1:8000',
+        supervisor: supervisor,
+        client: fastClient,
+        customLockFile: tempLockFile,
+        customExecutablePath: Platform.resolvedExecutable,
+      );
+
+      final result1 = await coordinator.ensureRuntimeReady(timeout: const Duration(seconds: 5));
+      expect(result1.status, equals(RuntimeStatus.readyAndAuthenticated));
+      expect(result1.pid, equals(1000));
+      expect(coordinator.activeRuntimeInfo?.pid, equals(1000));
+      expect(supervisor.spawnCallCount, equals(0));
+
+      // 2. Process dies: port closed, PID 1000 dead in OS table, discovery confirms noProcess
+      supervisor.isListening = false;
+      supervisor.isProcessActive = false;
+      supervisor.existingDescriptor = null;
+      supervisor.discoveryResult = const ProcessDiscoveryResult(status: ProcessDiscoveryStatus.noProcess);
+      supervisor.listenOnSpawn = true;
+
+      // 3. Recovery run: must launch replacement (PID 9999) rather than letting stale PID 1000 block spawn
+      final result2 = await coordinator.ensureRuntimeReady(timeout: const Duration(seconds: 5));
+
+      expect(supervisor.spawnCallCount, equals(1));
+      expect(result2.status, equals(RuntimeStatus.readyAndAuthenticated));
+      expect(result2.pid, equals(9999));
+      expect(coordinator.activeRuntimeInfo?.pid, equals(9999));
+
+      coordinator.dispose();
+      await realHandle.close();
+      await tempDir.delete(recursive: true);
+    });
+
+    test('Changing between local ports never misattributes an old PID', () async {
+      final supervisor = DiscoveryControlledMockSupervisor();
+      supervisor.isListening = true;
+      supervisor.isProcessActive = true;
+      supervisor.existingDescriptor = RuntimeLockfileData(
+        schemaVersion: 1,
+        instanceId: 'port-8000-inst',
+        pid: 1000,
+        port: 8000,
+        startedAt: DateTime.parse('2026-10-10T10:00:00.000Z'),
+        executablePath: Platform.resolvedExecutable,
+      );
+
+      final fastClient = DelayedAuthClient(authDelay: Duration.zero);
+
+      final coordinator = DesktopRuntimeCoordinator(
+        baseUrl: 'http://127.0.0.1:8000',
+        supervisor: supervisor,
+        client: fastClient,
+      );
+
+      final result1 = await coordinator.ensureRuntimeReady(timeout: const Duration(seconds: 5));
+      expect(result1.status, equals(RuntimeStatus.readyAndAuthenticated));
+      expect(result1.pid, equals(1000));
+      expect(coordinator.activeRuntimeInfo?.pid, equals(1000));
+
+      // Reconfigure to a different local port (9000)
+      coordinator.updateConfiguration(
+        newBaseUrl: 'http://127.0.0.1:9000',
+        newClient: fastClient,
+      );
+
+      // Stale PID from port 8000 must NOT be misattributed to port 9000!
+      expect(coordinator.currentState.port, equals(9000));
+      expect(coordinator.currentState.pid, isNull);
+      expect(coordinator.activeRuntimeInfo, isNull);
+
+      coordinator.dispose();
+    });
+
+    test('Ambiguous or unverified processes still fail closed without spawning duplicates', () async {
+      final tempDir = await Directory.systemTemp.createTemp('ambiguous_fail_closed_test_');
+      final tempLockFile = File('${tempDir.path}\\runtime.lock');
+      await tempLockFile.writeAsString('');
+      final realHandle = await tempLockFile.open(mode: FileMode.append);
+
+      final supervisor = DiscoveryControlledMockSupervisor();
+      supervisor.mockHandle = realHandle;
+      supervisor.isListening = false;
+      supervisor.discoveryResult = const ProcessDiscoveryResult(
+        status: ProcessDiscoveryStatus.unverifiedCandidate,
+        diagnostic: 'Candidate process missing valid module provenance',
+      );
+
+      final coordinator = DesktopRuntimeCoordinator(
+        baseUrl: 'http://127.0.0.1:8000',
+        supervisor: supervisor,
+        client: DelayedAuthClient(authDelay: Duration.zero),
+        customLockFile: tempLockFile,
+        customExecutablePath: Platform.resolvedExecutable,
+      );
+
+      final result = await coordinator.ensureRuntimeReady(timeout: const Duration(seconds: 5));
+
+      expect(result.status, equals(RuntimeStatus.alienPortConflict));
+      expect(supervisor.spawnCallCount, equals(0));
+      expect(coordinator.currentState.pid, isNull);
+      expect(coordinator.activeRuntimeInfo, isNull);
 
       coordinator.dispose();
       await realHandle.close();

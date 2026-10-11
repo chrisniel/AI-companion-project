@@ -229,7 +229,7 @@ void main() {
       );
 
       final state = await coordinator.ensureRuntimeReady(timeout: const Duration(seconds: 25));
-      expect(state.status, equals(RuntimeStatus.readyAndAuthenticated));
+      expect(state.status, equals(RuntimeStatus.readyAndAuthenticated), reason: 'Diagnostic: ${state.diagnosticMessage}');
       expect(state.pid, isNotNull);
       expect(state.pid, greaterThan(0));
 

@@ -83,6 +83,7 @@ class DesktopRuntimeCoordinator {
   }) {
     _activeGeneration++;
     final currentGen = _activeGeneration;
+    final oldPort = _port;
     baseUrl = newBaseUrl;
     _uri = Uri.parse(newBaseUrl);
     _host = _uri.host.isNotEmpty ? _uri.host : '127.0.0.1';
@@ -90,7 +91,7 @@ class DesktopRuntimeCoordinator {
     _supervisionMode = _isLoopbackHost(_host)
         ? SupervisionMode.localLoopback
         : SupervisionMode.remoteHost;
-    if (_supervisionMode == SupervisionMode.remoteHost) {
+    if (_supervisionMode == SupervisionMode.remoteHost || _port != oldPort) {
       _activeRuntimeInfo = null;
     }
     if (newClient != null) {
@@ -107,7 +108,9 @@ class DesktopRuntimeCoordinator {
       RuntimeProcessState(
         supervisionMode: _supervisionMode,
         status: RuntimeStatus.dormant,
-        pid: _supervisionMode == SupervisionMode.localLoopback ? _activeRuntimeInfo?.pid : null,
+        pid: (_supervisionMode == SupervisionMode.localLoopback && _activeRuntimeInfo?.port == _port)
+            ? _activeRuntimeInfo?.pid
+            : null,
         port: _port,
       ),
       generation: currentGen,
@@ -415,6 +418,7 @@ class DesktopRuntimeCoordinator {
     final targetExecutablePath = _resolveExecutablePath();
     final targetWorkingDirectory = _resolveWorkingDirectory();
     final targetLogFilePath = _resolveLogFilePath();
+    RuntimeLockfileData? attemptVerifiedRuntime;
 
     if (!_isLoopbackHost(targetHost)) {
       return _updateState(
@@ -455,7 +459,12 @@ class DesktopRuntimeCoordinator {
       if (generation != _activeGeneration || _isDisposed) return _currentState;
 
       final desc = await _supervisor.readDescriptorDirect(targetLockFile);
-      if (desc != null) _activeRuntimeInfo = desc;
+      if (desc != null && desc.port == targetPort) {
+        attemptVerifiedRuntime = desc;
+        _activeRuntimeInfo = desc;
+      } else {
+        _activeRuntimeInfo = null;
+      }
 
       final authTimeout = remainingTime() < const Duration(seconds: 5)
           ? remainingTime()
@@ -467,7 +476,7 @@ class DesktopRuntimeCoordinator {
           RuntimeProcessState(
             supervisionMode: SupervisionMode.localLoopback,
             status: RuntimeStatus.readyAndAuthenticated,
-            pid: _activeRuntimeInfo?.pid,
+            pid: attemptVerifiedRuntime?.pid ?? _activeRuntimeInfo?.pid,
             port: targetPort,
           ),
           generation: generation,
@@ -478,7 +487,7 @@ class DesktopRuntimeCoordinator {
           RuntimeProcessState(
             supervisionMode: SupervisionMode.localLoopback,
             status: RuntimeStatus.startupTimeout,
-            pid: _activeRuntimeInfo?.pid,
+            pid: attemptVerifiedRuntime?.pid ?? _activeRuntimeInfo?.pid,
             port: targetPort,
             diagnosticMessage: 'Local runtime authentication verification timed out',
           ),
@@ -491,7 +500,7 @@ class DesktopRuntimeCoordinator {
             RuntimeProcessState(
               supervisionMode: SupervisionMode.localLoopback,
               status: RuntimeStatus.reachableUnauthenticated,
-              pid: _activeRuntimeInfo?.pid,
+              pid: attemptVerifiedRuntime?.pid ?? _activeRuntimeInfo?.pid,
               port: targetPort,
               diagnosticMessage: 'Local runtime reachable but unauthenticated: ${e.message}',
             ),
@@ -503,7 +512,7 @@ class DesktopRuntimeCoordinator {
             RuntimeProcessState(
               supervisionMode: SupervisionMode.localLoopback,
               status: RuntimeStatus.startupTimeout,
-              pid: _activeRuntimeInfo?.pid,
+              pid: attemptVerifiedRuntime?.pid ?? _activeRuntimeInfo?.pid,
               port: targetPort,
               diagnosticMessage: 'Local runtime authentication verification timed out',
             ),
@@ -581,7 +590,12 @@ class DesktopRuntimeCoordinator {
         }
 
         final desc = await _supervisor.readDescriptorThroughHandle(lockHandle);
-        if (desc != null) _activeRuntimeInfo = desc;
+        if (desc != null && desc.port == targetPort) {
+          attemptVerifiedRuntime = desc;
+          _activeRuntimeInfo = desc;
+        } else {
+          _activeRuntimeInfo = null;
+        }
 
         final recheckAuthTimeout = remainingTime() < const Duration(seconds: 5)
             ? remainingTime()
@@ -592,7 +606,7 @@ class DesktopRuntimeCoordinator {
             RuntimeProcessState(
               supervisionMode: SupervisionMode.localLoopback,
               status: RuntimeStatus.readyAndAuthenticated,
-              pid: _activeRuntimeInfo?.pid,
+              pid: attemptVerifiedRuntime?.pid ?? _activeRuntimeInfo?.pid,
               port: targetPort,
             ),
             generation: generation,
@@ -602,7 +616,7 @@ class DesktopRuntimeCoordinator {
             RuntimeProcessState(
               supervisionMode: SupervisionMode.localLoopback,
               status: RuntimeStatus.startupTimeout,
-              pid: _activeRuntimeInfo?.pid,
+              pid: attemptVerifiedRuntime?.pid ?? _activeRuntimeInfo?.pid,
               port: targetPort,
               diagnosticMessage: 'Local runtime authentication verification timed out',
             ),
@@ -614,7 +628,7 @@ class DesktopRuntimeCoordinator {
               RuntimeProcessState(
                 supervisionMode: SupervisionMode.localLoopback,
                 status: RuntimeStatus.reachableUnauthenticated,
-                pid: _activeRuntimeInfo?.pid,
+                pid: attemptVerifiedRuntime?.pid ?? _activeRuntimeInfo?.pid,
                 port: targetPort,
                 diagnosticMessage: 'Local runtime reachable under lock but unauthenticated: ${e.message}',
               ),
@@ -625,7 +639,7 @@ class DesktopRuntimeCoordinator {
             RuntimeProcessState(
               supervisionMode: SupervisionMode.localLoopback,
               status: RuntimeStatus.unreachable,
-              pid: _activeRuntimeInfo?.pid,
+              pid: attemptVerifiedRuntime?.pid ?? _activeRuntimeInfo?.pid,
               port: targetPort,
               diagnosticMessage: 'Local runtime verification error: ${e.message}',
             ),
@@ -636,13 +650,14 @@ class DesktopRuntimeCoordinator {
 
       // 4. Validate existing descriptor and check process liveness
       final desc = await _supervisor.readDescriptorThroughHandle(lockHandle);
-      if (desc != null && desc.pid > 0) {
+      if (desc != null && desc.port == targetPort && desc.pid > 0) {
         final isAlive = await _supervisor.isProcessActiveAndMatching(
           desc.pid,
           expectedExecutable: desc.executablePath,
         );
         if (generation != _activeGeneration || _isDisposed) return _currentState;
         if (isAlive) {
+          attemptVerifiedRuntime = desc;
           _activeRuntimeInfo = desc;
           return _updateState(
             RuntimeProcessState(
@@ -655,8 +670,10 @@ class DesktopRuntimeCoordinator {
             generation: generation,
           );
         }
-        // desc.pid is dead in process table. We must inspect the process table for an unrecorded
-        // genuine runtime process before attempting to spawn, handling crash/interruption recovery.
+        // desc.pid is dead in process table. Stale descriptor.
+        _activeRuntimeInfo = null;
+      } else {
+        _activeRuntimeInfo = null;
       }
 
       // 5. Evaluate OS process candidates on targetPort under exclusive lock
@@ -678,11 +695,13 @@ class DesktopRuntimeCoordinator {
             executablePath: verified.executablePath,
           );
           await _supervisor.writeDescriptorThroughHandle(lockHandle, recoveredDesc);
+          attemptVerifiedRuntime = recoveredDesc;
           _activeRuntimeInfo = recoveredDesc;
           break;
 
         case ProcessDiscoveryStatus.multipleCandidates:
         case ProcessDiscoveryStatus.unverifiedCandidate:
+          _activeRuntimeInfo = null;
           return _updateState(
             RuntimeProcessState(
               supervisionMode: SupervisionMode.localLoopback,
@@ -694,6 +713,7 @@ class DesktopRuntimeCoordinator {
           );
 
         case ProcessDiscoveryStatus.inspectionUnavailable:
+          _activeRuntimeInfo = null;
           return _updateState(
             RuntimeProcessState(
               supervisionMode: SupervisionMode.localLoopback,
@@ -705,12 +725,13 @@ class DesktopRuntimeCoordinator {
           );
 
         case ProcessDiscoveryStatus.noProcess:
-          // Clean slate: proceed to safe spawn below!
+          attemptVerifiedRuntime = null;
+          _activeRuntimeInfo = null;
           break;
       }
 
-      // If active runtime was not recovered, proceed to safe spawn
-      if (_activeRuntimeInfo == null || _activeRuntimeInfo!.pid <= 0) {
+      // If active runtime was not verified in this attempt, proceed to safe spawn
+      if (attemptVerifiedRuntime == null) {
         // 5. Safe spawn: verify executable existence
         if (generation != _activeGeneration || _isDisposed) return _currentState;
         final exe = File(targetExecutablePath);
@@ -757,6 +778,7 @@ class DesktopRuntimeCoordinator {
           executablePath: exe.path,
         );
         await _supervisor.writeDescriptorThroughHandle(lockHandle, newDesc);
+        attemptVerifiedRuntime = newDesc;
         _activeRuntimeInfo = newDesc;
 
         // If attempt was superseded or coordinator disposed during spawn, do not destroy runtime.
@@ -800,7 +822,7 @@ class DesktopRuntimeCoordinator {
               RuntimeProcessState(
                 supervisionMode: SupervisionMode.localLoopback,
                 status: RuntimeStatus.readyAndAuthenticated,
-                pid: _activeRuntimeInfo?.pid,
+                pid: attemptVerifiedRuntime.pid,
                 port: targetPort,
               ),
               generation: generation,
@@ -814,7 +836,7 @@ class DesktopRuntimeCoordinator {
                 RuntimeProcessState(
                   supervisionMode: SupervisionMode.localLoopback,
                   status: RuntimeStatus.reachableUnauthenticated,
-                  pid: _activeRuntimeInfo?.pid,
+                  pid: attemptVerifiedRuntime.pid,
                   port: targetPort,
                   diagnosticMessage: 'Runtime reachable but token unauthenticated: ${e.message}',
                 ),
@@ -837,7 +859,7 @@ class DesktopRuntimeCoordinator {
       RuntimeProcessState(
         supervisionMode: SupervisionMode.localLoopback,
         status: RuntimeStatus.startupTimeout,
-        pid: _activeRuntimeInfo?.pid,
+        pid: attemptVerifiedRuntime.pid,
         port: targetPort,
         diagnosticMessage: 'Runtime failed to become ready within ${timeout.inSeconds} seconds',
       ),
