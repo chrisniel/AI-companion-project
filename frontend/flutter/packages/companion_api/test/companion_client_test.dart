@@ -448,5 +448,91 @@ void main() {
         throwsArgumentError,
       );
     });
+
+    test('getModelRegistry returns parsed registry entries on 200', () async {
+      final mock = MockClient((request) async {
+        expect(request.url.path, '/api/v1/models/registry');
+        return http.Response(
+          jsonEncode([
+            {
+              'manifest': {
+                'id': 'qwen3-vl-2b-instruct',
+                'display_name': 'Qwen3-VL 2B Instruct',
+                'primary_file': 'vision/qwen3-vl-2b-instruct/model.gguf',
+                'capabilities': ['chat', 'vision'],
+              },
+              'library_state': {
+                'validation_status': 'verified',
+                'primary_file_exists': true,
+                'available_capabilities': ['chat', 'vision'],
+              },
+              'hints': {
+                'estimated_vram_gb': 2.4,
+              },
+              'runtime_model_id': 'qwen3-vl-2b-instruct',
+            }
+          ]),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      final client = CompanionClient(httpClient: mock);
+      final entries = await client.getModelRegistry();
+      expect(entries.length, 1);
+      expect(entries.first.id, 'qwen3-vl-2b-instruct');
+      expect(entries.first.isVerified, isTrue);
+      expect(entries.first.hasVision, isTrue);
+    });
+
+    test('selectModel sends POST to /models/select and returns ModelStatusResponse', () async {
+      final mock = MockClient((request) async {
+        expect(request.url.path, '/api/v1/models/select');
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['model_name'], 'qwen3-vl-2b-instruct');
+        expect(body['load_immediately'], isTrue);
+        return http.Response(
+          jsonEncode({
+            'provider': 'llama.cpp',
+            'runtime_state': 'MODEL_READY',
+            'active_model': 'qwen3-vl-2b-instruct',
+            'selected_model': 'qwen3-vl-2b-instruct',
+            'model_resident': true,
+            'model_loaded': true,
+            'model_awake': true,
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      final client = CompanionClient(httpClient: mock);
+      final status = await client.selectModel('qwen3-vl-2b-instruct', loadImmediately: true);
+      expect(status.runtimeState, 'MODEL_READY');
+      expect(status.selectedModel, 'qwen3-vl-2b-instruct');
+    });
+
+    test('loadModel sends POST to /models/load and returns ModelStatusResponse', () async {
+      final mock = MockClient((request) async {
+        expect(request.url.path, '/api/v1/models/load');
+        return http.Response(
+          jsonEncode({
+            'provider': 'llama.cpp',
+            'runtime_state': 'MODEL_READY',
+            'active_model': 'qwen3-vl-2b-instruct',
+            'model_resident': true,
+            'model_loaded': true,
+            'model_awake': true,
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      final client = CompanionClient(httpClient: mock);
+      final status = await client.loadModel();
+      expect(status.runtimeState, 'MODEL_READY');
+      expect(status.activeModel, 'qwen3-vl-2b-instruct');
+    });
   });
 }

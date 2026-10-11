@@ -72,6 +72,7 @@ void main() {
         'managed_by_core': false,
         'runtime_state': 'MODEL_READY',
         'active_model': 'qwen2.5-7b',
+        'selected_model': 'qwen3-vl-2b-instruct',
         'model_resident': true,
         'model_loaded': true,
         'model_awake': true,
@@ -92,6 +93,7 @@ void main() {
       expect(dto.provider, 'llama.cpp');
       expect(dto.runtimeState, 'MODEL_READY');
       expect(dto.activeModel, 'qwen2.5-7b');
+      expect(dto.selectedModel, 'qwen3-vl-2b-instruct');
       expect(dto.modelResident, isTrue);
       expect(dto.modelLoaded, isTrue);
       expect(dto.modelAwake, isTrue);

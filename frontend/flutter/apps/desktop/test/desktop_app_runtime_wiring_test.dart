@@ -104,6 +104,32 @@ class FakeChatClient extends CompanionClient {
   Future<ConversationListOut> listConversations({int skip = 0, int limit = 50}) async {
     return const ConversationListOut(items: [], total: 0);
   }
+
+  @override
+  Future<List<ModelRegistryEntry>> getModelRegistry() async => const [];
+
+  @override
+  Future<ModelStatusResponse> selectModel(
+    String modelName, {
+    bool loadImmediately = false,
+    String? profile,
+  }) async {
+    return const ModelStatusResponse(
+      provider: 'llama.cpp',
+      selectedModel: 'qwen3-vl-2b-instruct',
+      runtimeState: 'MODEL_READY',
+    );
+  }
+
+  @override
+  Future<ModelStatusResponse> loadModel({String? modelName, String? profile}) async {
+    return const ModelStatusResponse(
+      provider: 'llama.cpp',
+      activeModel: 'qwen3-vl-2b-instruct',
+      modelLoaded: true,
+      runtimeState: 'MODEL_READY',
+    );
+  }
 }
 
 class FakeProcessSupervisor extends WindowsRuntimeProcessSupervisor {

@@ -7,6 +7,7 @@ import gc
 import importlib
 import json
 import logging
+import os
 from pathlib import Path
 import subprocess
 from typing import Any, AsyncGenerator, Dict, List, Optional
@@ -16,6 +17,11 @@ import httpx
 from app.core.config import settings
 from app.schemas.llm import ChatMessage, ModelStatusResponse
 from app.schemas.multimodal import ContentBlock, ResolvedImageContent, TextContent
+from app.services.host_config import (
+    get_saved_model_selection,
+    resolve_effective_model,
+    save_model_selection,
+)
 from app.services.llm.base import BaseLLMProvider
 from app.services.llm.runtime_state import LLMRuntimeState
 from app.services.model_registry import (
@@ -294,7 +300,9 @@ class LlamaCppProvider(BaseLLMProvider):
             return False
 
     def _resolve_model_path(self, model_name: Optional[str] = None) -> Path:
-        target = model_name or settings.DEFAULT_MODEL_NAME
+        target, _ = resolve_effective_model(model_name)
+        if not target:
+            target = "model_not_selected"
         models_dir = settings.MODELS_DIR
 
         # Check in configured models directory
@@ -419,16 +427,25 @@ class LlamaCppProvider(BaseLLMProvider):
                     else resolve_runtime_model_id(model_name)
                 )
                 if req_runtime_id and req_runtime_id == self._active_model_name:
+                    save_model_selection(model_name)
                     logger.info(
                         f"Requested model '{model_name}' matches active model '{self._active_model_name}'; reusing without reload"
                     )
                     self._last_active_at = datetime.now(timezone.utc)
                     return True
 
-            # Determine candidate model identifier
-            candidate_identifier = model_name or settings.DEFAULT_MODEL_NAME
+            # Resolve target model according to precedence:
+            # 1. Explicitly requested model for the operation
+            # 2. Saved host-level model selection
+            # 3. Explicit development environment override, if present
+            # 4. Otherwise MODEL_SELECTION_REQUIRED
+            candidate_identifier, source = resolve_effective_model(model_name)
+            if not candidate_identifier:
+                self._last_error = "MODEL_SELECTION_REQUIRED"
+                self._runtime_state = LLMRuntimeState.MODEL_SELECTION_REQUIRED
+                return False
 
-            # Enforce verified registry matching
+            # Enforce verified registry matching - never silently fall back
             registry_entry = find_model_registry_entry(candidate_identifier)
             if not registry_entry or not registry_entry.library_state.primary_file_exists:
                 self._last_error = f"CONFIGURED_MODEL_NOT_FOUND: {candidate_identifier}"
@@ -453,6 +470,8 @@ class LlamaCppProvider(BaseLLMProvider):
                         self._active_model_name = target_model_name
                         self._last_active_at = datetime.now(timezone.utc)
                         self._start_idle_monitor()
+                        if model_name:
+                            save_model_selection(model_name)
                         return True
                     else:
                         self._last_error = f"MODEL_LOAD_FAILED: {target_model_name}"
@@ -473,6 +492,8 @@ class LlamaCppProvider(BaseLLMProvider):
                         self._active_model_name = target_model_name
                         self._last_active_at = datetime.now(timezone.utc)
                         self._start_idle_monitor()
+                        if model_name:
+                            save_model_selection(model_name)
                         return True
                     else:
                         self._last_error = f"MODEL_LOAD_FAILED: {target_model_name}"
@@ -611,6 +632,8 @@ class LlamaCppProvider(BaseLLMProvider):
                 self._active_model_name = target_model_name
                 self._last_active_at = datetime.now(timezone.utc)
                 self._start_idle_monitor()
+                if model_name:
+                    save_model_selection(model_name)
                 logger.info(f"Model loaded: {target_model_name}")
                 return True
             else:
@@ -796,7 +819,10 @@ class LlamaCppProvider(BaseLLMProvider):
                         self._last_active_at = datetime.now(timezone.utc)
                 else:
                     self._active_model_name = None
-                    self._runtime_state = LLMRuntimeState.MODEL_UNLOADED
+                    if self._last_error == "MODEL_SELECTION_REQUIRED" or self._runtime_state == LLMRuntimeState.MODEL_SELECTION_REQUIRED:
+                        self._runtime_state = LLMRuntimeState.MODEL_SELECTION_REQUIRED
+                    else:
+                        self._runtime_state = LLMRuntimeState.MODEL_UNLOADED
             else:
                 router_running = False
                 self._server_is_active = False
@@ -805,11 +831,23 @@ class LlamaCppProvider(BaseLLMProvider):
                 self._applied_context_size = None
                 self._applied_gpu_layers = None
                 self._applied_mmproj_offload = None
-                if self._runtime_state not in (LLMRuntimeState.MODEL_ERROR, LLMRuntimeState.SERVER_ERROR):
+                if self._runtime_state not in (
+                    LLMRuntimeState.MODEL_ERROR,
+                    LLMRuntimeState.SERVER_ERROR,
+                    LLMRuntimeState.SERVER_STARTING,
+                    LLMRuntimeState.MODEL_LOADING,
+                    LLMRuntimeState.MODEL_UNLOADING,
+                    LLMRuntimeState.MODEL_SELECTION_REQUIRED,
+                ):
                     self._runtime_state = LLMRuntimeState.SERVER_STOPPED
         else:
             router_running = False
-            self._runtime_state = LLMRuntimeState.MODEL_READY if self._active_model_name else LLMRuntimeState.MODEL_UNLOADED
+            if self._active_model_name:
+                self._runtime_state = LLMRuntimeState.MODEL_READY
+            elif self._last_error == "MODEL_SELECTION_REQUIRED" or self._runtime_state == LLMRuntimeState.MODEL_SELECTION_REQUIRED:
+                self._runtime_state = LLMRuntimeState.MODEL_SELECTION_REQUIRED
+            else:
+                self._runtime_state = LLMRuntimeState.MODEL_UNLOADED
 
         req_params = self._get_profile_params(self._active_profile)
         available = []
@@ -860,6 +898,7 @@ class LlamaCppProvider(BaseLLMProvider):
             managed_by_core=self._managed_by_core and router_running,
             runtime_state=self._runtime_state,
             active_model=self._active_model_name if is_loaded else None,
+            selected_model=get_saved_model_selection() or self._active_model_name,
             model_resident=model_resident,
             model_loaded=model_loaded,
             model_awake=model_awake,
@@ -889,8 +928,11 @@ class LlamaCppProvider(BaseLLMProvider):
         if not self.is_loaded():
             loaded = await self.load_model()
             if not loaded:
+                if self._last_error == "MODEL_SELECTION_REQUIRED":
+                    raise RuntimeError("MODEL_SELECTION_REQUIRED")
                 raise RuntimeError(
-                    f"Failed to load local model. Ensure GGUF weights exist in '{settings.MODELS_DIR}' "
+                    f"Failed to load local model ({self._last_error or 'unknown error'}). "
+                    f"Ensure GGUF weights exist in '{settings.MODELS_DIR}' "
                     f"or start llama-server at '{settings.LLAMA_SERVER_URL}'."
                 )
 

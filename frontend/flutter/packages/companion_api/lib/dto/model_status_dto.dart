@@ -18,6 +18,7 @@ class ModelStatusResponse {
   final bool managedByCore;
   final String runtimeState;
   final String? activeModel;
+  final String? selectedModel;
   final bool modelResident;
   final bool modelLoaded;
   final bool modelAwake;
@@ -47,6 +48,7 @@ class ModelStatusResponse {
     this.managedByCore = false,
     this.runtimeState = 'UNLOADED',
     this.activeModel,
+    this.selectedModel,
     this.modelResident = false,
     this.modelLoaded = false,
     this.modelAwake = false,
@@ -99,6 +101,7 @@ class ModelStatusResponse {
       managedByCore: json['managed_by_core'] as bool? ?? false,
       runtimeState: json['runtime_state'] as String? ?? 'UNLOADED',
       activeModel: json['active_model'] as String?,
+      selectedModel: json['selected_model'] as String?,
       modelResident: json['model_resident'] as bool? ?? false,
       modelLoaded: json['model_loaded'] as bool? ?? false,
       modelAwake: json['model_awake'] as bool? ?? false,
@@ -130,6 +133,7 @@ class ModelStatusResponse {
         'managed_by_core': managedByCore,
         'runtime_state': runtimeState,
         if (activeModel != null) 'active_model': activeModel,
+        if (selectedModel != null) 'selected_model': selectedModel,
         'model_resident': modelResident,
         'model_loaded': modelLoaded,
         'model_awake': modelAwake,
@@ -164,6 +168,7 @@ class ModelStatusResponse {
           managedByCore == other.managedByCore &&
           runtimeState == other.runtimeState &&
           activeModel == other.activeModel &&
+          selectedModel == other.selectedModel &&
           modelResident == other.modelResident &&
           modelLoaded == other.modelLoaded &&
           modelAwake == other.modelAwake &&
@@ -190,6 +195,7 @@ class ModelStatusResponse {
         managedByCore,
         runtimeState,
         activeModel,
+        selectedModel,
         modelResident,
         modelLoaded,
         modelAwake,
@@ -211,5 +217,5 @@ class ModelStatusResponse {
 
   @override
   String toString() =>
-      'ModelStatusResponse(provider: $provider, state: $runtimeState, activeModel: $activeModel)';
+      'ModelStatusResponse(provider: $provider, state: $runtimeState, activeModel: $activeModel, selectedModel: $selectedModel)';
 }

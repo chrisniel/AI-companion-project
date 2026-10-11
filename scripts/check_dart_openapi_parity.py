@@ -81,6 +81,7 @@ UNMAPPED_FUTURE_ROUTES: Dict[Tuple[str, str], str] = {
     ("POST", "/api/v1/tasks/{task_id}/restore"): "M2 Tasks / Task Restoration",
     ("DELETE", "/api/v1/tasks/{task_id}/permanent"): "M2 Tasks / Permanent Task Purge",
     ("GET", "/api/v1/models/registry"): "M2/M3 Model Registry & Downloader",
+    ("POST", "/api/v1/models/select"): "M2/M3 Model Selection Management",
     ("POST", "/api/v1/models/load"): "M2/M3 Model Lifecycle Management",
     ("POST", "/api/v1/models/unload"): "M2/M3 Model Lifecycle Management",
     ("PATCH", "/api/v1/models/profile"): "M2/M3 Model Profile Tuning",

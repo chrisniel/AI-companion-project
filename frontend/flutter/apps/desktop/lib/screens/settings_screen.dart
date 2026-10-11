@@ -21,6 +21,7 @@ class SettingsScreen extends StatefulWidget {
     this.runtimeCoordinator,
     this.clientSettings,
     this.credentialStore,
+    this.client,
   });
 
   final DesktopSettingsController controller;
@@ -29,6 +30,7 @@ class SettingsScreen extends StatefulWidget {
   final DesktopRuntimeCoordinator? runtimeCoordinator;
   final DesktopClientSettings? clientSettings;
   final CredentialStore? credentialStore;
+  final CompanionClient? client;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -46,6 +48,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   DesktopLifecycleCoordinator? get coordinator => widget.coordinator;
   DesktopClientSettings get _clientSettings => widget.clientSettings ?? DesktopClientSettings();
   CredentialStore get _credentialStore => widget.credentialStore ?? WindowsDpapiCredentialStore();
+
+  List<ModelRegistryEntry>? _registryEntries;
+  ModelStatusResponse? _modelStatus;
+  bool _isLoadingModelCatalog = false;
+  bool _isExecutingModelAction = false;
+  String? _selectedModelId;
+  String? _modelActionMessage;
 
   @override
   void initState() {
@@ -85,6 +94,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         }
       });
     }
+
+    _loadModelData();
   }
 
   @override
@@ -127,6 +138,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // 2B. Runtime Process Supervision Section
           _buildRuntimeSupervisionCard(context, ext, isDark),
+          const SizedBox(height: CompanionSpacing.lg),
+
+          // 2C. Local LLM Model Selection Section
+          _buildModelSelectionCard(context, ext, isDark),
           const SizedBox(height: CompanionSpacing.lg),
 
           // 3. Storage Diagnostics Section
@@ -911,6 +926,485 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  CompanionClient _resolveClient() {
+    if (widget.client != null) {
+      return widget.client!;
+    }
+    if (widget.chatController != null) {
+      return widget.chatController!.client;
+    }
+    final rawUrl = _urlController.text.trim();
+    final uri = CompanionClient.validateBaseUrl(rawUrl.isNotEmpty ? rawUrl : 'http://127.0.0.1:8000');
+    return CompanionClient(
+      baseUrl: uri.toString(),
+      credentialStore: _credentialStore,
+    );
+  }
+
+  Future<void> _loadModelData() async {
+    if (_isLoadingModelCatalog) return;
+    if (widget.client == null && Platform.environment.containsKey('FLUTTER_TEST')) {
+      final savedModel = await _clientSettings.readSelectedModel();
+      if (mounted) {
+        setState(() {
+          _selectedModelId = savedModel ?? _selectedModelId;
+        });
+      }
+      return;
+    }
+
+    setState(() {
+      _isLoadingModelCatalog = true;
+      _modelActionMessage = null;
+    });
+
+    try {
+      final client = _resolveClient();
+      final results = await Future.wait([
+        client.getModelRegistry().catchError((_) => <ModelRegistryEntry>[]),
+        client.getModelStatus().catchError((_) => const ModelStatusResponse(provider: 'unknown')),
+        _clientSettings.readSelectedModel(),
+      ]);
+
+      if (!mounted) return;
+      setState(() {
+        _registryEntries = results[0] as List<ModelRegistryEntry>;
+        _modelStatus = results[1] as ModelStatusResponse;
+        final savedModel = results[2] as String?;
+        _selectedModelId = _modelStatus?.selectedModel ?? savedModel ?? _selectedModelId;
+        _isLoadingModelCatalog = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingModelCatalog = false;
+        _modelActionMessage = 'Failed to load model catalog: $e';
+      });
+    }
+  }
+
+  Future<void> _selectModel(String modelId, {bool loadImmediately = false}) async {
+    if (_isExecutingModelAction) return;
+    setState(() {
+      _isExecutingModelAction = true;
+      _modelActionMessage = loadImmediately ? 'Loading model into memory...' : 'Saving model selection...';
+    });
+
+    try {
+      final client = _resolveClient();
+      final updatedStatus = await client.selectModel(modelId, loadImmediately: loadImmediately);
+      await _clientSettings.writeSelectedModel(modelId);
+      if (!mounted) return;
+      setState(() {
+        _modelStatus = updatedStatus;
+        _selectedModelId = modelId;
+        _isExecutingModelAction = false;
+        _modelActionMessage = loadImmediately
+            ? 'Model loaded: ${updatedStatus.activeModel ?? modelId}'
+            : 'Model selected: $modelId';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isExecutingModelAction = false;
+        _modelActionMessage = 'Model action failed: $e';
+      });
+    }
+  }
+
+  Widget _buildModelSelectionCard(
+    BuildContext context,
+    CompanionThemeExtension? ext,
+    bool isDark,
+  ) {
+    final status = _modelStatus;
+    final stateName = status?.runtimeState ?? 'UNKNOWN';
+
+    Color stateColor;
+    IconData stateIcon;
+    String stateDescription;
+
+    switch (stateName) {
+      case 'MODEL_READY':
+        stateColor = ext?.success ?? CompanionColors.success;
+        stateIcon = Icons.check_circle_rounded;
+        stateDescription = 'Ready (Active: ${status?.activeModel ?? "None"})';
+        break;
+      case 'MODEL_LOADING':
+        stateColor = Colors.orange;
+        stateIcon = Icons.sync_rounded;
+        stateDescription = 'Loading weights into memory...';
+        break;
+      case 'MODEL_SELECTION_REQUIRED':
+        stateColor = Colors.amber;
+        stateIcon = Icons.warning_amber_rounded;
+        stateDescription = 'Selection Required: Choose a model below';
+        break;
+      case 'MODEL_SLEEPING':
+        stateColor = Colors.purple;
+        stateIcon = Icons.bedtime_rounded;
+        stateDescription = 'Sleeping (VRAM released)';
+        break;
+      case 'MODEL_ERROR':
+      case 'SERVER_ERROR':
+        stateColor = ext?.danger ?? CompanionColors.danger;
+        stateIcon = Icons.error_outline_rounded;
+        stateDescription = 'Error: ${status?.lastRuntimeError ?? "Failed"}';
+        break;
+      case 'SERVER_STOPPED':
+        stateColor = ext?.textMuted ?? Colors.grey;
+        stateIcon = Icons.stop_circle_outlined;
+        stateDescription = 'Server Stopped';
+        break;
+      default:
+        stateColor = ext?.accent ?? Colors.blue;
+        stateIcon = Icons.info_outline_rounded;
+        stateDescription = 'Unloaded (Selected: ${status?.selectedModel ?? _selectedModelId ?? "None"})';
+    }
+
+    return SoftGlassPanel(
+      padding: const EdgeInsets.all(CompanionSpacing.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.memory_rounded, size: 20, color: ext?.accent),
+                  const SizedBox(width: CompanionSpacing.sm),
+                  Text(
+                    'Local LLM Model Selection',
+                    style: CompanionTypography.titleMedium.copyWith(color: ext?.textPrimary),
+                  ),
+                ],
+              ),
+              IconButton(
+                icon: _isLoadingModelCatalog
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh_rounded, size: 18),
+                tooltip: 'Refresh Models',
+                onPressed: _isLoadingModelCatalog ? null : _loadModelData,
+              ),
+            ],
+          ),
+          const SizedBox(height: CompanionSpacing.xs),
+          Text(
+            'Dynamic model selection, verified capability badges, and persistent host configuration',
+            style: CompanionTypography.caption.copyWith(color: ext?.textSecondary),
+          ),
+          const SizedBox(height: CompanionSpacing.md),
+
+          // Current Runtime Status Pill
+          NeumorphicSurface(
+            surfaceType: NeumorphicSurfaceType.recessed,
+            borderRadius: CompanionRadius.borderMd,
+            padding: const EdgeInsets.all(CompanionSpacing.md),
+            child: Row(
+              children: [
+                Icon(stateIcon, size: 18, color: stateColor),
+                const SizedBox(width: CompanionSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Runtime Status: $stateName',
+                        style: CompanionTypography.bodySmall.copyWith(
+                          color: stateColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        stateDescription,
+                        style: CompanionTypography.caption.copyWith(color: ext?.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+                if (status?.appliedProfile != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05),
+                      borderRadius: CompanionRadius.borderSm,
+                    ),
+                    child: Text(
+                      'Profile: ${status!.appliedProfile}',
+                      style: CompanionTypography.caption.copyWith(
+                        color: ext?.textPrimary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: CompanionSpacing.lg),
+
+          // Model List Header
+          Text(
+            'Available Models in Registry',
+            style: CompanionTypography.bodySmall.copyWith(
+              color: ext?.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: CompanionSpacing.sm),
+
+          if (_isLoadingModelCatalog && (_registryEntries == null || _registryEntries!.isEmpty))
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(CompanionSpacing.lg),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (_registryEntries == null || _registryEntries!.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: CompanionSpacing.md),
+              child: Text(
+                'No models registered. Check models directory or verify runtime connection.',
+                style: CompanionTypography.bodySmall.copyWith(color: ext?.textMuted),
+              ),
+            )
+          else
+            ..._registryEntries!.map((entry) => _buildModelEntryCard(entry, ext, isDark)),
+
+          if (_modelActionMessage != null) ...[
+            const SizedBox(height: CompanionSpacing.md),
+            Container(
+              padding: const EdgeInsets.all(CompanionSpacing.sm),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.04),
+                borderRadius: CompanionRadius.borderSm,
+                border: Border.all(color: ext?.borderSubtle ?? Colors.transparent),
+              ),
+              child: Text(
+                _modelActionMessage!,
+                style: CompanionTypography.caption.copyWith(
+                  color: ext?.textPrimary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModelEntryCard(
+    ModelRegistryEntry entry,
+    CompanionThemeExtension? ext,
+    bool isDark,
+  ) {
+    final isSelected = (_selectedModelId == entry.id) ||
+        (_selectedModelId == entry.runtimeModelId) ||
+        (_modelStatus?.selectedModel == entry.id) ||
+        (_modelStatus?.selectedModel == entry.runtimeModelId);
+    final isReady = _modelStatus?.runtimeState == 'MODEL_READY' &&
+        (_modelStatus?.activeModel == entry.id || _modelStatus?.activeModel == entry.runtimeModelId);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: CompanionSpacing.md),
+      padding: const EdgeInsets.all(CompanionSpacing.md),
+      decoration: BoxDecoration(
+        color: isSelected
+            ? (ext?.accent.withValues(alpha: isDark ? 0.12 : 0.06) ?? Colors.blue.withValues(alpha: 0.08))
+            : (isDark ? Colors.white.withValues(alpha: 0.03) : Colors.black.withValues(alpha: 0.02)),
+        borderRadius: CompanionRadius.borderMd,
+        border: Border.all(
+          color: isSelected ? (ext?.accent ?? Colors.blue) : (ext?.borderSubtle ?? Colors.grey.withValues(alpha: 0.2)),
+          width: isSelected ? 1.5 : 1.0,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            entry.displayName,
+                            style: CompanionTypography.bodyMedium.copyWith(
+                              color: ext?.textPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (isSelected) ...[
+                          const SizedBox(width: CompanionSpacing.xs),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: ext?.accent ?? Colors.blue,
+                              borderRadius: CompanionRadius.borderSm,
+                            ),
+                            child: Text(
+                              isReady ? 'ACTIVE' : 'SELECTED',
+                              style: CompanionTypography.caption.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'ID: ${entry.id} | File: ${entry.primaryFile}',
+                      style: CompanionTypography.caption.copyWith(color: ext?.textSecondary),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: CompanionSpacing.sm),
+
+          // Badges: Capabilities & Validation Status
+          Wrap(
+            spacing: CompanionSpacing.xs,
+            runSpacing: CompanionSpacing.xs,
+            children: [
+              // Chat capability badge
+              _buildBadge(
+                label: 'Text',
+                icon: Icons.chat_bubble_outline_rounded,
+                active: entry.hasChat,
+                ext: ext,
+              ),
+              // Vision capability badge
+              _buildBadge(
+                label: 'Vision',
+                icon: Icons.image_outlined,
+                active: entry.hasVision,
+                ext: ext,
+              ),
+              // Reasoning capability badge
+              _buildBadge(
+                label: 'Reasoning',
+                icon: Icons.psychology_outlined,
+                active: entry.hasReasoning,
+                ext: ext,
+              ),
+              // Validation status badge
+              _buildValidationBadge(entry, ext),
+            ],
+          ),
+          const SizedBox(height: CompanionSpacing.sm),
+
+          // Action Buttons
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _isExecutingModelAction
+                    ? null
+                    : () => _selectModel(entry.id, loadImmediately: false),
+                icon: const Icon(Icons.bookmark_outline_rounded, size: 14),
+                label: Text(isSelected ? 'Selected' : 'Select'),
+              ),
+              const SizedBox(width: CompanionSpacing.sm),
+              FilledButton.tonalIcon(
+                onPressed: (_isExecutingModelAction || !entry.primaryFileExists)
+                    ? null
+                    : () => _selectModel(entry.id, loadImmediately: true),
+                icon: const Icon(Icons.play_arrow_rounded, size: 16),
+                label: Text(isReady ? 'Reload' : 'Load Model'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBadge({
+    required String label,
+    required IconData icon,
+    required bool active,
+    required CompanionThemeExtension? ext,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: active
+            ? (ext?.accent.withValues(alpha: 0.15) ?? Colors.blue.withValues(alpha: 0.15))
+            : Colors.grey.withValues(alpha: 0.1),
+        borderRadius: CompanionRadius.borderSm,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 12,
+            color: active ? (ext?.accent ?? Colors.blue) : (ext?.textMuted ?? Colors.grey),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: CompanionTypography.caption.copyWith(
+              color: active ? (ext?.accent ?? Colors.blue) : (ext?.textMuted ?? Colors.grey),
+              fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildValidationBadge(ModelRegistryEntry entry, CompanionThemeExtension? ext) {
+    Color color;
+    String text;
+    if (entry.isVerified) {
+      color = ext?.success ?? CompanionColors.success;
+      text = 'Verified';
+    } else if (entry.validationStatus == 'missing_companion') {
+      color = Colors.amber;
+      text = 'Text-Only (Companion Missing)';
+    } else if (!entry.primaryFileExists || entry.validationStatus == 'missing_primary') {
+      color = ext?.danger ?? CompanionColors.danger;
+      text = 'Missing GGUF';
+    } else {
+      color = ext?.danger ?? CompanionColors.danger;
+      text = entry.validationStatus;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: CompanionRadius.borderSm,
+      ),
+      child: Text(
+        text,
+        style: CompanionTypography.caption.copyWith(
+          color: color,
+          fontWeight: FontWeight.w600,
+          fontSize: 11,
+        ),
       ),
     );
   }

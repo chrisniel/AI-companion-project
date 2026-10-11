@@ -22,12 +22,14 @@ from app.schemas.llm import (
     ChatMessage,
     ModelLoadRequest,
     ModelProfileUpdateRequest,
+    ModelSelectRequest,
     ModelStatusResponse,
 )
 from app.schemas.model_registry import ModelRegistryEntry
+from app.services.host_config import save_model_selection
 from app.services.llm.base import BaseLLMProvider
 from app.services.llm.manager import get_llm_provider
-from app.services.model_registry import build_model_list
+from app.services.model_registry import build_model_list, find_model_registry_entry
 
 router = APIRouter()
 
@@ -80,6 +82,43 @@ async def load_model(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=error_msg,
         )
+    return await provider.get_status()
+
+
+@router.post(
+    "/models/select",
+    response_model=ModelStatusResponse,
+    summary="Select LLM model in persistent host configuration",
+    dependencies=[Depends(verify_token)],
+)
+async def select_model(
+    request: ModelSelectRequest,
+    provider: BaseLLMProvider = Depends(get_llm_provider),
+) -> ModelStatusResponse:
+    """Save selected model in host_config.json, optionally loading immediately."""
+    entry = find_model_registry_entry(request.model_name)
+    if not entry:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Model not found in registry: {request.model_name}",
+        )
+    if not entry.library_state.primary_file_exists:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Model file missing on host: {request.model_name}",
+        )
+
+    save_model_selection(request.model_name)
+
+    if request.load_immediately:
+        success = await provider.load_model(model_name=request.model_name, profile=request.profile)
+        if not success:
+            error_msg = getattr(provider, "_last_error", None) or "Failed to load model into memory."
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=error_msg,
+            )
+
     return await provider.get_status()
 
 

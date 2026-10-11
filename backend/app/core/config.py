@@ -3,7 +3,7 @@
 import os
 import secrets
 from pathlib import Path
-from typing import List, Union
+from typing import List, Optional, Union
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -135,7 +135,8 @@ class Settings(BaseSettings):
     @property
     def BACKUP_DIR(self) -> Path:
         return self.canonical_paths.BACKUP_DIR
-    DEFAULT_MODEL_NAME: str = "Qwen2.5-7B-Instruct-Q4_K_M.gguf"
+    DEFAULT_MODEL_NAME: Optional[str] = None
+    DEV_MODEL_OVERRIDE: Optional[str] = Field(default=None, validation_alias="COMPANION_DEV_MODEL")
     LLM_PROVIDER: str = "auto"  # "auto" | "llama_cpp" | "mock"
     LLM_PROFILE: str = "balanced"  # "eco" | "balanced" | "maximum"
     LLM_IDLE_TIMEOUT_SECONDS: int = 900  # 15 minutes auto-unload

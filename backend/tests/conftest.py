@@ -78,7 +78,7 @@ def isolate_test_environment(tmp_path_factory, monkeypatch):
 @pytest.fixture(autouse=True)
 def default_mock_llm_provider():
     """Ensure all tests run deterministically against MockLLMProvider unless explicitly overridden."""
-    mock = MockLLMProvider()
+    mock = MockLLMProvider(default_model="mock-default-model")
     llm_manager.set_provider(mock)
     yield mock
     llm_manager.reset()

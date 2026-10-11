@@ -135,6 +135,23 @@ In accordance with Decisions `D-PHONE-01`, `D-PHONE-01C`, `D-PHONE-03`, and `D-P
   - Requested execution backend (e.g., `AUTO`, `CPU`, `GPU`, `NPU`) and the actually applied backend must be truthfully and separately reported.
   - Evaluated models (such as Gemma 3 1B) represent empirical research candidates, not hard-coded architectural dependencies.
 
+### 2.8 Dynamic Model Selection & Hardware-Aware Recommendation Architecture
+
+In accordance with architectural decisions for replaceable local generative models:
+
+- **Dynamic & Replaceable Model Invariant:** No model family or specific checkpoint is permanently mandated or hard-coded into the architecture. The runtime orchestrator supports dynamic selection, replacement, loading, and unloading of approved local models. The reference model (`qwen3-vl-2b-instruct`) serves as an empirical development and qualification baseline, not an immutable system dependency.
+- **Strict Model Selection Precedence:** Runtime model resolution enforces deterministic precedence:
+  1. *Explicit Operation Request:* The model explicitly specified in the client request payload.
+  2. *Saved Host Configuration:* The model persisted in machine-level host configuration (`COMPANION_DATA_ROOT/config/host_config.json`).
+  3. *Development Environment Override:* Explicit override via `COMPANION_DEV_MODEL` when present in development/test environments.
+  4. *Fail-Closed Invariant (`MODEL_SELECTION_REQUIRED`):* If no valid model is resolved or the selected model is missing/incompatible, the runtime fails closed with `MODEL_SELECTION_REQUIRED` (HTTP 422). The system **never** silently falls back to an unselected or arbitrary model.
+- **Host-Level Configuration Scope:** Model selection is a machine-wide host configuration owned by the host environment (`host_config.json`), not stored per-user profile and not owned primarily by environment files.
+- **Hardware-Aware Model Recommendation (Target Architecture):**
+  - *Dedicated VRAM Target:* Recommendations target at most **50% of total dedicated VRAM** for resident model weights and KV cache under standard operating profiles.
+  - *Headroom & Safety Reserve:* Recommended capacity is further bounded by measured available VRAM headroom and a non-negotiable safety reserve ensuring desktop window compositing, operating system operations, and user applications avoid VRAM starvation or driver crashes.
+  - *Advisory vs. Enforced Policy:* Hardware-aware recommendations are advisory guidance surfaced in the user interface (such as compatibility badges and recommended model tags). Explicit user selection always overrides recommendations, subject to fail-closed preflight memory validation.
+  - *Truthful Capabilities:* Switching models truthfully reconfigures client capabilities; selecting a text-only model disables vision assistance, and missing companion projectors (`mmproj`) retain text capability while disabling multimodal turns without failing the entire model.
+
 ---
 
 ## 3. Current Verified Implementation
@@ -181,6 +198,8 @@ Verified in `backend/app/services/model_registry.py`:
 - **Metadata Reader (`read_gguf_metadata`):** Pure-Python binary reader parsing GGUF magic bytes (`0x46554747`), header fields, and key-value string metadata (architecture, context length, chat templates).
 - **Registry Merging:** Merges factory template models (`models/registry.template.json`) with persistent user-installed models at `COMPANION_DATA_ROOT/library/registry/models.json` to generate the effective runtime catalog.
 - **Canonical Model & Voice Libraries:** Model weights reside in `COMPANION_DATA_ROOT/library/models/llm`; voices reside in `COMPANION_DATA_ROOT/library/voices`.
+- **Dynamic Model Selection API & Precedence:** Implemented in `backend/app/api/v1/endpoints/models.py` (`POST /api/v1/models/select`). Model resolution strictly enforces precedence: explicit operation request $\rightarrow$ saved host config (`host_config.json`) $\rightarrow$ development override (`COMPANION_DEV_MODEL`) $\rightarrow$ fail closed (`MODEL_SELECTION_REQUIRED` / 422).
+- **Active Development Reference Model:** `qwen3-vl-2b-instruct` (Vision + Text) serves as the approved development reference model in `models/registry.template.json`.
 
 ### 3.4 Decision D6 Implementation Status vs. Gaps
 

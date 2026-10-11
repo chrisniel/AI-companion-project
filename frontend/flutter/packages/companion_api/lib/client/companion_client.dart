@@ -7,6 +7,7 @@ import '../dto/auth_dto.dart';
 import '../dto/conversation_dto.dart';
 import '../dto/health_dto.dart';
 import '../dto/message_dto.dart';
+import '../dto/model_registry_dto.dart';
 import '../dto/model_status_dto.dart';
 import '../dto/sse_event_dto.dart';
 import '../dto/system_status_dto.dart';
@@ -148,6 +149,60 @@ class CompanionClient {
     final uri = baseUri.replace(path: '${baseUri.path}/api/v1/models');
     final headers = await _buildHeaders(requiresAuth: true);
     final response = await _httpClient.get(uri, headers: headers);
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return ModelStatusResponse.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Retrieves model catalog and validation states via GET /api/v1/models/registry.
+  Future<List<ModelRegistryEntry>> getModelRegistry() async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/models/registry');
+    final headers = await _buildHeaders(requiresAuth: true);
+    final response = await _httpClient.get(uri, headers: headers);
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      if (json is List) {
+        return json
+            .map((e) => ModelRegistryEntry.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList();
+      }
+      return const [];
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Selects a model in persistent host configuration via POST /api/v1/models/select.
+  Future<ModelStatusResponse> selectModel(
+    String modelName, {
+    bool loadImmediately = false,
+    String? profile,
+  }) async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/models/select');
+    final headers = await _buildHeaders(requiresAuth: true);
+    final body = jsonEncode({
+      'model_name': modelName,
+      'load_immediately': loadImmediately,
+      if (profile != null) 'profile': profile,
+    });
+    final response = await _httpClient.post(uri, headers: headers, body: body);
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return ModelStatusResponse.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Explicitly loads model weights into VRAM via POST /api/v1/models/load.
+  Future<ModelStatusResponse> loadModel({String? modelName, String? profile}) async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/models/load');
+    final headers = await _buildHeaders(requiresAuth: true);
+    final body = jsonEncode({
+      if (modelName != null) 'model_name': modelName,
+      if (profile != null) 'profile': profile,
+    });
+    final response = await _httpClient.post(uri, headers: headers, body: body);
     if (response.statusCode == 200) {
       final dynamic json = jsonDecode(response.body);
       return ModelStatusResponse.fromJson(Map<String, dynamic>.from(json as Map));

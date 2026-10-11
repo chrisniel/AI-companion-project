@@ -65,6 +65,47 @@ class DesktopClientSettings {
     await file.writeAsString(jsonEncode(data), flush: true);
   }
 
+  /// Reads locally cached selected model identifier.
+  Future<String?> readSelectedModel() async {
+    try {
+      final file = File(_filePath);
+      if (!file.existsSync()) {
+        return null;
+      }
+      final content = await file.readAsString();
+      final dynamic decoded = jsonDecode(content);
+      if (decoded is Map && decoded['selectedModel'] is String) {
+        final m = (decoded['selectedModel'] as String).trim();
+        return m.isNotEmpty ? m : null;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Caches selected model identifier into client settings file.
+  Future<void> writeSelectedModel(String modelIdentifier) async {
+    final file = File(_filePath);
+    await file.parent.create(recursive: true);
+
+    Map<String, dynamic> data = {};
+    try {
+      if (await file.exists()) {
+        final content = await file.readAsString();
+        final dynamic decoded = jsonDecode(content);
+        if (decoded is Map<String, dynamic>) {
+          data = Map<String, dynamic>.from(decoded);
+        }
+      }
+    } catch (_) {}
+
+    data['selectedModel'] = modelIdentifier.trim();
+    data['updatedAt'] = DateTime.now().toUtc().toIso8601String();
+
+    await file.writeAsString(jsonEncode(data), flush: true);
+  }
+
   /// Deletes client settings file.
   Future<void> deleteSettings() async {
     try {

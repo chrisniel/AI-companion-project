@@ -599,7 +599,9 @@ async def send_message_stream(
         ):
             loaded = await provider.load_model()
             if not loaded:
-                raise HTTPException(status_code=503, detail="LLM_UNAVAILABLE")
+                err = getattr(provider, "_last_error", None)
+                detail = "MODEL_SELECTION_REQUIRED" if err == "MODEL_SELECTION_REQUIRED" or status_resp.runtime_state == LLMRuntimeState.MODEL_SELECTION_REQUIRED else "LLM_UNAVAILABLE"
+                raise HTTPException(status_code=503, detail=detail)
 
         # Execute atomic pre-stream preparation transaction
         prepared_turn = await prepare_turn(
