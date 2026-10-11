@@ -63,6 +63,17 @@
   - *Open Detail:* Immediate query-time filtering vs. background periodic expiration sweeper in `SchedulerService`.
   - *Resolution Point:* Milestone M3 implementation plan.
 
+- **`DEBT-V1-09`: Self-Contained Windows Installer & Bundled Runtime Packaging (`PC-HOST-006`)**
+  - *Context:* End-user PC V1 distribution requires a self-contained Windows installer bundling private Python runtime, application dependencies, Flutter Desktop, and native inference binaries without requiring developer setup, manual Python installation, or global PATH modifications.
+  - *Invariants:*
+    - One independent windowless Local AI Runtime per PC installation.
+    - Preserves user `DATA_ROOT` (`companion.db`, profiles, settings) and relocatable `LIBRARY_ROOT` across updates, repairs, and uninstalls.
+    - Preserves runtime process supervision, single-instance kernel locking, and file-based rotating diagnostics (`LOG_ROOT`).
+    - Model provisioning strictly adheres to Decision D6 (manual user import/inbox) and licensing requirements.
+    - Supports clean installation, in-place updates, component repair, and safe uninstallation.
+  - *Open Detail:* Packaging mechanism and distribution format (e.g., Inno Setup, WiX / MSI, MSIX, or NSIS), private Python bundling approach (embedded Python distribution vs PyInstaller/standalone freeze vs hermetic venv bundle), code signing infrastructure, and prerequisite validation are marked **OPEN DESIGN**.
+  - *Resolution Point:* Milestone M6 / PC V1 distribution packaging planning (deferred; developer venv remains the development baseline for M2).
+
 ### Category: `EXPERIMENT / EVIDENCE NEEDED`
 - **`DEBT-EXP-001`: Low-Impact Lightweight Model Benchmark on RX 580**
   - *Context:* Low-Impact mode swaps in a 1B–3B text model to conserve VRAM/compute during gaming.

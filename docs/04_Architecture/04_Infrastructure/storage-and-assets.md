@@ -115,6 +115,15 @@ When implemented for PC V1:
 1. **Relocatable `LIBRARY_ROOT`:** Support configuring `LIBRARY_ROOT` to an alternate drive or volume (e.g. `D:\AI-Models`) via `bootstrap.json` pointer while `DATA_ROOT` remains anchored to fast OS storage.
 2. **Pre-Migration Safety Snapshot Guarantee:** Ensure an automatic SQLite backup snapshot is captured in `BACKUP_DIR` prior to executing any schema-altering migration on an existing database.
 3. **Distribution Separation:** Windows installer packages separate read-only binaries into `APP_INSTALL_ROOT` (`%ProgramFiles%\AI Companion` or per-user local app dir) and runtime mutable data into `DATA_ROOT`, completely decoupled from git repository working copies.
+4. **Self-Contained Windows Installer & Bundled Runtime (`PC-HOST-006`):**
+   - **Consumer Distribution Requirement:** Target end users install AI Companion via a self-contained Windows installer without needing to install Python manually, configure virtual environments, or modify global system paths.
+   - **Bundled Execution Environment:** The distribution packages a private, isolated Python execution environment, backend dependencies, the Flutter Desktop production client, and required native inference binaries into `APP_INSTALL_ROOT`.
+   - **Environment Isolation:** Operates hermetically without global `PATH` modifications or developer virtual environment prerequisites.
+   - **Single Windowless Local Runtime:** Operates exactly one independent windowless Local AI Runtime per PC installation, preserving runtime process supervision, kernel lockfile coordination, and file-based rotating diagnostics in `LOG_ROOT`.
+   - **User Asset Preservation Across Lifecycle:** In-place updates, component repairs, and reinstalls strictly preserve persistent user data in `DATA_ROOT` (`companion.db`, profiles, chat history, attachments) and relocatable model assets in `LIBRARY_ROOT`. Uninstallation provides a safe option to preserve or archive user databases and models.
+   - **Model Provisioning Compliance:** Model delivery strictly adheres to approved Decision D6 (manual inbox/import pipeline) and vendor licensing requirements; model weights are never silently bundled in proprietary binaries without licensing verification.
+   - **Lifecycle Management:** Supports standard Windows installation, version updates, integrity repair, and safe uninstallation.
+   - **Open Design Status:** Specific installer technology (e.g., Inno Setup, WiX / MSI, MSIX, NSIS), private Python bundling approach (embedded distribution vs. standalone freeze), prerequisite verification, and code-signing infrastructure are explicitly designated **OPEN DESIGN** and deferred (`PC-HOST-006` / `DEBT-V1-09`). Installer packaging does not exist in current development or the M2-H1 milestone (developer venv remains the development baseline).
 
 ---
 
@@ -122,6 +131,7 @@ When implemented for PC V1:
 
 Detailed implementation choices for future planning are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
 
+- **Self-Contained Windows Installer & Bundled Runtime Packaging (`PC-HOST-006` / `DEBT-V1-09`):** Packaging mechanism, private Python bundling strategy, code signing, and update mechanics for self-contained Windows distribution.
 - **Storage Relocation Utility & UX:** Client UI workflow enabling users to safely relocate `LIBRARY_ROOT` or `DATA_ROOT` across volumes with progress feedback and integrity verification.
 - **Attachment Trash-Cleanup & Garbage Collection:** Automated sweep mechanisms coordinating between chat deletion, profile soft-delete windows, and physical file unlinking.
 - **Encryption-at-Rest Strategy:** Optional whole-database or sensitive-field encryption (evaluating SQLCipher vs. application-layer AES-GCM envelope encryption).

@@ -59,6 +59,7 @@
 - **`PC-HOST-003`**: Runtime Notification-Event & Durable Backlog Responsibility.
 - **`PC-HOST-004`**: Storage Roots Manager (Resolves `APP_INSTALL_ROOT`, `DATA_ROOT`, `LIBRARY_ROOT`, `CACHE_ROOT`, `LOG_ROOT`).
 - **`PC-HOST-005`**: Host Administration Separation & Secure Lifecycle Authority (Dedicated local host admin control, graceful runtime termination, owned model/provider shutdown, tray "Exit Companion" with confirmed warning; sequenced promptly after H1).
+- **`PC-HOST-006`**: Self-Contained Windows Installer & Bundled Runtime (Provisional deferred PC V1 packaging: bundle private Python execution environment, dependencies, Flutter Desktop, and native inference binaries without manual Python installation or global PATH changes; independent windowless runtime, preserve DATA_ROOT and LIBRARY_ROOT across updates, safe install/update/repair/uninstall; packaging technology and distribution format OPEN DESIGN; not implemented in M2-H1).
 
 ### Stream: `PC-API` — Client ↔ Runtime Contracts
 - **`PC-API-001`**: OpenAPI Schema 3.1 Hardening & Route Contract Regeneration.
