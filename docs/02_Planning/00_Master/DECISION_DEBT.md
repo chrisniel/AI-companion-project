@@ -72,7 +72,7 @@
     - Model provisioning strictly adheres to Decision D6 (manual user import/inbox) and licensing requirements.
     - Supports clean installation, in-place updates, component repair, and safe uninstallation.
   - *Open Detail:* Packaging mechanism and distribution format (e.g., Inno Setup, WiX / MSI, MSIX, or NSIS), private Python bundling approach (embedded Python distribution vs PyInstaller/standalone freeze vs hermetic venv bundle), code signing infrastructure, and prerequisite validation are marked **OPEN DESIGN**.
-  - *Resolution Point:* Milestone M6 / PC V1 distribution packaging planning (deferred; developer venv remains the development baseline for M2).
+  - *Resolution Point:* PC V1 release preparation / distribution packaging planning (deferred; developer venv remains the development baseline for M2).
 
 ### Category: `EXPERIMENT / EVIDENCE NEEDED`
 - **`DEBT-EXP-001`: Low-Impact Lightweight Model Benchmark on RX 580**

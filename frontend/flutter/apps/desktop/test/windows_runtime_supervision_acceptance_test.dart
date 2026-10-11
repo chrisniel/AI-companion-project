@@ -244,6 +244,22 @@ void main() {
       expect(lockData?.port, equals(testPort));
       if (Platform.isWindows) {
         expect(lockData?.executablePath.toLowerCase(), contains('pythonw.exe'));
+
+        // Verify windowless execution: pythonw has no console window (MainWindowHandle is 0)
+        final winQuery = await Process.run(
+          'powershell',
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            '(Get-Process -Id ${state.pid} -ErrorAction SilentlyContinue).MainWindowHandle',
+          ],
+          runInShell: false,
+        );
+        if (winQuery.exitCode == 0) {
+          final handleVal = int.tryParse(winQuery.stdout.toString().trim()) ?? 0;
+          expect(handleVal, equals(0), reason: 'pythonw.exe runtime must have no console window (MainWindowHandle == 0)');
+        }
       }
 
       // Verify rotating logfile was created and written to

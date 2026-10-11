@@ -190,13 +190,13 @@ class DesktopRuntimeCoordinator {
       if (Platform.isWindows) ...[
         r'backend\.venv\Scripts\pythonw.exe',
         r'.venv\Scripts\pythonw.exe',
-        r'backend\.venv\Scripts\python.exe',
-        r'.venv\Scripts\python.exe',
       ] else ...[
         'backend/.venv/bin/python',
         '.venv/bin/python',
       ],
     ];
+
+    String? expectedWindowlessPath;
 
     for (final base in searchBases) {
       Directory current = base.absolute;
@@ -204,17 +204,23 @@ class DesktopRuntimeCoordinator {
         for (final sub in relativeSubPaths) {
           final candidate = File('${current.path}${Platform.pathSeparator}$sub');
           if (candidate.existsSync()) {
-            if (Platform.isWindows && candidate.path.toLowerCase().endsWith(r'\python.exe')) {
-              final siblingW = File(candidate.path.replaceAll(RegExp(r'python\.exe$', caseSensitive: false), 'pythonw.exe'));
-              if (siblingW.existsSync()) return siblingW.path;
-            }
             return candidate.path;
+          }
+        }
+        if (Platform.isWindows && expectedWindowlessPath == null) {
+          final consoleCandidate = File('${current.path}${Platform.pathSeparator}backend\\.venv\\Scripts\\python.exe');
+          if (consoleCandidate.existsSync()) {
+            expectedWindowlessPath = '${current.path}${Platform.pathSeparator}backend\\.venv\\Scripts\\pythonw.exe';
           }
         }
         final parent = current.parent;
         if (parent.path == current.path) break;
         current = parent;
       }
+    }
+
+    if (expectedWindowlessPath != null) {
+      return expectedWindowlessPath;
     }
 
     return Platform.isWindows
@@ -749,12 +755,18 @@ class DesktopRuntimeCoordinator {
         if (generation != _activeGeneration || _isDisposed) return _currentState;
         final exe = File(targetExecutablePath);
         if (!await exe.exists()) {
+          final siblingConsolePy = (Platform.isWindows && exe.path.toLowerCase().endsWith(r'\pythonw.exe'))
+              ? File(exe.path.replaceAll(RegExp(r'pythonw\.exe$', caseSensitive: false), 'python.exe'))
+              : null;
+          final diagnostic = (siblingConsolePy != null && siblingConsolePy.existsSync())
+              ? 'Windowless runtime executable pythonw.exe not found at ${exe.path}. Normal Windows startup requires pythonw.exe to prevent visible console windows. (python.exe exists at ${siblingConsolePy.path}, but automatic fallback is prohibited; set COMPANION_RUNTIME_EXE to explicitly override for development).'
+              : 'Runtime executable not found at ${exe.path}';
           return _updateState(
             RuntimeProcessState(
               supervisionMode: SupervisionMode.localLoopback,
               status: RuntimeStatus.executableNotFound,
               port: targetPort,
-              diagnosticMessage: 'Runtime executable not found at ${exe.path}',
+              diagnosticMessage: diagnostic,
             ),
             generation: generation,
           );

@@ -35,14 +35,15 @@ def setup_logging(debug: bool = False, log_file: Optional[str] = None) -> None:
 
     uvicorn_handlers: list[logging.Handler] = []
 
+    formatter = SanitizingFormatter(
+        fmt="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
     stream_dest = sys.stdout if sys.stdout is not None else sys.stderr
     if stream_dest is not None:
         stream_handler = logging.StreamHandler(stream_dest)
         stream_handler.setLevel(log_level)
-        formatter = SanitizingFormatter(
-            fmt="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-        )
         stream_handler.setFormatter(formatter)
         root_logger.addHandler(stream_handler)
         uvicorn_handlers.append(stream_handler)

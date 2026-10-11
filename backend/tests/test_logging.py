@@ -75,3 +75,36 @@ def test_setup_logging_explicit_param(tmp_path: Path):
     # Cleanup handler
     fh.close()
     root.removeHandler(fh)
+
+
+def test_setup_logging_windowless_none_streams(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Test windowless execution where pythonw sets sys.stdout and sys.stderr to None."""
+    monkeypatch.setattr("sys.stdout", None)
+    monkeypatch.setattr("sys.stderr", None)
+
+    log_file = tmp_path / "windowless" / "runtime.log"
+    setup_logging(debug=False, log_file=str(log_file))
+
+    root = logging.getLogger()
+    # Confirm NullHandler attached for console when streams are None
+    assert any(isinstance(h, logging.NullHandler) for h in root.handlers)
+
+    # Confirm RotatingFileHandler is configured with SanitizingFormatter
+    file_handlers = [h for h in root.handlers if isinstance(h, RotatingFileHandler)]
+    assert len(file_handlers) == 1
+    fh = file_handlers[0]
+    assert isinstance(fh.formatter, SanitizingFormatter)
+
+    # Verify log output and secret redaction under windowless execution
+    test_logger = logging.getLogger("companion.windowless")
+    test_logger.info("Windowless startup with token companion_sec_windowless_token_123456")
+    fh.flush()
+
+    assert log_file.exists()
+    content = log_file.read_text(encoding="utf-8")
+    assert "companion_sec_windowless_token_123456" not in content
+    assert "***REDACTED_TOKEN***" in content
+
+    fh.close()
+    root.removeHandler(fh)
+

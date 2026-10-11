@@ -143,6 +143,8 @@ class DiscoveryControlledMockSupervisor extends WindowsRuntimeProcessSupervisor 
     return res.status == ProcessDiscoveryStatus.verified ? res.verifiedProcess?.pid : null;
   }
 
+  String? lastSpawnExecutable;
+
   @override
   Future<int> spawnDetachedRuntime({
     required String executable,
@@ -152,6 +154,7 @@ class DiscoveryControlledMockSupervisor extends WindowsRuntimeProcessSupervisor 
     Map<String, String>? environment,
   }) async {
     spawnCallCount++;
+    lastSpawnExecutable = executable;
     spawnArgs.addAll(args);
     if (listenOnSpawn) {
       isListening = true;
@@ -804,6 +807,84 @@ void main() {
       expect(supervisor.spawnCallCount, equals(0));
       expect(coordinator.currentState.pid, isNull);
       expect(coordinator.activeRuntimeInfo, isNull);
+
+      coordinator.dispose();
+      await realHandle.close();
+      await tempDir.delete(recursive: true);
+    });
+
+    test('Normal Windows startup fails closed with actionable diagnostic if pythonw.exe is missing (no silent fallback to python.exe)', () async {
+      final tempDir = await Directory.systemTemp.createTemp('missing_pythonw_test_');
+      final tempLockFile = File('${tempDir.path}\\runtime.lock');
+      await tempLockFile.writeAsString('');
+      final realHandle = await tempLockFile.open(mode: FileMode.append);
+
+      // Create a fake backend directory with only python.exe (no pythonw.exe)
+      final fakeScriptsDir = Directory('${tempDir.path}\\backend\\.venv\\Scripts');
+      await fakeScriptsDir.create(recursive: true);
+      final consolePy = File('${fakeScriptsDir.path}\\python.exe');
+      await consolePy.writeAsString('');
+
+      final supervisor = DiscoveryControlledMockSupervisor();
+      supervisor.mockHandle = realHandle;
+      supervisor.isListening = false;
+      supervisor.discoveryResult = const ProcessDiscoveryResult(
+        status: ProcessDiscoveryStatus.noProcess,
+      );
+
+      final coordinator = DesktopRuntimeCoordinator(
+        baseUrl: 'http://127.0.0.1:8000',
+        supervisor: supervisor,
+        client: DelayedAuthClient(authDelay: Duration.zero),
+        customLockFile: tempLockFile,
+        customExecutablePath: '${fakeScriptsDir.path}\\pythonw.exe',
+      );
+
+      final result = await coordinator.ensureRuntimeReady(timeout: const Duration(seconds: 5));
+
+      expect(result.status, equals(RuntimeStatus.executableNotFound));
+      expect(result.diagnosticMessage, contains('pythonw.exe'));
+      expect(result.diagnosticMessage, contains('automatic fallback is prohibited'));
+      expect(supervisor.spawnCallCount, equals(0));
+
+      coordinator.dispose();
+      await realHandle.close();
+      await tempDir.delete(recursive: true);
+    });
+
+    test('Explicit development override with customExecutablePath or COMPANION_RUNTIME_EXE is preserved', () async {
+      final tempDir = await Directory.systemTemp.createTemp('explicit_override_test_');
+      final tempLockFile = File('${tempDir.path}\\runtime.lock');
+      await tempLockFile.writeAsString('');
+      final realHandle = await tempLockFile.open(mode: FileMode.append);
+
+      final fakeExe = File('${tempDir.path}\\custom_python.exe');
+      await fakeExe.writeAsString('');
+
+      final supervisor = DiscoveryControlledMockSupervisor();
+      supervisor.mockHandle = realHandle;
+      supervisor.isListening = false;
+      supervisor.discoveryResult = const ProcessDiscoveryResult(
+        status: ProcessDiscoveryStatus.noProcess,
+      );
+
+      final coordinator = DesktopRuntimeCoordinator(
+        baseUrl: 'http://127.0.0.1:8000',
+        supervisor: supervisor,
+        client: DelayedAuthClient(authDelay: Duration.zero),
+        customLockFile: tempLockFile,
+        customExecutablePath: fakeExe.path,
+      );
+
+      Future.delayed(const Duration(milliseconds: 50), () {
+        supervisor.isListening = true;
+      });
+
+      await coordinator.ensureRuntimeReady(timeout: const Duration(seconds: 5));
+
+      // Proves spawn was executed with the explicitly configured executable
+      expect(supervisor.spawnCallCount, equals(1));
+      expect(supervisor.lastSpawnExecutable, equals(fakeExe.path));
 
       coordinator.dispose();
       await realHandle.close();
