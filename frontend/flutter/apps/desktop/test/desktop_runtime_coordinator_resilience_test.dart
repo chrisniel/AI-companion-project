@@ -388,6 +388,38 @@ void main() {
       await tempDir.delete(recursive: true);
     });
 
+    test('Spawns windowless runtime: passes --no-use-colors and preserves loopback parameters', () async {
+      final tempDir = await Directory.systemTemp.createTemp('windowless_spawn_test_');
+      final tempLockFile = File('${tempDir.path}\\runtime.lock');
+      await tempLockFile.writeAsString('');
+      final realHandle = await tempLockFile.open(mode: FileMode.append);
+
+      final supervisor = DiscoveryControlledMockSupervisor();
+      supervisor.mockHandle = realHandle;
+      supervisor.discoveryResult = const ProcessDiscoveryResult(status: ProcessDiscoveryStatus.noProcess);
+
+      final coordinator = DesktopRuntimeCoordinator(
+        baseUrl: 'http://127.0.0.1:8000',
+        supervisor: supervisor,
+        client: DelayedAuthClient(authDelay: Duration.zero),
+        customLockFile: tempLockFile,
+        customExecutablePath: Platform.resolvedExecutable,
+      );
+
+      Future.delayed(const Duration(milliseconds: 50), () {
+        supervisor.isListening = true;
+      });
+
+      await coordinator.ensureRuntimeReady(timeout: const Duration(seconds: 5));
+
+      expect(supervisor.spawnCallCount, equals(1));
+      expect(supervisor.spawnArgs, contains('--no-use-colors'));
+
+      coordinator.dispose();
+      await realHandle.close();
+      await tempDir.delete(recursive: true);
+    });
+
     test('Exact port matching: avoids false matches on similar but different port numbers', () {
       expect(WindowsRuntimeProcessSupervisor.matchesExactPort('python -m uvicorn app.main:app --port 80000', 8000), isFalse);
       expect(WindowsRuntimeProcessSupervisor.matchesExactPort('python -m uvicorn app.main:app --port 18000', 8000), isFalse);

@@ -173,7 +173,13 @@ class DesktopRuntimeCoordinator {
     final custom = _customExecutablePath;
     if (custom != null) return custom;
     final envExe = Platform.environment['COMPANION_RUNTIME_EXE'];
-    if (envExe != null && envExe.isNotEmpty) return envExe;
+    if (envExe != null && envExe.isNotEmpty) {
+      if (Platform.isWindows && envExe.toLowerCase().endsWith(r'\python.exe')) {
+        final siblingW = File(envExe.replaceAll(RegExp(r'python\.exe$', caseSensitive: false), 'pythonw.exe'));
+        if (siblingW.existsSync()) return siblingW.path;
+      }
+      return envExe;
+    }
 
     final searchBases = <Directory>[
       Directory.current,
@@ -181,12 +187,15 @@ class DesktopRuntimeCoordinator {
     ];
 
     final relativeSubPaths = [
-      Platform.isWindows
-          ? r'backend\.venv\Scripts\python.exe'
-          : 'backend/.venv/bin/python',
-      Platform.isWindows
-          ? r'.venv\Scripts\python.exe'
-          : '.venv/bin/python',
+      if (Platform.isWindows) ...[
+        r'backend\.venv\Scripts\pythonw.exe',
+        r'.venv\Scripts\pythonw.exe',
+        r'backend\.venv\Scripts\python.exe',
+        r'.venv\Scripts\python.exe',
+      ] else ...[
+        'backend/.venv/bin/python',
+        '.venv/bin/python',
+      ],
     ];
 
     for (final base in searchBases) {
@@ -195,6 +204,10 @@ class DesktopRuntimeCoordinator {
         for (final sub in relativeSubPaths) {
           final candidate = File('${current.path}${Platform.pathSeparator}$sub');
           if (candidate.existsSync()) {
+            if (Platform.isWindows && candidate.path.toLowerCase().endsWith(r'\python.exe')) {
+              final siblingW = File(candidate.path.replaceAll(RegExp(r'python\.exe$', caseSensitive: false), 'pythonw.exe'));
+              if (siblingW.existsSync()) return siblingW.path;
+            }
             return candidate.path;
           }
         }
@@ -205,7 +218,7 @@ class DesktopRuntimeCoordinator {
     }
 
     return Platform.isWindows
-        ? r'backend\.venv\Scripts\python.exe'
+        ? r'backend\.venv\Scripts\pythonw.exe'
         : 'backend/.venv/bin/python';
   }
 
@@ -763,7 +776,7 @@ class DesktopRuntimeCoordinator {
 
         final spawnedPid = await _supervisor.spawnDetachedRuntime(
           executable: exe.path,
-          args: ['-m', 'uvicorn', 'app.main:app', '--host', targetHost, '--port', '$targetPort'],
+          args: ['-m', 'uvicorn', 'app.main:app', '--host', targetHost, '--port', '$targetPort', '--no-use-colors'],
           workingDirectory: targetWorkingDirectory,
           logFilePath: targetLogFilePath,
           environment: _customEnvironment,

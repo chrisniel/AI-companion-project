@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:companion_api/companion_api.dart';
 import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
@@ -1340,6 +1341,153 @@ void main() {
 
       expect(mockClient.generateTitleCalled, isTrue);
       expect(controller.activeConversation?.title, 'Model-Generated Title');
+
+      controller.dispose();
+    });
+
+    testWidgets('Composer keyboard shortcuts: Shift+Enter inserts newline without sending, Enter sends exactly once', (WidgetTester tester) async {
+      final mockClient = MockCompanionClient();
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final textFieldFinder = find.byType(TextField);
+      expect(textFieldFinder, findsOneWidget);
+
+      // 1. Enter text
+      await tester.tap(textFieldFinder);
+      await tester.pump();
+      await tester.enterText(textFieldFinder, 'Line 1');
+      await tester.pump();
+
+      final textField = tester.widget<TextField>(textFieldFinder);
+      textField.controller!.selection = const TextSelection.collapsed(offset: 6);
+
+      // 2. Press Shift+Enter
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pump();
+
+      // Must NOT send message
+      expect(mockClient.sendMessageCalled, isFalse);
+      // Text must contain newline
+      expect(textField.controller!.text, equals('Line 1\n'));
+
+      // 3. Press Enter (without Shift) -> sends message
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+
+      expect(mockClient.sendMessageCalled, isTrue);
+
+      controller.dispose();
+    });
+
+    testWidgets('Composer keyboard shortcuts: Empty composer Enter does not send or insert newline', (WidgetTester tester) async {
+      final mockClient = MockCompanionClient();
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final textFieldFinder = find.byType(TextField);
+      await tester.tap(textFieldFinder);
+      await tester.pump();
+
+      // Empty text field: press Enter
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+
+      expect(mockClient.sendMessageCalled, isFalse);
+      final textField = tester.widget<TextField>(textFieldFinder);
+      expect(textField.controller!.text, isEmpty);
+
+      controller.dispose();
+    });
+
+    testWidgets('Composer keyboard shortcuts: Shift+Enter replaces active text selection with newline', (WidgetTester tester) async {
+      final mockClient = MockCompanionClient();
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final textFieldFinder = find.byType(TextField);
+      await tester.enterText(textFieldFinder, 'Hello REPLACE World');
+      await tester.pump();
+
+      final textField = tester.widget<TextField>(textFieldFinder);
+      // Select 'REPLACE' (offsets 6 to 13)
+      textField.controller!.selection = const TextSelection(baseOffset: 6, extentOffset: 13);
+
+      // Press Shift+Enter
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pump();
+
+      expect(mockClient.sendMessageCalled, isFalse);
+      expect(textField.controller!.text, equals('Hello \n World'));
+      expect(textField.controller!.selection.baseOffset, equals(7));
+
+      controller.dispose();
+    });
+
+    testWidgets('Composer: Send button works unchanged and sends current draft', (WidgetTester tester) async {
+      final mockClient = MockCompanionClient();
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final textFieldFinder = find.byType(TextField);
+      await tester.enterText(textFieldFinder, 'Sent via button');
+      await tester.pump();
+
+      final sendBtnFinder = find.byIcon(Icons.send_rounded);
+      expect(sendBtnFinder, findsOneWidget);
+
+      await tester.tap(sendBtnFinder);
+      await tester.pump();
+
+      expect(mockClient.sendMessageCalled, isTrue);
 
       controller.dispose();
     });

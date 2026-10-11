@@ -39,6 +39,9 @@ class FakeProcess implements Process {
 class FakeProcessLauncher implements ProcessLauncherAdapter {
   FakeProcess? processToStart;
   Exception? startException;
+  String? startedCommand;
+  List<String>? startedArgs;
+  ProcessResult? runResult;
 
   @override
   Future<Process> start(
@@ -50,6 +53,8 @@ class FakeProcessLauncher implements ProcessLauncherAdapter {
     bool runInShell = false,
     ProcessStartMode mode = ProcessStartMode.normal,
   }) async {
+    startedCommand = executable;
+    startedArgs = arguments;
     if (startException != null) throw startException!;
     return processToStart ?? FakeProcess();
   }
@@ -63,6 +68,7 @@ class FakeProcessLauncher implements ProcessLauncherAdapter {
     bool includeParentEnvironment = true,
     bool runInShell = false,
   }) async {
+    if (runResult != null) return runResult!;
     throw UnimplementedError('run() should not be used when start() is required for process lifecycle control');
   }
 
@@ -322,6 +328,71 @@ void main() {
       expect(result.status, equals(ProcessDiscoveryStatus.inspectionUnavailable));
       expect(result.diagnostic, contains('timed out'));
       expect(fakeProcess.wasKilled, isTrue);
+    });
+
+    test('isExecutablePathMatch: matches sibling python.exe and pythonw.exe in identical directory', () {
+      expect(
+        WindowsRuntimeProcessSupervisor.isExecutablePathMatch(
+          r'C:\venv\Scripts\python.exe',
+          r'C:\venv\Scripts\pythonw.exe',
+        ),
+        isTrue,
+      );
+      expect(
+        WindowsRuntimeProcessSupervisor.isExecutablePathMatch(
+          r'C:\venv\Scripts\pythonw.exe',
+          r'C:\venv\Scripts\python.exe',
+        ),
+        isTrue,
+      );
+      expect(
+        WindowsRuntimeProcessSupervisor.isExecutablePathMatch(
+          r'C:\foreign\Scripts\python.exe',
+          r'C:\venv\Scripts\pythonw.exe',
+        ),
+        isFalse,
+      );
+    });
+
+    test('isProcessActiveAndMatching: accepts python.exe image when expected executable is pythonw.exe', () async {
+      final fakeLauncher = FakeProcessLauncher();
+      fakeLauncher.runResult = ProcessResult(
+        1234,
+        0,
+        '"python.exe","1234","Console","1","50,000 K"\r\n',
+        '',
+      );
+      final supervisor = WindowsRuntimeProcessSupervisor(launcher: fakeLauncher);
+
+      final isMatch = await supervisor.isProcessActiveAndMatching(
+        1234,
+        expectedExecutable: r'C:\venv\Scripts\pythonw.exe',
+      );
+      expect(isMatch, isTrue);
+    });
+
+    test('discoverRuntimeProcesses: discovers existing python.exe process when expected executable is pythonw.exe', () async {
+      final fakeLauncher = FakeProcessLauncher();
+      fakeLauncher.processToStart = FakeProcess(
+        stdout: Stream.value(utf8.encode(jsonEncode({
+          'ProcessId': 7890,
+          'ExecutablePath': r'C:\venv\Scripts\python.exe',
+          'CommandLine': r'C:\venv\Scripts\python.exe -m uvicorn app.main:app --port 8000',
+          'CreationDate': '2026-10-11T10:00:00.0000000Z',
+        }))),
+        exitCode: Future.value(0),
+      );
+      final supervisor = WindowsRuntimeProcessSupervisor(launcher: fakeLauncher);
+
+      final result = await supervisor.discoverRuntimeProcesses(
+        port: 8000,
+        expectedExecutable: r'C:\venv\Scripts\pythonw.exe',
+      );
+
+      expect(result.status, equals(ProcessDiscoveryStatus.verified));
+      expect(result.verifiedProcess?.pid, equals(7890));
+      expect(fakeLauncher.startedCommand, equals('powershell'));
+      expect(fakeLauncher.startedArgs?.join(' '), contains("Name LIKE 'python%'"));
     });
   });
 }

@@ -174,6 +174,10 @@ class WindowsRuntimeProcessSupervisor {
           if (imageName == targetExeBase || imageName.startsWith(targetExeBase.replaceAll('.exe', ''))) {
             return true;
           }
+          if ((targetExeBase == 'python.exe' || targetExeBase == 'pythonw.exe') &&
+              (imageName == 'python.exe' || imageName == 'pythonw.exe')) {
+            return true;
+          }
         }
       }
       return false;
@@ -251,6 +255,16 @@ class WindowsRuntimeProcessSupervisor {
 
     final expectedBase = expectedPath.split(RegExp(r'[\\/]')).last.toLowerCase();
     final actualBase = actualPath.split(RegExp(r'[\\/]')).last.toLowerCase();
+
+    // Sibling Python binaries (e.g. python.exe vs pythonw.exe) in the exact same directory
+    final isPythonFamily = (actualBase == 'python.exe' || actualBase == 'pythonw.exe' || actualBase == 'python3.exe') &&
+        (expectedBase == 'python.exe' || expectedBase == 'pythonw.exe' || expectedBase == 'python3.exe');
+    if (isPythonFamily) {
+      final actualDir = File(normActual).parent.path.toLowerCase();
+      final expectedDir = File(normExpected).parent.path.toLowerCase();
+      if (actualDir == expectedDir) return true;
+    }
+
     if (actualBase != expectedBase) return false;
 
     final expectedRel = expectedPath.replaceAll('/', '\\').toLowerCase();
@@ -274,8 +288,13 @@ class WindowsRuntimeProcessSupervisor {
 
     try {
       final exeBase = expectedExecutable.split(RegExp(r'[\\/]')).last.toLowerCase();
-      final exeNamePrefix = exeBase.replaceAll('.exe', '').replaceAll("'", "''");
-      final filter = "Name LIKE '$exeNamePrefix%'";
+      final String filter;
+      if (exeBase == 'python.exe' || exeBase == 'pythonw.exe') {
+        filter = "Name LIKE 'python%'";
+      } else {
+        final exeNamePrefix = exeBase.replaceAll('.exe', '').replaceAll("'", "''");
+        filter = "Name LIKE '$exeNamePrefix%'";
+      }
 
       final process = await _launcher.start(
         'powershell',

@@ -242,6 +242,9 @@ void main() {
       expect(lockData?.schemaVersion, equals(1));
       expect(lockData?.pid, equals(state.pid));
       expect(lockData?.port, equals(testPort));
+      if (Platform.isWindows) {
+        expect(lockData?.executablePath.toLowerCase(), contains('pythonw.exe'));
+      }
 
       // Verify rotating logfile was created and written to
       expect(logFile.existsSync(), isTrue);

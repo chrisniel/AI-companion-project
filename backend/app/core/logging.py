@@ -29,21 +29,25 @@ def setup_logging(debug: bool = False, log_file: Optional[str] = None) -> None:
     """Configure root logger with structured formatting, secret sanitization, and optional rotating file."""
     log_level = logging.DEBUG if debug else logging.INFO
 
-    stream_handler = logging.StreamHandler(sys.stdout)
-    stream_handler.setLevel(log_level)
-    formatter = SanitizingFormatter(
-        fmt="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-    stream_handler.setFormatter(formatter)
-
     root_logger = logging.getLogger()
     root_logger.setLevel(log_level)
-    # Remove existing handlers to prevent duplicate lines
     root_logger.handlers.clear()
-    root_logger.addHandler(stream_handler)
 
-    uvicorn_handlers: list[logging.Handler] = [stream_handler]
+    uvicorn_handlers: list[logging.Handler] = []
+
+    stream_dest = sys.stdout if sys.stdout is not None else sys.stderr
+    if stream_dest is not None:
+        stream_handler = logging.StreamHandler(stream_dest)
+        stream_handler.setLevel(log_level)
+        formatter = SanitizingFormatter(
+            fmt="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+        stream_handler.setFormatter(formatter)
+        root_logger.addHandler(stream_handler)
+        uvicorn_handlers.append(stream_handler)
+    else:
+        root_logger.addHandler(logging.NullHandler())
 
     # File logging (e.g. for detached background process logging)
     target_log_file = log_file or os.environ.get("COMPANION_LOG_FILE")

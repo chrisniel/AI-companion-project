@@ -58,7 +58,7 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     }
     _textController = TextEditingController();
-    _focusNode = FocusNode();
+    _focusNode = FocusNode(onKeyEvent: _handleFocusKeyEvent);
     _scrollController = ScrollController();
 
     _textController.addListener(_onTextChanged);
@@ -67,6 +67,61 @@ class _ChatScreenState extends State<ChatScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _effectiveController.loadConversations();
     });
+  }
+
+  KeyEventResult _handleFocusKeyEvent(FocusNode node, KeyEvent event) {
+    if (event.logicalKey == LogicalKeyboardKey.enter) {
+      if (event is KeyDownEvent) {
+        final isShift = HardwareKeyboard.instance.isShiftPressed;
+        if (isShift) {
+          _insertNewline();
+          return KeyEventResult.handled;
+        } else {
+          final isBusy = _effectiveController.isGenerating ||
+              _effectiveController.isAwaitingAcceptance ||
+              _effectiveController.isCreatingConversation ||
+              _isSubmitting;
+          if (!isBusy && _canSend && _effectiveController.canSend) {
+            _handleSend();
+          }
+          return KeyEventResult.handled;
+        }
+      }
+      return KeyEventResult.handled;
+    }
+
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      if (event is KeyDownEvent) {
+        final isBusy = _effectiveController.isGenerating ||
+            _effectiveController.isAwaitingAcceptance ||
+            _effectiveController.isCreatingConversation ||
+            _isSubmitting;
+        if (isBusy) {
+          _effectiveController.cancelGeneration();
+          return KeyEventResult.handled;
+        }
+      }
+    }
+
+    return KeyEventResult.ignored;
+  }
+
+  void _insertNewline() {
+    final text = _textController.text;
+    final selection = _textController.selection;
+    if (selection.isValid && selection.start >= 0 && selection.end >= selection.start) {
+      final newText = text.replaceRange(selection.start, selection.end, '\n');
+      _textController.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(offset: selection.start + 1),
+      );
+    } else {
+      final newText = '$text\n';
+      _textController.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(offset: newText.length),
+      );
+    }
   }
 
   void _onTextChanged() {
@@ -862,45 +917,27 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               const SizedBox(width: CompanionSpacing.sm),
               Expanded(
-                child: CallbackShortcuts(
-                  bindings: {
-                    const SingleActivator(LogicalKeyboardKey.enter): () {
-                      if (!isBusy && _canSend && chatCtrl.canSend) {
-                        _handleSend();
-                      }
-                    },
-                    const SingleActivator(LogicalKeyboardKey.escape): () {
-                      if (isBusy) {
-                        chatCtrl.cancelGeneration();
-                      }
-                    },
-                  },
-                  child: NeumorphicSurface(
-                    surfaceType: NeumorphicSurfaceType.recessed,
-                    borderRadius: CompanionRadius.borderMd,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 6,
-                    ),
-                    child: TextField(
-                      controller: _textController,
-                      focusNode: _focusNode,
-                      maxLines: 5,
-                      minLines: 1,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) {
-                        if (!isBusy && _canSend && chatCtrl.canSend) {
-                          _handleSend();
-                        }
-                      },
-                      decoration: InputDecoration(
-                        hintText: 'Message AI Companion... (Shift+Enter for newline)',
-                        hintStyle: CompanionTypography.bodyMedium.copyWith(
-                          color: ext?.textMuted,
-                        ),
-                        border: InputBorder.none,
-                        isDense: true,
+                child: NeumorphicSurface(
+                  surfaceType: NeumorphicSurfaceType.recessed,
+                  borderRadius: CompanionRadius.borderMd,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 6,
+                  ),
+                  child: TextField(
+                    controller: _textController,
+                    focusNode: _focusNode,
+                    maxLines: 5,
+                    minLines: 1,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    decoration: InputDecoration(
+                      hintText: 'Message AI Companion... (Shift+Enter for newline)',
+                      hintStyle: CompanionTypography.bodyMedium.copyWith(
+                        color: ext?.textMuted,
                       ),
+                      border: InputBorder.none,
+                      isDense: true,
                     ),
                   ),
                 ),
