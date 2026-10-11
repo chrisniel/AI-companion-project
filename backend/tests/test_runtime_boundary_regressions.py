@@ -21,6 +21,7 @@ from app.services.llm.runtime_state import LLMRuntimeState
 
 TOKEN = 'data: {"choices":[{"delta":{"content":"Partial"},"finish_reason":null}]}\n\n'
 STOP = 'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'
+LENGTH = 'data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\ndata: [DONE]\n\n'
 DETAIL = "companion_sec_synthetic_provider_secret_1234567890 X:/synthetic-private/model"
 ERROR = "event: error\ndata: " + json.dumps({"error": {"message": DETAIL}}) + "\n\n"
 MESSAGES = [ChatMessage(role="user", content="Hello")]
@@ -355,3 +356,27 @@ async def test_shutdown_deadline_retains_busy_ownership(server_provider, monkeyp
     finally:
         stream.release.set()
         await asyncio.gather(generation, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_upstream_finish_reason_propagation_length_and_stop(server_provider, test_session):
+    """Verify that when upstream emits finish_reason 'length', provider records it and orchestrator persists 'length'."""
+    provider, router = server_provider
+    router["completion"] = lambda request: httpx.Response(200, text=TOKEN + LENGTH)
+    conversation = Conversation(id="b2-conv-length", owner_id="test-owner", title="Boundary Length")
+    test_session.add(conversation)
+    await test_session.commit()
+    lock = _get_lock(conversation.id)
+    await lock.acquire()
+    prepared = await prepare_turn(db=test_session, conversation_id=conversation.id, owner_id="test-owner", user_text="Hello")
+    assistant_id = prepared.assistant_message.id
+    chunks = [chunk async for chunk in orchestrate_chat_stream(
+        db=test_session, conversation_id=conversation.id, user_text="Hello", owner_id="test-owner",
+        prepared_turn=prepared, conversation_lock=lock,
+    )]
+    wire = "".join(chunks)
+    test_session.expire_all()
+    message = await test_session.get(Message, assistant_id)
+    assert message.status == "length"
+    assert getattr(provider, "last_finish_reason", None) == "length"
+    assert '"finish_reason": "length"' in wire

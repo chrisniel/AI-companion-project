@@ -1038,6 +1038,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _unloadModel() async {
+    if (_isExecutingModelAction) return;
+    if (widget.chatController?.isGenerating == true) {
+      setState(() {
+        _modelActionMessage = 'Cannot unload model while turn generation is active.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isExecutingModelAction = true;
+      _modelActionMessage = 'Unloading model and releasing VRAM...';
+    });
+
+    try {
+      final client = _resolveClient();
+      final updatedStatus = await client.unloadModel();
+      if (!mounted) return;
+      setState(() {
+        _modelStatus = updatedStatus;
+        _isExecutingModelAction = false;
+        _modelActionMessage = 'Model unloaded successfully. VRAM released.';
+      });
+      if (widget.chatController != null) {
+        try {
+          await widget.chatController!.checkConnection();
+        } catch (_) {}
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isExecutingModelAction = false;
+        _modelActionMessage = 'Failed to unload model: $e';
+      });
+    }
+  }
+
   Widget _buildModelSelectionCard(
     BuildContext context,
     CompanionThemeExtension? ext,
@@ -1171,6 +1208,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
+          if (status?.modelLoaded == true || status?.activeModel != null || status?.runtimeState == 'MODEL_READY') ...[
+            const SizedBox(height: CompanionSpacing.sm),
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                key: const Key('unload_model_status_button'),
+                onPressed: (_isExecutingModelAction || widget.chatController?.isGenerating == true)
+                    ? null
+                    : _unloadModel,
+                icon: const Icon(Icons.eject_rounded, size: 14),
+                label: const Text('Unload Model / Free VRAM'),
+              ),
+            ),
+          ],
           const SizedBox(height: CompanionSpacing.lg),
 
           // Model List Header
@@ -1341,6 +1392,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
+              if (isReady) ...[
+                OutlinedButton.icon(
+                  key: Key('unload_model_entry_${entry.id}'),
+                  onPressed: (_isExecutingModelAction || widget.chatController?.isGenerating == true)
+                      ? null
+                      : _unloadModel,
+                  icon: const Icon(Icons.eject_rounded, size: 14),
+                  label: const Text('Unload Model / Free VRAM'),
+                ),
+                const SizedBox(width: CompanionSpacing.sm),
+              ],
               OutlinedButton.icon(
                 onPressed: _isExecutingModelAction
                     ? null

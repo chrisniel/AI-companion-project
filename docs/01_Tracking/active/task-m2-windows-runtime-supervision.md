@@ -47,6 +47,12 @@
 - [x] **Task 3:** Desktop runtime coordinator (`DesktopRuntimeCoordinator`) with double-checked locking, readiness polling, and auth separation in `apps/desktop/lib/coordinator/`.
 - [x] **Task 4:** UI & lifecycle integration ("Quit UI != Stop Runtime", truthful tray actions, informational status, and Settings supervision diagnostics).
 - [x] **Task 5:** External PowerShell Windows acceptance harness (`scripts/verify_windows_runtime_supervision.ps1`) with disposable test environments and full test matrix verification.
+- [x] **Follow-Up Quality Items (PC-CLIENT-006 / PC-CLIENT-010):**
+  - **Area A (Generation Completion & Limits):** Trace real finish reasons (`length`, `stop`, `interrupted`) end-to-end; render limit banner with actionable continuation in Flutter chat.
+  - **Area B (Wide Tables):** Visible horizontal scrollbar, drag gesture support, and constrained text cell wrapping (`80..360`).
+  - **Area C (Mathematical Typesetting):** Textbook LaTeX equations with `flutter_math_fork`, raw formula copy, and system persona guidance.
+  - **Area D (Conversation Text Zoom):** Local text zoom (80%–160%) via `Ctrl+Wheel` and `Ctrl+=/- /0`, persisted in `client_settings.json`.
+  - **Area E (Explicit Model Unload):** Authenticated `POST /api/v1/models/unload` in `CompanionClient` and "Unload Model / Free VRAM" in Settings.
 - [ ] **Implementation Gate (STOP HERE):** Independent code & test review (Awaiting Chris / independent evaluation).
 
 - [ ] **Documentation Gate:** Canonical architecture spec updates review.

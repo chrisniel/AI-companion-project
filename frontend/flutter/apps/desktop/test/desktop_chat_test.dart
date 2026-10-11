@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 
 import 'package:ai_companion_desktop/controllers/desktop_settings_controller.dart';
 import 'package:ai_companion_desktop/features/chat/desktop_chat_controller.dart';
+import 'package:ai_companion_desktop/platform/desktop_client_settings.dart';
 import 'package:ai_companion_desktop/screens/chat_screen.dart';
 import 'package:ai_companion_desktop/screens/settings_screen.dart';
 import 'package:ai_companion_desktop/shell/desktop_shell.dart';
@@ -231,10 +232,38 @@ class MockCompanionClient extends CompanionClient {
     sendMessageCalled = true;
     if (customEventStream != null) {
       bool accepted = false;
+      String currentText = '';
       await for (final event in customEventStream!) {
         if (!accepted && autoAcceptStream) {
           accepted = true;
           onAccepted?.call();
+          _storedMessages.add(
+            MessageOut(
+              id: 'msg-u-${DateTime.now().millisecondsSinceEpoch}',
+              conversationId: conversationId,
+              sender: 'user',
+              content: payload.userText,
+              status: 'completed',
+              sequenceNo: _storedMessages.length + 1,
+              createdAt: DateTime.now().toUtc().toIso8601String(),
+            ),
+          );
+        }
+        if (event is SseTokenEvent) {
+          currentText += event.token;
+        }
+        if (event is SseDoneEvent) {
+          _storedMessages.add(
+            MessageOut(
+              id: 'msg-a-${DateTime.now().millisecondsSinceEpoch}',
+              conversationId: conversationId,
+              sender: 'assistant',
+              content: currentText,
+              status: event.finishReason == 'length' ? 'length' : 'completed',
+              sequenceNo: _storedMessages.length + 1,
+              createdAt: DateTime.now().toUtc().toIso8601String(),
+            ),
+          );
         }
         yield event;
       }
@@ -2029,6 +2058,166 @@ void main() {
       expect(scrollable.position.pixels, equals(120.0));
 
       controller.dispose();
+    });
+
+    testWidgets('Response reached generation limit UI renders when finishReason is length and tapping continue sends continuation', (tester) async {
+      final mockClient = MockCompanionClient();
+      const conv = ConversationOut(
+        id: 'conv-limit-1',
+        title: 'Limit Test',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: '2026-03-30T10:00:00Z',
+        updatedAt: '2026-03-30T10:00:00Z',
+        messageCount: 0,
+      );
+      mockClient.customConversations = [conv];
+      final streamCtrl = StreamController<SseEvent>();
+      mockClient.customEventStream = streamCtrl.stream;
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Send a message that hits the length limit
+      final sendFuture = controller.sendMessage('Generate long text');
+      streamCtrl.add(const SseTokenEvent('This is partial output'));
+      await tester.pump();
+      streamCtrl.add(const SseDoneEvent(finishReason: 'length'));
+      await streamCtrl.close();
+      await sendFuture;
+      await tester.pumpAndSettle();
+
+      // Check controller message status
+      expect(controller.messages.last.status, equals('length'));
+
+      // Check UI renders limit indicator and continue button
+      expect(find.text('Response reached generation limit'), findsOneWidget);
+      final continueBtnFinder = find.byKey(const Key('continue_response_button'));
+      expect(continueBtnFinder, findsOneWidget);
+
+      // Now tap continue response button
+      final secondStreamCtrl = StreamController<SseEvent>();
+      mockClient.customEventStream = secondStreamCtrl.stream;
+      await tester.tap(continueBtnFinder);
+      await tester.pump();
+
+      // Verify that 'Continue' was submitted and controller is generating
+      expect(controller.isGenerating, isTrue);
+      secondStreamCtrl.add(const SseTokenEvent(' and here is the rest.'));
+      secondStreamCtrl.add(const SseDoneEvent(finishReason: 'stop'));
+      await secondStreamCtrl.close();
+      await tester.pumpAndSettle();
+
+      expect(controller.messages.last.status, equals('completed'));
+      controller.dispose();
+    });
+
+    test('stream disconnects without SseDoneEvent transitions assistant turn status to interrupted', () async {
+      final mockClient = MockCompanionClient();
+      const conv = ConversationOut(
+        id: 'conv-interrupted-1',
+        title: 'Interrupted Test',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: '2026-03-30T10:00:00Z',
+        updatedAt: '2026-03-30T10:00:00Z',
+        messageCount: 0,
+      );
+      mockClient.customConversations = [conv];
+      final streamCtrl = StreamController<SseEvent>();
+      mockClient.customEventStream = streamCtrl.stream;
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      final sendFuture = controller.sendMessage('Test prompt that will disconnect');
+      streamCtrl.add(const SseTokenEvent('Incomplete response'));
+      await Future<void>.delayed(Duration.zero);
+      // Close stream without emitting SseDoneEvent
+      await streamCtrl.close();
+      await sendFuture;
+
+      expect(controller.messages.last.status, equals('interrupted'));
+      controller.dispose();
+    });
+
+    testWidgets('ChatScreen zoom shortcuts adjust conversation textScaler without scaling composer or chrome', (tester) async {
+      final mockClient = MockCompanionClient();
+      const conv = ConversationOut(
+        id: 'conv-zoom-1',
+        title: 'Zoom Test',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: '2026-03-30T10:00:00Z',
+        updatedAt: '2026-03-30T10:00:00Z',
+        messageCount: 2,
+      );
+      mockClient.customConversations = [conv];
+      final tempDir = Directory.systemTemp.createTempSync('chat_zoom_test');
+      final settingsFile = '${tempDir.path}\\client_settings.json';
+      final clientSettings = DesktopClientSettings(customFilePath: settingsFile);
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller, clientSettings: clientSettings),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final listViewFinder = find.byType(ListView);
+      expect(listViewFinder, findsOneWidget);
+      final initialMediaQuery = tester.widget<MediaQuery>(
+        find.ancestor(of: listViewFinder, matching: find.byType(MediaQuery)).first,
+      );
+      expect(initialMediaQuery.data.textScaler.scale(10), equals(10.0));
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.equal);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final zoomedMediaQuery = tester.widget<MediaQuery>(
+        find.ancestor(of: listViewFinder, matching: find.byType(MediaQuery)).first,
+      );
+      expect(zoomedMediaQuery.data.textScaler.scale(10), closeTo(11.0, 0.05));
+
+      final composerFinder = find.byType(TextField);
+      final composerMediaQuery = tester.widget<MediaQuery>(
+        find.ancestor(of: composerFinder, matching: find.byType(MediaQuery)).first,
+      );
+      expect(composerMediaQuery.data.textScaler.scale(10), equals(10.0));
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.digit0);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final resetMediaQuery = tester.widget<MediaQuery>(
+        find.ancestor(of: listViewFinder, matching: find.byType(MediaQuery)).first,
+      );
+      expect(resetMediaQuery.data.textScaler.scale(10), equals(10.0));
+
+      controller.dispose();
+      tempDir.deleteSync(recursive: true);
     });
   });
 }

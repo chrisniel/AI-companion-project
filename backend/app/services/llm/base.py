@@ -18,6 +18,15 @@ class BaseLLMProvider(ABC):
         """Return the unique identifier of the provider."""
         pass
 
+    @property
+    def last_finish_reason(self) -> Optional[str]:
+        """Return the finish reason of the most recent generation ('stop', 'length', etc.)."""
+        return getattr(self, "_last_finish_reason", "stop")
+
+    @last_finish_reason.setter
+    def last_finish_reason(self, value: Optional[str]) -> None:
+        self._last_finish_reason = value
+
     @abstractmethod
     async def load_model(self, model_name: Optional[str] = None, profile: Optional[str] = None) -> bool:
         """Load or initialize model into memory/VRAM."""

@@ -670,6 +670,22 @@ class DesktopChatController extends ChangeNotifier {
           } else if (event is SseDoneEvent) {
             _generationState = ChatGenerationState.idle;
             _streamingText = '';
+            if (_messages.isNotEmpty && _messages.last.sender == 'assistant') {
+              final last = _messages.last;
+              final finalStatus = event.finishReason == 'length' ? 'length' : 'completed';
+              _messages = [
+                ..._messages.sublist(0, _messages.length - 1),
+                MessageOut(
+                  id: last.id,
+                  conversationId: last.conversationId,
+                  sender: last.sender,
+                  content: last.content,
+                  status: finalStatus,
+                  sequenceNo: last.sequenceNo,
+                  createdAt: last.createdAt,
+                ),
+              ];
+            }
             _finalizeTurn(boundConvId, turnToken, hasBeenAccepted: hasBeenAccepted);
             _maybeGenerateModelTitle(boundConvId, deterministicTitle);
             if (!completer.isCompleted) completer.complete(true);
@@ -728,6 +744,21 @@ class DesktopChatController extends ChangeNotifier {
           if (_generationState == ChatGenerationState.generating) {
             _generationState = ChatGenerationState.idle;
             _streamingText = '';
+            if (_messages.isNotEmpty && _messages.last.sender == 'assistant') {
+              final last = _messages.last;
+              _messages = [
+                ..._messages.sublist(0, _messages.length - 1),
+                MessageOut(
+                  id: last.id,
+                  conversationId: last.conversationId,
+                  sender: last.sender,
+                  content: last.content,
+                  status: 'interrupted',
+                  sequenceNo: last.sequenceNo,
+                  createdAt: last.createdAt,
+                ),
+              ];
+            }
             _finalizeTurn(boundConvId, turnToken, hasBeenAccepted: hasBeenAccepted);
             _maybeGenerateModelTitle(boundConvId, deterministicTitle);
           }

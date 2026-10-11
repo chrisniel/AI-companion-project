@@ -155,6 +155,7 @@ class MockLLMProvider(BaseLLMProvider):
         **kwargs
     ) -> str:
         self._last_active_at = datetime.now(timezone.utc)
+        self.last_finish_reason = getattr(self, "configured_finish_reason", "stop") or "stop"
         raw_user_msg = next((m.content for m in reversed(messages) if m.role == "user"), "Hello!")
         last_user_msg = _extract_text_content(raw_user_msg) if raw_user_msg != "Hello!" else "Hello!"
         return f"[Mock AI Companion]: I received your message: '{last_user_msg}'. Local AI Runtime is operational."
@@ -167,6 +168,7 @@ class MockLLMProvider(BaseLLMProvider):
         **kwargs
     ) -> AsyncGenerator[str, None]:
         self._last_active_at = datetime.now(timezone.utc)
+        self.last_finish_reason = getattr(self, "configured_finish_reason", "stop") or "stop"
         raw_user_msg = next((m.content for m in reversed(messages) if m.role == "user"), "Hello!")
         last_user_msg = _extract_text_content(raw_user_msg) if raw_user_msg != "Hello!" else "Hello!"
         response_text = f"I received your message: '{last_user_msg}'. Local AI Runtime is operational."

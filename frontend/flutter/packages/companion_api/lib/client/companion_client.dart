@@ -210,6 +210,18 @@ class CompanionClient {
     _handleErrorResponse(response);
   }
 
+  /// Explicitly unloads model weights and releases VRAM via POST /api/v1/models/unload.
+  Future<ModelStatusResponse> unloadModel() async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/models/unload');
+    final headers = await _buildHeaders(requiresAuth: true);
+    final response = await _httpClient.post(uri, headers: headers);
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return ModelStatusResponse.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
   /// Creates a new persistent conversation thread via POST /api/v1/conversations.
   Future<ConversationOut> createConversation({String? title, String? characterId}) async {
     final uri = baseUri.replace(path: '${baseUri.path}/api/v1/conversations');

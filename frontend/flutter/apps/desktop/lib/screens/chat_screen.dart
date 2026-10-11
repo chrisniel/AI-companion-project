@@ -1,20 +1,24 @@
 import 'package:companion_api/companion_api.dart';
 import 'package:companion_design/companion_design.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../features/chat/assistant_markdown_view.dart';
 import '../features/chat/conversation_history_drawer.dart';
 import '../features/chat/desktop_chat_controller.dart';
+import '../platform/desktop_client_settings.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
     super.key,
     this.controller,
+    this.clientSettings,
     this.onNavigateToSettings,
   });
 
   final DesktopChatController? controller;
+  final DesktopClientSettings? clientSettings;
   final VoidCallback? onNavigateToSettings;
 
   @override
@@ -26,6 +30,11 @@ class _ChatScreenState extends State<ChatScreen> {
   late final FocusNode _focusNode;
   late final ScrollController _scrollController;
   DesktopChatController? _internalController;
+  DesktopClientSettings? _internalClientSettings;
+  DesktopClientSettings get _effectiveClientSettings =>
+      widget.clientSettings ?? (_internalClientSettings ??= DesktopClientSettings());
+
+  double _zoomLevel = 1.0;
   bool _canSend = false;
   bool _isHistoryOpen = false;
   bool _isSubmitting = false;
@@ -53,6 +62,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    _loadZoomLevel();
     if (widget.controller == null) {
       _internalController = DesktopChatController(
         client: CompanionClient(
@@ -89,6 +99,37 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  Future<void> _loadZoomLevel() async {
+    final zoom = await _effectiveClientSettings.readChatZoomLevel();
+    if (mounted) {
+      setState(() {
+        _zoomLevel = zoom;
+      });
+    }
+  }
+
+  void _updateZoom(double newZoom) {
+    final clamped = double.parse((newZoom.clamp(0.8, 1.6)).toStringAsFixed(2));
+    if (clamped == _zoomLevel) return;
+    setState(() {
+      _zoomLevel = clamped;
+    });
+    _effectiveClientSettings.writeChatZoomLevel(clamped);
+  }
+
+  void _handlePointerSignal(PointerSignalEvent event) {
+    if (event is PointerScrollEvent) {
+      final isControl = HardwareKeyboard.instance.isControlPressed;
+      if (isControl) {
+        if (event.scrollDelta.dy < 0) {
+          _updateZoom(_zoomLevel + 0.1);
+        } else if (event.scrollDelta.dy > 0) {
+          _updateZoom(_zoomLevel - 0.1);
+        }
+      }
+    }
+  }
+
   @override
   void didUpdateWidget(ChatScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -102,6 +143,26 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   KeyEventResult _handleFocusKeyEvent(FocusNode node, KeyEvent event) {
+    final isControl = HardwareKeyboard.instance.isControlPressed;
+    if (isControl && event is KeyDownEvent) {
+      if (event.logicalKey == LogicalKeyboardKey.equal ||
+          event.logicalKey == LogicalKeyboardKey.add ||
+          event.logicalKey == LogicalKeyboardKey.numpadAdd) {
+        _updateZoom(_zoomLevel + 0.1);
+        return KeyEventResult.handled;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.minus ||
+          event.logicalKey == LogicalKeyboardKey.numpadSubtract) {
+        _updateZoom(_zoomLevel - 0.1);
+        return KeyEventResult.handled;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.digit0 ||
+          event.logicalKey == LogicalKeyboardKey.numpad0) {
+        _updateZoom(1.0);
+        return KeyEventResult.handled;
+      }
+    }
+
     if (event.logicalKey == LogicalKeyboardKey.enter) {
       if (event is KeyDownEvent) {
         final isShift = HardwareKeyboard.instance.isShiftPressed;
@@ -343,6 +404,13 @@ class _ChatScreenState extends State<ChatScreen> {
           bindings: <ShortcutActivator, VoidCallback>{
             const SingleActivator(LogicalKeyboardKey.keyH, control: true): _toggleHistoryDrawer,
             const SingleActivator(LogicalKeyboardKey.escape): _closeHistoryDrawer,
+            const SingleActivator(LogicalKeyboardKey.equal, control: true): () => _updateZoom(_zoomLevel + 0.1),
+            const SingleActivator(LogicalKeyboardKey.add, control: true): () => _updateZoom(_zoomLevel + 0.1),
+            const SingleActivator(LogicalKeyboardKey.numpadAdd, control: true): () => _updateZoom(_zoomLevel + 0.1),
+            const SingleActivator(LogicalKeyboardKey.minus, control: true): () => _updateZoom(_zoomLevel - 0.1),
+            const SingleActivator(LogicalKeyboardKey.numpadSubtract, control: true): () => _updateZoom(_zoomLevel - 0.1),
+            const SingleActivator(LogicalKeyboardKey.digit0, control: true): () => _updateZoom(1.0),
+            const SingleActivator(LogicalKeyboardKey.numpad0, control: true): () => _updateZoom(1.0),
           },
           child: Focus(
             autofocus: true,
@@ -490,6 +558,48 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ),
                 ],
+              ),
+            ),
+          ),
+          const SizedBox(width: CompanionSpacing.sm),
+        ],
+        if ((_zoomLevel - 1.0).abs() > 0.01) ...[
+          Tooltip(
+            message: 'Conversation zoom level (${(_zoomLevel * 100).round()}%). Click or Ctrl+0 to reset.',
+            child: InkWell(
+              borderRadius: CompanionRadius.borderSm,
+              onTap: () => _updateZoom(1.0),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: CompanionSpacing.sm,
+                  vertical: CompanionSpacing.xs,
+                ),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.04),
+                  borderRadius: CompanionRadius.borderSm,
+                  border: Border.all(
+                    color: ext?.borderSubtle ?? Colors.transparent,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.zoom_in_rounded,
+                      size: 12,
+                      color: ext?.textSecondary,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${(_zoomLevel * 100).round()}%',
+                      style: CompanionTypography.caption.copyWith(
+                        color: ext?.textSecondary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -692,30 +802,38 @@ class _ChatScreenState extends State<ChatScreen> {
     CompanionThemeExtension? ext,
     bool isDark,
   ) {
-    return SoftGlassPanel(
-      padding: const EdgeInsets.symmetric(
-        horizontal: CompanionSpacing.lg,
-        vertical: CompanionSpacing.md,
-      ),
-      child: ListView.builder(
-        controller: _scrollController,
-        itemCount: chatCtrl.messages.length,
-        itemBuilder: (context, index) {
-          final msg = chatCtrl.messages[index];
-          final isUser = msg.sender == 'user';
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: CompanionSpacing.sm),
-            child: Align(
-              alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 680),
-                child: isUser
-                    ? _buildUserBubble(context, msg, ext)
-                    : _buildAssistantBubble(context, msg, ext, isDark),
-              ),
-            ),
-          );
-        },
+    return Listener(
+      onPointerSignal: _handlePointerSignal,
+      child: MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+          textScaler: TextScaler.linear(_zoomLevel),
+        ),
+        child: SoftGlassPanel(
+          padding: const EdgeInsets.symmetric(
+            horizontal: CompanionSpacing.lg,
+            vertical: CompanionSpacing.md,
+          ),
+          child: ListView.builder(
+            controller: _scrollController,
+            itemCount: chatCtrl.messages.length,
+            itemBuilder: (context, index) {
+              final msg = chatCtrl.messages[index];
+              final isUser = msg.sender == 'user';
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: CompanionSpacing.sm),
+                child: Align(
+                  alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 680),
+                    child: isUser
+                        ? _buildUserBubble(context, msg, ext)
+                        : _buildAssistantBubble(context, msg, ext, isDark),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -944,6 +1062,68 @@ class _ChatScreenState extends State<ChatScreen> {
                       '(Generation failed)',
                       style: CompanionTypography.bodySmall.copyWith(
                         color: ext?.danger ?? CompanionColors.danger,
+                      ),
+                    ),
+                  ),
+                if (msg.status == 'length')
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: (ext?.warning ?? CompanionColors.warning).withValues(alpha: 0.12),
+                        borderRadius: CompanionRadius.borderSm,
+                        border: Border.all(
+                          color: (ext?.warning ?? CompanionColors.warning).withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.timer_outlined,
+                                size: 16,
+                                color: ext?.warning ?? CompanionColors.warning,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Response reached generation limit',
+                                style: CompanionTypography.bodySmall.copyWith(
+                                  color: ext?.warning ?? CompanionColors.warning,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                          FilledButton.tonalIcon(
+                            key: const Key('continue_response_button'),
+                            style: FilledButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            ),
+                            icon: const Icon(Icons.arrow_forward_rounded, size: 14),
+                            label: const Text('Continue response', style: TextStyle(fontSize: 12)),
+                            onPressed: () {
+                              _effectiveController.sendMessage('Continue');
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (msg.status == 'interrupted')
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      '(Generation interrupted)',
+                      style: CompanionTypography.bodySmall.copyWith(
+                        color: ext?.danger ?? CompanionColors.danger,
+                        fontStyle: FontStyle.italic,
                       ),
                     ),
                   ),

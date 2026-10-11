@@ -534,5 +534,30 @@ void main() {
       expect(status.runtimeState, 'MODEL_READY');
       expect(status.activeModel, 'qwen3-vl-2b-instruct');
     });
+
+    test('unloadModel sends POST to /models/unload and returns ModelStatusResponse', () async {
+      final mock = MockClient((request) async {
+        expect(request.url.path, '/api/v1/models/unload');
+        expect(request.method, 'POST');
+        return http.Response(
+          jsonEncode({
+            'provider': 'llama.cpp',
+            'runtime_state': 'MODEL_UNLOADED',
+            'active_model': null,
+            'selected_model': 'qwen3-vl-2b-instruct',
+            'model_resident': false,
+            'model_loaded': false,
+            'model_awake': false,
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      final client = CompanionClient(httpClient: mock);
+      final status = await client.unloadModel();
+      expect(status.runtimeState, 'MODEL_UNLOADED');
+      expect(status.modelLoaded, isFalse);
+    });
   });
 }

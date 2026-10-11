@@ -964,3 +964,66 @@ async def test_orchestrator_media_resolver_failure_post_sse_error_lifecycle(
 
     # 7. Provider generation_active is False
     assert not (await provider.get_status()).generation_active
+
+
+@pytest.mark.anyio
+async def test_stream_finish_reason_length_and_token_budgeting(test_session: AsyncSession, monkeypatch):
+    """Verify that when provider finish_reason is 'length', orchestrator emits finish_reason 'length', persists status 'length', and bounds max_tokens by context capacity."""
+    conv = Conversation(id="conv-length-test", owner_id="test-owner", title="Length Test")
+    test_session.add(conv)
+    await test_session.commit()
+
+    provider = get_llm_provider()
+    # Configure mock provider to report finish_reason = 'length'
+    provider.configured_finish_reason = "length"
+
+    # Track max_tokens passed to generate_stream
+    captured_kwargs = {}
+    orig_generate_stream = provider.generate_stream
+
+    async def tracking_generate_stream(messages, **kwargs):
+        captured_kwargs.update(kwargs)
+        async for token in orig_generate_stream(messages, **kwargs):
+            yield token
+
+    monkeypatch.setattr(provider, "generate_stream", tracking_generate_stream)
+
+    lock = _get_lock("conv-length-test")
+    await lock.acquire()
+
+    prepared = await prepare_turn(
+        db=test_session,
+        conversation_id="conv-length-test",
+        owner_id="test-owner",
+        user_text="Tell me a very long story",
+    )
+
+    chunks = []
+    async for chunk in orchestrate_chat_stream(
+        db=test_session,
+        conversation_id="conv-length-test",
+        user_text="Tell me a very long story",
+        owner_id="test-owner",
+        prepared_turn=prepared,
+        conversation_lock=lock,
+    ):
+        chunks.append(chunk)
+
+    done_frames = [json.loads(c[6:]) for c in chunks if c.startswith("data: ") and '"type": "done"' in c]
+    assert len(done_frames) == 1
+    done_payload = done_frames[0]
+    assert done_payload["finish_reason"] == "length"
+    assert "prompt_tokens" in done_payload
+    assert "completion_tokens" in done_payload
+
+    # Assistant message in DB must have status == "length"
+    result = await test_session.execute(
+        select(Message).where(Message.conversation_id == "conv-length-test", Message.sender == "assistant")
+    )
+    asst_msg = result.scalar_one()
+    assert asst_msg.status == "length"
+
+    # Verify max_tokens was passed and bounded <= 1024
+    assert "max_tokens" in captured_kwargs
+    assert captured_kwargs["max_tokens"] <= 1024
+    assert captured_kwargs["max_tokens"] > 0

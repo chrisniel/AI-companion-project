@@ -232,6 +232,7 @@ async def create_chat_completion(
                 return
 
             # Final stop chunk
+            finish_reason = getattr(provider, "last_finish_reason", "stop") or "stop"
             stop_chunk = ChatCompletionStreamChunk(
                 id=completion_id,
                 created=created_ts,
@@ -240,7 +241,7 @@ async def create_chat_completion(
                     ChatCompletionStreamChoice(
                         index=0,
                         delta=ChatCompletionDelta(),
-                        finish_reason="stop",
+                        finish_reason=finish_reason,
                     )
                 ],
             )
@@ -274,6 +275,7 @@ async def create_chat_completion(
     prompt_chars = sum(len(m.content) for m in request.messages)
     prompt_tokens = max(1, prompt_chars // 4)
     completion_tokens = max(1, len(content) // 4)
+    finish_reason = getattr(provider, "last_finish_reason", "stop") or "stop"
 
     return ChatCompletionResponse(
         id=completion_id,
@@ -283,7 +285,7 @@ async def create_chat_completion(
             ChatCompletionChoice(
                 index=0,
                 message=ChatCompletionMessage(role="assistant", content=content),
-                finish_reason="stop",
+                finish_reason=finish_reason,
             )
         ],
         usage=ChatCompletionUsage(

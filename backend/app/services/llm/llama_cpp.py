@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
 
 import httpx
 
@@ -43,7 +43,7 @@ def _decode_stream_event(event: str, data: str) -> tuple[str, bool]:
     if event == "error":
         raise ProviderGenerationError("UPSTREAM_GENERATION_ERROR")
     if data == "[DONE]":
-        return "", True
+        return "", True, None
     try:
         chunk = json.loads(data)
     except (ValueError, TypeError):
@@ -55,7 +55,7 @@ def _decode_stream_event(event: str, data: str) -> tuple[str, bool]:
     choices = chunk.get("choices")
     # Usage-only frames and role-only deltas carry no text, but are valid protocol.
     if choices == [] and isinstance(chunk.get("usage"), dict):
-        return "", False
+        return "", False, None
     if not isinstance(choices, list) or len(choices) != 1 or not isinstance(choices[0], dict):
         raise ProviderGenerationError("UPSTREAM_PROTOCOL_ERROR")
     choice = choices[0]
@@ -68,10 +68,13 @@ def _decode_stream_event(event: str, data: str) -> tuple[str, bool]:
     token = delta.get("content")
     if token is not None and not isinstance(token, str):
         raise ProviderGenerationError("UPSTREAM_PROTOCOL_ERROR")
-    return token or "", False
+    return token or "", False, reason
 
 
-async def _server_stream_tokens(response: httpx.Response) -> AsyncGenerator[str, None]:
+async def _server_stream_tokens(
+    response: httpx.Response,
+    on_finish: Optional[Callable[[str], None]] = None,
+) -> AsyncGenerator[str, None]:
     if not response.is_success:
         raise ProviderGenerationError("UPSTREAM_HTTP_ERROR")
     event = ""
@@ -79,7 +82,9 @@ async def _server_stream_tokens(response: httpx.Response) -> AsyncGenerator[str,
     async for line in response.aiter_lines():
         if not line:
             if data or event == "error":
-                token, done = _decode_stream_event(event, "\n".join(data))
+                token, done, finish_reason = _decode_stream_event(event, "\n".join(data))
+                if finish_reason and on_finish:
+                    on_finish(finish_reason)
                 if token:
                     yield token
                 if done:
@@ -91,7 +96,9 @@ async def _server_stream_tokens(response: httpx.Response) -> AsyncGenerator[str,
             event = line[6:].strip()
         # SSE comments, id and retry fields are non-terminal metadata.
     if data or event == "error":
-        token, done = _decode_stream_event(event, "\n".join(data))
+        token, done, finish_reason = _decode_stream_event(event, "\n".join(data))
+        if finish_reason and on_finish:
+            on_finish(finish_reason)
         if token:
             yield token
         if done:
@@ -972,7 +979,9 @@ class LlamaCppProvider(BaseLLMProvider):
                     if not resp.is_success:
                         raise ProviderGenerationError("UPSTREAM_HTTP_ERROR")
                     data = resp.json()
-                    return data["choices"][0]["message"]["content"]
+                    choice = data["choices"][0]
+                    self.last_finish_reason = choice.get("finish_reason") or "stop"
+                    return choice["message"]["content"]
 
             # Route B: In-process llama_cpp
             native_model = self._llm
@@ -988,7 +997,9 @@ class LlamaCppProvider(BaseLLMProvider):
             worker = self._start_owned_worker(_infer, lease)
             worker_owns_lease = True
             output = await asyncio.shield(worker)
-            return output["choices"][0]["message"]["content"]
+            choice = output["choices"][0]
+            self.last_finish_reason = choice.get("finish_reason") or "stop"
+            return choice["message"]["content"]
         except httpx.HTTPError:
             raise ProviderGenerationError("UPSTREAM_TRANSPORT_ERROR") from None
         finally:
@@ -1005,6 +1016,10 @@ class LlamaCppProvider(BaseLLMProvider):
         formatted_messages = _translate_messages(messages)
         lease = await self._acquire_generation()
         worker_owns_lease = False
+        self.last_finish_reason = "stop"
+
+        def _record_finish(reason: str) -> None:
+            self.last_finish_reason = reason
 
         try:
             # Route A: Standalone llama-server streaming
@@ -1018,7 +1033,7 @@ class LlamaCppProvider(BaseLLMProvider):
                 }
                 async with httpx.AsyncClient(timeout=120.0) as client:
                     async with client.stream("POST", f"{settings.LLAMA_SERVER_URL}/chat/completions", json=payload) as response:
-                        async for token in _server_stream_tokens(response):
+                        async for token in _server_stream_tokens(response, on_finish=_record_finish):
                             yield token
                 return
 
@@ -1036,10 +1051,16 @@ class LlamaCppProvider(BaseLLMProvider):
                         stream=True,
                     )
                     for chunk in stream:
-                        delta = chunk["choices"][0].get("delta", {})
-                        token = delta.get("content")
-                        if token:
-                            loop.call_soon_threadsafe(queue.put_nowait, token)
+                        choices = chunk.get("choices", [])
+                        if choices:
+                            choice = choices[0]
+                            reason = choice.get("finish_reason")
+                            if reason:
+                                self.last_finish_reason = reason
+                            delta = choice.get("delta", {})
+                            token = delta.get("content")
+                            if token:
+                                loop.call_soon_threadsafe(queue.put_nowait, token)
                 except Exception as e:
                     loop.call_soon_threadsafe(queue.put_nowait, e)
                 finally:

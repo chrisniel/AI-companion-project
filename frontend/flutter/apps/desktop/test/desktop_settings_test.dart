@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:ai_companion_desktop/controllers/desktop_settings_controller.dart';
 import 'package:ai_companion_desktop/diagnostics/windows_storage_diagnostic_reader.dart';
+import 'package:ai_companion_desktop/features/chat/desktop_chat_controller.dart';
 import 'package:ai_companion_desktop/platform/desktop_client_settings.dart';
 import 'package:ai_companion_desktop/screens/settings_screen.dart';
 import 'package:companion_api/companion_api.dart';
@@ -132,11 +133,109 @@ void main() {
 
       expect(fakeClient.selectedModelCalls, greaterThan(0));
     });
+
+    testWidgets('renders Unload Model button when model is loaded and triggers unloadModel', (tester) async {
+      setupDesktopViewport(tester);
+
+      final tempDir = Directory.systemTemp.createTempSync('settings_unload_test_');
+      final tempSettingsFile = File('${tempDir.path}${Platform.pathSeparator}client_settings.json');
+      final isolatedSettings = DesktopClientSettings(customFilePath: tempSettingsFile.path);
+      final isolatedCredentials = InMemoryCredentialStore('test-token');
+      addTearDown(() {
+        if (tempDir.existsSync()) {
+          try {
+            tempDir.deleteSync(recursive: true);
+          } catch (_) {}
+        }
+      });
+
+      final fakeClient = FakeModelSelectionClient();
+      final controller = DesktopSettingsController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: SettingsScreen(
+              controller: controller,
+              client: fakeClient,
+              clientSettings: isolatedSettings,
+              credentialStore: isolatedCredentials,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      final unloadButtons = find.widgetWithText(OutlinedButton, 'Unload Model / Free VRAM');
+      expect(unloadButtons, findsWidgets);
+
+      await tester.ensureVisible(unloadButtons.first);
+      await tester.pumpAndSettle();
+
+      await tester.tap(unloadButtons.first);
+      await tester.pumpAndSettle();
+
+      expect(fakeClient.unloadModelCalls, equals(1));
+      expect(find.text('Model unloaded successfully. VRAM released.'), findsOneWidget);
+    });
+
+    testWidgets('disables Unload Model button when chat generation is active', (tester) async {
+      setupDesktopViewport(tester);
+
+      final tempDir = Directory.systemTemp.createTempSync('settings_unload_disabled_test_');
+      final tempSettingsFile = File('${tempDir.path}${Platform.pathSeparator}client_settings.json');
+      final isolatedSettings = DesktopClientSettings(customFilePath: tempSettingsFile.path);
+      final isolatedCredentials = InMemoryCredentialStore('test-token');
+      addTearDown(() {
+        if (tempDir.existsSync()) {
+          try {
+            tempDir.deleteSync(recursive: true);
+          } catch (_) {}
+        }
+      });
+
+      final fakeClient = FakeModelSelectionClient();
+      final controller = DesktopSettingsController();
+      final mockChatController = FakeGeneratingChatController(client: fakeClient);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: SettingsScreen(
+              controller: controller,
+              client: fakeClient,
+              chatController: mockChatController,
+              clientSettings: isolatedSettings,
+              credentialStore: isolatedCredentials,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      final unloadButtons = find.widgetWithText(OutlinedButton, 'Unload Model / Free VRAM');
+      expect(unloadButtons, findsWidgets);
+
+      final button = tester.widget<OutlinedButton>(unloadButtons.first);
+      expect(button.onPressed, isNull);
+    });
   });
+}
+
+class FakeGeneratingChatController extends DesktopChatController {
+  FakeGeneratingChatController({required super.client});
+
+  @override
+  bool get isGenerating => true;
 }
 
 class FakeModelSelectionClient extends CompanionClient {
   int selectedModelCalls = 0;
+  int unloadModelCalls = 0;
   String? lastSelectedModel;
 
   FakeModelSelectionClient()
@@ -173,6 +272,8 @@ class FakeModelSelectionClient extends CompanionClient {
       runtimeState: 'MODEL_READY',
       activeModel: 'qwen3-vl-2b-instruct',
       selectedModel: 'qwen3-vl-2b-instruct',
+      modelLoaded: true,
+      modelResident: true,
     );
   }
 
@@ -189,6 +290,7 @@ class FakeModelSelectionClient extends CompanionClient {
       runtimeState: 'MODEL_READY',
       activeModel: loadImmediately ? modelName : 'qwen3-vl-2b-instruct',
       selectedModel: modelName,
+      modelLoaded: loadImmediately,
     );
   }
 
@@ -200,6 +302,19 @@ class FakeModelSelectionClient extends CompanionClient {
       activeModel: modelName ?? 'qwen3-vl-2b-instruct',
       selectedModel: modelName ?? 'qwen3-vl-2b-instruct',
       modelLoaded: true,
+    );
+  }
+
+  @override
+  Future<ModelStatusResponse> unloadModel() async {
+    unloadModelCalls++;
+    return const ModelStatusResponse(
+      provider: 'llama.cpp',
+      runtimeState: 'MODEL_UNLOADED',
+      activeModel: null,
+      selectedModel: 'qwen3-vl-2b-instruct',
+      modelLoaded: false,
+      modelResident: false,
     );
   }
 }

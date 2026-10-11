@@ -983,7 +983,7 @@ class _CodeBlockWidgetState extends State<_CodeBlockWidget> {
   }
 }
 
-class _MarkdownTableWidget extends StatelessWidget {
+class _MarkdownTableWidget extends StatefulWidget {
   final List<String> headers;
   final List<List<String>> rows;
   final List<TextAlign> alignments;
@@ -1001,14 +1001,27 @@ class _MarkdownTableWidget extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final borderColor = themeExt?.borderSubtle ?? Colors.grey.withValues(alpha: 0.2);
-    final headerBg = themeExt?.surfaceElevated ?? Colors.black.withValues(alpha: 0.05);
-    final stripeBg = themeExt?.surfaceRecessed ?? Colors.black.withValues(alpha: 0.02);
+  State<_MarkdownTableWidget> createState() => _MarkdownTableWidgetState();
+}
 
-    final headerStyle = defaultStyle.copyWith(
+class _MarkdownTableWidgetState extends State<_MarkdownTableWidget> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = widget.themeExt?.borderSubtle ?? Colors.grey.withValues(alpha: 0.2);
+    final headerBg = widget.themeExt?.surfaceElevated ?? Colors.black.withValues(alpha: 0.05);
+    final stripeBg = widget.themeExt?.surfaceRecessed ?? Colors.black.withValues(alpha: 0.02);
+
+    final headerStyle = widget.defaultStyle.copyWith(
       fontWeight: FontWeight.bold,
-      color: themeExt?.textPrimary,
+      color: widget.themeExt?.textPrimary,
     );
 
     return Padding(
@@ -1019,60 +1032,86 @@ class _MarkdownTableWidget extends StatelessWidget {
           border: Border.all(color: borderColor, width: 1),
         ),
         clipBehavior: Clip.antiAlias,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Table(
-            defaultColumnWidth: const IntrinsicColumnWidth(),
-            border: TableBorder(
-              horizontalInside: BorderSide(color: borderColor, width: 1),
-              verticalInside: BorderSide(color: borderColor, width: 1),
-            ),
-            children: [
-              TableRow(
-                decoration: BoxDecoration(color: headerBg),
-                children: List.generate(headers.length, (colIdx) {
-                  final alignment = colIdx < alignments.length ? alignments[colIdx] : TextAlign.left;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: CompanionSpacing.md,
-                      vertical: CompanionSpacing.sm,
-                    ),
-                    child: SelectableText.rich(
-                      TextSpan(
-                        style: headerStyle,
-                        children: renderInline(headers[colIdx], headerStyle),
-                      ),
-                      textAlign: alignment,
-                    ),
-                  );
-                }),
-              ),
-              ...rows.asMap().entries.map((entry) {
-                final rowIdx = entry.key;
-                final row = entry.value;
-                final isEven = rowIdx % 2 == 1;
-                return TableRow(
-                  decoration: isEven ? BoxDecoration(color: stripeBg) : null,
-                  children: List.generate(headers.length, (colIdx) {
-                    final cellText = colIdx < row.length ? row[colIdx] : '';
-                    final alignment = colIdx < alignments.length ? alignments[colIdx] : TextAlign.left;
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: CompanionSpacing.md,
-                        vertical: CompanionSpacing.sm,
-                      ),
-                      child: SelectableText.rich(
-                        TextSpan(
-                          style: defaultStyle,
-                          children: renderInline(cellText, defaultStyle),
+        child: ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(
+            dragDevices: {
+              PointerDeviceKind.touch,
+              PointerDeviceKind.mouse,
+              PointerDeviceKind.trackpad,
+            },
+          ),
+          child: Scrollbar(
+            controller: _scrollController,
+            thumbVisibility: true,
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              scrollDirection: Axis.horizontal,
+              child: Table(
+                defaultColumnWidth: const IntrinsicColumnWidth(),
+                border: TableBorder(
+                  horizontalInside: BorderSide(color: borderColor, width: 1),
+                  verticalInside: BorderSide(color: borderColor, width: 1),
+                ),
+                children: [
+                  TableRow(
+                    decoration: BoxDecoration(color: headerBg),
+                    children: List.generate(widget.headers.length, (colIdx) {
+                      final alignment = colIdx < widget.alignments.length ? widget.alignments[colIdx] : TextAlign.left;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: CompanionSpacing.md,
+                          vertical: CompanionSpacing.sm,
                         ),
-                        textAlign: alignment,
-                      ),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            minWidth: 80.0,
+                            maxWidth: 360.0,
+                          ),
+                          child: SelectableText.rich(
+                            TextSpan(
+                              style: headerStyle,
+                              children: widget.renderInline(widget.headers[colIdx], headerStyle),
+                            ),
+                            textAlign: alignment,
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                  ...widget.rows.asMap().entries.map((entry) {
+                    final rowIdx = entry.key;
+                    final row = entry.value;
+                    final isEven = rowIdx % 2 == 1;
+                    return TableRow(
+                      decoration: isEven ? BoxDecoration(color: stripeBg) : null,
+                      children: List.generate(widget.headers.length, (colIdx) {
+                        final cellText = colIdx < row.length ? row[colIdx] : '';
+                        final alignment = colIdx < widget.alignments.length ? widget.alignments[colIdx] : TextAlign.left;
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: CompanionSpacing.md,
+                            vertical: CompanionSpacing.sm,
+                          ),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(
+                              minWidth: 80.0,
+                              maxWidth: 360.0,
+                            ),
+                            child: SelectableText.rich(
+                              TextSpan(
+                                style: widget.defaultStyle,
+                                children: widget.renderInline(cellText, widget.defaultStyle),
+                              ),
+                              textAlign: alignment,
+                            ),
+                          ),
+                        );
+                      }),
                     );
                   }),
-                );
-              }),
-            ],
+                ],
+              ),
+            ),
           ),
         ),
       ),

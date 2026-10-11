@@ -368,6 +368,39 @@ And another line of text.
       expect(find.byType(SingleChildScrollView), findsWidgets);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('renders wide 8-column table with visible horizontal Scrollbar and constrained wrapped cells', (tester) async {
+      tester.view.physicalSize = const Size(1024, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      const markdown = '''
+| Column 1 | Column 2 | Column 3 | Column 4 | Column 5 | Column 6 | Column 7 | Column 8 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| First description of some length | Second parameter explanation with detailed text | Third configuration item | Fourth setting value | Fifth metric telemetry | Sixth status report | Seventh historical log entry | Eighth outcome evaluation |
+''';
+      await tester.pumpWidget(wrapWidget(const AssistantMarkdownView(content: markdown)));
+      expect(find.byType(Table), findsOneWidget);
+
+      // Verify that Scrollbar is present and wraps the table's scrollable
+      final scrollbarFinder = find.byType(Scrollbar);
+      expect(scrollbarFinder, findsWidgets);
+      final scrollbar = tester.widget<Scrollbar>(scrollbarFinder.first);
+      expect(scrollbar.thumbVisibility, isTrue);
+
+      // Verify cells are constrained with max width bounds
+      final constrainedBoxFinder = find.descendant(
+        of: find.byType(Table),
+        matching: find.byType(ConstrainedBox),
+      );
+      expect(constrainedBoxFinder, findsWidgets);
+      final firstConstrainedBox = tester.widget<ConstrainedBox>(constrainedBoxFinder.first);
+      expect(firstConstrainedBox.constraints.maxWidth, lessThanOrEqualTo(360.0));
+      expect(firstConstrainedBox.constraints.minWidth, greaterThanOrEqualTo(80.0));
+    });
   });
 
   group('AssistantMarkdownView Mathematical Rendering Tests', () {
@@ -459,6 +492,36 @@ And another line of text.
       expect(copiedData, contains(r'\text{Meters per step}'));
 
       // Let the 2-second timer finish before completing test
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('renders textbook calculus integral equation with SelectableMath and copyable raw source', (tester) async {
+      String? copiedData;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copiedData = (call.arguments as Map)['text'] as String?;
+        }
+        return null;
+      });
+
+      const calculusEquation = r'''
+\[
+\int_1^\infty \frac{1}{x^2}\,dx = \left[-\frac{1}{x}\right]_{1}^{\infty} = 1
+\]
+''';
+      await tester.pumpWidget(wrapWidget(const AssistantMarkdownView(content: calculusEquation)));
+      expect(tester.takeException(), isNull);
+      expect(find.byType(SelectableMath), findsOneWidget);
+
+      final copyBtn = find.text('Copy');
+      expect(copyBtn, findsOneWidget);
+      await tester.tap(copyBtn);
+      await tester.pump();
+
+      expect(find.text('Copied'), findsOneWidget);
+      expect(copiedData, contains(r'\int_1^\infty \frac{1}{x^2}\,dx'));
+
       await tester.pump(const Duration(seconds: 2));
     });
   });

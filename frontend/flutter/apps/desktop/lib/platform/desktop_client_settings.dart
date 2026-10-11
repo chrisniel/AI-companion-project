@@ -106,6 +106,47 @@ class DesktopClientSettings {
     await file.writeAsString(jsonEncode(data), flush: true);
   }
 
+  /// Reads conversation text zoom level (clamped between 0.8 and 1.6), falling back to defaultValue.
+  Future<double> readChatZoomLevel({double defaultValue = 1.0}) async {
+    try {
+      final file = File(_filePath);
+      if (!await file.exists()) {
+        return defaultValue;
+      }
+      final content = await file.readAsString();
+      final dynamic decoded = jsonDecode(content);
+      if (decoded is Map && decoded['chatZoomLevel'] is num) {
+        final zoom = (decoded['chatZoomLevel'] as num).toDouble();
+        return zoom.clamp(0.8, 1.6);
+      }
+      return defaultValue;
+    } catch (_) {
+      return defaultValue;
+    }
+  }
+
+  /// Persists conversation text zoom level (clamped between 0.8 and 1.6).
+  Future<void> writeChatZoomLevel(double zoomLevel) async {
+    final file = File(_filePath);
+    await file.parent.create(recursive: true);
+
+    Map<String, dynamic> data = {};
+    try {
+      if (await file.exists()) {
+        final content = await file.readAsString();
+        final dynamic decoded = jsonDecode(content);
+        if (decoded is Map<String, dynamic>) {
+          data = Map<String, dynamic>.from(decoded);
+        }
+      }
+    } catch (_) {}
+
+    data['chatZoomLevel'] = zoomLevel.clamp(0.8, 1.6);
+    data['updatedAt'] = DateTime.now().toUtc().toIso8601String();
+
+    await file.writeAsString(jsonEncode(data), flush: true);
+  }
+
   /// Deletes client settings file.
   Future<void> deleteSettings() async {
     try {
