@@ -11,6 +11,7 @@ import 'package:http/http.dart' as http;
 import 'package:ai_companion_desktop/controllers/desktop_settings_controller.dart';
 import 'package:ai_companion_desktop/features/chat/desktop_chat_controller.dart';
 import 'package:ai_companion_desktop/screens/chat_screen.dart';
+import 'package:ai_companion_desktop/screens/settings_screen.dart';
 import 'package:ai_companion_desktop/shell/desktop_shell.dart';
 
 class MockCompanionClient extends CompanionClient {
@@ -65,6 +66,8 @@ class MockCompanionClient extends CompanionClient {
   String? lastDeletedConvId;
   ModelStatusResponse? customModelStatus;
   List<MessageOut>? customMessages;
+  Map<String, List<MessageOut>>? customMessagesPerConversation;
+  Future<MessageListOut> Function(String conversationId)? onListMessages;
   List<ConversationOut>? customConversations;
   List<MessageOut> _storedMessages = [
     MessageOut(
@@ -158,6 +161,13 @@ class MockCompanionClient extends CompanionClient {
     int skip = 0,
     int limit = 100,
   }) async {
+    if (onListMessages != null) {
+      return onListMessages!(conversationId);
+    }
+    if (customMessagesPerConversation != null && customMessagesPerConversation!.containsKey(conversationId)) {
+      final msgs = customMessagesPerConversation![conversationId]!;
+      return MessageListOut(items: msgs, total: msgs.length);
+    }
     if (customMessages != null) {
       return MessageListOut(items: customMessages!, total: customMessages!.length);
     }
@@ -1680,6 +1690,343 @@ void main() {
       await tester.pump();
 
       expect(scrollable.position.pixels, equals(100.0));
+
+      controller.dispose();
+    });
+
+    testWidgets('Delayed message loading with 30+ messages: first opening shows latest message', (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1280, 800);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final mockClient = MockCompanionClient();
+      final messages = List<MessageOut>.generate(
+        35,
+        (i) => MessageOut(
+          id: 'msg-$i',
+          conversationId: 'conv-1',
+          sender: i % 2 == 0 ? 'user' : 'assistant',
+          content: 'Turn $i: This is a test turn with substantial content to ensure vertical scroll extent.',
+          status: 'completed',
+          sequenceNo: i + 1,
+          createdAt: DateTime.now().toUtc().toIso8601String(),
+        ),
+      );
+      final conv = ConversationOut(
+        id: 'conv-1',
+        title: 'Thread 1',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+        messageCount: 35,
+      );
+      mockClient.customConversations = [conv];
+
+      // Delay message loading with a completer
+      final completer = Completer<MessageListOut>();
+      mockClient.onListMessages = (id) => completer.future;
+
+      final controller = DesktopChatController(client: mockClient);
+      unawaited(controller.checkConnection());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      // First frame pumped: messages are still loading asynchronously, welcome stage is shown
+      await tester.pump();
+      expect(find.byType(ListView), findsNothing);
+
+      // Complete message load
+      completer.complete(MessageListOut(items: messages, total: messages.length));
+      await tester.pumpAndSettle();
+
+      final listViewFinder = find.byType(ListView);
+      expect(listViewFinder, findsOneWidget);
+
+      final scrollableFinder = find.descendant(of: listViewFinder, matching: find.byType(Scrollable)).first;
+      final scrollable = tester.state<ScrollableState>(scrollableFinder);
+      final maxScroll = scrollable.position.maxScrollExtent;
+      expect(maxScroll, greaterThan(100.0));
+
+      // Shows latest message (scrolled to bottom)
+      expect(scrollable.position.pixels, closeTo(maxScroll, 50.0));
+
+      controller.dispose();
+    });
+
+    testWidgets('Switching conversations restores each position with 30+ messages', (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1280, 800);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final mockClient = MockCompanionClient();
+      final conv1 = ConversationOut(
+        id: 'conv-1',
+        title: 'Thread 1',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+        messageCount: 35,
+      );
+      final conv2 = ConversationOut(
+        id: 'conv-2',
+        title: 'Thread 2',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+        messageCount: 35,
+      );
+      mockClient.customConversations = [conv1, conv2];
+
+      final messages1 = List<MessageOut>.generate(
+        35,
+        (i) => MessageOut(
+          id: 'msg-c1-$i',
+          conversationId: 'conv-1',
+          sender: i % 2 == 0 ? 'user' : 'assistant',
+          content: 'Thread 1 Turn $i: Message content for testing scroll restoration position.',
+          status: 'completed',
+          sequenceNo: i + 1,
+          createdAt: DateTime.now().toUtc().toIso8601String(),
+        ),
+      );
+      final messages2 = List<MessageOut>.generate(
+        35,
+        (i) => MessageOut(
+          id: 'msg-c2-$i',
+          conversationId: 'conv-2',
+          sender: i % 2 == 0 ? 'user' : 'assistant',
+          content: 'Thread 2 Turn $i: Different content for second thread scroll extent.',
+          status: 'completed',
+          sequenceNo: i + 1,
+          createdAt: DateTime.now().toUtc().toIso8601String(),
+        ),
+      );
+
+      mockClient.customMessagesPerConversation = {
+        'conv-1': messages1,
+        'conv-2': messages2,
+      };
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final listViewFinder = find.byType(ListView);
+      final scrollableFinder = find.descendant(of: listViewFinder, matching: find.byType(Scrollable)).first;
+      var scrollable = tester.state<ScrollableState>(scrollableFinder);
+      final maxScroll1 = scrollable.position.maxScrollExtent;
+      expect(maxScroll1, greaterThan(100.0));
+      expect(scrollable.position.pixels, closeTo(maxScroll1, 5.0));
+
+      // User scrolls Conv 1 up to 150.0
+      scrollable.position.jumpTo(150.0);
+      await tester.pump();
+      expect(scrollable.position.pixels, equals(150.0));
+
+      // Switch to Conv 2
+      await controller.selectConversation(conv2);
+      await tester.pumpAndSettle();
+
+      scrollable = tester.state<ScrollableState>(scrollableFinder);
+      final maxScroll2 = scrollable.position.maxScrollExtent;
+      expect(maxScroll2, greaterThan(100.0));
+      // First opening of Conv 2 shows latest message
+      expect(scrollable.position.pixels, closeTo(maxScroll2, 5.0));
+
+      // User scrolls Conv 2 to 300.0
+      scrollable.position.jumpTo(300.0);
+      await tester.pump();
+      expect(scrollable.position.pixels, equals(300.0));
+
+      // Switch back to Conv 1
+      await controller.selectConversation(conv1);
+      await tester.pumpAndSettle();
+
+      scrollable = tester.state<ScrollableState>(scrollableFinder);
+      // Conv 1 scroll offset is restored to 150.0!
+      expect(scrollable.position.pixels, closeTo(150.0, 1.0));
+
+      // Switch back to Conv 2
+      await controller.selectConversation(conv2);
+      await tester.pumpAndSettle();
+
+      scrollable = tester.state<ScrollableState>(scrollableFinder);
+      // Conv 2 scroll offset is restored to 300.0!
+      expect(scrollable.position.pixels, closeTo(300.0, 1.0));
+
+      controller.dispose();
+    });
+
+    testWidgets('Chat -> Settings -> Chat preserves reading position', (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1280, 800);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final mockClient = MockCompanionClient();
+      final conv = ConversationOut(
+        id: 'conv-1',
+        title: 'Thread 1',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+        messageCount: 35,
+      );
+      mockClient.customConversations = [conv];
+      final messages = List<MessageOut>.generate(
+        35,
+        (i) => MessageOut(
+          id: 'msg-$i',
+          conversationId: 'conv-1',
+          sender: i % 2 == 0 ? 'user' : 'assistant',
+          content: 'Message $i: Scroll testing turn with sufficient length.',
+          status: 'completed',
+          sequenceNo: i + 1,
+          createdAt: DateTime.now().toUtc().toIso8601String(),
+        ),
+      );
+      mockClient.customMessages = messages;
+
+      final chatController = DesktopChatController(client: mockClient);
+      final settingsController = DesktopSettingsController();
+      await chatController.checkConnection();
+      await chatController.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: DesktopShell(
+              controller: settingsController,
+              chatController: chatController,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final listViewFinder = find.descendant(of: find.byType(ChatScreen), matching: find.byType(ListView));
+      expect(listViewFinder, findsOneWidget);
+
+      final scrollableFinder = find.descendant(of: listViewFinder, matching: find.byType(Scrollable)).first;
+      var scrollable = tester.state<ScrollableState>(scrollableFinder);
+      expect(scrollable.position.pixels, closeTo(scrollable.position.maxScrollExtent, 50.0));
+
+      // Scroll up to reading position (e.g. 200.0)
+      scrollable.position.jumpTo(200.0);
+      await tester.pump();
+      expect(scrollable.position.pixels, equals(200.0));
+
+      // Navigate to Settings
+      settingsController.setDestination(DesktopNavDestination.settings);
+      await tester.pumpAndSettle();
+      expect(find.byType(ChatScreen), findsNothing);
+      expect(find.byType(SettingsScreen), findsOneWidget);
+
+      // Navigate back to Chat
+      settingsController.setDestination(DesktopNavDestination.chat);
+      await tester.pumpAndSettle();
+      expect(find.byType(ChatScreen), findsOneWidget);
+
+      scrollable = tester.state<ScrollableState>(scrollableFinder);
+      // Reading position preserved!
+      expect(scrollable.position.pixels, closeTo(200.0, 1.0));
+
+      chatController.dispose();
+      settingsController.dispose();
+    });
+
+    testWidgets('Older-message reading is never unexpectedly overridden by subsequent controller events', (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1280, 800);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final mockClient = MockCompanionClient();
+      final conv = ConversationOut(
+        id: 'conv-1',
+        title: 'Thread 1',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+        messageCount: 35,
+      );
+      mockClient.customConversations = [conv];
+      final messages = List<MessageOut>.generate(
+        35,
+        (i) => MessageOut(
+          id: 'msg-$i',
+          conversationId: 'conv-1',
+          sender: i % 2 == 0 ? 'user' : 'assistant',
+          content: 'Turn $i: Reading older messages test content.',
+          status: 'completed',
+          sequenceNo: i + 1,
+          createdAt: DateTime.now().toUtc().toIso8601String(),
+        ),
+      );
+      mockClient.customMessages = messages;
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final listViewFinder = find.byType(ListView);
+      final scrollableFinder = find.descendant(of: listViewFinder, matching: find.byType(Scrollable)).first;
+      final scrollable = tester.state<ScrollableState>(scrollableFinder);
+      expect(scrollable.position.pixels, closeTo(scrollable.position.maxScrollExtent, 50.0));
+
+      // User scrolls to offset 120.0 to read older messages
+      scrollable.position.jumpTo(120.0);
+      await tester.pump();
+      expect(scrollable.position.pixels, equals(120.0));
+
+      // Multiple controller updates fire (e.g. status change, rebuilds, model status poll)
+      await controller.checkConnection();
+      await tester.pumpAndSettle();
+
+      // The reading position remains untouched at 120.0!
+      expect(scrollable.position.pixels, equals(120.0));
 
       controller.dispose();
     });

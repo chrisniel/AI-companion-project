@@ -30,6 +30,8 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isHistoryOpen = false;
   bool _isSubmitting = false;
   String? _currentConversationId;
+  String? _restoredConversationId;
+  bool _isRestorationScheduled = false;
   bool _userExplicitlySent = false;
 
   DesktopChatController get _effectiveController => widget.controller ?? _internalController!;
@@ -77,21 +79,13 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
 
-    // Initial load and first layout restoration
+    // Initial load of conversation list if needed and scroll check
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (_effectiveController.conversations.isEmpty) {
         _effectiveController.loadConversations();
-      } else if (_currentConversationId != null && _scrollController.hasClients) {
-        final savedOffset = _effectiveController.getScrollOffset(_currentConversationId!);
-        if (savedOffset != null) {
-          _scrollController.jumpTo(
-            savedOffset.clamp(0.0, _scrollController.position.maxScrollExtent),
-          );
-        } else if (_effectiveController.messages.isNotEmpty) {
-          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-        }
       }
+      _checkAndRestoreScroll();
     });
   }
 
@@ -101,7 +95,10 @@ class _ChatScreenState extends State<ChatScreen> {
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller?.removeListener(_onChatControllerChanged);
       widget.controller?.addListener(_onChatControllerChanged);
+      _restoredConversationId = null;
+      _isRestorationScheduled = false;
     }
+    _checkAndRestoreScroll();
   }
 
   KeyEventResult _handleFocusKeyEvent(FocusNode node, KeyEvent event) {
@@ -200,6 +197,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
       // 2. Switch to new conversation
       _currentConversationId = activeId;
+      _restoredConversationId = null;
+      _isRestorationScheduled = false;
       _userExplicitlySent = false;
 
       // 3. Restore draft for new conversation
@@ -207,22 +206,45 @@ class _ChatScreenState extends State<ChatScreen> {
       if (_textController.text != draft) {
         _textController.text = draft;
       }
-
-      // 4. Restore scroll offset or scroll to bottom on first opening
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_scrollController.hasClients) return;
-        if (activeId != null) {
-          final savedOffset = _effectiveController.getScrollOffset(activeId);
-          if (savedOffset != null) {
-            _scrollController.jumpTo(
-              savedOffset.clamp(0.0, _scrollController.position.maxScrollExtent),
-            );
-          } else if (_effectiveController.messages.isNotEmpty) {
-            _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-          }
-        }
-      });
     }
+
+    _checkAndRestoreScroll();
+  }
+
+  void _checkAndRestoreScroll() {
+    final activeId = _effectiveController.activeConversation?.id;
+    if (activeId == null) return;
+    if (_restoredConversationId == activeId) return;
+
+    final messages = _effectiveController.messages;
+    if (messages.isEmpty) return;
+
+    if (_isRestorationScheduled) return;
+    _isRestorationScheduled = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _isRestorationScheduled = false;
+      if (!mounted) return;
+      if (_effectiveController.activeConversation?.id != activeId) return;
+      if (_restoredConversationId == activeId) return;
+
+      if (!_scrollController.hasClients) {
+        if (_effectiveController.messages.isNotEmpty) {
+          _checkAndRestoreScroll();
+        }
+        return;
+      }
+
+      final savedOffset = _effectiveController.getScrollOffset(activeId);
+      if (savedOffset != null) {
+        _scrollController.jumpTo(
+          savedOffset.clamp(0.0, _scrollController.position.maxScrollExtent),
+        );
+      } else {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      }
+      _restoredConversationId = activeId;
+    });
   }
 
   @override
@@ -302,6 +324,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final chatCtrl = _effectiveController;
+    _checkAndRestoreScroll();
 
     return ListenableBuilder(
       listenable: chatCtrl,
