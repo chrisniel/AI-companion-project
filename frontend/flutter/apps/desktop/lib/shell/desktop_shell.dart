@@ -134,6 +134,7 @@ class DesktopShell extends StatelessWidget {
         return ChatScreen(
           key: const ValueKey('chat_screen'),
           controller: chatController,
+          onNavigateToSettings: () => controller.setDestination(DesktopNavDestination.settings),
         );
       case DesktopNavDestination.voice:
         return const VoiceScreen(key: ValueKey('voice_screen'));

@@ -31,6 +31,7 @@ enum ModelRuntimeStateCategory {
   modelReady,
   modelSleeping,
   modelLoadFailed,
+  modelSelectionRequired,
 }
 
 typedef CompanionClientFactory = CompanionClient Function({
@@ -128,11 +129,15 @@ class DesktopChatController extends ChangeNotifier {
       return ModelRuntimeStateCategory.authenticatedNoModel;
     }
 
+    final state = ms.runtimeState.toUpperCase();
+    if (state == 'MODEL_SELECTION_REQUIRED' || ms.lastRuntimeError == 'MODEL_SELECTION_REQUIRED') {
+      return ModelRuntimeStateCategory.modelSelectionRequired;
+    }
+
     if (ms.lastRuntimeError != null && ms.lastRuntimeError!.isNotEmpty) {
       return ModelRuntimeStateCategory.modelLoadFailed;
     }
 
-    final state = ms.runtimeState.toUpperCase();
     if (state == 'MODEL_READY') {
       return ModelRuntimeStateCategory.modelReady;
     }
@@ -167,6 +172,8 @@ class DesktopChatController extends ChangeNotifier {
         return 'Pairing Required';
       case ModelRuntimeStateCategory.authenticatedNoModel:
         return _activeModelName ?? 'No Model';
+      case ModelRuntimeStateCategory.modelSelectionRequired:
+        return 'No Model Selected';
       case ModelRuntimeStateCategory.modelReady:
         return _modelStatus?.activeModel ?? _activeModelName ?? 'Ready';
       case ModelRuntimeStateCategory.modelSleeping:
@@ -188,6 +195,8 @@ class DesktopChatController extends ChangeNotifier {
         return 'Pairing token required. Configure credentials in Settings.';
       case ModelRuntimeStateCategory.authenticatedNoModel:
         return 'Authenticated with runtime. No active model configured.';
+      case ModelRuntimeStateCategory.modelSelectionRequired:
+        return 'No model is selected. Choose a model in Settings to begin chat.';
       case ModelRuntimeStateCategory.modelReady:
         return 'Local model is active in memory and ready for generation.';
       case ModelRuntimeStateCategory.modelSleeping:
@@ -290,7 +299,11 @@ class DesktopChatController extends ChangeNotifier {
               final modelStatus = await _client.getModelStatus();
               if (_configEpoch != epoch || _isDisposed) return;
               _modelStatus = modelStatus;
-              _activeModelName = modelStatus.activeModel ?? 'default';
+              if (modelStatus.runtimeState == 'MODEL_SELECTION_REQUIRED') {
+                _activeModelName = null;
+              } else {
+                _activeModelName = modelStatus.activeModel ?? modelStatus.selectedModel;
+              }
             } catch (_) {
               if (_configEpoch != epoch || _isDisposed) return;
               // Valid auth + unavailable model: retain connected/authorized status
@@ -659,7 +672,10 @@ class DesktopChatController extends ChangeNotifier {
           _generationState = ChatGenerationState.error;
 
           if (err is CompanionApiException) {
-            if (err.statusCode == 503) {
+            if ((err.statusCode == 422 || err.statusCode == 503) &&
+                err.message.contains('MODEL_SELECTION_REQUIRED')) {
+              _errorMessage = 'No model selected. Choose a model in Settings to begin chat.';
+            } else if (err.statusCode == 503) {
               final backendReason = _modelStatus?.lastRuntimeError;
               if (backendReason != null && backendReason.isNotEmpty) {
                 _errorMessage = 'Local AI model unavailable (503): $backendReason';
@@ -704,13 +720,20 @@ class DesktopChatController extends ChangeNotifier {
     } catch (e) {
       _isAwaitingAcceptance = false;
       _generationState = ChatGenerationState.error;
-      if (e is CompanionApiException && e.statusCode == 503) {
-        final backendReason = _modelStatus?.lastRuntimeError;
-        if (backendReason != null && backendReason.isNotEmpty) {
-          _errorMessage = 'Local AI model unavailable (503): $backendReason';
+      if (e is CompanionApiException) {
+        if ((e.statusCode == 422 || e.statusCode == 503) &&
+            e.message.contains('MODEL_SELECTION_REQUIRED')) {
+          _errorMessage = 'No model selected. Choose a model in Settings to begin chat.';
+        } else if (e.statusCode == 503) {
+          final backendReason = _modelStatus?.lastRuntimeError;
+          if (backendReason != null && backendReason.isNotEmpty) {
+            _errorMessage = 'Local AI model unavailable (503): $backendReason';
+          } else {
+            _errorMessage =
+                'Local AI model unavailable (503): Model engine is not loaded or ready. Start the local LLM router or check model status in Settings.';
+          }
         } else {
-          _errorMessage =
-              'Local AI model unavailable (503): Model engine is not loaded or ready. Start the local LLM router or check model status in Settings.';
+          _errorMessage = e.message;
         }
       } else {
         _errorMessage = e.toString();

@@ -78,6 +78,11 @@ async def load_model(
     success = await provider.load_model(model_name=model_name, profile=profile)
     if not success:
         error_msg = getattr(provider, "_last_error", None) or "Failed to load model into memory."
+        if error_msg == "MODEL_SELECTION_REQUIRED":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="MODEL_SELECTION_REQUIRED",
+            )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=error_msg,

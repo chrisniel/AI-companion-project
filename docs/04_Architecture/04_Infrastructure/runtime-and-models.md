@@ -146,11 +146,12 @@ In accordance with architectural decisions for replaceable local generative mode
   3. *Development Environment Override:* Explicit override via `COMPANION_DEV_MODEL` when present in development/test environments.
   4. *Fail-Closed Invariant (`MODEL_SELECTION_REQUIRED`):* If no valid model is resolved or the selected model is missing/incompatible, the runtime fails closed with `MODEL_SELECTION_REQUIRED` (HTTP 422). The system **never** silently falls back to an unselected or arbitrary model.
 - **Host-Level Configuration Scope:** Model selection is a machine-wide host configuration owned by the host environment (`host_config.json`), not stored per-user profile and not owned primarily by environment files.
-- **Hardware-Aware Model Recommendation (Target Architecture):**
+- **Hardware-Aware Model Recommendation (Target Architecture — PC-CLIENT-010):**
   - *Dedicated VRAM Target:* Recommendations target at most **50% of total dedicated VRAM** for resident model weights and KV cache under standard operating profiles.
   - *Headroom & Safety Reserve:* Recommended capacity is further bounded by measured available VRAM headroom and a non-negotiable safety reserve ensuring desktop window compositing, operating system operations, and user applications avoid VRAM starvation or driver crashes.
   - *Advisory vs. Enforced Policy:* Hardware-aware recommendations are advisory guidance surfaced in the user interface (such as compatibility badges and recommended model tags). Explicit user selection always overrides recommendations, subject to fail-closed preflight memory validation.
   - *Truthful Capabilities:* Switching models truthfully reconfigures client capabilities; selecting a text-only model disables vision assistance, and missing companion projectors (`mmproj`) retain text capability while disabling multimodal turns without failing the entire model.
+  - *Implementation Status:* Hardware-aware VRAM budgeting and dynamic recommendation formulas are target capabilities tracked under **PC-CLIENT-010** and are not currently enforced in code. Current runtime relies on explicit user model selection and static performance profiles (`eco`, `balanced`, `maximum`).
 
 ---
 

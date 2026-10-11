@@ -1724,7 +1724,7 @@
             "description": "CONVERSATION_BUSY or DUPLICATE_MESSAGE"
           },
           "422": {
-            "description": "ATTACHMENT_NOT_AVAILABLE or ATTACHMENT_ALREADY_CLAIMED"
+            "description": "ATTACHMENT_NOT_AVAILABLE, ATTACHMENT_ALREADY_CLAIMED, or MODEL_SELECTION_REQUIRED"
           },
           "503": {
             "description": "LLM_UNAVAILABLE"

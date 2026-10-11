@@ -427,7 +427,6 @@ class LlamaCppProvider(BaseLLMProvider):
                     else resolve_runtime_model_id(model_name)
                 )
                 if req_runtime_id and req_runtime_id == self._active_model_name:
-                    save_model_selection(model_name)
                     logger.info(
                         f"Requested model '{model_name}' matches active model '{self._active_model_name}'; reusing without reload"
                     )
@@ -470,8 +469,6 @@ class LlamaCppProvider(BaseLLMProvider):
                         self._active_model_name = target_model_name
                         self._last_active_at = datetime.now(timezone.utc)
                         self._start_idle_monitor()
-                        if model_name:
-                            save_model_selection(model_name)
                         return True
                     else:
                         self._last_error = f"MODEL_LOAD_FAILED: {target_model_name}"
@@ -485,6 +482,7 @@ class LlamaCppProvider(BaseLLMProvider):
             # Mode 1: Check if port is already listening before spawning
             if self._check_port_listening(settings.LLAMA_ROUTER_HOST, settings.LLAMA_ROUTER_PORT):
                 if await self._check_external_server():
+                    self._server_is_active = True
                     logger.info(f"Connected to active external llama-server at {settings.LLAMA_SERVER_URL}")
                     self._runtime_state = LLMRuntimeState.MODEL_LOADING
                     if await self._router_load_model(target_model_name):
@@ -492,8 +490,6 @@ class LlamaCppProvider(BaseLLMProvider):
                         self._active_model_name = target_model_name
                         self._last_active_at = datetime.now(timezone.utc)
                         self._start_idle_monitor()
-                        if model_name:
-                            save_model_selection(model_name)
                         return True
                     else:
                         self._last_error = f"MODEL_LOAD_FAILED: {target_model_name}"
@@ -632,8 +628,6 @@ class LlamaCppProvider(BaseLLMProvider):
                 self._active_model_name = target_model_name
                 self._last_active_at = datetime.now(timezone.utc)
                 self._start_idle_monitor()
-                if model_name:
-                    save_model_selection(model_name)
                 logger.info(f"Model loaded: {target_model_name}")
                 return True
             else:
@@ -819,7 +813,14 @@ class LlamaCppProvider(BaseLLMProvider):
                         self._last_active_at = datetime.now(timezone.utc)
                 else:
                     self._active_model_name = None
-                    if self._last_error == "MODEL_SELECTION_REQUIRED" or self._runtime_state == LLMRuntimeState.MODEL_SELECTION_REQUIRED:
+                    if self._runtime_state in (
+                        LLMRuntimeState.MODEL_ERROR,
+                        LLMRuntimeState.SERVER_ERROR,
+                        LLMRuntimeState.MODEL_LOADING,
+                        LLMRuntimeState.MODEL_UNLOADING,
+                    ):
+                        pass
+                    elif self._last_error == "MODEL_SELECTION_REQUIRED" or self._runtime_state == LLMRuntimeState.MODEL_SELECTION_REQUIRED:
                         self._runtime_state = LLMRuntimeState.MODEL_SELECTION_REQUIRED
                     else:
                         self._runtime_state = LLMRuntimeState.MODEL_UNLOADED
@@ -891,6 +892,7 @@ class LlamaCppProvider(BaseLLMProvider):
         effective_applied_mmproj = self._applied_mmproj_offload if router_running else None
         compat_mmproj_offload = effective_applied_mmproj if effective_applied_mmproj is not None else requested_mmproj_offload
 
+
         return ModelStatusResponse(
             provider=self.provider_name,
             engine_version=self._engine_version,
@@ -898,7 +900,7 @@ class LlamaCppProvider(BaseLLMProvider):
             managed_by_core=self._managed_by_core and router_running,
             runtime_state=self._runtime_state,
             active_model=self._active_model_name if is_loaded else None,
-            selected_model=get_saved_model_selection() or self._active_model_name,
+            selected_model=get_saved_model_selection(),
             model_resident=model_resident,
             model_loaded=model_loaded,
             model_awake=model_awake,

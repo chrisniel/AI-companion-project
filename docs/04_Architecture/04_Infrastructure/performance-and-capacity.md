@@ -90,14 +90,15 @@ In accordance with Decision `D-PHONE-05A` and the Mobile V1 hardware architectur
     - Preserving durable conversation turns, outbox intents, and scheduling state *before* launching heavy generative operations.
     - Safe tolerance and clean recovery from abrupt OS process death without database or state corruption.
 
-### 2.5 Hardware-Aware GPU Memory Budgeting & Model Allocation Policy
+### 2.5 Hardware-Aware GPU Memory Budgeting & Model Allocation Policy (Target Architecture — PC-CLIENT-010)
 
-To protect workstation stability and prevent graphics driver crashes or memory thrashing, the runtime enforces hardware-aware memory budgeting:
+To protect workstation stability and prevent graphics driver crashes or memory thrashing, the target architecture establishes hardware-aware memory budgeting (tracked under `PC-CLIENT-010`):
 
 - **50% Dedicated VRAM Target:** Model memory allocation recommendations target at most **50% of dedicated VRAM** for resident model weights and KV cache buffer under standard operating profiles.
 - **Measured Headroom & Safety Reserve:** Allocation boundaries are bounded by real-time measured available VRAM headroom, maintaining a mandatory safety reserve for desktop window compositing, operating system displays, and concurrent user applications.
 - **Fail-Closed on Capacity Failure:** When a model's resident memory requirement exceeds verified hardware limits or preflight checks detect insufficient headroom, the system fails closed with structured diagnostics rather than silently falling back, overflowing into high-latency shared system RAM, or risking GPU driver TDR (Timeout Detection and Recovery) resets.
 - **Host-Level Configuration Scope:** Hardware memory constraints and active model assignments reside in persistent host configuration (`COMPANION_DATA_ROOT/config/host_config.json`), applying globally across all profiles on the PC.
+- **Implementation Status:** Not currently enforced in code; tracked under `PC-CLIENT-010`. Current implementation enforces static profiles (`eco`, `balanced`, `maximum`) and fail-closed model selection precedence.
 
 ---
 
@@ -120,6 +121,7 @@ Verified in `backend/app/core/config.py`:
 
 - **Dynamic Gaming / Low-Impact Automatic Policy:** **NOT IMPLEMENTED**. The current codebase contains no automatic process monitor or dynamic policy throttler.
 - **Dynamic VRAM Scaling Status:** **NOT IMPLEMENTED**. GPU layer allocation is determined at model load time and cannot dynamically adjust to foreground GPU pressure without reloading or recycling the provider process.
+- **Hardware-Aware VRAM Budgeting & Recommendation Status:** **NOT ENFORCED (PC-CLIENT-010)**. Real-time automated measurement of dedicated VRAM, 50% budgeting formulas, and dynamic hardware-aware model recommendations are target capabilities tracked under `PC-CLIENT-010`. Current runtime relies on static profiles (`eco`, `balanced`, `maximum`) with user-selected models.
 
 ---
 

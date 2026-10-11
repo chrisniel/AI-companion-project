@@ -1003,15 +1003,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _modelStatus = updatedStatus;
         _selectedModelId = modelId;
         _isExecutingModelAction = false;
-        _modelActionMessage = loadImmediately
-            ? 'Model loaded: ${updatedStatus.activeModel ?? modelId}'
-            : 'Model selected: $modelId';
+        final isActivated = updatedStatus.runtimeState == 'MODEL_READY' &&
+            (updatedStatus.activeModel == modelId ||
+                _registryEntries?.any((e) => e.id == modelId && e.runtimeModelId == updatedStatus.activeModel) == true);
+        if (loadImmediately) {
+          _modelActionMessage = isActivated
+              ? 'Model selected and loaded: ${updatedStatus.activeModel ?? modelId}'
+              : 'Model selection saved (${updatedStatus.selectedModel ?? modelId}), but activation did not complete (${updatedStatus.runtimeState}). Model is NOT active.';
+        } else {
+          _modelActionMessage = 'Model selected: $modelId (not loaded into memory)';
+        }
       });
     } catch (e) {
       if (!mounted) return;
+      try {
+        final client = _resolveClient();
+        final refreshedStatus = await client.getModelStatus();
+        if (mounted) {
+          setState(() {
+            _modelStatus = refreshedStatus;
+            if (refreshedStatus.selectedModel != null) {
+              _selectedModelId = refreshedStatus.selectedModel;
+            }
+          });
+        }
+      } catch (_) {}
+      if (!mounted) return;
       setState(() {
         _isExecutingModelAction = false;
-        _modelActionMessage = 'Model action failed: $e';
+        _modelActionMessage = loadImmediately
+            ? 'Model selection saved, but activation failed: $e. Model is NOT active.'
+            : 'Model selection failed: $e';
       });
     }
   }
@@ -1053,7 +1075,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case 'SERVER_ERROR':
         stateColor = ext?.danger ?? CompanionColors.danger;
         stateIcon = Icons.error_outline_rounded;
-        stateDescription = 'Error: ${status?.lastRuntimeError ?? "Failed"}';
+        stateDescription = 'Error: ${status?.lastRuntimeError ?? "Failed to load model. Model is NOT active."}';
         break;
       case 'SERVER_STOPPED':
         stateColor = ext?.textMuted ?? Colors.grey;
@@ -1248,16 +1270,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (isSelected) ...[
+                        if (isReady || isSelected) ...[
                           const SizedBox(width: CompanionSpacing.xs),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: ext?.accent ?? Colors.blue,
+                              color: isReady
+                                  ? (ext?.success ?? CompanionColors.success)
+                                  : (ext?.accent ?? Colors.blue),
                               borderRadius: CompanionRadius.borderSm,
                             ),
                             child: Text(
-                              isReady ? 'ACTIVE' : 'SELECTED',
+                              isReady ? 'ACTIVE' : 'SELECTED (NOT LOADED)',
                               style: CompanionTypography.caption.copyWith(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,

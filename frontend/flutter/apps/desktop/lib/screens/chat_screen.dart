@@ -11,9 +11,11 @@ class ChatScreen extends StatefulWidget {
   const ChatScreen({
     super.key,
     this.controller,
+    this.onNavigateToSettings,
   });
 
   final DesktopChatController? controller;
+  final VoidCallback? onNavigateToSettings;
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -178,7 +180,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       // Central Conversational Stage
                       Expanded(
                         child: chatCtrl.messages.isEmpty
-                            ? _buildWelcomeStage(context, ext)
+                            ? _buildWelcomeStage(context, ext, chatCtrl)
                             : _buildMessageList(context, chatCtrl, ext, isDark),
                       ),
 
@@ -360,6 +362,8 @@ class _ChatScreenState extends State<ChatScreen> {
         return const Color(0xFF38BDF8); // Sky blue
       case ModelRuntimeStateCategory.modelLoading:
         return ext?.warning ?? CompanionColors.warning;
+      case ModelRuntimeStateCategory.modelSelectionRequired:
+        return ext?.warning ?? CompanionColors.warning;
       case ModelRuntimeStateCategory.modelLoadFailed:
         return ext?.danger ?? CompanionColors.danger;
       case ModelRuntimeStateCategory.pairingRequired:
@@ -379,6 +383,8 @@ class _ChatScreenState extends State<ChatScreen> {
         return Icons.bedtime_rounded;
       case ModelRuntimeStateCategory.modelLoading:
         return Icons.hourglass_top_rounded;
+      case ModelRuntimeStateCategory.modelSelectionRequired:
+        return Icons.tune_rounded;
       case ModelRuntimeStateCategory.modelLoadFailed:
         return Icons.error_outline_rounded;
       case ModelRuntimeStateCategory.pairingRequired:
@@ -405,7 +411,11 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Widget _buildWelcomeStage(BuildContext context, CompanionThemeExtension? ext) {
+  Widget _buildWelcomeStage(
+    BuildContext context,
+    CompanionThemeExtension? ext,
+    DesktopChatController chatCtrl,
+  ) {
     return SoftGlassPanel(
       padding: const EdgeInsets.all(CompanionSpacing.xxl),
       child: Center(
@@ -444,6 +454,51 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 textAlign: TextAlign.center,
               ),
+              if (chatCtrl.modelStateCategory == ModelRuntimeStateCategory.modelSelectionRequired) ...[
+                const SizedBox(height: CompanionSpacing.lg),
+                Container(
+                  padding: const EdgeInsets.all(CompanionSpacing.md),
+                  decoration: BoxDecoration(
+                    color: (ext?.warning ?? CompanionColors.warning).withValues(alpha: 0.1),
+                    borderRadius: CompanionRadius.borderMd,
+                    border: Border.all(
+                      color: (ext?.warning ?? CompanionColors.warning).withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.tune_rounded, size: 18, color: ext?.warning ?? CompanionColors.warning),
+                          const SizedBox(width: CompanionSpacing.xs),
+                          Text(
+                            'No Model Selected',
+                            style: CompanionTypography.bodyMedium.copyWith(
+                              color: ext?.textPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: CompanionSpacing.xs),
+                      Text(
+                        'A local model must be selected before starting a conversation.',
+                        style: CompanionTypography.caption.copyWith(color: ext?.textSecondary),
+                        textAlign: TextAlign.center,
+                      ),
+                      if (widget.onNavigateToSettings != null) ...[
+                        const SizedBox(height: CompanionSpacing.md),
+                        FilledButton.tonalIcon(
+                          onPressed: widget.onNavigateToSettings,
+                          icon: const Icon(Icons.settings_rounded, size: 16),
+                          label: const Text('Choose a Model in Settings'),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -728,34 +783,52 @@ class _ChatScreenState extends State<ChatScreen> {
     String message,
     CompanionThemeExtension? ext,
   ) {
+    final isSelectionError = message.contains('Settings') || message.contains('MODEL_SELECTION_REQUIRED');
+    final bannerColor = isSelectionError
+        ? (ext?.warning ?? CompanionColors.warning)
+        : (ext?.danger ?? CompanionColors.danger);
+
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: CompanionSpacing.md,
         vertical: CompanionSpacing.sm,
       ),
       decoration: BoxDecoration(
-        color: (ext?.danger ?? CompanionColors.danger).withValues(alpha: 0.1),
+        color: bannerColor.withValues(alpha: 0.1),
         borderRadius: CompanionRadius.borderMd,
         border: Border.all(
-          color: (ext?.danger ?? CompanionColors.danger).withValues(alpha: 0.3),
+          color: bannerColor.withValues(alpha: 0.3),
         ),
       ),
       child: Row(
         children: [
           Icon(
-            Icons.error_outline_rounded,
+            isSelectionError ? Icons.tune_rounded : Icons.error_outline_rounded,
             size: 16,
-            color: ext?.danger ?? CompanionColors.danger,
+            color: bannerColor,
           ),
           const SizedBox(width: CompanionSpacing.sm),
           Expanded(
             child: Text(
               message,
               style: CompanionTypography.caption.copyWith(
-                color: ext?.danger ?? CompanionColors.danger,
+                color: bannerColor,
               ),
             ),
           ),
+          if (isSelectionError && widget.onNavigateToSettings != null) ...[
+            const SizedBox(width: CompanionSpacing.sm),
+            OutlinedButton.icon(
+              onPressed: widget.onNavigateToSettings,
+              icon: const Icon(Icons.settings_rounded, size: 14),
+              label: const Text('Open Settings'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
         ],
       ),
     );

@@ -63,9 +63,6 @@ class MockLLMProvider(BaseLLMProvider):
             self._last_error = "MODEL_SELECTION_REQUIRED"
             return False
 
-        if model_name:
-            save_model_selection(model_name)
-
         self._active_model = target
         if profile:
             self._active_profile = profile
@@ -112,6 +109,10 @@ class MockLLMProvider(BaseLLMProvider):
             runtime_state = LLMRuntimeState.MODEL_READY
         elif self._last_error == "MODEL_SELECTION_REQUIRED":
             runtime_state = LLMRuntimeState.MODEL_SELECTION_REQUIRED
+        elif self._last_error:
+            runtime_state = LLMRuntimeState.MODEL_ERROR
+        elif not saved_selection and not os.environ.get("COMPANION_DEV_MODEL"):
+            runtime_state = LLMRuntimeState.MODEL_SELECTION_REQUIRED
         else:
             runtime_state = LLMRuntimeState.MODEL_UNLOADED
 
@@ -122,7 +123,7 @@ class MockLLMProvider(BaseLLMProvider):
             managed_by_core=True,
             runtime_state=runtime_state,
             active_model=self._active_model if is_loaded else None,
-            selected_model=saved_selection or self._active_model or self._default_mock_model,
+            selected_model=saved_selection,
             model_resident=is_loaded,
             model_loaded=is_loaded,
             model_awake=is_loaded,
