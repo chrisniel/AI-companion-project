@@ -246,5 +246,82 @@ void main() {
       expect(result.diagnostic, contains('timed out'));
       expect(fakeProcess.wasKilled, isTrue);
     });
+    test('discoverRuntimeProcesses: query with exit code 0 but stderr error returns inspectionUnavailable', () async {
+      final fakeLauncher = FakeProcessLauncher();
+      fakeLauncher.processToStart = FakeProcess(
+        stdout: Stream.value(utf8.encode('')),
+        stderr: Stream.value(utf8.encode('Get-CimInstance : Access is denied')),
+        exitCode: Future.value(0),
+      );
+      final supervisor = WindowsRuntimeProcessSupervisor(launcher: fakeLauncher);
+
+      final result = await supervisor.discoverRuntimeProcesses(
+        port: 8000,
+        expectedExecutable: r'C:\test\python.exe',
+      );
+
+      expect(result.status, equals(ProcessDiscoveryStatus.inspectionUnavailable));
+      expect(result.diagnostic, contains('stderr'));
+    });
+
+    test('discoverRuntimeProcesses: valid JSON with invalid process schema returns inspectionUnavailable', () async {
+      final fakeLauncher = FakeProcessLauncher();
+      fakeLauncher.processToStart = FakeProcess(
+        stdout: Stream.value(utf8.encode('{"Message":"Access denied"}')),
+        exitCode: Future.value(0),
+      );
+      final supervisor = WindowsRuntimeProcessSupervisor(launcher: fakeLauncher);
+
+      final result = await supervisor.discoverRuntimeProcesses(
+        port: 8000,
+        expectedExecutable: r'C:\test\python.exe',
+      );
+
+      expect(result.status, equals(ProcessDiscoveryStatus.inspectionUnavailable));
+      expect(result.diagnostic, contains('ProcessId'));
+    });
+
+    test('discoverRuntimeProcesses: valid process query output returns verified result', () async {
+      final fakeLauncher = FakeProcessLauncher();
+      fakeLauncher.processToStart = FakeProcess(
+        stdout: Stream.value(utf8.encode(jsonEncode({
+          'ProcessId': 4321,
+          'ExecutablePath': r'C:\test\python.exe',
+          'CommandLine': r'C:\test\python.exe -m uvicorn app.main:app --port 8000',
+          'CreationDate': '2026-10-11T10:00:00.0000000Z',
+        }))),
+        exitCode: Future.value(0),
+      );
+      final supervisor = WindowsRuntimeProcessSupervisor(launcher: fakeLauncher);
+
+      final result = await supervisor.discoverRuntimeProcesses(
+        port: 8000,
+        expectedExecutable: r'C:\test\python.exe',
+      );
+
+      expect(result.status, equals(ProcessDiscoveryStatus.verified));
+      expect(result.verifiedProcess?.pid, equals(4321));
+    });
+
+    test('discoverRuntimeProcesses: hanging output collection respects bounded deadline and terminates subprocess', () async {
+      final fakeProcess = FakeProcess(
+        exitCode: Future.value(0),
+        stdout: Completer<List<int>>().future.asStream(), // Output stream never closes
+      );
+      final fakeLauncher = FakeProcessLauncher();
+      fakeLauncher.processToStart = fakeProcess;
+
+      final supervisor = WindowsRuntimeProcessSupervisor(launcher: fakeLauncher);
+
+      final result = await supervisor.discoverRuntimeProcesses(
+        port: 8000,
+        expectedExecutable: r'C:\test\python.exe',
+        timeout: const Duration(milliseconds: 100),
+      );
+
+      expect(result.status, equals(ProcessDiscoveryStatus.inspectionUnavailable));
+      expect(result.diagnostic, contains('timed out'));
+      expect(fakeProcess.wasKilled, isTrue);
+    });
   });
 }

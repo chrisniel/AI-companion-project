@@ -283,23 +283,29 @@ class WindowsRuntimeProcessSupervisor {
           '-NoProfile',
           '-NonInteractive',
           '-Command',
-          'Get-CimInstance Win32_Process -Filter "$filter" | '
-              'Select-Object -Property ProcessId, ExecutablePath, CommandLine, @{Name=\x27CreationDate\x27;Expression={\$_.CreationDate.ToUniversalTime().ToString(\x27o\x27)}} | '
+          '\$ErrorActionPreference = \x27Stop\x27; '
+              'Get-CimInstance Win32_Process -Filter "$filter" -ErrorAction Stop | '
+              'Select-Object -Property ProcessId, ExecutablePath, CommandLine, @{Name=\x27CreationDate\x27;Expression={if (\$_.CreationDate) { \$_.CreationDate.ToUniversalTime().ToString(\x27o\x27) } else { \x27\x27 }}} | '
               'ConvertTo-Json',
         ],
         runInShell: false,
       );
 
-      final stdoutFuture = utf8.decoder.bind(process.stdout).join();
-      final stderrFuture = utf8.decoder.bind(process.stderr).join();
+      final stdoutFuture = utf8.decoder.bind(process.stdout).join().catchError((_) => '');
+      final stderrFuture = utf8.decoder.bind(process.stderr).join().catchError((_) => '');
 
       int exitCode;
       String stdoutStr = '';
       String stderrStr = '';
       try {
-        exitCode = await process.exitCode.timeout(timeout);
-        stdoutStr = await stdoutFuture;
-        stderrStr = await stderrFuture;
+        final results = await Future.wait([
+          process.exitCode,
+          stdoutFuture,
+          stderrFuture,
+        ]).timeout(timeout);
+        exitCode = results[0] as int;
+        stdoutStr = results[1] as String;
+        stderrStr = results[2] as String;
       } on TimeoutException {
         process.kill();
         return ProcessDiscoveryResult(
@@ -312,6 +318,13 @@ class WindowsRuntimeProcessSupervisor {
         return ProcessDiscoveryResult(
           status: ProcessDiscoveryStatus.inspectionUnavailable,
           diagnostic: 'Process inspection query exited with code $exitCode: $stderrStr',
+        );
+      }
+
+      if (stderrStr.trim().isNotEmpty) {
+        return ProcessDiscoveryResult(
+          status: ProcessDiscoveryStatus.inspectionUnavailable,
+          diagnostic: 'Process inspection query reported stderr error: ${stderrStr.trim()}',
         );
       }
 
@@ -353,8 +366,31 @@ class WindowsRuntimeProcessSupervisor {
             diagnostic: 'Unexpected non-map entry in process list: ${raw.runtimeType}',
           );
         }
-        final candPid = int.tryParse('${raw['ProcessId']}') ?? 0;
-        if (candPid <= 0 || candPid == pid) continue;
+
+        // Validate Win32_Process schema: must contain ProcessId and expected properties
+        if (!raw.containsKey('ProcessId') || raw['ProcessId'] == null) {
+          return ProcessDiscoveryResult(
+            status: ProcessDiscoveryStatus.inspectionUnavailable,
+            diagnostic: 'Process inspection query output missing ProcessId field: $raw',
+          );
+        }
+
+        final candPid = int.tryParse('${raw['ProcessId']}');
+        if (candPid == null || candPid <= 0) {
+          return ProcessDiscoveryResult(
+            status: ProcessDiscoveryStatus.inspectionUnavailable,
+            diagnostic: 'Process inspection query output contains invalid ProcessId: ${raw['ProcessId']}',
+          );
+        }
+
+        if (!raw.containsKey('CommandLine') || !raw.containsKey('ExecutablePath')) {
+          return ProcessDiscoveryResult(
+            status: ProcessDiscoveryStatus.inspectionUnavailable,
+            diagnostic: 'Process inspection query output missing required Win32_Process fields: $raw',
+          );
+        }
+
+        if (candPid == pid) continue;
 
         final cmdLine = (raw['CommandLine'] ?? '').toString();
         if (!matchesExactPort(cmdLine, port)) {
