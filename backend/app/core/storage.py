@@ -631,9 +631,18 @@ def prepare_database_schema(
     script = ScriptDirectory.from_config(cfg)
     head_rev = script.get_current_head()
 
-    if canonical_db_path.exists() and canonical_db_path.stat().st_size > 0:
+    if canonical_db_path.exists():
+        # Fail closed: never back up, upgrade or otherwise mutate an existing invalid database.
+        if canonical_db_path.stat().st_size == 0:
+            raise StorageError(
+                f"Refusing to upgrade existing database at {canonical_db_path}: file is an invalid zero-byte database."
+            )
         inspection = inspect_legacy_candidate(canonical_db_path)
-        if inspection.is_valid and inspection.alembic_version != head_rev:
+        if not inspection.is_valid or not inspection.integrity_ok:
+            raise StorageError(
+                f"Refusing to upgrade existing database at {canonical_db_path}: failed validation ({inspection.error})."
+            )
+        if inspection.alembic_version != head_rev:
             target_backup_dir = backup_dir or (canonical_db_path.parent.parent / "backups")
             logger.info(
                 f"Existing database at {canonical_db_path} (rev={inspection.alembic_version}) requires upgrade to head ({head_rev}). "

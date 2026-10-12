@@ -1,8 +1,14 @@
 """SQLite WAL-safe pre-migration backup and restore utility (PC-RESILIENCE-002).
 
-This module provides thread-safe, WAL-consistent online database snapshots using
-Python's native sqlite3 Connection.backup API, integrity verification via SQLite
-pragmas, and safe quiesced restoration.
+Safety properties:
+- Backups use sqlite3 ``Connection.backup`` (captures committed, uncheckpointed WAL pages).
+- Every snapshot gets a collision-proof name and is published with no-overwrite semantics,
+  so a prior verified recovery snapshot is never replaced.
+- Snapshots are staged, integrity-verified, and only then published.
+- Restoration never unlinks or replaces live ``-wal``/``-shm`` files and never swaps the live
+  file underneath SQLite. It verifies writer quiescence, stages and verifies the backup,
+  keeps a verified pre-restore snapshot of the live database, applies the staged copy through
+  SQLite's own transactional backup API, re-verifies, and rolls back on failure.
 """
 
 from datetime import datetime, timezone
@@ -11,8 +17,12 @@ import os
 from pathlib import Path
 import sqlite3
 from typing import Optional
+import uuid
 
 logger = logging.getLogger(__name__)
+
+_QUIESCENCE_PROBE_TIMEOUT_SECONDS = 0.25
+_APPLY_TIMEOUT_SECONDS = 0.5
 
 
 class SQLiteBackupError(Exception):
@@ -60,15 +70,66 @@ def verify_sqlite_integrity(db_path: Path) -> bool:
             conn.close()
 
 
+def _unique_suffix() -> str:
+    return uuid.uuid4().hex[:12]
+
+
+def _snapshot_name(label: str) -> str:
+    """Collision-proof snapshot file name: label + UTC microsecond timestamp + random suffix."""
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+    return f"pre_{label}_{timestamp}_{_unique_suffix()}.db"
+
+
+def _copy_via_backup_api(source: Path, destination: Path) -> None:
+    """Copy a database with SQLite's online backup API (WAL-consistent)."""
+    source_conn: Optional[sqlite3.Connection] = None
+    dest_conn: Optional[sqlite3.Connection] = None
+    try:
+        source_conn = sqlite3.connect(source)
+        dest_conn = sqlite3.connect(destination)
+        source_conn.backup(dest_conn)
+        dest_conn.commit()
+    finally:
+        if dest_conn:
+            dest_conn.close()
+        if source_conn:
+            source_conn.close()
+
+
+def _discard(path: Path) -> None:
+    """Remove a file we created ourselves (staging artifacts only)."""
+    try:
+        if path.exists():
+            path.unlink()
+    except OSError:
+        logger.warning("Could not remove temporary file %s", path)
+
+
+def _publish_without_overwrite(staged: Path, final: Path) -> None:
+    """Atomically expose a verified staged file under ``final`` without ever replacing a file."""
+    try:
+        os.link(staged, final)  # fails with FileExistsError if final exists
+    except FileExistsError as exc:
+        raise SQLiteBackupError(f"Backup snapshot already exists and was not overwritten: {final}") from exc
+    except OSError:
+        # Filesystem without hard links: fall back to exists-check + rename.
+        if final.exists():
+            raise SQLiteBackupError(f"Backup snapshot already exists and was not overwritten: {final}")
+        os.rename(staged, final)
+        return
+    _discard(staged)
+
+
 def create_pre_migration_backup(
     source_db_path: Path,
     backup_dir: Path,
     label: str = "migration",
 ) -> Path:
-    """Create an atomic, WAL-consistent online backup of the source database.
+    """Create an atomic, WAL-consistent, verified, never-overwriting backup of the source database.
 
-    Uses sqlite3 Connection.backup() to cleanly capture active uncheckpointed WAL pages.
-    Verifies destination file integrity before returning.
+    The snapshot is written to a private staging file, integrity-verified, then published under
+    a collision-proof name. An existing snapshot is never replaced; on any failure only this
+    call's own staging file is removed.
     """
     if not source_db_path.exists():
         raise SQLiteBackupError(f"Source database does not exist: {source_db_path}")
@@ -77,47 +138,87 @@ def create_pre_migration_backup(
         raise SQLiteBackupError(f"Source database is an empty file: {source_db_path}")
 
     backup_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    backup_filename = f"pre_{label}_{timestamp}.db"
-    backup_path = backup_dir / backup_filename
+    final_path = backup_dir / _snapshot_name(label)
+    if final_path.exists():
+        raise SQLiteBackupError(f"Backup snapshot already exists and was not overwritten: {final_path}")
 
-    source_conn: Optional[sqlite3.Connection] = None
-    dest_conn: Optional[sqlite3.Connection] = None
+    staged_path = final_path.with_name(f".{final_path.name}.partial")
+    if staged_path.exists():
+        raise SQLiteBackupError(f"Backup staging file already exists and was not reused: {staged_path}")
 
     try:
-        source_conn = sqlite3.connect(source_db_path)
-        dest_conn = sqlite3.connect(backup_path)
+        _copy_via_backup_api(source_db_path, staged_path)
+        verify_sqlite_integrity(staged_path)
+        _publish_without_overwrite(staged_path, final_path)
+    except SQLiteBackupError:
+        _discard(staged_path)
+        raise
+    except Exception as exc:
+        _discard(staged_path)
+        raise SQLiteBackupError(f"Failed to create pre-migration backup for {source_db_path}: {exc}") from exc
 
-        # Online WAL-safe backup: blocks concurrent page writes per step, captures active WAL state
+    logger.info(f"Successfully created and verified pre-migration backup at: {final_path}")
+    return final_path
+
+
+def _assert_writers_quiesced(target_db_path: Path) -> None:
+    """Verify nobody is writing to the live database by taking (then releasing) a write lock.
+
+    The caller remains responsible for stopping the application first; this check refuses to
+    proceed if a writer is still active.
+    """
+    probe: Optional[sqlite3.Connection] = None
+    try:
+        probe = sqlite3.connect(
+            target_db_path,
+            timeout=_QUIESCENCE_PROBE_TIMEOUT_SECONDS,
+            isolation_level=None,
+        )
+        probe.execute("BEGIN EXCLUSIVE")
+        probe.execute("ROLLBACK")
+    except sqlite3.Error as exc:
+        raise SQLiteBackupError(
+            f"Refusing to restore: database writers are not quiesced for {target_db_path} ({exc}). "
+            "Stop the application and retry."
+        ) from exc
+    finally:
+        if probe:
+            probe.close()
+
+
+def _apply_snapshot_to_live(snapshot_path: Path, target_db_path: Path) -> None:
+    """Apply a snapshot through SQLite's transactional backup API (no file swapping, no sidecar edits).
+
+    The destination is only modified by a single atomic write transaction; failure leaves it unchanged.
+    """
+    source_conn: Optional[sqlite3.Connection] = None
+    dest_conn: Optional[sqlite3.Connection] = None
+    try:
+        source_conn = sqlite3.connect(snapshot_path)
+        dest_conn = sqlite3.connect(target_db_path, timeout=_APPLY_TIMEOUT_SECONDS)
         source_conn.backup(dest_conn)
         dest_conn.commit()
-    except Exception as exc:
-        if backup_path.exists():
-            try:
-                backup_path.unlink()
-            except OSError:
-                pass
-        raise SQLiteBackupError(f"Failed to create pre-migration backup for {source_db_path}: {exc}") from exc
     finally:
         if dest_conn:
             dest_conn.close()
         if source_conn:
             source_conn.close()
 
-    # Validate destination integrity
-    verify_sqlite_integrity(backup_path)
-    logger.info(f"Successfully created and verified pre-migration backup at: {backup_path}")
-    return backup_path
-
 
 def restore_database_from_backup(
     backup_path: Path,
     target_db_path: Path,
-) -> None:
-    """Safely restore a database from a verified backup snapshot.
+    safety_dir: Optional[Path] = None,
+) -> Optional[Path]:
+    """Restore a verified backup over ``target_db_path`` in a staged, failure-safe way.
 
-    Requires target writers to be quiesced. Cleans up stale -wal and -shm files
-    at the destination to prevent dangerous WAL sidecar mixing.
+    Sequence: verify backup -> stage + verify a private copy -> verify writer quiescence ->
+    take a verified pre-restore snapshot of the live database (kept in ``safety_dir``, default
+    the backup's directory) -> apply via SQLite's backup API -> verify -> on failure roll back
+    to the pre-restore snapshot. Live ``-wal``/``-shm`` files are never unlinked or replaced.
+
+    Returns the pre-restore safety snapshot path (None if the target did not exist).
+    Raises SQLiteBackupError (fail closed, target untouched) if any pre-apply step fails.
     """
     if not backup_path.exists():
         raise SQLiteBackupError(f"Backup file does not exist: {backup_path}")
@@ -125,35 +226,54 @@ def restore_database_from_backup(
     verify_sqlite_integrity(backup_path)
 
     target_db_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # 1. Clean up stale sidecar files at destination before restoration
-    wal_file = target_db_path.parent / f"{target_db_path.name}-wal"
-    shm_file = target_db_path.parent / f"{target_db_path.name}-shm"
-
-    for sidecar in (wal_file, shm_file):
-        if sidecar.exists():
-            try:
-                sidecar.unlink()
-            except OSError as exc:
-                logger.warning(f"Could not unlink stale sidecar {sidecar} during restore: {exc}")
-
-    # 2. Use sqlite3 backup from verified source to target
-    source_conn: Optional[sqlite3.Connection] = None
-    dest_conn: Optional[sqlite3.Connection] = None
+    staged_path = target_db_path.parent / f".{target_db_path.name}.restore-{_unique_suffix()}.staged"
+    safety_snapshot: Optional[Path] = None
 
     try:
-        source_conn = sqlite3.connect(backup_path)
-        dest_conn = sqlite3.connect(target_db_path)
-        source_conn.backup(dest_conn)
-        dest_conn.commit()
-    except Exception as exc:
-        raise SQLiteBackupError(f"Failed to restore database from {backup_path} to {target_db_path}: {exc}") from exc
-    finally:
-        if dest_conn:
-            dest_conn.close()
-        if source_conn:
-            source_conn.close()
+        # 1. Stage a private copy of the backup and verify it before touching the live DB.
+        _copy_via_backup_api(backup_path, staged_path)
+        verify_sqlite_integrity(staged_path)
 
-    # 3. Post-restore integrity check
-    verify_sqlite_integrity(target_db_path)
+        target_exists = target_db_path.exists() and target_db_path.stat().st_size > 0
+        if target_exists:
+            # 2. Require writer quiescence, then preserve the live state before replacing it.
+            _assert_writers_quiesced(target_db_path)
+            safety_snapshot = create_pre_migration_backup(
+                target_db_path,
+                safety_dir if safety_dir is not None else backup_path.parent,
+                label="restore",
+            )
+
+        # 3. Apply through SQLite itself (atomic; unchanged on failure).
+        try:
+            _apply_snapshot_to_live(staged_path, target_db_path)
+        except sqlite3.Error as exc:
+            raise SQLiteBackupError(
+                f"Failed to restore database from {backup_path} to {target_db_path}: {exc}"
+            ) from exc
+
+        # 4. Verify the result; roll back to the pre-restore snapshot if it is not healthy.
+        try:
+            verify_sqlite_integrity(target_db_path)
+        except SQLiteBackupError as verify_exc:
+            if safety_snapshot is None:
+                raise SQLiteBackupError(
+                    f"Restored database failed verification and no pre-restore snapshot exists: {verify_exc}"
+                ) from verify_exc
+            try:
+                _apply_snapshot_to_live(safety_snapshot, target_db_path)
+                verify_sqlite_integrity(target_db_path)
+            except (sqlite3.Error, SQLiteBackupError) as rollback_exc:
+                raise SQLiteBackupError(
+                    f"Restore verification failed ({verify_exc}) and automatic rollback also failed "
+                    f"({rollback_exc}). Recover manually from snapshot: {safety_snapshot}"
+                ) from rollback_exc
+            raise SQLiteBackupError(
+                f"Restored database failed verification and was rolled back to the pre-restore "
+                f"snapshot {safety_snapshot}: {verify_exc}"
+            ) from verify_exc
+    finally:
+        _discard(staged_path)
+
     logger.info(f"Successfully restored database from {backup_path} to {target_db_path}")
+    return safety_snapshot

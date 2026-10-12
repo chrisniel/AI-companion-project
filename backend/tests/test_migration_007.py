@@ -17,7 +17,6 @@ from alembic import command
 from alembic.config import Config
 
 from app.db.backup import MigrationAmbiguityError
-from app.models.base import DEFAULT_PROFILE_ID
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
@@ -53,9 +52,9 @@ def test_migration_007_fresh_database_upgrade():
                 assert expected in p_cols
 
             # 3. Verify Default Profile was seeded
-            def_profile = cur.execute("SELECT id, name, is_default, status FROM profiles WHERE id = ?", (DEFAULT_PROFILE_ID,)).fetchone()
-            assert def_profile is not None
-            assert def_profile[0] == DEFAULT_PROFILE_ID
+            def_profile = cur.execute("SELECT id, name, is_default, status FROM profiles WHERE is_default = 1").fetchone()
+            assert def_profile is not None  # unique per installation; see test_default_profile_identity.py
+            assert len(def_profile[0]) == 36
             assert def_profile[1] == "Default Profile"
             assert def_profile[2] == 1  # True in SQLite
             assert def_profile[3] == "active"
@@ -125,42 +124,43 @@ def test_migration_007_populated_006_upgrade_data_retention_and_fts5():
         conn = sqlite3.connect(db_path)
         try:
             cur = conn.cursor()
+            default_id = cur.execute("SELECT id FROM profiles WHERE is_default = 1").fetchone()[0]
 
-            # Verify conversation retained and assigned DEFAULT_PROFILE_ID
+            # Verify conversation retained and assigned default_id
             c = cur.execute("SELECT id, owner_id, profile_id, title FROM conversations WHERE id = 'conv-1'").fetchone()
             assert c is not None
             assert c[0] == "conv-1"
             assert c[1] == "local_user"
-            assert c[2] == DEFAULT_PROFILE_ID
+            assert c[2] == default_id
             assert c[3] == "Legacy Chat"
 
-            # Verify message retained and assigned DEFAULT_PROFILE_ID
+            # Verify message retained and assigned default_id
             m = cur.execute("SELECT id, owner_id, profile_id, content FROM messages WHERE id = 'msg-1'").fetchone()
             assert m is not None
             assert m[0] == "msg-1"
-            assert m[2] == DEFAULT_PROFILE_ID
+            assert m[2] == default_id
 
-            # Verify memory retained and assigned DEFAULT_PROFILE_ID
+            # Verify memory retained and assigned default_id
             mem = cur.execute("SELECT id, owner_id, profile_id, content FROM memories WHERE id = 'mem-1'").fetchone()
             assert mem is not None
             assert mem[0] == "mem-1"
-            assert mem[2] == DEFAULT_PROFILE_ID
+            assert mem[2] == default_id
 
-            # Verify task retained and assigned DEFAULT_PROFILE_ID
+            # Verify task retained and assigned default_id
             t = cur.execute("SELECT id, owner_id, profile_id, title FROM tasks WHERE id = 'task-1'").fetchone()
             assert t is not None
             assert t[0] == "task-1"
-            assert t[2] == DEFAULT_PROFILE_ID
+            assert t[2] == default_id
 
-            # Verify attachment retained and assigned DEFAULT_PROFILE_ID
+            # Verify attachment retained and assigned default_id
             att = cur.execute("SELECT id, owner_id, profile_id, filename_display FROM attachments WHERE id = 'att-1'").fetchone()
             assert att is not None
             assert att[0] == "att-1"
             assert att[1] == "local_user"
-            assert att[2] == DEFAULT_PROFILE_ID
+            assert att[2] == default_id
             assert att[3] == "test.png"
             assert att[0] == "att-1"
-            assert att[2] == DEFAULT_PROFILE_ID
+            assert att[2] == default_id
 
             # Verify FTS5 query works after rebuild!
             fts_count_after = cur.execute("SELECT count(*) FROM memories_fts WHERE memories_fts MATCH 'quantum'").fetchone()[0]
@@ -170,7 +170,7 @@ def test_migration_007_populated_006_upgrade_data_retention_and_fts5():
             cur.execute("""
                 INSERT INTO memories (id, created_at, updated_at, owner_id, profile_id, category, content, importance, is_deleted)
                 VALUES ('mem-2', '2026-09-01 10:00:05', '2026-09-01 10:00:05', 'local_user', ?, 'fact', 'User enjoys astrophysics research', 1.0, 0)
-            """, (DEFAULT_PROFILE_ID,))
+            """, (default_id,))
             conn.commit()
 
             fts_count_new = cur.execute("SELECT count(*) FROM memories_fts WHERE memories_fts MATCH 'astrophysics'").fetchone()[0]

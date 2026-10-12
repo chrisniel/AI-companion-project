@@ -120,10 +120,6 @@ async def test_session() -> AsyncGenerator[AsyncSession, None]:
         await conn.run_sync(Base.metadata.create_all)
         from sqlalchemy import text
         await conn.execute(text("""
-            INSERT OR IGNORE INTO profiles (id, created_at, updated_at, name, is_default, status, is_deleted)
-            VALUES ('00000000-0000-4000-8000-000000000001', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'Default Profile', 1, 'active', 0);
-        """))
-        await conn.execute(text("""
             CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
                 id UNINDEXED, content, category, content='memories', content_rowid='rowid'
             );

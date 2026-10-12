@@ -6,25 +6,29 @@ Create Date: 2026-10-12 16:00:00.000000
 
 PC-IDENTITY-001: Profile Schema Foundation
 - Creates `profiles` table and seeds Default Profile
-- Enforces single-user legacy owner allowlist (local_user, default_user)
-- Adds `profile_id` NOT NULL with server_default=DEFAULT_PROFILE_ID and CASCADE FK
+- Strictly enforces the legacy owner allowlist (local_user, default_user); rejects unexpected/empty/NULL
+- Adds `profile_id` NOT NULL with a per-installation server_default UUID and CASCADE FK
 - Retains existing `owner_id` column for backward compatibility
 - Safely cycles `memories_fts` triggers and rebuilds FTS5 index
 - Enforces PRAGMA foreign_key_check
 - Refuses downgrade if > 1 profile exists
 """
+import uuid
 from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
+
+from app.db.backup import MigrationAmbiguityError
+from app.db.legacy_owner_validation import (
+    APPROVED_LEGACY_OWNER_ALIASES,
+    find_unapproved_owners,
+)
 
 # revision identifiers, used by Alembic.
 revision: str = "007_profiles_and_owner_id_migration"
 down_revision: Union[str, None] = "006_add_attachments"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
-
-DEFAULT_PROFILE_ID: str = "00000000-0000-4000-8000-000000000001"
-ALLOWED_LEGACY_ALIASES: set[str] = {"local_user", "default_user"}
 
 naming_convention = {
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
@@ -34,32 +38,23 @@ naming_convention = {
 }
 
 
-from app.db.backup import MigrationAmbiguityError
-
-
 def upgrade() -> None:
     conn = op.get_bind()
 
-    # 1. Inspect existing legacy owner_id values across all entity tables
+    # 1. Strictly validate legacy ownership BEFORE any schema change. Only the approved
+    #    single-user aliases may map to the Default Profile; anything else (unexpected,
+    #    empty, whitespace, case variants, NULL) refuses the migration with data untouched.
     tables_to_check = ["conversations", "messages", "memories", "tasks", "attachments"]
-    unexpected_owners = set()
-    for table in tables_to_check:
-        has_table = conn.execute(
-            sa.text("SELECT 1 FROM sqlite_master WHERE type='table' AND name=:name"),
-            {"name": table},
-        ).scalar()
-        if has_table:
-            rows = conn.execute(sa.text(f"SELECT DISTINCT owner_id FROM {table}")).fetchall()
-            for row in rows:
-                owner = row[0]
-                if owner is not None and owner != "" and owner not in ALLOWED_LEGACY_ALIASES:
-                    unexpected_owners.add(owner)
-
-    if unexpected_owners:
+    offenders = find_unapproved_owners(conn, tables_to_check)
+    if offenders:
         raise MigrationAmbiguityError(
-            f"Ambiguous legacy ownership detected: {unexpected_owners}. "
-            f"Expected only {ALLOWED_LEGACY_ALIASES}. Automatic consolidation aborted."
+            f"Ambiguous legacy ownership detected: {offenders!r}. "
+            f"Only {sorted(APPROVED_LEGACY_OWNER_ALIASES)} may migrate to the Default Profile. "
+            "No data was modified; resolve ownership explicitly before retrying."
         )
+
+    # Unique identity for THIS installation/database (never shared across installs).
+    default_profile_id = str(uuid.uuid4())
 
     # 2. Create profiles table
     op.create_table(
@@ -82,11 +77,18 @@ def upgrade() -> None:
     op.create_index("ix_profiles_is_deleted", "profiles", ["is_deleted"])
     op.create_index("ix_profiles_deleted_at", "profiles", ["deleted_at"])
     op.create_index("ix_profiles_purge_after", "profiles", ["purge_after"])
+    op.create_index(
+        "uq_profiles_single_default",
+        "profiles",
+        ["is_default"],
+        unique=True,
+        sqlite_where=sa.text("is_default = 1"),
+    )
 
-    # 3. Seed Default Profile
+    # 3. Seed this installation's Default Profile (persisted; survives restart and backup)
     conn.execute(
         sa.text("""
-            INSERT OR IGNORE INTO profiles (
+            INSERT INTO profiles (
                 id, created_at, updated_at, name, avatar_url, pin_hash,
                 is_default, status, is_deleted, deleted_at, purge_after
             ) VALUES (
@@ -94,7 +96,7 @@ def upgrade() -> None:
                 1, 'active', 0, NULL, NULL
             )
         """),
-        {"id": DEFAULT_PROFILE_ID, "name": "Default Profile"},
+        {"id": default_profile_id, "name": "Default Profile"},
     )
 
     # 4. Batch alter conversations
@@ -104,7 +106,7 @@ def upgrade() -> None:
                 "profile_id",
                 sa.String(36),
                 nullable=False,
-                server_default=DEFAULT_PROFILE_ID,
+                server_default=default_profile_id,
             )
         )
         batch_op.create_foreign_key(
@@ -123,7 +125,7 @@ def upgrade() -> None:
                 "profile_id",
                 sa.String(36),
                 nullable=False,
-                server_default=DEFAULT_PROFILE_ID,
+                server_default=default_profile_id,
             )
         )
         batch_op.create_foreign_key(
@@ -142,7 +144,7 @@ def upgrade() -> None:
                 "profile_id",
                 sa.String(36),
                 nullable=False,
-                server_default=DEFAULT_PROFILE_ID,
+                server_default=default_profile_id,
             )
         )
         batch_op.create_foreign_key(
@@ -161,7 +163,7 @@ def upgrade() -> None:
                 "profile_id",
                 sa.String(36),
                 nullable=False,
-                server_default=DEFAULT_PROFILE_ID,
+                server_default=default_profile_id,
             )
         )
         batch_op.create_foreign_key(
@@ -184,7 +186,7 @@ def upgrade() -> None:
                 "profile_id",
                 sa.String(36),
                 nullable=False,
-                server_default=DEFAULT_PROFILE_ID,
+                server_default=default_profile_id,
             )
         )
         batch_op.create_foreign_key(
@@ -300,6 +302,7 @@ def downgrade() -> None:
         batch_op.drop_column("profile_id")
 
     # 6. Drop profiles table
+    op.drop_index("uq_profiles_single_default", table_name="profiles")
     op.drop_index("ix_profiles_purge_after", table_name="profiles")
     op.drop_index("ix_profiles_deleted_at", table_name="profiles")
     op.drop_index("ix_profiles_is_deleted", table_name="profiles")

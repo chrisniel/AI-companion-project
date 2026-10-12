@@ -134,3 +134,85 @@ def test_database_already_at_head_creates_no_redundant_backup():
         if backup_dir.exists():
             backups = list(backup_dir.glob("pre_migration_*.db"))
             assert len(backups) == 0
+
+
+def _bytes(path):
+    return path.read_bytes()
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [b"definitely not a sqlite database " * 200, b""],
+    ids=["garbage-header", "zero-byte"],
+)
+def test_invalid_existing_database_fails_closed_before_any_upgrade(payload):
+    """An existing but invalid canonical DB must never be upgraded, replaced or backed up."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_root = Path(tmpdir)
+        db_path = tmp_root / "database" / "companion.db"
+        db_path.parent.mkdir(parents=True)
+        db_path.write_bytes(payload)
+        backup_dir = tmp_root / "backups"
+
+        with pytest.raises(StorageError, match="Refusing to upgrade"):
+            prepare_database_schema(db_path, backup_dir=backup_dir)
+
+        assert _bytes(db_path) == payload
+        assert not (backup_dir.exists() and any(backup_dir.iterdir()))
+
+
+def test_valid_database_with_failed_integrity_fails_closed_before_upgrade():
+    """A real SQLite file whose pages are damaged must stop startup without modification."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_root = Path(tmpdir)
+        db_path = tmp_root / "database" / "companion.db"
+        db_path.parent.mkdir(parents=True)
+        cfg = _get_alembic_config(db_path)
+        command.upgrade(cfg, "006_add_attachments")
+
+        conn = sqlite3.connect(db_path)
+        conn.execute("PRAGMA journal_mode=DELETE")
+        for i in range(400):
+            conn.execute(
+                "INSERT INTO tasks (id, created_at, updated_at, owner_id, title, status, priority, is_deleted) "
+                "VALUES (?, '2026-09-01', '2026-09-01', 'local_user', ?, 'pending', 1, 0)",
+                (f"t{i}", "x" * 200),
+            )
+        conn.commit()
+        conn.close()
+
+        raw = bytearray(db_path.read_bytes())
+        page = 4096
+        assert len(raw) > page * 6
+        for offset in range(page * 4, page * 6):
+            raw[offset] = 0xFF  # destroy b-tree interior pages
+        db_path.write_bytes(bytes(raw))
+        damaged = _bytes(db_path)
+
+        with pytest.raises(StorageError, match="Refusing to upgrade"):
+            prepare_database_schema(db_path, backup_dir=tmp_root / "backups")
+
+        assert _bytes(db_path) == damaged
+        assert not (tmp_root / "backups").exists() or not any((tmp_root / "backups").iterdir())
+
+
+def test_each_upgrade_creates_a_distinct_never_overwritten_backup():
+    """Repeated pre-upgrade backups must accumulate; earlier verified snapshots stay intact."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_root = Path(tmpdir)
+        db_path = tmp_root / "database" / "companion.db"
+        db_path.parent.mkdir(parents=True)
+        backup_dir = tmp_root / "backups"
+        cfg = _get_alembic_config(db_path)
+
+        command.upgrade(cfg, "005_scope_message_constraints")
+        prepare_database_schema(db_path, backup_dir=backup_dir)  # 005 -> head
+        first = sorted(backup_dir.glob("pre_migration_*.db"))
+        assert len(first) == 1
+        first_bytes = _bytes(first[0])
+
+        command.downgrade(cfg, "006_add_attachments")
+        prepare_database_schema(db_path, backup_dir=backup_dir)  # 006 -> head, same second likely
+        after = sorted(backup_dir.glob("pre_migration_*.db"))
+        assert len(after) == 2
+        assert _bytes(first[0]) == first_bytes
