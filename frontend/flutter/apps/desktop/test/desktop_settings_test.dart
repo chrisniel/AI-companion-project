@@ -178,7 +178,113 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(fakeClient.unloadModelCalls, equals(1));
-      expect(find.text('Model unloaded successfully. VRAM released.'), findsOneWidget);
+      expect(find.text('Model unloaded successfully.'), findsOneWidget);
+      expect(find.textContaining('VRAM released'), findsNothing);
+    });
+
+    testWidgets('shows error and does not announce success when unloadModel throws 409 conflict', (tester) async {
+      setupDesktopViewport(tester);
+
+      final tempDir = Directory.systemTemp.createTempSync('settings_unload_err_test_');
+      final tempSettingsFile = File('${tempDir.path}${Platform.pathSeparator}client_settings.json');
+      final isolatedSettings = DesktopClientSettings(customFilePath: tempSettingsFile.path);
+      final isolatedCredentials = InMemoryCredentialStore('test-token');
+      addTearDown(() {
+        if (tempDir.existsSync()) {
+          try {
+            tempDir.deleteSync(recursive: true);
+          } catch (_) {}
+        }
+      });
+
+      final fakeClient = FakeModelSelectionClient();
+      fakeClient.unloadModelException = const CompanionApiException(
+        message: 'MODEL_BUSY: active generation',
+        statusCode: 409,
+      );
+      final controller = DesktopSettingsController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: SettingsScreen(
+              controller: controller,
+              client: fakeClient,
+              clientSettings: isolatedSettings,
+              credentialStore: isolatedCredentials,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      final unloadButtons = find.widgetWithText(OutlinedButton, 'Unload Model / Free VRAM');
+      await tester.ensureVisible(unloadButtons.first);
+      await tester.pumpAndSettle();
+
+      await tester.tap(unloadButtons.first);
+      await tester.pumpAndSettle();
+
+      expect(fakeClient.unloadModelCalls, equals(1));
+      expect(find.textContaining('Failed to unload model:'), findsOneWidget);
+      expect(find.textContaining('MODEL_BUSY'), findsOneWidget);
+      expect(find.textContaining('Model unloaded successfully'), findsNothing);
+    });
+
+    testWidgets('does not announce success when unloadModel returns modelLoaded == true', (tester) async {
+      setupDesktopViewport(tester);
+
+      final tempDir = Directory.systemTemp.createTempSync('settings_unload_refused_test_');
+      final tempSettingsFile = File('${tempDir.path}${Platform.pathSeparator}client_settings.json');
+      final isolatedSettings = DesktopClientSettings(customFilePath: tempSettingsFile.path);
+      final isolatedCredentials = InMemoryCredentialStore('test-token');
+      addTearDown(() {
+        if (tempDir.existsSync()) {
+          try {
+            tempDir.deleteSync(recursive: true);
+          } catch (_) {}
+        }
+      });
+
+      final fakeClient = FakeModelSelectionClient();
+      fakeClient.unloadModelResponseOverride = const ModelStatusResponse(
+        provider: 'llama.cpp',
+        runtimeState: 'MODEL_READY',
+        activeModel: 'qwen3-vl-2b-instruct',
+        selectedModel: 'qwen3-vl-2b-instruct',
+        modelLoaded: true,
+        modelResident: true,
+      );
+      final controller = DesktopSettingsController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: SettingsScreen(
+              controller: controller,
+              client: fakeClient,
+              clientSettings: isolatedSettings,
+              credentialStore: isolatedCredentials,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      final unloadButtons = find.widgetWithText(OutlinedButton, 'Unload Model / Free VRAM');
+      await tester.ensureVisible(unloadButtons.first);
+      await tester.pumpAndSettle();
+
+      await tester.tap(unloadButtons.first);
+      await tester.pumpAndSettle();
+
+      expect(fakeClient.unloadModelCalls, equals(1));
+      expect(find.text('Model unload refused or incomplete: model remains loaded.'), findsOneWidget);
+      expect(find.textContaining('Model unloaded successfully'), findsNothing);
     });
 
     testWidgets('disables Unload Model button when chat generation is active', (tester) async {
@@ -305,9 +411,18 @@ class FakeModelSelectionClient extends CompanionClient {
     );
   }
 
+  ModelStatusResponse? unloadModelResponseOverride;
+  Exception? unloadModelException;
+
   @override
   Future<ModelStatusResponse> unloadModel() async {
     unloadModelCalls++;
+    if (unloadModelException != null) {
+      throw unloadModelException!;
+    }
+    if (unloadModelResponseOverride != null) {
+      return unloadModelResponseOverride!;
+    }
     return const ModelStatusResponse(
       provider: 'llama.cpp',
       runtimeState: 'MODEL_UNLOADED',

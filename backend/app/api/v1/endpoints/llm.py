@@ -137,8 +137,27 @@ async def unload_model(
     provider: BaseLLMProvider = Depends(get_llm_provider),
 ) -> ModelStatusResponse:
     """Unload model from GPU memory to free VRAM immediately."""
-    await provider.unload_model()
-    return await provider.get_status()
+    success = await provider.unload_model()
+    if not success:
+        error_msg = getattr(provider, "_last_error", None) or "Failed to unload model from memory."
+        if "MODEL_BUSY" in error_msg:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=error_msg,
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_msg,
+        )
+
+    status_resp = await provider.get_status()
+    if status_resp.model_loaded:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Model unload incomplete: model remains loaded.",
+        )
+
+    return status_resp
 
 
 @router.patch(
@@ -208,11 +227,12 @@ async def create_chat_completion(
 
             # Content token deltas
             try:
-                async with aclosing(provider.generate_stream(
+                stream = provider.generate_stream(
                     messages=internal_messages,
                     temperature=request.temperature,
                     max_tokens=request.max_tokens or 1024,
-                )) as tokens:
+                )
+                async with aclosing(stream) as tokens:
                     async for token in tokens:
                         chunk = ChatCompletionStreamChunk(
                             id=completion_id,
@@ -232,7 +252,7 @@ async def create_chat_completion(
                 return
 
             # Final stop chunk
-            finish_reason = getattr(provider, "last_finish_reason", "stop") or "stop"
+            finish_reason = getattr(stream, "finish_reason", None) or getattr(provider, "last_finish_reason", "stop") or "stop"
             stop_chunk = ChatCompletionStreamChunk(
                 id=completion_id,
                 created=created_ts,
@@ -275,7 +295,7 @@ async def create_chat_completion(
     prompt_chars = sum(len(m.content) for m in request.messages)
     prompt_tokens = max(1, prompt_chars // 4)
     completion_tokens = max(1, len(content) // 4)
-    finish_reason = getattr(provider, "last_finish_reason", "stop") or "stop"
+    finish_reason = getattr(content, "finish_reason", None) or getattr(provider, "last_finish_reason", "stop") or "stop"
 
     return ChatCompletionResponse(
         id=completion_id,

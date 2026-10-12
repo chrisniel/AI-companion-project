@@ -1027,3 +1027,75 @@ async def test_stream_finish_reason_length_and_token_budgeting(test_session: Asy
     assert "max_tokens" in captured_kwargs
     assert captured_kwargs["max_tokens"] <= 1024
     assert captured_kwargs["max_tokens"] > 0
+
+
+@pytest.mark.asyncio
+async def test_concurrent_interleaving_streams_retain_independent_finish_reasons(test_session: AsyncSession):
+    """Verify concurrent conversation streams do not overwrite each other's terminal finish reason."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    conv1 = Conversation(title="Interleaved Length Conv", owner_id="user-concurrent")
+    conv2 = Conversation(title="Interleaved Stop Conv", owner_id="user-concurrent")
+    test_session.add_all([conv1, conv2])
+    await test_session.commit()
+    await test_session.refresh(conv1)
+    await test_session.refresh(conv2)
+
+    provider = get_llm_provider()
+    # Configure mock provider with different reasons per conversation
+    setattr(provider, "configured_finish_reasons", {
+        conv1.id: "length",
+        conv2.id: "stop",
+    })
+
+    session_factory = async_sessionmaker(bind=test_session.bind, class_=AsyncSession, expire_on_commit=False)
+
+    async def execute_turn(conv_id: str, prompt_text: str):
+        async with session_factory() as session:
+            lock = _get_lock(conv_id)
+            await lock.acquire()
+            prepared = await prepare_turn(
+                db=session,
+                conversation_id=conv_id,
+                owner_id="user-concurrent",
+                user_text=prompt_text,
+            )
+            chunks = []
+            async for chunk in orchestrate_chat_stream(
+                db=session,
+                conversation_id=conv_id,
+                user_text=prompt_text,
+                owner_id="user-concurrent",
+                prepared_turn=prepared,
+                conversation_lock=lock,
+            ):
+                chunks.append(chunk)
+            return chunks
+
+    # Run both streams concurrently so they interleave
+    chunks1, chunks2 = await asyncio.gather(
+        execute_turn(conv1.id, "Generate length response"),
+        execute_turn(conv2.id, "Generate stop response"),
+    )
+
+    # Verify SSE terminal finish reasons
+    done_frames1 = [json.loads(c[6:]) for c in chunks1 if c.startswith("data: ") and '"type": "done"' in c]
+    done_frames2 = [json.loads(c[6:]) for c in chunks2 if c.startswith("data: ") and '"type": "done"' in c]
+    assert len(done_frames1) == 1
+    assert len(done_frames2) == 1
+    assert done_frames1[0]["finish_reason"] == "length"
+    assert done_frames2[0]["finish_reason"] == "stop"
+
+    # Verify persisted message status in DB
+    async with session_factory() as session:
+        r1 = await session.execute(
+            select(Message).where(Message.conversation_id == conv1.id, Message.sender == "assistant")
+        )
+        msg1 = r1.scalar_one()
+        assert msg1.status == "length"
+
+        r2 = await session.execute(
+            select(Message).where(Message.conversation_id == conv2.id, Message.sender == "assistant")
+        )
+        msg2 = r2.scalar_one()
+        assert msg2.status == "completed"

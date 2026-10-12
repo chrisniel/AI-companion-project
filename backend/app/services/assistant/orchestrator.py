@@ -370,7 +370,8 @@ async def orchestrate_chat_stream(
         available_generation_tokens = max(1, context_capacity - prompt_tokens)
         max_tokens = min(1024, available_generation_tokens)
 
-        async with aclosing(provider.generate_stream(prompt_messages, max_tokens=max_tokens)) as tokens:
+        stream = provider.generate_stream(prompt_messages, max_tokens=max_tokens, conversation_id=conversation_id)
+        async with aclosing(stream) as tokens:
             async for token in tokens:
                 full_response_text += token
                 chunk_data = json.dumps({
@@ -387,7 +388,7 @@ async def orchestrate_chat_stream(
 
         # Update assistant placeholder upon completion
         completion_tokens = _estimate_tokens(full_response_text)
-        finish_reason = getattr(provider, "last_finish_reason", "stop") or "stop"
+        finish_reason = getattr(stream, "finish_reason", None) or getattr(provider, "last_finish_reason", "stop") or "stop"
         asst_msg.content = full_response_text
         asst_msg.status = "length" if finish_reason == "length" else "completed"
         asst_msg.prompt_tokens = prompt_tokens

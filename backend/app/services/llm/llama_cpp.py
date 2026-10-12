@@ -23,7 +23,7 @@ from app.services.host_config import (
     resolve_effective_model,
     save_model_selection,
 )
-from app.services.llm.base import BaseLLMProvider
+from app.services.llm.base import BaseLLMProvider, GeneratedText, GenerationStream
 from app.services.llm.runtime_state import LLMRuntimeState
 from app.services.model_registry import (
     build_model_list,
@@ -980,8 +980,9 @@ class LlamaCppProvider(BaseLLMProvider):
                         raise ProviderGenerationError("UPSTREAM_HTTP_ERROR")
                     data = resp.json()
                     choice = data["choices"][0]
-                    self.last_finish_reason = choice.get("finish_reason") or "stop"
-                    return choice["message"]["content"]
+                    reason = choice.get("finish_reason") or "stop"
+                    self.last_finish_reason = reason
+                    return GeneratedText(choice["message"]["content"], finish_reason=reason)
 
             # Route B: In-process llama_cpp
             native_model = self._llm
@@ -998,89 +999,95 @@ class LlamaCppProvider(BaseLLMProvider):
             worker_owns_lease = True
             output = await asyncio.shield(worker)
             choice = output["choices"][0]
-            self.last_finish_reason = choice.get("finish_reason") or "stop"
-            return choice["message"]["content"]
+            reason = choice.get("finish_reason") or "stop"
+            self.last_finish_reason = reason
+            return GeneratedText(choice["message"]["content"], finish_reason=reason)
         except httpx.HTTPError:
             raise ProviderGenerationError("UPSTREAM_TRANSPORT_ERROR") from None
         finally:
             if not worker_owns_lease:
                 self._release_generation(lease)
 
-    async def generate_stream(
+    def generate_stream(
         self,
         messages: List[ChatMessage],
         temperature: float = 0.7,
         max_tokens: int = 1024,
         **kwargs
-    ) -> AsyncGenerator[str, None]:
-        formatted_messages = _translate_messages(messages)
-        lease = await self._acquire_generation()
-        worker_owns_lease = False
-        self.last_finish_reason = "stop"
+    ) -> GenerationStream:
+        stream_meta = {"finish_reason": "stop"}
 
         def _record_finish(reason: str) -> None:
+            stream_meta["finish_reason"] = reason
             self.last_finish_reason = reason
 
-        try:
-            # Route A: Standalone llama-server streaming
-            if self._server_is_active:
-                payload = {
-                    "model": self._active_model_name or "default",
-                    "messages": formatted_messages,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                    "stream": True,
-                }
-                async with httpx.AsyncClient(timeout=120.0) as client:
-                    async with client.stream("POST", f"{settings.LLAMA_SERVER_URL}/chat/completions", json=payload) as response:
-                        async for token in _server_stream_tokens(response, on_finish=_record_finish):
-                            yield token
-                return
+        async def _stream_generator() -> AsyncGenerator[str, None]:
+            formatted_messages = _translate_messages(messages)
+            lease = await self._acquire_generation()
+            worker_owns_lease = False
 
-            # Route B: In-process llama_cpp streaming
-            queue: asyncio.Queue = asyncio.Queue()
-            loop = asyncio.get_running_loop()
-            native_model = self._llm
+            try:
+                # Route A: Standalone llama-server streaming
+                if self._server_is_active:
+                    payload = {
+                        "model": self._active_model_name or "default",
+                        "messages": formatted_messages,
+                        "temperature": temperature,
+                        "max_tokens": max_tokens,
+                        "stream": True,
+                    }
+                    async with httpx.AsyncClient(timeout=120.0) as client:
+                        async with client.stream("POST", f"{settings.LLAMA_SERVER_URL}/chat/completions", json=payload) as response:
+                            async for token in _server_stream_tokens(response, on_finish=_record_finish):
+                                yield token
+                    return
 
-            def _worker():
-                try:
-                    stream = native_model.create_chat_completion(
-                        messages=formatted_messages,
-                        temperature=temperature,
-                        max_tokens=max_tokens,
-                        stream=True,
-                    )
-                    for chunk in stream:
-                        choices = chunk.get("choices", [])
-                        if choices:
-                            choice = choices[0]
-                            reason = choice.get("finish_reason")
-                            if reason:
-                                self.last_finish_reason = reason
-                            delta = choice.get("delta", {})
-                            token = delta.get("content")
-                            if token:
-                                loop.call_soon_threadsafe(queue.put_nowait, token)
-                except Exception as e:
-                    loop.call_soon_threadsafe(queue.put_nowait, e)
-                finally:
-                    loop.call_soon_threadsafe(queue.put_nowait, None)
+                # Route B: In-process llama_cpp streaming
+                queue: asyncio.Queue = asyncio.Queue()
+                loop = asyncio.get_running_loop()
+                native_model = self._llm
 
-            self._start_owned_worker(_worker, lease)
-            worker_owns_lease = True
+                def _worker():
+                    try:
+                        stream = native_model.create_chat_completion(
+                            messages=formatted_messages,
+                            temperature=temperature,
+                            max_tokens=max_tokens,
+                            stream=True,
+                        )
+                        for chunk in stream:
+                            choices = chunk.get("choices", [])
+                            if choices:
+                                choice = choices[0]
+                                reason = choice.get("finish_reason")
+                                if reason:
+                                    _record_finish(reason)
+                                delta = choice.get("delta", {})
+                                token = delta.get("content")
+                                if token:
+                                    loop.call_soon_threadsafe(queue.put_nowait, token)
+                    except Exception as e:
+                        loop.call_soon_threadsafe(queue.put_nowait, e)
+                    finally:
+                        loop.call_soon_threadsafe(queue.put_nowait, None)
 
-            while True:
-                item = await queue.get()
-                if item is None:
-                    break
-                if isinstance(item, Exception):
-                    raise item
-                yield item
-        except httpx.HTTPError:
-            raise ProviderGenerationError("UPSTREAM_TRANSPORT_ERROR") from None
-        finally:
-            if not worker_owns_lease:
-                self._release_generation(lease)
+                self._start_owned_worker(_worker, lease)
+                worker_owns_lease = True
+
+                while True:
+                    item = await queue.get()
+                    if item is None:
+                        break
+                    if isinstance(item, Exception):
+                        raise item
+                    yield item
+            except httpx.HTTPError:
+                raise ProviderGenerationError("UPSTREAM_TRANSPORT_ERROR") from None
+            finally:
+                if not worker_owns_lease:
+                    self._release_generation(lease)
+
+        return GenerationStream(_stream_generator(), meta=stream_meta)
 
     async def shutdown(self) -> None:
         """Drain in-flight generation, unload model, stop router."""

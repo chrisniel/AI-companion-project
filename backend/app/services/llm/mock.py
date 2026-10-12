@@ -7,7 +7,7 @@ from typing import Any, AsyncGenerator, List, Optional, Union
 
 from app.core.config import settings
 from app.schemas.llm import ChatMessage, ModelStatusResponse
-from app.services.llm.base import BaseLLMProvider
+from app.services.llm.base import BaseLLMProvider, GeneratedText, GenerationStream
 from app.services.llm.runtime_state import LLMRuntimeState
 from app.services.model_registry import build_model_list
 
@@ -155,25 +155,52 @@ class MockLLMProvider(BaseLLMProvider):
         **kwargs
     ) -> str:
         self._last_active_at = datetime.now(timezone.utc)
-        self.last_finish_reason = getattr(self, "configured_finish_reason", "stop") or "stop"
+        target_reason = getattr(self, "configured_finish_reason", "stop") or "stop"
+        self.last_finish_reason = target_reason
         raw_user_msg = next((m.content for m in reversed(messages) if m.role == "user"), "Hello!")
         last_user_msg = _extract_text_content(raw_user_msg) if raw_user_msg != "Hello!" else "Hello!"
-        return f"[Mock AI Companion]: I received your message: '{last_user_msg}'. Local AI Runtime is operational."
+        content = f"[Mock AI Companion]: I received your message: '{last_user_msg}'. Local AI Runtime is operational."
+        return GeneratedText(content, finish_reason=target_reason)
 
-    async def generate_stream(
+    def generate_stream(
         self,
         messages: List[ChatMessage],
         temperature: float = 0.7,
         max_tokens: int = 1024,
         **kwargs
-    ) -> AsyncGenerator[str, None]:
+    ) -> GenerationStream:
         self._last_active_at = datetime.now(timezone.utc)
-        self.last_finish_reason = getattr(self, "configured_finish_reason", "stop") or "stop"
-        raw_user_msg = next((m.content for m in reversed(messages) if m.role == "user"), "Hello!")
-        last_user_msg = _extract_text_content(raw_user_msg) if raw_user_msg != "Hello!" else "Hello!"
-        response_text = f"I received your message: '{last_user_msg}'. Local AI Runtime is operational."
-        tokens = response_text.split(" ")
 
-        for i, token in enumerate(tokens):
-            yield token if i == 0 else f" {token}"
-            await asyncio.sleep(0.01)  # Micro-delay to simulate streaming chunks
+        reason = "stop"
+        conv_id = kwargs.get("conversation_id")
+        if hasattr(self, "configured_finish_reasons") and isinstance(self.configured_finish_reasons, dict):
+            if conv_id and conv_id in self.configured_finish_reasons:
+                reason = self.configured_finish_reasons[conv_id]
+            else:
+                raw_user = next((m.content for m in reversed(messages) if m.role == "user"), "")
+                text_user = _extract_text_content(raw_user)
+                for key, val in self.configured_finish_reasons.items():
+                    if key in text_user:
+                        reason = val
+                        break
+        elif callable(getattr(self, "configured_finish_reason", None)):
+            reason = self.configured_finish_reason(messages, **kwargs)
+        elif getattr(self, "configured_finish_reason", None):
+            reason = self.configured_finish_reason
+        elif "finish_reason" in kwargs:
+            reason = kwargs["finish_reason"]
+
+        self.last_finish_reason = reason
+        stream_meta = {"finish_reason": reason}
+
+        async def _stream_generator() -> AsyncGenerator[str, None]:
+            raw_user_msg = next((m.content for m in reversed(messages) if m.role == "user"), "Hello!")
+            last_user_msg = _extract_text_content(raw_user_msg) if raw_user_msg != "Hello!" else "Hello!"
+            response_text = f"I received your message: '{last_user_msg}'. Local AI Runtime is operational."
+            tokens = response_text.split(" ")
+
+            for i, token in enumerate(tokens):
+                yield token if i == 0 else f" {token}"
+                await asyncio.sleep(0.01)  # Micro-delay to simulate streaming chunks
+
+        return GenerationStream(_stream_generator(), meta=stream_meta)

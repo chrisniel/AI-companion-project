@@ -1049,18 +1049,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     setState(() {
       _isExecutingModelAction = true;
-      _modelActionMessage = 'Unloading model and releasing VRAM...';
+      _modelActionMessage = 'Unloading model...';
     });
 
     try {
       final client = _resolveClient();
       final updatedStatus = await client.unloadModel();
       if (!mounted) return;
-      setState(() {
-        _modelStatus = updatedStatus;
-        _isExecutingModelAction = false;
-        _modelActionMessage = 'Model unloaded successfully. VRAM released.';
-      });
+      if (updatedStatus.modelLoaded) {
+        setState(() {
+          _modelStatus = updatedStatus;
+          _isExecutingModelAction = false;
+          _modelActionMessage = 'Model unload refused or incomplete: model remains loaded.';
+        });
+      } else {
+        setState(() {
+          _modelStatus = updatedStatus;
+          _isExecutingModelAction = false;
+          _modelActionMessage = 'Model unloaded successfully.';
+        });
+      }
       if (widget.chatController != null) {
         try {
           await widget.chatController!.checkConnection();

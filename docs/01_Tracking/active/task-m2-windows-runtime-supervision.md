@@ -53,6 +53,9 @@
   - **Area C (Mathematical Typesetting):** Textbook LaTeX equations with `flutter_math_fork`, raw formula copy, and system persona guidance.
   - **Area D (Conversation Text Zoom):** Local text zoom (80%–160%) via `Ctrl+Wheel` and `Ctrl+=/- /0`, persisted in `client_settings.json`.
   - **Area E (Explicit Model Unload):** Authenticated `POST /api/v1/models/unload` in `CompanionClient` and "Unload Model / Free VRAM" in Settings.
+- [x] **Chat Quality Correctness Fixes:**
+  - **Truthful Model Unload:** `POST /api/v1/models/unload` returns 409 Conflict if busy and 500 on provider failure; verifies model state is actually unloaded; Flutter verifies `!modelLoaded` and reports truthful status without claiming unevidenced VRAM reclamation.
+  - **Request-Scoped Finish Reasons:** Replaced singleton `provider.last_finish_reason` with request-scoped `GenerationStream` metadata; concurrent interleaved streams in separate conversations maintain independent finish reasons without race conditions.
 - [ ] **Implementation Gate (STOP HERE):** Independent code & test review (Awaiting Chris / independent evaluation).
 
 - [ ] **Documentation Gate:** Canonical architecture spec updates review.
