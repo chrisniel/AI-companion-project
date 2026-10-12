@@ -810,15 +810,24 @@ describe('Phase 4: Models Web UI State Reconciliation & Truthfulness', () => {
       </BackendProvider>
     );
 
-    // Initial state: Hero shows active Model A
+    // Initial state: Hero and Card 4B reflect active Model A and selection hydration has stabilized
     await waitFor(() => {
-      expect(screen.getAllByText('Qwen3-VL-4B-Instruct').length).toBeGreaterThanOrEqual(1);
+      const hero = document.getElementById('current-model-hero-card');
+      expect(hero).not.toBeNull();
+      expect(hero?.textContent).toContain('Qwen3-VL-4B-Instruct');
+      expect(hero?.textContent).toContain('Loaded / Awake');
+      expect(document.getElementById('model-card-qwen3-vl-4b-instruct')?.textContent).toContain('Selected');
     });
 
     // User selects Model B (2B Instruct)
     const card2b = document.getElementById('model-card-qwen3-vl-2b-instruct');
     expect(card2b).not.toBeNull();
     fireEvent.click(card2b!);
+
+    // Model B card must reflect Selected state before verifying Hero transition
+    await waitFor(() => {
+      expect(document.getElementById('model-card-qwen3-vl-2b-instruct')?.textContent).toContain('Selected');
+    });
 
     // Hero now displays Model B
     await waitFor(() => {
