@@ -90,11 +90,17 @@ In accordance with Decision D4 and Decision D-PHONE-01B:
 
 Repository source code establishes the following baseline reality:
 
-- **Entity Ownership (`OwnerMixin`):** Defined in `backend/app/models/base.py`, `OwnerMixin` enforces an indexed `owner_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default_user", index=True)`. Applied across `Attachment`, `Conversation`, `Memory`, `Message`, and `Task`.
+- **Entity Ownership & Profile Schema Foundation (Batch A Verified):**
+  - **Migration 007 (`007_profiles_and_owner_id_migration.py`):** Introduces the `profiles` table with stable UUID primary keys. Generates a unique, non-hardcoded Profile UUID per installation/database during migration or fresh database initialization, enforced with a partial unique index (`uq_profiles_single_default`) ensuring exactly one default profile (`is_default = 1`).
+  - **Foreign Key Integration:** Adds indexed `profile_id` foreign keys referencing `profiles.id` across `conversations`, `messages`, `tasks`, `memories`, and `attachments`.
+  - **Backward-Compatible Ownership:** Retains existing `owner_id: Mapped[str]` columns and indices across all five entity tables. `OwnerMixin` in `backend/app/models/base.py` defaults new instances to `local_user`, ensuring all existing single-user runtime operations, models, and endpoints remain operational without regression.
+  - **Dynamic Default Profile Resolution:** `ProfileMixin` dynamically resolves `profile_id` from the database's active default profile during flush (`resolve_default_profile_id`), ensuring newly created records receive a valid, consistent Default Profile association.
+  - **Fail-Closed Legacy Owner Validation:** `backend/app/db/legacy_owner_validation.py` accepts only explicitly approved legacy owner aliases (`local_user`, `default_user`) and strictly rejects unexpected, empty, whitespace-only, case-variant, or NULL owner values, preserving source data untouched if migration refuses.
 - **Shared Credential Reality:** The FastAPI backend currently validates a single shared pairing key (`COMPANION_API_KEY`) via `Authorization: Bearer <token>` or `X-API-Key` headers (`app/core/security.py`).
-- **Android Client Connection:** `SharedPreferencesConnectionRepository` stores the host URL and shared pairing token in unencrypted `SharedPreferences`.
+- **Profile Sessions & Multi-Profile Authorization Status:** `NOT IMPLEMENTED`. Profile Sessions (`POST /api/v1/auth/profile/session`), token-bound profile context, multi-profile authorization isolation, profile CRUD/switching APIs, and PIN security remain not implemented (deferred to Batch B and subsequent identity tasks).
+- **Client Profile Switcher UI:** `NOT IMPLEMENTED`. No profile management or switching interface exists in the Flutter Desktop or React Web clients.
 - **Device Registry Status:** `NOT IMPLEMENTED`. No `devices` table or endpoint exists yet.
-- **Multi-Profile Schema Status:** `NOT IMPLEMENTED IN SCHEMA`. The database does not yet contain a `profiles` table; code currently relies on `owner_id`.
+- **Android Client Connection:** `SharedPreferencesConnectionRepository` stores the host URL and shared pairing token in unencrypted `SharedPreferences`.
 
 ---
 

@@ -31,10 +31,9 @@
   - *Decision Needed:* Select the Flutter Windows notification plugin or platform-channel/native adapter and verify activation callbacks and presentation behavior. The implementation choice remains OPEN; Python does not own native Toast presentation.
   - *Resolution Point:* Milestone M2 planning.
 
-- **`DEBT-V1-03`: Multi-Profile Database Migration Schema Design**
+- **`DEBT-V1-03`: Multi-Profile Database Migration Schema Design [RESOLVED IN BATCH A]**
   - *Context:* Transitioning from single-user `owner_id` to multi-Profile `profile_id` (ADR-0018).
-  - *Requirement:* Must provide an Alembic migration (007) that cleanly wraps existing data into a default primary Profile without data loss.
-  - *Resolution Point:* Milestone M2 planning.
+  - *Resolution:* Delivered in Batch A via Alembic migration 007 (`007_profiles_and_owner_id_migration.py`). Introduces `profiles` table with unique per-installation Default Profile UUID, partial unique index, and foreign keys across existing user entity tables while retaining `owner_id` for backward compatibility. Fail-closed legacy owner validation enforces data safety. Profile Sessions and multi-profile authorization cutover remain tracked under Batch B (`PC-IDENTITY-002`).
 
 - **`DEBT-V1-04`: Local STT & TTS Process Architecture**
   - *Context:* Pre-staged binaries (`runtime/whisper.cpp/`) and Kokoro-82M ONNX weights exist locally.
@@ -77,6 +76,11 @@
     - Supports clean installation, in-place updates, component repair, and safe uninstallation.
   - *Open Detail:* Packaging mechanism and distribution format (e.g., Inno Setup, WiX / MSI, MSIX, or NSIS), private Python bundling approach (embedded Python distribution vs PyInstaller/standalone freeze vs hermetic venv bundle), code signing infrastructure, and prerequisite validation are marked **OPEN DESIGN**.
   - *Resolution Point:* PC V1 release preparation / distribution packaging planning (deferred; developer venv remains the development baseline for M2).
+
+- **`DEBT-V1-10`: Database Restore Host-Level Writer Quiescence Enforcement**
+  - *Context:* Batch A introduced a mechanically verified standalone restore utility (`restore_database_from_backup` in `app/db/backup.py`) with integrity checking, pre-restore safety snapshotting, and automatic rollback.
+  - *Open Requirement:* The standalone restore utility is not approved for live or automated recovery during runtime execution until host-level writer quiescence is enforced across the complete restore operation (e.g., coordinating with process supervision to pause incoming writes, terminate connections, or hold an exclusive transaction without concurrent writer access).
+  - *Resolution Point:* Milestone M5 / PC-RESILIENCE-003 resilience hardening.
 
 ### Category: `EXPERIMENT / EVIDENCE NEEDED`
 - **`DEBT-EXP-001`: Low-Impact Lightweight Model Benchmark on RX 580**
