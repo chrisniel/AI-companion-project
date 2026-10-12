@@ -128,5 +128,5 @@ The approved visual design language across the companion ecosystem is:
 
 ### 5.7 Nonblocking Future Chat UX Items (`PC-CLIENT-006` Backlog)
 The following quality improvements are cataloged as nonblocking future UX enhancements:
-1. **Visible Horizontal Scrollbar for Fenced Code Blocks:** Add a dedicated visible horizontal scrollbar (matching wide tables) and enhanced horizontal scrolling gestures for wide code snippets rendered by `_MarkdownCodeBlockWidget`.
+1. **Visible Horizontal Scrollbar for Fenced Code Blocks:** Add a dedicated visible horizontal scrollbar (matching wide tables) and enhanced horizontal scrolling gestures for wide code snippets rendered by `_CodeBlockWidget`.
 2. **Improved Model-Generated Mathematical Presentation:** Refine system prompt guidance and rendering for complex multi-step LaTeX equations, while strictly maintaining the rule that fenced literal code blocks (` ```latex `) are never converted into math widgets.

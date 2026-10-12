@@ -295,6 +295,6 @@
 ### Nonblocking Future UX Enhancements (`PC-CLIENT-006` Backlog)
 
 1. **Visible Horizontal Scrollbar for Fenced Code Blocks:**
-   - Provide a dedicated visible horizontal scrollbar (matching wide tables) and enhanced horizontal scrolling gestures for wide code snippets rendered by `_MarkdownCodeBlockWidget`.
+   - Provide a dedicated visible horizontal scrollbar (matching wide tables) and enhanced horizontal scrolling gestures for wide code snippets rendered by `_CodeBlockWidget`.
 2. **Improved Model-Generated Mathematical Presentation:**
    - Refine system prompt guidance and rendering for complex multi-step LaTeX equations, while strictly maintaining the rule that fenced literal code blocks (` ```latex `) are never converted into math widgets.

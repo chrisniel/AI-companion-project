@@ -12,5 +12,5 @@
 
 ## Next Milestone / Current Focus
 
-- **M2 PC Companion Foundation:** ACTIVE / IN PROGRESS — Batch M2-H1 / PC-HOST-001 (Windows Runtime Launch, Attach & Supervision + Desktop Chat Quality Follow-Up) has completed implementation and is at the **DOCUMENTATION STAGE** awaiting Documentation Gate review. Wider Milestone M2 tracks remain planned and in progress (PC-HOST-005 secure lifecycle authority and tray Exit Companion, PC-HOST-002 Task Scheduler autostart, PC-HOST-003 native desktop notifications, storage roots manager, D6 model import, and multi-Profile database migration).
+- **M2 PC Companion Foundation:** ACTIVE / IN PROGRESS — Batch M2-H1 / PC-HOST-001 (Windows Runtime Launch, Attach & Supervision + Desktop Chat Quality Follow-Up) has completed implementation, documentation, and closure verification (**PR-READY** on branch `feature/m2-windows-runtime-supervision`). Wider Milestone M2 tracks remain planned and in progress (PC-HOST-005 secure lifecycle authority and tray Exit Companion, PC-HOST-002 Task Scheduler autostart, PC-HOST-003 native desktop notifications, storage roots manager, D6 model import, and multi-Profile database migration).
 - **Mobile Companion Implementation:** Independent follow-on track scheduled per `docs/02_Planning/00_Master/MOBILE_WBS.md` without blocking PC V1.
