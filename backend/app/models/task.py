@@ -6,10 +6,16 @@ from sqlalchemy import DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
-from app.models.base import OwnerMixin, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.base import (
+    OwnerMixin,
+    ProfileMixin,
+    SoftDeleteMixin,
+    TimestampMixin,
+    UUIDPrimaryKeyMixin,
+)
 
 
-class Task(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, SoftDeleteMixin):
+class Task(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, ProfileMixin, SoftDeleteMixin):
     """Personal task, reminder, or action item entity."""
 
     __tablename__ = "tasks"

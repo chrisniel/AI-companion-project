@@ -46,19 +46,19 @@ def test_migration_006_fresh_database_upgrade_to_head():
         db_path = Path(tmpdir) / "fresh_006.db"
         cfg = _get_alembic_config(db_path)
 
-        command.upgrade(cfg, "head")
+        command.upgrade(cfg, "006_add_attachments")
 
         conn = sqlite3.connect(db_path)
-        cur = conn.cursor()
+        try:
+            cur = conn.cursor()
+            ver = cur.execute("SELECT version_num FROM alembic_version;").fetchone()
+            assert ver is not None and ver[0] == "006_add_attachments"
 
-        ver = cur.execute("SELECT version_num FROM alembic_version;").fetchone()
-        assert ver is not None and ver[0] == "006_add_attachments"
-
-        # Verify attachments table exists
-        tables = [r[0] for r in cur.execute("SELECT name FROM sqlite_master WHERE type='table';").fetchall()]
-        assert "attachments" in tables
-
-        conn.close()
+            # Verify attachments table exists
+            tables = [r[0] for r in cur.execute("SELECT name FROM sqlite_master WHERE type='table';").fetchall()]
+            assert "attachments" in tables
+        finally:
+            conn.close()
 
 
 def test_migration_006_upgrade_from_005_and_schema_inspection():

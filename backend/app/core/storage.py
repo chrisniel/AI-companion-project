@@ -589,20 +589,27 @@ def execute_migration(
 # Schema Lifecycle & Upgrade (Correction Requirement 2)
 # ---------------------------------------------------------------------------
 
+from app.db.backup import create_pre_migration_backup, SQLiteBackupError
+
+
 def prepare_database_schema(
     canonical_db_path: Path,
     alembic_ini_path: Optional[Path] = None,
+    backup_dir: Optional[Path] = None,
 ) -> str:
     """Ensure canonical database exists and is upgraded to current Alembic head.
 
     Executes Alembic migrations in an isolated worker thread so that asyncio.run()
     inside migrations/env.py does not collide with an active event loop.
     Application logging remains caller-owned during this programmatic upgrade.
+    If the canonical database exists with older data and requires an upgrade,
+    a verified WAL-consistent pre-migration backup is taken prior to running upgrade.
     Returns the current Alembic revision string.
     """
     import concurrent.futures
     from alembic.config import Config
     from alembic import command
+    from alembic.script import ScriptDirectory
 
     canonical_db_path.parent.mkdir(parents=True, exist_ok=True)
     db_url = f"sqlite+aiosqlite:///{canonical_db_path.resolve().as_posix()}"
@@ -614,12 +621,30 @@ def prepare_database_schema(
     if not ini_path.exists():
         raise StorageError(f"Alembic configuration file not found at {ini_path}")
 
+    cfg = Config(str(ini_path))
+    cfg.attributes["application_owns_logging"] = True
+    migrations_dir = ini_path.parent / "migrations"
+    cfg.set_main_option("script_location", str(migrations_dir.resolve()))
+    cfg.set_main_option("sqlalchemy.url", db_url)
+
+    # Check if database exists and requires an upgrade
+    script = ScriptDirectory.from_config(cfg)
+    head_rev = script.get_current_head()
+
+    if canonical_db_path.exists() and canonical_db_path.stat().st_size > 0:
+        inspection = inspect_legacy_candidate(canonical_db_path)
+        if inspection.is_valid and inspection.alembic_version != head_rev:
+            target_backup_dir = backup_dir or (canonical_db_path.parent.parent / "backups")
+            logger.info(
+                f"Existing database at {canonical_db_path} (rev={inspection.alembic_version}) requires upgrade to head ({head_rev}). "
+                f"Taking pre-migration backup to {target_backup_dir}..."
+            )
+            try:
+                create_pre_migration_backup(canonical_db_path, backup_dir=target_backup_dir)
+            except SQLiteBackupError as exc:
+                raise StorageError(f"Pre-migration backup failed for {canonical_db_path}: {exc}") from exc
+
     def _run_upgrade():
-        cfg = Config(str(ini_path))
-        cfg.attributes["application_owns_logging"] = True
-        migrations_dir = ini_path.parent / "migrations"
-        cfg.set_main_option("script_location", str(migrations_dir.resolve()))
-        cfg.set_main_option("sqlalchemy.url", db_url)
         command.upgrade(cfg, "head")
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:

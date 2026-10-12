@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy import Boolean, DateTime, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 
@@ -15,6 +15,14 @@ def generate_uuid() -> str:
 def utc_now() -> datetime:
     """Return current timezone-aware UTC datetime."""
     return datetime.now(timezone.utc)
+
+
+DEFAULT_PROFILE_ID: str = "00000000-0000-4000-8000-000000000001"
+
+
+def get_default_profile_id() -> str:
+    """Return the stable default profile UUID string."""
+    return DEFAULT_PROFILE_ID
 
 
 class UUIDPrimaryKeyMixin:
@@ -47,14 +55,41 @@ class TimestampMixin:
 
 
 class OwnerMixin:
-    """Provides owner_id scoping for OWASP API1 BOLA compliance."""
+    """Provides owner_id scoping for legacy single-user compatibility."""
 
     owner_id: Mapped[str] = mapped_column(
         String(64),
         default="local_user",
+        server_default="local_user",
         nullable=False,
         index=True,
     )
+
+
+class ProfileMixin:
+    """Provides profile_id scoping for multi-profile isolation (PC-IDENTITY-001)."""
+
+    profile_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("profiles.id", ondelete="CASCADE"),
+        default=get_default_profile_id,
+        server_default="00000000-0000-4000-8000-000000000001",
+        nullable=False,
+        index=True,
+    )
+
+
+from sqlalchemy import event
+
+
+@event.listens_for(OwnerMixin, "init", propagate=True)
+def _set_owner_default(target, args, kwargs):
+    kwargs.setdefault("owner_id", "local_user")
+
+
+@event.listens_for(ProfileMixin, "init", propagate=True)
+def _set_profile_default(target, args, kwargs):
+    kwargs.setdefault("profile_id", get_default_profile_id())
 
 
 class SoftDeleteMixin:
