@@ -2,27 +2,34 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: Draft (Awaiting Independent Plan Review)
-- Scope Mode: New Feature & Authorization Hardening — `PC-IDENTITY-002` Profile Authorization & Isolation
+- Status: Draft (Awaiting Independent Plan Gate Review)
+- Scope Mode: Authorization Hardening & Session Security — `PC-IDENTITY-002` Profile Authorization & Isolation
 - Target Files:
   - `backend/migrations/versions/008_profile_sessions_and_tickets.py`
   - `backend/app/models/profile_session.py`
   - `backend/app/models/session_ticket.py`
+  - `backend/app/models/base.py`
   - `backend/app/models/__init__.py`
   - `backend/app/core/security.py`
   - `backend/app/core/host_admin.py`
   - `backend/app/core/windows_security.py`
   - `backend/app/api/deps.py`
-  - `backend/app/routers/auth.py`
-  - `backend/app/routers/profiles.py`
-  - `backend/app/routers/conversations.py`
-  - `backend/app/routers/tasks.py`
-  - `backend/app/routers/memories.py`
-  - `backend/app/services/memory/service.py`
+  - `backend/app/api/v1/router.py`
+  - `backend/app/api/v1/endpoints/auth.py`
+  - `backend/app/api/v1/endpoints/profiles.py`
+  - `backend/app/api/v1/endpoints/conversations.py`
+  - `backend/app/api/v1/endpoints/attachments.py`
+  - `backend/app/api/v1/endpoints/tasks.py`
+  - `backend/app/api/v1/endpoints/memories.py`
+  - `backend/app/api/v1/endpoints/llm.py`
+  - `backend/app/api/v1/endpoints/health.py`
+  - `backend/app/services/memory/retriever.py`
+  - `backend/tests/test_migration_008.py`
   - `backend/tests/test_profile_sessions.py`
   - `backend/tests/test_profile_authorization.py`
   - `backend/tests/test_windows_security.py`
-  - `frontend/flutter/packages/companion_api/lib/src/companion_api_client.dart`
+  - `frontend/flutter/packages/companion_api/lib/client/companion_client.dart`
+  - `frontend/flutter/apps/desktop/lib/platform/windows_dpapi_credential_store.dart`
   - `frontend/web/src/context/BackendContext.tsx`
   - `frontend/web/src/services/api/index.ts`
 
@@ -33,47 +40,43 @@ Notice: Update this plan in place during planning. After approval, switch live e
 ## 1. Request Understanding & Goals
 
 ### 1.1 Primary Objective
-Deliver `PC-IDENTITY-002` (Milestone M2 Batch B) to establish cryptographically enforced multi-profile session management, strict cross-profile personal-data isolation, desktop-approved browser session bootstrapping, and fail-closed host administrator boundaries on the Windows desktop, building directly on the Batch A schema foundation (`ADR-0018`, Migration 007).
+Deliver `PC-IDENTITY-002` (Milestone M2 Batch B) to establish fail-closed multi-profile authorization, session token issuance, desktop-approved browser bootstrapping, and complete cross-profile isolation across all personal-data endpoints, memory retrieval, and streaming services, building on the database foundation established in Batch A (`ADR-0018`, Migration 007).
 
 ### 1.2 Concrete Deliverables
-1. **Database Migration 008 (`profile_sessions` & `session_tickets`):**
-   - Introduces the `profile_sessions` table for revocable, TTL-bounded session tokens bound to a verified `profile_id`.
-   - Introduces the `session_tickets` table for single-use, high-entropy, short-lived bootstrap exchange tickets.
-   - Clean Alembic downgrade capability preserving `profiles` and all existing personal records.
-2. **Four Discrete Authority Realms (`SYSTEM_BASELINE.md` & `ADR-0018`):**
-   - **Local Host Administrator:** Authenticated solely via protected `desktop_admin.secret` (never shared with browsers or satellite devices; independent from `COMPANION_API_KEY`).
-   - **Profile Session (`ProfileSession`):** Scoped bearer token (`psk_...`) issued upon verified desktop bootstrap or session exchange; strictly bounds all queries and mutations to `session.profile_id`.
-   - **Legacy Pairing Credential (`COMPANION_API_KEY`):** Strictly restricted to host-level telemetry, router health, and model lifecycle (`/health`, `/api/v1/model/*`); statically disallowed from accessing personal data.
-   - **Future Profile-Bound Device Credentials:** Reserved architectural realm for satellite companions bound to a single profile without host administrative privileges.
+1. **Migration 008 (`008_profile_sessions_and_tickets.py`):**
+   - Tables `profile_sessions` (token hash, profile reference, client type, TTL, revocation) and `session_tickets` (single-use exchange tickets).
+   - Removal of SQLite `server_default` constraints on `profile_id` across all five personal-data tables (`conversations`, `messages`, `tasks`, `memories`, `attachments`).
+   - Removal of SQLAlchemy implicit defaults (`resolve_default_profile_id` in `ProfileMixin`).
+   - Raw SQL and ORM writes without `profile_id` must fail closed (`NOT NULL constraint failed`).
+   - Preservation of existing records, foreign keys, unique indexes, FTS5 triggers, and `owner_id` as a non-authoritative legacy shadow column.
+2. **Three Strict Authority Realms (`SYSTEM_BASELINE.md` & `ADR-0018`):**
+   - **Local Host Administrator:** Authenticated solely via `desktop_admin.secret` (stored in `%LOCALAPPDATA%\AICompanion\secrets\` with Windows user SID ACL verification). Authorizes model selection, hardware profile changes, system diagnostics, and profile ticket issuance. Completely isolated from `COMPANION_API_KEY`.
+   - **Profile Session (`ProfileSession`):** Scoped bearer token (`psk_...`) bound to `session.profile_id`. Required on **every** personal-data endpoint (conversations, messages, SSE turns, titles, attachments, tasks, memories, FTS5 retrieval).
+   - **Legacy Pairing Credential (`COMPANION_API_KEY`):** Restricted solely to read-only host telemetry (`/health`, read-only `/models`, read-only `/models/registry`) and pairing validation (`/auth/verify`). Statically barred from all personal data, session minting, and model-loading mutations.
 3. **Desktop-Approved Browser Session Bootstrap:**
-   - Flutter Desktop mints high-entropy single-use bootstrap ticket (`ptk_...`) bound to the selected Profile via Host Admin IPC.
-   - Browser exchanges ticket via `POST /api/v1/auth/session/exchange` for an ephemeral Profile Session token stored in React memory context, retiring `localStorage` pairing-key storage.
-   - Windows user SID and ACL verification (`Win32 API` / `icacls`) ensuring secret files are restricted strictly to the Current User SID (`S-1-5-21-...`) and `SYSTEM`, failing closed on multi-user or insecure permissions.
-4. **Personal-Data Route Isolation Without Legacy Bypass:**
-   - Immediate removal of legacy fallback on 4 critical personal-data routes: `GET /tasks`, `POST /tasks`, `GET /memories/search`, and `POST /memories`.
-   - Unauthenticated, expired, or invalid session requests fail closed with `401 Unauthorized` / `403 Forbidden`.
-5. **FastAPI Route Decorator Matrix Alignment:**
-   - Real FastAPI decorator paths reconciled:
-     - `POST /conversations/{id}/generate-title`
-     - `POST /conversations/{id}/messages` (SSE streaming turn)
-     - `GET /conversations/{id}/attachments/{aid}/preview`
-     - `DELETE /tasks/{id}/permanent`
-   - Explicitly pruned non-existent routes (`GET /memories/{id}`, standalone attachment listing/deletion).
-6. **Minimal Profile CRUD Scope (4 Endpoints):**
-   - `GET /api/v1/profiles` (Host Admin enumerates all; active Profile Session retrieves own profile).
-   - `POST /api/v1/profiles` (Host Admin or desktop bootstrap creates profile).
-   - `GET /api/v1/profiles/{id}` (Host Admin or session matching `{id}`).
-   - `PATCH /api/v1/profiles/{id}` (Host Admin or session matching `{id}`).
-   - Profile deletion (`DELETE /api/v1/profiles/{id}`) is explicitly **DEFERRED**.
-7. **Comprehensive Security Test Suite:**
-   - Adversarial cross-profile leakage tests, ticket replay tests, ACL violation fail-closed tests, and FTS5 memory boundary isolation tests.
+   - Flutter desktop creates/approves a single-use ticket for a specific Profile.
+   - High-entropy, short-lived (TTL $\le 60\text{ seconds}$), single-use ticket (`ptk_...`) exchanged via loopback POST without exposing bearer tickets in URL query parameters.
+   - Origin/CSRF protections, single-use invalidation, and removal of browser `localStorage` pairing-key storage (token held in memory React context).
+   - PIN-protected Profiles require challenge verification or fail closed (`403 Forbidden`).
+4. **Complete Personal-Data Route Isolation:**
+   - Every personal-data endpoint in `backend/app/api/v1/endpoints/` requires an active `ProfileSession`.
+   - All queries and mutations strictly filtered by `profile_id == session.profile_id`.
+   - FTS5 search in `app/services/memory/retriever.py` updated to filter strictly by `profile_id`.
+5. **Exact FastAPI Decorator Alignment:**
+   - Accurate source paths in `backend/app/api/v1/endpoints/` (`conversations.py`, `attachments.py`, `tasks.py`, `memories.py`, `llm.py`, `health.py`, `auth.py`).
+   - No phantom endpoints (pruned non-existent `GET /memories/search` and `GET /memories/{id}`).
+6. **Minimal Read-Only Profile Catalog (No General CRUD in Batch B):**
+   - In-scope: Read-only profile lookup (`GET /api/v1/profiles`, `GET /api/v1/profiles/{id}`).
+   - Explicitly excluded: General `POST /api/v1/profiles`, `PATCH /api/v1/profiles/{id}`, and `DELETE` stubs.
+   - Future roadmap alignment:
+     - `PC-IDENTITY-003`: Device Enrollment & satellite keypairs.
+     - `PC-IDENTITY-004`: Profile Administration & PIN UX.
+     - `PC-IDENTITY-005`: Profile Deletion Lifecycle & 7-day soft purge.
 
-### 1.3 Explicit Out-of-Scope (Deferred to Subsequent Work Items)
-- **Profile Deletion Lifecycle (`DELETE /api/v1/profiles/{id}`):** Requires 7-day soft-delete grace period, cascade purge workflows, and WAL writer quiescence; deferred to follow-on admin milestone.
-- **PIN / Windows Hello Hardware Security (`PC-IDENTITY-003`):** Salted Argon2id PIN hashing, Windows Hello biometric integration, and UI PIN lock screens.
-- **Multi-Profile Client Switching UI:** Flutter and React profile-switcher UI components (belongs to UI implementation passes).
-- **Character Templates & Emotional Mood Models (`PC-CHAR-001` / Decision D11):** Persona instances, trait vectors, and mood states.
-- **Satellite Mobile Enrollment (`D-PHONE-01B` / `ADR-0005`):** Android enrollment flows and device keypair negotiation.
+### 1.3 Explicit Out-of-Scope (Deferred)
+- **Profile Management & Deletion (`PC-IDENTITY-004` & `PC-IDENTITY-005`):** Creating, updating, or deleting profiles via API; PIN enrollment UX; Argon2id salt generation.
+- **Device Keypair Enrollment (`PC-IDENTITY-003` / `D-PHONE-01B`):** Satellite mobile public key enrollment.
+- **Character Templates & Emotional Mood Models (`PC-CHAR-001` / Decision D11):** Persona instances, trait vectors, and active mood states.
 
 ---
 
@@ -81,25 +84,26 @@ Deliver `PC-IDENTITY-002` (Milestone M2 Batch B) to establish cryptographically 
 
 | Observation / Evidence | Verified Interpretation |
 | --- | --- |
-| Batch A (`007_profiles_and_owner_id_migration.py`) created `profiles` table with unique per-install Default Profile, but ORM `ProfileMixin` still resolves `default_profile_id` dynamically on flush. | Write operations will silently assign all new records to the Default Profile if an explicit session context is not strictly enforced. |
-| `app/core/security.py` relies on `verify_token` matching `COMPANION_API_KEY` across all protected routes. | The shared pairing key grants ambient authority to all endpoints, conflating host administration with personal data access and allowing cross-profile data visibility. |
-| React web client stores `COMPANION_API_KEY` in browser `localStorage`. | Browser script execution or malicious tabs on the host can access the master pairing key and enumerate all runtime APIs. |
-| Personal-data routes (`tasks.py`, `memories.py`, `conversations.py`) filter queries by `owner_id = 'local_user'`. | Queries do not filter by `profile_id`, permitting total data conflation if multiple profiles exist in the database. |
-| Non-existent routes (`GET /memories/{id}`, attachment deletion) were previously drafted in generic API matrices. | The specification must strictly reflect implemented FastAPI decorators to prevent phantom contract regressions. |
+| Migration 007 added `profile_id` with `server_default=default_profile_id` to 5 tables. | Raw SQL inserts omitting `profile_id` silently succeed and associate records with the Default Profile instead of failing closed. |
+| `ProfileMixin` in `backend/app/models/base.py` automatically resolves `default_profile_id` during flush. | ORM writes silently fallback to Default Profile if an authenticated profile context is missing. |
+| `protected_router` in `backend/app/api/v1/router.py` applies `Depends(verify_token)` globally. | Conflates host administration with personal data access; pairing key grants ambient authority to all routes. |
+| Endpoints in `conversations.py`, `tasks.py`, and `memories.py` filter by `owner_id = Depends(get_current_owner)`. | Entities are partitioned by legacy `local_user` rather than verified `session.profile_id`, allowing cross-profile data leakage. |
+| `backend/app/services/memory/retriever.py` queries `memories_fts` with `WHERE m.owner_id = :owner_id`. | Long-term memory context injection across chat turns leaks memories across profiles. |
+| Web frontend stores `COMPANION_API_KEY` in `localStorage`. | Browser pairing key can be exfiltrated or abused to query host runtime endpoints. |
 
 ---
 
 ## 3. Proposed File Changes & In-Place Logic
 
 ### [ADD] `backend/migrations/versions/008_profile_sessions_and_tickets.py`
-- Primary Responsibility: Alembic migration for session management.
+- Primary Responsibility: Alembic migration for session management and removal of default constraints.
 - Schema Definition:
   - Table `profile_sessions`:
     - `id`: VARCHAR(36) PRIMARY KEY (UUID).
     - `profile_id`: VARCHAR(36) FOREIGN KEY REFERENCES `profiles(id)` ON DELETE CASCADE, NOT NULL, INDEX.
     - `token_hash`: VARCHAR(64) NOT NULL UNIQUE, INDEX (SHA-256 of bearer token `psk_...`).
     - `client_type`: VARCHAR(32) NOT NULL (`desktop`, `web_browser`, `satellite_device`).
-    - `client_identifier`: VARCHAR(128) NULL (e.g. host user agent or machine name).
+    - `client_identifier`: VARCHAR(128) NULL.
     - `created_at`: DATETIME NOT NULL.
     - `expires_at`: DATETIME NOT NULL, INDEX.
     - `revoked_at`: DATETIME NULL.
@@ -111,196 +115,250 @@ Deliver `PC-IDENTITY-002` (Milestone M2 Batch B) to establish cryptographically 
     - `created_at`: DATETIME NOT NULL.
     - `expires_at`: DATETIME NOT NULL (TTL $\le 60\text{ seconds}$).
     - `redeemed_at`: DATETIME NULL.
-- Invariants: Pre-migration WAL backup hook must execute before schema modification. Downgrade drops both tables cleanly without affecting `profiles` or entity data.
+  - Batch Alter on 5 Personal-Data Tables (`conversations`, `messages`, `tasks`, `memories`, `attachments`):
+    - Remove `server_default` on `profile_id` via `batch_op.alter_column('profile_id', server_default=None, nullable=False)`.
+    - Preserve existing foreign keys, unique indices, and non-authoritative `owner_id` shadow column.
+- Invariants: Pre-migration WAL safety backup hook executes before schema modifications. Downgrade cleanly restores `server_default` and drops session tables.
 
-### [ADD] `backend/app/models/profile_session.py` & `backend/app/models/session_ticket.py`
-- Primary Responsibility: SQLAlchemy 2.0 ORM declarations for `ProfileSession` and `SessionTicket`.
-- Planned Logic: Declarative mapping with indexed fields and relationship back to `Profile`.
+### [MODIFY] `backend/app/models/base.py` & [ADD] `profile_session.py`, `session_ticket.py`
+- Primary Responsibility: Remove implicit ORM profile resolution and declare session models.
+- Planned Logic:
+  - Remove `resolve_default_profile_id` hook from `ProfileMixin`; require explicit `profile_id` on all model initializations.
+  - Declare `ProfileSession` and `SessionTicket` SQLAlchemy 2.0 ORM models.
 
 ### [ADD] `backend/app/core/windows_security.py`
-- Primary Responsibility: Enforce Windows filesystem ACL security on sensitive credentials.
+- Primary Responsibility: Windows filesystem ACL security enforcement.
 - Planned Logic:
-  - Inspect file security descriptor on Windows using `advapi32.dll` (`GetFileSecurityW` / `GetSecurityDescriptorDacl`) or deterministic `icacls` audit.
-  - Verify access is granted EXCLUSIVELY to Current User SID (`S-1-5-21-...`) and `SYSTEM`.
-  - Disallow inheritance from parent directories and reject any access granted to `Users`, `Everyone`, or secondary accounts.
-  - Fail closed on non-Windows platforms unless configured for development mode.
+  - Inspect file security descriptor on Windows using Win32 API (`advapi32.dll` / `GetFileSecurityW`) or deterministic `icacls`.
+  - Validate that access is granted EXCLUSIVELY to Current User SID (`S-1-5-21-...`) and `SYSTEM`.
+  - Fail closed on multi-user or insecure ACLs on startup.
 
 ### [ADD] `backend/app/core/host_admin.py`
-- Primary Responsibility: Host Administrator credential lifecycle and verification.
+- Primary Responsibility: Desktop Host Administrator credential lifecycle.
 - Planned Logic:
-  - Generate and persist `desktop_admin.secret` in `%LOCALAPPDATA%\AICompanion\secrets\`.
-  - Enforce Windows ACL verification prior to loading.
-  - Issue single-use bootstrap tickets (`ptk_...`) bound to specified `profile_id` with 60-second TTL.
-  - Completely isolated from `COMPANION_API_KEY`.
+  - Manage `desktop_admin.secret` in `%LOCALAPPDATA%\AICompanion\secrets\`.
+  - Provide `require_host_admin` dependency validating against the desktop secret using constant-time comparison.
+  - Issue single-use, 60s TTL tickets (`ptk_...`) bound to specified `profile_id`.
+  - If target Profile has `pin_hash is not None`, reject ticket issuance with `403 Forbidden` (fail-closed until `PC-IDENTITY-004` challenge flow is delivered).
 
-### [MODIFY] `backend/app/core/security.py` & `backend/app/api/deps.py`
-- Primary Responsibility: Authentication dependencies and context resolution.
+### [MODIFY] `backend/app/api/deps.py` & `backend/app/core/security.py`
+- Primary Responsibility: Authentication dependencies.
 - Planned Logic:
-  - Add `get_current_profile_session(credentials: HTTPAuthorizationCredentials) -> ProfileSession`:
-    - Hashes token via SHA-256 and queries `profile_sessions`.
-    - Validates `revoked_at is None` and `expires_at > utcnow()`.
-    - Updates `last_active_at` asynchronously or throttled.
-    - Returns session object containing verified `profile_id`.
-  - Add `require_host_admin(credentials: HTTPAuthorizationCredentials) -> bool`:
-    - Validates against `desktop_admin.secret`.
-    - Constant-time comparison (`secrets.compare_digest`).
-  - Modify `verify_token`:
-    - Retain for host-level infrastructure routes (`/health`, `/api/v1/model/*`).
-    - Statically disallowed on personal-data routes.
+  - `get_current_profile_session`: Validates `Authorization: Bearer psk_...`, checks SHA-256 hash against `profile_sessions`, verifies `revoked_at is None` and `expires_at > utcnow()`. Returns active `ProfileSession`.
+  - `require_host_admin`: Validates `X-Host-Admin-Secret` or `Authorization: Bearer <admin_secret>`.
+  - `verify_token`: Retained ONLY for read-only telemetry (`/models`, `/models/registry`) and pairing checks (`/auth/verify`). Statically barred from personal-data endpoints.
 
-### [ADD] `backend/app/routers/auth.py`
-- Primary Responsibility: Ticket issuance and exchange endpoints.
+### [MODIFY] `backend/app/api/v1/router.py`
+- Primary Responsibility: Router tree segregation.
 - Planned Logic:
-  - `POST /api/v1/auth/session/exchange`:
-    - Public / loopback endpoint.
-    - Accepts `{"ticket": "ptk_..."}`.
-    - Atomically verifies and marks `redeemed_at = utcnow()`.
-    - Mints `ProfileSession`, stores hash, and returns `{"token": "psk_...", "profile_id": "...", "expires_at": "..."}`.
-  - `POST /api/v1/auth/session/revoke`:
-    - Revokes current `ProfileSession`.
-  - `POST /api/v1/auth/bootstrap/ticket`:
-    - Requires Host Admin authority.
-    - Mints single-use ticket bound to requested `profile_id`.
+  - `public_router`: `GET /health`.
+  - `host_admin_router`: `POST /models/load`, `POST /models/select`, `POST /models/unload`, `PATCH /models/profile`, `GET /system/status`, `POST /auth/bootstrap/ticket`.
+  - `profile_session_router`: All conversation, attachment, task, memory, and chat completion endpoints.
+  - `telemetry_router`: Read-only `/models`, `/models/registry`, and `/auth/verify` (guarded by pairing token or session).
 
-### [ADD] `backend/app/routers/profiles.py`
-- Primary Responsibility: Minimal Profile CRUD.
+### [MODIFY] `backend/app/api/v1/endpoints/auth.py`
+- Primary Responsibility: Session exchange and ticket claim.
 - Planned Logic:
-  - `GET /api/v1/profiles`: Host Admin returns all profiles; Profile Session returns `[current_profile]`.
-  - `POST /api/v1/profiles`: Requires Host Admin. Creates new profile with generated UUID.
-  - `GET /api/v1/profiles/{id}`: Requires Host Admin OR `session.profile_id == id`.
-  - `PATCH /api/v1/profiles/{id}`: Requires Host Admin OR `session.profile_id == id`. Updates metadata (`display_name`, `avatar`, `theme`).
-  - `DELETE /api/v1/profiles/{id}`: Returns `501 Not Implemented` with detail `Profile deletion lifecycle is deferred to administrative release`.
+  - `POST /api/v1/auth/bootstrap/ticket`: (Host Admin) Mints single-use ticket `ptk_...` for a specified profile.
+  - `POST /api/v1/auth/session/exchange`: (Loopback POST) Accepts `{"ticket": "ptk_..."}`, verifies SHA-256 hash, atomically sets `redeemed_at = utcnow()`, mints `ProfileSession`, and returns `{"token": "psk_...", "profile_id": "...", "expires_at": "..."}`.
+  - `POST /api/v1/auth/session/claim`: (Loopback Browser Handoff) Allows browser at `http://localhost:5173` to exchange an ephemeral desktop-primed grant without putting tickets in URL query parameters.
+  - `POST /api/v1/auth/session/revoke`: (Profile Session) Revokes active session.
+  - `GET /api/v1/auth/session/me`: (Profile Session) Returns active session profile metadata.
 
-### [MODIFY] `backend/app/routers/tasks.py`
-- Primary Responsibility: Isolate tasks to authenticated Profile Session.
+### [ADD] `backend/app/api/v1/endpoints/profiles.py`
+- Primary Responsibility: Minimal read-only Profile lookup.
 - Planned Logic:
-  - Replace `dependencies=[Depends(verify_token)]` with `session: ProfileSession = Depends(get_current_profile_session)`.
-  - Drop all fallback to `owner_id == 'local_user'`.
-  - Enforce `task.profile_id == session.profile_id` on all queries (`GET /tasks`), mutations (`POST /tasks`, `PATCH /tasks/{id}`), and deletion (`DELETE /tasks/{id}`, `DELETE /tasks/{id}/permanent`).
+  - `GET /api/v1/profiles`: (Host Admin or Profile Session) Returns list of existing profiles (id, name, is_default, status) for desktop selection/catalog.
+  - `GET /api/v1/profiles/{profile_id}`: (Host Admin or matching Profile Session) Returns profile details.
+  - No `POST`, `PATCH`, or `DELETE` endpoints in Batch B.
 
-### [MODIFY] `backend/app/routers/memories.py` & `backend/app/services/memory/service.py`
-- Primary Responsibility: Isolate long-term memory queries and FTS5 search to authenticated Profile Session.
+### [MODIFY] `backend/app/api/v1/endpoints/conversations.py`
+- Primary Responsibility: Isolate all 8 conversation endpoints to authenticated Profile Session.
 - Planned Logic:
-  - Require `ProfileSession` on `GET /memories/search` and `POST /memories`.
-  - Scope FTS5 full-text queries strictly by `WHERE profile_id = :session_profile_id`.
-  - Ensure memory creation explicitly records `profile_id = session.profile_id`.
+  - Require `session: ProfileSession = Depends(get_current_profile_session)`.
+  - Endpoints:
+    - `POST /conversations`: Sets `profile_id = session.profile_id`.
+    - `GET /conversations`: Filters `Conversation.profile_id == session.profile_id`.
+    - `GET /conversations/{id}`: Validates `conv.profile_id == session.profile_id` (404 on mismatch).
+    - `PATCH /conversations/{id}`: Validates `conv.profile_id == session.profile_id`.
+    - `DELETE /conversations/{id}`: Validates `conv.profile_id == session.profile_id`.
+    - `POST /conversations/{id}/messages`: Validates `conv.profile_id == session.profile_id`; SSE stream and memory extraction bound to `session.profile_id`.
+    - `GET /conversations/{id}/messages`: Validates `conv.profile_id == session.profile_id`.
+    - `POST /conversations/{id}/generate-title`: Validates `conv.profile_id == session.profile_id`.
 
-### [MODIFY] `backend/app/routers/conversations.py`
-- Primary Responsibility: Isolate conversation history, SSE streaming turns, and title generation.
+### [MODIFY] `backend/app/api/v1/endpoints/attachments.py`
+- Primary Responsibility: Isolate all 3 attachment endpoints to authenticated Profile Session.
 - Planned Logic:
-  - Require `ProfileSession` across:
-    - `GET /conversations`
-    - `POST /conversations`
-    - `GET /conversations/{id}`
-    - `PATCH /conversations/{id}`
-    - `DELETE /conversations/{id}`
-    - `POST /conversations/{id}/generate-title`
-    - `POST /conversations/{id}/messages` (SSE streaming turn)
-    - `GET /conversations/{id}/attachments/{aid}/preview`
-  - Reject access with `404 Not Found` (fail-closed ID obfuscation) if conversation belongs to another profile.
+  - `POST /conversations/{id}/attachments`: Validates conversation belongs to `session.profile_id`; sets `attachment.profile_id = session.profile_id`.
+  - `GET /conversations/{id}/attachments/{aid}/preview`: Validates attachment and parent conversation belong to `session.profile_id`.
+  - `DELETE /conversations/{id}/attachments/{aid}`: Validates attachment belongs to `session.profile_id`.
+
+### [MODIFY] `backend/app/api/v1/endpoints/tasks.py`
+- Primary Responsibility: Isolate all 8 task endpoints to authenticated Profile Session.
+- Planned Logic:
+  - Require `session: ProfileSession = Depends(get_current_profile_session)`.
+  - Endpoints:
+    - `GET /tasks`: Filters `Task.profile_id == session.profile_id`.
+    - `POST /tasks`: Sets `task.profile_id = session.profile_id`.
+    - `GET /tasks/trash`: Filters `Task.profile_id == session.profile_id`.
+    - `GET /tasks/{id}`: Validates `task.profile_id == session.profile_id`.
+    - `PATCH /tasks/{id}`: Validates `task.profile_id == session.profile_id`.
+    - `DELETE /tasks/{id}`: Validates `task.profile_id == session.profile_id`.
+    - `POST /tasks/{id}/restore`: Validates `task.profile_id == session.profile_id`.
+    - `DELETE /tasks/{id}/permanent`: Validates `task.profile_id == session.profile_id`.
+
+### [MODIFY] `backend/app/api/v1/endpoints/memories.py` & `backend/app/services/memory/retriever.py`
+- Primary Responsibility: Isolate all 4 memory endpoints and FTS5 search to authenticated Profile Session.
+- Planned Logic:
+  - `GET /memories`: Filters `Memory.profile_id == session.profile_id`.
+  - `POST /memories`: Sets `memory.profile_id = session.profile_id`.
+  - `PATCH /memories/{id}`: Validates `memory.profile_id == session.profile_id`.
+  - `DELETE /memories/{id}`: Validates `memory.profile_id == session.profile_id`.
+  - `retriever.py` (`search_relevant_memories`):
+    - Update SQL query: replace `AND m.owner_id = :owner_id` with `AND m.profile_id = :profile_id`.
+
+### [MODIFY] `backend/app/api/v1/endpoints/llm.py` & `health.py`
+- Primary Responsibility: Host Admin vs Profile Session routing.
+- Planned Logic:
+  - Host Admin required: `POST /models/load`, `POST /models/select`, `POST /models/unload`, `PATCH /models/profile`, `GET /system/status`.
+  - Profile Session required: `POST /chat/completions`.
+  - Telemetry (pairing token or session): `GET /models`, `GET /models/registry`.
+
+### [MODIFY] `frontend/flutter/packages/companion_api/lib/client/companion_client.dart` & `windows_dpapi_credential_store.dart`
+- Primary Responsibility: Flutter desktop client session awareness and DPAPI storage.
+- Planned Logic:
+  - Add session token management to `CompanionClient`; pass `Authorization: Bearer psk_...` on personal-data calls.
+  - Store Host Admin secret and active Profile Session token via `WindowsDpapiCredentialStore`.
 
 ### [MODIFY] `frontend/web/src/context/BackendContext.tsx` & `frontend/web/src/services/api/index.ts`
-- Primary Responsibility: React client Profile Session integration and credential retirement.
+- Primary Responsibility: React web client in-memory session handling.
 - Planned Logic:
-  - Support URL query param bootstrap `?ticket=ptk_...` on startup.
-  - Execute exchange via `POST /api/v1/auth/session/exchange`.
-  - Store `sessionToken` exclusively in memory React state (not in `localStorage`).
-  - Safely retire legacy pairing key from `localStorage` once session is established.
-
-### [MODIFY] `frontend/flutter/packages/companion_api/lib/src/companion_api_client.dart`
-- Primary Responsibility: Flutter desktop API client profile session awareness.
-- Planned Logic:
-  - Pass `Authorization: Bearer psk_...` on profile-scoped endpoints.
-  - Retain Host Admin authorization for desktop management calls.
+  - Claim bootstrap ticket via loopback POST handoff (no tokens in URL query string).
+  - Store `sessionToken` exclusively in memory React state.
+  - Purge legacy `COMPANION_API_KEY` from browser `localStorage`.
 
 ---
 
 ## 4. Step-by-Step Pseudocode & Implementation Sequence
 
-### Phase B.1: Schema Migration 008 & ORM Models
-1. Author `migrations/versions/008_profile_sessions_and_tickets.py` creating `profile_sessions` and `session_tickets`.
-2. Connect pre-migration safety backup hook to ensure automated snapshotting prior to upgrade.
-3. Implement `ProfileSession` and `SessionTicket` models in `backend/app/models/`.
-4. Verify migration up and down with SQLite in isolation:
-   ```bash
-   alembic upgrade head
-   alembic downgrade -1
-   ```
+### Phase B.1: Migration 008 & Model Hardening
+1. Implement `backend/migrations/versions/008_profile_sessions_and_tickets.py`:
+   - Create `profile_sessions` and `session_tickets` tables.
+   - Batch alter `conversations`, `messages`, `tasks`, `memories`, and `attachments` to drop `server_default` on `profile_id`.
+   - Maintain `nullable=False`, foreign keys, and shadow `owner_id`.
+2. Connect pre-migration safety backup hook to trigger verified backup prior to DDL execution.
+3. Update `backend/app/models/base.py`:
+   - Remove `resolve_default_profile_id` from `ProfileMixin`.
+4. Add models `ProfileSession` and `SessionTicket` in `backend/app/models/`.
+5. Automated Test: Verify raw SQL `INSERT` without `profile_id` fails closed on all 5 tables (`sqlite3.IntegrityError: NOT NULL constraint failed`).
 
-### Phase B.2: Host Admin Authority & Windows ACL Security
-1. Implement `backend/app/core/windows_security.py` validating that secret files have ACL restricted exclusively to Current User SID and `SYSTEM`.
-2. Implement `backend/app/core/host_admin.py` managing `desktop_admin.secret` and bootstrap ticket minting.
-3. Add unit tests for SID extraction, ACL verification, and fail-closed behavior on multi-user permissions.
+### Phase B.2: Windows ACL Security & Host Admin Authority
+1. Implement `backend/app/core/windows_security.py`:
+   - Verify filesystem permissions on `%LOCALAPPDATA%\AICompanion\secrets\desktop_admin.secret`.
+   - Confirm ACL contains only Current User SID (`S-1-5-21-...`) and `SYSTEM`.
+   - Fail closed on multi-user environments or loose ACLs.
+2. Implement `backend/app/core/host_admin.py`:
+   - Initialize and protect `desktop_admin.secret`.
+   - Implement `require_host_admin` dependency using `secrets.compare_digest`.
+   - Mint single-use, 60s TTL tickets `ptk_...` bound to specified Profile.
+   - Fail closed (`403 Forbidden`) if target Profile has `pin_hash is not None`.
 
-### Phase B.3: Session Token Exchange & Auth Endpoints
-1. Implement `POST /api/v1/auth/bootstrap/ticket` requiring Host Admin.
-2. Implement `POST /api/v1/auth/session/exchange`:
-   - Validates `ptk_...` hash.
-   - Atomically consumes ticket (`redeemed_at = utcnow()`).
-   - Mints `psk_...` and stores hash in `profile_sessions`.
-3. Implement `POST /api/v1/auth/session/revoke` invalidating active session.
+### Phase B.3: Session Exchange & Secure Browser Bootstrap Handoff
+1. Implement `backend/app/api/v1/endpoints/auth.py`:
+   - `POST /api/v1/auth/bootstrap/ticket` (Host Admin only).
+   - `POST /api/v1/auth/session/exchange` (Loopback POST, burns ticket atomically, issues bearer token `psk_...`).
+   - `POST /api/v1/auth/session/claim` (Loopback browser handoff without query string tokens).
+   - `POST /api/v1/auth/session/revoke` (Invalidates session).
+   - `GET /api/v1/auth/session/me` (Inspects active session profile metadata).
+2. Automated Test: Verify single-use burning, concurrent replay rejection, and 60-second TTL expiration.
 
-### Phase B.4: Authentication Dependencies & Removal of Implicit Defaults
-1. Create `get_current_profile_session` dependency in `backend/app/api/deps.py`.
-2. Remove implicit fallback to Default Profile ID in write operations (`ProfileMixin` requires explicit profile attribution on session-guarded writes).
-3. Enforce fail-closed `401 Unauthorized` / `403 Forbidden` on requests lacking a valid session token.
+### Phase B.4: Router Segregation & Authentication Dependencies
+1. Implement `get_current_profile_session` dependency in `backend/app/api/deps.py`.
+2. Restructure `backend/app/api/v1/router.py`:
+   - Isolate public, host admin, telemetry, and profile session route groups.
+   - Statically bar `verify_token` pairing key from all personal-data endpoints.
 
-### Phase B.5: Personal-Data Route Isolation & Matrix Reconciliation
-1. Refactor `tasks.py`:
-   - Drop legacy pairing fallback on `GET /tasks` and `POST /tasks`.
-   - Update `DELETE /tasks/{id}/permanent` to enforce `task.profile_id == session.profile_id`.
-2. Refactor `memories.py` and `service.py`:
-   - Drop legacy fallback on `GET /memories/search` and `POST /memories`.
-   - Enforce FTS5 search query filtering by `profile_id`.
-3. Refactor `conversations.py`:
-   - Require `ProfileSession` on `POST /conversations/{id}/generate-title`, `POST /conversations/{id}/messages` (SSE), and `GET /conversations/{id}/attachments/{aid}/preview`.
-   - Verify non-existent routes (`GET /memories/{id}`, loose attachment listing/deletion) remain absent.
+### Phase B.5: Complete Personal-Data Endpoint Isolation & Memory Retrieval
+1. Refactor `conversations.py`:
+   - Enforce `ProfileSession` on all 8 endpoints (`GET /conversations`, `POST /conversations`, `GET /conversations/{id}`, `PATCH /conversations/{id}`, `DELETE /conversations/{id}`, `POST /conversations/{id}/messages` SSE, `GET /conversations/{id}/messages`, `POST /conversations/{id}/generate-title`).
+2. Refactor `attachments.py`:
+   - Enforce `ProfileSession` on all 3 endpoints (upload, preview, delete).
+3. Refactor `tasks.py`:
+   - Enforce `ProfileSession` on all 8 endpoints (list, create, trash, get, update, soft-delete, restore, permanent delete).
+4. Refactor `memories.py`:
+   - Enforce `ProfileSession` on all 4 endpoints (list, create, update, delete).
+5. Refactor `retriever.py` in `backend/app/services/memory/retriever.py`:
+   - Scope FTS5 search query strictly by `m.profile_id = :profile_id`.
+6. Refactor `llm.py` and `health.py`:
+   - Restrict model mutation endpoints to `HostAdmin`.
+   - Restrict `GET /system/status` to `HostAdmin`.
 
-### Phase B.6: Minimal Profile CRUD
-1. Implement `GET /api/v1/profiles`, `POST /api/v1/profiles`, `GET /api/v1/profiles/{id}`, and `PATCH /api/v1/profiles/{id}`.
-2. Explicitly stub `DELETE /api/v1/profiles/{id}` returning `501 Not Implemented`.
+### Phase B.6: Minimal Read-Only Profile Catalog
+1. Implement `backend/app/api/v1/endpoints/profiles.py`:
+   - `GET /api/v1/profiles`: (Host Admin or Profile Session) Returns list of profiles for catalog/selection.
+   - `GET /api/v1/profiles/{id}`: Returns profile metadata.
+   - Explicitly omit `POST`, `PATCH`, and `DELETE` endpoints.
 
-### Phase B.7: Client Compatibility & Memory-Only Storage
-1. Update `frontend/web/src/context/BackendContext.tsx` to handle bootstrap ticket exchange on load.
-2. Store session token strictly in React state; remove `localStorage.setItem('apiKey', ...)`.
-3. Update Flutter `companion_api` client to support bearer session tokens.
+### Phase B.7: Client Adapters & Storage Retirement
+1. Update `frontend/flutter/packages/companion_api/lib/client/companion_client.dart`:
+   - Pass `Authorization: Bearer psk_...` on personal-data calls.
+   - Integrate `WindowsDpapiCredentialStore` for persistent credentials.
+2. Update `frontend/web/src/context/BackendContext.tsx` & `src/services/api/index.ts`:
+   - Integrate loopback bootstrap handoff.
+   - Store `sessionToken` exclusively in memory React context.
+   - Purge `COMPANION_API_KEY` from `localStorage`.
 
-### Phase B.8: Security Regression & Verification Suite
-1. Implement adversarial tests in `backend/tests/test_profile_authorization.py`:
-   - Session A attempting to read/write/delete Session B's conversations, messages, tasks, and memories.
-   - Single-use ticket replay attack rejection.
-   - Expired ticket and expired session rejection.
-   - Pairing key (`COMPANION_API_KEY`) rejected on all personal-data routes.
-2. Run full backend, flutter analyze, and web test suites.
+### Phase B.8: Comprehensive Security Regression Suite
+1. Build `backend/tests/test_profile_authorization.py`:
+   - Cross-profile leakage attempts across conversations, messages, attachments, tasks, memories, and SSE.
+   - Memory injection cross-profile isolation in FTS5 retriever.
+   - Legacy pairing key rejected on all personal-data routes (`401`/`403`).
+   - Admin privilege escalation attempts rejected.
+   - Raw SQL and ORM missing-profile write rejection.
+   - PIN-protected profile ticket issuance fails closed.
+2. Run full backend, Flutter analyze, and React test suites.
 
 ---
 
 ## 5. Acceptance Criteria & Verification Plan
 
 ### Automated Repository Checks
-- [ ] `pytest backend/tests/test_migration_008.py` passes up and down without data loss.
-- [ ] `pytest backend/tests/test_profile_authorization.py` verifies 100% fail-closed isolation across personal-data routes.
-- [ ] `pytest backend/tests/test_profile_sessions.py` verifies ticket generation, single-use burning, TTL expiry, and revocation.
-- [ ] `pytest backend/tests/test_windows_security.py` confirms Windows SID/ACL enforcement and fail-closed behavior on loose permissions.
-- [ ] Full backend test suite passes with zero regressions (`pytest backend/tests`).
-- [ ] `flutter analyze` passes across all Flutter monorepo packages.
-- [ ] `npm test` and `npm run lint` pass across `frontend/web`.
+- [ ] `pytest backend/tests/test_migration_008.py`: Migration 008 applies up and down cleanly without data loss.
+- [ ] `pytest backend/tests/test_profile_authorization.py`:
+  - Profile A cannot access Profile B's conversations, messages, attachments, tasks, or memories (100% fail-closed 404/403).
+  - Pairing key `COMPANION_API_KEY` receives 401/403 on all personal-data endpoints.
+  - Raw SQL inserts and ORM writes without `profile_id` raise `IntegrityError` (NOT NULL constraint).
+  - Memory FTS5 retrieval for Profile A never returns Profile B's records.
+  - SSE turns in Profile A never stream to or leak data from Profile B.
+- [ ] `pytest backend/tests/test_profile_sessions.py`:
+  - Bootstrap ticket cannot be redeemed more than once (atomic burn).
+  - Concurrent ticket replay fails with 401/409.
+  - Expired tickets ($\gt 60\text{s}$) and expired sessions fail with 401.
+  - Revoked sessions fail immediately with 401.
+  - PIN-protected profile ticket request fails closed (403).
+- [ ] `pytest backend/tests/test_windows_security.py`:
+  - Secret file with permissions granting access to `Everyone` or other users fails closed on startup.
+  - Secret file restricted to Current User SID and `SYSTEM` passes.
+- [ ] Full backend test suite passes (`pytest backend/tests`).
+- [ ] `flutter analyze` passes across all monorepo packages.
+- [ ] `npm test` and `npm run lint` pass in `frontend/web`.
 
 ### Manual / User-Owned Checks
-- [ ] Inspect `%LOCALAPPDATA%\AICompanion\secrets\desktop_admin.secret` using `icacls` to confirm read/write rights belong strictly to Current User SID.
-- [ ] Launch Web client with bootstrap ticket; confirm session exchanges successfully and `localStorage` contains no persistent API keys.
-- [ ] Verify that attempting to access `/api/v1/tasks` with only `COMPANION_API_KEY` returns HTTP 401/403.
+- [ ] Confirm `%LOCALAPPDATA%\AICompanion\secrets\desktop_admin.secret` permissions via `icacls` are restricted to Current User SID.
+- [ ] Open Web UI via desktop bootstrap handoff; verify valid session established without `?ticket=` in browser URL bar and no API keys in `localStorage`.
+- [ ] Verify curl request to `/api/v1/conversations` with pairing key returns 401/403.
 
 ---
 
 ## 6. Risks, Recovery & Rollback
 
-- **Risk: Accidental Lockout of Legacy Single-User Clients.**
-  - *Mitigation:* The local desktop client maintains Host Admin authority and automatically mints an active Default Profile session upon launch, ensuring uninterrupted operation for single-user desktop users.
-- **Risk: Browser Refresh Session Loss.**
-  - *Mitigation:* While long-term storage is in-memory for maximum security, browser sessions can exchange an encrypted, short-lived session cookie (`SameSite=Strict`, `HttpOnly`) or request silent desktop re-authorization via local loopback IPC.
-- **Risk: Database Corruption During Migration 008.**
-  - *Mitigation:* Pre-migration WAL-safe backup snapshot hook automatically executes before Alembic 008 DDL runs, creating an atomically verified restore point.
+- **Risk: Accidental Breakage of Single-User Experience.**
+  - *Mitigation:* The local Flutter desktop client maintains Host Admin authority and automatically mints an active Default Profile session upon application startup, ensuring seamless local desktop companion usage.
+- **Risk: Browser Refresh Session State Loss.**
+  - *Mitigation:* Browser context retains session in memory; on refresh, web client requests seamless loopback re-authorization from the local desktop runtime via loopback handoff.
+- **Risk: Migration 008 Failure.**
+  - *Mitigation:* Pre-migration WAL safety snapshot automatically executes before Migration 008 runs. If migration fails, the database restores the pre-migration snapshot cleanly.
 - **Rollback Procedure:**
-  - Execute `alembic downgrade -1` to drop `session_tickets` and `profile_sessions`.
-  - Revert route dependencies to legacy single-user mode. No personal user data or profile entities are deleted or modified during rollback.
+  - In the event of rollback, execute `alembic downgrade 007` or restore the pre-migration WAL snapshot.
+  - Fail closed if corrupt database or version mismatch is encountered.
+  - **Security Invariant:** Ambient pairing-key access to personal data will NEVER be restored as a rollback mechanism.
