@@ -63,6 +63,21 @@
   - *Open Detail:* Immediate query-time filtering vs. background periodic expiration sweeper in `SchedulerService`.
   - *Resolution Point:* Milestone M3 implementation plan.
 
+- **`DEBT-V1-09`: Self-Contained Windows Installer & Bundled Runtime Packaging (`PC-HOST-006`)**
+  - *Context:* End-user PC V1 distribution requires a self-contained Windows installer bundling private Python runtime, application dependencies, Flutter Desktop, and native inference binaries without requiring developer setup, manual Python installation, or global PATH modifications.
+  - *Invariants:*
+    - Three identifiable, independently supervised components visible in Windows Task Manager for user inspection and diagnostic control: `AI Companion.exe` (Flutter Desktop UI), `AI Companion Runtime.exe` (Python FastAPI host), and `AI Companion Inference.exe` (native llama.cpp server).
+    - No visible console windows during ordinary application startup or model execution.
+    - No intentional concealment from Windows Task Manager; processes remain transparent and accountable.
+    - Full process separation and crash isolation: UI, runtime host, and inference engine run in independent processes so that child crashes or UI termination do not corrupt peer components.
+    - One independent windowless Local AI Runtime per PC installation.
+    - Preserves user `DATA_ROOT` (`companion.db`, profiles, settings) and relocatable `LIBRARY_ROOT` across updates, repairs, and uninstalls.
+    - Preserves runtime process supervision, single-instance kernel locking, and file-based rotating diagnostics (`LOG_ROOT`).
+    - Model provisioning strictly adheres to Decision D6 (manual user import/inbox) and licensing requirements.
+    - Supports clean installation, in-place updates, component repair, and safe uninstallation.
+  - *Open Detail:* Packaging mechanism and distribution format (e.g., Inno Setup, WiX / MSI, MSIX, or NSIS), private Python bundling approach (embedded Python distribution vs PyInstaller/standalone freeze vs hermetic venv bundle), code signing infrastructure, and prerequisite validation are marked **OPEN DESIGN**.
+  - *Resolution Point:* PC V1 release preparation / distribution packaging planning (deferred; developer venv remains the development baseline for M2).
+
 ### Category: `EXPERIMENT / EVIDENCE NEEDED`
 - **`DEBT-EXP-001`: Low-Impact Lightweight Model Benchmark on RX 580**
   - *Context:* Low-Impact mode swaps in a 1B–3B text model to conserve VRAM/compute during gaming.

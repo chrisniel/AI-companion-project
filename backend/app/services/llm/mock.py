@@ -2,13 +2,21 @@
 
 import asyncio
 from datetime import datetime, timezone
+import os
 from typing import Any, AsyncGenerator, List, Optional, Union
 
 from app.core.config import settings
 from app.schemas.llm import ChatMessage, ModelStatusResponse
-from app.services.llm.base import BaseLLMProvider
+from app.services.llm.base import BaseLLMProvider, GeneratedText, GenerationStream
 from app.services.llm.runtime_state import LLMRuntimeState
 from app.services.model_registry import build_model_list
+
+
+from app.services.host_config import (
+    get_saved_model_selection,
+    resolve_effective_model,
+    save_model_selection,
+)
 
 
 def _extract_text_content(content: Union[str, List[Any]]) -> str:
@@ -27,24 +35,39 @@ def _extract_text_content(content: Union[str, List[Any]]) -> str:
 class MockLLMProvider(BaseLLMProvider):
     """High-speed deterministic mock provider that simulates LLM generation and streaming."""
 
-    def __init__(self):
+    def __init__(self, default_model: Optional[str] = None):
         self._is_loaded = False
         self._active_model = None
+        self._default_mock_model = default_model
         self._active_profile = settings.LLM_PROFILE
         self._last_active_at = datetime.now(timezone.utc)
+        self._last_error: Optional[str] = None
 
     @property
     def provider_name(self) -> str:
         return "mock"
 
     async def load_model(self, model_name: Optional[str] = None, profile: Optional[str] = None) -> bool:
-        if model_name:
-            self._active_model = model_name
-        elif not self._active_model:
-            self._active_model = settings.DEFAULT_MODEL_NAME
+        if self._is_loaded and model_name is None:
+            self._last_active_at = datetime.now(timezone.utc)
+            return True
+
+        target, source = resolve_effective_model(model_name)
+        if not target and self._default_mock_model:
+            target = self._default_mock_model
+            source = "mock_configuration"
+
+        if not target:
+            self._is_loaded = False
+            self._active_model = None
+            self._last_error = "MODEL_SELECTION_REQUIRED"
+            return False
+
+        self._active_model = target
         if profile:
             self._active_profile = profile
         self._is_loaded = True
+        self._last_error = None
         self._last_active_at = datetime.now(timezone.utc)
         return True
 
@@ -75,19 +98,32 @@ class MockLLMProvider(BaseLLMProvider):
 
         registry_entries = [m.manifest.primary_file for m in build_model_list() if m.library_state.primary_file_exists]
 
+        saved_selection = get_saved_model_selection()
         is_loaded = self._is_loaded
         applied_ctx = context_sizes.get(self._active_profile, 4096)
         applied_ngl = gpu_layers.get(self._active_profile, settings.LLM_GPU_LAYERS)
         is_eco = self._active_profile == "eco"
         mmproj_flag = not is_eco
 
+        if is_loaded:
+            runtime_state = LLMRuntimeState.MODEL_READY
+        elif self._last_error == "MODEL_SELECTION_REQUIRED":
+            runtime_state = LLMRuntimeState.MODEL_SELECTION_REQUIRED
+        elif self._last_error:
+            runtime_state = LLMRuntimeState.MODEL_ERROR
+        elif not saved_selection and not os.environ.get("COMPANION_DEV_MODEL"):
+            runtime_state = LLMRuntimeState.MODEL_SELECTION_REQUIRED
+        else:
+            runtime_state = LLMRuntimeState.MODEL_UNLOADED
+
         return ModelStatusResponse(
             provider=self.provider_name,
             engine_version="mock-v1",
             router_running=True,
             managed_by_core=True,
-            runtime_state=LLMRuntimeState.MODEL_READY if is_loaded else LLMRuntimeState.MODEL_UNLOADED,
+            runtime_state=runtime_state,
             active_model=self._active_model if is_loaded else None,
+            selected_model=saved_selection,
             model_resident=is_loaded,
             model_loaded=is_loaded,
             model_awake=is_loaded,
@@ -99,7 +135,7 @@ class MockLLMProvider(BaseLLMProvider):
             applied_mmproj_offload=mmproj_flag,
             mmproj_offload=mmproj_flag,
             generation_active=False,
-            last_runtime_error=None,
+            last_runtime_error=self._last_error,
             is_loaded=is_loaded,
             active_profile=self._active_profile,
             available_models=available,
@@ -119,23 +155,52 @@ class MockLLMProvider(BaseLLMProvider):
         **kwargs
     ) -> str:
         self._last_active_at = datetime.now(timezone.utc)
+        target_reason = getattr(self, "configured_finish_reason", "stop") or "stop"
+        self.last_finish_reason = target_reason
         raw_user_msg = next((m.content for m in reversed(messages) if m.role == "user"), "Hello!")
         last_user_msg = _extract_text_content(raw_user_msg) if raw_user_msg != "Hello!" else "Hello!"
-        return f"[Mock AI Companion]: I received your message: '{last_user_msg}'. Local AI Runtime is operational."
+        content = f"[Mock AI Companion]: I received your message: '{last_user_msg}'. Local AI Runtime is operational."
+        return GeneratedText(content, finish_reason=target_reason)
 
-    async def generate_stream(
+    def generate_stream(
         self,
         messages: List[ChatMessage],
         temperature: float = 0.7,
         max_tokens: int = 1024,
         **kwargs
-    ) -> AsyncGenerator[str, None]:
+    ) -> GenerationStream:
         self._last_active_at = datetime.now(timezone.utc)
-        raw_user_msg = next((m.content for m in reversed(messages) if m.role == "user"), "Hello!")
-        last_user_msg = _extract_text_content(raw_user_msg) if raw_user_msg != "Hello!" else "Hello!"
-        response_text = f"I received your message: '{last_user_msg}'. Local AI Runtime is operational."
-        tokens = response_text.split(" ")
 
-        for i, token in enumerate(tokens):
-            yield token if i == 0 else f" {token}"
-            await asyncio.sleep(0.01)  # Micro-delay to simulate streaming chunks
+        reason = "stop"
+        conv_id = kwargs.get("conversation_id")
+        if hasattr(self, "configured_finish_reasons") and isinstance(self.configured_finish_reasons, dict):
+            if conv_id and conv_id in self.configured_finish_reasons:
+                reason = self.configured_finish_reasons[conv_id]
+            else:
+                raw_user = next((m.content for m in reversed(messages) if m.role == "user"), "")
+                text_user = _extract_text_content(raw_user)
+                for key, val in self.configured_finish_reasons.items():
+                    if key in text_user:
+                        reason = val
+                        break
+        elif callable(getattr(self, "configured_finish_reason", None)):
+            reason = self.configured_finish_reason(messages, **kwargs)
+        elif getattr(self, "configured_finish_reason", None):
+            reason = self.configured_finish_reason
+        elif "finish_reason" in kwargs:
+            reason = kwargs["finish_reason"]
+
+        self.last_finish_reason = reason
+        stream_meta = {"finish_reason": reason}
+
+        async def _stream_generator() -> AsyncGenerator[str, None]:
+            raw_user_msg = next((m.content for m in reversed(messages) if m.role == "user"), "Hello!")
+            last_user_msg = _extract_text_content(raw_user_msg) if raw_user_msg != "Hello!" else "Hello!"
+            response_text = f"I received your message: '{last_user_msg}'. Local AI Runtime is operational."
+            tokens = response_text.split(" ")
+
+            for i, token in enumerate(tokens):
+                yield token if i == 0 else f" {token}"
+                await asyncio.sleep(0.01)  # Micro-delay to simulate streaming chunks
+
+        return GenerationStream(_stream_generator(), meta=stream_meta)

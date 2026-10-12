@@ -7,11 +7,12 @@ from app.services.llm.runtime_state import LLMRuntimeState
 
 
 def test_runtime_state_enum_coverage():
-    """Verify all 9 runtime states from LLAMA_CPP_RUNTIME_ARCHITECTURE.md §4 exist."""
+    """Verify all runtime states from LLAMA_CPP_RUNTIME_ARCHITECTURE.md §4 and M2-H1 exist."""
     expected_states = {
         "SERVER_STOPPED",
         "SERVER_STARTING",
         "MODEL_UNLOADED",
+        "MODEL_SELECTION_REQUIRED",
         "MODEL_LOADING",
         "MODEL_READY",
         "MODEL_SLEEPING",

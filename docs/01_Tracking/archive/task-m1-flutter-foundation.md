@@ -5,7 +5,12 @@
 - **Milestone:** M1 — Flutter Desktop Client Foundation.
 - **Active Work Item:** `PC-CLIENT-004` (Typed Runtime Client, REST/SSE Integration and Functional Desktop Conversation).
 - **Implementation Plan:** [`docs/02_Planning/01_Plans/plan-m1-flutter-desktop-client-foundation.md`](../../02_Planning/01_Plans/plan-m1-flutter-desktop-client-foundation.md).
-- **Current Stage:** Stage 4/5 (Implementation Complete, Verified Locally, Documentation Reconciled; Awaiting Hosted PR CI & Independent Review for Closure Gate).
+- **Current Stage:** Stage 7 (COMPLETE / SQUASH-MERGED via PR #23 at commit `7c1d1a2ddb5c57ddaae9bbacbcab2e25f9938fe1`; Archived).
+
+> **POST-MERGE ARCHIVAL EXCEPTION NOTE:**
+> Milestone M1 implementation was delivered via PR #23 (squash commit `7c1d1a2ddb5c57ddaae9bbacbcab2e25f9938fe1`), verified by PR CI and develop post-merge checks.
+> Due to an operational oversight, this tracker was not moved from `docs/01_Tracking/active/` to `docs/01_Tracking/archive/` prior to the squash merge.
+> Archival is recorded post-merge on branch `feature/m2-windows-runtime-supervision` per human instruction, without creating a separate cleanup-only PR. Historical PR #23 merge and post-merge verification evidence are preserved.
 
 ---
 
@@ -16,7 +21,7 @@
 | **B1** | `PC-CLIENT-001` | `VERIFIED` | Pub Workspace (`frontend/flutter/`), `companion_core`, `companion_api`, `companion_design`, `apps/desktop` Windows runner, CI policy and workflow integration. |
 | **B2** | `PC-CLIENT-002` | `VERIFIED` | Window framing (1280×800 / 1024×640), close-to-tray lifecycle, native tray menu, clean shutdown, 23 workspace tests, native WM_CLOSE interception verified. |
 | **B3** | `PC-CLIENT-003` | `VERIFIED` | SoftGlass tokens, 4 accent presets, neumorphic surface & inner shadow system (`NeumorphicSurface`, `_InnerShadowPainter`), interactive component parity (`DesktopNavigationRail`, `NeumorphicButton`, `NeumorphicSegmentedControl`, recessed chat composer well, recessed diagnostic cards), shortcuts (`Ctrl+,`, conditional `Esc`), read-only fail-closed storage diagnostics, 73 workspace tests, Windows startup fix. |
-| **B4** | `PC-CLIENT-004` | **VERIFIED (PR CANDIDATE)** | Typed OpenAPI DTOs in `companion_api`, pure-Dart RFC 4122 v4 UUID generator in `companion_core`, robust SSE streaming parser, Windows DPAPI credential store, `DesktopChatController` with draft reuse & double-click protection, live `ChatScreen` UI with `ConversationHistoryDrawer`, safe Markdown renderer (`AssistantMarkdownView`) with GFM tables, post-turn AI title parity, truthful attachment placeholders, backend model registry matching with fail-closed behavior, contract parity checker, 193 workspace tests passing, 0 lints. |
+| **B4** | `PC-CLIENT-004` | **VERIFIED (DELIVERED IN PR #23)** | Typed OpenAPI DTOs in `companion_api`, pure-Dart RFC 4122 v4 UUID generator in `companion_core`, robust SSE streaming parser, Windows DPAPI credential store, `DesktopChatController` with draft reuse & double-click protection, live `ChatScreen` UI with `ConversationHistoryDrawer`, safe Markdown renderer (`AssistantMarkdownView`) with GFM tables, post-turn AI title parity, truthful attachment placeholders, backend model registry matching with fail-closed behavior, contract parity checker, 193 workspace tests passing, 0 lints. |
 
 ---
 
@@ -156,8 +161,8 @@
   - GitHub-Flavored Markdown (GFM) table rendering across Flutter (`AssistantMarkdownView`) and React Web (`AssistantMarkdownRenderer`): streaming-stable block parsing with delimiter detection, column alignments (`:---:`, `---:`, `:---`, `---`), escaped pipes `\|` and inline code `` `code | pipe` `` cell safety, inline formatting (bold, italic, code, safe links), selectable rich text, and horizontal scrolling preventing layout overflows on narrow desktop viewports (1024×640); ordinary text containing shell pipes (`cat file | grep foo`) preserved as text; incomplete streaming tables handled gracefully without exceptions.
 - [x] Run full verification suite (193 workspace Flutter tests pass: 107 desktop, 52 api, 16 core, 18 design; 13/13 React Web Vitest files pass [234 tests]; 0 lints via `dart analyze .`; clean Windows debug build `flutter build windows --debug`; native lifecycle verification pass [3/3 via `verify_native_windows_lifecycle.ps1`]; OpenAPI parity pass [13/13 DTOs, 12/12 routes via `check_dart_openapi_parity.py`]; 37 Python unittest tests pass via `scripts/tests`; `git diff --check` clean).
 - [x] Reconcile project documentation, author M1 delivery walkthrough, and update master planning spine.
-- [ ] Hosted PR CI verification on PR to develop.
-- [ ] M1 Final Acceptance independent human review handoff and Closure Gate sign-off. Stop at gate.
+- [x] Hosted PR CI verification on PR #23 to develop passed.
+- [x] M1 Final Acceptance and Closure Gate reconciled post-merge (PR #23 merged at commit `7c1d1a2ddb5c57ddaae9bbacbcab2e25f9938fe1`; post-merge tracker archival exception recorded per human instruction).
 
 ---
 

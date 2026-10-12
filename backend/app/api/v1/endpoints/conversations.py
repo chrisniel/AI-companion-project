@@ -548,7 +548,9 @@ async def list_messages(
         403: {"description": "ATTACHMENT_FORBIDDEN"},
         404: {"description": "Conversation or Attachment not found"},
         409: {"description": "CONVERSATION_BUSY or DUPLICATE_MESSAGE"},
-        422: {"description": "ATTACHMENT_NOT_AVAILABLE or ATTACHMENT_ALREADY_CLAIMED"},
+        422: {
+            "description": "ATTACHMENT_NOT_AVAILABLE, ATTACHMENT_ALREADY_CLAIMED, or MODEL_SELECTION_REQUIRED"
+        },
         503: {"description": "LLM_UNAVAILABLE"},
     },
 )
@@ -599,7 +601,19 @@ async def send_message_stream(
         ):
             loaded = await provider.load_model()
             if not loaded:
-                raise HTTPException(status_code=503, detail="LLM_UNAVAILABLE")
+                err = getattr(provider, "_last_error", None)
+                if (
+                    err == "MODEL_SELECTION_REQUIRED"
+                    or status_resp.runtime_state == LLMRuntimeState.MODEL_SELECTION_REQUIRED
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail="MODEL_SELECTION_REQUIRED",
+                    )
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="LLM_UNAVAILABLE",
+                )
 
         # Execute atomic pre-stream preparation transaction
         prepared_turn = await prepare_turn(

@@ -62,7 +62,7 @@ The AI Companion ecosystem is centered around an independent, persistent Windows
 ## 3. Cross-Cutting Architectural Invariants
 
 1. **Local-First Default:** All core intelligence runs locally on user hardware. Cloud LLM fallback is strictly opt-in, disabled by default, and transparent.
-2. **Runtime Independence:** Closing the Flutter UI hides to the system tray. Closing the React browser tab simply disconnects. Neither action terminates the Local AI Runtime (`ADR-0003`). Quit UI != Stop Runtime.
+2. **Runtime Independence & Lifecycle (D2 Refined):** Closing the Flutter UI window (`×`) hides to the Windows System Tray. UI crash or unexpected termination leaves the Local AI Runtime independent and alive. Closing the React browser tab simply disconnects. Deliberate full shutdown is performed via system tray "Exit Companion" with explicit warning, stopping local runtime and Flutter via `PC-HOST-005`. Remote clients cannot stop a remote host.
 3. **Multi-Profile PC V1 Identity:** Operates under a single installation Account with multiple isolated Profiles (`ADR-0018`). Normal satellite devices bind to a single profile; PC desktop admin can manage and switch profiles.
 4. **Transparent, User-Controlled Memory:** Selective auto-extraction under deterministic policy (`ADR-0008`). Memories are scoped to `PROFILE` or `CHARACTER`, inspectable, and user-correctable.
 5. **Deterministic Action Policy & DEFAULT DENY:** Model requests are typed intents evaluated against deterministic policy (`ADR-0010`). Risk 0/1/2 configurable; Risk 3 generic shell execution is permanently rejected (`REJECTED`). Emergency kill switch provided.
@@ -81,7 +81,7 @@ The historical product decision spine is D1-D11. Additional accepted ADRs refine
 | Decision | Topic | Canonical Policy & Chosen Architecture | Key Spec / ADR |
 | :--- | :--- | :--- | :--- |
 | **D1** | Scope Boundary | PC V1 mandatory milestone; Android V1 independent follow-on | `SYSTEM_BASELINE.md`, [ADR-0002](decisions/ADR-0002-d1-pc-v1-release-boundary.md) |
-| **D2** | Host Lifecycle | Local AI Runtime independent background service; Task Scheduler at login | [`windows-host-and-notifications.md`](04_Infrastructure/windows-host-and-notifications.md), [ADR-0003](decisions/ADR-0003-d2-windows-host-model.md) |
+| **D2** | Host Lifecycle | Local AI Runtime independent background service; Task Scheduler at login (`PC-HOST-002`); Option A lifecycle refined (Window X hides to tray; confirmed tray Exit Companion stops local host via `PC-HOST-005`) | [`windows-host-and-notifications.md`](04_Infrastructure/windows-host-and-notifications.md), [ADR-0003](decisions/ADR-0003-d2-windows-host-model.md) |
 | **D3** | Android Identity | Package com.cnl.aicompanion; Android V1 follow-on milestone | [`android-companion.md`](01_Domains/android-companion.md), [ADR-0004](decisions/ADR-0004-d3-android-application-identity.md) |
 | **D4** | Device Auth | Profile/Device separation, profile-bound enrollment, revocable credentials, platform-protected local secret storage | [`profiles-and-devices.md`](02_Data_and_Security/profiles-and-devices.md), [ADR-0005](decisions/ADR-0005-d4-profile-device-credential-boundary.md) |
 | **D5** | Remote Access | Loopback default + Tailscale private mesh + Cloudflare Tunnel; no port forwarding | [`authentication-and-secrets.md`](02_Data_and_Security/authentication-and-secrets.md), [ADR-0006](decisions/ADR-0006-d5-remote-access-trust-boundary.md) |

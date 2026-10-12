@@ -22,12 +22,14 @@ from app.schemas.llm import (
     ChatMessage,
     ModelLoadRequest,
     ModelProfileUpdateRequest,
+    ModelSelectRequest,
     ModelStatusResponse,
 )
 from app.schemas.model_registry import ModelRegistryEntry
+from app.services.host_config import save_model_selection
 from app.services.llm.base import BaseLLMProvider
 from app.services.llm.manager import get_llm_provider
-from app.services.model_registry import build_model_list
+from app.services.model_registry import build_model_list, find_model_registry_entry
 
 router = APIRouter()
 
@@ -76,10 +78,52 @@ async def load_model(
     success = await provider.load_model(model_name=model_name, profile=profile)
     if not success:
         error_msg = getattr(provider, "_last_error", None) or "Failed to load model into memory."
+        if error_msg == "MODEL_SELECTION_REQUIRED":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="MODEL_SELECTION_REQUIRED",
+            )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=error_msg,
         )
+    return await provider.get_status()
+
+
+@router.post(
+    "/models/select",
+    response_model=ModelStatusResponse,
+    summary="Select LLM model in persistent host configuration",
+    dependencies=[Depends(verify_token)],
+)
+async def select_model(
+    request: ModelSelectRequest,
+    provider: BaseLLMProvider = Depends(get_llm_provider),
+) -> ModelStatusResponse:
+    """Save selected model in host_config.json, optionally loading immediately."""
+    entry = find_model_registry_entry(request.model_name)
+    if not entry:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Model not found in registry: {request.model_name}",
+        )
+    if not entry.library_state.primary_file_exists:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Model file missing on host: {request.model_name}",
+        )
+
+    save_model_selection(request.model_name)
+
+    if request.load_immediately:
+        success = await provider.load_model(model_name=request.model_name, profile=request.profile)
+        if not success:
+            error_msg = getattr(provider, "_last_error", None) or "Failed to load model into memory."
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=error_msg,
+            )
+
     return await provider.get_status()
 
 
@@ -93,8 +137,27 @@ async def unload_model(
     provider: BaseLLMProvider = Depends(get_llm_provider),
 ) -> ModelStatusResponse:
     """Unload model from GPU memory to free VRAM immediately."""
-    await provider.unload_model()
-    return await provider.get_status()
+    success = await provider.unload_model()
+    if not success:
+        error_msg = getattr(provider, "_last_error", None) or "Failed to unload model from memory."
+        if "MODEL_BUSY" in error_msg:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=error_msg,
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_msg,
+        )
+
+    status_resp = await provider.get_status()
+    if status_resp.model_loaded:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Model unload incomplete: model remains loaded.",
+        )
+
+    return status_resp
 
 
 @router.patch(
@@ -164,11 +227,12 @@ async def create_chat_completion(
 
             # Content token deltas
             try:
-                async with aclosing(provider.generate_stream(
+                stream = provider.generate_stream(
                     messages=internal_messages,
                     temperature=request.temperature,
                     max_tokens=request.max_tokens or 1024,
-                )) as tokens:
+                )
+                async with aclosing(stream) as tokens:
                     async for token in tokens:
                         chunk = ChatCompletionStreamChunk(
                             id=completion_id,
@@ -188,6 +252,7 @@ async def create_chat_completion(
                 return
 
             # Final stop chunk
+            finish_reason = getattr(stream, "finish_reason", None) or getattr(provider, "last_finish_reason", "stop") or "stop"
             stop_chunk = ChatCompletionStreamChunk(
                 id=completion_id,
                 created=created_ts,
@@ -196,7 +261,7 @@ async def create_chat_completion(
                     ChatCompletionStreamChoice(
                         index=0,
                         delta=ChatCompletionDelta(),
-                        finish_reason="stop",
+                        finish_reason=finish_reason,
                     )
                 ],
             )
@@ -230,6 +295,7 @@ async def create_chat_completion(
     prompt_chars = sum(len(m.content) for m in request.messages)
     prompt_tokens = max(1, prompt_chars // 4)
     completion_tokens = max(1, len(content) // 4)
+    finish_reason = getattr(content, "finish_reason", None) or getattr(provider, "last_finish_reason", "stop") or "stop"
 
     return ChatCompletionResponse(
         id=completion_id,
@@ -239,7 +305,7 @@ async def create_chat_completion(
             ChatCompletionChoice(
                 index=0,
                 message=ChatCompletionMessage(role="assistant", content=content),
-                finish_reason="stop",
+                finish_reason=finish_reason,
             )
         ],
         usage=ChatCompletionUsage(

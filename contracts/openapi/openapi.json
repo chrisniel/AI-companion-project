@@ -908,6 +908,68 @@
         }
       }
     },
+    "/api/v1/models/select": {
+      "post": {
+        "summary": "Select LLM model in persistent host configuration",
+        "description": "Save selected model in host_config.json, optionally loading immediately.",
+        "operationId": "select_model_api_v1_models_select_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-API-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelSelectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/models/unload": {
       "post": {
         "summary": "Unload LLM model and release VRAM",
@@ -1662,7 +1724,7 @@
             "description": "CONVERSATION_BUSY or DUPLICATE_MESSAGE"
           },
           "422": {
-            "description": "ATTACHMENT_NOT_AVAILABLE or ATTACHMENT_ALREADY_CLAIMED"
+            "description": "ATTACHMENT_NOT_AVAILABLE, ATTACHMENT_ALREADY_CLAIMED, or MODEL_SELECTION_REQUIRED"
           },
           "503": {
             "description": "LLM_UNAVAILABLE"
@@ -2854,6 +2916,7 @@
           "SERVER_STOPPED",
           "SERVER_STARTING",
           "MODEL_UNLOADED",
+          "MODEL_SELECTION_REQUIRED",
           "MODEL_LOADING",
           "MODEL_READY",
           "MODEL_SLEEPING",
@@ -3524,6 +3587,42 @@
         "title": "ModelRuntimeHints",
         "description": "Non-authoritative runtime/hardware recommendations."
       },
+      "ModelSelectRequest": {
+        "properties": {
+          "model_name": {
+            "type": "string",
+            "title": "Model Name"
+          },
+          "load_immediately": {
+            "type": "boolean",
+            "title": "Load Immediately",
+            "default": false
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "eco",
+                  "balanced",
+                  "maximum"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "model_name"
+        ],
+        "title": "ModelSelectRequest",
+        "description": "Payload to select model in persistent host configuration."
+      },
       "ModelStatusResponse": {
         "properties": {
           "provider": {
@@ -3566,6 +3665,17 @@
               }
             ],
             "title": "Active Model"
+          },
+          "selected_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Model"
           },
           "model_resident": {
             "type": "boolean",

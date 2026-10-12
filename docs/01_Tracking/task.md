@@ -8,9 +8,9 @@
 - **Phase 8:** COMPLETE / VERIFIED
 - **M0 Documentation & Architecture Reset:** COMPLETE / VERIFIED
 - **MOBILE-ARCH — Mobile V1 Canonical Architecture Pass:** COMPLETE / VERIFIED (Architecture specs, Mobile WBS, and Mobile Checklist completed; Closure Gate passed).
-- **M1 Flutter Client Foundation:** IMPLEMENTED / LOCALLY VERIFIED (Local monorepo pub workspace, Win32 desktop shell, system tray, fail-closed auth, chat streaming, Markdown tables, and post-turn AI title parity; hosted PR CI verification and independent Closure Gate approval pending on PR #23).
+- **M1 Flutter Client Foundation:** COMPLETE / SQUASH-MERGED (Delivered via PR #23 at commit `7c1d1a2ddb5c57ddaae9bbacbcab2e25f9938fe1`; local monorepo pub workspace, Win32 desktop shell, system tray, fail-closed auth, chat streaming, Markdown tables, and post-turn AI title parity; Closure Gate reconciled post-merge with documented tracker archival exception).
 
-## Next Milestone
+## Next Milestone / Current Focus
 
-- **M2 PC Companion Foundation:** NEXT (Windows autostart at login, native desktop notifications, Task Scheduler integration, D6 controlled model import service, and multi-Profile database migration).
+- **M2 PC Companion Foundation:** ACTIVE / IN PROGRESS — Batch M2-H1 / PC-HOST-001 (Windows Runtime Launch, Attach & Supervision + Desktop Chat Quality Follow-Up) has completed implementation, documentation, and closure verification (**PR-READY** on branch `feature/m2-windows-runtime-supervision`). Wider Milestone M2 tracks remain planned and in progress (PC-HOST-005 secure lifecycle authority and tray Exit Companion, PC-HOST-002 Task Scheduler autostart, PC-HOST-003 native desktop notifications, storage roots manager, D6 model import, and multi-Profile database migration).
 - **Mobile Companion Implementation:** Independent follow-on track scheduled per `docs/02_Planning/00_Master/MOBILE_WBS.md` without blocking PC V1.

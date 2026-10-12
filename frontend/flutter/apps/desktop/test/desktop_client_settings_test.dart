@@ -41,5 +41,23 @@ void main() {
       await settings.deleteSettings();
       expect(await File(testPath).exists(), isFalse);
     });
+
+    test('readChatZoomLevel returns 1.0 default when absent', () async {
+      final zoom = await settings.readChatZoomLevel();
+      expect(zoom, equals(1.0));
+    });
+
+    test('writeChatZoomLevel persists value and clamps to 0.8..1.6 range', () async {
+      await settings.writeChatZoomLevel(1.25);
+      expect(await settings.readChatZoomLevel(), equals(1.25));
+
+      // Test clamping lower bound
+      await settings.writeChatZoomLevel(0.5);
+      expect(await settings.readChatZoomLevel(), equals(0.8));
+
+      // Test clamping upper bound
+      await settings.writeChatZoomLevel(2.5);
+      expect(await settings.readChatZoomLevel(), equals(1.6));
+    });
   });
 }

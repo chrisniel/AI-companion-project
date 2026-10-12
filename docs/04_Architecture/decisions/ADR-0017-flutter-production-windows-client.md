@@ -1,14 +1,15 @@
 # Flutter Production Windows Client
 
-**Status:** Accepted  
-**Decision ID:** ADR-0017  
-**Codification Date:** 2026-10-03  
-**Primary Canonical Owner:** [`windows-host-and-notifications.md`](../04_Infrastructure/windows-host-and-notifications.md)  
+**Status:** Accepted<br>
+**Decision ID:** ADR-0017<br>
+**Codification Date:** 2026-10-03<br>
+**Primary Canonical Owner:** [`windows-host-and-notifications.md`](../04_Infrastructure/windows-host-and-notifications.md)<br>
 **Related Specifications:** [`SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md), [`voice-and-audio.md`](../01_Domains/voice-and-audio.md), [`ADR-0002`](ADR-0002-d1-pc-v1-release-boundary.md), [`ADR-0003`](ADR-0003-d2-windows-host-model.md)
 
 ## Decision History
 - Approved during PC V1 Architecture Decision Pass (2026-10-03).
 - Recorded in Master Decision Register (`DECISION_REGISTER.md`, Row 22).
+- Refined by human approval (Chris, 2026-10-11, PC V1 Option A): Window close (`×`) hides Flutter to system tray while runtime continues; unexpected UI termination leaves runtime alive; deliberate tray "Exit Companion" provides confirmed graceful full shutdown via `PC-HOST-005`.
 
 ## Context
 The PC V1 product requires a high-performance, polished, native-feeling desktop experience on Windows. The client must integrate seamlessly with the Windows system tray, handle local microphone audio capture and speaker playback with low latency, display native notifications, and communicate cleanly with the decoupled local Python/FastAPI runtime.
@@ -21,7 +22,7 @@ Previously, React Web served as the primary interface accessed via a browser tab
 - **Kotlin Android** remains an independent prototype/reference client deferred to a dedicated post-PC-V1 pass.
 - The Flutter client manages:
   - Native Windows desktop windowing, minimize-to-tray, and system tray context menus.
-  - Invariant: **"Quit UI != Stop Runtime"** (closing or quitting the Flutter client leaves the background runtime executing unless explicitly commanded to stop).
+  - Lifecycle: Closing window (`×`) hides to tray; accidental UI crash leaves runtime alive; deliberate tray "Exit Companion" performs confirmed full shutdown of local runtime, owned model processes, and Flutter via `PC-HOST-005` (with remote host shutdown strictly prohibited).
   - Audio hardware interaction (capturing mic input and playing synthesized speech streams).
   - Native toast notifications and desktop UI presentation.
 - The Local AI Runtime remains an independent Python/FastAPI process running as a background host process.

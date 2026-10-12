@@ -9,6 +9,46 @@ if TYPE_CHECKING:
     from app.schemas.llm import ChatMessage, ModelStatusResponse
 
 
+class GenerationStream:
+    """Request-scoped token stream carrying completion metadata."""
+
+    def __init__(
+        self,
+        token_iter: AsyncGenerator[str, None],
+        meta: Optional[Dict[str, Any]] = None,
+    ):
+        self._iter = token_iter
+        self._meta = meta if meta is not None else {"finish_reason": "stop"}
+
+    @property
+    def finish_reason(self) -> str:
+        return self._meta.get("finish_reason", "stop")
+
+    @finish_reason.setter
+    def finish_reason(self, value: str) -> None:
+        self._meta["finish_reason"] = value
+
+    def __aiter__(self) -> GenerationStream:
+        return self
+
+    async def __anext__(self) -> str:
+        return await self._iter.__anext__()
+
+    async def aclose(self) -> None:
+        if hasattr(self._iter, "aclose"):
+            await self._iter.aclose()
+
+
+class GeneratedText(str):
+    """String result carrying request-scoped generation metadata."""
+    finish_reason: str = "stop"
+
+    def __new__(cls, content: str, finish_reason: str = "stop"):
+        obj = super().__new__(cls, content)
+        obj.finish_reason = finish_reason
+        return obj
+
+
 class BaseLLMProvider(ABC):
     """Contract for local and fallback LLM inference engines."""
 
@@ -17,6 +57,15 @@ class BaseLLMProvider(ABC):
     def provider_name(self) -> str:
         """Return the unique identifier of the provider."""
         pass
+
+    @property
+    def last_finish_reason(self) -> Optional[str]:
+        """Fallback finish reason. Use request-scoped stream.finish_reason for concurrent safety."""
+        return getattr(self, "_last_finish_reason", "stop")
+
+    @last_finish_reason.setter
+    def last_finish_reason(self, value: Optional[str]) -> None:
+        self._last_finish_reason = value
 
     @abstractmethod
     async def load_model(self, model_name: Optional[str] = None, profile: Optional[str] = None) -> bool:

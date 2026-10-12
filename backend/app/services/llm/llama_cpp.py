@@ -7,16 +7,23 @@ import gc
 import importlib
 import json
 import logging
+import os
 from pathlib import Path
 import subprocess
-from typing import Any, AsyncGenerator, Dict, List, Optional
+import sys
+from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
 
 import httpx
 
 from app.core.config import settings
 from app.schemas.llm import ChatMessage, ModelStatusResponse
 from app.schemas.multimodal import ContentBlock, ResolvedImageContent, TextContent
-from app.services.llm.base import BaseLLMProvider
+from app.services.host_config import (
+    get_saved_model_selection,
+    resolve_effective_model,
+    save_model_selection,
+)
+from app.services.llm.base import BaseLLMProvider, GeneratedText, GenerationStream
 from app.services.llm.runtime_state import LLMRuntimeState
 from app.services.model_registry import (
     build_model_list,
@@ -36,7 +43,7 @@ def _decode_stream_event(event: str, data: str) -> tuple[str, bool]:
     if event == "error":
         raise ProviderGenerationError("UPSTREAM_GENERATION_ERROR")
     if data == "[DONE]":
-        return "", True
+        return "", True, None
     try:
         chunk = json.loads(data)
     except (ValueError, TypeError):
@@ -48,7 +55,7 @@ def _decode_stream_event(event: str, data: str) -> tuple[str, bool]:
     choices = chunk.get("choices")
     # Usage-only frames and role-only deltas carry no text, but are valid protocol.
     if choices == [] and isinstance(chunk.get("usage"), dict):
-        return "", False
+        return "", False, None
     if not isinstance(choices, list) or len(choices) != 1 or not isinstance(choices[0], dict):
         raise ProviderGenerationError("UPSTREAM_PROTOCOL_ERROR")
     choice = choices[0]
@@ -61,10 +68,13 @@ def _decode_stream_event(event: str, data: str) -> tuple[str, bool]:
     token = delta.get("content")
     if token is not None and not isinstance(token, str):
         raise ProviderGenerationError("UPSTREAM_PROTOCOL_ERROR")
-    return token or "", False
+    return token or "", False, reason
 
 
-async def _server_stream_tokens(response: httpx.Response) -> AsyncGenerator[str, None]:
+async def _server_stream_tokens(
+    response: httpx.Response,
+    on_finish: Optional[Callable[[str], None]] = None,
+) -> AsyncGenerator[str, None]:
     if not response.is_success:
         raise ProviderGenerationError("UPSTREAM_HTTP_ERROR")
     event = ""
@@ -72,7 +82,9 @@ async def _server_stream_tokens(response: httpx.Response) -> AsyncGenerator[str,
     async for line in response.aiter_lines():
         if not line:
             if data or event == "error":
-                token, done = _decode_stream_event(event, "\n".join(data))
+                token, done, finish_reason = _decode_stream_event(event, "\n".join(data))
+                if finish_reason and on_finish:
+                    on_finish(finish_reason)
                 if token:
                     yield token
                 if done:
@@ -84,7 +96,9 @@ async def _server_stream_tokens(response: httpx.Response) -> AsyncGenerator[str,
             event = line[6:].strip()
         # SSE comments, id and retry fields are non-terminal metadata.
     if data or event == "error":
-        token, done = _decode_stream_event(event, "\n".join(data))
+        token, done, finish_reason = _decode_stream_event(event, "\n".join(data))
+        if finish_reason and on_finish:
+            on_finish(finish_reason)
         if token:
             yield token
         if done:
@@ -294,7 +308,9 @@ class LlamaCppProvider(BaseLLMProvider):
             return False
 
     def _resolve_model_path(self, model_name: Optional[str] = None) -> Path:
-        target = model_name or settings.DEFAULT_MODEL_NAME
+        target, _ = resolve_effective_model(model_name)
+        if not target:
+            target = "model_not_selected"
         models_dir = settings.MODELS_DIR
 
         # Check in configured models directory
@@ -425,10 +441,18 @@ class LlamaCppProvider(BaseLLMProvider):
                     self._last_active_at = datetime.now(timezone.utc)
                     return True
 
-            # Determine candidate model identifier
-            candidate_identifier = model_name or settings.DEFAULT_MODEL_NAME
+            # Resolve target model according to precedence:
+            # 1. Explicitly requested model for the operation
+            # 2. Saved host-level model selection
+            # 3. Explicit development environment override, if present
+            # 4. Otherwise MODEL_SELECTION_REQUIRED
+            candidate_identifier, source = resolve_effective_model(model_name)
+            if not candidate_identifier:
+                self._last_error = "MODEL_SELECTION_REQUIRED"
+                self._runtime_state = LLMRuntimeState.MODEL_SELECTION_REQUIRED
+                return False
 
-            # Enforce verified registry matching
+            # Enforce verified registry matching - never silently fall back
             registry_entry = find_model_registry_entry(candidate_identifier)
             if not registry_entry or not registry_entry.library_state.primary_file_exists:
                 self._last_error = f"CONFIGURED_MODEL_NOT_FOUND: {candidate_identifier}"
@@ -466,6 +490,7 @@ class LlamaCppProvider(BaseLLMProvider):
             # Mode 1: Check if port is already listening before spawning
             if self._check_port_listening(settings.LLAMA_ROUTER_HOST, settings.LLAMA_ROUTER_PORT):
                 if await self._check_external_server():
+                    self._server_is_active = True
                     logger.info(f"Connected to active external llama-server at {settings.LLAMA_SERVER_URL}")
                     self._runtime_state = LLMRuntimeState.MODEL_LOADING
                     if await self._router_load_model(target_model_name):
@@ -532,12 +557,19 @@ class LlamaCppProvider(BaseLLMProvider):
                 launch_args.append("--no-mmproj-offload")
 
             self._runtime_state = LLMRuntimeState.SERVER_STARTING
+            popen_kwargs: Dict[str, Any] = {
+                "cwd": str(settings.LLAMA_CPP_BIN_DIR.resolve()),
+                "stdout": subprocess.DEVNULL,
+                "stderr": subprocess.DEVNULL,
+            }
+            if sys.platform == "win32":
+                popen_kwargs["creationflags"] = getattr(
+                    subprocess, "CREATE_NO_WINDOW", 0x08000000
+                )
             try:
                 proc = subprocess.Popen(
                     launch_args,
-                    cwd=str(settings.LLAMA_CPP_BIN_DIR.resolve()),
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
+                    **popen_kwargs,
                 )
                 self._server_process = proc
                 self._server_pid = proc.pid
@@ -796,7 +828,17 @@ class LlamaCppProvider(BaseLLMProvider):
                         self._last_active_at = datetime.now(timezone.utc)
                 else:
                     self._active_model_name = None
-                    self._runtime_state = LLMRuntimeState.MODEL_UNLOADED
+                    if self._runtime_state in (
+                        LLMRuntimeState.MODEL_ERROR,
+                        LLMRuntimeState.SERVER_ERROR,
+                        LLMRuntimeState.MODEL_LOADING,
+                        LLMRuntimeState.MODEL_UNLOADING,
+                    ):
+                        pass
+                    elif self._last_error == "MODEL_SELECTION_REQUIRED" or self._runtime_state == LLMRuntimeState.MODEL_SELECTION_REQUIRED:
+                        self._runtime_state = LLMRuntimeState.MODEL_SELECTION_REQUIRED
+                    else:
+                        self._runtime_state = LLMRuntimeState.MODEL_UNLOADED
             else:
                 router_running = False
                 self._server_is_active = False
@@ -805,11 +847,23 @@ class LlamaCppProvider(BaseLLMProvider):
                 self._applied_context_size = None
                 self._applied_gpu_layers = None
                 self._applied_mmproj_offload = None
-                if self._runtime_state not in (LLMRuntimeState.MODEL_ERROR, LLMRuntimeState.SERVER_ERROR):
+                if self._runtime_state not in (
+                    LLMRuntimeState.MODEL_ERROR,
+                    LLMRuntimeState.SERVER_ERROR,
+                    LLMRuntimeState.SERVER_STARTING,
+                    LLMRuntimeState.MODEL_LOADING,
+                    LLMRuntimeState.MODEL_UNLOADING,
+                    LLMRuntimeState.MODEL_SELECTION_REQUIRED,
+                ):
                     self._runtime_state = LLMRuntimeState.SERVER_STOPPED
         else:
             router_running = False
-            self._runtime_state = LLMRuntimeState.MODEL_READY if self._active_model_name else LLMRuntimeState.MODEL_UNLOADED
+            if self._active_model_name:
+                self._runtime_state = LLMRuntimeState.MODEL_READY
+            elif self._last_error == "MODEL_SELECTION_REQUIRED" or self._runtime_state == LLMRuntimeState.MODEL_SELECTION_REQUIRED:
+                self._runtime_state = LLMRuntimeState.MODEL_SELECTION_REQUIRED
+            else:
+                self._runtime_state = LLMRuntimeState.MODEL_UNLOADED
 
         req_params = self._get_profile_params(self._active_profile)
         available = []
@@ -853,6 +907,7 @@ class LlamaCppProvider(BaseLLMProvider):
         effective_applied_mmproj = self._applied_mmproj_offload if router_running else None
         compat_mmproj_offload = effective_applied_mmproj if effective_applied_mmproj is not None else requested_mmproj_offload
 
+
         return ModelStatusResponse(
             provider=self.provider_name,
             engine_version=self._engine_version,
@@ -860,6 +915,7 @@ class LlamaCppProvider(BaseLLMProvider):
             managed_by_core=self._managed_by_core and router_running,
             runtime_state=self._runtime_state,
             active_model=self._active_model_name if is_loaded else None,
+            selected_model=get_saved_model_selection(),
             model_resident=model_resident,
             model_loaded=model_loaded,
             model_awake=model_awake,
@@ -889,8 +945,11 @@ class LlamaCppProvider(BaseLLMProvider):
         if not self.is_loaded():
             loaded = await self.load_model()
             if not loaded:
+                if self._last_error == "MODEL_SELECTION_REQUIRED":
+                    raise RuntimeError("MODEL_SELECTION_REQUIRED")
                 raise RuntimeError(
-                    f"Failed to load local model. Ensure GGUF weights exist in '{settings.MODELS_DIR}' "
+                    f"Failed to load local model ({self._last_error or 'unknown error'}). "
+                    f"Ensure GGUF weights exist in '{settings.MODELS_DIR}' "
                     f"or start llama-server at '{settings.LLAMA_SERVER_URL}'."
                 )
 
@@ -920,7 +979,10 @@ class LlamaCppProvider(BaseLLMProvider):
                     if not resp.is_success:
                         raise ProviderGenerationError("UPSTREAM_HTTP_ERROR")
                     data = resp.json()
-                    return data["choices"][0]["message"]["content"]
+                    choice = data["choices"][0]
+                    reason = choice.get("finish_reason") or "stop"
+                    self.last_finish_reason = reason
+                    return GeneratedText(choice["message"]["content"], finish_reason=reason)
 
             # Route B: In-process llama_cpp
             native_model = self._llm
@@ -936,78 +998,96 @@ class LlamaCppProvider(BaseLLMProvider):
             worker = self._start_owned_worker(_infer, lease)
             worker_owns_lease = True
             output = await asyncio.shield(worker)
-            return output["choices"][0]["message"]["content"]
+            choice = output["choices"][0]
+            reason = choice.get("finish_reason") or "stop"
+            self.last_finish_reason = reason
+            return GeneratedText(choice["message"]["content"], finish_reason=reason)
         except httpx.HTTPError:
             raise ProviderGenerationError("UPSTREAM_TRANSPORT_ERROR") from None
         finally:
             if not worker_owns_lease:
                 self._release_generation(lease)
 
-    async def generate_stream(
+    def generate_stream(
         self,
         messages: List[ChatMessage],
         temperature: float = 0.7,
         max_tokens: int = 1024,
         **kwargs
-    ) -> AsyncGenerator[str, None]:
-        formatted_messages = _translate_messages(messages)
-        lease = await self._acquire_generation()
-        worker_owns_lease = False
+    ) -> GenerationStream:
+        stream_meta = {"finish_reason": "stop"}
 
-        try:
-            # Route A: Standalone llama-server streaming
-            if self._server_is_active:
-                payload = {
-                    "model": self._active_model_name or "default",
-                    "messages": formatted_messages,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                    "stream": True,
-                }
-                async with httpx.AsyncClient(timeout=120.0) as client:
-                    async with client.stream("POST", f"{settings.LLAMA_SERVER_URL}/chat/completions", json=payload) as response:
-                        async for token in _server_stream_tokens(response):
-                            yield token
-                return
+        def _record_finish(reason: str) -> None:
+            stream_meta["finish_reason"] = reason
+            self.last_finish_reason = reason
 
-            # Route B: In-process llama_cpp streaming
-            queue: asyncio.Queue = asyncio.Queue()
-            loop = asyncio.get_running_loop()
-            native_model = self._llm
+        async def _stream_generator() -> AsyncGenerator[str, None]:
+            formatted_messages = _translate_messages(messages)
+            lease = await self._acquire_generation()
+            worker_owns_lease = False
 
-            def _worker():
-                try:
-                    stream = native_model.create_chat_completion(
-                        messages=formatted_messages,
-                        temperature=temperature,
-                        max_tokens=max_tokens,
-                        stream=True,
-                    )
-                    for chunk in stream:
-                        delta = chunk["choices"][0].get("delta", {})
-                        token = delta.get("content")
-                        if token:
-                            loop.call_soon_threadsafe(queue.put_nowait, token)
-                except Exception as e:
-                    loop.call_soon_threadsafe(queue.put_nowait, e)
-                finally:
-                    loop.call_soon_threadsafe(queue.put_nowait, None)
+            try:
+                # Route A: Standalone llama-server streaming
+                if self._server_is_active:
+                    payload = {
+                        "model": self._active_model_name or "default",
+                        "messages": formatted_messages,
+                        "temperature": temperature,
+                        "max_tokens": max_tokens,
+                        "stream": True,
+                    }
+                    async with httpx.AsyncClient(timeout=120.0) as client:
+                        async with client.stream("POST", f"{settings.LLAMA_SERVER_URL}/chat/completions", json=payload) as response:
+                            async for token in _server_stream_tokens(response, on_finish=_record_finish):
+                                yield token
+                    return
 
-            self._start_owned_worker(_worker, lease)
-            worker_owns_lease = True
+                # Route B: In-process llama_cpp streaming
+                queue: asyncio.Queue = asyncio.Queue()
+                loop = asyncio.get_running_loop()
+                native_model = self._llm
 
-            while True:
-                item = await queue.get()
-                if item is None:
-                    break
-                if isinstance(item, Exception):
-                    raise item
-                yield item
-        except httpx.HTTPError:
-            raise ProviderGenerationError("UPSTREAM_TRANSPORT_ERROR") from None
-        finally:
-            if not worker_owns_lease:
-                self._release_generation(lease)
+                def _worker():
+                    try:
+                        stream = native_model.create_chat_completion(
+                            messages=formatted_messages,
+                            temperature=temperature,
+                            max_tokens=max_tokens,
+                            stream=True,
+                        )
+                        for chunk in stream:
+                            choices = chunk.get("choices", [])
+                            if choices:
+                                choice = choices[0]
+                                reason = choice.get("finish_reason")
+                                if reason:
+                                    _record_finish(reason)
+                                delta = choice.get("delta", {})
+                                token = delta.get("content")
+                                if token:
+                                    loop.call_soon_threadsafe(queue.put_nowait, token)
+                    except Exception as e:
+                        loop.call_soon_threadsafe(queue.put_nowait, e)
+                    finally:
+                        loop.call_soon_threadsafe(queue.put_nowait, None)
+
+                self._start_owned_worker(_worker, lease)
+                worker_owns_lease = True
+
+                while True:
+                    item = await queue.get()
+                    if item is None:
+                        break
+                    if isinstance(item, Exception):
+                        raise item
+                    yield item
+            except httpx.HTTPError:
+                raise ProviderGenerationError("UPSTREAM_TRANSPORT_ERROR") from None
+            finally:
+                if not worker_owns_lease:
+                    self._release_generation(lease)
+
+        return GenerationStream(_stream_generator(), meta=stream_meta)
 
     async def shutdown(self) -> None:
         """Drain in-flight generation, unload model, stop router."""

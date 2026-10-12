@@ -1,12 +1,19 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'package:companion_api/companion_api.dart';
 import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:ai_companion_desktop/controllers/desktop_settings_controller.dart';
 import 'package:ai_companion_desktop/features/chat/desktop_chat_controller.dart';
+import 'package:ai_companion_desktop/platform/desktop_client_settings.dart';
 import 'package:ai_companion_desktop/screens/chat_screen.dart';
+import 'package:ai_companion_desktop/screens/settings_screen.dart';
+import 'package:ai_companion_desktop/shell/desktop_shell.dart';
 
 class MockCompanionClient extends CompanionClient {
   bool shouldHealthSucceed;
@@ -45,7 +52,7 @@ class MockCompanionClient extends CompanionClient {
   }
 
   @override
-  Future<AuthVerifyResponse> verifyAuth() async {
+  Future<AuthVerifyResponse> verifyAuth({Duration timeout = const Duration(seconds: 5)}) async {
     verifyAuthCalled = true;
     if (authStatusCode == 401) {
       throw const CompanionApiException(statusCode: 401, message: 'Invalid or expired token.');
@@ -60,6 +67,8 @@ class MockCompanionClient extends CompanionClient {
   String? lastDeletedConvId;
   ModelStatusResponse? customModelStatus;
   List<MessageOut>? customMessages;
+  Map<String, List<MessageOut>>? customMessagesPerConversation;
+  Future<MessageListOut> Function(String conversationId)? onListMessages;
   List<ConversationOut>? customConversations;
   List<MessageOut> _storedMessages = [
     MessageOut(
@@ -153,6 +162,13 @@ class MockCompanionClient extends CompanionClient {
     int skip = 0,
     int limit = 100,
   }) async {
+    if (onListMessages != null) {
+      return onListMessages!(conversationId);
+    }
+    if (customMessagesPerConversation != null && customMessagesPerConversation!.containsKey(conversationId)) {
+      final msgs = customMessagesPerConversation![conversationId]!;
+      return MessageListOut(items: msgs, total: msgs.length);
+    }
     if (customMessages != null) {
       return MessageListOut(items: customMessages!, total: customMessages!.length);
     }
@@ -216,10 +232,38 @@ class MockCompanionClient extends CompanionClient {
     sendMessageCalled = true;
     if (customEventStream != null) {
       bool accepted = false;
+      String currentText = '';
       await for (final event in customEventStream!) {
         if (!accepted && autoAcceptStream) {
           accepted = true;
           onAccepted?.call();
+          _storedMessages.add(
+            MessageOut(
+              id: 'msg-u-${DateTime.now().millisecondsSinceEpoch}',
+              conversationId: conversationId,
+              sender: 'user',
+              content: payload.userText,
+              status: 'completed',
+              sequenceNo: _storedMessages.length + 1,
+              createdAt: DateTime.now().toUtc().toIso8601String(),
+            ),
+          );
+        }
+        if (event is SseTokenEvent) {
+          currentText += event.token;
+        }
+        if (event is SseDoneEvent) {
+          _storedMessages.add(
+            MessageOut(
+              id: 'msg-a-${DateTime.now().millisecondsSinceEpoch}',
+              conversationId: conversationId,
+              sender: 'assistant',
+              content: currentText,
+              status: event.finishReason == 'length' ? 'length' : 'completed',
+              sequenceNo: _storedMessages.length + 1,
+              createdAt: DateTime.now().toUtc().toIso8601String(),
+            ),
+          );
         }
         yield event;
       }
@@ -342,6 +386,105 @@ void main() {
       expect(ctrl.canSend, isTrue);
 
       ctrl.dispose();
+    });
+
+    test('production-style controller begins on Host A, updates to Host B, and subsequent requests target B never A', () async {
+      final prevOverrides = HttpOverrides.current;
+      HttpOverrides.global = null;
+      final serverA = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final serverB = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+
+      final requestsA = <String>[];
+      final requestsB = <String>[];
+
+      void handleRequest(HttpRequest request, List<String> log) {
+        log.add(request.uri.path);
+        final response = request.response
+          ..statusCode = 200
+          ..headers.contentType = ContentType.json;
+        if (request.uri.path == '/api/v1/health') {
+          response.write(jsonEncode({'status': 'healthy'}));
+        } else if (request.uri.path == '/api/v1/auth/verify') {
+          response.write(jsonEncode({'authenticated': true, 'token_type': 'Bearer'}));
+        } else if (request.uri.path == '/api/v1/models') {
+          response.write(jsonEncode({
+            'active_model': 'test-model',
+            'model_loaded': true,
+            'model_awake': true,
+            'runtime_state': 'MODEL_READY',
+          }));
+        } else if (request.uri.path == '/api/v1/conversations') {
+          response.write(jsonEncode([]));
+        } else {
+          response.write(jsonEncode({'status': 'ok'}));
+        }
+        response.close();
+      }
+
+      serverA.listen((request) => handleRequest(request, requestsA));
+      serverB.listen((request) => handleRequest(request, requestsB));
+
+      try {
+        final initialClient = CompanionClient(
+          baseUrl: 'http://127.0.0.1:${serverA.port}',
+          credentialStore: InMemoryCredentialStore('token-a'),
+        );
+
+        // Production-style instantiation: NO clientFactory provided!
+        final controller = DesktopChatController(client: initialClient);
+        expect(controller.client.baseUri.port, equals(serverA.port));
+
+        await controller.checkConnection();
+        expect(requestsA, contains('/api/v1/health'));
+        expect(requestsB, isEmpty);
+
+        // Reconfigure to Host B
+        await controller.updateConfiguration(
+          baseUrl: 'http://127.0.0.1:${serverB.port}',
+          pairingToken: 'token-b',
+        );
+
+        // Actual client endpoint must be replaced to Host B!
+        expect(controller.client.baseUri.port, equals(serverB.port));
+        expect(controller.client.baseUri.toString(), equals('http://127.0.0.1:${serverB.port}'));
+
+        final aCountAfterReconfig = requestsA.length;
+        expect(requestsB, contains('/api/v1/health'));
+
+        // Subsequent checkConnection targets B, never A
+        await controller.checkConnection();
+        expect(requestsA.length, equals(aCountAfterReconfig));
+        expect(requestsB.length, greaterThan(1));
+
+        controller.dispose();
+      } finally {
+        HttpOverrides.global = prevOverrides;
+        await serverA.close(force: true);
+        await serverB.close(force: true);
+      }
+    });
+
+    test('injected test clientFactory remains supported and is called on updateConfiguration', () async {
+      final mockA = MockCompanionClient(token: 'token-a');
+      final mockB = MockCompanionClient(token: 'token-b');
+      var factoryCalledWithUrl = '';
+
+      final controller = DesktopChatController(
+        client: mockA,
+        clientFactory: ({required baseUrl, credentialStore}) {
+          factoryCalledWithUrl = baseUrl;
+          return mockB;
+        },
+      );
+
+      await controller.updateConfiguration(
+        baseUrl: 'http://127.0.0.1:9999',
+        pairingToken: 'token-b',
+      );
+
+      expect(factoryCalledWithUrl, equals('http://127.0.0.1:9999'));
+      expect(controller.client, same(mockB));
+      controller.dispose();
     });
 
     test('sendMessage throws StateError when runtime is not connected', () async {
@@ -1241,6 +1384,840 @@ void main() {
       expect(controller.activeConversation?.title, 'Model-Generated Title');
 
       controller.dispose();
+    });
+
+    testWidgets('Composer keyboard shortcuts: Shift+Enter inserts newline without sending, Enter sends exactly once', (WidgetTester tester) async {
+      final mockClient = MockCompanionClient();
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final textFieldFinder = find.byType(TextField);
+      expect(textFieldFinder, findsOneWidget);
+
+      // 1. Enter text
+      await tester.tap(textFieldFinder);
+      await tester.pump();
+      await tester.enterText(textFieldFinder, 'Line 1');
+      await tester.pump();
+
+      final textField = tester.widget<TextField>(textFieldFinder);
+      textField.controller!.selection = const TextSelection.collapsed(offset: 6);
+
+      // 2. Press Shift+Enter
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pump();
+
+      // Must NOT send message
+      expect(mockClient.sendMessageCalled, isFalse);
+      // Text must contain newline
+      expect(textField.controller!.text, equals('Line 1\n'));
+
+      // 3. Press Enter (without Shift) -> sends message
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+
+      expect(mockClient.sendMessageCalled, isTrue);
+
+      controller.dispose();
+    });
+
+    testWidgets('Composer keyboard shortcuts: Empty composer Enter does not send or insert newline', (WidgetTester tester) async {
+      final mockClient = MockCompanionClient();
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final textFieldFinder = find.byType(TextField);
+      await tester.tap(textFieldFinder);
+      await tester.pump();
+
+      // Empty text field: press Enter
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+
+      expect(mockClient.sendMessageCalled, isFalse);
+      final textField = tester.widget<TextField>(textFieldFinder);
+      expect(textField.controller!.text, isEmpty);
+
+      controller.dispose();
+    });
+
+    testWidgets('Composer keyboard shortcuts: Shift+Enter replaces active text selection with newline', (WidgetTester tester) async {
+      final mockClient = MockCompanionClient();
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final textFieldFinder = find.byType(TextField);
+      await tester.enterText(textFieldFinder, 'Hello REPLACE World');
+      await tester.pump();
+
+      final textField = tester.widget<TextField>(textFieldFinder);
+      // Select 'REPLACE' (offsets 6 to 13)
+      textField.controller!.selection = const TextSelection(baseOffset: 6, extentOffset: 13);
+
+      // Press Shift+Enter
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pump();
+
+      expect(mockClient.sendMessageCalled, isFalse);
+      expect(textField.controller!.text, equals('Hello \n World'));
+      expect(textField.controller!.selection.baseOffset, equals(7));
+
+      controller.dispose();
+    });
+
+    testWidgets('Composer: Send button works unchanged and sends current draft', (WidgetTester tester) async {
+      final mockClient = MockCompanionClient();
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final textFieldFinder = find.byType(TextField);
+      await tester.enterText(textFieldFinder, 'Sent via button');
+      await tester.pump();
+
+      final sendBtnFinder = find.byIcon(Icons.send_rounded);
+      expect(sendBtnFinder, findsOneWidget);
+
+      await tester.tap(sendBtnFinder);
+      await tester.pump();
+
+      expect(mockClient.sendMessageCalled, isTrue);
+
+      controller.dispose();
+    });
+
+    testWidgets('Chat -> Settings -> Chat restores exact prior reading area and unsent draft', (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1280, 800);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final mockClient = MockCompanionClient();
+      final chatController = DesktopChatController(client: mockClient);
+      await chatController.checkConnection();
+      await chatController.loadConversations();
+
+      final settingsController = DesktopSettingsController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: DesktopShell(
+            controller: settingsController,
+            chatController: chatController,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Enter unsent draft in ChatScreen
+      final textFieldFinder = find.byType(TextField);
+      expect(textFieldFinder, findsOneWidget);
+      await tester.enterText(textFieldFinder, 'My important unsent draft');
+      await tester.pump();
+
+      // Navigate to Settings
+      settingsController.setDestination(DesktopNavDestination.settings);
+      await tester.pumpAndSettle();
+
+      // Verify SettingsScreen is active (chat screen is offstage)
+      expect(find.text('Settings'), findsWidgets);
+
+      // Navigate back to Chat
+      settingsController.setDestination(DesktopNavDestination.chat);
+      await tester.pumpAndSettle();
+
+      // Verify exact draft is restored in composer
+      expect(find.text('My important unsent draft'), findsOneWidget);
+
+      chatController.dispose();
+    });
+
+    testWidgets('Switching conversations maintains independent draft state and scroll offsets', (WidgetTester tester) async {
+      final mockClient = MockCompanionClient();
+      final conv1 = ConversationOut(
+        id: 'conv-1',
+        title: 'Thread 1',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+        messageCount: 0,
+      );
+      final conv2 = ConversationOut(
+        id: 'conv-2',
+        title: 'Thread 2',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+        messageCount: 0,
+      );
+      mockClient.customConversations = [conv1, conv2];
+      mockClient.customMessages = [];
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Conversation 1 is active; type draft
+      final textFieldFinder = find.byType(TextField);
+      await tester.enterText(textFieldFinder, 'Draft for Conversation 1');
+      await tester.pump();
+      expect(controller.getDraft('conv-1'), equals('Draft for Conversation 1'));
+
+      // Switch to Conversation 2
+      await controller.selectConversation(conv2);
+      await tester.pumpAndSettle();
+
+      // Conversation 2 composer is empty
+      final textFieldWidget2 = tester.widget<TextField>(textFieldFinder);
+      expect(textFieldWidget2.controller!.text, equals(''));
+
+      // Type draft in Conversation 2
+      await tester.enterText(textFieldFinder, 'Draft for Conversation 2');
+      await tester.pump();
+      expect(controller.getDraft('conv-2'), equals('Draft for Conversation 2'));
+
+      // Switch back to Conversation 1
+      await controller.selectConversation(conv1);
+      await tester.pumpAndSettle();
+
+      // Conversation 1 draft is restored!
+      final textFieldWidget1 = tester.widget<TextField>(textFieldFinder);
+      expect(textFieldWidget1.controller!.text, equals('Draft for Conversation 1'));
+
+      controller.dispose();
+    });
+
+    testWidgets('Auto-follow generation only if near bottom; reading older messages does not force-scroll', (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1280, 800);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final mockClient = MockCompanionClient();
+      final messages = List<MessageOut>.generate(
+        30,
+        (i) => MessageOut(
+          id: 'msg-$i',
+          conversationId: 'conv-1',
+          sender: i % 2 == 0 ? 'user' : 'assistant',
+          content: 'Message $i: This is a test turn with enough content to scroll vertically.',
+          status: 'completed',
+          sequenceNo: i + 1,
+          createdAt: DateTime.now().toUtc().toIso8601String(),
+        ),
+      );
+      final conv = ConversationOut(
+        id: 'conv-1',
+        title: 'Thread 1',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+        messageCount: 30,
+      );
+      mockClient.customConversations = [conv];
+      mockClient.customMessages = messages;
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final listViewFinder = find.byType(ListView);
+      expect(listViewFinder, findsOneWidget);
+
+      final scrollableFinder = find.descendant(of: listViewFinder, matching: find.byType(Scrollable)).first;
+      final scrollable = tester.state<ScrollableState>(scrollableFinder);
+      final maxScroll = scrollable.position.maxScrollExtent;
+      expect(maxScroll, greaterThan(0.0));
+
+      // First opening populated conversation: shows latest turn (scrolled to bottom)
+      expect(scrollable.position.pixels, closeTo(maxScroll, 10.0));
+
+      // User scrolls up to read older messages (e.g. offset 100.0)
+      scrollable.position.jumpTo(100.0);
+      await tester.pump();
+      expect(scrollable.position.pixels, equals(100.0));
+
+      // Simulate generation event while scrolled up
+      // When generating and user is NOT near bottom and did not explicitly send,
+      // it should NOT yank the viewport back down!
+      controller.setScrollOffset('conv-1', 100.0);
+      await tester.pump();
+
+      expect(scrollable.position.pixels, equals(100.0));
+
+      controller.dispose();
+    });
+
+    testWidgets('Delayed message loading with 30+ messages: first opening shows latest message', (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1280, 800);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final mockClient = MockCompanionClient();
+      final messages = List<MessageOut>.generate(
+        35,
+        (i) => MessageOut(
+          id: 'msg-$i',
+          conversationId: 'conv-1',
+          sender: i % 2 == 0 ? 'user' : 'assistant',
+          content: 'Turn $i: This is a test turn with substantial content to ensure vertical scroll extent.',
+          status: 'completed',
+          sequenceNo: i + 1,
+          createdAt: DateTime.now().toUtc().toIso8601String(),
+        ),
+      );
+      final conv = ConversationOut(
+        id: 'conv-1',
+        title: 'Thread 1',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+        messageCount: 35,
+      );
+      mockClient.customConversations = [conv];
+
+      // Delay message loading with a completer
+      final completer = Completer<MessageListOut>();
+      mockClient.onListMessages = (id) => completer.future;
+
+      final controller = DesktopChatController(client: mockClient);
+      unawaited(controller.checkConnection());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      // First frame pumped: messages are still loading asynchronously, welcome stage is shown
+      await tester.pump();
+      expect(find.byType(ListView), findsNothing);
+
+      // Complete message load
+      completer.complete(MessageListOut(items: messages, total: messages.length));
+      await tester.pumpAndSettle();
+
+      final listViewFinder = find.byType(ListView);
+      expect(listViewFinder, findsOneWidget);
+
+      final scrollableFinder = find.descendant(of: listViewFinder, matching: find.byType(Scrollable)).first;
+      final scrollable = tester.state<ScrollableState>(scrollableFinder);
+      final maxScroll = scrollable.position.maxScrollExtent;
+      expect(maxScroll, greaterThan(100.0));
+
+      // Shows latest message (scrolled to bottom)
+      expect(scrollable.position.pixels, closeTo(maxScroll, 50.0));
+
+      controller.dispose();
+    });
+
+    testWidgets('Switching conversations restores each position with 30+ messages', (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1280, 800);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final mockClient = MockCompanionClient();
+      final conv1 = ConversationOut(
+        id: 'conv-1',
+        title: 'Thread 1',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+        messageCount: 35,
+      );
+      final conv2 = ConversationOut(
+        id: 'conv-2',
+        title: 'Thread 2',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+        messageCount: 35,
+      );
+      mockClient.customConversations = [conv1, conv2];
+
+      final messages1 = List<MessageOut>.generate(
+        35,
+        (i) => MessageOut(
+          id: 'msg-c1-$i',
+          conversationId: 'conv-1',
+          sender: i % 2 == 0 ? 'user' : 'assistant',
+          content: 'Thread 1 Turn $i: Message content for testing scroll restoration position.',
+          status: 'completed',
+          sequenceNo: i + 1,
+          createdAt: DateTime.now().toUtc().toIso8601String(),
+        ),
+      );
+      final messages2 = List<MessageOut>.generate(
+        35,
+        (i) => MessageOut(
+          id: 'msg-c2-$i',
+          conversationId: 'conv-2',
+          sender: i % 2 == 0 ? 'user' : 'assistant',
+          content: 'Thread 2 Turn $i: Different content for second thread scroll extent.',
+          status: 'completed',
+          sequenceNo: i + 1,
+          createdAt: DateTime.now().toUtc().toIso8601String(),
+        ),
+      );
+
+      mockClient.customMessagesPerConversation = {
+        'conv-1': messages1,
+        'conv-2': messages2,
+      };
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final listViewFinder = find.byType(ListView);
+      final scrollableFinder = find.descendant(of: listViewFinder, matching: find.byType(Scrollable)).first;
+      var scrollable = tester.state<ScrollableState>(scrollableFinder);
+      final maxScroll1 = scrollable.position.maxScrollExtent;
+      expect(maxScroll1, greaterThan(100.0));
+      expect(scrollable.position.pixels, closeTo(maxScroll1, 5.0));
+
+      // User scrolls Conv 1 up to 150.0
+      scrollable.position.jumpTo(150.0);
+      await tester.pump();
+      expect(scrollable.position.pixels, equals(150.0));
+
+      // Switch to Conv 2
+      await controller.selectConversation(conv2);
+      await tester.pumpAndSettle();
+
+      scrollable = tester.state<ScrollableState>(scrollableFinder);
+      final maxScroll2 = scrollable.position.maxScrollExtent;
+      expect(maxScroll2, greaterThan(100.0));
+      // First opening of Conv 2 shows latest message
+      expect(scrollable.position.pixels, closeTo(maxScroll2, 5.0));
+
+      // User scrolls Conv 2 to 300.0
+      scrollable.position.jumpTo(300.0);
+      await tester.pump();
+      expect(scrollable.position.pixels, equals(300.0));
+
+      // Switch back to Conv 1
+      await controller.selectConversation(conv1);
+      await tester.pumpAndSettle();
+
+      scrollable = tester.state<ScrollableState>(scrollableFinder);
+      // Conv 1 scroll offset is restored to 150.0!
+      expect(scrollable.position.pixels, closeTo(150.0, 1.0));
+
+      // Switch back to Conv 2
+      await controller.selectConversation(conv2);
+      await tester.pumpAndSettle();
+
+      scrollable = tester.state<ScrollableState>(scrollableFinder);
+      // Conv 2 scroll offset is restored to 300.0!
+      expect(scrollable.position.pixels, closeTo(300.0, 1.0));
+
+      controller.dispose();
+    });
+
+    testWidgets('Chat -> Settings -> Chat preserves reading position', (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1280, 800);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final mockClient = MockCompanionClient();
+      final conv = ConversationOut(
+        id: 'conv-1',
+        title: 'Thread 1',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+        messageCount: 35,
+      );
+      mockClient.customConversations = [conv];
+      final messages = List<MessageOut>.generate(
+        35,
+        (i) => MessageOut(
+          id: 'msg-$i',
+          conversationId: 'conv-1',
+          sender: i % 2 == 0 ? 'user' : 'assistant',
+          content: 'Message $i: Scroll testing turn with sufficient length.',
+          status: 'completed',
+          sequenceNo: i + 1,
+          createdAt: DateTime.now().toUtc().toIso8601String(),
+        ),
+      );
+      mockClient.customMessages = messages;
+
+      final chatController = DesktopChatController(client: mockClient);
+      final settingsController = DesktopSettingsController();
+      await chatController.checkConnection();
+      await chatController.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: DesktopShell(
+              controller: settingsController,
+              chatController: chatController,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final listViewFinder = find.descendant(of: find.byType(ChatScreen), matching: find.byType(ListView));
+      expect(listViewFinder, findsOneWidget);
+
+      final scrollableFinder = find.descendant(of: listViewFinder, matching: find.byType(Scrollable)).first;
+      var scrollable = tester.state<ScrollableState>(scrollableFinder);
+      expect(scrollable.position.pixels, closeTo(scrollable.position.maxScrollExtent, 50.0));
+
+      // Scroll up to reading position (e.g. 200.0)
+      scrollable.position.jumpTo(200.0);
+      await tester.pump();
+      expect(scrollable.position.pixels, equals(200.0));
+
+      // Navigate to Settings
+      settingsController.setDestination(DesktopNavDestination.settings);
+      await tester.pumpAndSettle();
+      expect(find.byType(ChatScreen), findsNothing);
+      expect(find.byType(SettingsScreen), findsOneWidget);
+
+      // Navigate back to Chat
+      settingsController.setDestination(DesktopNavDestination.chat);
+      await tester.pumpAndSettle();
+      expect(find.byType(ChatScreen), findsOneWidget);
+
+      scrollable = tester.state<ScrollableState>(scrollableFinder);
+      // Reading position preserved!
+      expect(scrollable.position.pixels, closeTo(200.0, 1.0));
+
+      chatController.dispose();
+      settingsController.dispose();
+    });
+
+    testWidgets('Older-message reading is never unexpectedly overridden by subsequent controller events', (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1280, 800);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final mockClient = MockCompanionClient();
+      final conv = ConversationOut(
+        id: 'conv-1',
+        title: 'Thread 1',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+        messageCount: 35,
+      );
+      mockClient.customConversations = [conv];
+      final messages = List<MessageOut>.generate(
+        35,
+        (i) => MessageOut(
+          id: 'msg-$i',
+          conversationId: 'conv-1',
+          sender: i % 2 == 0 ? 'user' : 'assistant',
+          content: 'Turn $i: Reading older messages test content.',
+          status: 'completed',
+          sequenceNo: i + 1,
+          createdAt: DateTime.now().toUtc().toIso8601String(),
+        ),
+      );
+      mockClient.customMessages = messages;
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final listViewFinder = find.byType(ListView);
+      final scrollableFinder = find.descendant(of: listViewFinder, matching: find.byType(Scrollable)).first;
+      final scrollable = tester.state<ScrollableState>(scrollableFinder);
+      expect(scrollable.position.pixels, closeTo(scrollable.position.maxScrollExtent, 50.0));
+
+      // User scrolls to offset 120.0 to read older messages
+      scrollable.position.jumpTo(120.0);
+      await tester.pump();
+      expect(scrollable.position.pixels, equals(120.0));
+
+      // Multiple controller updates fire (e.g. status change, rebuilds, model status poll)
+      await controller.checkConnection();
+      await tester.pumpAndSettle();
+
+      // The reading position remains untouched at 120.0!
+      expect(scrollable.position.pixels, equals(120.0));
+
+      controller.dispose();
+    });
+
+    testWidgets('Response reached generation limit UI renders when finishReason is length and tapping continue sends continuation', (tester) async {
+      final mockClient = MockCompanionClient();
+      const conv = ConversationOut(
+        id: 'conv-limit-1',
+        title: 'Limit Test',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: '2026-03-30T10:00:00Z',
+        updatedAt: '2026-03-30T10:00:00Z',
+        messageCount: 0,
+      );
+      mockClient.customConversations = [conv];
+      final streamCtrl = StreamController<SseEvent>();
+      mockClient.customEventStream = streamCtrl.stream;
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Send a message that hits the length limit
+      final sendFuture = controller.sendMessage('Generate long text');
+      streamCtrl.add(const SseTokenEvent('This is partial output'));
+      await tester.pump();
+      streamCtrl.add(const SseDoneEvent(finishReason: 'length'));
+      await streamCtrl.close();
+      await sendFuture;
+      await tester.pumpAndSettle();
+
+      // Check controller message status
+      expect(controller.messages.last.status, equals('length'));
+
+      // Check UI renders limit indicator and continue button
+      expect(find.text('Response reached generation limit'), findsOneWidget);
+      final continueBtnFinder = find.byKey(const Key('continue_response_button'));
+      expect(continueBtnFinder, findsOneWidget);
+
+      // Now tap continue response button
+      final secondStreamCtrl = StreamController<SseEvent>();
+      mockClient.customEventStream = secondStreamCtrl.stream;
+      await tester.tap(continueBtnFinder);
+      await tester.pump();
+
+      // Verify that 'Continue' was submitted and controller is generating
+      expect(controller.isGenerating, isTrue);
+      secondStreamCtrl.add(const SseTokenEvent(' and here is the rest.'));
+      secondStreamCtrl.add(const SseDoneEvent(finishReason: 'stop'));
+      await secondStreamCtrl.close();
+      await tester.pumpAndSettle();
+
+      expect(controller.messages.last.status, equals('completed'));
+      controller.dispose();
+    });
+
+    test('stream disconnects without SseDoneEvent transitions assistant turn status to interrupted', () async {
+      final mockClient = MockCompanionClient();
+      const conv = ConversationOut(
+        id: 'conv-interrupted-1',
+        title: 'Interrupted Test',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: '2026-03-30T10:00:00Z',
+        updatedAt: '2026-03-30T10:00:00Z',
+        messageCount: 0,
+      );
+      mockClient.customConversations = [conv];
+      final streamCtrl = StreamController<SseEvent>();
+      mockClient.customEventStream = streamCtrl.stream;
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      final sendFuture = controller.sendMessage('Test prompt that will disconnect');
+      streamCtrl.add(const SseTokenEvent('Incomplete response'));
+      await Future<void>.delayed(Duration.zero);
+      // Close stream without emitting SseDoneEvent
+      await streamCtrl.close();
+      await sendFuture;
+
+      expect(controller.messages.last.status, equals('interrupted'));
+      controller.dispose();
+    });
+
+    testWidgets('ChatScreen zoom shortcuts adjust conversation textScaler without scaling composer or chrome', (tester) async {
+      final mockClient = MockCompanionClient();
+      const conv = ConversationOut(
+        id: 'conv-zoom-1',
+        title: 'Zoom Test',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: '2026-03-30T10:00:00Z',
+        updatedAt: '2026-03-30T10:00:00Z',
+        messageCount: 2,
+      );
+      mockClient.customConversations = [conv];
+      final tempDir = Directory.systemTemp.createTempSync('chat_zoom_test');
+      final settingsFile = '${tempDir.path}\\client_settings.json';
+      final clientSettings = DesktopClientSettings(customFilePath: settingsFile);
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller, clientSettings: clientSettings),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final listViewFinder = find.byType(ListView);
+      expect(listViewFinder, findsOneWidget);
+      final initialMediaQuery = tester.widget<MediaQuery>(
+        find.ancestor(of: listViewFinder, matching: find.byType(MediaQuery)).first,
+      );
+      expect(initialMediaQuery.data.textScaler.scale(10), equals(10.0));
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.equal);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final zoomedMediaQuery = tester.widget<MediaQuery>(
+        find.ancestor(of: listViewFinder, matching: find.byType(MediaQuery)).first,
+      );
+      expect(zoomedMediaQuery.data.textScaler.scale(10), closeTo(11.0, 0.05));
+
+      final composerFinder = find.byType(TextField);
+      final composerMediaQuery = tester.widget<MediaQuery>(
+        find.ancestor(of: composerFinder, matching: find.byType(MediaQuery)).first,
+      );
+      expect(composerMediaQuery.data.textScaler.scale(10), equals(10.0));
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.digit0);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final resetMediaQuery = tester.widget<MediaQuery>(
+        find.ancestor(of: listViewFinder, matching: find.byType(MediaQuery)).first,
+      );
+      expect(resetMediaQuery.data.textScaler.scale(10), equals(10.0));
+
+      controller.dispose();
+      tempDir.deleteSync(recursive: true);
     });
   });
 }

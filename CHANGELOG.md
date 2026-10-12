@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added & Verified (2026-10-12 - M2-H1: Windows Runtime Process Supervision & Desktop Chat Quality)
+
+- **Windows Runtime Supervision (`PC-HOST-001`)**:
+  - Implemented decoupled, windowless runtime launch and supervision for the Local AI Runtime on Windows using `pythonw.exe` and `subprocess.CREATE_NO_WINDOW` for `llama-server.exe` child inference processes without popup console windows.
+  - Added atomic kernel file-locking via `%LOCALAPPDATA%\AI Companion\runtime.lock` with `FileMode.append` and `RandomAccessFile.lock(FileLock.exclusive)`, writing strictly through the locked handle to eliminate truncation races.
+  - Implemented double-checked locking under guard, authenticated identification (`POST /api/v1/auth/verify` with DPAPI pairing token) decoupled from public `GET /api/v1/health` reachability, and orthogonal supervision state modeling (`localLoopback` vs `remoteHost`).
+  - Added safe stale-lock recovery, alien port conflict detection failing closed without process killing, and rotating file logging via `COMPANION_LOG_FILE` with secret redaction.
+  - Integrated system tray menu ("Hide Window to Tray", developer-only "Quit UI Only", and disabled "Exit Companion (Full Shutdown - Planned PC-HOST-005)") and Settings supervision diagnostics.
+  - Delivered external PowerShell acceptance test harness (`scripts/verify_windows_runtime_supervision.ps1`) executing all 6 core lifecycle scenarios against isolated test roots and ports.
+- **Desktop Chat Quality Follow-Up (`PC-CLIENT-006` / `PC-CLIENT-010`)**:
+  - **Generation Completion & Limits:** Preserved upstream `finish_reason` end-to-end (`llama.cpp` -> per-request `GenerationStream` metadata -> orchestrator SSE `done` event -> Flutter client); prevented concurrency races across simultaneous turns; bounded token headroom against remaining context capacity; displayed clear "Response reached generation limit" indicator in chat with actionable continuation turn.
+  - **Wide Tables:** Added visible horizontal scrollbar (`thumbVisibility: true`), touch/mouse/trackpad drag gesture configuration, and constrained text cell wrapping (80..360 px) in `_MarkdownTableWidget`.
+  - **Mathematical Typesetting:** Integrated textbook LaTeX rendering via `flutter_math_fork` for display `\[ ... \]` and inline `\( ... \)` formulas with raw source copying, keeping literal fenced code blocks (` ```latex `) unconverted.
+  - **Conversation Text Zoom:** Implemented scoped text zoom (80%–160%) via `Ctrl+Wheel` and `Ctrl+=/- /0` applied strictly to the conversation viewport, persisted across restarts in `%LOCALAPPDATA%\AI Companion\client_settings.json` under key `chatZoomLevel` with `COMPANION_CLIENT_SETTINGS_FILE` override support.
+  - **Truthful Model Unload:** Added authenticated `POST /api/v1/models/unload` returning HTTP 409 when generating and HTTP 500 on failure; verified `model_loaded == false` before announcing success in Flutter Settings; preserved saved model selection.
+
 ### Added (2026-10-07 - MOBILE-ARCH: Mobile V1 Batch D Reconciliation & Canonical Promotion)
 
 - **Mobile Batch D Canonical Promotion**: Promoted 104 approved product and architecture decisions across core baseline, conversation branching, memory overlays, local tool gateway, composable voice, conditional Health Connect, multimodal vision, and mobile companion UX.

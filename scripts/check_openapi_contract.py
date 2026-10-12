@@ -34,6 +34,7 @@ if str(BACKEND_DIR) not in sys.path:
 REQUIRED_MODEL_ROUTES = [
     ("/api/v1/models", "get"),
     ("/api/v1/models/registry", "get"),
+    ("/api/v1/models/select", "post"),
     ("/api/v1/models/load", "post"),
     ("/api/v1/models/unload", "post"),
     ("/api/v1/models/profile", "patch"),

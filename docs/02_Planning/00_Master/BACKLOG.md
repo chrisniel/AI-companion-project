@@ -36,6 +36,7 @@
 - **Resilience & Maintenance:** Coordinated DB+Profile asset backup, pre-migration snapshots, staged restore verification, local admin Factory Reset.
 - **Low-Impact / Gaming Mode:** Normal / Low Impact / Auto; Option B configured game/heavy app list; Low-Impact lightweight model substitution.
 - **Two-Tier Verification:** Scoped CI matrix (always-running `ci-gate`) + 14-group Golden PC V1 Acceptance Gate.
+- **Self-Contained Windows Installer (PC-HOST-006):** Consumer distribution bundling private Python environment, dependencies, Flutter Desktop, and native inference binaries; deferred packaging with OPEN DESIGN format and toolchain.
 
 ### 2.2 PC Later (Post-V1 Approved Backlog)
 - **Wake Word Detection:** Hands-free background listening (`WakeWordProvider`, openWakeWord / Snowboy).

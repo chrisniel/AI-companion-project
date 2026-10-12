@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:companion_design/companion_design.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_math_fork/flutter_math.dart';
 
 /// Callback invoked when a sanitized link is tapped.
 typedef MarkdownLinkTapCallback = void Function(String url);
@@ -105,6 +107,68 @@ class _AssistantMarkdownViewState extends State<AssistantMarkdownView> {
           ),
         );
         continue;
+      }
+
+      // 1B. Display Math Block: \[ ... \] or $$ ... $$
+      final trimmedLine = line.trim();
+      final isBracketBlock = trimmedLine.startsWith(r'\[');
+      final isDollarBlock = trimmedLine.startsWith(r'$$');
+      if (isBracketBlock || isDollarBlock) {
+        final closeToken = isBracketBlock ? r'\]' : r'$$';
+        final openToken = isBracketBlock ? r'\[' : r'$$';
+        final rawLines = <String>[line];
+
+        final afterOpen = trimmedLine.substring(openToken.length);
+        if (afterOpen.contains(closeToken)) {
+          final closeIdx = afterOpen.indexOf(closeToken);
+          final mathContent = afterOpen.substring(0, closeIdx).trim();
+          widgets.add(
+            _DisplayMathWidget(
+              tex: mathContent,
+              rawSource: line,
+              isClosed: true,
+              themeExt: themeExt,
+            ),
+          );
+          i++;
+          continue;
+        } else {
+          final mathLines = <String>[];
+          if (afterOpen.trim().isNotEmpty) {
+            mathLines.add(afterOpen.trim());
+          }
+          i++;
+          bool isClosed = false;
+          while (i < lines.length) {
+            final curLine = lines[i];
+            rawLines.add(curLine);
+            if (curLine.trim().contains(closeToken)) {
+              final closeIdx = curLine.indexOf(closeToken);
+              final beforeClose = curLine.substring(0, closeIdx).trim();
+              if (beforeClose.isNotEmpty) {
+                mathLines.add(beforeClose);
+              }
+              i++;
+              isClosed = true;
+              break;
+            }
+            mathLines.add(curLine);
+            i++;
+          }
+
+          final rawSource = rawLines.join('\n');
+          final tex = mathLines.join('\n').trim();
+
+          widgets.add(
+            _DisplayMathWidget(
+              tex: tex,
+              rawSource: rawSource,
+              isClosed: isClosed,
+              themeExt: themeExt,
+            ),
+          );
+          continue;
+        }
       }
 
       // 2. Horizontal Rule: ---, ***, ___
@@ -386,6 +450,8 @@ class _AssistantMarkdownViewState extends State<AssistantMarkdownView> {
       while (i < lines.length &&
           lines[i].trim().isNotEmpty &&
           !lines[i].trim().startsWith('```') &&
+          !lines[i].trim().startsWith(r'\[') &&
+          !lines[i].trim().startsWith(r'$$') &&
           !RegExp(r'^(#{1,4})\s+').hasMatch(lines[i]) &&
           !lines[i].trim().startsWith('>') &&
           !RegExp(r'^\s*[-*]\s+').hasMatch(lines[i]) &&
@@ -413,6 +479,34 @@ class _AssistantMarkdownViewState extends State<AssistantMarkdownView> {
     return widgets;
   }
 
+  static bool _isCurrencyOrNonMath(String inner) {
+    final trimmed = inner.trim();
+    if (trimmed.isEmpty) return true;
+    if (RegExp(r'^\d+(?:[.,]\d+)?\s*(?:[-–/]\s*\d+(?:[.,]\d+)?)?$').hasMatch(trimmed)) {
+      return true;
+    }
+    if (RegExp(r'^\d+(?:[.,]\d+)?\s*(?:k|M|B|USD|EUR|GBP|AUD|CAD)?$', caseSensitive: false).hasMatch(trimmed)) {
+      return true;
+    }
+    if (!trimmed.contains(r'\') &&
+        !trimmed.contains('=') &&
+        !trimmed.contains('+') &&
+        !trimmed.contains('-') &&
+        !trimmed.contains('*') &&
+        !trimmed.contains('/') &&
+        !trimmed.contains('^') &&
+        !trimmed.contains('_') &&
+        !trimmed.contains('<') &&
+        !trimmed.contains('>') &&
+        !trimmed.contains('(') &&
+        !trimmed.contains(')')) {
+      if (trimmed.contains(' ') || trimmed.length > 8) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   List<InlineSpan> _renderInline(
     String text,
     TextStyle defaultStyle,
@@ -420,7 +514,7 @@ class _AssistantMarkdownViewState extends State<AssistantMarkdownView> {
   ) {
     final spans = <InlineSpan>[];
     final tokenRegex = RegExp(
-      r'(`[^`]+`|\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\((?:[^()]+|\([^()]*\))*\))',
+      r'(`[^`]+`|\\\[[\s\S]+?\\\]|\$\$[^\n]+?\$\$|\\\([^\n]+?\\\)|\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\((?:[^()]+|\([^()]*\))*\)|(?<![\w\\\$])\$(?!\s)[^$\n]+?(?<!\s)(?<!\\)\$(?![\w\d]))',
     );
 
     int lastIndex = 0;
@@ -464,6 +558,88 @@ class _AssistantMarkdownViewState extends State<AssistantMarkdownView> {
             ),
           ),
         );
+      }
+      // Display Math bracket: \[ ... \]
+      else if (token.startsWith(r'\[') && token.endsWith(r'\]') && token.length >= 4) {
+        final content = token.substring(2, token.length - 2).trim();
+        spans.add(
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: CompanionSpacing.xs),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Math.tex(
+                  content,
+                  mathStyle: MathStyle.display,
+                  textStyle: defaultStyle,
+                  onErrorFallback: (err) => Text(token, style: defaultStyle),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+      // Display Math double dollar: $$ ... $$
+      else if (token.startsWith(r'$$') && token.endsWith(r'$$') && token.length >= 4) {
+        final content = token.substring(2, token.length - 2).trim();
+        spans.add(
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: CompanionSpacing.xs),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Math.tex(
+                  content,
+                  mathStyle: MathStyle.display,
+                  textStyle: defaultStyle,
+                  onErrorFallback: (err) => Text(token, style: defaultStyle),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+      // Inline Math paren: \( ... \)
+      else if (token.startsWith(r'\(') && token.endsWith(r'\)') && token.length >= 4) {
+        final content = token.substring(2, token.length - 2).trim();
+        spans.add(
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Math.tex(
+                content,
+                mathStyle: MathStyle.text,
+                textStyle: defaultStyle,
+                onErrorFallback: (err) => Text(token, style: defaultStyle),
+              ),
+            ),
+          ),
+        );
+      }
+      // Inline Math dollar: $ ... $
+      else if (token.startsWith(r'$') && token.endsWith(r'$') && token.length >= 2) {
+        final content = token.substring(1, token.length - 1).trim();
+        if (_isCurrencyOrNonMath(content)) {
+          spans.add(TextSpan(text: token, style: defaultStyle));
+        } else {
+          spans.add(
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: Math.tex(
+                  content,
+                  mathStyle: MathStyle.text,
+                  textStyle: defaultStyle,
+                  onErrorFallback: (err) => Text(token, style: defaultStyle),
+                ),
+              ),
+            ),
+          );
+        }
       }
       // Bold-Italic: ***text***
       else if (token.startsWith('***') && token.endsWith('***') && token.length >= 6) {
@@ -807,7 +983,7 @@ class _CodeBlockWidgetState extends State<_CodeBlockWidget> {
   }
 }
 
-class _MarkdownTableWidget extends StatelessWidget {
+class _MarkdownTableWidget extends StatefulWidget {
   final List<String> headers;
   final List<List<String>> rows;
   final List<TextAlign> alignments;
@@ -825,14 +1001,27 @@ class _MarkdownTableWidget extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final borderColor = themeExt?.borderSubtle ?? Colors.grey.withValues(alpha: 0.2);
-    final headerBg = themeExt?.surfaceElevated ?? Colors.black.withValues(alpha: 0.05);
-    final stripeBg = themeExt?.surfaceRecessed ?? Colors.black.withValues(alpha: 0.02);
+  State<_MarkdownTableWidget> createState() => _MarkdownTableWidgetState();
+}
 
-    final headerStyle = defaultStyle.copyWith(
+class _MarkdownTableWidgetState extends State<_MarkdownTableWidget> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = widget.themeExt?.borderSubtle ?? Colors.grey.withValues(alpha: 0.2);
+    final headerBg = widget.themeExt?.surfaceElevated ?? Colors.black.withValues(alpha: 0.05);
+    final stripeBg = widget.themeExt?.surfaceRecessed ?? Colors.black.withValues(alpha: 0.02);
+
+    final headerStyle = widget.defaultStyle.copyWith(
       fontWeight: FontWeight.bold,
-      color: themeExt?.textPrimary,
+      color: widget.themeExt?.textPrimary,
     );
 
     return Padding(
@@ -843,62 +1032,252 @@ class _MarkdownTableWidget extends StatelessWidget {
           border: Border.all(color: borderColor, width: 1),
         ),
         clipBehavior: Clip.antiAlias,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Table(
-            defaultColumnWidth: const IntrinsicColumnWidth(),
-            border: TableBorder(
-              horizontalInside: BorderSide(color: borderColor, width: 1),
-              verticalInside: BorderSide(color: borderColor, width: 1),
-            ),
-            children: [
-              TableRow(
-                decoration: BoxDecoration(color: headerBg),
-                children: List.generate(headers.length, (colIdx) {
-                  final alignment = colIdx < alignments.length ? alignments[colIdx] : TextAlign.left;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: CompanionSpacing.md,
-                      vertical: CompanionSpacing.sm,
-                    ),
-                    child: SelectableText.rich(
-                      TextSpan(
-                        style: headerStyle,
-                        children: renderInline(headers[colIdx], headerStyle),
-                      ),
-                      textAlign: alignment,
-                    ),
-                  );
-                }),
-              ),
-              ...rows.asMap().entries.map((entry) {
-                final rowIdx = entry.key;
-                final row = entry.value;
-                final isEven = rowIdx % 2 == 1;
-                return TableRow(
-                  decoration: isEven ? BoxDecoration(color: stripeBg) : null,
-                  children: List.generate(headers.length, (colIdx) {
-                    final cellText = colIdx < row.length ? row[colIdx] : '';
-                    final alignment = colIdx < alignments.length ? alignments[colIdx] : TextAlign.left;
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: CompanionSpacing.md,
-                        vertical: CompanionSpacing.sm,
-                      ),
-                      child: SelectableText.rich(
-                        TextSpan(
-                          style: defaultStyle,
-                          children: renderInline(cellText, defaultStyle),
+        child: ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(
+            dragDevices: {
+              PointerDeviceKind.touch,
+              PointerDeviceKind.mouse,
+              PointerDeviceKind.trackpad,
+            },
+          ),
+          child: Scrollbar(
+            controller: _scrollController,
+            thumbVisibility: true,
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              scrollDirection: Axis.horizontal,
+              child: Table(
+                defaultColumnWidth: const IntrinsicColumnWidth(),
+                border: TableBorder(
+                  horizontalInside: BorderSide(color: borderColor, width: 1),
+                  verticalInside: BorderSide(color: borderColor, width: 1),
+                ),
+                children: [
+                  TableRow(
+                    decoration: BoxDecoration(color: headerBg),
+                    children: List.generate(widget.headers.length, (colIdx) {
+                      final alignment = colIdx < widget.alignments.length ? widget.alignments[colIdx] : TextAlign.left;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: CompanionSpacing.md,
+                          vertical: CompanionSpacing.sm,
                         ),
-                        textAlign: alignment,
-                      ),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            minWidth: 80.0,
+                            maxWidth: 360.0,
+                          ),
+                          child: SelectableText.rich(
+                            TextSpan(
+                              style: headerStyle,
+                              children: widget.renderInline(widget.headers[colIdx], headerStyle),
+                            ),
+                            textAlign: alignment,
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                  ...widget.rows.asMap().entries.map((entry) {
+                    final rowIdx = entry.key;
+                    final row = entry.value;
+                    final isEven = rowIdx % 2 == 1;
+                    return TableRow(
+                      decoration: isEven ? BoxDecoration(color: stripeBg) : null,
+                      children: List.generate(widget.headers.length, (colIdx) {
+                        final cellText = colIdx < row.length ? row[colIdx] : '';
+                        final alignment = colIdx < widget.alignments.length ? widget.alignments[colIdx] : TextAlign.left;
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: CompanionSpacing.md,
+                            vertical: CompanionSpacing.sm,
+                          ),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(
+                              minWidth: 80.0,
+                              maxWidth: 360.0,
+                            ),
+                            child: SelectableText.rich(
+                              TextSpan(
+                                style: widget.defaultStyle,
+                                children: widget.renderInline(cellText, widget.defaultStyle),
+                              ),
+                              textAlign: alignment,
+                            ),
+                          ),
+                        );
+                      }),
                     );
                   }),
-                );
-              }),
-            ],
+                ],
+              ),
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _DisplayMathWidget extends StatefulWidget {
+  final String tex;
+  final String rawSource;
+  final bool isClosed;
+  final CompanionThemeExtension? themeExt;
+
+  const _DisplayMathWidget({
+    required this.tex,
+    required this.rawSource,
+    this.isClosed = true,
+    this.themeExt,
+  });
+
+  @override
+  State<_DisplayMathWidget> createState() => _DisplayMathWidgetState();
+}
+
+class _DisplayMathWidgetState extends State<_DisplayMathWidget> {
+  bool _copied = false;
+  Timer? _copyTimer;
+
+  void _handleCopy() async {
+    await Clipboard.setData(ClipboardData(text: widget.rawSource));
+    if (mounted) {
+      setState(() => _copied = true);
+      _copyTimer?.cancel();
+      _copyTimer = Timer(const Duration(seconds: 2), () {
+        if (mounted) setState(() => _copied = false);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _copyTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ext = widget.themeExt ?? Theme.of(context).extension<CompanionThemeExtension>();
+    final textColor = ext?.textPrimary ?? Colors.black87;
+    final mathStyle = TextStyle(
+      fontSize: 15,
+      color: textColor,
+    );
+
+    // Incomplete streaming math -> safely fall back to literal text
+    if (!widget.isClosed || widget.tex.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: CompanionSpacing.xs),
+        child: SelectableText(
+          widget.rawSource,
+          style: mathStyle.copyWith(fontFamily: 'Consolas, monospace'),
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: CompanionSpacing.sm),
+      decoration: BoxDecoration(
+        color: ext?.surfaceRecessed ?? Colors.black.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(CompanionRadius.md),
+        border: Border.all(
+          color: ext?.borderSubtle ?? Colors.black.withValues(alpha: 0.06),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Header Bar with "math" pill and Copy button
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: CompanionSpacing.sm,
+              vertical: 4,
+            ),
+            decoration: BoxDecoration(
+              color: ext?.surfaceElevated ?? Colors.black.withValues(alpha: 0.02),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(CompanionRadius.md),
+                topRight: Radius.circular(CompanionRadius.md),
+              ),
+              border: Border(
+                bottom: BorderSide(
+                  color: ext?.borderSubtle ?? Colors.black.withValues(alpha: 0.04),
+                  width: 1,
+                ),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'math',
+                  style: CompanionTypography.caption.copyWith(
+                    color: ext?.textMuted ?? Colors.grey,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                InkWell(
+                  onTap: _handleCopy,
+                  borderRadius: BorderRadius.circular(CompanionRadius.sm),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: CompanionSpacing.xs,
+                      vertical: 2,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _copied ? Icons.check_rounded : Icons.copy_rounded,
+                          size: 12,
+                          color: _copied
+                              ? (ext?.success ?? CompanionColors.success)
+                              : (ext?.textSecondary ?? Colors.grey),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _copied ? 'Copied' : 'Copy',
+                          style: CompanionTypography.caption.copyWith(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: _copied
+                                ? (ext?.success ?? CompanionColors.success)
+                                : (ext?.textSecondary ?? Colors.grey),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Scrollable Math View (handles long fractions and narrow viewports)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(
+              horizontal: CompanionSpacing.md,
+              vertical: CompanionSpacing.sm,
+            ),
+            child: SelectableMath.tex(
+              widget.tex,
+              mathStyle: MathStyle.display,
+              textStyle: mathStyle,
+              onErrorFallback: (err) {
+                return SelectableText(
+                  widget.rawSource,
+                  style: mathStyle.copyWith(fontFamily: 'Consolas, monospace'),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

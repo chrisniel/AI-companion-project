@@ -18,11 +18,11 @@
 └──────────────────────────────┬──────────────────────────────┘
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ M1: Flutter Desktop Client Foundation                       │ ◄── [IMPLEMENTED / PR CANDIDATE]
+│ M1: Flutter Desktop Client Foundation                       │ ◄── [COMPLETE / SQUASH-MERGED (PR #23)]
 └──────────────────────────────┬──────────────────────────────┘
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ M2: PC Companion Foundation (Host, Multi-Profile, D6 Model) │
+│ M2: PC Companion Foundation (Host, Multi-Profile, D6 Model) │ ◄── [IN PROGRESS — M2-H1 PR-READY; WIDER M2 IN PROGRESS]
 └──────────────────────────────┬──────────────────────────────┘
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -69,13 +69,14 @@
 - **Exit Criteria:** All validation gates pass; D2–D5 independently reviewed; Gate 4 Closure Gate PASSED at checkpoint `282f3607c6663cb72b34ad8f3596651aaf5ac18f`; PR #21 CI Run #84 green; PR #21 merged to develop (commit `28c4332`); active tracker archived; M1 unblocked.
 - **Dependency Note:** Mobile production implementation is cataloged in [`MOBILE_WBS.md`](MOBILE_WBS.md) as an independent follow-on track that does NOT block PC V1. M1 Flutter Desktop foundation unblocked following merge of PR #21.
 
-### Milestone M1: Flutter Desktop Client Foundation (IMPLEMENTED / PR CANDIDATE)
+### Milestone M1: Flutter Desktop Client Foundation (COMPLETE / SQUASH-MERGED)
 - **Primary Objective:** Scaffold the production Flutter Windows Desktop client monorepo pub workspace under `frontend/flutter/` (`companion_core`, `companion_api`, `companion_design`, and `apps/desktop`), establish native window lifecycle and system tray integration (minimize-to-tray, close-to-tray, tray restore/exit), build the SoftGlass / Neumorphic design system with dark/light theme tokens, integrate OpenAPI-derived Dart models and fail-closed authentication, implement chat conversation drawer with draft reuse, GFM Markdown tables, attachment placeholders, and post-turn AI title generation parity.
-- **Exit Criteria:** Flutter Desktop client runs on Windows, communicates reliably with Local AI Runtime over localhost REST/SSE, displays live streaming text with Markdown rendering, handles fail-closed auth and model unreadiness, and passes all 193 workspace tests and native Win32 lifecycle checks. PR candidate prepared with hosted PR CI pending. React Web remains fully operational as test oracle.
+- **Exit Criteria:** Flutter Desktop client runs on Windows, communicates reliably with Local AI Runtime over localhost REST/SSE, displays live streaming text with Markdown rendering, handles fail-closed auth and model unreadiness, and passes all 193 workspace tests and native Win32 lifecycle checks. Delivered via PR #23 (commit `7c1d1a2ddb5c57ddaae9bbacbcab2e25f9938fe1`); Closure Gate reconciled post-merge with documented tracker archival exception. React Web remains fully operational as test oracle.
 
 ### Milestone M2: PC Companion Foundation (Host, Identity & Model Pipeline)
-- **Primary Objective:** Implement Windows Task Scheduler autostart at user login, native Windows Action Center Toast presentation, storage roots manager (`APP_INSTALL`, `DATA`, `LIBRARY`), Account/Multi-Profile DB schema migration (`profile_id`), Profile isolation middleware, and the D6 manual scan / bundle model import service.
-- **Exit Criteria:** Runtime launches at login without console window; Toast notifications alert closed-browser; D6 imports paired GGUF+mmproj models into relocatable library; multiple Profiles operate strictly isolated with PIN challenge.
+- **Current Status:** IN PROGRESS. Batch M2-H1 (`PC-HOST-001` Windows Runtime Launch, Attach & Supervision + Desktop Chat Quality Follow-Up) has completed implementation, documentation, and closure verification (**PR-READY** on branch `feature/m2-windows-runtime-supervision`). Wider Milestone M2 tracks remain planned and in progress (`PC-HOST-005`, `PC-HOST-002`, `PC-HOST-003`, storage roots manager, multi-profile DB migration, D6 model import).
+- **Primary Objective:** Implement Windows Runtime launch, attach & supervision (Batch M2-H1 / `PC-HOST-001`), followed promptly by Host Administration Separation & Secure Lifecycle Authority (`PC-HOST-005`: secure local lifecycle authority, graceful runtime termination, model process draining, tray Exit Companion), Windows Task Scheduler autostart at user login for runtime and Flutter (`PC-HOST-002`), native Windows Action Center Toast presentation (`PC-HOST-003` / `PC-CLIENT-012`), storage roots manager (`APP_INSTALL`, `DATA`, `LIBRARY`), Account/Multi-Profile DB schema migration (`profile_id`), Profile isolation middleware, and the D6 manual scan / bundle model import service (`PC-MODEL-002`).
+- **Exit Criteria:** Runtime launches reliably and supervised as a detached background process with authenticated identification; autostart configured at login without console window; Toast notifications alert closed-browser; D6 imports paired GGUF+mmproj models into relocatable library; multiple Profiles operate strictly isolated with PIN challenge.
 
 ### Milestone M3: Companion Intelligence & Productivity
 - **Primary Objective:** Implement Character Studio and personality configuration with 8 continuous traits (0–100), persistent bounded mood simulation with time-based rebalancing, Profile/Character scoped memory with selective automatic extraction and temporary revalidation, and the `SchedulerService` engine with distinct Task, Reminder, Alarm, and Routine lifecycles.

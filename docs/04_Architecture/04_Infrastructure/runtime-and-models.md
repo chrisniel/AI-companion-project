@@ -135,6 +135,24 @@ In accordance with Decisions `D-PHONE-01`, `D-PHONE-01C`, `D-PHONE-03`, and `D-P
   - Requested execution backend (e.g., `AUTO`, `CPU`, `GPU`, `NPU`) and the actually applied backend must be truthfully and separately reported.
   - Evaluated models (such as Gemma 3 1B) represent empirical research candidates, not hard-coded architectural dependencies.
 
+### 2.8 Dynamic Model Selection & Hardware-Aware Recommendation Architecture
+
+In accordance with architectural decisions for replaceable local generative models:
+
+- **Dynamic & Replaceable Model Invariant:** No model family or specific checkpoint is permanently mandated or hard-coded into the architecture. The runtime orchestrator supports dynamic selection, replacement, loading, and unloading of approved local models. The reference model (`qwen3-vl-2b-instruct`) serves as an empirical development and qualification baseline, not an immutable system dependency.
+- **Strict Model Selection Precedence:** Runtime model resolution enforces deterministic precedence:
+  1. *Explicit Operation Request:* The model explicitly specified in the client request payload.
+  2. *Saved Host Configuration:* The model persisted in machine-level host configuration (`COMPANION_DATA_ROOT/config/host_config.json`).
+  3. *Development Environment Override:* Explicit override via `COMPANION_DEV_MODEL` when present in development/test environments.
+  4. *Fail-Closed Invariant (`MODEL_SELECTION_REQUIRED`):* If no model selection exists (no explicit operation request, no saved host configuration, and no development override), model loading fails closed with `MODEL_SELECTION_REQUIRED` (HTTP 422 in `backend/app/api/v1/endpoints/llm.py`). If a model was explicitly selected or requested but is missing from the registry or host storage, it fails closed with its actual distinct error (HTTP 404 Model Not Found in registry, or HTTP 400 Model File Missing on host, rather than conflating with `MODEL_SELECTION_REQUIRED`). The system **never** silently falls back to an unselected or arbitrary model.
+- **Host-Level Configuration Scope:** Model selection is a machine-wide host configuration owned by the host environment (`host_config.json`), not stored per-user profile and not owned primarily by environment files.
+- **Hardware-Aware Model Recommendation (Target Architecture — PC-CLIENT-010):**
+  - *Dedicated VRAM Target:* Recommendations target at most **50% of total dedicated VRAM** for resident model weights and KV cache under standard operating profiles.
+  - *Headroom & Safety Reserve:* Recommended capacity is further bounded by measured available VRAM headroom and a non-negotiable safety reserve ensuring desktop window compositing, operating system operations, and user applications avoid VRAM starvation or driver crashes.
+  - *Advisory vs. Enforced Policy:* Hardware-aware recommendations are advisory guidance surfaced in the user interface (such as compatibility badges and recommended model tags). Explicit user selection always overrides recommendations, subject to fail-closed preflight memory validation.
+  - *Truthful Capabilities:* Switching models truthfully reconfigures client capabilities; selecting a text-only model disables vision assistance, and missing companion projectors (`mmproj`) retain text capability while disabling multimodal turns without failing the entire model.
+  - *Implementation Status:* Hardware-aware VRAM budgeting and dynamic recommendation formulas are target capabilities tracked under **PC-CLIENT-010** and are not currently enforced in code. Current runtime relies on explicit user model selection and static performance profiles (`eco`, `balanced`, `maximum`).
+
 ---
 
 ## 3. Current Verified Implementation
@@ -155,13 +173,17 @@ Verified in `backend/app/services/llm/`:
   - `async generate_stream(messages: List[ChatMessage], temperature: float = 0.7, max_tokens: int = 1024, **kwargs) -> AsyncGenerator[str, None]`
   - `async shutdown() -> None`
 - **Concrete Providers:**
-  - `LlamaCppProvider` (`llama_cpp.py`): Connects to a local router or launches standalone `llama-server.exe`, tracks Core-managed process state, loads/unloads models via router API, applies profiles, and idle-unloads models. Supports Server-Sent Events (SSE) token streaming via OpenAI-compatible endpoints (`/v1/chat/completions`).
+  - `LlamaCppProvider` (`llama_cpp.py`): Connects to a local router or launches standalone `llama-server.exe`, tracks Core-managed process state, loads/unloads models via router API, applies profiles, and manages idle sleep/unload lifecycles.
+    - *Windowless Subprocess Execution:* Launches `llama-server.exe` with `creationflags=subprocess.CREATE_NO_WINDOW` on Windows, preserving direct process invocation, exact PID ownership, single-resident model policy, model load/unload lifecycle, and crash isolation without popping up an interactive console window.
+    - *Request-Scoped Finish Reasons:* Preserves upstream chunk completion reasons (`"stop"`, `"length"`) via `GenerationStream` metadata, preventing concurrency races across interleaved turns.
+    - *Truthful Model Unload (`POST /api/v1/models/unload`):* Returns `409 Conflict` if generation is active, `500 Internal Server Error` if unload fails or the model remains loaded in memory; verifies that `status.model_loaded == False` before returning success; preserves saved model selection in `host_config.json`.
+    - *Client Settings Control (`PC-CLIENT-010`):* Flutter Settings exposes an authenticated "Unload Model / Free VRAM" action with active-generation protection and truthful status announcements.
   - `MockLLMProvider` (`mock.py`): Supplies deterministic synthetic token streams for testing.
   - **Cloud Providers:** **NOT IMPLEMENTED**. No OpenAI, Anthropic, or external cloud API client adapter exists in `app/services/llm/`.
 - **Process Management & Router Constants:** `scripts/start-model.ps1` exists as a diagnostic/helper script, not the primary runtime launcher. Current implementation constants include:
   - Local loopback host: `127.0.0.1` (never `0.0.0.0`).
   - Router port: `8085` (`LLAMA_ROUTER_PORT`).
-  - Auto-unload timeout: `900s` (`LLAMA_ROUTER_IDLE_TIMEOUT`).
+  - Native idle sleep timeout: `900s` (`LLAMA_ROUTER_IDLE_TIMEOUT` passing `--sleep-idle-seconds`). When the router is active with native idle sleep, `llama-server` handles memory sleep natively without Python auto-unloading the model. Native sleep is not equivalent to an explicit model unload (which terminates/evicts the model completely and resets loaded state via `POST /api/v1/models/unload`); the runtime does not claim auto-unload when configured for native idle sleep.
   - Model residency cap: `1` (`LLAMA_ROUTER_MODELS_MAX`).
   - Reference server build: `b10936`.
   *(These constants represent current implementation reality, not eternal architectural locks).*
@@ -181,6 +203,8 @@ Verified in `backend/app/services/model_registry.py`:
 - **Metadata Reader (`read_gguf_metadata`):** Pure-Python binary reader parsing GGUF magic bytes (`0x46554747`), header fields, and key-value string metadata (architecture, context length, chat templates).
 - **Registry Merging:** Merges factory template models (`models/registry.template.json`) with persistent user-installed models at `COMPANION_DATA_ROOT/library/registry/models.json` to generate the effective runtime catalog.
 - **Canonical Model & Voice Libraries:** Model weights reside in `COMPANION_DATA_ROOT/library/models/llm`; voices reside in `COMPANION_DATA_ROOT/library/voices`.
+- **Dynamic Model Selection API & Precedence:** Implemented in `backend/app/api/v1/endpoints/llm.py` (`POST /api/v1/models/select` and `POST /api/v1/models/load`). Model resolution strictly enforces precedence: explicit operation request $\rightarrow$ saved host config (`host_config.json`) $\rightarrow$ development override (`COMPANION_DEV_MODEL`). When no selection exists, load fails closed with `MODEL_SELECTION_REQUIRED` (HTTP 422). If an explicitly selected model is missing from the registry or host filesystem, select/load fails closed with distinct errors (HTTP 404 Not Found or HTTP 400 Bad Request) rather than generic selection failure.
+- **Active Development Reference Model:** `qwen3-vl-2b-instruct` (Vision + Text) serves as the approved development reference model in `models/registry.template.json`.
 
 ### 3.4 Decision D6 Implementation Status vs. Gaps
 

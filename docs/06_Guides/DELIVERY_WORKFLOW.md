@@ -78,11 +78,13 @@ For all non-trivial implementation, refactoring, or bug fixes, contributors and 
 - **Verification:** Independent check confirming:
   - Branch tracking matches independently verified code, tests, contracts and documentation as applicable.
   - Delivered scope matches approved requirements.
-  - No unverified capability or test result is claimed.
+  - No unverified capability or test result is claimed; agents never claim self-approved gates.
   - Known blockers, deferred work, and manual/hardware checks remain explicit.
+- **Mandatory Quality Gates:** Independent Implementation, Documentation, and Closure Gates remain mandatory for all non-trivial deliveries.
+- **Delivery Destination (PR-READY):** The delivery destination after these gates are approved is **PR-READY**.
 - **Same-Branch Closure:** Reconcile documentation/tracking on the same branch.
 - **Archiving:** Archive the branch active task to `docs/01_Tracking/archive/`.
-- **Git Handoff:** Prepare PR/squash handoff and provide a proposed Conventional Commit message.
+- **Git Handoff & Authorization:** Agents may commit/push ONLY with explicit, task-bounded human authorization. PR creation and merge require separately authorized action by Chris. Prepare PR/squash handoff and provide a proposed Conventional Commit message.
 
 ---
 
@@ -100,12 +102,14 @@ To prevent both microscopic over-ceremony and unwieldy, unreviewable pull reques
 
 ## 4. Git Ownership & PR Handoff Protocol
 
-### 4.1 Strict Human-Only Git Authority
-Chris owns all repository mutations. AI agents operate under a **Strict Read-Only Git Policy**:
-- **Prohibited Agent Commands:** `git add`, `git commit`, `git push`, `git merge`, `git rebase`, `git branch`, `git checkout`, `git switch`, `git tag`, `git stash`, `git reset`, `git restore`, and PR creation/merge.
-- **Permitted Agent Commands (Read-Only):** `git status`, `git diff`, `git log`, `git show`, `git rev-parse`, `git branch` (list only), `git worktree list`.
-- **Git Branch Preflight:** Before non-trivial edits, inspect the current Git branch (`git branch --show-current`). If on `develop` or `master`, STOP before editing. Recommend an appropriate task branch, ask Chris to create/switch/push it, and resume only after Chris confirms. Agents still perform no Git mutations.
-- **Handoff Mechanism:** When verification passes, the agent stops, displays command evidence, and supplies a formatted Conventional Commit proposal for Chris to review, commit, and push manually.
+### 4.1 Human Git Authority & Agent Boundaries
+Chris owns all repository mutations. AI agents operate under a **Strict Read-Only Git Policy by Default**:
+- **Default Read-Only:** Git operations default strictly to read-only (`git status`, `git diff`, `git log`, `git show`, `git rev-parse`, `git branch --show-current`, read-only history/inspection).
+- **Task-Bounded Authorization:** Agents may commit/push ONLY with explicit, task-bounded human authorization for the active task (e.g. narrow: *"commit these changes"* or bounded: *"commit scoped closure updates and HTTPS-push to the branch"*). Generic skills or procedural templates never constitute Git authorization.
+- **Separate PR & Merge Authority:** PR creation, review approvals, and merge operations require separately authorized action by Chris. Agents must not create PRs or execute merges without explicit instruction.
+- **Mandatory Gates & No Self-Approval:** Independent Implementation, Documentation, and Closure Gates remain mandatory. Agents never self-certify or claim self-approved quality gates. The delivery destination after passing these gates is **PR-READY**.
+- **Git Branch Preflight:** Before non-trivial edits, inspect the current Git branch (`git branch --show-current`). If on `develop` or `master`, STOP before editing. Recommend an appropriate task branch, ask Chris to create/switch/push it (or confirm authorization), and resume only after Chris confirms.
+- **Handoff Mechanism:** When verification passes, the agent stops, displays command evidence, and supplies a formatted Conventional Commit and PR summary proposal for Chris to review, commit, and push manually unless specific task-bounded mutation authorization was granted.
 
 ### 4.2 Conventional Commit Proposals
 All proposed commits must adhere to the Conventional Commits specification:

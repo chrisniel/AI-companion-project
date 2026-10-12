@@ -1,19 +1,25 @@
 import 'package:companion_api/companion_api.dart';
 import 'package:companion_design/companion_design.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../features/chat/assistant_markdown_view.dart';
 import '../features/chat/conversation_history_drawer.dart';
 import '../features/chat/desktop_chat_controller.dart';
+import '../platform/desktop_client_settings.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
     super.key,
     this.controller,
+    this.clientSettings,
+    this.onNavigateToSettings,
   });
 
   final DesktopChatController? controller;
+  final DesktopClientSettings? clientSettings;
+  final VoidCallback? onNavigateToSettings;
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -24,9 +30,18 @@ class _ChatScreenState extends State<ChatScreen> {
   late final FocusNode _focusNode;
   late final ScrollController _scrollController;
   DesktopChatController? _internalController;
+  DesktopClientSettings? _internalClientSettings;
+  DesktopClientSettings get _effectiveClientSettings =>
+      widget.clientSettings ?? (_internalClientSettings ??= DesktopClientSettings());
+
+  double _zoomLevel = 1.0;
   bool _canSend = false;
   bool _isHistoryOpen = false;
   bool _isSubmitting = false;
+  String? _currentConversationId;
+  String? _restoredConversationId;
+  bool _isRestorationScheduled = false;
+  bool _userExplicitlySent = false;
 
   DesktopChatController get _effectiveController => widget.controller ?? _internalController!;
 
@@ -47,6 +62,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    _loadZoomLevel();
     if (widget.controller == null) {
       _internalController = DesktopChatController(
         client: CompanionClient(
@@ -56,15 +72,165 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     }
     _textController = TextEditingController();
-    _focusNode = FocusNode();
+    _focusNode = FocusNode(onKeyEvent: _handleFocusKeyEvent);
     _scrollController = ScrollController();
 
     _textController.addListener(_onTextChanged);
+    _scrollController.addListener(_onScroll);
+    _effectiveController.addListener(_onChatControllerChanged);
 
-    // Initial load
+    // Initialize current conversation state if already selected
+    final activeId = _effectiveController.activeConversation?.id;
+    if (activeId != null) {
+      _currentConversationId = activeId;
+      final draft = _effectiveController.getDraft(activeId);
+      if (draft.isNotEmpty) {
+        _textController.text = draft;
+      }
+    }
+
+    // Initial load of conversation list if needed and scroll check
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _effectiveController.loadConversations();
+      if (!mounted) return;
+      if (_effectiveController.conversations.isEmpty) {
+        _effectiveController.loadConversations();
+      }
+      _checkAndRestoreScroll();
     });
+  }
+
+  Future<void> _loadZoomLevel() async {
+    final zoom = await _effectiveClientSettings.readChatZoomLevel();
+    if (mounted) {
+      setState(() {
+        _zoomLevel = zoom;
+      });
+    }
+  }
+
+  void _updateZoom(double newZoom) {
+    final clamped = double.parse((newZoom.clamp(0.8, 1.6)).toStringAsFixed(2));
+    if (clamped == _zoomLevel) return;
+    setState(() {
+      _zoomLevel = clamped;
+    });
+    _effectiveClientSettings.writeChatZoomLevel(clamped);
+  }
+
+  void _handlePointerSignal(PointerSignalEvent event) {
+    if (event is PointerScrollEvent) {
+      final isControl = HardwareKeyboard.instance.isControlPressed;
+      if (isControl) {
+        if (event.scrollDelta.dy < 0) {
+          _updateZoom(_zoomLevel + 0.1);
+        } else if (event.scrollDelta.dy > 0) {
+          _updateZoom(_zoomLevel - 0.1);
+        }
+      }
+    }
+  }
+
+  @override
+  void didUpdateWidget(ChatScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller?.removeListener(_onChatControllerChanged);
+      widget.controller?.addListener(_onChatControllerChanged);
+      _restoredConversationId = null;
+      _isRestorationScheduled = false;
+    }
+    _checkAndRestoreScroll();
+  }
+
+  KeyEventResult _handleFocusKeyEvent(FocusNode node, KeyEvent event) {
+    final isControl = HardwareKeyboard.instance.isControlPressed;
+    if (isControl && event is KeyDownEvent) {
+      if (event.logicalKey == LogicalKeyboardKey.equal ||
+          event.logicalKey == LogicalKeyboardKey.add ||
+          event.logicalKey == LogicalKeyboardKey.numpadAdd) {
+        _updateZoom(_zoomLevel + 0.1);
+        return KeyEventResult.handled;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.minus ||
+          event.logicalKey == LogicalKeyboardKey.numpadSubtract) {
+        _updateZoom(_zoomLevel - 0.1);
+        return KeyEventResult.handled;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.digit0 ||
+          event.logicalKey == LogicalKeyboardKey.numpad0) {
+        _updateZoom(1.0);
+        return KeyEventResult.handled;
+      }
+    }
+
+    if (event.logicalKey == LogicalKeyboardKey.enter) {
+      if (event is KeyDownEvent) {
+        final isShift = HardwareKeyboard.instance.isShiftPressed;
+        if (isShift) {
+          _insertNewline();
+          return KeyEventResult.handled;
+        } else {
+          final isBusy = _effectiveController.isGenerating ||
+              _effectiveController.isAwaitingAcceptance ||
+              _effectiveController.isCreatingConversation ||
+              _isSubmitting;
+          if (!isBusy && _canSend && _effectiveController.canSend) {
+            _handleSend();
+          }
+          return KeyEventResult.handled;
+        }
+      }
+      return KeyEventResult.handled;
+    }
+
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      if (event is KeyDownEvent) {
+        final isBusy = _effectiveController.isGenerating ||
+            _effectiveController.isAwaitingAcceptance ||
+            _effectiveController.isCreatingConversation ||
+            _isSubmitting;
+        if (isBusy) {
+          _effectiveController.cancelGeneration();
+          return KeyEventResult.handled;
+        }
+      }
+    }
+
+    return KeyEventResult.ignored;
+  }
+
+  void _insertNewline() {
+    final text = _textController.text;
+    final selection = _textController.selection;
+    if (selection.isValid && selection.start >= 0 && selection.end >= selection.start) {
+      final newText = text.replaceRange(selection.start, selection.end, '\n');
+      _textController.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(offset: selection.start + 1),
+      );
+    } else {
+      final newText = '$text\n';
+      _textController.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(offset: newText.length),
+      );
+    }
+  }
+
+  bool get _isNearBottom {
+    if (!_scrollController.hasClients) return true;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.offset;
+    return (maxScroll - currentScroll) <= 80.0;
+  }
+
+  void _onScroll() {
+    if (_scrollController.hasClients && _currentConversationId != null) {
+      _effectiveController.setScrollOffset(_currentConversationId!, _scrollController.offset);
+    }
+    if (!_isNearBottom) {
+      _userExplicitlySent = false;
+    }
   }
 
   void _onTextChanged() {
@@ -74,11 +240,79 @@ class _ChatScreenState extends State<ChatScreen> {
         _canSend = hasText;
       });
     }
+    if (_currentConversationId != null) {
+      _effectiveController.setDraft(_currentConversationId!, _textController.text);
+    }
+  }
+
+  void _onChatControllerChanged() {
+    final activeId = _effectiveController.activeConversation?.id;
+    if (activeId != _currentConversationId) {
+      // 1. Save state of previous conversation
+      if (_currentConversationId != null) {
+        _effectiveController.setDraft(_currentConversationId!, _textController.text);
+        if (_scrollController.hasClients) {
+          _effectiveController.setScrollOffset(_currentConversationId!, _scrollController.offset);
+        }
+      }
+
+      // 2. Switch to new conversation
+      _currentConversationId = activeId;
+      _restoredConversationId = null;
+      _isRestorationScheduled = false;
+      _userExplicitlySent = false;
+
+      // 3. Restore draft for new conversation
+      final draft = activeId != null ? _effectiveController.getDraft(activeId) : '';
+      if (_textController.text != draft) {
+        _textController.text = draft;
+      }
+    }
+
+    _checkAndRestoreScroll();
+  }
+
+  void _checkAndRestoreScroll() {
+    final activeId = _effectiveController.activeConversation?.id;
+    if (activeId == null) return;
+    if (_restoredConversationId == activeId) return;
+
+    final messages = _effectiveController.messages;
+    if (messages.isEmpty) return;
+
+    if (_isRestorationScheduled) return;
+    _isRestorationScheduled = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _isRestorationScheduled = false;
+      if (!mounted) return;
+      if (_effectiveController.activeConversation?.id != activeId) return;
+      if (_restoredConversationId == activeId) return;
+
+      if (!_scrollController.hasClients) {
+        if (_effectiveController.messages.isNotEmpty) {
+          _checkAndRestoreScroll();
+        }
+        return;
+      }
+
+      final savedOffset = _effectiveController.getScrollOffset(activeId);
+      if (savedOffset != null) {
+        _scrollController.jumpTo(
+          savedOffset.clamp(0.0, _scrollController.position.maxScrollExtent),
+        );
+      } else {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      }
+      _restoredConversationId = activeId;
+    });
   }
 
   @override
   void dispose() {
     _textController.removeListener(_onTextChanged);
+    _scrollController.removeListener(_onScroll);
+    _effectiveController.removeListener(_onChatControllerChanged);
     _textController.dispose();
     _focusNode.dispose();
     _scrollController.dispose();
@@ -106,6 +340,7 @@ class _ChatScreenState extends State<ChatScreen> {
         text,
         onAccepted: () {
           if (mounted) {
+            _userExplicitlySent = true;
             _textController.clear();
             setState(() {
               _canSend = false;
@@ -130,14 +365,19 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  void _scrollToBottom() {
+  void _scrollToBottom({bool animate = true}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
-        );
+        final max = _scrollController.position.maxScrollExtent;
+        if (animate) {
+          _scrollController.animateTo(
+            max,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+          );
+        } else {
+          _scrollController.jumpTo(max);
+        }
       }
     });
   }
@@ -145,6 +385,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final chatCtrl = _effectiveController;
+    _checkAndRestoreScroll();
 
     return ListenableBuilder(
       listenable: chatCtrl,
@@ -152,15 +393,24 @@ class _ChatScreenState extends State<ChatScreen> {
         final ext = Theme.of(context).extension<CompanionThemeExtension>();
         final isDark = Theme.of(context).brightness == Brightness.dark;
 
-        // Auto-scroll when new streaming content arrives
-        if (chatCtrl.isGenerating) {
-          _scrollToBottom();
+        // Auto-follow generation only if near bottom or following explicit user send
+        if (chatCtrl.isGenerating && (_userExplicitlySent || _isNearBottom)) {
+          _scrollToBottom(animate: false);
+        } else if (!chatCtrl.isGenerating) {
+          _userExplicitlySent = false;
         }
 
         return CallbackShortcuts(
           bindings: <ShortcutActivator, VoidCallback>{
             const SingleActivator(LogicalKeyboardKey.keyH, control: true): _toggleHistoryDrawer,
             const SingleActivator(LogicalKeyboardKey.escape): _closeHistoryDrawer,
+            const SingleActivator(LogicalKeyboardKey.equal, control: true): () => _updateZoom(_zoomLevel + 0.1),
+            const SingleActivator(LogicalKeyboardKey.add, control: true): () => _updateZoom(_zoomLevel + 0.1),
+            const SingleActivator(LogicalKeyboardKey.numpadAdd, control: true): () => _updateZoom(_zoomLevel + 0.1),
+            const SingleActivator(LogicalKeyboardKey.minus, control: true): () => _updateZoom(_zoomLevel - 0.1),
+            const SingleActivator(LogicalKeyboardKey.numpadSubtract, control: true): () => _updateZoom(_zoomLevel - 0.1),
+            const SingleActivator(LogicalKeyboardKey.digit0, control: true): () => _updateZoom(1.0),
+            const SingleActivator(LogicalKeyboardKey.numpad0, control: true): () => _updateZoom(1.0),
           },
           child: Focus(
             autofocus: true,
@@ -178,7 +428,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       // Central Conversational Stage
                       Expanded(
                         child: chatCtrl.messages.isEmpty
-                            ? _buildWelcomeStage(context, ext)
+                            ? _buildWelcomeStage(context, ext, chatCtrl)
                             : _buildMessageList(context, chatCtrl, ext, isDark),
                       ),
 
@@ -313,6 +563,48 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           const SizedBox(width: CompanionSpacing.sm),
         ],
+        if ((_zoomLevel - 1.0).abs() > 0.01) ...[
+          Tooltip(
+            message: 'Conversation zoom level (${(_zoomLevel * 100).round()}%). Click or Ctrl+0 to reset.',
+            child: InkWell(
+              borderRadius: CompanionRadius.borderSm,
+              onTap: () => _updateZoom(1.0),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: CompanionSpacing.sm,
+                  vertical: CompanionSpacing.xs,
+                ),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.04),
+                  borderRadius: CompanionRadius.borderSm,
+                  border: Border.all(
+                    color: ext?.borderSubtle ?? Colors.transparent,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.zoom_in_rounded,
+                      size: 12,
+                      color: ext?.textSecondary,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${(_zoomLevel * 100).round()}%',
+                      style: CompanionTypography.caption.copyWith(
+                        color: ext?.textSecondary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: CompanionSpacing.sm),
+        ],
         // Connection status pill
         Container(
           padding: const EdgeInsets.symmetric(
@@ -360,6 +652,8 @@ class _ChatScreenState extends State<ChatScreen> {
         return const Color(0xFF38BDF8); // Sky blue
       case ModelRuntimeStateCategory.modelLoading:
         return ext?.warning ?? CompanionColors.warning;
+      case ModelRuntimeStateCategory.modelSelectionRequired:
+        return ext?.warning ?? CompanionColors.warning;
       case ModelRuntimeStateCategory.modelLoadFailed:
         return ext?.danger ?? CompanionColors.danger;
       case ModelRuntimeStateCategory.pairingRequired:
@@ -379,6 +673,8 @@ class _ChatScreenState extends State<ChatScreen> {
         return Icons.bedtime_rounded;
       case ModelRuntimeStateCategory.modelLoading:
         return Icons.hourglass_top_rounded;
+      case ModelRuntimeStateCategory.modelSelectionRequired:
+        return Icons.tune_rounded;
       case ModelRuntimeStateCategory.modelLoadFailed:
         return Icons.error_outline_rounded;
       case ModelRuntimeStateCategory.pairingRequired:
@@ -405,7 +701,11 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Widget _buildWelcomeStage(BuildContext context, CompanionThemeExtension? ext) {
+  Widget _buildWelcomeStage(
+    BuildContext context,
+    CompanionThemeExtension? ext,
+    DesktopChatController chatCtrl,
+  ) {
     return SoftGlassPanel(
       padding: const EdgeInsets.all(CompanionSpacing.xxl),
       child: Center(
@@ -444,6 +744,51 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 textAlign: TextAlign.center,
               ),
+              if (chatCtrl.modelStateCategory == ModelRuntimeStateCategory.modelSelectionRequired) ...[
+                const SizedBox(height: CompanionSpacing.lg),
+                Container(
+                  padding: const EdgeInsets.all(CompanionSpacing.md),
+                  decoration: BoxDecoration(
+                    color: (ext?.warning ?? CompanionColors.warning).withValues(alpha: 0.1),
+                    borderRadius: CompanionRadius.borderMd,
+                    border: Border.all(
+                      color: (ext?.warning ?? CompanionColors.warning).withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.tune_rounded, size: 18, color: ext?.warning ?? CompanionColors.warning),
+                          const SizedBox(width: CompanionSpacing.xs),
+                          Text(
+                            'No Model Selected',
+                            style: CompanionTypography.bodyMedium.copyWith(
+                              color: ext?.textPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: CompanionSpacing.xs),
+                      Text(
+                        'A local model must be selected before starting a conversation.',
+                        style: CompanionTypography.caption.copyWith(color: ext?.textSecondary),
+                        textAlign: TextAlign.center,
+                      ),
+                      if (widget.onNavigateToSettings != null) ...[
+                        const SizedBox(height: CompanionSpacing.md),
+                        FilledButton.tonalIcon(
+                          onPressed: widget.onNavigateToSettings,
+                          icon: const Icon(Icons.settings_rounded, size: 16),
+                          label: const Text('Choose a Model in Settings'),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -457,30 +802,38 @@ class _ChatScreenState extends State<ChatScreen> {
     CompanionThemeExtension? ext,
     bool isDark,
   ) {
-    return SoftGlassPanel(
-      padding: const EdgeInsets.symmetric(
-        horizontal: CompanionSpacing.lg,
-        vertical: CompanionSpacing.md,
-      ),
-      child: ListView.builder(
-        controller: _scrollController,
-        itemCount: chatCtrl.messages.length,
-        itemBuilder: (context, index) {
-          final msg = chatCtrl.messages[index];
-          final isUser = msg.sender == 'user';
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: CompanionSpacing.sm),
-            child: Align(
-              alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 680),
-                child: isUser
-                    ? _buildUserBubble(context, msg, ext)
-                    : _buildAssistantBubble(context, msg, ext, isDark),
-              ),
-            ),
-          );
-        },
+    return Listener(
+      onPointerSignal: _handlePointerSignal,
+      child: MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+          textScaler: TextScaler.linear(_zoomLevel),
+        ),
+        child: SoftGlassPanel(
+          padding: const EdgeInsets.symmetric(
+            horizontal: CompanionSpacing.lg,
+            vertical: CompanionSpacing.md,
+          ),
+          child: ListView.builder(
+            controller: _scrollController,
+            itemCount: chatCtrl.messages.length,
+            itemBuilder: (context, index) {
+              final msg = chatCtrl.messages[index];
+              final isUser = msg.sender == 'user';
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: CompanionSpacing.sm),
+                child: Align(
+                  alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 680),
+                    child: isUser
+                        ? _buildUserBubble(context, msg, ext)
+                        : _buildAssistantBubble(context, msg, ext, isDark),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -602,11 +955,8 @@ class _ChatScreenState extends State<ChatScreen> {
           if (msg.attachments.isNotEmpty)
             _buildAttachmentCards(msg.attachments, ext, isUser: true),
           if (msg.content.isNotEmpty)
-            SelectableText(
-              msg.content,
-              style: CompanionTypography.bodyMedium.copyWith(
-                color: ext?.textPrimary,
-              ),
+            AssistantMarkdownView(
+              content: msg.content,
             ),
         ],
       ),
@@ -715,6 +1065,68 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ),
                   ),
+                if (msg.status == 'length')
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: (ext?.warning ?? CompanionColors.warning).withValues(alpha: 0.12),
+                        borderRadius: CompanionRadius.borderSm,
+                        border: Border.all(
+                          color: (ext?.warning ?? CompanionColors.warning).withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.timer_outlined,
+                                size: 16,
+                                color: ext?.warning ?? CompanionColors.warning,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Response reached generation limit',
+                                style: CompanionTypography.bodySmall.copyWith(
+                                  color: ext?.warning ?? CompanionColors.warning,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                          FilledButton.tonalIcon(
+                            key: const Key('continue_response_button'),
+                            style: FilledButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            ),
+                            icon: const Icon(Icons.arrow_forward_rounded, size: 14),
+                            label: const Text('Continue response', style: TextStyle(fontSize: 12)),
+                            onPressed: () {
+                              _effectiveController.sendMessage('Continue');
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (msg.status == 'interrupted')
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      '(Generation interrupted)',
+                      style: CompanionTypography.bodySmall.copyWith(
+                        color: ext?.danger ?? CompanionColors.danger,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -728,34 +1140,52 @@ class _ChatScreenState extends State<ChatScreen> {
     String message,
     CompanionThemeExtension? ext,
   ) {
+    final isSelectionError = message.contains('Settings') || message.contains('MODEL_SELECTION_REQUIRED');
+    final bannerColor = isSelectionError
+        ? (ext?.warning ?? CompanionColors.warning)
+        : (ext?.danger ?? CompanionColors.danger);
+
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: CompanionSpacing.md,
         vertical: CompanionSpacing.sm,
       ),
       decoration: BoxDecoration(
-        color: (ext?.danger ?? CompanionColors.danger).withValues(alpha: 0.1),
+        color: bannerColor.withValues(alpha: 0.1),
         borderRadius: CompanionRadius.borderMd,
         border: Border.all(
-          color: (ext?.danger ?? CompanionColors.danger).withValues(alpha: 0.3),
+          color: bannerColor.withValues(alpha: 0.3),
         ),
       ),
       child: Row(
         children: [
           Icon(
-            Icons.error_outline_rounded,
+            isSelectionError ? Icons.tune_rounded : Icons.error_outline_rounded,
             size: 16,
-            color: ext?.danger ?? CompanionColors.danger,
+            color: bannerColor,
           ),
           const SizedBox(width: CompanionSpacing.sm),
           Expanded(
             child: Text(
               message,
               style: CompanionTypography.caption.copyWith(
-                color: ext?.danger ?? CompanionColors.danger,
+                color: bannerColor,
               ),
             ),
           ),
+          if (isSelectionError && widget.onNavigateToSettings != null) ...[
+            const SizedBox(width: CompanionSpacing.sm),
+            OutlinedButton.icon(
+              onPressed: widget.onNavigateToSettings,
+              icon: const Icon(Icons.settings_rounded, size: 14),
+              label: const Text('Open Settings'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -789,45 +1219,27 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               const SizedBox(width: CompanionSpacing.sm),
               Expanded(
-                child: CallbackShortcuts(
-                  bindings: {
-                    const SingleActivator(LogicalKeyboardKey.enter): () {
-                      if (!isBusy && _canSend && chatCtrl.canSend) {
-                        _handleSend();
-                      }
-                    },
-                    const SingleActivator(LogicalKeyboardKey.escape): () {
-                      if (isBusy) {
-                        chatCtrl.cancelGeneration();
-                      }
-                    },
-                  },
-                  child: NeumorphicSurface(
-                    surfaceType: NeumorphicSurfaceType.recessed,
-                    borderRadius: CompanionRadius.borderMd,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 6,
-                    ),
-                    child: TextField(
-                      controller: _textController,
-                      focusNode: _focusNode,
-                      maxLines: 5,
-                      minLines: 1,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) {
-                        if (!isBusy && _canSend && chatCtrl.canSend) {
-                          _handleSend();
-                        }
-                      },
-                      decoration: InputDecoration(
-                        hintText: 'Message AI Companion... (Shift+Enter for newline)',
-                        hintStyle: CompanionTypography.bodyMedium.copyWith(
-                          color: ext?.textMuted,
-                        ),
-                        border: InputBorder.none,
-                        isDense: true,
+                child: NeumorphicSurface(
+                  surfaceType: NeumorphicSurfaceType.recessed,
+                  borderRadius: CompanionRadius.borderMd,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 6,
+                  ),
+                  child: TextField(
+                    controller: _textController,
+                    focusNode: _focusNode,
+                    maxLines: 5,
+                    minLines: 1,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    decoration: InputDecoration(
+                      hintText: 'Message AI Companion... (Shift+Enter for newline)',
+                      hintStyle: CompanionTypography.bodyMedium.copyWith(
+                        color: ext?.textMuted,
                       ),
+                      border: InputBorder.none,
+                      isDense: true,
                     ),
                   ),
                 ),

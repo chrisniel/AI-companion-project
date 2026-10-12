@@ -1,7 +1,10 @@
 """Tests for LLM runtime endpoints, streaming completions, model status, and authentication."""
 
+from unittest.mock import AsyncMock, patch
 import pytest
 from httpx import AsyncClient
+
+from app.services.llm.manager import get_llm_provider
 
 
 @pytest.mark.asyncio
@@ -193,4 +196,59 @@ def test_internal_chat_message_still_accepts_content_blocks():
     assert len(msg.content) == 2
     assert msg.content[0].type == "image_bytes"
     assert msg.content[1].type == "text"
+
+
+@pytest.mark.asyncio
+async def test_unload_model_endpoint_busy_returns_409(client: AsyncClient, auth_headers: dict):
+    """POST /api/v1/models/unload returns 409 Conflict when generation is active."""
+    provider = get_llm_provider()
+    with patch.object(provider, "unload_model", new_callable=AsyncMock, return_value=False):
+        setattr(provider, "_last_error", "MODEL_BUSY: active generation")
+        resp = await client.post("/api/v1/models/unload", headers=auth_headers)
+        assert resp.status_code == 409
+        err = resp.json()["error"]
+        assert "MODEL_BUSY" in err["message"]
+
+
+@pytest.mark.asyncio
+async def test_unload_model_endpoint_provider_failure_returns_500(client: AsyncClient, auth_headers: dict):
+    """POST /api/v1/models/unload returns 500 when provider unload fails."""
+    provider = get_llm_provider()
+    with patch.object(provider, "unload_model", new_callable=AsyncMock, return_value=False):
+        setattr(provider, "_last_error", "ROUTER_UNLOAD_FAILED")
+        resp = await client.post("/api/v1/models/unload", headers=auth_headers)
+        assert resp.status_code == 500
+        err = resp.json()["error"]
+        assert "ROUTER_UNLOAD_FAILED" in err["message"]
+
+
+@pytest.mark.asyncio
+async def test_unload_model_endpoint_remains_loaded_returns_500(client: AsyncClient, auth_headers: dict):
+    """POST /api/v1/models/unload returns 500 if returned model state is still loaded."""
+    from app.schemas.llm import ModelStatusResponse
+    provider = get_llm_provider()
+    fake_status = ModelStatusResponse(
+        provider="mock",
+        model_loaded=True,
+        active_model="qwen3-vl-2b-instruct",
+    )
+    with patch.object(provider, "unload_model", new_callable=AsyncMock, return_value=True), \
+         patch.object(provider, "get_status", new_callable=AsyncMock, return_value=fake_status):
+        resp = await client.post("/api/v1/models/unload", headers=auth_headers)
+        assert resp.status_code == 500
+        err = resp.json()["error"]
+        assert "model remains loaded" in err["message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_unload_model_endpoint_preserves_selection_and_succeeds(client: AsyncClient, auth_headers: dict):
+    """POST /api/v1/models/unload succeeds and preserves saved model selection."""
+    from app.services.host_config import save_model_selection, get_saved_model_selection
+    save_model_selection("qwen3-vl-2b-instruct")
+    resp = await client.post("/api/v1/models/unload", headers=auth_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["model_loaded"] is False
+    assert get_saved_model_selection() == "qwen3-vl-2b-instruct"
+    assert data.get("selected_model") == "qwen3-vl-2b-instruct"
 

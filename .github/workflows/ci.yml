@@ -289,9 +289,39 @@ jobs:
     needs: classifier
     if: needs.classifier.outputs.needs_flutter == 'true'
     runs-on: windows-latest
+    env:
+      COMPANION_API_KEY: ci-ephemeral-test-key
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+
+      - name: Set up Python 3.11.9 x64
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11.9'
+          architecture: 'x64'
+          cache: 'pip'
+          cache-dependency-path: 'backend/requirements.lock'
+
+      - name: Provision isolated Python runtime for desktop acceptance
+        shell: pwsh
+        run: |
+          $qualificationRoot = Join-Path $env:RUNNER_TEMP "ai-companion-backend-qualification"
+          if (Test-Path -LiteralPath $qualificationRoot) { throw "Qualification environment must be fresh" }
+          python -I -B -m venv $qualificationRoot
+          if ($LASTEXITCODE -ne 0) { throw "Qualification environment creation failed" }
+          $qualificationPython = Join-Path $qualificationRoot "Scripts/python.exe"
+          $runtimePythonw = Join-Path $qualificationRoot "Scripts/pythonw.exe"
+          if (-not (Test-Path -LiteralPath $runtimePythonw)) { throw "Windowless runtime pythonw.exe not found in qualification venv" }
+          & $qualificationPython -I -B -m pip --isolated uninstall --yes setuptools
+          if ($LASTEXITCODE -ne 0) { throw "Seed distribution removal failed" }
+          & $qualificationPython -I -B -m pip --isolated install --require-hashes --only-binary=:all: --no-cache-dir --index-url https://pypi.org/simple -r backend/requirements.lock
+          if ($LASTEXITCODE -ne 0) { throw "Locked dependency installation failed" }
+          & $qualificationPython -I -B scripts/python_dependency_lock.py verify
+          if ($LASTEXITCODE -ne 0) { throw "Locked dependency closure verification failed" }
+          $backendDir = (Resolve-Path "backend").Path
+          "COMPANION_RUNTIME_EXE=$runtimePythonw" >> $env:GITHUB_ENV
+          "COMPANION_RUNTIME_DIR=$backendDir" >> $env:GITHUB_ENV
 
       - name: Set up Flutter 3.47.1
         uses: subosito/flutter-action@v2

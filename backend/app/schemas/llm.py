@@ -103,6 +103,7 @@ class ModelStatusResponse(BaseSchema):
 
     # Model status & residency
     active_model: Optional[str] = None
+    selected_model: Optional[str] = None
     model_resident: bool = False   # Physical VRAM compute residency (True ONLY when MODEL_READY)
     model_loaded: bool = False     # Logical residency: worker exists, model registered in router (READY or SLEEPING)
     model_awake: bool = False      # GPU/RAM compute readiness (True for READY, False for SLEEPING)
@@ -135,6 +136,13 @@ class ModelStatusResponse(BaseSchema):
 class ModelLoadRequest(BaseSchema):
     """Payload to trigger loading a model into memory/VRAM."""
     model_name: Optional[str] = None
+    profile: Optional[Literal["eco", "balanced", "maximum"]] = None
+
+
+class ModelSelectRequest(BaseSchema):
+    """Payload to select model in persistent host configuration."""
+    model_name: str
+    load_immediately: bool = False
     profile: Optional[Literal["eco", "balanced", "maximum"]] = None
 
 
