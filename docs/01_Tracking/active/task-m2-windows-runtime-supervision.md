@@ -5,7 +5,7 @@
 - **Milestone:** M2 — PC Companion Foundation.
 - **Active Work Item:** `PC-HOST-001` (Local AI Runtime Process Supervision & Launch Coordinator).
 - **Implementation Plan:** [`docs/02_Planning/01_Plans/plan-m2-h1-windows-runtime-supervision.md`](../../02_Planning/01_Plans/plan-m2-h1-windows-runtime-supervision.md).
-- **Current Stage:** Stage 3: IMPLEMENTATION GATE (Implementation & Verification Complete; Awaiting Independent Review).
+- **Current Stage:** Stage 4: DOCUMENTATION (Documentation Reconciliation Complete; Awaiting Documentation Gate Review).
 
 ---
 
@@ -21,9 +21,11 @@
   6. Process safety & untrusted PID invariant (never kill unknown or unverified PIDs; safe stale lock recovery; alien port conflict fail-closed; surviving unresponsive process detection).
   7. Informational system tray status, truthful disclosure ("Hide Window to Tray", disabled "Exit Companion (Full Shutdown - Planned PC-HOST-005)", dev UI quit for crash/exit testing), and Settings supervision diagnostic card.
   8. External PowerShell acceptance harness (`scripts/verify_windows_runtime_supervision.ps1`) using disposable test roots, ports, and tokens without touching user data or live port 8000.
-- **Strictly Out of Scope:**
+  9. Desktop Chat Quality Follow-Up (`PC-CLIENT-006` / `PC-CLIENT-010`): request-scoped finish reasons, wide table horizontal scrollbars, textbook LaTeX rendering, scoped text zoom (0.8–1.6x), generation limit continuation turn, and truthful Settings model unload.
+- **Strictly Out of Scope & Planned Boundaries:**
   - Host termination / shutdown / restart (`POST /api/v1/system/shutdown` deferred to dedicated local host administration `PC-HOST-005`).
   - Windows Task Scheduler login autostart (`PC-HOST-002`).
+  - Self-contained Windows installer and bundled runtime (`PC-HOST-006` / `DEBT-V1-09`).
   - Native Windows Action Center Toasts (`PC-HOST-003`, `PC-CLIENT-012`).
   - Multi-Profile database schema migration (`PC-IDENTITY-001`).
   - D6 model import service (`PC-MODEL-002`).
@@ -56,7 +58,8 @@
 - [x] **Chat Quality Correctness Fixes:**
   - **Truthful Model Unload:** `POST /api/v1/models/unload` returns 409 Conflict if busy and 500 on provider failure; verifies model state is actually unloaded; Flutter verifies `!modelLoaded` and reports truthful status without claiming unevidenced VRAM reclamation.
   - **Request-Scoped Finish Reasons:** Replaced singleton `provider.last_finish_reason` with request-scoped `GenerationStream` metadata; concurrent interleaved streams in separate conversations maintain independent finish reasons without race conditions.
-- [ ] **Implementation Gate (STOP HERE):** Independent code & test review (Awaiting Chris / independent evaluation).
-
-- [ ] **Documentation Gate:** Canonical architecture spec updates review.
+- [x] **Implementation Gate:** APPROVED at commit `7a37ebb36e60a8540d4ad86e5a3b7536088e8b5b`.
+- [x] **Documentation Reconciliation:** Canonical specs updated (`windows-host-and-notifications.md`, `01_PC_Desktop_Shell_and_Tray.md`, `assistant-and-conversations.md`, `runtime-and-models.md`); chat quality plan reconciled; active tracker updated; planned `PC-HOST-002`, `PC-HOST-005`, and `PC-HOST-006` clearly distinguished.
+- [ ] **Native User Manual Acceptance:** PENDING (awaiting Chris's manual Windows validation of interactive checks).
+- [ ] **Documentation Gate (STOP HERE):** Independent review of documentation changes (Awaiting Chris / independent evaluation).
 - [ ] **Closure Gate:** M2-H1 delivery verification and handoff.

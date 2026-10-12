@@ -51,20 +51,20 @@
 - Consumes: Upstream `choices[0].finish_reason` from `llama-server` SSE stream.
 - Produces: `provider.last_finish_reason: Optional[str]`, `data: {"type": "done", "finish_reason": "length"|"stop"|"cancelled", ...}\n\n`, and `Message.status = "length"|"completed"|"cancelled"|"error"`.
 
-- [ ] **Step 1: Write the failing tests for finish_reason propagation and context budgeting**
+- [x] **Step 1: Write the failing tests for finish_reason propagation and context budgeting**
   - In `backend/tests/test_assistant_orchestrator.py`: test that when upstream provider yields tokens and ends with `finish_reason="length"`, the orchestrator SSE stream emits `{"type": "done", "finish_reason": "length"}`, persists assistant message with `status="length"`, logs token counts without prompt text, and sets `max_tokens` bounded by remaining context.
   - In `backend/tests/test_runtime_boundary_regressions.py`: test `_decode_stream_event` and `_server_stream_tokens` capturing `"length"` vs `"stop"`.
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
   - Run: `.\venv\Scripts\pytest backend/tests/test_assistant_orchestrator.py -k "finish_reason" -v`
   - Expected: FAIL (`finish_reason` expected "length", got "stop").
 
-- [ ] **Step 3: Implement upstream finish_reason capture in `LlamaCppProvider` & `MockLLMProvider`**
+- [x] **Step 3: Implement upstream finish_reason capture in `LlamaCppProvider` & `MockLLMProvider`**
   - In `backend/app/services/llm/llama_cpp.py`: update `_decode_stream_event` to return `(token, done, finish_reason)` or invoke an `on_finish` callback.
   - In `_server_stream_tokens` and in-process `_worker`: store `self.last_finish_reason = reason`.
   - In `MockLLMProvider`: add `self.last_finish_reason = getattr(self, "configured_finish_reason", "stop")`.
 
-- [ ] **Step 4: Implement bounded token budgeting and finish_reason SSE emission in `orchestrator.py`**
+- [x] **Step 4: Implement bounded token budgeting and finish_reason SSE emission in `orchestrator.py`**
   - Calculate `available_generation_tokens = max(1, context_capacity - prompt_tokens)`.
   - Pass `max_tokens = min(1024, available_generation_tokens)` to `provider.generate_stream(..., max_tokens=...)`.
   - Read `finish_reason = getattr(provider, "last_finish_reason", "stop") or "stop"`.
@@ -72,7 +72,7 @@
   - Emit `done_data = json.dumps({"type": "done", "finish_reason": finish_reason, "prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens})`.
   - Log: `logger.info(f"Turn generation completed: conv_id={conversation_id}, prompt_tokens={prompt_tokens}, completion_tokens={completion_tokens}, finish_reason={finish_reason}")`.
 
-- [ ] **Step 5: Run tests to verify pass**
+- [x] **Step 5: Run tests to verify pass**
   - Run: `.\venv\Scripts\pytest backend/tests/test_assistant_orchestrator.py backend/tests/test_runtime_boundary_regressions.py -v`
   - Expected: PASS.
 
@@ -89,17 +89,17 @@
 - Consumes: `SseDoneEvent.finishReason`.
 - Produces: `MessageOut.status = 'length'`, UI badge "Response reached generation limit" with "Continue response" button calling `controller.sendMessage("Continue")`.
 
-- [ ] **Step 1: Write the failing tests for finish_reason handling in `desktop_chat_test.dart`**
+- [x] **Step 1: Write the failing tests for finish_reason handling in `desktop_chat_test.dart`**
   - Test: when `SseDoneEvent(finishReason: 'length')` is received, the assistant turn updates to `status: 'length'`.
   - Test: when `status == 'length'`, `ChatScreen` renders "Response reached generation limit" badge and a "Continue response" button.
   - Test: tapping "Continue response" sends a continuation prompt as a new turn.
   - Test: when stream disconnects without `SseDoneEvent`, it transitions to interrupted rather than normal completion.
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
   - Run: `flutter test test/desktop_chat_test.dart -n "generation limit"`
   - Expected: FAIL.
 
-- [ ] **Step 3: Implement controller and UI handling for generation limit**
+- [x] **Step 3: Implement controller and UI handling for generation limit**
   - In `desktop_chat_controller.dart`: on `SseDoneEvent`, update assistant message status to `event.finishReason ?? 'completed'`.
   - On `onDone`: if state was still `generating` without `SseDoneEvent`, set status to `'interrupted'` and report error.
   - In `chat_screen.dart`: under the assistant message bubble, if `msg.status == 'length'`, render warning container:
@@ -107,7 +107,7 @@
     - Label: `Response reached generation limit`.
     - Button: `FilledButton.tonalIcon(label: Text('Continue response'), icon: Icon(Icons.arrow_forward_rounded), onPressed: () => chatCtrl.sendMessage('Continue'))`.
 
-- [ ] **Step 4: Run tests to verify pass**
+- [x] **Step 4: Run tests to verify pass**
   - Run: `flutter test test/desktop_chat_test.dart`
   - Expected: PASS.
 
@@ -123,22 +123,22 @@
 - Consumes: Markdown table tokens.
 - Produces: `_MarkdownTableWidget` with dedicated `ScrollController`, visible `Scrollbar`, mouse drag support, and constrained text wrapping.
 
-- [ ] **Step 1: Write the failing test for wide table scrollbar and cell wrapping**
+- [x] **Step 1: Write the failing test for wide table scrollbar and cell wrapping**
   - In `assistant_markdown_view_test.dart`: test an 8-column table with wide descriptions on a 1024x640 viewport.
   - Assert that `Scrollbar` is present with `thumbVisibility: true`.
   - Assert that cells have constrained max widths so text wraps without clipping.
 
-- [ ] **Step 2: Run test to verify failure**
+- [x] **Step 2: Run test to verify failure**
   - Run: `flutter test test/assistant_markdown_view_test.dart -n "Scrollbar"`
   - Expected: FAIL (`Scrollbar` not found).
 
-- [ ] **Step 3: Implement `_MarkdownTableWidget` improvements**
+- [x] **Step 3: Implement `_MarkdownTableWidget` improvements**
   - Convert `_MarkdownTableWidget` to `StatefulWidget` to maintain its own `ScrollController`.
   - Wrap `SingleChildScrollView` in `Scrollbar(controller: _scrollController, thumbVisibility: true)`.
   - Add `ScrollConfiguration(behavior: ScrollConfiguration.of(context).copyWith(dragDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse, PointerDeviceKind.trackpad}))`.
   - Wrap cell contents in `ConstrainedBox(constraints: const BoxConstraints(minWidth: 80, maxWidth: 360), child: SelectableText.rich(...))` to wrap long text while preserving column alignment.
 
-- [ ] **Step 4: Run test to verify pass**
+- [x] **Step 4: Run test to verify pass**
   - Run: `flutter test test/assistant_markdown_view_test.dart`
   - Expected: PASS.
 
@@ -155,22 +155,22 @@
 - Consumes: Display LaTeX `\[ ... \]` and inline LaTeX `\( ... \)`.
 - Produces: Beautifully typeset mathematical formulas (integrals, limits, fractions) with copyable raw source.
 
-- [ ] **Step 1: Write tests for textbook calculus integral and display math**
+- [x] **Step 1: Write tests for textbook calculus integral and display math**
   - In `assistant_markdown_view_test.dart`: add test rendering exact textbook equation:
     `\[\int_1^\infty \frac{1}{x^2}\,dx = \left[-\frac{1}{x}\right]_{1}^{\infty} = 1\]`.
   - Assert `SelectableMath` renders display math with integral and limits.
   - Test multiline math with alignment and copy functionality.
   - Test that literal fenced code ```latex is NOT converted to math widget.
 
-- [ ] **Step 2: Run tests to verify current behavior and gaps**
+- [x] **Step 2: Run tests to verify current behavior and gaps**
   - Run: `flutter test test/assistant_markdown_view_test.dart -n "textbook"`
   - Expected: Verify behavior against the new formula.
 
-- [ ] **Step 3: Update `DEFAULT_PERSONA` in orchestrator & fine-tune math display**
+- [x] **Step 3: Update `DEFAULT_PERSONA` in orchestrator & fine-tune math display**
   - In `orchestrator.py`: add system instruction: `"When providing mathematical formulas or steps, use standard display LaTeX delimiters \\[ ... \\] or inline \\( ... \\) rather than fenced code blocks."`
   - In `assistant_markdown_view.dart`: ensure multiline display math properly preserves LaTeX spacing and does not break on line breaks.
 
-- [ ] **Step 4: Run tests to verify pass**
+- [x] **Step 4: Run tests to verify pass**
   - Run: `flutter test test/assistant_markdown_view_test.dart`
   - Expected: PASS.
 
@@ -188,25 +188,25 @@
 - Consumes: Ctrl+Wheel, Ctrl+Plus/Minus/0 shortcuts.
 - Produces: Persistent `chatZoomLevel` (0.8–1.6) applying strictly to conversation viewport via `MediaQuery.textScaler`.
 
-- [ ] **Step 1: Write tests for zoom settings persistence and chat zoom interactions**
+- [x] **Step 1: Write tests for zoom settings persistence and chat zoom interactions**
   - In `desktop_client_settings_test.dart`: test `readChatZoomLevel` and `writeChatZoomLevel` (default 1.0, clamp between 0.8 and 1.6).
   - In `desktop_chat_test.dart`: test `ChatScreen` keyboard shortcuts (`Ctrl+=`, `Ctrl+-`, `Ctrl+0`) and Ctrl+Wheel altering the conversation text scaler without altering header/composer text sizes.
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
   - Run: `flutter test test/desktop_client_settings_test.dart test/desktop_chat_test.dart -n "zoom"`
   - Expected: FAIL.
 
-- [ ] **Step 3: Implement zoom settings in `DesktopClientSettings`**
+- [x] **Step 3: Implement zoom settings in `DesktopClientSettings`**
   - Add `Future<double> readChatZoomLevel({double defaultValue = 1.0})`.
   - Add `Future<void> writeChatZoomLevel(double zoomLevel)`. Clamped to `0.8..1.6`.
 
-- [ ] **Step 4: Implement zoom gestures and scoped text scaling in `ChatScreen`**
+- [x] **Step 4: Implement zoom gestures and scoped text scaling in `ChatScreen`**
   - Add `double _zoomLevel = 1.0`. Load on `initState()` via `_effectiveClientSettings.readChatZoomLevel()`.
   - Wrap `_buildMessageList` in `Listener(onPointerSignal: _handlePointerSignal, child: MediaQuery(data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(_zoomLevel)), child: ...))`.
   - Add shortcut actions for `LogicalKeyboardKey.equal` (zoom in), `LogicalKeyboardKey.minus` (zoom out), `LogicalKeyboardKey.digit0` (reset).
   - On zoom change: `_effectiveClientSettings.writeChatZoomLevel(_zoomLevel)`.
 
-- [ ] **Step 5: Run tests to verify pass**
+- [x] **Step 5: Run tests to verify pass**
   - Run: `flutter test test/desktop_client_settings_test.dart test/desktop_chat_test.dart`
   - Expected: PASS.
 
@@ -224,24 +224,24 @@
 - Consumes: Authenticated `POST /api/v1/models/unload`.
 - Produces: `CompanionClient.unloadModel()`, "Unload Model / Free VRAM" button in `SettingsScreen`.
 
-- [ ] **Step 1: Write failing tests for client unload and settings screen unload button**
+- [x] **Step 1: Write failing tests for client unload and settings screen unload button**
   - In `companion_client_test.dart`: test `unloadModel()` sends `POST /api/v1/models/unload` with auth header and returns `ModelStatusResponse`.
   - In `settings_screen_test.dart`: test that when model is loaded, "Unload Model / Free VRAM" button is enabled; when tapped, invokes `unloadModel()` and updates UI; test that when turn generation is active, unload is disabled or rejected.
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
   - Run: `flutter test test/settings_screen_test.dart`
   - Expected: FAIL (`unloadModel` missing).
 
-- [ ] **Step 3: Implement `unloadModel()` in `CompanionClient`**
+- [x] **Step 3: Implement `unloadModel()` in `CompanionClient`**
   - Add `Future<ModelStatusResponse> unloadModel()` in `companion_client.dart`.
 
-- [ ] **Step 4: Implement Unload Model button and handler in `SettingsScreen`**
+- [x] **Step 4: Implement Unload Model button and handler in `SettingsScreen`**
   - Add `Future<void> _unloadModel()` in `_SettingsScreenState`.
   - Verify `chatController?.isGenerating != true`.
   - Call `client.unloadModel()`, update `_modelStatus`, report result truthfully, and notify `chatController`.
   - Render "Unload Model / Free VRAM" button in Active Model Card and loaded model entry.
 
-- [ ] **Step 5: Run tests to verify pass**
+- [x] **Step 5: Run tests to verify pass**
   - Run: `flutter test test/settings_screen_test.dart`
   - Expected: PASS.
 
@@ -253,17 +253,39 @@
 - Modify: `docs/01_Tracking/active/task-m2-windows-runtime-supervision.md`
 - Verify: Full Flutter tests, backend pytest, linter checks.
 
-- [ ] **Step 1: Run full verification suite**
-  - `flutter analyze`
-  - `flutter test`
-  - `pytest backend/tests/test_assistant_orchestrator.py backend/tests/test_llm_router.py backend/tests/test_model_registry.py`
-  - `python scripts/verify_llama_windowless.py`
+- [x] **Step 1: Run full verification suite**
+  - `dart analyze frontend/flutter/` (0 issues)
+  - `flutter test frontend/flutter/apps/desktop` (95 passed)
+  - `dart test frontend/flutter/packages/companion_core` (passed)
+  - `dart test frontend/flutter/packages/companion_api` (56 passed)
+  - `pytest backend/tests` (148 passed)
+  - `python scripts/check_dart_openapi_parity.py` (0 discrepancies)
+  - `python scripts/verify_llama_windowless.py` (passed empirical isolated check)
 
-- [ ] **Step 2: Update active task tracking**
+- [x] **Step 2: Update active task tracking**
   - Record the quality follow-up items under PC-CLIENT-006 and PC-CLIENT-010 in `task-m2-windows-runtime-supervision.md`.
 
-- [ ] **Step 3: Commit and HTTPS push**
-  - Commit scoped changes with Conventional Commits: `fix(desktop): chat quality follow-up for finish reasons, table scroll, math, zoom, and model unload`.
+- [x] **Step 3: Commit and HTTPS push**
+  - Scoped changes committed with Conventional Commits.
   - HTTPS push to `feature/m2-windows-runtime-supervision`.
-  - Verify remote HEAD.
-  - STOP for independent review.
+  - Remote HEAD verified.
+
+---
+
+### Correctness Fixes (Post-Implementation Review)
+
+#### Correctness Fix A: Truthful Model Unload Verification
+- **Issue:** `POST /api/v1/models/unload` previously ignored provider `unload_model()` return value, and Flutter displayed success on HTTP 200 without checking if the model actually unloaded.
+- **Resolution:**
+  - `POST /api/v1/models/unload` returns `409 Conflict` if turn generation is active.
+  - Returns `500 Internal Server Error` if provider unload fails or if `status.model_loaded` remains `True`.
+  - Flutter Settings checks that `status.model_loaded == false` before announcing success (`"Model unloaded successfully."`).
+  - Reports failure truthfully without claiming unevidenced VRAM reclamation.
+  - Regression tests added in `backend/tests/test_llm.py` and `frontend/flutter/apps/desktop/test/desktop_settings_test.dart`.
+
+#### Correctness Fix B: Request-Scoped Finish Reasons
+- **Issue:** `BaseLLMProvider.last_finish_reason` was shared mutable state on a singleton provider, causing race conditions where concurrent conversation streams could overwrite each other's terminal finish reason.
+- **Resolution:**
+  - Carried completion reasons directly within per-request `GenerationStream` metadata and `GeneratedText`.
+  - Interleaving concurrent conversation streams maintain isolated terminal finish reasons without cross-talk.
+  - Verified with multi-turn concurrent regression test in `backend/tests/test_assistant_orchestrator.py`.

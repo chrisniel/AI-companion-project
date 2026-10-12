@@ -183,7 +183,13 @@ Verified in `backend/app/api/v1/endpoints/conversations.py`:
   4. *Concurrency Lock:* Acquires in-memory asyncio lock `_get_lock(conversation_id)` (returns `409 CONVERSATION_BUSY` if locked).
   5. *Provider Check:* Verifies LLM provider runtime state (returns `503 LLM_UNAVAILABLE` if unavailable).
   6. *Atomic Preparation (`prepare_turn`):* Validates attachment IDs, allocates sequence numbers (with bounded retry for collisions), persists user message and assistant placeholder, flushes rows, atomically claims attachments for the user message, and commits the transaction exactly once. (Note: `prepare_turn` does not retrieve memories.)
-  7. *Streaming Orchestration (`orchestrate_chat_stream`):* Retrieves relevant memories via FTS5 lexical search, constructs prompt context fitting the token budget, streams SSE tokens (`text/event-stream`), persists completed assistant message, records token usage, and releases the conversation lock upon completion.
+  7. *Streaming Orchestration (`orchestrate_chat_stream`):* Retrieves relevant memories via FTS5 lexical search, calculates bounded generation headroom (`max_tokens = min(default_max_tokens, context_capacity - prompt_tokens)`) to prevent upstream context overflow, streams SSE tokens (`text/event-stream`), persists assistant message with truthful status (`"completed"`, `"length"`, or `"interrupted"`), records token usage, and releases the conversation lock upon completion.
+- **Request-Scoped Finish Reasons & Stream Metadata:** Generative completion preserves request-scoped finish reasons via `GenerationStream` (carrying per-operation metadata) and `GeneratedText(str)` rather than shared mutable provider state, preventing concurrency races across interleaving conversation streams:
+  - Upstream `llama-server` SSE chunk decoders capture genuine finish reasons (`"stop"`, `"length"`).
+  - Orchestrator emits `{"type": "done", "finish_reason": finish_reason, "prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens}` in the SSE terminal event.
+  - Assistant message status is persisted truthfully as `"length"` when output token capacity is reached, or `"completed"` on natural conclusion.
+  - On the client, `finish_reason == "length"` renders an actionable "Response reached generation limit" status banner with a "Continue response" button, allowing explicit continuation turns without mutating historical turns.
+  - System persona prompt provides guidance directing models to use standard LaTeX delimiters (`\[ ... \]`, `\( ... \)`) for mathematical formulations rather than plain text.
 
 ### 3.3 Context Assembly & Injection
 

@@ -73,3 +73,52 @@ The approved visual design language across the companion ecosystem is:
 - **System Theme Synchronization:** Automatic switching between Windows Dark Mode and Light Mode based on OS preference, with manual override in Settings.
 - **Keyboard Navigation:** Full keyboard focus traversal (`Tab` / `Shift+Tab`), shortcut keys (`Ctrl+N` for new conversation, `Ctrl+M` to toggle mute, `Ctrl+,` for settings, `Esc` to hide window).
 - **High-Contrast Support:** Compatible with Windows High Contrast mode themes.
+
+---
+
+## 5. Desktop Conversation Experience & Chat Quality Design (`PC-CLIENT-006` / `PC-CLIENT-010`)
+
+### 5.1 Chat Composer & Keyboard Interactions
+- **Enter vs. Shift+Enter Semantics:** Pressing `Enter` in the chat input well submits the active message draft. Pressing `Shift+Enter` inserts a soft newline, allowing comfortable authoring of multiline prompts without premature submission.
+- **Draft Persistence:** Unsent input text drafts persist locally across conversation switching and window minimization.
+- **Asynchronous Scroll Restoration:** Scroll restoration is layout-aware. When opening a conversation or navigating between Chat and Settings, the viewport awaits authoritative message population and layout completion before applying scroll restoration, guaranteeing that reading positions in long conversation histories (30+ messages) are never jumpily overwritten.
+
+### 5.2 Wide Markdown Tables
+- **Horizontal Scrollbar:** Wide Markdown tables rendered in `AssistantMarkdownView` (via `_MarkdownTableWidget`) include a visible, interactive horizontal `Scrollbar` with `thumbVisibility: true`.
+- **Gesture Support:** Supports mouse drag, trackpad pan, and horizontal wheel scrolling through explicit `ScrollConfiguration` configuration.
+- **Cell Width Constraints:** Table cells enforce bounded width constraints (`minWidth: 80, maxWidth: 360`) with word-wrapping, preventing wide tables from clipping, overflowing message bubble bounds, or corrupting desktop layouts on compact viewports (1024×640).
+
+### 5.3 Professional Mathematical Typesetting & LaTeX Syntax
+- **Rendering Engine:** Mathematical expressions are rendered using `flutter_math_fork` (`SelectableMath`), delivering textbook-grade typography for scientific and mathematical formulations.
+- **Supported Delimiters:**
+  - **Display Math:** `\[ ... \]` and `$$ ... $$` (rendered centered with horizontal scroll capacity for long equations).
+  - **Inline Math:** `\( ... \)` and `$...$`.
+- **Supported Syntax:** Standard LaTeX math syntax including fractions (`\frac{a}{b}`), definite/indefinite integrals (`\int_{a}^{b}`), limits (`\lim_{x \to \infty}`), summations (`\sum`), text annotations (`\text{...}`), square roots, matrices, and greek symbols.
+- **Copy & Inspection:** The raw LaTeX source remains accessible via selection and copy actions.
+- **Code Block Isolation:** Fenced code blocks with language tags (e.g. ` ```latex `) remain literal code blocks and are never converted to math widgets.
+- **Graceful Fallback:** Syntax errors or unsupported TeX commands fall back cleanly to formatted monospace text without throwing exceptions or corrupting adjacent message flow.
+
+### 5.4 Scoped Conversation Text Zoom
+- **Zoom Range & Stepping:** Conversation text zoom scales between **0.8× (80%)** and **1.6× (160%)** in 0.1× increments, defaulting to **1.0× (100%)**.
+- **Keyboard & Mouse Controls:**
+  - `Ctrl + Mouse Wheel Up`: Zoom in (+0.1×).
+  - `Ctrl + Mouse Wheel Down`: Zoom out (-0.1×).
+  - `Ctrl + =` or `Ctrl + +`: Zoom in.
+  - `Ctrl + -`: Zoom out.
+  - `Ctrl + 0`: Reset zoom to 1.0×.
+- **Strict Scope Isolation:** Text scaling is applied strictly to the conversation viewport (`MediaQuery(textScaler: TextScaler.linear(zoom))`). It does **not** scale or distort navigation rails, title bars, dialogs, composer wells, or settings forms.
+- **Persistence:** The active zoom level is persisted across application restarts in `%LOCALAPPDATA%\AI Companion\config\client_settings.json` (`chat_zoom_level`).
+
+### 5.5 Generation Limits & Continuation Turns
+- **Truthful Finish Reason Propagation:** The full generation pipeline (inference engine $\rightarrow$ provider $\rightarrow$ orchestrator SSE $\rightarrow$ Flutter client) preserves and propagates genuine completion reasons (`stop`, `length`, `cancelled`, `interrupted`, `error`).
+- **Generation Limit Indicator:** When a response ends because the model reached its allocated output token limit (`finish_reason == "length"`), the UI displays a clear, non-intrusive status banner below the message bubble: *"Response reached generation limit"*.
+- **Continuation Turn Action:** A `"Continue response"` button is rendered alongside the limit indicator. Activating it submits an explicit follow-up prompt (`"Continue"`) as a new conversation turn, seamlessly continuing the generated content without modifying past turn history.
+- **Transport Resilience:** Unexpected transport disconnects or stream drops transition to an explicit interrupted state rather than falsely claiming successful completion.
+
+### 5.6 Settings Model Management & Truthful Unload (`PC-CLIENT-010`)
+- **Explicit Model Unload Control:** The Settings screen provides an *"Unload Model / Free VRAM"* button under the Active Model card whenever a model is resident in memory.
+- **Generation Protection:** The unload action is disabled and blocked while active generation is in progress, preventing race conditions.
+- **Truthful Unload Verification:** Activating unload calls authenticated `POST /api/v1/models/unload`. The backend returns `409 Conflict` if the provider is busy and `500 Internal Server Error` if unload fails or the model remains loaded. Flutter verifies that `status.model_loaded == false` before announcing success (`"Model unloaded successfully."`).
+- **No Unevidenced VRAM Claims:** UI feedback truthfully reports model unload without claiming exact byte-for-byte VRAM reclamation without diagnostic hardware hooks.
+- **Configuration Preservation:** Unloading a model evicts resident weights from memory while preserving saved model selection in `host_config.json`, allowing instant reload on demand.
+- **Deferred Target Capabilities:** Hardware-aware dynamic memory budgeting formulas (e.g. 50% dedicated VRAM ceiling) and automated model recommendation algorithms remain target capabilities tracked under `PC-CLIENT-010` and are not currently enforced in code.

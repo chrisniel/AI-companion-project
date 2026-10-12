@@ -173,7 +173,11 @@ Verified in `backend/app/services/llm/`:
   - `async generate_stream(messages: List[ChatMessage], temperature: float = 0.7, max_tokens: int = 1024, **kwargs) -> AsyncGenerator[str, None]`
   - `async shutdown() -> None`
 - **Concrete Providers:**
-  - `LlamaCppProvider` (`llama_cpp.py`): Connects to a local router or launches standalone `llama-server.exe`, tracks Core-managed process state, loads/unloads models via router API, applies profiles, and idle-unloads models. Supports Server-Sent Events (SSE) token streaming via OpenAI-compatible endpoints (`/v1/chat/completions`).
+  - `LlamaCppProvider` (`llama_cpp.py`): Connects to a local router or launches standalone `llama-server.exe`, tracks Core-managed process state, loads/unloads models via router API, applies profiles, and idle-unloads models.
+    - *Windowless Subprocess Execution:* Launches `llama-server.exe` with `creationflags=subprocess.CREATE_NO_WINDOW` on Windows, preserving direct process invocation, exact PID ownership, single-resident model policy, model load/unload lifecycle, and crash isolation without popping up an interactive console window.
+    - *Request-Scoped Finish Reasons:* Preserves upstream chunk completion reasons (`"stop"`, `"length"`) via `GenerationStream` metadata, preventing concurrency races across interleaved turns.
+    - *Truthful Model Unload (`POST /api/v1/models/unload`):* Returns `409 Conflict` if generation is active, `500 Internal Server Error` if unload fails or the model remains loaded in memory; verifies that `status.model_loaded == False` before returning success; preserves saved model selection in `host_config.json`.
+    - *Client Settings Control (`PC-CLIENT-010`):* Flutter Settings exposes an authenticated "Unload Model / Free VRAM" action with active-generation protection and truthful status announcements.
   - `MockLLMProvider` (`mock.py`): Supplies deterministic synthetic token streams for testing.
   - **Cloud Providers:** **NOT IMPLEMENTED**. No OpenAI, Anthropic, or external cloud API client adapter exists in `app/services/llm/`.
 - **Process Management & Router Constants:** `scripts/start-model.ps1` exists as a diagnostic/helper script, not the primary runtime launcher. Current implementation constants include:
