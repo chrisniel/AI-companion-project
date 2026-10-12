@@ -118,22 +118,58 @@ void main() {
       final lockFile = File('${tempDir.path}\\runtime.lock');
       final supervisor = WindowsRuntimeProcessSupervisor();
 
-      // Launch external Dart helper process that holds lock for 2 seconds
+      final helperPath = _resolveLockHelperPath();
       final dartExe = Platform.executable.contains('dart') ? Platform.executable : 'dart';
       final helper = await Process.start(
         dartExe,
-        ['run', 'test/helpers/lock_holder_helper.dart', lockFile.path, '2000'],
+        ['run', helperPath, lockFile.path, '2000'],
         workingDirectory: Directory.current.path,
         runInShell: Platform.isWindows,
       );
 
-      // Wait for LOCKED signal
-      final line = await helper.stdout
+      final stderrBuffer = StringBuffer();
+      helper.stderr.transform(utf8.decoder).listen(stderrBuffer.write);
+
+      final completer = Completer<String>();
+      final sub = helper.stdout
           .transform(utf8.decoder)
           .transform(const LineSplitter())
-          .firstWhere((l) => l.trim() == 'LOCKED')
-          .timeout(const Duration(seconds: 5));
+          .listen((line) {
+        if (line.trim() == 'LOCKED' && !completer.isCompleted) {
+          completer.complete(line.trim());
+        }
+      }, onError: (Object err) {
+        if (!completer.isCompleted) completer.completeError(err);
+      }, onDone: () {
+        if (!completer.isCompleted) {
+          completer.completeError(
+            StateError(
+              'Lock helper exited before emitting LOCKED. Stderr: ${stderrBuffer.toString().trim()}',
+            ),
+          );
+        }
+      });
+
+      helper.exitCode.then((code) {
+        if (!completer.isCompleted) {
+          completer.completeError(
+            StateError(
+              'Lock helper terminated prematurely with code $code. Stderr: ${stderrBuffer.toString().trim()}',
+            ),
+          );
+        }
+      });
+
+      final line = await completer.future.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw TimeoutException(
+            'Timed out waiting for LOCKED from helper. Stderr: ${stderrBuffer.toString().trim()}',
+          );
+        },
+      );
       expect(line, equals('LOCKED'));
+      await sub.cancel();
 
       // Immediate attempt with 100ms timeout must detect lock contention and return null
       final handle = await supervisor.acquireStartupLock(lockFile, timeout: const Duration(milliseconds: 100));
@@ -395,4 +431,33 @@ void main() {
       expect(fakeLauncher.startedArgs?.join(' '), contains("Name LIKE 'python%'"));
     });
   });
+}
+
+String _resolveLockHelperPath() {
+  final candidates = [
+    File('${Directory.current.path}/test/helpers/lock_holder_helper.dart'),
+    File('${Directory.current.path}/apps/desktop/test/helpers/lock_holder_helper.dart'),
+    File('${Directory.current.path}/frontend/flutter/apps/desktop/test/helpers/lock_holder_helper.dart'),
+  ];
+  if (Platform.script.scheme == 'file') {
+    final scriptDir = File(Platform.script.toFilePath()).parent;
+    candidates.add(File('${scriptDir.path}/helpers/lock_holder_helper.dart'));
+    candidates.add(File('${scriptDir.path}/test/helpers/lock_holder_helper.dart'));
+  }
+  for (final candidate in candidates) {
+    if (candidate.existsSync()) {
+      return candidate.absolute.path;
+    }
+  }
+  Directory dir = Directory.current.absolute;
+  for (var i = 0; i < 5; i++) {
+    final candidate = File('${dir.path}/frontend/flutter/apps/desktop/test/helpers/lock_holder_helper.dart');
+    if (candidate.existsSync()) return candidate.path;
+    final candidate2 = File('${dir.path}/apps/desktop/test/helpers/lock_holder_helper.dart');
+    if (candidate2.existsSync()) return candidate2.path;
+    final parent = dir.parent;
+    if (parent.path == dir.path) break;
+    dir = parent;
+  }
+  throw StateError('Could not resolve lock_holder_helper.dart path from ${Directory.current.path}');
 }

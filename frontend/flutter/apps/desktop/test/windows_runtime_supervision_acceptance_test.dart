@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:ai_companion_desktop/coordinator/desktop_runtime_coordinator.dart';
@@ -90,14 +91,109 @@ void main() {
     late Map<String, String> testEnv;
     late int testPort;
     late String testToken;
+    late String runtimeExecutable;
+    late String runtimeWorkingDir;
 
     int? launchedPid;
     final List<AcceptanceSpawnRecord> trackedSpawnRecords = <AcceptanceSpawnRecord>[];
 
     setUpAll(() async {
       final envPort = Platform.environment['COMPANION_TEST_PORT'];
-      testPort = envPort != null && envPort.isNotEmpty ? int.parse(envPort) : 8765;
+      if (envPort != null && envPort.isNotEmpty) {
+        testPort = int.parse(envPort);
+      } else {
+        final socket = await ServerSocket.bind('127.0.0.1', 0);
+        testPort = socket.port;
+        await socket.close();
+      }
       testToken = Platform.environment['COMPANION_API_KEY'] ?? 'companion_sec_test_verify_token_12345';
+
+      // 1. Resolve explicit acceptance runtime executable (pythonw.exe on Windows)
+      String? resolvedExe = Platform.environment['COMPANION_RUNTIME_EXE'];
+      if (resolvedExe != null && resolvedExe.isNotEmpty) {
+        if (Platform.isWindows && resolvedExe.toLowerCase().endsWith(r'\python.exe')) {
+          final siblingW = File(resolvedExe.replaceAll(RegExp(r'python\.exe$', caseSensitive: false), 'pythonw.exe'));
+          if (siblingW.existsSync()) resolvedExe = siblingW.path;
+        }
+      }
+
+      if (resolvedExe == null || !File(resolvedExe).existsSync()) {
+        final searchBases = <Directory>[
+          Directory.current,
+          File(Platform.resolvedExecutable).parent,
+        ];
+        final relativeSubPaths = [
+          if (Platform.isWindows) ...[
+            r'backend\.venv\Scripts\pythonw.exe',
+            r'.venv\Scripts\pythonw.exe',
+          ] else ...[
+            'backend/.venv/bin/python',
+            '.venv/bin/python',
+          ],
+        ];
+        for (final base in searchBases) {
+          Directory current = base.absolute;
+          for (var i = 0; i < 5; i++) {
+            for (final sub in relativeSubPaths) {
+              final candidate = File('${current.path}${Platform.pathSeparator}$sub');
+              if (candidate.existsSync()) {
+                resolvedExe = candidate.path;
+                break;
+              }
+            }
+            if (resolvedExe != null) break;
+            final parent = current.parent;
+            if (parent.path == current.path) break;
+            current = parent;
+          }
+          if (resolvedExe != null) break;
+        }
+      }
+
+      if (resolvedExe == null || !File(resolvedExe).existsSync()) {
+        throw StateError(
+          'Acceptance runtime executable could not be resolved. '
+          'Checked COMPANION_RUNTIME_EXE and candidate paths from ${Directory.current.path}. '
+          'Set COMPANION_RUNTIME_EXE to pythonw.exe or ensure backend/.venv is provisioned.',
+        );
+      }
+      runtimeExecutable = File(resolvedExe).absolute.path;
+
+      // 2. Resolve explicit runtime working directory (backend/)
+      String? resolvedWd = Platform.environment['COMPANION_RUNTIME_DIR'];
+      if (resolvedWd == null || !Directory(resolvedWd).existsSync()) {
+        final searchBases = <Directory>[
+          Directory.current,
+          File(Platform.resolvedExecutable).parent,
+        ];
+        for (final base in searchBases) {
+          Directory current = base.absolute;
+          for (var i = 0; i < 5; i++) {
+            final mainPy = File('${current.path}${Platform.pathSeparator}backend${Platform.pathSeparator}app${Platform.pathSeparator}main.py');
+            if (mainPy.existsSync()) {
+              resolvedWd = Directory('${current.path}${Platform.pathSeparator}backend').path;
+              break;
+            }
+            final directMainPy = File('${current.path}${Platform.pathSeparator}app${Platform.pathSeparator}main.py');
+            if (directMainPy.existsSync()) {
+              resolvedWd = current.path;
+              break;
+            }
+            final parent = current.parent;
+            if (parent.path == current.path) break;
+            current = parent;
+          }
+          if (resolvedWd != null) break;
+        }
+      }
+
+      if (resolvedWd == null || !Directory(resolvedWd).existsSync()) {
+        throw StateError(
+          'Acceptance runtime working directory could not be resolved. '
+          'Checked COMPANION_RUNTIME_DIR and candidate paths from ${Directory.current.path}.',
+        );
+      }
+      runtimeWorkingDir = Directory(resolvedWd).absolute.path;
 
       final customTemp = Platform.environment['COMPANION_TEST_TEMP_ROOT'];
       if (customTemp != null && customTemp.isNotEmpty) {
@@ -125,6 +221,9 @@ void main() {
         'COMPANION_LOCK_FILE': lockFile.path,
         'COMPANION_LOG_FILE': logFile.path,
         'COMPANION_CLIENT_SETTINGS_FILE': settingsFile.path,
+        'COMPANION_RUNTIME_EXE': runtimeExecutable,
+        'COMPANION_RUNTIME_DIR': runtimeWorkingDir,
+        'LOCALAPPDATA': tempRoot.path,
         'PYTHONUNBUFFERED': '1',
       };
     });
@@ -226,6 +325,8 @@ void main() {
         customLockFile: lockFile,
         customLogFilePath: logFile.path,
         customEnvironment: testEnv,
+        customExecutablePath: runtimeExecutable,
+        customWorkingDirectory: runtimeWorkingDir,
       );
 
       final state = await coordinator.ensureRuntimeReady(timeout: const Duration(seconds: 25));
@@ -281,6 +382,8 @@ void main() {
         customLockFile: lockFile,
         customLogFilePath: logFile.path,
         customEnvironment: testEnv,
+        customExecutablePath: runtimeExecutable,
+        customWorkingDirectory: runtimeWorkingDir,
       );
 
       final state = await secondCoordinator.ensureRuntimeReady(timeout: const Duration(seconds: 10));
@@ -315,7 +418,10 @@ void main() {
       );
       expect(isAlive, isFalse);
 
-      final testPortD = testPort + 2;
+      final socketD = await ServerSocket.bind('127.0.0.1', 0);
+      final testPortD = socketD.port;
+      await socketD.close();
+
       final staleDataDir = Directory('${tempRoot.path}\\DataD');
       await staleDataDir.create(recursive: true);
       final staleEnvFile = File('${tempRoot.path}\\.envD');
@@ -331,6 +437,9 @@ void main() {
         'COMPANION_LOCK_FILE': staleLockFile.path,
         'COMPANION_LOG_FILE': staleLogFile.path,
         'COMPANION_CLIENT_SETTINGS_FILE': settingsFile.path,
+        'COMPANION_RUNTIME_EXE': runtimeExecutable,
+        'COMPANION_RUNTIME_DIR': runtimeWorkingDir,
+        'LOCALAPPDATA': tempRoot.path,
         'PYTHONUNBUFFERED': '1',
       };
 
@@ -363,6 +472,8 @@ void main() {
         customLockFile: staleLockFile,
         customLogFilePath: staleLogFile.path,
         customEnvironment: testEnvD,
+        customExecutablePath: runtimeExecutable,
+        customWorkingDirectory: runtimeWorkingDir,
       );
 
       final recoveryState = await recoveryCoordinator.ensureRuntimeReady(
@@ -406,6 +517,8 @@ void main() {
         supervisor: supervisor,
         credentialStore: InMemoryCredentialStore(testToken),
         customEnvironment: testEnv,
+        customExecutablePath: runtimeExecutable,
+        customWorkingDirectory: runtimeWorkingDir,
       );
 
       final state = await coordinator.ensureRuntimeReady(timeout: const Duration(seconds: 3));
@@ -423,20 +536,58 @@ void main() {
       final contentionLockFile = File('${tempDir.path}\\runtime.lock');
       final supervisor = WindowsRuntimeProcessSupervisor();
 
+      final helperPath = _resolveLockHelperPath();
       final dartExe = Platform.executable.contains('dart') ? Platform.executable : 'dart';
       final helper = await Process.start(
         dartExe,
-        ['run', 'test/helpers/lock_holder_helper.dart', contentionLockFile.path, '2000'],
+        ['run', helperPath, contentionLockFile.path, '2000'],
         workingDirectory: Directory.current.path,
         runInShell: Platform.isWindows,
       );
 
-      final line = await helper.stdout
+      final stderrBuffer = StringBuffer();
+      helper.stderr.transform(utf8.decoder).listen(stderrBuffer.write);
+
+      final completer = Completer<String>();
+      final sub = helper.stdout
           .transform(utf8.decoder)
           .transform(const LineSplitter())
-          .firstWhere((l) => l.trim() == 'LOCKED')
-          .timeout(const Duration(seconds: 5));
+          .listen((line) {
+        if (line.trim() == 'LOCKED' && !completer.isCompleted) {
+          completer.complete(line.trim());
+        }
+      }, onError: (Object err) {
+        if (!completer.isCompleted) completer.completeError(err);
+      }, onDone: () {
+        if (!completer.isCompleted) {
+          completer.completeError(
+            StateError(
+              'Lock helper exited before emitting LOCKED. Stderr: ${stderrBuffer.toString().trim()}',
+            ),
+          );
+        }
+      });
+
+      helper.exitCode.then((code) {
+        if (!completer.isCompleted) {
+          completer.completeError(
+            StateError(
+              'Lock helper terminated prematurely with code $code. Stderr: ${stderrBuffer.toString().trim()}',
+            ),
+          );
+        }
+      });
+
+      final line = await completer.future.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw TimeoutException(
+            'Timed out waiting for LOCKED from helper. Stderr: ${stderrBuffer.toString().trim()}',
+          );
+        },
+      );
       expect(line, equals('LOCKED'));
+      await sub.cancel();
 
       final handle = await supervisor.acquireStartupLock(
         contentionLockFile,
@@ -448,4 +599,33 @@ void main() {
       await tempDir.delete(recursive: true);
     });
   });
+}
+
+String _resolveLockHelperPath() {
+  final candidates = [
+    File('${Directory.current.path}/test/helpers/lock_holder_helper.dart'),
+    File('${Directory.current.path}/apps/desktop/test/helpers/lock_holder_helper.dart'),
+    File('${Directory.current.path}/frontend/flutter/apps/desktop/test/helpers/lock_holder_helper.dart'),
+  ];
+  if (Platform.script.scheme == 'file') {
+    final scriptDir = File(Platform.script.toFilePath()).parent;
+    candidates.add(File('${scriptDir.path}/helpers/lock_holder_helper.dart'));
+    candidates.add(File('${scriptDir.path}/test/helpers/lock_holder_helper.dart'));
+  }
+  for (final candidate in candidates) {
+    if (candidate.existsSync()) {
+      return candidate.absolute.path;
+    }
+  }
+  Directory dir = Directory.current.absolute;
+  for (var i = 0; i < 5; i++) {
+    final candidate = File('${dir.path}/frontend/flutter/apps/desktop/test/helpers/lock_holder_helper.dart');
+    if (candidate.existsSync()) return candidate.path;
+    final candidate2 = File('${dir.path}/apps/desktop/test/helpers/lock_holder_helper.dart');
+    if (candidate2.existsSync()) return candidate2.path;
+    final parent = dir.parent;
+    if (parent.path == dir.path) break;
+    dir = parent;
+  }
+  throw StateError('Could not resolve lock_holder_helper.dart path from ${Directory.current.path}');
 }
