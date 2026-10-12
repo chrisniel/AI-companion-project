@@ -518,4 +518,3 @@ async def test_api_endpoints_model_selection_and_load(client: AsyncClient, auth_
             assert get_saved_model_selection() == "qwen3-vl-2b-instruct"
     finally:
         llm_manager.set_provider(prev_provider)
-

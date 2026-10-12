@@ -394,6 +394,7 @@ async def orchestrate_chat_stream(
         asst_msg.prompt_tokens = prompt_tokens
         asst_msg.completion_tokens = completion_tokens
         asst_msg.model_name = status_resp.active_model
+        db.add(asst_msg)
         await db.commit()
 
         logger.info(

@@ -4,7 +4,7 @@
 
 **Goal:** Address human Windows acceptance feedback across five scoped areas: propagate real finish reasons (`length`, `stop`, `cancelled`, error) end-to-end with continuation options, provide visible horizontal scrollbars and mouse/trackpad gestures for wide tables, guarantee textbook-grade mathematical typesetting for LaTeX equations, implement local conversation text zoom (80%–160% via Ctrl+Wheel and Ctrl+Plus/Minus/0), and add explicit authenticated model unload in Flutter Settings.
 
-**Architecture:** 
+**Architecture:**
 - End-to-end finish-reason pipeline: `llama.cpp` upstream SSE chunk decoder captures `finish_reason` -> provider yields per-request `GenerationStream` carrying request-scoped `finish_reason` metadata (superseding interim `provider.last_finish_reason`) -> orchestrator passes bounded `max_tokens` against remaining context capacity, persists backend message status (`completed`, `length`, `cancelled`, `failed`), and emits `finish_reason` in SSE `done` event -> Flutter client parses reason and renders an actionable "Response reached generation limit" indicator with a continuation turn (or client-side transient `interrupted` state on transport drop).
 - Markdown & Table Layout: `_MarkdownTableWidget` wraps horizontal `SingleChildScrollView` in a visible `Scrollbar` with `thumbVisibility: true` and `ScrollConfiguration` enabling mouse/trackpad drag, with constrained cell wrapping preventing clipping.
 - Typesetting: Persona prompt prefers standard LaTeX delimiters (`\[ ... \]`, `\( ... \)`) for mathematical explanations; renderer supports complex integrals and multiline equations with copyable raw source and horizontal scroll.

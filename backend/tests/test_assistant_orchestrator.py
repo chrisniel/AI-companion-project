@@ -1030,72 +1030,131 @@ async def test_stream_finish_reason_length_and_token_budgeting(test_session: Asy
 
 
 @pytest.mark.asyncio
-async def test_concurrent_interleaving_streams_retain_independent_finish_reasons(test_session: AsyncSession):
+async def test_concurrent_interleaving_streams_retain_independent_finish_reasons(tmp_path):
     """Verify concurrent conversation streams do not overwrite each other's terminal finish reason."""
-    from sqlalchemy.ext.asyncio import async_sessionmaker
+    from sqlalchemy import event, text
+    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+    from app.db.base import Base
+    from app.services.llm.base import GenerationStream
 
-    conv1 = Conversation(title="Interleaved Length Conv", owner_id="user-concurrent")
-    conv2 = Conversation(title="Interleaved Stop Conv", owner_id="user-concurrent")
-    test_session.add_all([conv1, conv2])
-    await test_session.commit()
-    await test_session.refresh(conv1)
-    await test_session.refresh(conv2)
-
-    provider = get_llm_provider()
-    # Configure mock provider with different reasons per conversation
-    setattr(provider, "configured_finish_reasons", {
-        conv1.id: "length",
-        conv2.id: "stop",
-    })
-
-    session_factory = async_sessionmaker(bind=test_session.bind, class_=AsyncSession, expire_on_commit=False)
-
-    async def execute_turn(conv_id: str, prompt_text: str):
-        async with session_factory() as session:
-            lock = _get_lock(conv_id)
-            await lock.acquire()
-            prepared = await prepare_turn(
-                db=session,
-                conversation_id=conv_id,
-                owner_id="user-concurrent",
-                user_text=prompt_text,
-            )
-            chunks = []
-            async for chunk in orchestrate_chat_stream(
-                db=session,
-                conversation_id=conv_id,
-                user_text=prompt_text,
-                owner_id="user-concurrent",
-                prepared_turn=prepared,
-                conversation_lock=lock,
-            ):
-                chunks.append(chunk)
-            return chunks
-
-    # Run both streams concurrently so they interleave
-    chunks1, chunks2 = await asyncio.gather(
-        execute_turn(conv1.id, "Generate length response"),
-        execute_turn(conv2.id, "Generate stop response"),
+    db_file = tmp_path / "concurrent_interleaved.db"
+    db_url = f"sqlite+aiosqlite:///{db_file.resolve().as_posix()}"
+    engine = create_async_engine(
+        db_url,
+        connect_args={"check_same_thread": False},
     )
 
-    # Verify SSE terminal finish reasons
-    done_frames1 = [json.loads(c[6:]) for c in chunks1 if c.startswith("data: ") and '"type": "done"' in c]
-    done_frames2 = [json.loads(c[6:]) for c in chunks2 if c.startswith("data: ") and '"type": "done"' in c]
-    assert len(done_frames1) == 1
-    assert len(done_frames2) == 1
-    assert done_frames1[0]["finish_reason"] == "length"
-    assert done_frames2[0]["finish_reason"] == "stop"
+    @event.listens_for(engine.sync_engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode = WAL;")
+        cursor.execute("PRAGMA busy_timeout = 5000;")
+        cursor.execute("PRAGMA foreign_keys = ON;")
+        cursor.execute("PRAGMA synchronous = NORMAL;")
+        cursor.close()
 
-    # Verify persisted message status in DB
-    async with session_factory() as session:
-        r1 = await session.execute(
-            select(Message).where(Message.conversation_id == conv1.id, Message.sender == "assistant")
-        )
-        msg1 = r1.scalar_one()
-        assert msg1.status == "length"
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(text("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+                id UNINDEXED, content, category, content='memories', content_rowid='rowid'
+            );
+        """))
 
-        r2 = await session.execute(
-            select(Message).where(Message.conversation_id == conv2.id, Message.sender == "assistant")
+    session_factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+
+    async with session_factory() as init_session:
+        conv1 = Conversation(title="Interleaved Length Conv", owner_id="user-concurrent")
+        conv2 = Conversation(title="Interleaved Stop Conv", owner_id="user-concurrent")
+        init_session.add_all([conv1, conv2])
+        await init_session.commit()
+        conv1_id, conv2_id = conv1.id, conv2.id
+
+    provider = get_llm_provider()
+
+    step1 = asyncio.Event()
+    step2 = asyncio.Event()
+    step3 = asyncio.Event()
+    step4 = asyncio.Event()
+
+    async def stream1_gen():
+        yield "Token1_A"
+        step1.set()
+        await step2.wait()
+        yield " Token1_B"
+        step3.set()
+        await step4.wait()
+        yield " Token1_C"
+
+    async def stream2_gen():
+        await step1.wait()
+        yield "Token2_A"
+        step2.set()
+        await step3.wait()
+        yield " Token2_B"
+        step4.set()
+        yield " Token2_C"
+
+    def custom_generate_stream(messages, **kwargs):
+        cid = kwargs.get("conversation_id")
+        if cid == conv1_id:
+            return GenerationStream(stream1_gen(), meta={"finish_reason": "length"})
+        else:
+            return GenerationStream(stream2_gen(), meta={"finish_reason": "stop"})
+
+    orig_generate_stream = provider.generate_stream
+    provider.generate_stream = custom_generate_stream
+
+    try:
+        async def execute_turn(conv_id: str, prompt_text: str):
+            async with session_factory() as session:
+                lock = _get_lock(conv_id)
+                await lock.acquire()
+                prepared = await prepare_turn(
+                    db=session,
+                    conversation_id=conv_id,
+                    owner_id="user-concurrent",
+                    user_text=prompt_text,
+                )
+                chunks = []
+                async for chunk in orchestrate_chat_stream(
+                    db=session,
+                    conversation_id=conv_id,
+                    user_text=prompt_text,
+                    owner_id="user-concurrent",
+                    prepared_turn=prepared,
+                    conversation_lock=lock,
+                ):
+                    chunks.append(chunk)
+                return chunks
+
+        # Run both streams concurrently with deterministic interleaving
+        chunks1, chunks2 = await asyncio.gather(
+            execute_turn(conv1_id, "Generate length response"),
+            execute_turn(conv2_id, "Generate stop response"),
         )
-        msg2 = r2.scalar_one()
-        assert msg2.status == "completed"
+
+        # Verify SSE terminal finish reasons
+        done_frames1 = [json.loads(c[6:]) for c in chunks1 if c.startswith("data: ") and '"type": "done"' in c]
+        done_frames2 = [json.loads(c[6:]) for c in chunks2 if c.startswith("data: ") and '"type": "done"' in c]
+        assert len(done_frames1) == 1
+        assert len(done_frames2) == 1
+        assert done_frames1[0]["finish_reason"] == "length"
+        assert done_frames2[0]["finish_reason"] == "stop"
+
+        # Verify persisted message status in DB
+        async with session_factory() as session:
+            r1 = await session.execute(
+                select(Message).where(Message.conversation_id == conv1_id, Message.sender == "assistant")
+            )
+            msg1 = r1.scalar_one()
+            assert msg1.status == "length"
+
+            r2 = await session.execute(
+                select(Message).where(Message.conversation_id == conv2_id, Message.sender == "assistant")
+            )
+            msg2 = r2.scalar_one()
+            assert msg2.status == "completed"
+    finally:
+        provider.generate_stream = orig_generate_stream
+        await engine.dispose()

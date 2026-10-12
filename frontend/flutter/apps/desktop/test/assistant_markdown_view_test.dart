@@ -526,4 +526,3 @@ And another line of text.
     });
   });
 }
-

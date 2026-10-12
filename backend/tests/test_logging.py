@@ -107,4 +107,3 @@ def test_setup_logging_windowless_none_streams(tmp_path: Path, monkeypatch: pyte
 
     fh.close()
     root.removeHandler(fh)
-

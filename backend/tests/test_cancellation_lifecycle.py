@@ -50,7 +50,7 @@ async def test_stream_cancellation_persists_cancelled_status_safely(test_session
         )
     )
 
-    async def mock_cancelling_stream(messages):
+    async def mock_cancelling_stream(messages, *args, **kwargs):
         yield "First token received "
         raise asyncio.CancelledError()
 
@@ -140,7 +140,7 @@ async def test_stream_cancellation_with_attachments_preserves_bindings(test_sess
         )
     )
 
-    async def mock_cancelling_stream(messages):
+    async def mock_cancelling_stream(messages, *args, **kwargs):
         if False:
             yield "never"
         raise asyncio.CancelledError()
@@ -207,7 +207,7 @@ async def test_db_session_pool_healthy_after_cancellation(test_session: AsyncSes
         )
     )
 
-    async def mock_cancelling_stream(messages):
+    async def mock_cancelling_stream(messages, *args, **kwargs):
         if False:
             yield "never"
         raise asyncio.CancelledError()
@@ -280,7 +280,7 @@ async def test_request_session_commit_cancelled_persists_via_isolated_session(te
         )
     )
 
-    async def mock_cancelling_stream(messages):
+    async def mock_cancelling_stream(messages, *args, **kwargs):
         yield "Partial token before cancel "
         raise asyncio.CancelledError("Stream interrupted by client")
 
@@ -355,7 +355,7 @@ async def test_stream_failure_path_isolated_persistence(test_session: AsyncSessi
         )
     )
 
-    async def mock_failing_stream(messages):
+    async def mock_failing_stream(messages, *args, **kwargs):
         yield "Initial chunk "
         raise RuntimeError("GPU Driver Crashed")
 
