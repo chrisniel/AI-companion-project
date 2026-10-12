@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added & Verified (2026-10-13 - M2: Profile Schema Foundation & Pre-Migration WAL Backup — Batch A)
+
+- **Profile Schema Foundation (`PC-IDENTITY-001`)**:
+  - Implemented Alembic migration 007 (`migrations/versions/007_profiles_and_owner_id_migration.py`) introducing the `profiles` table with unique, installation-specific Default Profile UUID and partial unique index (`uq_profiles_single_default`).
+  - Added indexed `profile_id` foreign keys referencing `profiles.id` across `conversations`, `messages`, `tasks`, `memories`, and `attachments`.
+  - Retained existing `owner_id` columns and indices across all five entity tables to preserve seamless backward compatibility for existing runtime operations and models.
+  - Implemented dynamic context-sensitive default resolution (`resolve_default_profile_id`) in `ProfileMixin` and lifecycle hooks in the `Profile` model, ensuring newly created records receive a valid, consistent Default Profile association.
+  - Implemented strict legacy owner validation (`app/db/legacy_owner_validation.py`) accepting only approved single-user aliases (`local_user`, `default_user`) and strictly failing closed on unexpected, empty, whitespace-only, case-variant, or NULL owner values prior to executing table rebuilding DDL.
+  - Profile Sessions, multi-profile authorization, profile CRUD/switching APIs, and PIN security remain not implemented (deferred to Batch B and subsequent identity tasks).
+- **Pre-Migration Safety Snapshot & Backup Resilience (`PC-RESILIENCE-002`)**:
+  - Integrated automatic pre-migration SQLite WAL backup hook into startup (`prepare_database_schema()`) prior to applying schema migrations to existing databases.
+  - Implemented collision-proof backup filenames using UTC microsecond timestamps and random UUID suffixes (`pre_<label>_<timestamp>_<suffix>.db`) in `app/db/backup.py`.
+  - Staged backups to temporary files (`.<name>.partial`), verified with SQLite `PRAGMA integrity_check`, and published via hardlinks without overwriting existing verified snapshots.
+  - Enforced fail-closed startup preflight checks inspecting existing databases: zero-byte files, invalid SQLite headers, or corrupt databases safely abort startup before any backup or migration attempt.
+  - Implemented standalone verified restore utility (`restore_database_from_backup`) featuring quiescence probing (`BEGIN EXCLUSIVE`), pre-restore safety snapshotting, SQLite backup API restoration (preserving WAL/SHM sidecars), and automatic rollback on verification failure (live/automatic recovery remains deferred pending host-level writer quiescence controls across the complete restore operation).
+
 ### Added & Verified (2026-10-12 - M2-H1: Windows Runtime Process Supervision & Desktop Chat Quality)
 
 - **Windows Runtime Supervision (`PC-HOST-001`)**:

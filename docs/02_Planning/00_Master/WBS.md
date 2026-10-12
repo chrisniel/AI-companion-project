@@ -69,7 +69,7 @@
 - **`PC-API-005`**: Structured Error Codes & Diagnostic Correlation IDs.
 
 ### Stream: `PC-IDENTITY` — Multi-Profile & Accounts
-- **`PC-IDENTITY-001`**: Account & Multi-Profile Database Schema Migration (`owner_id` → `profile_id` transition).
+- **`PC-IDENTITY-001`**: Account & Multi-Profile Database Schema Migration (`owner_id` → `profile_id` transition; Batch A Schema Foundation & Migration 007 verified; Batch B Profile Sessions & cutover pending).
 - **`PC-IDENTITY-002`**: Strict Profile Authorization Context Middleware & Isolation Enforcement.
 - **`PC-IDENTITY-003`**: Satellite Device Enrollment & Single-Profile Binding (Individually revocable credentials).
 - **`PC-IDENTITY-004`**: Local PC Admin Profile Management Service (Create, rename, PIN protect, delete).
@@ -133,8 +133,8 @@
 
 ### Stream: `PC-RESILIENCE` — Backup, Restore & Reset
 - **`PC-RESILIENCE-001`**: Coordinated Database & Profile-Asset Backup Snapshotter (Checksummed archive).
-- **`PC-RESILIENCE-002`**: Pre-Migration Automatic Safety Snapshot Hook.
-- **`PC-RESILIENCE-003`**: Staged Restore Verification & Referential Integrity Preflight.
+- **`PC-RESILIENCE-002`**: Pre-Migration Automatic Safety Snapshot Hook (Delivered & verified in Batch A via `prepare_database_schema` and `app.db.backup`).
+- **`PC-RESILIENCE-003`**: Staged Restore Verification & Referential Integrity Preflight (Standalone verified utility delivered; automatic/live recovery pending host-level writer quiescence).
 - **`PC-RESILIENCE-004`**: Local Admin Factory Reset Engine (Wipes Account/Profile data; models/backups default keep).
 
 ### Stream: `PC-RESOURCE` — Resource Governance & Gaming

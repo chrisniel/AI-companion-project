@@ -2,14 +2,20 @@ from typing import List, TYPE_CHECKING
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.session import Base
-from app.models.base import UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, SoftDeleteMixin
+from app.models.base import (
+    UUIDPrimaryKeyMixin,
+    TimestampMixin,
+    OwnerMixin,
+    ProfileMixin,
+    SoftDeleteMixin,
+)
 
 if TYPE_CHECKING:
     from app.models.message import Message
     from app.models.attachment import Attachment
 
 
-class Conversation(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, SoftDeleteMixin):
+class Conversation(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, ProfileMixin, SoftDeleteMixin):
     """Persistent chat thread owned by a user."""
     __tablename__ = "conversations"
 

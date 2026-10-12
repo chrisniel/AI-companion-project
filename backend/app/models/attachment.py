@@ -5,14 +5,20 @@ from sqlalchemy import ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
-from app.models.base import OwnerMixin, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.base import (
+    OwnerMixin,
+    ProfileMixin,
+    SoftDeleteMixin,
+    TimestampMixin,
+    UUIDPrimaryKeyMixin,
+)
 
 if TYPE_CHECKING:
     from app.models.conversation import Conversation
     from app.models.message import Message
 
 
-class Attachment(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, SoftDeleteMixin):
+class Attachment(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, ProfileMixin, SoftDeleteMixin):
     """Uploaded image attachment associated with a conversation and optional message."""
 
     __tablename__ = "attachments"

@@ -2,14 +2,20 @@ from typing import List, Optional, TYPE_CHECKING
 from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.session import Base
-from app.models.base import UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, SoftDeleteMixin
+from app.models.base import (
+    UUIDPrimaryKeyMixin,
+    TimestampMixin,
+    OwnerMixin,
+    ProfileMixin,
+    SoftDeleteMixin,
+)
 
 if TYPE_CHECKING:
     from app.models.conversation import Conversation
     from app.models.attachment import Attachment
 
 
-class Message(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, SoftDeleteMixin):
+class Message(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, ProfileMixin, SoftDeleteMixin):
     """Individual message within a conversation."""
     __tablename__ = "messages"
     __table_args__ = (

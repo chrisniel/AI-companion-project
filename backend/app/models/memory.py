@@ -2,10 +2,16 @@ from typing import Optional
 from sqlalchemy import Boolean, Float, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from app.db.session import Base
-from app.models.base import UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, SoftDeleteMixin
+from app.models.base import (
+    UUIDPrimaryKeyMixin,
+    TimestampMixin,
+    OwnerMixin,
+    ProfileMixin,
+    SoftDeleteMixin,
+)
 
 
-class Memory(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, SoftDeleteMixin):
+class Memory(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, ProfileMixin, SoftDeleteMixin):
     """User fact, preference, or context memory indexed in FTS5."""
     __tablename__ = "memories"
 

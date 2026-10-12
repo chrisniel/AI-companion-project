@@ -20,7 +20,7 @@
 | **PC Host** | Storage Roots (`APP`, `DATA`, `LIBRARY`)| `storage-and-assets.md` | `app.core.storage` (Partial)| Pytest storage | G1 | **PARTIAL** |
 | **Contracts** | OpenAPI Schema 3.1 & Drift Check | `DOCUMENTATION_MAP.md` | `contracts/openapi/openapi.json` | Python drift check| G1 | **VERIFIED** |
 | **Contracts** | Durable FIFO Conversation Queues | `assistant-and-conversations.md` | Pending implementation | Queue unit tests | G4 | **NOT STARTED** |
-| **Identity** | Multi-Profile PC V1 Model | `profiles-and-devices.md` | Migration 007 (Pending) | Adversarial test | G2 | **NOT STARTED** |
+| **Identity** | Multi-Profile PC V1 Model | `profiles-and-devices.md` | Migration 007 & Schema (Batch A Verified); Sessions/Auth (Batch B Pending) | Migration & isolation tests | G2 | **PARTIAL (BATCH A SCHEMA VERIFIED)** |
 | **Identity** | Satellite Device Revocable Token | `profiles-and-devices.md` | Pending implementation | Auth unit tests | G2 | **NOT STARTED** |
 | **Models** | Local `llama.cpp` Vulkan GPU Offload | `runtime-and-models.md` | `llama_cpp.py` (b10936 RX 580) | Pytest mocks | G3 | **PARTIAL** (reference/mock evidence only until supported live/packaged verification exists) |
 | **Models** | D6 Controlled Manual Import (Bundles)| `runtime-and-models.md` | GGUF parser done; service gap | Import unit tests| G3 | **PARTIAL** |
@@ -49,8 +49,8 @@
 | **Cloud** | Device-Local Cloud Keys (No sync) | `authentication-and-secrets.md` | Pending secrets manager | Isolation tests | G11 | **NOT STARTED** |
 | **Resource** | Low-Impact Mode (Option B App List) | `performance-and-capacity.md` | Pending resource controller | Throttling tests | G12 | **NOT STARTED** |
 | **Resource** | Low-Impact Lightweight Model Swap | `performance-and-capacity.md` | Pending swap coordinator | Swap tests | G12 | **NOT STARTED** |
-| **Resilience**| Coordinated DB + Profile Asset Backup | `backup-recovery-and-diagnostics.md` | Migration backup exists | Backup tests | G13 | **PARTIAL** |
-| **Resilience**| Staged Restore Verification | `backup-recovery-and-diagnostics.md` | Pending restore validator | Restore tests | G13 | **NOT STARTED** |
+| **Resilience**| Coordinated DB + Profile Asset Backup | `backup-recovery-and-diagnostics.md` | Pre-migration WAL-safe DB backup hook verified (`app.db.backup`); Asset archive pending | Pytest backup | G13 | **PARTIAL (PRE-MIGRATION DB VERIFIED)** |
+| **Resilience**| Staged Restore Verification | `backup-recovery-and-diagnostics.md` | Standalone restore utility with pre-restore safety snapshot verified (`restore_database_from_backup`); automatic/live recovery pending quiescence authority | Restore tests | G13 | **PARTIAL (STANDALONE UTILITY VERIFIED)** |
 | **Resilience**| Local Admin Factory Reset | `backup-recovery-and-diagnostics.md` | Pending reset service | Reset tests | G13 | **NOT STARTED** |
 | **Remote** | Tailscale Mesh & Cloudflare Tunnel | `authentication-and-secrets.md` | Tailscale installed on host | Remote tests | G14 | **PARTIAL** |
 | **Golden Gate**| 14-Group End-to-End Release Gate | `SYSTEM_BASELINE.md` §5 | Verification Guide | Release Run | All 14 Groups | **NOT STARTED** |

@@ -49,18 +49,31 @@ Repository source code establishes the following baseline reality:
 
 ### 3.1 Implemented Backup & Diagnostic Mechanisms
 
-Verified in `backend/app/core/storage.py`, `backend/app/core/logging.py`, and `backend/app/api/v1/`:
-- **Legacy Migration Backup Snapshot:** In `backend/app/core/storage.py`, `execute_migration()` creates a logical SQLite backup of a legacy source into a temporary canonical file, verifies it, promotes it, and attempts to preserve an additional backup copy in `BACKUP_DIR` with naming equivalent to `companion.db.backup-<timestamp>`; failure of that extra copy is logged (while the original legacy source file remains untouched).
+Verified in `backend/app/core/storage.py`, `backend/app/db/backup.py`, `backend/app/core/logging.py`, and `backend/app/api/v1/`:
+- **Pre-Migration WAL-Safe SQLite Backup Hook (`app.db.backup` & `app.core.storage`):**
+  - Prior to applying schema upgrades (such as migration 007) to an older canonical database in `prepare_database_schema()`, the runtime triggers an automatic, verified pre-migration backup via `create_pre_migration_backup()`.
+  - Backups use collision-proof filenames (`pre_<label>_<timestamp>_<suffix>.db`) with UTC microsecond timestamps and random UUID suffixes.
+  - Backups are staged to temporary files (`.<name>.partial`), verified with SQLite `PRAGMA integrity_check`, and published via hardlink (`os.link`) without overwriting existing verified snapshots. Failure of pre-migration backup immediately aborts schema migration.
+  - Startup preflight checks inspect existing databases: zero-byte files, invalid SQLite headers, or integrity failures raise `StorageError` and safely abort startup before any backup or migration attempt.
+- **Standalone Verified Database Restore Utility (`restore_database_from_backup`):**
+  - Implements a verified database restoration utility in `backend/app/db/backup.py`.
+  - Pre-restore verification validates the backup file's integrity and stages a copy.
+  - Probes live database writer quiescence with `BEGIN EXCLUSIVE` prior to modification.
+  - Captures an automatic pre-restore safety snapshot (`pre_restore_<timestamp>_<suffix>.db`) of the live database in the backup directory before applying changes.
+  - Applies restoration via SQLite's native online backup API (`sqlite3.Connection.backup()`), preserving live WAL/SHM sidecars without file unlinking.
+  - Re-verifies restored database integrity and automatically rolls back to the pre-restore safety snapshot if verification fails.
 - **Canonical Backup Directory:** `BACKUP_DIR` is canonically derived under `COMPANION_DATA_ROOT/backups` and is created as needed by migration/backup execution paths.
+- **Legacy Migration Backup Snapshot:** In `backend/app/core/storage.py`, `execute_migration()` creates a logical SQLite backup of a legacy source into a temporary canonical file, verifies it, promotes it, and attempts to preserve an additional backup copy in `BACKUP_DIR` with naming equivalent to `companion.db.backup-<timestamp>`; failure of that extra copy is logged (while the original legacy source file remains untouched).
 - **Health & Status Endpoints:**
   - `GET /api/v1/health`: Public probe returning basic service liveness: `{"status": "healthy"}`.
   - `GET /api/v1/system/status`: Authenticated endpoint returning system diagnostic telemetry: `status`, `platform`, `python_version`, `hostname`, `cpu_count`, `version`, `database_connected`, and `timestamp`. *(Current `/api/v1/system/status` does NOT report model-state or storage-path telemetry).*
-- **Diagnostic Logging:** Configured in `backend/app/core/logging.py` emitting standard Python console logs.
+- **Diagnostic Logging:** Configured in `backend/app/core/logging.py` emitting standard Python console logs, with direct rotating file logging via `COMPANION_LOG_FILE` (`PC-HOST-001`).
 
 ### 3.2 Implemented Reality Boundaries
 
-- **User-Facing Backup Status:** **NOT IMPLEMENTED**. The current codebase contains no endpoint, CLI command, or UI control allowing a user to create a comprehensive backup archive, schedule automated backups, or restore from a past snapshot.
-- **Asset Packaging Status:** **NOT IMPLEMENTED**. Migration backups copy only the SQLite database file; no mechanism currently bundles attachments, character lore cards, or settings into a unified archive.
+- **Live / Automatic Restore Automation Status:** **NOT APPROVED FOR LIVE/AUTOMATIC RECOVERY**. While the standalone `restore_database_from_backup()` utility is mechanically verified, it is not approved for live or automatic recovery during running operations until host-level writer quiescence is enforced across the complete restore operation. This is tracked as a nonblocking future resilience requirement (`DEBT-V1-10`).
+- **User-Facing Backup & Restore UI Status:** **NOT IMPLEMENTED**. The current codebase contains no endpoint, CLI command, or UI control allowing an end-user to create a comprehensive backup archive, schedule automated backups, or initiate restoration from the client.
+- **Asset Packaging Status:** **NOT IMPLEMENTED**. Migration backups snapshot only the SQLite database file; no mechanism currently bundles attachments, character lore cards, or settings into a unified archive.
 - **Factory Reset Status:** **NOT IMPLEMENTED**. No reset endpoint, CLI helper, or UI modal exists in the application.
 - **Diagnostics Center Status:** **NOT IMPLEMENTED**. No graphical diagnostic dashboard, log viewer UI, or interactive recovery console exists in the application.
 
