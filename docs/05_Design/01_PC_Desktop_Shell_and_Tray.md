@@ -44,15 +44,18 @@ The desktop shell utilizes a compact, collapsible left navigation rail:
 - **Muted Audio State:** Icon with a discrete mute slash.
 - **Disconnected / Offline:** Grayscale icon with warning indicator.
 
-### 3.2 System Tray Context Menu (Right-Click)
+### 3.2 System Tray Context Menu (Right-Click) & Lifecycle Distinctions
+The system tray menu strictly distinguishes three distinct lifecycle concepts:
 1. **Open AI Companion** *(Default click / double-click action)* — Restores and focuses the main window.
-2. **Active Profile:** Shows current profile name with quick flyout to switch profiles.
-3. --- (Separator) ---
-4. **Mute Audio:** Immediate toggle to silence speech output and chime alerts.
-5. **Performance Mode:** Quick toggle (`Normal` / `Low-Impact` / `Auto`).
-6. --- (Separator) ---
-7. **Runtime Status:** Informational label (e.g., *"Runtime: Active (PID 14220)"* or *"Runtime: Remote Host"*).
-8. **Exit Companion (`PC-HOST-005` Target):** Triggers explicit confirmation dialog: *"Exit Companion will stop the AI Companion and all scheduled reminders and alarms on this PC. Continue?"*. Upon confirmation, gracefully stops the verified local runtime, its owned model processes, and Flutter. *(Note: Disabled / planned in M2-H1 until PC-HOST-005 is delivered; interim testing provides a developer-only "Quit UI Only" action clearly labeled as non-production).*
+2. **Hide to System Tray** — Minimizes/hides the desktop UI window to the system tray. Both the Flutter UI process and the Local AI Runtime host process remain active and executing.
+3. **Active Profile:** Shows current profile name with quick flyout to switch profiles.
+4. --- (Separator) ---
+5. **Mute Audio:** Immediate toggle to silence speech output and chime alerts.
+6. **Performance Mode:** Quick toggle (`Normal` / `Low-Impact` / `Auto`).
+7. --- (Separator) ---
+8. **Runtime Status:** Informational label (e.g., *"Runtime: Active (PID 14220)"* or *"Runtime: Remote Host"*).
+9. **Quit UI Only (Developer Test Only):** Exits or terminates the Flutter UI desktop process only. The Local AI Runtime host process survives independently and continues executing in the background ("Quit UI != Stop Runtime").
+10. **Exit Companion (`PC-HOST-005` Planned):** Triggers explicit confirmation dialog: *"Exit Companion will stop the AI Companion and all scheduled reminders and alarms on this PC. Continue?"*. Upon user confirmation, it gracefully and securely stops the Flutter UI, the verified Local AI Runtime host, and its owned local inference engine (`llama-server.exe`). *(Note: Disabled in M2-H1 with label "Exit Companion (Full Shutdown - Planned PC-HOST-005)" until dedicated local host administration authority is delivered in PC-HOST-005).*
 
 ---
 
@@ -107,13 +110,13 @@ The approved visual design language across the companion ecosystem is:
   - `Ctrl + -`: Zoom out.
   - `Ctrl + 0`: Reset zoom to 1.0×.
 - **Strict Scope Isolation:** Text scaling is applied strictly to the conversation viewport (`MediaQuery(textScaler: TextScaler.linear(zoom))`). It does **not** scale or distort navigation rails, title bars, dialogs, composer wells, or settings forms.
-- **Persistence:** The active zoom level is persisted across application restarts in `%LOCALAPPDATA%\AI Companion\config\client_settings.json` (`chat_zoom_level`).
+- **Persistence:** The active zoom level is persisted across application restarts in `%LOCALAPPDATA%\AI Companion\client_settings.json` under JSON key `chatZoomLevel`. The client settings path also respects explicit file overrides via the `COMPANION_CLIENT_SETTINGS_FILE` environment variable or custom file path constructor injection.
 
 ### 5.5 Generation Limits & Continuation Turns
-- **Truthful Finish Reason Propagation:** The full generation pipeline (inference engine $\rightarrow$ provider $\rightarrow$ orchestrator SSE $\rightarrow$ Flutter client) preserves and propagates genuine completion reasons (`stop`, `length`, `cancelled`, `interrupted`, `error`).
+- **Truthful Finish Reason Propagation:** The full generation pipeline (inference engine $\rightarrow$ provider $\rightarrow$ orchestrator SSE $\rightarrow$ Flutter client) preserves and propagates genuine completion reasons (`stop`, `length`, `cancelled`, `error`).
+- **Terminal Status vs. Client Interrupted State:** Backend terminal statuses persisted in SQLite are `"completed"`, `"length"`, `"cancelled"`, or `"failed"` (`"streaming"` placeholder during turn generation). If an active SSE stream drops unexpectedly or transport disconnects before the terminal `done` event is received, Flutter transitions the in-memory client turn to a client-side transient `"interrupted"` state without falsely claiming successful completion.
 - **Generation Limit Indicator:** When a response ends because the model reached its allocated output token limit (`finish_reason == "length"`), the UI displays a clear, non-intrusive status banner below the message bubble: *"Response reached generation limit"*.
 - **Continuation Turn Action:** A `"Continue response"` button is rendered alongside the limit indicator. Activating it submits an explicit follow-up prompt (`"Continue"`) as a new conversation turn, seamlessly continuing the generated content without modifying past turn history.
-- **Transport Resilience:** Unexpected transport disconnects or stream drops transition to an explicit interrupted state rather than falsely claiming successful completion.
 
 ### 5.6 Settings Model Management & Truthful Unload (`PC-CLIENT-010`)
 - **Explicit Model Unload Control:** The Settings screen provides an *"Unload Model / Free VRAM"* button under the Active Model card whenever a model is resident in memory.
@@ -122,3 +125,8 @@ The approved visual design language across the companion ecosystem is:
 - **No Unevidenced VRAM Claims:** UI feedback truthfully reports model unload without claiming exact byte-for-byte VRAM reclamation without diagnostic hardware hooks.
 - **Configuration Preservation:** Unloading a model evicts resident weights from memory while preserving saved model selection in `host_config.json`, allowing instant reload on demand.
 - **Deferred Target Capabilities:** Hardware-aware dynamic memory budgeting formulas (e.g. 50% dedicated VRAM ceiling) and automated model recommendation algorithms remain target capabilities tracked under `PC-CLIENT-010` and are not currently enforced in code.
+
+### 5.7 Nonblocking Future Chat UX Items (`PC-CLIENT-006` Backlog)
+The following quality improvements are cataloged as nonblocking future UX enhancements:
+1. **Visible Horizontal Scrollbar for Fenced Code Blocks:** Add a dedicated visible horizontal scrollbar (matching wide tables) and enhanced horizontal scrolling gestures for wide code snippets rendered by `_MarkdownCodeBlockWidget`.
+2. **Improved Model-Generated Mathematical Presentation:** Refine system prompt guidance and rendering for complex multi-step LaTeX equations, while strictly maintaining the rule that fenced literal code blocks (` ```latex `) are never converted into math widgets.

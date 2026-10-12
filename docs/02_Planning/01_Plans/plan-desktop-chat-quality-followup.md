@@ -5,7 +5,7 @@
 **Goal:** Address human Windows acceptance feedback across five scoped areas: propagate real finish reasons (`length`, `stop`, `cancelled`, error) end-to-end with continuation options, provide visible horizontal scrollbars and mouse/trackpad gestures for wide tables, guarantee textbook-grade mathematical typesetting for LaTeX equations, implement local conversation text zoom (80%–160% via Ctrl+Wheel and Ctrl+Plus/Minus/0), and add explicit authenticated model unload in Flutter Settings.
 
 **Architecture:** 
-- End-to-end finish-reason pipeline: `llama.cpp` upstream SSE chunk decoder captures `finish_reason` -> provider records `last_finish_reason` -> orchestrator passes bounded `max_tokens` against remaining context capacity, persists message status (`completed`, `length`, `cancelled`, `error`), and emits `finish_reason` in SSE `done` event -> Flutter client parses reason and renders an actionable "Response reached generation limit" indicator with a continuation turn.
+- End-to-end finish-reason pipeline: `llama.cpp` upstream SSE chunk decoder captures `finish_reason` -> provider yields per-request `GenerationStream` carrying request-scoped `finish_reason` metadata (superseding interim `provider.last_finish_reason`) -> orchestrator passes bounded `max_tokens` against remaining context capacity, persists backend message status (`completed`, `length`, `cancelled`, `failed`), and emits `finish_reason` in SSE `done` event -> Flutter client parses reason and renders an actionable "Response reached generation limit" indicator with a continuation turn (or client-side transient `interrupted` state on transport drop).
 - Markdown & Table Layout: `_MarkdownTableWidget` wraps horizontal `SingleChildScrollView` in a visible `Scrollbar` with `thumbVisibility: true` and `ScrollConfiguration` enabling mouse/trackpad drag, with constrained cell wrapping preventing clipping.
 - Typesetting: Persona prompt prefers standard LaTeX delimiters (`\[ ... \]`, `\( ... \)`) for mathematical explanations; renderer supports complex integrals and multiline equations with copyable raw source and horizontal scroll.
 - Conversation Zoom: `DesktopClientSettings` persists zoom level (0.8–1.6, default 1.0); `ChatScreen` wraps only the message viewport in `MediaQuery(textScaler: TextScaler.linear(zoom))` listening to Ctrl+Wheel and Ctrl+Plus/Minus/0 shortcuts without zooming application chrome.
@@ -49,7 +49,7 @@
 
 **Interfaces:**
 - Consumes: Upstream `choices[0].finish_reason` from `llama-server` SSE stream.
-- Produces: `provider.last_finish_reason: Optional[str]`, `data: {"type": "done", "finish_reason": "length"|"stop"|"cancelled", ...}\n\n`, and `Message.status = "length"|"completed"|"cancelled"|"error"`.
+- Produces: Request-scoped `GenerationStream.finish_reason` metadata (superseding interim `provider.last_finish_reason`), `data: {"type": "done", "finish_reason": "length"|"stop"|"cancelled", ...}\n\n`, and backend `Message.status = "length"|"completed"|"cancelled"|"failed"`.
 
 - [x] **Step 1: Write the failing tests for finish_reason propagation and context budgeting**
   - In `backend/tests/test_assistant_orchestrator.py`: test that when upstream provider yields tokens and ends with `finish_reason="length"`, the orchestrator SSE stream emits `{"type": "done", "finish_reason": "length"}`, persists assistant message with `status="length"`, logs token counts without prompt text, and sets `max_tokens` bounded by remaining context.
@@ -61,13 +61,13 @@
 
 - [x] **Step 3: Implement upstream finish_reason capture in `LlamaCppProvider` & `MockLLMProvider`**
   - In `backend/app/services/llm/llama_cpp.py`: update `_decode_stream_event` to return `(token, done, finish_reason)` or invoke an `on_finish` callback.
-  - In `_server_stream_tokens` and in-process `_worker`: store `self.last_finish_reason = reason`.
+  - In `_server_stream_tokens` and in-process `_worker`: initially captured in `self.last_finish_reason` (later superseded in Correctness Fix B by request-scoped `GenerationStream` metadata to eliminate race conditions across concurrent turns).
   - In `MockLLMProvider`: add `self.last_finish_reason = getattr(self, "configured_finish_reason", "stop")`.
 
 - [x] **Step 4: Implement bounded token budgeting and finish_reason SSE emission in `orchestrator.py`**
   - Calculate `available_generation_tokens = max(1, context_capacity - prompt_tokens)`.
   - Pass `max_tokens = min(1024, available_generation_tokens)` to `provider.generate_stream(..., max_tokens=...)`.
-  - Read `finish_reason = getattr(provider, "last_finish_reason", "stop") or "stop"`.
+  - Read `finish_reason = getattr(stream, "finish_reason", None) or getattr(provider, "last_finish_reason", "stop") or "stop"`.
   - Set `asst_msg.status = "length" if finish_reason == "length" else "completed"`.
   - Emit `done_data = json.dumps({"type": "done", "finish_reason": finish_reason, "prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens})`.
   - Log: `logger.info(f"Turn generation completed: conv_id={conversation_id}, prompt_tokens={prompt_tokens}, completion_tokens={completion_tokens}, finish_reason={finish_reason}")`.
@@ -253,12 +253,12 @@
 - Modify: `docs/01_Tracking/active/task-m2-windows-runtime-supervision.md`
 - Verify: Full Flutter tests, backend pytest, linter checks.
 
-- [x] **Step 1: Run full verification suite**
+- [x] **Step 1: Run verification suites**
   - `dart analyze frontend/flutter/` (0 issues)
   - `flutter test frontend/flutter/apps/desktop` (95 passed)
   - `dart test frontend/flutter/packages/companion_core` (passed)
   - `dart test frontend/flutter/packages/companion_api` (56 passed)
-  - `pytest backend/tests` (148 passed)
+  - `pytest backend/tests/test_assistant_orchestrator.py backend/tests/test_llm.py backend/tests/test_runtime_boundary_regressions.py` (targeted backend test suites passed)
   - `python scripts/check_dart_openapi_parity.py` (0 discrepancies)
   - `python scripts/verify_llama_windowless.py` (passed empirical isolated check)
 
@@ -289,3 +289,12 @@
   - Carried completion reasons directly within per-request `GenerationStream` metadata and `GeneratedText`.
   - Interleaving concurrent conversation streams maintain isolated terminal finish reasons without cross-talk.
   - Verified with multi-turn concurrent regression test in `backend/tests/test_assistant_orchestrator.py`.
+
+---
+
+### Nonblocking Future UX Enhancements (`PC-CLIENT-006` Backlog)
+
+1. **Visible Horizontal Scrollbar for Fenced Code Blocks:**
+   - Provide a dedicated visible horizontal scrollbar (matching wide tables) and enhanced horizontal scrolling gestures for wide code snippets rendered by `_MarkdownCodeBlockWidget`.
+2. **Improved Model-Generated Mathematical Presentation:**
+   - Refine system prompt guidance and rendering for complex multi-step LaTeX equations, while strictly maintaining the rule that fenced literal code blocks (` ```latex `) are never converted into math widgets.

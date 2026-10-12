@@ -22,7 +22,7 @@
 └──────────────────────────────┬──────────────────────────────┘
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ M2: PC Companion Foundation (Host, Multi-Profile, D6 Model) │ ◄── [IN PROGRESS / PLANNING — M2-H1]
+│ M2: PC Companion Foundation (Host, Multi-Profile, D6 Model) │ ◄── [IN PROGRESS — M2-H1 AT DOCUMENTATION STAGE; WIDER M2 IN PROGRESS]
 └──────────────────────────────┬──────────────────────────────┘
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -74,7 +74,8 @@
 - **Exit Criteria:** Flutter Desktop client runs on Windows, communicates reliably with Local AI Runtime over localhost REST/SSE, displays live streaming text with Markdown rendering, handles fail-closed auth and model unreadiness, and passes all 193 workspace tests and native Win32 lifecycle checks. Delivered via PR #23 (commit `7c1d1a2ddb5c57ddaae9bbacbcab2e25f9938fe1`); Closure Gate reconciled post-merge with documented tracker archival exception. React Web remains fully operational as test oracle.
 
 ### Milestone M2: PC Companion Foundation (Host, Identity & Model Pipeline)
-- **Primary Objective:** Implement Windows Runtime launch, attach & supervision (Batch M2-H1 / `PC-HOST-001`), followed promptly by Host Administration Separation & Secure Lifecycle Authority (`PC-HOST-005`: secure local lifecycle authority, graceful runtime termination, model process draining, tray Exit Companion), Windows Task Scheduler autostart at user login for runtime and Flutter (`PC-HOST-002`), native Windows Action Center Toast presentation, storage roots manager (`APP_INSTALL`, `DATA`, `LIBRARY`), Account/Multi-Profile DB schema migration (`profile_id`), Profile isolation middleware, and the D6 manual scan / bundle model import service.
+- **Current Status:** IN PROGRESS. Batch M2-H1 (`PC-HOST-001` Windows Runtime Launch, Attach & Supervision + Desktop Chat Quality Follow-Up) has completed implementation and is at the **DOCUMENTATION STAGE** awaiting Documentation Gate review. Wider Milestone M2 tracks remain planned and in progress (`PC-HOST-005`, `PC-HOST-002`, `PC-HOST-003`, storage roots manager, multi-profile DB migration, D6 model import).
+- **Primary Objective:** Implement Windows Runtime launch, attach & supervision (Batch M2-H1 / `PC-HOST-001`), followed promptly by Host Administration Separation & Secure Lifecycle Authority (`PC-HOST-005`: secure local lifecycle authority, graceful runtime termination, model process draining, tray Exit Companion), Windows Task Scheduler autostart at user login for runtime and Flutter (`PC-HOST-002`), native Windows Action Center Toast presentation (`PC-HOST-003` / `PC-CLIENT-012`), storage roots manager (`APP_INSTALL`, `DATA`, `LIBRARY`), Account/Multi-Profile DB schema migration (`profile_id`), Profile isolation middleware, and the D6 manual scan / bundle model import service (`PC-MODEL-002`).
 - **Exit Criteria:** Runtime launches reliably and supervised as a detached background process with authenticated identification; autostart configured at login without console window; Toast notifications alert closed-browser; D6 imports paired GGUF+mmproj models into relocatable library; multiple Profiles operate strictly isolated with PIN challenge.
 
 ### Milestone M3: Companion Intelligence & Productivity
