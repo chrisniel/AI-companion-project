@@ -157,6 +157,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Step 2: Ensure schema is at Alembic head BEFORE initializing runtime engine
     settings.DATABASE_DIR.mkdir(parents=True, exist_ok=True)
     prepare_database_schema(canonical_db_path=settings.DATABASE_PATH)
+    from app.core.host_admin import initialize_host_admin_secret
+    initialize_host_admin_secret()
     initialize_database_runtime(database_url=settings.DATABASE_URL, debug=settings.DEBUG)
 
     # Step 3: Ensure pairing key exists
@@ -205,7 +207,7 @@ def create_app() -> FastAPI:
         allow_origins=settings.CORS_ORIGINS if isinstance(settings.CORS_ORIGINS, list) else [settings.CORS_ORIGINS],
         allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-API-Key", "X-Request-ID"],
+        allow_headers=["Authorization", "Content-Type", "X-API-Key", "X-Request-ID", "X-Companion-Bootstrap"],
     )
 
     # Global Exception Handlers (Error-Handling skill standard)
@@ -250,7 +252,7 @@ def create_app() -> FastAPI:
                 status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             )
         return format_error_response(
-            code="HTTP_ERROR",
+            code="AUTHENTICATION_REQUIRED" if exc.status_code == 401 else "HTTP_ERROR",
             message=str(exc.detail),
             details=None,
             request_id=request_id,

@@ -504,8 +504,8 @@ describe('Phase 4: Models Web UI State Reconciliation & Truthfulness', () => {
     const item4b = screen.getByText('Qwen3-VL-4B-Instruct');
     fireEvent.click(item4b);
 
-    // Reuses the backend loadModel action with exact ID
-    expect(api.loadModel).toHaveBeenCalledWith('qwen3-vl-4b-instruct', undefined);
+    // Browser cannot perform host model administration.
+    expect(api.loadModel).not.toHaveBeenCalled();
   });
 
   it('11. When Runtime is offline, Header selector shows Runtime Offline and Profile indicates Requested only', async () => {

@@ -91,10 +91,10 @@ async def test_chat_completions_validation_error(client: AsyncClient, auth_heade
 
 
 @pytest.mark.asyncio
-async def test_unload_and_load_model_endpoints(client: AsyncClient, auth_headers: dict):
+async def test_unload_and_load_model_endpoints(client: AsyncClient, host_admin_headers: dict):
     """Admin controls: unload releases model; load restores model into memory."""
     # 1. Unload model
-    resp_unload = await client.post("/api/v1/models/unload", headers=auth_headers)
+    resp_unload = await client.post("/api/v1/models/unload", headers=host_admin_headers)
     assert resp_unload.status_code == 200
     data_unload = resp_unload.json()
     assert data_unload["is_loaded"] is False
@@ -103,7 +103,7 @@ async def test_unload_and_load_model_endpoints(client: AsyncClient, auth_headers
     resp_load = await client.post(
         "/api/v1/models/load",
         json={"model_name": "Qwen2.5-7B-Instruct-Q4_K_M.gguf", "profile": "balanced"},
-        headers=auth_headers,
+        headers=host_admin_headers,
     )
     assert resp_load.status_code == 200
     data_load = resp_load.json()
@@ -112,13 +112,13 @@ async def test_unload_and_load_model_endpoints(client: AsyncClient, auth_headers
 
 
 @pytest.mark.asyncio
-async def test_update_model_profile_endpoint(client: AsyncClient, auth_headers: dict):
+async def test_update_model_profile_endpoint(client: AsyncClient, host_admin_headers: dict):
     """Admin controls: patch profile updates GPU layer targets and context sizes."""
     # Switch to Eco
     resp_eco = await client.patch(
         "/api/v1/models/profile",
         json={"profile": "eco"},
-        headers=auth_headers,
+        headers=host_admin_headers,
     )
     assert resp_eco.status_code == 200
     data_eco = resp_eco.json()
@@ -130,7 +130,7 @@ async def test_update_model_profile_endpoint(client: AsyncClient, auth_headers: 
     resp_max = await client.patch(
         "/api/v1/models/profile",
         json={"profile": "maximum"},
-        headers=auth_headers,
+        headers=host_admin_headers,
     )
     assert resp_max.status_code == 200
     data_max = resp_max.json()
@@ -142,7 +142,7 @@ async def test_update_model_profile_endpoint(client: AsyncClient, auth_headers: 
     resp_invalid = await client.patch(
         "/api/v1/models/profile",
         json={"profile": "ultra_extreme_invalid"},
-        headers=auth_headers,
+        headers=host_admin_headers,
     )
     assert resp_invalid.status_code == 422
 
@@ -199,31 +199,31 @@ def test_internal_chat_message_still_accepts_content_blocks():
 
 
 @pytest.mark.asyncio
-async def test_unload_model_endpoint_busy_returns_409(client: AsyncClient, auth_headers: dict):
+async def test_unload_model_endpoint_busy_returns_409(client: AsyncClient, host_admin_headers: dict):
     """POST /api/v1/models/unload returns 409 Conflict when generation is active."""
     provider = get_llm_provider()
     with patch.object(provider, "unload_model", new_callable=AsyncMock, return_value=False):
         setattr(provider, "_last_error", "MODEL_BUSY: active generation")
-        resp = await client.post("/api/v1/models/unload", headers=auth_headers)
+        resp = await client.post("/api/v1/models/unload", headers=host_admin_headers)
         assert resp.status_code == 409
         err = resp.json()["error"]
         assert "MODEL_BUSY" in err["message"]
 
 
 @pytest.mark.asyncio
-async def test_unload_model_endpoint_provider_failure_returns_500(client: AsyncClient, auth_headers: dict):
+async def test_unload_model_endpoint_provider_failure_returns_500(client: AsyncClient, host_admin_headers: dict):
     """POST /api/v1/models/unload returns 500 when provider unload fails."""
     provider = get_llm_provider()
     with patch.object(provider, "unload_model", new_callable=AsyncMock, return_value=False):
         setattr(provider, "_last_error", "ROUTER_UNLOAD_FAILED")
-        resp = await client.post("/api/v1/models/unload", headers=auth_headers)
+        resp = await client.post("/api/v1/models/unload", headers=host_admin_headers)
         assert resp.status_code == 500
         err = resp.json()["error"]
         assert "ROUTER_UNLOAD_FAILED" in err["message"]
 
 
 @pytest.mark.asyncio
-async def test_unload_model_endpoint_remains_loaded_returns_500(client: AsyncClient, auth_headers: dict):
+async def test_unload_model_endpoint_remains_loaded_returns_500(client: AsyncClient, host_admin_headers: dict):
     """POST /api/v1/models/unload returns 500 if returned model state is still loaded."""
     from app.schemas.llm import ModelStatusResponse
     provider = get_llm_provider()
@@ -234,18 +234,18 @@ async def test_unload_model_endpoint_remains_loaded_returns_500(client: AsyncCli
     )
     with patch.object(provider, "unload_model", new_callable=AsyncMock, return_value=True), \
          patch.object(provider, "get_status", new_callable=AsyncMock, return_value=fake_status):
-        resp = await client.post("/api/v1/models/unload", headers=auth_headers)
+        resp = await client.post("/api/v1/models/unload", headers=host_admin_headers)
         assert resp.status_code == 500
         err = resp.json()["error"]
         assert "model remains loaded" in err["message"].lower()
 
 
 @pytest.mark.asyncio
-async def test_unload_model_endpoint_preserves_selection_and_succeeds(client: AsyncClient, auth_headers: dict):
+async def test_unload_model_endpoint_preserves_selection_and_succeeds(client: AsyncClient, host_admin_headers: dict):
     """POST /api/v1/models/unload succeeds and preserves saved model selection."""
     from app.services.host_config import save_model_selection, get_saved_model_selection
     save_model_selection("qwen3-vl-2b-instruct")
-    resp = await client.post("/api/v1/models/unload", headers=auth_headers)
+    resp = await client.post("/api/v1/models/unload", headers=host_admin_headers)
     assert resp.status_code == 200
     data = resp.json()
     assert data["model_loaded"] is False

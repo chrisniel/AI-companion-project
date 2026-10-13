@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import '../controllers/desktop_settings_controller.dart';
 import '../coordinator/desktop_runtime_coordinator.dart';
 import '../features/chat/desktop_chat_controller.dart';
+import '../features/profiles/desktop_profile_controller.dart';
+import '../features/profiles/profile_access_card.dart';
 import '../lifecycle/desktop_lifecycle_coordinator.dart';
 import '../platform/desktop_client_settings.dart';
 import '../platform/windows_dpapi_credential_store.dart';
@@ -18,6 +20,7 @@ class SettingsScreen extends StatefulWidget {
     required this.controller,
     this.coordinator,
     this.chatController,
+    this.profileController,
     this.runtimeCoordinator,
     this.clientSettings,
     this.credentialStore,
@@ -27,6 +30,7 @@ class SettingsScreen extends StatefulWidget {
   final DesktopSettingsController controller;
   final DesktopLifecycleCoordinator? coordinator;
   final DesktopChatController? chatController;
+  final DesktopProfileController? profileController;
   final DesktopRuntimeCoordinator? runtimeCoordinator;
   final DesktopClientSettings? clientSettings;
   final CredentialStore? credentialStore;
@@ -135,6 +139,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // 2. Runtime Connection & Pairing Section
           _buildRuntimeConnectionCard(context, ext, isDark),
           const SizedBox(height: CompanionSpacing.lg),
+          if (widget.profileController != null) ...[
+            ProfileAccessCard(controller:widget.profileController!),
+            const SizedBox(height:CompanionSpacing.lg),
+          ],
 
           // 2B. Runtime Process Supervision Section
           _buildRuntimeSupervisionCard(context, ext, isDark),

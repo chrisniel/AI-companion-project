@@ -487,11 +487,14 @@ describe('Phase 8 Cross-Feature Integration Suite (8C.4 Matrix)', () => {
     );
 
     const ModelSwitcherHelper = () => {
-      const { loadModel } = useBackend();
+      const { refreshStatus } = useBackend();
       return (
         <button
           data-testid="test-switch-model-btn"
-          onClick={() => loadModel('llama-3.2-3b-instruct')}
+          onClick={() => {
+            vi.mocked(api.getModelStatus).mockResolvedValue(createMockStatus({ active_model: 'llama-3.2-3b-instruct' }));
+            void refreshStatus();
+          }}
         >
           Switch to Text Model
         </button>

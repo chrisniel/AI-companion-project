@@ -31,7 +31,7 @@ void main() {
         return http.Response(jsonEncode({'status': 'healthy'}), 200);
       });
 
-      final client = CompanionClient(httpClient: mock);
+      final client = CompanionClient(httpClient: mock, hostAdminStore: InMemoryCredentialStore('admin-test'));
       final health = await client.getHealth();
       expect(health.status, 'healthy');
     });
@@ -65,7 +65,7 @@ void main() {
         );
       });
 
-      final client = CompanionClient(httpClient: mock);
+      final client = CompanionClient(httpClient: mock, hostAdminStore: InMemoryCredentialStore('admin-test'));
       expect(
         () => client.verifyAuth(),
         throwsA(isA<CompanionApiException>().having((e) => e.statusCode, 'statusCode', 401)),
@@ -89,7 +89,7 @@ void main() {
         );
       });
 
-      final client = CompanionClient(httpClient: mock);
+      final client = CompanionClient(httpClient: mock, hostAdminStore: InMemoryCredentialStore('admin-test'));
       final status = await client.getSystemStatus();
       expect(status.platform, 'Windows 11');
       expect(status.databaseConnected, isTrue);
@@ -109,7 +109,7 @@ void main() {
         );
       });
 
-      final client = CompanionClient(httpClient: mock);
+      final client = CompanionClient(httpClient: mock, hostAdminStore: InMemoryCredentialStore('admin-test'));
       final status = await client.getModelStatus();
       expect(status.provider, 'llama.cpp');
       expect(status.activeModel, 'qwen2.5-7b');
@@ -152,7 +152,7 @@ void main() {
         return http.Response('Not Found', 404);
       });
 
-      final client = CompanionClient(httpClient: mock);
+      final client = CompanionClient(httpClient: mock, hostAdminStore: InMemoryCredentialStore('admin-test'));
       final created = await client.createConversation(title: 'New Chat');
       expect(created.id, 'conv-101');
 
@@ -184,7 +184,7 @@ void main() {
         );
       });
 
-      final client = CompanionClient(httpClient: mock);
+      final client = CompanionClient(httpClient: mock, hostAdminStore: InMemoryCredentialStore('admin-test'));
       final messages = await client.listMessages('conv-1');
       expect(messages.total, 1);
       expect(messages.items.first.content, 'Hi');
@@ -279,7 +279,7 @@ void main() {
         );
       });
 
-      final client = CompanionClient(httpClient: mock);
+      final client = CompanionClient(httpClient: mock, hostAdminStore: InMemoryCredentialStore('admin-test'));
       final conv = await client.getConversation('conv-42');
       expect(conv.id, 'conv-42');
       expect(conv.title, 'Specific Thread');
@@ -293,7 +293,7 @@ void main() {
         return http.Response('', 204);
       });
 
-      final client = CompanionClient(httpClient: mock);
+      final client = CompanionClient(httpClient: mock, hostAdminStore: InMemoryCredentialStore('admin-test'));
       await expectLater(client.deleteConversation('conv-42'), completes);
     });
 
@@ -317,7 +317,7 @@ void main() {
         );
       });
 
-      final client = CompanionClient(httpClient: mock);
+      final client = CompanionClient(httpClient: mock, hostAdminStore: InMemoryCredentialStore('admin-test'));
       final res = await client.renameConversation('conv-42', 'Renamed Chat');
       expect(res.id, 'conv-42');
       expect(res.title, 'Renamed Chat');
@@ -345,7 +345,7 @@ void main() {
         );
       });
 
-      final client = CompanionClient(httpClient: mock);
+      final client = CompanionClient(httpClient: mock, hostAdminStore: InMemoryCredentialStore('admin-test'));
       final res = await client.generateConversationTitle(
         'conv-42',
         currentTitle: 'Current',
@@ -477,7 +477,7 @@ void main() {
         );
       });
 
-      final client = CompanionClient(httpClient: mock);
+      final client = CompanionClient(httpClient: mock, hostAdminStore: InMemoryCredentialStore('admin-test'));
       final entries = await client.getModelRegistry();
       expect(entries.length, 1);
       expect(entries.first.id, 'qwen3-vl-2b-instruct');
@@ -506,7 +506,7 @@ void main() {
         );
       });
 
-      final client = CompanionClient(httpClient: mock);
+      final client = CompanionClient(httpClient: mock, hostAdminStore: InMemoryCredentialStore('admin-test'));
       final status = await client.selectModel('qwen3-vl-2b-instruct', loadImmediately: true);
       expect(status.runtimeState, 'MODEL_READY');
       expect(status.selectedModel, 'qwen3-vl-2b-instruct');
@@ -529,7 +529,7 @@ void main() {
         );
       });
 
-      final client = CompanionClient(httpClient: mock);
+      final client = CompanionClient(httpClient: mock, hostAdminStore: InMemoryCredentialStore('admin-test'));
       final status = await client.loadModel();
       expect(status.runtimeState, 'MODEL_READY');
       expect(status.activeModel, 'qwen3-vl-2b-instruct');
@@ -554,7 +554,7 @@ void main() {
         );
       });
 
-      final client = CompanionClient(httpClient: mock);
+      final client = CompanionClient(httpClient: mock, hostAdminStore: InMemoryCredentialStore('admin-test'));
       final status = await client.unloadModel();
       expect(status.runtimeState, 'MODEL_UNLOADED');
       expect(status.modelLoaded, isFalse);

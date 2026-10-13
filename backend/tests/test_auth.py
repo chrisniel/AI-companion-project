@@ -29,9 +29,9 @@ async def test_auth_verify_invalid_token_returns_401(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_auth_verify_valid_bearer_token_returns_200(client: AsyncClient, auth_headers: dict):
+async def test_auth_verify_valid_bearer_token_returns_200(client: AsyncClient, pairing_headers: dict):
     """AC-3 / Auth Flow: Valid Bearer token succeeds."""
-    response = await client.post("/api/v1/auth/verify", headers=auth_headers)
+    response = await client.post("/api/v1/auth/verify", headers=pairing_headers)
     assert response.status_code == 200
 
     payload = response.json()

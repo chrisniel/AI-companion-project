@@ -63,6 +63,7 @@ class DesktopChatController extends ChangeNotifier {
   int _turnSequenceToken = 0;
   int _loadSequenceToken = 0;
   bool _isDisposed = false;
+  Timer? _sessionExpiryTimer;
   bool _isCreatingConversation = false;
   bool _isAwaitingAcceptance = false;
   final Set<String> _userRenamedConversationIds = <String>{};
@@ -95,6 +96,53 @@ class DesktopChatController extends ChangeNotifier {
         _clientFactory = clientFactory;
 
   CompanionClient get client => _client;
+  int get profileEpoch => _configEpoch;
+
+  void _clearPersonalState() {
+    _sessionExpiryTimer?.cancel();
+    ++_configEpoch;
+    ++_loadSequenceToken;
+    _conversations = [];
+    _activeConversation = null;
+    _messages = [];
+    _streamingText = '';
+    _conversationDrafts.clear();
+    _conversationScrollOffsets.clear();
+    _userRenamedConversationIds.clear();
+    _titleGenerationInProgress.clear();
+    _modelRefinedConversationIds.clear();
+    _pendingRenameFutures.clear();
+    _isLoadingConversations = false;
+    _isCreatingConversation = false;
+    _connectionStatus = RuntimeConnectionStatus.unauthorized;
+  }
+
+  Future<void> invalidateProfileSession() async {
+    _clearPersonalState();
+    await cancelGeneration();
+    await _client.sessionStore.deleteToken();
+    if (!_isDisposed) notifyListeners();
+  }
+
+  /// A Profile change invalidates every pending operation and personal cache.
+  Future<void> selectProfile(String profileId) async {
+    _clearPersonalState();
+    await cancelGeneration();
+    notifyListeners();
+    if (await _client.sessionStore.readToken() != null) {
+      try { await _client.revokeProfileSession(); }
+      on CompanionApiException catch (error) {
+        if (error.statusCode != 401 && error.statusCode != 403) rethrow;
+      }
+    }
+    final session = await _client.establishProfileSession(profileId);
+    final expires = DateTime.tryParse(session['expires_at']?.toString() ?? '');
+    if (expires != null) {
+      final duration = expires.difference(DateTime.now().toUtc());
+      _sessionExpiryTimer = Timer(duration.isNegative ? Duration.zero : duration, invalidateProfileSession);
+    }
+    await checkConnection();
+  }
   RuntimeConnectionStatus get connectionStatus => _connectionStatus;
   ChatGenerationState get generationState => _generationState;
   List<ConversationOut> get conversations => List.unmodifiable(_conversations);
@@ -187,7 +235,7 @@ class DesktopChatController extends ChangeNotifier {
       case ModelRuntimeStateCategory.unreachable:
         return 'Offline';
       case ModelRuntimeStateCategory.pairingRequired:
-        return 'Pairing Required';
+        return 'Profile Access Required';
       case ModelRuntimeStateCategory.authenticatedNoModel:
         return _activeModelName ?? 'No Model';
       case ModelRuntimeStateCategory.modelSelectionRequired:
@@ -210,7 +258,7 @@ class DesktopChatController extends ChangeNotifier {
       case ModelRuntimeStateCategory.unreachable:
         return 'Cannot connect to Local AI Runtime.';
       case ModelRuntimeStateCategory.pairingRequired:
-        return 'Pairing token required. Configure credentials in Settings.';
+        return 'Profile access required. Select a Profile in Settings.';
       case ModelRuntimeStateCategory.authenticatedNoModel:
         return 'Authenticated with runtime. No active model configured.';
       case ModelRuntimeStateCategory.modelSelectionRequired:
@@ -254,6 +302,14 @@ class DesktopChatController extends ChangeNotifier {
     if (isGenerating) {
       await cancelGeneration();
     }
+    if (await _client.sessionStore.readToken() != null) {
+      try { await _client.revokeProfileSession(); }
+      on CompanionApiException catch (error) {
+        if (error.statusCode != 401 && error.statusCode != 403) rethrow;
+      }
+    }
+    _conversationDrafts.clear();
+    _conversationScrollOffsets.clear();
 
     if (pairingToken != null && _client.credentialStore != null) {
       await _client.credentialStore!.writeToken(pairingToken.trim());
@@ -264,6 +320,8 @@ class DesktopChatController extends ChangeNotifier {
         : CompanionClient(
             baseUrl: baseUrl,
             credentialStore: _client.credentialStore,
+            hostAdminStore: _client.hostAdminStore,
+            sessionStore: _client.sessionStore,
           );
 
     _conversations = [];
@@ -294,22 +352,22 @@ class DesktopChatController extends ChangeNotifier {
       if (health.status == 'healthy') {
         // Health 200 proves runtime reachability only, NOT authorization.
         // Check if pairing credentials exist and verify them fail-closed.
-        final token = await _client.credentialStore?.readToken();
+        final token = await _client.sessionStore.readToken();
         if (_configEpoch != epoch || _isDisposed) return;
 
         if (token == null || token.trim().isEmpty) {
           _connectionStatus = RuntimeConnectionStatus.unauthorized;
-          _errorMessage = 'Pairing token is missing. Configure token in Settings.';
+          _errorMessage = 'Profile access is required. Select a Profile in Settings.';
           _activeModelName = null;
           notifyListeners();
           return;
         }
 
         try {
-          final auth = await _client.verifyAuth();
+          final auth = await _client.getOwnSession();
           if (_configEpoch != epoch || _isDisposed) return;
 
-          if (auth.authenticated) {
+          if (auth['id'] is String) {
             _connectionStatus = RuntimeConnectionStatus.connected;
             _errorMessage = null;
 
@@ -334,16 +392,18 @@ class DesktopChatController extends ChangeNotifier {
             }
           } else {
             _connectionStatus = RuntimeConnectionStatus.unauthorized;
-            _errorMessage = auth.message.isNotEmpty ? auth.message : 'Authentication verification failed.';
+            _errorMessage = 'Profile session verification failed.';
             _activeModelName = null;
           }
         } on CompanionApiException catch (authEx) {
           if (_configEpoch != epoch || _isDisposed) return;
+          if (authEx.statusCode == 401 || authEx.statusCode == 403) await invalidateProfileSession();
           _connectionStatus = RuntimeConnectionStatus.unauthorized;
           _errorMessage = authEx.message.isNotEmpty
               ? authEx.message
               : 'Authentication failed (HTTP ${authEx.statusCode}).';
           _activeModelName = null;
+          if (!_isDisposed) notifyListeners();
         } catch (authErr) {
           if (_configEpoch != epoch || _isDisposed) return;
           _connectionStatus = RuntimeConnectionStatus.unauthorized;
@@ -368,23 +428,24 @@ class DesktopChatController extends ChangeNotifier {
   /// Loads available conversations from backend.
   Future<void> loadConversations() async {
     if (_isDisposed || !isConnected) return;
+    final epoch = _configEpoch;
     _isLoadingConversations = true;
     _conversationError = null;
     notifyListeners();
 
     try {
       final res = await _client.listConversations();
-      if (_isDisposed) return;
+      if (_isDisposed || epoch != _configEpoch) return;
       _conversations = res.items;
 
       if (_conversations.isNotEmpty && _activeConversation == null) {
         await selectConversation(_conversations.first);
       }
     } catch (e) {
-      if (_isDisposed) return;
+      if (_isDisposed || epoch != _configEpoch) return;
       _conversationError = e.toString();
     } finally {
-      if (!_isDisposed) {
+      if (!_isDisposed && epoch == _configEpoch) {
         _isLoadingConversations = false;
         notifyListeners();
       }
@@ -414,6 +475,7 @@ class DesktopChatController extends ChangeNotifier {
   /// Never fabricates fake local conversation records when backend calls fail.
   Future<void> createNewConversation({String title = 'New Conversation'}) async {
     if (_isDisposed) return;
+    final epoch = _configEpoch;
     if (_isCreatingConversation) return;
     if (!isConnected) {
       _errorMessage = 'Cannot create conversation: Runtime is not connected and authorized.';
@@ -439,15 +501,19 @@ class DesktopChatController extends ChangeNotifier {
     notifyListeners();
     try {
       final created = await _client.createConversation(title: title);
+      if (_isDisposed || epoch != _configEpoch) return;
       _conversations = [created, ..._conversations];
       await selectConversation(created);
     } catch (e) {
+      if (_isDisposed || epoch != _configEpoch) return;
       _errorMessage = 'Failed to create conversation: $e';
       if (!_isDisposed) notifyListeners();
       rethrow;
     } finally {
-      _isCreatingConversation = false;
-      if (!_isDisposed) notifyListeners();
+      if (!_isDisposed && epoch == _configEpoch) {
+        _isCreatingConversation = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -456,6 +522,7 @@ class DesktopChatController extends ChangeNotifier {
   /// Fails closed if runtime is not connected, or if deleting active thread during generation.
   Future<void> deleteConversation(String conversationId) async {
     if (_isDisposed) return;
+    final epoch = _configEpoch;
     if (!isConnected) {
       _errorMessage = 'Cannot delete conversation: Runtime is not connected and authorized.';
       notifyListeners();
@@ -467,6 +534,7 @@ class DesktopChatController extends ChangeNotifier {
 
     try {
       await _client.deleteConversation(conversationId);
+      if (_isDisposed || epoch != _configEpoch) return;
       _conversations = _conversations.where((c) => c.id != conversationId).toList();
       if (_activeConversation?.id == conversationId) {
         if (_conversations.isNotEmpty) {
@@ -482,6 +550,7 @@ class DesktopChatController extends ChangeNotifier {
         notifyListeners();
       }
     } catch (e) {
+      if (_isDisposed || epoch != _configEpoch) return;
       _errorMessage = 'Failed to delete conversation: $e';
       if (!_isDisposed) notifyListeners();
       rethrow;
@@ -513,6 +582,7 @@ class DesktopChatController extends ChangeNotifier {
     String text, {
     void Function()? onAccepted,
   }) async {
+    final epoch = _configEpoch;
     final trimmed = text.trim();
     if (trimmed.isEmpty ||
         isGenerating ||
@@ -533,7 +603,9 @@ class DesktopChatController extends ChangeNotifier {
     if (_activeConversation == null) {
       try {
         await createNewConversation();
+        if (_isDisposed || epoch != _configEpoch) return false;
       } catch (e) {
+        if (_isDisposed || epoch != _configEpoch) return false;
         _errorMessage = 'Failed to prepare conversation: $e';
         if (!_isDisposed) notifyListeners();
         return false;
@@ -706,6 +778,7 @@ class DesktopChatController extends ChangeNotifier {
           _generationState = ChatGenerationState.error;
 
           if (err is CompanionApiException) {
+            if (err.statusCode == 401 || err.statusCode == 403) unawaited(invalidateProfileSession());
             if ((err.statusCode == 422 || err.statusCode == 503) &&
                 err.message.contains('MODEL_SELECTION_REQUIRED')) {
               _errorMessage = 'No model selected. Choose a model in Settings to begin chat.';
@@ -806,9 +879,11 @@ class DesktopChatController extends ChangeNotifier {
   }
 
   Future<void> _persistDeterministicTitle(String conversationId, String title) async {
+    final epoch = _configEpoch;
     if (_userRenamedConversationIds.contains(conversationId)) return;
     try {
       final updated = await _client.renameConversation(conversationId, title);
+      if (_isDisposed || epoch != _configEpoch) return;
       if (!_userRenamedConversationIds.contains(conversationId)) {
         _conversations =
             _conversations.map((c) => c.id == conversationId ? updated : c).toList();
@@ -823,6 +898,7 @@ class DesktopChatController extends ChangeNotifier {
   }
 
   Future<void> _maybeGenerateModelTitle(String conversationId, String? fallbackTitle) async {
+    final epoch = _configEpoch;
     if (fallbackTitle == null ||
         _userRenamedConversationIds.contains(conversationId) ||
         _modelRefinedConversationIds.contains(conversationId) ||
@@ -842,7 +918,7 @@ class DesktopChatController extends ChangeNotifier {
         } catch (_) {}
       }
 
-      if (_isDisposed ||
+      if (_isDisposed || epoch != _configEpoch ||
           _userRenamedConversationIds.contains(conversationId) ||
           _modelRefinedConversationIds.contains(conversationId)) {
         return;
@@ -854,7 +930,7 @@ class DesktopChatController extends ChangeNotifier {
       if (_modelStatus?.modelLoaded != true) {
         try {
           final fresh = await _client.getModelStatus();
-          if (!_isDisposed &&
+          if (!_isDisposed && epoch == _configEpoch &&
               !_userRenamedConversationIds.contains(conversationId)) {
             _modelStatus = fresh;
             _activeModelName = fresh.activeModel ?? 'default';
@@ -865,7 +941,7 @@ class DesktopChatController extends ChangeNotifier {
         }
       }
 
-      if (_isDisposed ||
+      if (_isDisposed || epoch != _configEpoch ||
           _userRenamedConversationIds.contains(conversationId) ||
           _modelRefinedConversationIds.contains(conversationId)) {
         return;
@@ -878,7 +954,7 @@ class DesktopChatController extends ChangeNotifier {
           currentTitle: fallbackTitle,
           fallbackTitle: fallbackTitle,
         );
-        if (_isDisposed ||
+        if (_isDisposed || epoch != _configEpoch ||
             _userRenamedConversationIds.contains(conversationId) ||
             _modelRefinedConversationIds.contains(conversationId)) {
           return;
@@ -896,14 +972,17 @@ class DesktopChatController extends ChangeNotifier {
         // Gracefully keep fallbackTitle
       }
     } finally {
-      _titleGenerationInProgress.remove(conversationId);
-      _pendingRenameFutures.remove(conversationId);
+      if (epoch == _configEpoch) {
+        _titleGenerationInProgress.remove(conversationId);
+        _pendingRenameFutures.remove(conversationId);
+      }
     }
   }
 
   /// Renames a conversation thread by ID.
   Future<void> renameConversation(String conversationId, String newTitle) async {
     if (_isDisposed) return;
+    final epoch = _configEpoch;
     if (!isConnected) {
       _errorMessage = 'Cannot rename conversation: Runtime is not connected and authorized.';
       notifyListeners();
@@ -912,6 +991,7 @@ class DesktopChatController extends ChangeNotifier {
     _userRenamedConversationIds.add(conversationId);
     try {
       final updated = await _client.renameConversation(conversationId, newTitle);
+      if (_isDisposed || epoch != _configEpoch) return;
       _conversations =
           _conversations.map((c) => c.id == conversationId ? updated : c).toList();
       if (_activeConversation?.id == conversationId) {
@@ -919,6 +999,7 @@ class DesktopChatController extends ChangeNotifier {
       }
       notifyListeners();
     } catch (e) {
+      if (_isDisposed || epoch != _configEpoch) return;
       _errorMessage = 'Failed to rename conversation: $e';
       if (!_isDisposed) notifyListeners();
       rethrow;
@@ -952,6 +1033,7 @@ class DesktopChatController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _sessionExpiryTimer?.cancel();
     _isDisposed = true;
     _currentStreamSubscription?.cancel();
     super.dispose();

@@ -2,7 +2,7 @@
  * Attachment API — upload, binary preview fetch, and delete for multimodal conversation attachments.
  * Phase 8B.6 — Master Plan §16.4
  */
-import { getApiBaseUrl, getApiKey, apiFetch, ApiError } from './client';
+import { getApiBaseUrl, getApiKey, apiFetch, invalidateUnauthorizedSession, ApiError } from './client';
 
 // Canonical attachment constraints matching backend schemas
 export const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg'] as const;
@@ -63,6 +63,7 @@ export async function fetchAttachmentBlobUrl(
   });
 
   if (!response.ok) {
+    invalidateUnauthorizedSession(response.status);
     throw new ApiError({
       code: 'ATTACHMENT_PREVIEW_FAILED',
       message: `Failed to fetch attachment preview (${response.status})`,

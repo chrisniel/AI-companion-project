@@ -419,7 +419,7 @@ async def test_model_status_reporting_states(llama_provider):
 
 
 @pytest.mark.asyncio
-async def test_api_endpoints_model_selection_and_load(client: AsyncClient, auth_headers: dict, tmp_path, monkeypatch):
+async def test_api_endpoints_model_selection_and_load(client: AsyncClient, host_admin_headers: dict, tmp_path, monkeypatch):
     """
     Test API endpoints for model selection, load, and contract compliance:
     1. POST /api/v1/models/select with unknown model -> 404
@@ -445,7 +445,7 @@ async def test_api_endpoints_model_selection_and_load(client: AsyncClient, auth_
         resp_404 = await client.post(
             "/api/v1/models/select",
             json={"model_name": "unknown-nonexistent-model"},
-            headers=auth_headers,
+            headers=host_admin_headers,
         )
         assert resp_404.status_code == 404
         assert "not found in registry" in _get_err(resp_404).lower()
@@ -456,7 +456,7 @@ async def test_api_endpoints_model_selection_and_load(client: AsyncClient, auth_
         resp_400 = await client.post(
             "/api/v1/models/select",
             json={"model_name": "model-missing-file"},
-            headers=auth_headers,
+            headers=host_admin_headers,
         )
         assert resp_400.status_code == 400
         assert "missing on host" in _get_err(resp_400).lower()
@@ -467,7 +467,7 @@ async def test_api_endpoints_model_selection_and_load(client: AsyncClient, auth_
         resp_select = await client.post(
             "/api/v1/models/select",
             json={"model_name": "qwen3-vl-2b-instruct", "load_immediately": False},
-            headers=auth_headers,
+            headers=host_admin_headers,
         )
         assert resp_select.status_code == 200
         data_sel = resp_select.json()
@@ -483,7 +483,7 @@ async def test_api_endpoints_model_selection_and_load(client: AsyncClient, auth_
     resp_load_unselected = await client.post(
         "/api/v1/models/load",
         json={"profile": "balanced"},
-        headers=auth_headers,
+        headers=host_admin_headers,
     )
     assert resp_load_unselected.status_code == 422
     assert "MODEL_SELECTION_REQUIRED" in _get_err(resp_load_unselected)
@@ -510,7 +510,7 @@ async def test_api_endpoints_model_selection_and_load(client: AsyncClient, auth_
             resp_load_fail = await client.post(
                 "/api/v1/models/select",
                 json={"model_name": "qwen3-vl-2b-instruct", "load_immediately": True},
-                headers=auth_headers,
+                headers=host_admin_headers,
             )
             assert resp_load_fail.status_code == 500
             assert "ENGINE_GPU_OOM" in _get_err(resp_load_fail)

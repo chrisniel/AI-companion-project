@@ -1,5 +1,7 @@
 """Tests for assistant stream cancellation, transaction safety, and connection pool integrity."""
 
+from tests.profile_helpers import session_for_owner
+
 import asyncio
 from unittest.mock import AsyncMock
 import uuid
@@ -24,14 +26,14 @@ async def test_stream_cancellation_persists_cancelled_status_safely(test_session
     """Verify stream cancellation reconciles assistant placeholder to 'cancelled' without pool corruption."""
     owner_id = "test-owner-cancel-1"
     conv_id = f"conv-{uuid.uuid4()}"
-    conv = Conversation(id=conv_id, owner_id=owner_id, title="Test Cancellation")
+    conv = Conversation(profile_id=(await session_for_owner(test_session, owner_id)).profile_id, id=conv_id, owner_id=owner_id, title="Test Cancellation")
     test_session.add(conv)
     await test_session.commit()
 
     prepared = await prepare_turn(
         db=test_session,
         conversation_id=conv_id,
-        owner_id=owner_id,
+        profile_session=(await session_for_owner(test_session, owner_id)),
         user_text="Stream test message that will be cancelled",
     )
     asst_id = prepared.assistant_message.id
@@ -60,7 +62,7 @@ async def test_stream_cancellation_persists_cancelled_status_safely(test_session
         db=test_session,
         conversation_id=conv_id,
         user_text="Stream test message that will be cancelled",
-        owner_id=owner_id,
+        profile_session=(await session_for_owner(test_session, owner_id)),
         prepared_turn=prepared,
         conversation_lock=lock,
     )
@@ -96,13 +98,13 @@ async def test_stream_cancellation_with_attachments_preserves_bindings(test_sess
     """Verify that committed user turn and attachment bindings remain durable when stream is cancelled."""
     owner_id = "test-owner-cancel-2"
     conv_id = f"conv-{uuid.uuid4()}"
-    conv = Conversation(id=conv_id, owner_id=owner_id, title="Test Cancellation with Attachments")
+    conv = Conversation(profile_id=(await session_for_owner(test_session, owner_id)).profile_id, id=conv_id, owner_id=owner_id, title="Test Cancellation with Attachments")
     test_session.add(conv)
     await test_session.commit()
 
     # Create active attachment in this conversation
     att_id = f"att-{uuid.uuid4()}"
-    att = Attachment(
+    att = Attachment(profile_id=(await session_for_owner(test_session, owner_id)).profile_id,
         id=att_id,
         owner_id=owner_id,
         conversation_id=conv_id,
@@ -120,7 +122,7 @@ async def test_stream_cancellation_with_attachments_preserves_bindings(test_sess
     prepared = await prepare_turn(
         db=test_session,
         conversation_id=conv_id,
-        owner_id=owner_id,
+        profile_session=(await session_for_owner(test_session, owner_id)),
         user_text="Describe this image please",
         attachment_ids=[att_id],
     )
@@ -151,7 +153,7 @@ async def test_stream_cancellation_with_attachments_preserves_bindings(test_sess
         db=test_session,
         conversation_id=conv_id,
         user_text="Describe this image please",
-        owner_id=owner_id,
+        profile_session=(await session_for_owner(test_session, owner_id)),
         prepared_turn=prepared,
         conversation_lock=lock,
     )
@@ -183,14 +185,14 @@ async def test_db_session_pool_healthy_after_cancellation(test_session: AsyncSes
     """Verify connection pool remains healthy and usable by subsequent requests after stream cancellation."""
     owner_id = "test-owner-cancel-3"
     conv_id = f"conv-{uuid.uuid4()}"
-    conv = Conversation(id=conv_id, owner_id=owner_id, title="Test Pool Health")
+    conv = Conversation(profile_id=(await session_for_owner(test_session, owner_id)).profile_id, id=conv_id, owner_id=owner_id, title="Test Pool Health")
     test_session.add(conv)
     await test_session.commit()
 
     prepared = await prepare_turn(
         db=test_session,
         conversation_id=conv_id,
-        owner_id=owner_id,
+        profile_session=(await session_for_owner(test_session, owner_id)),
         user_text="Trigger cancellation",
     )
 
@@ -218,7 +220,7 @@ async def test_db_session_pool_healthy_after_cancellation(test_session: AsyncSes
         db=test_session,
         conversation_id=conv_id,
         user_text="Trigger cancellation",
-        owner_id=owner_id,
+        profile_session=(await session_for_owner(test_session, owner_id)),
         prepared_turn=prepared,
         conversation_lock=lock,
     )
@@ -232,7 +234,7 @@ async def test_db_session_pool_healthy_after_cancellation(test_session: AsyncSes
     factory = async_sessionmaker(bind=test_session.bind, class_=AsyncSession, expire_on_commit=False)
     for i in range(3):
         async with factory() as session:
-            test_msg = Message(
+            test_msg = Message(profile_id=(await session_for_owner(session, owner_id)).profile_id,
                 id=f"msg-post-cancel-{i}-{uuid.uuid4()}",
                 conversation_id=conv_id,
                 owner_id=owner_id,
@@ -254,14 +256,14 @@ async def test_request_session_commit_cancelled_persists_via_isolated_session(te
     """Verify that if request-scoped session raises CancelledError, terminal status is still persisted."""
     owner_id = "test-owner-req-cancel"
     conv_id = f"conv-{uuid.uuid4()}"
-    conv = Conversation(id=conv_id, owner_id=owner_id, title="Test Request Cancelled")
+    conv = Conversation(profile_id=(await session_for_owner(test_session, owner_id)).profile_id, id=conv_id, owner_id=owner_id, title="Test Request Cancelled")
     test_session.add(conv)
     await test_session.commit()
 
     prepared = await prepare_turn(
         db=test_session,
         conversation_id=conv_id,
-        owner_id=owner_id,
+        profile_session=(await session_for_owner(test_session, owner_id)),
         user_text="User query for request cancel test",
     )
     asst_id = prepared.assistant_message.id
@@ -294,7 +296,7 @@ async def test_request_session_commit_cancelled_persists_via_isolated_session(te
         db=test_session,
         conversation_id=conv_id,
         user_text="User query for request cancel test",
-        owner_id=owner_id,
+        profile_session=(await session_for_owner(test_session, owner_id)),
         prepared_turn=prepared,
         conversation_lock=lock,
     )
@@ -329,14 +331,14 @@ async def test_stream_failure_path_isolated_persistence(test_session: AsyncSessi
     """Verify that failure path persists 'failed' status via isolated session and releases lock."""
     owner_id = "test-owner-stream-fail"
     conv_id = f"conv-{uuid.uuid4()}"
-    conv = Conversation(id=conv_id, owner_id=owner_id, title="Test Stream Failure")
+    conv = Conversation(profile_id=(await session_for_owner(test_session, owner_id)).profile_id, id=conv_id, owner_id=owner_id, title="Test Stream Failure")
     test_session.add(conv)
     await test_session.commit()
 
     prepared = await prepare_turn(
         db=test_session,
         conversation_id=conv_id,
-        owner_id=owner_id,
+        profile_session=(await session_for_owner(test_session, owner_id)),
         user_text="User query for failure test",
     )
     asst_id = prepared.assistant_message.id
@@ -365,7 +367,7 @@ async def test_stream_failure_path_isolated_persistence(test_session: AsyncSessi
         db=test_session,
         conversation_id=conv_id,
         user_text="User query for failure test",
-        owner_id=owner_id,
+        profile_session=(await session_for_owner(test_session, owner_id)),
         prepared_turn=prepared,
         conversation_lock=lock,
     )

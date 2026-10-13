@@ -15,6 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.attachment import Attachment
+from app.models.conversation import Conversation
+from app.models.message import Message
+from app.models.profile_session import ProfileSession
+from app.core.profile_sessions import validate_profile_session
 from app.schemas.multimodal import ImageAttachmentRef, ResolvedImageContent
 from app.services.attachment_validator import detect_image_mime
 
@@ -122,7 +126,7 @@ async def resolve_image_content(
     session: AsyncSession,
     ref: Union[ImageAttachmentRef, Attachment],
     *,
-    owner_id: str,
+    profile_session: ProfileSession,
     conversation_id: str,
     message_id: str,
 ) -> ResolvedImageContent:
@@ -138,21 +142,29 @@ async def resolve_image_content(
     7. Storage path canonical containment without Python assert.
     8. Physical file existence, size integrity, and signature verification.
     """
-    if isinstance(ref, Attachment):
-        att = ref
-        ref_mime = att.mime_type
-    else:
-        stmt = select(Attachment).where(Attachment.id == ref.attachment_id)
-        res = await session.execute(stmt)
-        att = res.scalar_one_or_none()
-        ref_mime = ref.mime_type
+    profile_session = await validate_profile_session(session, profile_session)
+    parent = await session.scalar(select(Conversation.id).where(
+        Conversation.id == conversation_id,
+        Conversation.profile_id == profile_session.profile_id,
+        Conversation.deleted_at.is_(None), Conversation.is_deleted.is_(False),
+    ))
+    message = await session.scalar(select(Message.id).where(
+        Message.id == message_id, Message.conversation_id == conversation_id,
+        Message.profile_id == profile_session.profile_id, Message.deleted_at.is_(None),
+    ))
+    if parent is None or message is None:
+        raise MediaAttachmentNotFoundError("Attachment parent not found.")
+    att_id = ref.id if isinstance(ref, Attachment) else ref.attachment_id
+    stmt = select(Attachment).where(Attachment.id == att_id).execution_options(populate_existing=True)
+    att = (await session.execute(stmt)).scalar_one_or_none()
+    ref_mime = ref.mime_type
 
     if att is None:
         att_id_str = getattr(ref, "attachment_id", str(ref))
         raise MediaAttachmentNotFoundError(f"Attachment '{att_id_str}' not found.")
     if att.conversation_id != conversation_id:
         raise MediaAttachmentNotFoundError("Attachment does not belong to the requested conversation.")
-    if att.owner_id != owner_id:
+    if att.profile_id != profile_session.profile_id:
         raise MediaAttachmentForbiddenError("Access to attachment is forbidden.")
     if att.is_deleted:
         raise MediaAttachmentDeletedError("Attachment is soft-deleted.")
@@ -176,14 +188,15 @@ async def resolve_image_content(
     if ".." in storage_p.parts:
         raise MediaSecurityError("Path traversal not permitted in storage path.")
 
-    expected_rel_parent = Path("attachments") / owner_id / conversation_id
-    if storage_p.parent != expected_rel_parent:
+    expected_rel_parent = Path("attachments") / profile_session.profile_id / conversation_id
+    legacy_parent = Path("attachments") / "local_user" / conversation_id
+    if storage_p.parent not in (expected_rel_parent, legacy_parent):
         raise MediaSecurityError("Storage path directory structure mismatch.")
     if storage_p.name != att.storage_filename:
         raise MediaSecurityError("Storage filename does not match storage path.")
 
     attachment_dir = settings.ATTACHMENT_DIR.resolve()
-    expected_dir = (settings.ATTACHMENT_DIR / owner_id / conversation_id).resolve()
+    expected_dir = (settings.COMPANION_DATA_ROOT / storage_p.parent).resolve()
     candidate_path = (settings.COMPANION_DATA_ROOT / att.storage_path).resolve()
 
     if candidate_path.parent != expected_dir or attachment_dir not in candidate_path.parents:
@@ -192,6 +205,7 @@ async def resolve_image_content(
     # Read bytes off the main event loop
     data = await asyncio.to_thread(_read_file_sync, candidate_path, att.size_bytes, att.mime_type)
 
+    await validate_profile_session(session, profile_session)
     return ResolvedImageContent(
         type="image_bytes",
         mime_type=att.mime_type,

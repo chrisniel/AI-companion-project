@@ -37,19 +37,9 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
     changeProfile,
     lastError,
     clearError,
-    apiKey,
-    setApiKey,
     refreshStatus,
     registry,
   } = useBackend();
-
-  const [keyInput, setKeyInput] = useState(apiKey || '');
-
-  useEffect(() => {
-    if (apiKey) {
-      setKeyInput(apiKey);
-    }
-  }, [apiKey]);
 
   // Authoritative Backend Active Model:
   // Derived directly from backend truth (model_loaded = True and active_model populated).
@@ -260,7 +250,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
 
   return (
     <div id="models-and-runtime-view" className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* Error Banner / Pairing Input */}
+      {/* Error Banner */}
       {lastError && (
         <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-500 text-xs space-y-3">
           <div className="flex items-center justify-between">
@@ -272,30 +262,7 @@ export const ModelsView: React.FC<ModelsViewProps> = ({
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
-          {(lastError.toLowerCase().includes('auth') || lastError.toLowerCase().includes('credential')) && (
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-2 border-t border-rose-500/20">
-              <div className="relative flex-1">
-                <input
-                  type="password"
-                  value={keyInput}
-                  onChange={(e) => setKeyInput(e.target.value)}
-                  placeholder="Paste COMPANION_API_KEY here..."
-                  className="w-full px-3 py-1.5 rounded-xl bg-[var(--color-surface-elevated)] border border-rose-500/40 text-xs text-[var(--color-text-primary)] font-mono focus:outline-none focus:border-[var(--color-accent)] transition-all shadow-xs"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={async () => {
-                  setApiKey(keyInput.trim());
-                  clearError();
-                  await refreshStatus();
-                }}
-                className="px-3.5 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold tracking-wide transition-all shadow-xs flex-shrink-0"
-              >
-                Save & Connect
-              </button>
-            </div>
-          )}
+          <p>Browser access requires explicit Flutter Desktop approval. Model administration is available in Flutter Desktop.</p>
         </div>
       )}
 

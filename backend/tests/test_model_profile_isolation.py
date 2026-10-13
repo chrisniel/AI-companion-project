@@ -1,12 +1,12 @@
-"""Tests for ProfileMixin and backward-compatible OwnerMixin coexistence (PC-IDENTITY-001)."""
+"""Tests for explicit Profile ownership and legacy owner shadow metadata (PC-IDENTITY-002)."""
 
-from sqlalchemy import select
+import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app.models.attachment import Attachment
 from app.models.conversation import Conversation
 from app.models.memory import Memory
 from app.models.message import Message
-from app.models.profile import Profile
 from app.models.task import Task
 
 
@@ -25,18 +25,17 @@ def test_instantiated_models_default_owner_to_local_user():
     assert Memory(content="Test Memory").owner_id == "local_user"
 
 
-async def test_new_records_via_session_get_this_databases_default_profile(test_session):
-    """Records created without profile_id are never NULL and follow this database's default."""
-    default = (await test_session.execute(select(Profile).where(Profile.is_default.is_(True)))).scalar_one()
-
-    conv = Conversation(title="Test Chat")
+async def test_new_records_persist_explicit_profile_ownership(test_session, profile_id):
+    """Explicit ownership persists on all five models while owner_id stays shadow metadata."""
+    conv = Conversation(title="Test Chat", profile_id=profile_id)
     test_session.add(conv)
     await test_session.flush()
-    task = Task(title="Test Task")
-    mem = Memory(content="Test Memory")
-    msg = Message(conversation_id=conv.id, sender="user", content="Hello", sequence_no=1)
+    task = Task(title="Test Task", profile_id=profile_id)
+    mem = Memory(content="Test Memory", profile_id=profile_id)
+    msg = Message(conversation_id=conv.id, sender="user", content="Hello", sequence_no=1, profile_id=profile_id)
     att = Attachment(
         conversation_id=conv.id,
+        profile_id=profile_id,
         filename_display="img.png",
         storage_filename="img_1.png",
         storage_path="/path/img_1.png",
@@ -47,5 +46,14 @@ async def test_new_records_via_session_get_this_databases_default_profile(test_s
     await test_session.commit()
 
     for obj in (conv, task, mem, msg, att):
-        assert obj.profile_id == default.id, type(obj).__name__
+        await test_session.refresh(obj)
+        assert obj.profile_id == profile_id, type(obj).__name__
         assert obj.owner_id == "local_user"
+
+
+async def test_legacy_owner_metadata_cannot_supply_missing_profile(test_session, profile_id):
+    """Even with a seeded Profile and legacy owner, omitted ownership fails closed."""
+    test_session.add(Conversation(title="Unowned", owner_id="local_user"))
+    with pytest.raises(IntegrityError, match="NOT NULL constraint failed: conversations.profile_id"):
+        await test_session.flush()
+    await test_session.rollback()

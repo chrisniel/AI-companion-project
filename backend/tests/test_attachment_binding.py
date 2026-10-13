@@ -1,5 +1,7 @@
 """Comprehensive test suite for Phase 8B.4: Transactional Message Binding & Pre-Stream Preparation."""
 
+from tests.profile_helpers import session_for_owner
+
 import asyncio
 from pathlib import Path
 from typing import AsyncGenerator
@@ -39,7 +41,7 @@ async def _create_test_conversation(
     title: str = "Binding Test Conv",
 ) -> Conversation:
     """Helper to create an active test conversation."""
-    conv = Conversation(
+    conv = Conversation(profile_id=(await session_for_owner(session, owner_id)).profile_id,
         id=f"conv-{uuid.uuid4().hex[:8]}",
         owner_id=owner_id,
         title=title,
@@ -61,7 +63,7 @@ async def _create_test_attachment(
 ) -> Attachment:
     """Helper to create a test attachment in DB."""
     att_id = f"att-{uuid.uuid4().hex[:8]}"
-    att = Attachment(
+    att = Attachment(profile_id=(await session_for_owner(session, owner_id)).profile_id,
         id=att_id,
         conversation_id=conversation_id,
         owner_id=owner_id,
@@ -396,7 +398,7 @@ async def test_commit_failure_rolls_back_messages_and_claims(test_session: Async
         await prepare_turn(
             db=test_session,
             conversation_id=conv_id,
-            owner_id="local_user",
+            profile_session=(await session_for_owner(test_session, "local_user")),
             user_text="Turn that fails commit",
             attachment_ids=[att_id],
         )
@@ -531,13 +533,13 @@ async def test_atomic_claim_concurrency_race(tmp_path: Path):
 
     # Seed conversation, user messages, and single staged attachment
     async with session_maker() as init_session:
-        conv = Conversation(id=conv_id, owner_id="local_user", title="Race Conv")
+        conv = Conversation(profile_id=(await session_for_owner(init_session, "local_user")).profile_id, id=conv_id, owner_id="local_user", title="Race Conv")
         init_session.add(conv)
-        m1 = Message(id=msg1_id, conversation_id=conv_id, owner_id="local_user", sender="user", content="Turn 1", sequence_no=1)
-        m2 = Message(id=msg2_id, conversation_id=conv_id, owner_id="local_user", sender="user", content="Turn 2", sequence_no=2)
+        m1 = Message(profile_id=(await session_for_owner(init_session, "local_user")).profile_id, id=msg1_id, conversation_id=conv_id, owner_id="local_user", sender="user", content="Turn 1", sequence_no=1)
+        m2 = Message(profile_id=(await session_for_owner(init_session, "local_user")).profile_id, id=msg2_id, conversation_id=conv_id, owner_id="local_user", sender="user", content="Turn 2", sequence_no=2)
         init_session.add(m1)
         init_session.add(m2)
-        att = Attachment(
+        att = Attachment(profile_id=(await session_for_owner(init_session, "local_user")).profile_id,
             id=att_id,
             conversation_id=conv_id,
             owner_id="local_user",
@@ -565,7 +567,7 @@ async def test_atomic_claim_concurrency_race(tmp_path: Path):
                     db=session_a,
                     attachment_ids=[att_id],
                     message_id=msg1_id,
-                    owner_id="local_user",
+                    profile_session=(await session_for_owner(session_a, "local_user")),
                     conversation_id=conv_id,
                 )
                 await session_a.commit()
@@ -583,7 +585,7 @@ async def test_atomic_claim_concurrency_race(tmp_path: Path):
                     db=session_b,
                     attachment_ids=[att_id],
                     message_id=msg2_id,
-                    owner_id="local_user",
+                    profile_session=(await session_for_owner(session_b, "local_user")),
                     conversation_id=conv_id,
                 )
                 await session_b.commit()
@@ -672,7 +674,7 @@ async def test_sequence_collision_bounded_retry(test_session: AsyncSession, monk
     prepared = await prepare_turn(
         db=test_session,
         conversation_id=conv_id,
-        owner_id="local_user",
+        profile_session=(await session_for_owner(test_session, "local_user")),
         user_text="Turn with sequence retry",
         attachment_ids=[att_id],
     )
@@ -779,8 +781,8 @@ async def test_conversation_delete_soft_deletes_staged_and_bound_attachments(cli
 
 
 @pytest.mark.anyio
-async def test_conversation_delete_cascade_affects_all_child_attachments_regardless_of_owner(client: AsyncClient, auth_headers: dict, test_session: AsyncSession):
-    """Verify parent conversation soft-delete cascades to child attachments regardless of owner metadata."""
+async def test_conversation_delete_cascade_preserves_foreign_profile_child(client: AsyncClient, auth_headers: dict, test_session: AsyncSession):
+    """A mismatched child Profile cannot be mutated through an owned parent."""
     conv = await _create_test_conversation(test_session, owner_id="local_user")
     conv_id = conv.id
     att_foreign = await _create_test_attachment(test_session, conv_id, owner_id="foreign_owner")
@@ -791,8 +793,8 @@ async def test_conversation_delete_cascade_affects_all_child_attachments_regardl
 
     res = await test_session.execute(select(Attachment).where(Attachment.id == foreign_id))
     f = res.scalar_one()
-    assert f.is_deleted is True
-    assert f.deleted_at is not None
+    assert f.is_deleted is False
+    assert f.deleted_at is None
 
 
 @pytest.mark.anyio
@@ -972,7 +974,7 @@ async def test_stream_task_cancellation_with_staged_attachment_preserves_state(
     prepared = await prepare_turn(
         db=test_session,
         conversation_id=conv_id,
-        owner_id="local_user",
+        profile_session=(await session_for_owner(test_session, "local_user")),
         user_text="User prompt with staged attachment",
         attachment_ids=[att_id],
     )
@@ -992,7 +994,7 @@ async def test_stream_task_cancellation_with_staged_attachment_preserves_state(
         db=test_session,
         conversation_id=conv_id,
         user_text="User prompt with staged attachment",
-        owner_id="local_user",
+        profile_session=(await session_for_owner(test_session, "local_user")),
         prepared_turn=prepared,
         conversation_lock=lock,
     )

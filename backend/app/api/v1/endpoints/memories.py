@@ -9,7 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_owner, get_db
+from app.api.deps import get_current_profile_session, get_db
+from app.core.profile_sessions import validate_profile_session
+from app.models.profile_session import ProfileSession
 from app.models.memory import Memory
 from app.schemas.memory import MemoryCreate, MemoryListOut, MemoryOut, MemoryUpdate
 
@@ -27,12 +29,12 @@ async def list_memories(
     category: Optional[str] = Query(None, description="Filter by category (fact, preference, context)"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    owner_id: str = Depends(get_current_owner),
+    session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
 ) -> MemoryListOut:
     """List active memories owned by the user, optionally filtered by category."""
     query = select(Memory).where(
-        Memory.owner_id == owner_id,
+        Memory.profile_id == session.profile_id,
         Memory.deleted_at.is_(None),
     )
     if category:
@@ -56,13 +58,13 @@ async def list_memories(
 )
 async def create_memory(
     payload: MemoryCreate,
-    owner_id: str = Depends(get_current_owner),
+    session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
 ) -> MemoryOut:
     """Create a new manual memory record (synced automatically to FTS5)."""
     memory = Memory(
         id=str(uuid.uuid4()),
-        owner_id=owner_id,
+        profile_id=session.profile_id,
         category=payload.category,
         content=payload.content,
         importance=payload.importance,
@@ -70,6 +72,7 @@ async def create_memory(
         user_verified=True,
     )
     db.add(memory)
+    await validate_profile_session(db, session)
     await db.commit()
     await db.refresh(memory)
     return memory
@@ -83,13 +86,13 @@ async def create_memory(
 async def update_memory(
     memory_id: str,
     payload: MemoryUpdate,
-    owner_id: str = Depends(get_current_owner),
+    session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
 ) -> MemoryOut:
     """Update memory content, category, or importance."""
     query = select(Memory).where(
         Memory.id == memory_id,
-        Memory.owner_id == owner_id,
+        Memory.profile_id == session.profile_id,
         Memory.deleted_at.is_(None),
     )
     memory = (await db.execute(query)).scalar_one_or_none()
@@ -103,6 +106,8 @@ async def update_memory(
     if payload.importance is not None:
         memory.importance = payload.importance
 
+    await validate_profile_session(db, session)
+
     await db.commit()
     await db.refresh(memory)
     return memory
@@ -115,13 +120,13 @@ async def update_memory(
 )
 async def delete_memory(
     memory_id: str,
-    owner_id: str = Depends(get_current_owner),
+    session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Soft-delete memory (FTS5 triggers remove it from index)."""
     query = select(Memory).where(
         Memory.id == memory_id,
-        Memory.owner_id == owner_id,
+        Memory.profile_id == session.profile_id,
         Memory.deleted_at.is_(None),
     )
     memory = (await db.execute(query)).scalar_one_or_none()
@@ -130,4 +135,5 @@ async def delete_memory(
 
     memory.is_deleted = True
     memory.deleted_at = datetime.now(timezone.utc)
+    await validate_profile_session(db, session)
     await db.commit()

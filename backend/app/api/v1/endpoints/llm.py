@@ -9,7 +9,10 @@ from typing import AsyncGenerator, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
-from app.api.deps import verify_token
+from app.api.deps import get_current_profile_session, get_db, require_host_admin, verify_telemetry
+from app.core.profile_sessions import guarded_tokens, validate_profile_session
+from app.models.profile_session import ProfileSession
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.llm import (
     ChatCompletionChoice,
     ChatCompletionDelta,
@@ -38,7 +41,7 @@ router = APIRouter()
     "/models",
     response_model=ModelStatusResponse,
     summary="Get LLM model status and hardware profiles",
-    dependencies=[Depends(verify_token)],
+    dependencies=[Depends(verify_telemetry)],
 )
 async def get_model_status(
     provider: BaseLLMProvider = Depends(get_llm_provider),
@@ -51,7 +54,7 @@ async def get_model_status(
     "/models/registry",
     response_model=List[ModelRegistryEntry],
     summary="Get Model Registry",
-    dependencies=[Depends(verify_token)],
+    dependencies=[Depends(verify_telemetry)],
 )
 async def get_model_registry() -> List[ModelRegistryEntry]:
     """
@@ -66,7 +69,7 @@ async def get_model_registry() -> List[ModelRegistryEntry]:
     "/models/load",
     response_model=ModelStatusResponse,
     summary="Load LLM model into VRAM",
-    dependencies=[Depends(verify_token)],
+    dependencies=[Depends(require_host_admin)],
 )
 async def load_model(
     request: Optional[ModelLoadRequest] = None,
@@ -94,7 +97,7 @@ async def load_model(
     "/models/select",
     response_model=ModelStatusResponse,
     summary="Select LLM model in persistent host configuration",
-    dependencies=[Depends(verify_token)],
+    dependencies=[Depends(require_host_admin)],
 )
 async def select_model(
     request: ModelSelectRequest,
@@ -131,7 +134,7 @@ async def select_model(
     "/models/unload",
     response_model=ModelStatusResponse,
     summary="Unload LLM model and release VRAM",
-    dependencies=[Depends(verify_token)],
+    dependencies=[Depends(require_host_admin)],
 )
 async def unload_model(
     provider: BaseLLMProvider = Depends(get_llm_provider),
@@ -164,7 +167,7 @@ async def unload_model(
     "/models/profile",
     response_model=ModelStatusResponse,
     summary="Update hardware performance profile",
-    dependencies=[Depends(verify_token)],
+    dependencies=[Depends(require_host_admin)],
 )
 async def update_profile(
     request: ModelProfileUpdateRequest,
@@ -184,11 +187,13 @@ async def update_profile(
     "/chat/completions",
     response_model=ChatCompletionResponse,
     summary="Generate chat completions (streaming or synchronous)",
-    dependencies=[Depends(verify_token)],
+    dependencies=[Depends(get_current_profile_session)],
 )
 async def create_chat_completion(
     request: ChatCompletionRequest,
     provider: BaseLLMProvider = Depends(get_llm_provider),
+    profile_session: ProfileSession = Depends(get_current_profile_session),
+    db: AsyncSession = Depends(get_db),
 ):
     """Generate conversational completions matching OpenAI API format.
     
@@ -211,6 +216,7 @@ async def create_chat_completion(
     # Streaming mode (SSE)
     if request.stream:
         async def event_stream() -> AsyncGenerator[str, None]:
+            await validate_profile_session(db, profile_session)
             # Initial delta with role
             first_chunk = ChatCompletionStreamChunk(
                 id=completion_id,
@@ -233,7 +239,7 @@ async def create_chat_completion(
                     max_tokens=request.max_tokens or 1024,
                 )
                 async with aclosing(stream) as tokens:
-                    async for token in tokens:
+                    async for token in guarded_tokens(tokens, db, profile_session):
                         chunk = ChatCompletionStreamChunk(
                             id=completion_id,
                             created=created_ts,
@@ -246,12 +252,16 @@ async def create_chat_completion(
                             ],
                         )
                         yield f"data: {chunk.model_dump_json()}\n\n"
+            except HTTPException:
+                yield 'data: {"error":{"message":"Profile Session ended.","type":"authentication_error"}}\n\n'
+                return
             except Exception:
                 error_payload = {"error": {"message": "Model generation failed.", "type": "runtime_error"}}
                 yield f"data: {json.dumps(error_payload)}\n\n"
                 return
 
             # Final stop chunk
+            await validate_profile_session(db, profile_session)
             finish_reason = getattr(stream, "finish_reason", None) or getattr(provider, "last_finish_reason", "stop") or "stop"
             stop_chunk = ChatCompletionStreamChunk(
                 id=completion_id,
@@ -280,11 +290,16 @@ async def create_chat_completion(
 
     # Synchronous mode (JSON)
     try:
-        content = await provider.generate(
-            messages=internal_messages,
-            temperature=request.temperature,
-            max_tokens=request.max_tokens or 1024,
-        )
+        async def completion_once():
+            yield await provider.generate(
+                messages=internal_messages,
+                temperature=request.temperature,
+                max_tokens=request.max_tokens or 1024,
+            )
+        async for result in guarded_tokens(completion_once(), db, profile_session):
+            content = result
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -292,6 +307,7 @@ async def create_chat_completion(
         ) from None
 
     # Approximate token counts
+    await validate_profile_session(db, profile_session)
     prompt_chars = sum(len(m.content) for m in request.messages)
     prompt_tokens = max(1, prompt_chars // 4)
     completion_tokens = max(1, len(content) // 4)

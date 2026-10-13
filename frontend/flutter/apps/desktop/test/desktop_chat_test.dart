@@ -28,6 +28,8 @@ class MockCompanionClient extends CompanionClient {
   bool modelStatusCalled = false;
   bool createConvCalled = false;
   bool sendMessageCalled = false;
+  Future<void> Function()? onCreate;
+  Future<void> Function()? onDelete;
 
   MockCompanionClient({
     String token = 'valid_test_token',
@@ -40,6 +42,7 @@ class MockCompanionClient extends CompanionClient {
   }) : super(
           baseUrl: 'http://127.0.0.1:8000',
           credentialStore: InMemoryCredentialStore(token),
+          sessionStore: InMemoryCredentialStore(token),
         );
 
   @override
@@ -61,6 +64,15 @@ class MockCompanionClient extends CompanionClient {
       return const AuthVerifyResponse(authenticated: false, message: 'Token verification failed.');
     }
     return const AuthVerifyResponse(authenticated: true, tokenType: 'Bearer', message: 'Token verified.');
+  }
+
+  @override
+  Future<void> revokeProfileSession() async => sessionStore.deleteToken();
+
+  @override
+  Future<Map<String, dynamic>> getOwnSession() async {
+    final result = await verifyAuth();
+    return result.authenticated ? {'id':'test-profile'} : {};
   }
 
   bool deleteConvCalled = false;
@@ -110,12 +122,14 @@ class MockCompanionClient extends CompanionClient {
 
   @override
   Future<void> deleteConversation(String conversationId) async {
+    if (onDelete != null) await onDelete!();
     deleteConvCalled = true;
     lastDeletedConvId = conversationId;
   }
 
   @override
   Future<ConversationOut> createConversation({String? title, String? characterId}) async {
+    if (onCreate != null) await onCreate!();
     createConvCalled = true;
     _storedMessages = [];
     if (!shouldCreateConvSucceed) {
@@ -323,6 +337,43 @@ void main() {
       expect(controller.connectionStatus, RuntimeConnectionStatus.unconnected);
     });
 
+    test('late prior Profile rename completion cannot update replacement cache', () async {
+      await controller.checkConnection();
+      final pending = Completer<void>();
+      mockClient.onRename = (_,__) => pending.future;
+      final old = controller.renameConversation('mock-conv-1','old private title');
+      await controller.invalidateProfileSession();
+      await mockClient.sessionStore.writeToken('psk_new');
+      await controller.checkConnection();
+      pending.complete(); await old;
+      expect(controller.activeConversation?.title,'Existing Chat');
+    });
+    test('late prior Profile delete completion cannot remove replacement cache', () async {
+      await controller.checkConnection();
+      final pending = Completer<void>();
+      mockClient.onDelete = () => pending.future;
+      final old = controller.deleteConversation('mock-conv-1');
+      await controller.invalidateProfileSession();
+      await mockClient.sessionStore.writeToken('psk_new');
+      await controller.checkConnection();
+      pending.complete(); await old;
+      expect(controller.conversations.length,1);
+    });
+    test('late deterministic title cannot trigger prior Profile model title using new session', () async {
+      mockClient.customConversations = const [ConversationOut(id:'mock-conv-1',title:'New Conversation',characterId:'default',ownerId:'owner',createdAt:'2026',updatedAt:'2026')];
+      mockClient.customMessages = [];
+      final pending = Completer<void>();
+      mockClient.onRename = (_,__) => pending.future;
+      await controller.checkConnection();
+      await controller.sendMessage('old private prompt');
+      await controller.invalidateProfileSession();
+      await mockClient.sessionStore.writeToken('psk_new');
+      await controller.checkConnection();
+      pending.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(mockClient.generateTitleCalled,isFalse);
+    });
+
     test('checkConnection: Health 200 + Valid Auth connects and loads model', () async {
       await controller.checkConnection();
       expect(mockClient.healthCalled, isTrue);
@@ -352,9 +403,20 @@ void main() {
       await unauthedController.checkConnection();
       expect(unauthedController.connectionStatus, RuntimeConnectionStatus.unauthorized);
       expect(unauthedController.canSend, isFalse);
-      expect(unauthedController.errorMessage, contains('Pairing token is missing'));
+      expect(unauthedController.errorMessage, contains('Profile access is required'));
 
       unauthedController.dispose();
+    });
+
+    test('revoked Profile session clears private cached conversations and drafts', () async {
+      await controller.checkConnection();
+      controller.setDraft('mock-conv-1','private draft');
+      mockClient.authStatusCode = 401;
+      await controller.checkConnection();
+      expect(controller.conversations,isEmpty);
+      expect(controller.messages,isEmpty);
+      expect(controller.getDraft('mock-conv-1'),'');
+      expect(await mockClient.sessionStore.readToken(),isNull);
     });
 
     test('checkConnection: Valid auth + unavailable model keeps connected but marks model Unavailable', () async {
@@ -366,7 +428,7 @@ void main() {
       expect(controller.activeModelName, 'Unavailable');
     });
 
-    test('updateConfiguration recovers auth after saving valid token', () async {
+    test('updateConfiguration pairing change does not grant Profile access', () async {
       final mock = MockCompanionClient(token: '');
       final ctrl = DesktopChatController(
         client: mock,
@@ -382,8 +444,8 @@ void main() {
         pairingToken: 'restored_valid_token',
       );
 
-      expect(ctrl.connectionStatus, RuntimeConnectionStatus.connected);
-      expect(ctrl.canSend, isTrue);
+      expect(ctrl.connectionStatus, RuntimeConnectionStatus.unauthorized);
+      expect(ctrl.canSend, isFalse);
 
       ctrl.dispose();
     });
@@ -914,6 +976,48 @@ void main() {
   });
 
   group('ChatScreen Widget Tests', () {
+    testWidgets('new Profile composer remains usable while prior Profile creation is pending', (tester) async {
+      final pending = Completer<void>();
+      final mock = MockCompanionClient()..customConversations = [];
+      final controller = DesktopChatController(client:mock);
+      await controller.checkConnection();
+      await tester.pumpWidget(MaterialApp(theme:CompanionTheme.dark(),home:Scaffold(body:ChatScreen(controller:controller))));
+      await tester.pumpAndSettle();
+      mock.onCreate = () => pending.future;
+      await tester.enterText(find.byType(TextField),'old private prompt');
+      await tester.pump();
+      await tester.tap(find.byTooltip('Send message (Enter)'));
+      await tester.pump();
+      expect(controller.isCreatingConversation,isTrue);
+      await controller.invalidateProfileSession();
+      mock.onCreate = null;
+      await mock.sessionStore.writeToken('psk_new_profile');
+      await controller.checkConnection();
+      await tester.pump();
+      await tester.enterText(find.byType(TextField),'new Profile draft');
+      await tester.pump();
+      expect(find.byTooltip('Send message (Enter)'),findsOneWidget);
+      expect(tester.widget<NeumorphicButton>(find.widgetWithIcon(NeumorphicButton,Icons.send_rounded)).onPressed,isNotNull);
+      pending.complete();
+      await tester.pumpAndSettle();
+      expect(mock.sendMessageCalled,isFalse);
+      expect(find.text('new Profile draft'),findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+    });
+    testWidgets('session invalidation clears visible draft without resaving old Profile cache', (tester) async {
+      final controller = DesktopChatController(client:MockCompanionClient());
+      await controller.checkConnection();
+      await tester.pumpWidget(MaterialApp(theme:CompanionTheme.dark(),home:Scaffold(body:ChatScreen(controller:controller))));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField),'private unsent draft');
+      await controller.invalidateProfileSession();
+      await tester.pumpAndSettle();
+      expect(controller.getDraft('mock-conv-1'),'');
+      expect(find.text('private unsent draft'),findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+    });
     testWidgets('renders interactive chat UI and sends message when connected', (tester) async {
       final mockClient = MockCompanionClient();
       final controller = DesktopChatController(client: mockClient);

@@ -8,7 +8,7 @@ SSE token streaming, idempotency, and concurrency controls.
 import asyncio
 import json
 import logging
-from contextlib import aclosing
+from contextlib import aclosing, suppress
 from dataclasses import dataclass
 from typing import Any, AsyncGenerator, List, Optional, Union
 import uuid
@@ -19,6 +19,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import settings
+from app.core.profile_sessions import validate_profile_session
+from app.models.profile_session import ProfileSession
 from app.db.session import get_session_factory
 from app.models.attachment import Attachment
 from app.models.conversation import Conversation
@@ -148,11 +150,78 @@ class PreparedTurn:
     assistant_sequence_no: int
 
 
+async def _require_conversation(
+    db: AsyncSession, profile_session: ProfileSession, conversation_id: str,
+) -> ProfileSession:
+    """Validate current authority and the active parent at every service boundary."""
+    profile_session = await validate_profile_session(db, profile_session)
+    parent = await db.scalar(select(Conversation.id).where(
+        Conversation.id == conversation_id, Conversation.profile_id == profile_session.profile_id,
+        Conversation.deleted_at.is_(None), Conversation.is_deleted.is_(False),
+    ))
+    if parent is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return profile_session
+
+
+async def _require_prepared_turn(
+    db: AsyncSession, profile_session: ProfileSession, conversation_id: str, turn: PreparedTurn,
+) -> None:
+    # Finish an in-flight SQLite check before propagating consumer cancellation.
+    # Cancelling aiosqlite mid-query invalidates the shared connection, preventing
+    # safe rollback and isolated terminal persistence.
+    check = asyncio.create_task(_validate_prepared_turn(db, profile_session, conversation_id, turn))
+    try:
+        await asyncio.shield(check)
+    except asyncio.CancelledError:
+        with suppress(Exception):
+            await asyncio.shield(check)
+        raise
+
+
+async def _validate_prepared_turn(
+    db: AsyncSession, profile_session: ProfileSession, conversation_id: str, turn: PreparedTurn,
+) -> None:
+    await _require_conversation(db, profile_session, conversation_id)
+    ids = (turn.user_message.id, turn.assistant_message.id)
+    rows = (await db.execute(select(Message.id).where(
+        Message.id.in_(ids), Message.conversation_id == conversation_id,
+        Message.profile_id == profile_session.profile_id, Message.deleted_at.is_(None),
+    ))).scalars().all()
+    if len(rows) != 2:
+        raise HTTPException(status_code=404, detail="Turn not found")
+
+
+async def _authorized_tokens(db, profile_session, conversation_id, turn, tokens):
+    """Poll authority while waiting without cancelling a slow provider on each poll."""
+    pending = None
+    try:
+        while True:
+            await _require_prepared_turn(db, profile_session, conversation_id, turn)
+            pending = asyncio.create_task(anext(tokens))
+            while True:
+                try:
+                    token = await asyncio.wait_for(asyncio.shield(pending), timeout=0.25)
+                    break
+                except asyncio.TimeoutError:
+                    await _require_prepared_turn(db, profile_session, conversation_id, turn)
+            pending = None
+            await _require_prepared_turn(db, profile_session, conversation_id, turn)
+            yield token
+    except StopAsyncIteration:
+        return
+    finally:
+        if pending is not None:
+            pending.cancel()
+            with suppress(asyncio.CancelledError, StopAsyncIteration):
+                await pending
+
+
 async def prepare_turn(
     db: AsyncSession,
     *,
     conversation_id: str,
-    owner_id: str,
+    profile_session: ProfileSession,
     user_text: str,
     client_message_id: Optional[str] = None,
     attachment_ids: Optional[list[str]] = None,
@@ -168,14 +237,17 @@ async def prepare_turn(
     6. Commits the transaction exactly once.
     On failure: rolls back session and re-raises domain/HTTP exception.
     """
+    profile_session = await _require_conversation(db, profile_session, conversation_id)
     # 1. Defend attachment-list invariants inside prepare_turn
     validate_attachment_ids_syntax(attachment_ids)
 
     # 2. Sequence allocation & message persistence with bounded retry
     for attempt in range(max_seq_retries):
         try:
+            profile_session = await _require_conversation(db, profile_session, conversation_id)
             seq_query = select(func.max(Message.sequence_no)).where(
-                Message.conversation_id == conversation_id
+                Message.conversation_id == conversation_id,
+                Message.profile_id == profile_session.profile_id,
             )
             seq_result = await db.execute(seq_query)
             max_seq = seq_result.scalar() or 0
@@ -185,7 +257,7 @@ async def prepare_turn(
             user_msg = Message(
                 id=str(uuid.uuid4()),
                 conversation_id=conversation_id,
-                owner_id=owner_id,
+                profile_id=profile_session.profile_id,
                 sender="user",
                 content=user_text,
                 status="completed",
@@ -195,7 +267,7 @@ async def prepare_turn(
             asst_msg = Message(
                 id=str(uuid.uuid4()),
                 conversation_id=conversation_id,
-                owner_id=owner_id,
+                profile_id=profile_session.profile_id,
                 sender="assistant",
                 content="",
                 status="streaming",
@@ -211,11 +283,12 @@ async def prepare_turn(
                     db=db,
                     attachment_ids=attachment_ids,
                     message_id=user_msg.id,
-                    owner_id=owner_id,
+                    profile_session=profile_session,
                     conversation_id=conversation_id,
                 )
 
-            # Single atomic commit for messages + claims
+            # Single atomic commit for messages + claims after fresh authorization.
+            await _require_conversation(db, profile_session, conversation_id)
             await db.commit()
 
             return PreparedTurn(
@@ -244,6 +317,9 @@ async def _persist_terminal_assistant_status(
     status: str,
     content: Optional[str] = None,
     engine: Any = None,
+    *,
+    profile_session: ProfileSession,
+    conversation_id: str,
 ) -> None:
     """
     Safely persist assistant terminal status (cancelled / failed) in an isolated session.
@@ -256,13 +332,18 @@ async def _persist_terminal_assistant_status(
         else:
             factory = get_session_factory()
         async with factory() as session:
-            stmt = select(Message).where(Message.id == assistant_msg_id)
+            await _require_conversation(session, profile_session, conversation_id)
+            stmt = select(Message).where(
+                Message.id == assistant_msg_id, Message.profile_id == profile_session.profile_id,
+                Message.conversation_id == conversation_id, Message.deleted_at.is_(None),
+            )
             res = await session.execute(stmt)
             msg = res.scalar_one_or_none()
             if msg:
                 msg.status = status
                 if content is not None:
                     msg.content = content
+                await _require_conversation(session, profile_session, conversation_id)
                 await session.commit()
     except Exception as exc:
         logger.warning(
@@ -274,7 +355,7 @@ async def orchestrate_chat_stream(
     db: AsyncSession,
     conversation_id: str,
     user_text: str,
-    owner_id: str,
+    profile_session: ProfileSession,
     prepared_turn: PreparedTurn,
     conversation_lock: asyncio.Lock,
     persona: Optional[str] = None,
@@ -294,11 +375,12 @@ async def orchestrate_chat_stream(
     provider = get_llm_provider()
 
     try:
+        await _require_prepared_turn(db, profile_session, conversation_id, prepared_turn)
         # Retrieve relevant memories via FTS5
         memories = await search_relevant_memories(
             db=db,
             query=user_text,
-            owner_id=owner_id,
+            profile_session=profile_session,
             limit=settings.MEMORY_SEARCH_LIMIT,
         )
 
@@ -307,6 +389,7 @@ async def orchestrate_chat_stream(
             select(Message)
             .where(
                 Message.conversation_id == conversation_id,
+                Message.profile_id == profile_session.profile_id,
                 Message.sequence_no < prepared_turn.user_sequence_no,
                 Message.deleted_at.is_(None),
             )
@@ -335,7 +418,7 @@ async def orchestrate_chat_stream(
             select(Attachment)
             .where(
                 Attachment.message_id == prepared_turn.user_message.id,
-                Attachment.owner_id == owner_id,
+                Attachment.profile_id == profile_session.profile_id,
                 Attachment.conversation_id == conversation_id,
                 Attachment.is_deleted.is_(False),
             )
@@ -357,7 +440,7 @@ async def orchestrate_chat_stream(
                 resolved = await resolve_image_content(
                     session=db,
                     ref=att,
-                    owner_id=owner_id,
+                    profile_session=profile_session,
                     conversation_id=conversation_id,
                     message_id=prepared_turn.user_message.id,
                 )
@@ -372,7 +455,7 @@ async def orchestrate_chat_stream(
 
         stream = provider.generate_stream(prompt_messages, max_tokens=max_tokens, conversation_id=conversation_id)
         async with aclosing(stream) as tokens:
-            async for token in tokens:
+            async for token in _authorized_tokens(db, profile_session, conversation_id, prepared_turn, tokens):
                 full_response_text += token
                 chunk_data = json.dumps({
                     "type": "token",
@@ -386,6 +469,7 @@ async def orchestrate_chat_stream(
                 })
                 yield f"data: {chunk_data}\n\n"
 
+        await _require_prepared_turn(db, profile_session, conversation_id, prepared_turn)
         # Update assistant placeholder upon completion
         completion_tokens = _estimate_tokens(full_response_text)
         finish_reason = getattr(stream, "finish_reason", None) or getattr(provider, "last_finish_reason", "stop") or "stop"
@@ -395,6 +479,7 @@ async def orchestrate_chat_stream(
         asst_msg.completion_tokens = completion_tokens
         asst_msg.model_name = status_resp.active_model
         db.add(asst_msg)
+        await _require_prepared_turn(db, profile_session, conversation_id, prepared_turn)
         await db.commit()
 
         logger.info(
@@ -408,7 +493,9 @@ async def orchestrate_chat_stream(
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
         })
+        await _require_prepared_turn(db, profile_session, conversation_id, prepared_turn)
         yield f"data: {done_data}\n\n"
+        await _require_prepared_turn(db, profile_session, conversation_id, prepared_turn)
         yield "data: [DONE]\n\n"
 
     except (asyncio.CancelledError, GeneratorExit):
@@ -428,8 +515,16 @@ async def orchestrate_chat_stream(
                 status="cancelled",
                 content=full_response_text if full_response_text else None,
                 engine=db.bind,
+                profile_session=profile_session,
+                conversation_id=conversation_id,
             )
         )
+        raise
+    except HTTPException as exc:
+        await db.rollback()
+        # Authorization failure is terminal: no personal output or cleanup write.
+        if exc.status_code in (401, 403, 404):
+            return
         raise
     except Exception as exc:
         logger.error(f"Error during assistant orchestration stream: {exc}")
@@ -446,8 +541,14 @@ async def orchestrate_chat_stream(
                 status="failed",
                 content=full_response_text if full_response_text else None,
                 engine=db.bind,
+                profile_session=profile_session,
+                conversation_id=conversation_id,
             )
         )
+        try:
+            await _require_conversation(db, profile_session, conversation_id)
+        except HTTPException:
+            return
         error_payload = json.dumps({
             "type": "error",
             "code": "MODEL_GENERATION_FAILED",

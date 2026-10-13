@@ -113,8 +113,9 @@ def test_only_one_default_profile_is_allowed(tmp_path):
 
 
 def test_raw_insert_without_profile_id_uses_database_default(tmp_path):
+    """Historical 007 compatibility is retained when explicitly migrating only to 007."""
     db = tmp_path / "raw.db"
-    command.upgrade(_cfg(db), "head")
+    command.upgrade(_cfg(db), "007_profiles_and_owner_id_migration")
     default_id = _single_default(db)
     conn = sqlite3.connect(db)
     conn.execute(
@@ -133,15 +134,16 @@ async def _create_all_engine(db_path: Path):
     return engine
 
 
-async def _insert_one_of_each(session: AsyncSession, tag: str) -> dict:
-    conv = Conversation(title=f"conv-{tag}")
+async def _insert_one_of_each(session: AsyncSession, tag: str, profile_id: str) -> dict:
+    conv = Conversation(title=f"conv-{tag}", profile_id=profile_id)
     session.add(conv)
     await session.flush()
-    msg = Message(conversation_id=conv.id, sender="user", content="hi", sequence_no=1)
-    task = Task(title=f"task-{tag}")
-    mem = Memory(content=f"memory {tag}")
+    msg = Message(conversation_id=conv.id, sender="user", content="hi", sequence_no=1, profile_id=profile_id)
+    task = Task(title=f"task-{tag}", profile_id=profile_id)
+    mem = Memory(content=f"memory {tag}", profile_id=profile_id)
     att = Attachment(
         conversation_id=conv.id,
+        profile_id=profile_id,
         filename_display="a.png",
         storage_filename=f"a-{tag}.png",
         storage_path=f"attachments/a-{tag}.png",
@@ -153,7 +155,7 @@ async def _insert_one_of_each(session: AsyncSession, tag: str) -> dict:
     return {"conversation": conv, "message": msg, "task": task, "memory": mem, "attachment": att}
 
 
-async def test_create_all_databases_get_distinct_defaults_and_new_records_follow_own_default(tmp_path):
+async def test_create_all_databases_get_distinct_defaults_and_records_use_explicit_profile(tmp_path):
     engines = [await _create_all_engine(tmp_path / n) for n in ("x.db", "y.db")]
     try:
         defaults = []
@@ -166,7 +168,7 @@ async def test_create_all_databases_get_distinct_defaults_and_new_records_follow
 
         for engine, expected in zip(engines, defaults):
             async with async_sessionmaker(engine, expire_on_commit=False)() as session:
-                created = await _insert_one_of_each(session, expected[:6])
+                created = await _insert_one_of_each(session, expected[:6], expected)
             for name, obj in created.items():
                 assert obj.profile_id == expected, name
                 assert obj.owner_id == "local_user", name
@@ -175,7 +177,7 @@ async def test_create_all_databases_get_distinct_defaults_and_new_records_follow
             await engine.dispose()
 
 
-async def test_new_records_in_migrated_database_follow_default_across_restart(tmp_path):
+async def test_explicit_profile_ownership_persists_across_restart(tmp_path):
     db = tmp_path / "database" / "companion.db"
     await asyncio.to_thread(prepare_database_schema, db)
     default_id = _single_default(db)
@@ -184,7 +186,7 @@ async def test_new_records_in_migrated_database_follow_default_across_restart(tm
         engine = create_async_engine(f"sqlite+aiosqlite:///{db.as_posix()}")
         try:
             async with async_sessionmaker(engine, expire_on_commit=False)() as session:
-                created = await _insert_one_of_each(session, run)
+                created = await _insert_one_of_each(session, run, default_id)
             assert all(obj.profile_id == default_id for obj in created.values())
         finally:
             await engine.dispose()

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../controllers/desktop_settings_controller.dart';
 import '../coordinator/desktop_runtime_coordinator.dart';
 import '../features/chat/desktop_chat_controller.dart';
+import '../features/profiles/desktop_profile_controller.dart';
 import '../lifecycle/desktop_lifecycle_coordinator.dart';
 import '../platform/desktop_client_settings.dart';
 import '../screens/chat_screen.dart';
@@ -30,6 +31,7 @@ class DesktopShell extends StatefulWidget {
     required this.controller,
     this.coordinator,
     this.chatController,
+    this.profileController,
     this.runtimeCoordinator,
     this.clientSettings,
     this.credentialStore,
@@ -38,6 +40,7 @@ class DesktopShell extends StatefulWidget {
   final DesktopSettingsController controller;
   final DesktopLifecycleCoordinator? coordinator;
   final DesktopChatController? chatController;
+  final DesktopProfileController? profileController;
   final DesktopRuntimeCoordinator? runtimeCoordinator;
   final DesktopClientSettings? clientSettings;
   final CredentialStore? credentialStore;
@@ -174,6 +177,7 @@ class _DesktopShellState extends State<DesktopShell> {
           controller: widget.controller,
           coordinator: widget.coordinator,
           chatController: widget.chatController,
+          profileController: widget.profileController,
           runtimeCoordinator: widget.runtimeCoordinator,
           clientSettings: widget.clientSettings,
           credentialStore: widget.credentialStore,

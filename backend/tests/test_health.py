@@ -28,9 +28,9 @@ async def test_system_status_requires_authentication(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_system_status_succeeds_with_auth(client: AsyncClient, auth_headers: dict):
+async def test_system_status_succeeds_with_auth(client: AsyncClient, host_admin_headers: dict):
     """AC-3 / System Status: /system/status returns full telemetry and diagnostics when authenticated."""
-    response = await client.get("/api/v1/system/status", headers=auth_headers)
+    response = await client.get("/api/v1/system/status", headers=host_admin_headers)
     assert response.status_code == 200
 
     data = response.json()
