@@ -2,7 +2,7 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: Draft (Awaiting Independent Plan Gate Review)
+- Status: Plan Gate CONDITIONALLY APPROVED — binding handoff addendum recorded before implementation
 - Scope Mode: Authorization Hardening & Session Security — `PC-IDENTITY-002` Profile Authorization & Isolation
 - Target Files:
   - `backend/migrations/versions/008_profile_sessions_and_tickets.py`
@@ -24,6 +24,9 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
   - `backend/app/api/v1/endpoints/llm.py`
   - `backend/app/api/v1/endpoints/health.py`
   - `backend/app/services/memory/retriever.py`
+  - `backend/app/services/assistant/orchestrator.py`
+  - `backend/app/services/attachment_service.py`
+  - `backend/app/services/retention.py`
   - `backend/tests/test_migration_008.py`
   - `backend/tests/test_profile_sessions.py`
   - `backend/tests/test_profile_authorization.py`
@@ -66,7 +69,7 @@ Deliver `PC-IDENTITY-002` (Milestone M2 Batch B) to establish fail-closed multi-
    - Accurate source paths in `backend/app/api/v1/endpoints/` (`conversations.py`, `attachments.py`, `tasks.py`, `memories.py`, `llm.py`, `health.py`, `auth.py`).
    - No phantom endpoints (pruned non-existent `GET /memories/search` and `GET /memories/{id}`).
 6. **Minimal Read-Only Profile Catalog (No General CRUD in Batch B):**
-   - In-scope: Read-only profile lookup (`GET /api/v1/profiles`, `GET /api/v1/profiles/{id}`).
+   - In-scope: Host Admin-only catalog (`GET /api/v1/profiles`) and Host Admin or own-Profile lookup (`GET /api/v1/profiles/{id}`). A Profile Session cannot enumerate other Profiles.
    - Explicitly excluded: General `POST /api/v1/profiles`, `PATCH /api/v1/profiles/{id}`, and `DELETE` stubs.
    - Future roadmap alignment:
      - `PC-IDENTITY-003`: Device Enrollment & satellite keypairs.
@@ -118,7 +121,7 @@ Deliver `PC-IDENTITY-002` (Milestone M2 Batch B) to establish fail-closed multi-
   - Batch Alter on 5 Personal-Data Tables (`conversations`, `messages`, `tasks`, `memories`, `attachments`):
     - Remove `server_default` on `profile_id` via `batch_op.alter_column('profile_id', server_default=None, nullable=False)`.
     - Preserve existing foreign keys, unique indices, and non-authoritative `owner_id` shadow column.
-- Invariants: Pre-migration WAL safety backup hook executes before schema modifications. Downgrade cleanly restores `server_default` and drops session tables.
+- Invariants: Pre-migration WAL safety backup hook executes before schema modifications. Downgrade drops session tables but preserves explicit ownership requirements; it never restores implicit defaults or legacy pairing-key personal-data authority. Recovery requires authorized host-quiesced maintenance.
 
 ### [MODIFY] `backend/app/models/base.py` & [ADD] `profile_session.py`, `session_ticket.py`
 - Primary Responsibility: Remove implicit ORM profile resolution and declare session models.
@@ -168,7 +171,7 @@ Deliver `PC-IDENTITY-002` (Milestone M2 Batch B) to establish fail-closed multi-
 ### [ADD] `backend/app/api/v1/endpoints/profiles.py`
 - Primary Responsibility: Minimal read-only Profile lookup.
 - Planned Logic:
-  - `GET /api/v1/profiles`: (Host Admin or Profile Session) Returns list of existing profiles (id, name, is_default, status) for desktop selection/catalog.
+  - `GET /api/v1/profiles`: (Host Admin only) Returns existing profiles (id, name, is_default, status) for desktop selection/catalog. Profile Sessions cannot enumerate the catalog.
   - `GET /api/v1/profiles/{profile_id}`: (Host Admin or matching Profile Session) Returns profile details.
   - No `POST`, `PATCH`, or `DELETE` endpoints in Batch B.
 
@@ -355,10 +358,46 @@ Deliver `PC-IDENTITY-002` (Milestone M2 Batch B) to establish fail-closed multi-
 - **Risk: Accidental Breakage of Single-User Experience.**
   - *Mitigation:* The local Flutter desktop client maintains Host Admin authority and automatically mints an active Default Profile session upon application startup, ensuring seamless local desktop companion usage.
 - **Risk: Browser Refresh Session State Loss.**
-  - *Mitigation:* Browser context retains session in memory; on refresh, web client requests seamless loopback re-authorization from the local desktop runtime via loopback handoff.
+  - *Mitigation:* Browser context retains session in memory; refresh starts a new authorization request requiring explicit trusted Desktop approval. Loopback proximity does not authorize a session.
 - **Risk: Migration 008 Failure.**
-  - *Mitigation:* Pre-migration WAL safety snapshot automatically executes before Migration 008 runs. If migration fails, the database restores the pre-migration snapshot cleanly.
+  - *Mitigation:* Pre-migration WAL safety snapshot executes and is verified before Migration 008 runs. Failure aborts startup, retains the verified snapshot and reports diagnostics. Startup never automatically restores a live database.
 - **Rollback Procedure:**
-  - In the event of rollback, execute `alembic downgrade 007` or restore the pre-migration WAL snapshot.
+  - Recovery or rollback requires separately authorized host-quiesced maintenance; retain and verify the snapshot before any restoration. Do not automatically restore a running/live database. Downgrade must preserve explicit ownership requirements.
   - Fail closed if corrupt database or version mismatch is encountered.
   - **Security Invariant:** Ambient pairing-key access to personal data will NEVER be restored as a rollback mechanism.
+
+## 7. Binding Plan Gate Addendum (Chris handoff, 2026-10-13)
+
+This addendum binds implementation and supersedes less restrictive pseudocode above. It records the conditions of the human-approved handoff; it does not claim an independently passed Implementation, Documentation or Closure Gate.
+
+### A. Browser request, Desktop approval and proof of possession
+
+- The browser generates its own high-entropy claim secret, keeps it in memory and initiates a short-lived authorization request bound to its hash and exact allowed Origin. It receives only a non-bearer request identifier and expiry.
+- Host Admin-only pending-request lookup exposes the request identifier, Origin and expiry for trusted Flutter Desktop review. Flutter explicitly approves one request for one selected active Profile using independent Host Admin authority. No browser receives the administrator secret.
+- Claim/exchange requires the requesting browser's secret, the matching Origin, explicit approval, an active unprotected Profile and an unexpired request. Consume the grant atomically with session issuance in one transaction; concurrent redemption and replay fail closed. TTL is at most 60 seconds. A desktop-only direct ticket uses independent Host Admin authorization and cannot bypass browser Origin/claim binding.
+- Browser POSTs require an exact configured Origin and JSON/custom-header CSRF protection; reject missing/untrusted/null Origin, inappropriate browser fetch metadata and non-loopback bootstrap transport. Localhost, pairing credentials and pending requests grant no personal-data authority.
+- Never transport bearer tickets or sessions in URL queries, fragments or browser history. Browser tokens remain in memory; remove legacy persisted pairing keys. Refresh requires fresh explicit approval. PIN-protected Profiles fail closed until an authorized challenge exists.
+
+### B. Catalog privacy
+
+- Only Host Admin enumerates all Profiles. A Profile Session retrieves only its own Profile metadata, including through `/auth/session/me`; guessed foreign Profile identifiers fail closed without disclosure.
+- General Profile CRUD, PIN enrollment and device enrollment remain out of scope.
+
+### C. Complete service ownership and session lifecycle
+
+- Explicitly include `backend/app/services/assistant/orchestrator.py`, `backend/app/services/attachment_service.py`, `backend/app/services/memory/retriever.py` and `backend/app/services/retention.py` alongside all personal-data routes.
+- Derive personal-data ownership from a validated Profile Session or explicitly trusted maintenance authority. Require explicit ownership in service calls and writes; no default Profile or `owner_id` fallback.
+- Protect conversations, messages, attachment upload/binding/preview/delete, memory/FTS5 retrieval, SSE output, turn persistence and task/retention operations against cross-Profile access. Validate both child and parent ownership where applicable.
+- Revalidate session expiration/revocation and Profile availability during ongoing streaming and before persistence, including while awaiting slow model output. Stop unauthorized output and writes. Cancel/close model iteration safely.
+- Retention requires an explicit trusted maintenance context; arbitrary profile identifiers alone do not grant maintenance authority.
+
+### D. Migration recovery and verification
+
+- Migration 008 removes all SQLite and ORM implicit `profile_id` defaults across the five personal-data tables; raw SQL and ORM writes without ownership fail closed.
+- Preserve data, foreign keys, indexes, FTS5 triggers/search and verified pre-migration backups. Test upgrade and downgrade using synthetic databases, including existing rows and FTS5 behavior.
+- Migration failure aborts startup, retains the verified snapshot and emits diagnostics. Never automatically restore a live database. Recovery requires authorized host-quiesced maintenance. Never restore pairing-key authority over personal data during rollback.
+
+### Execution and review boundary
+
+- Commit this in-place correction on `feature/m2-profile-foundation-b`, then execute B.1–B.8 using failing tests first. Related runtime startup, client wiring/UI, fixtures and generated OpenAPI contract changes necessary for the cutover are included; no unrelated infrastructure or dependency changes.
+- Verify focused and full relevant backend, React and Flutter checks, keeping pre-existing failures distinct from candidate results. Commit and HTTPS-push the implementation on this same branch, verify remote HEAD equals local HEAD, then STOP for independent Implementation Gate review. Do not create a PR, merge, begin canonical documentation/closure or self-approve any gate.
