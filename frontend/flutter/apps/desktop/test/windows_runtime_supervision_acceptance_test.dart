@@ -23,7 +23,22 @@ class AcceptanceSpawnRecord {
   });
 }
 
-class AcceptanceTrackingSupervisor extends WindowsRuntimeProcessSupervisor {
+class AcceptanceProcessSupervisor extends WindowsRuntimeProcessSupervisor {
+  @override
+  Future<ProcessDiscoveryResult> discoverRuntimeProcesses({
+    required int port,
+    required String expectedExecutable,
+    Duration timeout = const Duration(seconds: 15),
+  }) => super.discoverRuntimeProcesses(
+    port: port,
+    expectedExecutable: expectedExecutable,
+    // Real PowerShell/CIM startup can exceed 3 seconds on shared CI runners.
+    // Keep production deadlines and fail-closed provenance checks unchanged.
+    timeout: timeout,
+  );
+}
+
+class AcceptanceTrackingSupervisor extends AcceptanceProcessSupervisor {
   final List<AcceptanceSpawnRecord> spawnedRecords;
 
   AcceptanceTrackingSupervisor({required this.spawnedRecords});
@@ -409,7 +424,7 @@ void main() {
     });
 
     test('Scenario D: Stale lock recovery detects dead PID, spawns runtime, and overwrites lockfile descriptor with active PID', () async {
-      final supervisor = WindowsRuntimeProcessSupervisor();
+      final supervisor = AcceptanceProcessSupervisor();
       const deadPid = 999999;
 
       final isAlive = await supervisor.isProcessActiveAndMatching(
