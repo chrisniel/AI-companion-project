@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Fixed — PR #27 CI scheduling
+
+- Serialized Desktop test files in CI so real Windows runtime acceptance checks do not compete with other test files; retained all tests, production deadlines and fail-closed process checks.
+
 ### Implemented & Locally Verified (2026-10-15 - M2: Profile Sessions & Cross-Profile Isolation — Batch B)
 
 - Added migration 008 with Profile Sessions and single-use authorization grants; removed implicit Profile ownership defaults while preserving existing data, foreign keys and FTS5 behavior.

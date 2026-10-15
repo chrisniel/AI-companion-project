@@ -110,3 +110,9 @@ pending independent gates, hosted PR CI, manual acceptance and wider M2 work.
 ## 6. Stop Boundary
 
 Documentation/closure preparation is submitted for independent semantic review after mechanical checks. Commit and HTTPS-push only this authorized branch delivery, verify local and remote SHA, then **STOP FOR FINAL INDEPENDENT PR-READY REVIEW**. Do not self-approve gates, create a PR, merge, or archive this task before independently approved closure.
+
+## 7. PR #27 CI Correction Checkpoint
+
+- Chris authorized a surgical CI correction, verification, commit and push. PR #27 run `38762836880` failed Desktop acceptance when Windows process inspection exceeded its 3000ms deadline; dependent launch scenarios also failed. Backend, contract, web and documentation jobs passed on that candidate.
+- Limited the Desktop CI test command to `--concurrency=1`, matching prior serial local verification and avoiding competing test files during real process inspection. All tests, runtime deadlines, provenance checks and fail-closed behavior remain unchanged.
+- Local verification: concurrent baseline and corrected serial Desktop runs each passed **231 tests** on Flutter **3.47.1**, using the existing Python **3.13.14** environment; **24 CI policy tests passed**. The hosted timing failure was not reproduced locally. Hosted confirmation of the scheduling correction remains pending at this publication checkpoint; independent gates and manual acceptance remain pending.
