@@ -112,21 +112,21 @@ Repository source code and test suites verify the following baseline reality:
 ### 3.1 Implemented Data Model & Storage
 
 Memories are persisted in SQLite via SQLAlchemy ORM (`app.models.memory.Memory`) and indexed via an FTS5 virtual table:
-- **Core Entity Fields:** `id` (UUIDv4), `owner_id` (String), `category` (String(32), default `"fact"`), `content` (Text), `importance` (Float, default `1.0`), `source_type` (String(32), default `"manual"`), `source_message_id` (String(36), optional), `user_verified` (Boolean, default `True`).
+- **Core Entity Fields:** `id` (UUIDv4), `profile_id` (explicit, non-null UUID foreign key to `profiles.id`), `owner_id` (String, retained for compatibility), `category` (String(32), default `"fact"`), `content` (Text), `importance` (Float, default `1.0`), `source_type` (String(32), default `"manual"`), `source_message_id` (String(36), optional), `user_verified` (Boolean, default `True`). `owner_id` is not authorization authority; missing `profile_id` fails closed without an implicit default.
 - **Audit & Soft-Delete Mixins:** `created_at`, `updated_at`, `is_deleted` (Boolean), `deleted_at` (DateTime, optional).
 - **Scope Fields State:** `NOT IMPLEMENTED IN SCHEMA`. The current database schema does **not** yet contain explicit `scope` or `character_id` columns; all current memories function at the profile level.
 
 ### 3.2 Implemented Retrieval & Prompt Assembly
 
 Verified in `app.services.memory.retriever`:
-- **FTS5 Lexical Search:** Uses a SQLite `memories_fts` virtual table joined on `id` against non-deleted memories.
+- **FTS5 Lexical Search:** Uses a SQLite `memories_fts` virtual table joined on `id` against non-deleted memories, filtering by the `profile_id` derived from a validated Profile Session. Retrieval accepts session authority rather than an arbitrary caller-supplied Profile identifier.
 - **Multilingual Token Sanitation:** The query sanitizer extracts safe alphanumeric, Latin-extended, CJK, and Hangul word tokens, explicitly filtering FTS5 operators (`AND`, `OR`, `NOT`).
 - **Prompt Injection Budget:** Implemented in `app.services.assistant.orchestrator`, which retrieves up to 5 matching memories constrained by the configuration constant:
   ```python
   MEMORY_BUDGET_TOKENS: int = 256  # app.core.config.Settings (Current Implementation Constant)
   ```
-- **Implemented API Endpoints:** Verified in `backend/app/api/v1/endpoints/memories.py`:
-  - `GET /api/v1/memories`: Lists active memories owned by the authenticated user, optionally filtered by category.
+- **Implemented API Endpoints:** Verified in `backend/app/api/v1/endpoints/memories.py`; each requires a validated Profile Session and derives read/write ownership from `session.profile_id`, with foreign Profile records failing closed:
+  - `GET /api/v1/memories`: Lists active memories owned by the authenticated Profile, optionally filtered by category.
   - `POST /api/v1/memories`: Creates a new manual memory record (synced automatically to FTS5).
   - `PATCH /api/v1/memories/{memory_id}`: Updates memory content, category, or importance.
   - `DELETE /api/v1/memories/{memory_id}`: Soft-deletes a memory (`is_deleted = True`, `deleted_at = now()`; triggers remove it from FTS5 index).

@@ -2,7 +2,7 @@
  * Conversation & Message API client for persistent chats.
  */
 
-import { apiFetch, getApiBaseUrl, getApiKey, ApiError } from './client';
+import { apiFetch, getApiBaseUrl, getApiKey, invalidateUnauthorizedSession, ApiError } from './client';
 import type { AttachmentRef } from './attachmentApi';
 
 export interface ConversationOut {
@@ -159,6 +159,7 @@ export async function streamSendMessage({
     });
 
     if (!response.ok) {
+    invalidateUnauthorizedSession(response.status);
       let errorMessage = `Message stream failed with status ${response.status}`;
       try {
         const errorJson = await response.json();

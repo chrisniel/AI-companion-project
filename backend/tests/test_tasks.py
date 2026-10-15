@@ -1,5 +1,7 @@
 """Tests for Tasks CRUD endpoints, categories, reminders, soft deletion, and retention purge."""
 
+from tests.profile_helpers import session_for_owner
+
 from datetime import datetime, timedelta, timezone
 import pytest
 from httpx import AsyncClient
@@ -248,7 +250,7 @@ async def test_retention_purge_service(test_session: AsyncSession):
     recent_deleted_at = now - timedelta(days=5)
 
     # Insert old soft-deleted task
-    old_task = Task(
+    old_task = Task(profile_id=(await session_for_owner(test_session, "local_user")).profile_id,
         title="Old Deleted Task (35 days)",
         category="general",
         priority="low",
@@ -258,7 +260,7 @@ async def test_retention_purge_service(test_session: AsyncSession):
         owner_id="local_user",
     )
     # Insert recent soft-deleted task
-    recent_task = Task(
+    recent_task = Task(profile_id=(await session_for_owner(test_session, "local_user")).profile_id,
         title="Recent Deleted Task (5 days)",
         category="work",
         priority="medium",
@@ -271,7 +273,7 @@ async def test_retention_purge_service(test_session: AsyncSession):
     await test_session.commit()
 
     # Run purge with 30-day retention
-    purged_count = await purge_expired_trash(test_session, retention_days=30)
+    purged_count = await purge_expired_trash(test_session, retention_days=30, authority=(await session_for_owner(test_session, "local_user")))
     assert purged_count == 1
 
     # Verify old task is gone and recent task remains

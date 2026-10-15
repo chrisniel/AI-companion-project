@@ -52,7 +52,7 @@ def test_fresh_install_runs_alembic_upgrade_to_head(tmp_path):
 
     # Prepare schema upgrades to head
     head_rev = prepare_database_schema(canonical_db)
-    assert head_rev == "007_profiles_and_owner_id_migration"
+    assert head_rev == "008_profile_sessions_and_tickets"
 
     # Verify tables exist
     conn = sqlite3.connect(canonical_db)
@@ -89,13 +89,13 @@ def test_migrated_older_db_upgraded_on_canonical_copy_while_source_remains_at_ol
 
     # Run schema preparation on canonical copy
     head_rev = prepare_database_schema(canonical_db)
-    assert head_rev == "007_profiles_and_owner_id_migration"
+    assert head_rev == "008_profile_sessions_and_tickets"
 
-    # Canonical copy has revision 007
+    # Canonical copy has revision 008
     conn_canon = sqlite3.connect(canonical_db)
     canon_rev = conn_canon.execute("SELECT version_num FROM alembic_version;").fetchone()[0]
     conn_canon.close()
-    assert canon_rev == "007_profiles_and_owner_id_migration"
+    assert canon_rev == "008_profile_sessions_and_tickets"
 
     # Legacy source MUST remain at 004
     conn_source = sqlite3.connect(legacy_db)
@@ -117,9 +117,9 @@ def test_existing_canonical_db_safely_upgraded_if_behind(tmp_path):
     assert decision.action == "CANONICAL_EXISTS"
 
     head_rev = prepare_database_schema(canonical_db)
-    assert head_rev == "007_profiles_and_owner_id_migration"
+    assert head_rev == "008_profile_sessions_and_tickets"
 
     conn = sqlite3.connect(canonical_db)
     rev = conn.execute("SELECT version_num FROM alembic_version;").fetchone()[0]
     conn.close()
-    assert rev == "007_profiles_and_owner_id_migration"
+    assert rev == "008_profile_sessions_and_tickets"

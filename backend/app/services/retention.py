@@ -20,6 +20,16 @@ from app.db.session import (
     initialize_database_runtime,
 )
 from app.models.task import Task
+from app.models.profile_session import ProfileSession
+from app.core.profile_sessions import validate_profile_session
+from fastapi import HTTPException
+
+
+class _MaintenanceAuthority:
+    """In-process authority reserved for the standalone trusted maintenance runner."""
+
+
+_MAINTENANCE_AUTHORITY = _MaintenanceAuthority()
 
 
 def calculate_remaining_days(
@@ -42,12 +52,20 @@ def calculate_remaining_days(
 async def purge_expired_trash(
     db: AsyncSession,
     retention_days: Optional[int] = None,
-    owner_id: Optional[str] = None,
+    *,
+    authority: ProfileSession | _MaintenanceAuthority,
 ) -> int:
     """Permanently delete soft-deleted records older than the retention threshold.
-    
-    Adheres strictly to owner-isolation if owner_id is provided.
+
+    Requires a validated Profile Session or the runner-owned maintenance authority.
     """
+    if isinstance(authority, ProfileSession):
+        authority = await validate_profile_session(db, authority)
+        profile_id = authority.profile_id
+    elif authority is _MAINTENANCE_AUTHORITY:
+        profile_id = None
+    else:
+        raise HTTPException(status_code=403, detail="Trusted retention authority required")
     days = retention_days if retention_days is not None else settings.DATA_RETENTION_DAYS
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
@@ -56,10 +74,12 @@ async def purge_expired_trash(
         Task.deleted_at <= cutoff,
     )
 
-    if owner_id:
-        stmt = stmt.where(Task.owner_id == owner_id)
+    if profile_id is not None:
+        stmt = stmt.where(Task.profile_id == profile_id)
 
     result = await db.execute(stmt)
+    if isinstance(authority, ProfileSession):
+        await validate_profile_session(db, authority)
     await db.commit()
     purged_count = result.rowcount or 0
 
@@ -118,7 +138,7 @@ async def run_retention_purge_job(retention_days: Optional[int] = None) -> int:
     try:
         initialize_database_runtime(database_url=paths.DATABASE_URL)
         async with AsyncSessionLocal() as session:
-            return await purge_expired_trash(session, retention_days=retention_days)
+            return await purge_expired_trash(session, retention_days=retention_days, authority=_MAINTENANCE_AUTHORITY)
     finally:
         await dispose_database_runtime()
 

@@ -78,10 +78,17 @@ class TestCheckDartOpenApiParity(unittest.TestCase):
         self.assertTrue(any("uncataloged route" in err for err in errors))
 
     def test_verify_companion_client_implementations_passes(self):
-        """CompanionClient must implement all 12 M1 routes with correct path templates."""
+        """CompanionClient must implement all 12 M1 and 6 native identity routes."""
         errors, verified = checker.verify_companion_client_implementations(checker.CLIENT_PATH)
         self.assertEqual(errors, [])
-        self.assertEqual(len(verified), 12)
+        self.assertEqual(len(verified), 18)
+
+    def test_native_identity_routes_cannot_silently_disappear(self):
+        import json
+        schema = json.loads(checker.CONTRACT_PATH.read_text(encoding="utf-8"))
+        del schema["paths"]["/api/v1/auth/bootstrap/requests"]
+        errors, _, _ = checker.verify_route_coverage(schema)
+        self.assertTrue(any("Required M2 route missing" in error and "bootstrap/requests" in error for error in errors))
 
     def test_verify_companion_client_implementations_fails_on_missing_method(self):
         """Missing implementation method must fail closed."""

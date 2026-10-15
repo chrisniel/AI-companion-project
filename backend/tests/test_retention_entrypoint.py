@@ -1,5 +1,7 @@
 """Standalone retention uses its own runtime and only prepared synthetic storage."""
 
+from tests.profile_helpers import session_for_owner
+
 import os
 from contextlib import closing
 from pathlib import Path
@@ -115,7 +117,7 @@ def _prepare(database_path):
             ("active-b", "owner-b", 0, 40),
         ):
             connection.execute(
-                "INSERT INTO tasks (id, owner_id, title, status, priority, is_deleted, deleted_at) VALUES (?, ?, ?, 'pending', 'medium', ?, ?)",
+                "INSERT INTO tasks (id, owner_id, title, status, priority, is_deleted, deleted_at, profile_id) VALUES (?, ?, ?, 'pending', 'medium', ?, ?, (SELECT id FROM profiles WHERE is_default=1))",
                 (task_id, owner, task_id, deleted, (now - timedelta(days=age)).isoformat()),
             )
         connection.execute("CREATE TABLE retention_unrelated (value TEXT NOT NULL)")
@@ -236,11 +238,11 @@ async def test_owned_runner_rejects_existing_runtime_without_disposing_it(retent
 async def test_caller_owned_session_keeps_owner_scope_and_session_usable(test_session):
     now = datetime.now(timezone.utc)
     test_session.add_all([
-        Task(id="owner-a-expired", owner_id="owner-a", title="synthetic a", is_deleted=True, deleted_at=now - timedelta(days=40)),
-        Task(id="owner-b-expired", owner_id="owner-b", title="synthetic b", is_deleted=True, deleted_at=now - timedelta(days=40)),
+        Task(profile_id=(await session_for_owner(test_session, "owner-a")).profile_id, id="owner-a-expired", owner_id="owner-a", title="synthetic a", is_deleted=True, deleted_at=now - timedelta(days=40)),
+        Task(profile_id=(await session_for_owner(test_session, "owner-b")).profile_id, id="owner-b-expired", owner_id="owner-b", title="synthetic b", is_deleted=True, deleted_at=now - timedelta(days=40)),
     ])
     await test_session.commit()
-    assert await purge_expired_trash(test_session, retention_days=30, owner_id="owner-a") == 1
+    assert await purge_expired_trash(test_session, retention_days=30, authority=(await session_for_owner(test_session, "owner-a"))) == 1
     remaining = (await test_session.execute(select(Task.id))).scalars().all()
     assert remaining == ["owner-b-expired"]
     assert test_session.is_active

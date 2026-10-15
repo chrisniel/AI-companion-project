@@ -1,5 +1,7 @@
 """Comprehensive unit tests for MediaResolver service in Phase 8B.5."""
 
+from tests.profile_helpers import session_for_owner
+
 from pathlib import Path
 import uuid
 import pytest
@@ -42,11 +44,11 @@ async def _setup_turn(
     conv_id = f"conv-{uuid.uuid4().hex[:8]}"
     msg_id = f"msg-{uuid.uuid4().hex[:8]}"
 
-    conv = Conversation(id=conv_id, owner_id=owner_id, title="Media Test", character_id="default")
+    conv = Conversation(profile_id=(await session_for_owner(session, owner_id)).profile_id, id=conv_id, owner_id=owner_id, title="Media Test", character_id="default")
     session.add(conv)
     await session.flush()
 
-    msg = Message(
+    msg = Message(profile_id=(await session_for_owner(session, owner_id)).profile_id,
         id=msg_id,
         conversation_id=conv_id,
         owner_id=owner_id,
@@ -82,10 +84,10 @@ async def test_resolve_valid_bound_png_returns_exact_bytes(test_session: AsyncSe
 
     att_id = f"att-{uuid.uuid4().hex[:8]}"
     filename = f"{att_id}.png"
-    storage_path = f"attachments/{owner_id}/{conv.id}/{filename}"
-    _create_physical_file(owner_id, conv.id, filename, SAMPLE_PNG_BYTES)
+    storage_path = f"attachments/{conv.profile_id}/{conv.id}/{filename}"
+    _create_physical_file(conv.profile_id, conv.id, filename, SAMPLE_PNG_BYTES)
 
-    att = Attachment(
+    att = Attachment(profile_id=(await session_for_owner(test_session, owner_id)).profile_id,
         id=att_id,
         conversation_id=conv.id,
         owner_id=owner_id,
@@ -103,7 +105,7 @@ async def test_resolve_valid_bound_png_returns_exact_bytes(test_session: AsyncSe
     resolved = await resolve_image_content(
         session=test_session,
         ref=ref,
-        owner_id=owner_id,
+        profile_session=(await session_for_owner(test_session, owner_id)),
         conversation_id=conv.id,
         message_id=msg.id,
     )
@@ -121,10 +123,10 @@ async def test_resolve_valid_bound_jpeg_returns_exact_bytes(test_session: AsyncS
 
     att_id = f"att-{uuid.uuid4().hex[:8]}"
     filename = f"{att_id}.jpeg"
-    storage_path = f"attachments/{owner_id}/{conv.id}/{filename}"
-    _create_physical_file(owner_id, conv.id, filename, SAMPLE_JPEG_BYTES)
+    storage_path = f"attachments/{conv.profile_id}/{conv.id}/{filename}"
+    _create_physical_file(conv.profile_id, conv.id, filename, SAMPLE_JPEG_BYTES)
 
-    att = Attachment(
+    att = Attachment(profile_id=(await session_for_owner(test_session, owner_id)).profile_id,
         id=att_id,
         conversation_id=conv.id,
         owner_id=owner_id,
@@ -142,7 +144,7 @@ async def test_resolve_valid_bound_jpeg_returns_exact_bytes(test_session: AsyncS
     resolved = await resolve_image_content(
         session=test_session,
         ref=ref,
-        owner_id=owner_id,
+        profile_session=(await session_for_owner(test_session, owner_id)),
         conversation_id=conv.id,
         message_id=msg.id,
     )
@@ -159,10 +161,10 @@ async def test_resolve_returns_mime_from_attachment_metadata(test_session: Async
 
     att_id = f"att-{uuid.uuid4().hex[:8]}"
     filename = f"{att_id}.png"
-    storage_path = f"attachments/{owner_id}/{conv.id}/{filename}"
-    _create_physical_file(owner_id, conv.id, filename, SAMPLE_PNG_BYTES)
+    storage_path = f"attachments/{conv.profile_id}/{conv.id}/{filename}"
+    _create_physical_file(conv.profile_id, conv.id, filename, SAMPLE_PNG_BYTES)
 
-    att = Attachment(
+    att = Attachment(profile_id=(await session_for_owner(test_session, owner_id)).profile_id,
         id=att_id,
         conversation_id=conv.id,
         owner_id=owner_id,
@@ -180,7 +182,7 @@ async def test_resolve_returns_mime_from_attachment_metadata(test_session: Async
     resolved = await resolve_image_content(
         session=test_session,
         ref=ref,
-        owner_id=owner_id,
+        profile_session=(await session_for_owner(test_session, owner_id)),
         conversation_id=conv.id,
         message_id=msg.id,
     )
@@ -196,7 +198,7 @@ async def test_resolve_nonexistent_attachment_raises_not_found(test_session: Asy
         await resolve_image_content(
             session=test_session,
             ref=ref,
-            owner_id="test-owner",
+            profile_session=(await session_for_owner(test_session, "test-owner")),
             conversation_id=conv.id,
             message_id=msg.id,
         )
@@ -214,7 +216,7 @@ async def test_resolve_wrong_conversation_raises_not_found(test_session: AsyncSe
     storage_path = f"attachments/{owner_id}/{conv1.id}/{filename}"
     _create_physical_file(owner_id, conv1.id, filename, SAMPLE_PNG_BYTES)
 
-    att = Attachment(
+    att = Attachment(profile_id=(await session_for_owner(test_session, owner_id)).profile_id,
         id=att_id,
         conversation_id=conv1.id,
         owner_id=owner_id,
@@ -234,7 +236,7 @@ async def test_resolve_wrong_conversation_raises_not_found(test_session: AsyncSe
         await resolve_image_content(
             session=test_session,
             ref=ref,
-            owner_id=owner_id,
+            profile_session=(await session_for_owner(test_session, owner_id)),
             conversation_id=conv2.id,
             message_id=msg2.id,
         )
@@ -250,7 +252,7 @@ async def test_resolve_wrong_owner_raises_forbidden(test_session: AsyncSession):
     storage_path = f"attachments/legit-owner/{conv.id}/{filename}"
     _create_physical_file("legit-owner", conv.id, filename, SAMPLE_PNG_BYTES)
 
-    att = Attachment(
+    att = Attachment(profile_id=(await session_for_owner(test_session, "foreign-owner")).profile_id,
         id=att_id,
         conversation_id=conv.id,
         owner_id="foreign-owner",  # BOLA foreign owner
@@ -269,7 +271,7 @@ async def test_resolve_wrong_owner_raises_forbidden(test_session: AsyncSession):
         await resolve_image_content(
             session=test_session,
             ref=ref,
-            owner_id="legit-owner",
+            profile_session=(await session_for_owner(test_session, "legit-owner")),
             conversation_id=conv.id,
             message_id=msg.id,
         )
@@ -283,10 +285,10 @@ async def test_resolve_staged_unbound_attachment_raises_not_bound(test_session: 
 
     att_id = f"att-{uuid.uuid4().hex[:8]}"
     filename = f"{att_id}.png"
-    storage_path = f"attachments/{owner_id}/{conv.id}/{filename}"
-    _create_physical_file(owner_id, conv.id, filename, SAMPLE_PNG_BYTES)
+    storage_path = f"attachments/{conv.profile_id}/{conv.id}/{filename}"
+    _create_physical_file(conv.profile_id, conv.id, filename, SAMPLE_PNG_BYTES)
 
-    att = Attachment(
+    att = Attachment(profile_id=(await session_for_owner(test_session, owner_id)).profile_id,
         id=att_id,
         conversation_id=conv.id,
         owner_id=owner_id,
@@ -305,7 +307,7 @@ async def test_resolve_staged_unbound_attachment_raises_not_bound(test_session: 
         await resolve_image_content(
             session=test_session,
             ref=ref,
-            owner_id=owner_id,
+            profile_session=(await session_for_owner(test_session, owner_id)),
             conversation_id=conv.id,
             message_id=msg.id,
         )
@@ -316,7 +318,7 @@ async def test_resolve_attachment_bound_to_different_message_raises_wrong_messag
     """Attachment bound to another message_id raises MediaAttachmentWrongMessageError."""
     owner_id = "owner-wrong-msg"
     conv, msg1 = await _setup_turn(test_session, owner_id=owner_id)
-    msg2 = Message(
+    msg2 = Message(profile_id=(await session_for_owner(test_session, owner_id)).profile_id,
         id=f"msg-{uuid.uuid4().hex[:8]}",
         conversation_id=conv.id,
         owner_id=owner_id,
@@ -330,10 +332,10 @@ async def test_resolve_attachment_bound_to_different_message_raises_wrong_messag
 
     att_id = f"att-{uuid.uuid4().hex[:8]}"
     filename = f"{att_id}.png"
-    storage_path = f"attachments/{owner_id}/{conv.id}/{filename}"
-    _create_physical_file(owner_id, conv.id, filename, SAMPLE_PNG_BYTES)
+    storage_path = f"attachments/{conv.profile_id}/{conv.id}/{filename}"
+    _create_physical_file(conv.profile_id, conv.id, filename, SAMPLE_PNG_BYTES)
 
-    att = Attachment(
+    att = Attachment(profile_id=(await session_for_owner(test_session, owner_id)).profile_id,
         id=att_id,
         conversation_id=conv.id,
         owner_id=owner_id,
@@ -353,7 +355,7 @@ async def test_resolve_attachment_bound_to_different_message_raises_wrong_messag
         await resolve_image_content(
             session=test_session,
             ref=ref,
-            owner_id=owner_id,
+            profile_session=(await session_for_owner(test_session, owner_id)),
             conversation_id=conv.id,
             message_id=msg2.id,
         )
@@ -367,10 +369,10 @@ async def test_resolve_soft_deleted_attachment_raises_deleted(test_session: Asyn
 
     att_id = f"att-{uuid.uuid4().hex[:8]}"
     filename = f"{att_id}.png"
-    storage_path = f"attachments/{owner_id}/{conv.id}/{filename}"
-    _create_physical_file(owner_id, conv.id, filename, SAMPLE_PNG_BYTES)
+    storage_path = f"attachments/{conv.profile_id}/{conv.id}/{filename}"
+    _create_physical_file(conv.profile_id, conv.id, filename, SAMPLE_PNG_BYTES)
 
-    att = Attachment(
+    att = Attachment(profile_id=(await session_for_owner(test_session, owner_id)).profile_id,
         id=att_id,
         conversation_id=conv.id,
         owner_id=owner_id,
@@ -391,7 +393,7 @@ async def test_resolve_soft_deleted_attachment_raises_deleted(test_session: Asyn
         await resolve_image_content(
             session=test_session,
             ref=ref,
-            owner_id=owner_id,
+            profile_session=(await session_for_owner(test_session, owner_id)),
             conversation_id=conv.id,
             message_id=msg.id,
         )
@@ -404,7 +406,7 @@ async def test_resolve_absolute_storage_path_raises_security_error(test_session:
     conv, msg = await _setup_turn(test_session, owner_id=owner_id)
 
     att_id = f"att-{uuid.uuid4().hex[:8]}"
-    att = Attachment(
+    att = Attachment(profile_id=(await session_for_owner(test_session, owner_id)).profile_id,
         id=att_id,
         conversation_id=conv.id,
         owner_id=owner_id,
@@ -423,7 +425,7 @@ async def test_resolve_absolute_storage_path_raises_security_error(test_session:
         await resolve_image_content(
             session=test_session,
             ref=ref,
-            owner_id=owner_id,
+            profile_session=(await session_for_owner(test_session, owner_id)),
             conversation_id=conv.id,
             message_id=msg.id,
         )
@@ -436,7 +438,7 @@ async def test_resolve_traversal_dot_dot_path_raises_security_error(test_session
     conv, msg = await _setup_turn(test_session, owner_id=owner_id)
 
     att_id = f"att-{uuid.uuid4().hex[:8]}"
-    att = Attachment(
+    att = Attachment(profile_id=(await session_for_owner(test_session, owner_id)).profile_id,
         id=att_id,
         conversation_id=conv.id,
         owner_id=owner_id,
@@ -455,7 +457,7 @@ async def test_resolve_traversal_dot_dot_path_raises_security_error(test_session
         await resolve_image_content(
             session=test_session,
             ref=ref,
-            owner_id=owner_id,
+            profile_session=(await session_for_owner(test_session, owner_id)),
             conversation_id=conv.id,
             message_id=msg.id,
         )
@@ -472,7 +474,7 @@ async def test_resolve_foreign_owner_path_tamper_raises_security_error(test_sess
     # Points to victim-owner instead of owner-tamper1
     storage_path = f"attachments/victim-owner/{conv.id}/{filename}"
 
-    att = Attachment(
+    att = Attachment(profile_id=(await session_for_owner(test_session, owner_id)).profile_id,
         id=att_id,
         conversation_id=conv.id,
         owner_id=owner_id,
@@ -491,7 +493,7 @@ async def test_resolve_foreign_owner_path_tamper_raises_security_error(test_sess
         await resolve_image_content(
             session=test_session,
             ref=ref,
-            owner_id=owner_id,
+            profile_session=(await session_for_owner(test_session, owner_id)),
             conversation_id=conv.id,
             message_id=msg.id,
         )
@@ -508,7 +510,7 @@ async def test_resolve_foreign_conversation_path_tamper_raises_security_error(te
     # Points to other-conv-id instead of conv.id
     storage_path = f"attachments/{owner_id}/other-conv-id/{filename}"
 
-    att = Attachment(
+    att = Attachment(profile_id=(await session_for_owner(test_session, owner_id)).profile_id,
         id=att_id,
         conversation_id=conv.id,
         owner_id=owner_id,
@@ -527,7 +529,7 @@ async def test_resolve_foreign_conversation_path_tamper_raises_security_error(te
         await resolve_image_content(
             session=test_session,
             ref=ref,
-            owner_id=owner_id,
+            profile_session=(await session_for_owner(test_session, owner_id)),
             conversation_id=conv.id,
             message_id=msg.id,
         )
@@ -540,9 +542,9 @@ async def test_resolve_storage_filename_mismatch_raises_security_error(test_sess
     conv, msg = await _setup_turn(test_session, owner_id=owner_id)
 
     att_id = f"att-{uuid.uuid4().hex[:8]}"
-    storage_path = f"attachments/{owner_id}/{conv.id}/actual_target.png"
+    storage_path = f"attachments/{conv.profile_id}/{conv.id}/actual_target.png"
 
-    att = Attachment(
+    att = Attachment(profile_id=(await session_for_owner(test_session, owner_id)).profile_id,
         id=att_id,
         conversation_id=conv.id,
         owner_id=owner_id,
@@ -561,7 +563,7 @@ async def test_resolve_storage_filename_mismatch_raises_security_error(test_sess
         await resolve_image_content(
             session=test_session,
             ref=ref,
-            owner_id=owner_id,
+            profile_session=(await session_for_owner(test_session, owner_id)),
             conversation_id=conv.id,
             message_id=msg.id,
         )
@@ -575,10 +577,10 @@ async def test_resolve_missing_physical_file_raises_file_not_found(test_session:
 
     att_id = f"att-{uuid.uuid4().hex[:8]}"
     filename = f"{att_id}.png"
-    storage_path = f"attachments/{owner_id}/{conv.id}/{filename}"
+    storage_path = f"attachments/{conv.profile_id}/{conv.id}/{filename}"
     # Intentionally do NOT create physical file
 
-    att = Attachment(
+    att = Attachment(profile_id=(await session_for_owner(test_session, owner_id)).profile_id,
         id=att_id,
         conversation_id=conv.id,
         owner_id=owner_id,
@@ -597,7 +599,7 @@ async def test_resolve_missing_physical_file_raises_file_not_found(test_session:
         await resolve_image_content(
             session=test_session,
             ref=ref,
-            owner_id=owner_id,
+            profile_session=(await session_for_owner(test_session, owner_id)),
             conversation_id=conv.id,
             message_id=msg.id,
         )
@@ -611,13 +613,13 @@ async def test_resolve_directory_target_raises_invalid_file(test_session: AsyncS
 
     att_id = f"att-{uuid.uuid4().hex[:8]}"
     filename = f"{att_id}.png"
-    storage_path = f"attachments/{owner_id}/{conv.id}/{filename}"
+    storage_path = f"attachments/{conv.profile_id}/{conv.id}/{filename}"
 
     # Create directory at that path
-    target_dir = settings.ATTACHMENT_DIR / owner_id / conv.id / filename
+    target_dir = settings.ATTACHMENT_DIR / conv.profile_id / conv.id / filename
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    att = Attachment(
+    att = Attachment(profile_id=(await session_for_owner(test_session, owner_id)).profile_id,
         id=att_id,
         conversation_id=conv.id,
         owner_id=owner_id,
@@ -636,7 +638,7 @@ async def test_resolve_directory_target_raises_invalid_file(test_session: AsyncS
         await resolve_image_content(
             session=test_session,
             ref=ref,
-            owner_id=owner_id,
+            profile_session=(await session_for_owner(test_session, owner_id)),
             conversation_id=conv.id,
             message_id=msg.id,
         )
@@ -650,13 +652,13 @@ async def test_resolve_physical_file_exceeding_size_ceiling_raises_too_large(tes
 
     att_id = f"att-{uuid.uuid4().hex[:8]}"
     filename = f"{att_id}.png"
-    storage_path = f"attachments/{owner_id}/{conv.id}/{filename}"
+    storage_path = f"attachments/{conv.profile_id}/{conv.id}/{filename}"
 
     # Create dummy 10 MiB + 10 bytes file
     huge_data = b"\x89PNG\r\n\x1a\n" + b"0" * (10 * 1024 * 1024 + 10)
-    _create_physical_file(owner_id, conv.id, filename, huge_data)
+    _create_physical_file(conv.profile_id, conv.id, filename, huge_data)
 
-    att = Attachment(
+    att = Attachment(profile_id=(await session_for_owner(test_session, owner_id)).profile_id,
         id=att_id,
         conversation_id=conv.id,
         owner_id=owner_id,
@@ -675,7 +677,7 @@ async def test_resolve_physical_file_exceeding_size_ceiling_raises_too_large(tes
         await resolve_image_content(
             session=test_session,
             ref=ref,
-            owner_id=owner_id,
+            profile_session=(await session_for_owner(test_session, owner_id)),
             conversation_id=conv.id,
             message_id=msg.id,
         )
@@ -689,10 +691,10 @@ async def test_resolve_ref_mime_mismatches_persisted_mime_raises_corrupted_file(
 
     att_id = f"att-{uuid.uuid4().hex[:8]}"
     filename = f"{att_id}.png"
-    storage_path = f"attachments/{owner_id}/{conv.id}/{filename}"
-    _create_physical_file(owner_id, conv.id, filename, SAMPLE_PNG_BYTES)
+    storage_path = f"attachments/{conv.profile_id}/{conv.id}/{filename}"
+    _create_physical_file(conv.profile_id, conv.id, filename, SAMPLE_PNG_BYTES)
 
-    att = Attachment(
+    att = Attachment(profile_id=(await session_for_owner(test_session, owner_id)).profile_id,
         id=att_id,
         conversation_id=conv.id,
         owner_id=owner_id,
@@ -712,7 +714,7 @@ async def test_resolve_ref_mime_mismatches_persisted_mime_raises_corrupted_file(
         await resolve_image_content(
             session=test_session,
             ref=ref,
-            owner_id=owner_id,
+            profile_session=(await session_for_owner(test_session, owner_id)),
             conversation_id=conv.id,
             message_id=msg.id,
         )
@@ -726,10 +728,10 @@ async def test_resolve_physical_file_size_mismatches_persisted_size_raises_corru
 
     att_id = f"att-{uuid.uuid4().hex[:8]}"
     filename = f"{att_id}.png"
-    storage_path = f"attachments/{owner_id}/{conv.id}/{filename}"
-    _create_physical_file(owner_id, conv.id, filename, SAMPLE_PNG_BYTES)
+    storage_path = f"attachments/{conv.profile_id}/{conv.id}/{filename}"
+    _create_physical_file(conv.profile_id, conv.id, filename, SAMPLE_PNG_BYTES)
 
-    att = Attachment(
+    att = Attachment(profile_id=(await session_for_owner(test_session, owner_id)).profile_id,
         id=att_id,
         conversation_id=conv.id,
         owner_id=owner_id,
@@ -748,7 +750,7 @@ async def test_resolve_physical_file_size_mismatches_persisted_size_raises_corru
         await resolve_image_content(
             session=test_session,
             ref=ref,
-            owner_id=owner_id,
+            profile_session=(await session_for_owner(test_session, owner_id)),
             conversation_id=conv.id,
             message_id=msg.id,
         )
@@ -762,11 +764,11 @@ async def test_resolve_physical_file_signature_mismatch_raises_corrupted_file(te
 
     att_id = f"att-{uuid.uuid4().hex[:8]}"
     filename = f"{att_id}.png"
-    storage_path = f"attachments/{owner_id}/{conv.id}/{filename}"
+    storage_path = f"attachments/{conv.profile_id}/{conv.id}/{filename}"
     # Persist as PNG, but write JPEG bytes to disk
-    _create_physical_file(owner_id, conv.id, filename, SAMPLE_JPEG_BYTES)
+    _create_physical_file(conv.profile_id, conv.id, filename, SAMPLE_JPEG_BYTES)
 
-    att = Attachment(
+    att = Attachment(profile_id=(await session_for_owner(test_session, owner_id)).profile_id,
         id=att_id,
         conversation_id=conv.id,
         owner_id=owner_id,
@@ -785,7 +787,7 @@ async def test_resolve_physical_file_signature_mismatch_raises_corrupted_file(te
         await resolve_image_content(
             session=test_session,
             ref=ref,
-            owner_id=owner_id,
+            profile_session=(await session_for_owner(test_session, owner_id)),
             conversation_id=conv.id,
             message_id=msg.id,
         )
@@ -799,11 +801,11 @@ async def test_resolve_malformed_unknown_signature_rejected(test_session: AsyncS
 
     att_id = f"att-{uuid.uuid4().hex[:8]}"
     filename = f"{att_id}.png"
-    storage_path = f"attachments/{owner_id}/{conv.id}/{filename}"
+    storage_path = f"attachments/{conv.profile_id}/{conv.id}/{filename}"
     bad_bytes = b"MZ\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xff\xff\x00\x00"  # PE binary header
-    _create_physical_file(owner_id, conv.id, filename, bad_bytes)
+    _create_physical_file(conv.profile_id, conv.id, filename, bad_bytes)
 
-    att = Attachment(
+    att = Attachment(profile_id=(await session_for_owner(test_session, owner_id)).profile_id,
         id=att_id,
         conversation_id=conv.id,
         owner_id=owner_id,
@@ -822,7 +824,7 @@ async def test_resolve_malformed_unknown_signature_rejected(test_session: AsyncS
         await resolve_image_content(
             session=test_session,
             ref=ref,
-            owner_id=owner_id,
+            profile_session=(await session_for_owner(test_session, owner_id)),
             conversation_id=conv.id,
             message_id=msg.id,
         )
@@ -836,10 +838,10 @@ async def test_resolve_unsupported_persisted_mime_rejected(test_session: AsyncSe
 
     att_id = f"att-{uuid.uuid4().hex[:8]}"
     filename = f"{att_id}.webp"
-    storage_path = f"attachments/{owner_id}/{conv.id}/{filename}"
-    _create_physical_file(owner_id, conv.id, filename, SAMPLE_WEBP_BYTES)
+    storage_path = f"attachments/{conv.profile_id}/{conv.id}/{filename}"
+    _create_physical_file(conv.profile_id, conv.id, filename, SAMPLE_WEBP_BYTES)
 
-    att = Attachment(
+    att = Attachment(profile_id=(await session_for_owner(test_session, owner_id)).profile_id,
         id=att_id,
         conversation_id=conv.id,
         owner_id=owner_id,
@@ -858,7 +860,7 @@ async def test_resolve_unsupported_persisted_mime_rejected(test_session: AsyncSe
         await resolve_image_content(
             session=test_session,
             ref=ref,
-            owner_id=owner_id,
+            profile_session=(await session_for_owner(test_session, owner_id)),
             conversation_id=conv.id,
             message_id=msg.id,
         )

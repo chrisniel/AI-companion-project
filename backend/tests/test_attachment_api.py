@@ -1,5 +1,7 @@
 """Comprehensive test suite for Phase 8B.3: Secure Attachment API."""
 
+from tests.profile_helpers import session_for_owner
+
 import io
 import os
 from pathlib import Path
@@ -10,7 +12,7 @@ from PIL import Image
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_owner, get_db
+from app.api.deps import get_db
 from app.core.config import settings
 from app.main import app
 from app.models.attachment import Attachment
@@ -45,7 +47,7 @@ async def _create_test_conversation(
 ) -> Conversation:
     """Create a persistent test conversation in DB."""
     import uuid
-    conv = Conversation(
+    conv = Conversation(profile_id=(await session_for_owner(session, owner_id)).profile_id,
         id=f"conv-{uuid.uuid4().hex[:8]}",
         owner_id=owner_id,
         title=title,
@@ -139,7 +141,7 @@ async def test_middleware_attachment_upload_streaming_chunked_exceeds_route_limi
     """Chunked streaming upload exceeding route-specific limit returns 413 PAYLOAD_TOO_LARGE without persisting row or file."""
     conv = await _create_test_conversation(test_session)
     conv_id = conv.id
-    target_dir = settings.ATTACHMENT_DIR / "local_user" / conv_id
+    target_dir = settings.ATTACHMENT_DIR / conv.profile_id / conv_id
 
     # Monkeypatch route-specific attachment limit to a lightweight test value (8 KiB)
     test_limit = 8 * 1024
@@ -411,7 +413,8 @@ async def test_upload_created_attachment_is_staged_and_db_verified(
     assert att.message_id is None
     assert att.owner_id == "local_user"
     assert att.conversation_id == conv.id
-    assert att.storage_path.startswith("attachments/local_user/")
+    assert att.storage_path.startswith(f"attachments/{conv.profile_id}/")
+    assert att.profile_id == conv.profile_id
     assert att.storage_filename.endswith(".png")
 
 
@@ -494,7 +497,7 @@ async def test_upload_validation_failure_leaves_no_file_or_row(
     stmt = select(Attachment).where(Attachment.conversation_id == conv.id)
     assert len((await test_session.execute(stmt)).scalars().all()) == 0
 
-    target_dir = settings.ATTACHMENT_DIR / "local_user" / conv.id
+    target_dir = settings.ATTACHMENT_DIR / conv.profile_id / conv.id
     if target_dir.exists():
         assert len(list(target_dir.iterdir())) == 0
 
@@ -506,7 +509,7 @@ async def test_upload_db_flush_failure_leaves_no_file_or_row(
     """Database flush failure occurs before disk write, leaving no file on disk and no DB row."""
     conv = await _create_test_conversation(test_session)
     conv_id = conv.id
-    target_dir = settings.ATTACHMENT_DIR / "local_user" / conv_id
+    target_dir = settings.ATTACHMENT_DIR / conv.profile_id / conv_id
     png_bytes = _create_minimal_png()
 
     async def fake_flush():
@@ -562,7 +565,7 @@ async def test_upload_db_second_flush_failure_cleans_up_promoted_file(
     import app.api.v1.endpoints.attachments as att_module
     conv = await _create_test_conversation(test_session)
     conv_id = conv.id
-    target_dir = settings.ATTACHMENT_DIR / "local_user" / conv_id
+    target_dir = settings.ATTACHMENT_DIR / conv.profile_id / conv_id
     target_dir.mkdir(parents=True, exist_ok=True)
 
     # Pre-create an existing file that causes a collision during file save
@@ -635,7 +638,7 @@ async def test_upload_db_commit_failure_cleans_up_promoted_file(
     """Commit failure rolls back DB and deletes newly promoted physical file."""
     conv = await _create_test_conversation(test_session)
     conv_id = conv.id
-    target_dir = settings.ATTACHMENT_DIR / "local_user" / conv_id
+    target_dir = settings.ATTACHMENT_DIR / conv.profile_id / conv_id
     png_bytes = _create_minimal_png()
 
     async def fake_commit():
@@ -696,7 +699,7 @@ async def test_upload_storage_collision_no_clobber(
     """Pre-existing file on disk is NEVER overwritten by an attachment upload."""
     import app.api.v1.endpoints.attachments as att_module
     conv = await _create_test_conversation(test_session)
-    target_dir = settings.ATTACHMENT_DIR / "local_user" / conv.id
+    target_dir = settings.ATTACHMENT_DIR / conv.profile_id / conv.id
     target_dir.mkdir(parents=True, exist_ok=True)
 
     # Pre-create an existing file with specific content
@@ -737,7 +740,7 @@ async def test_upload_exclusive_temp_file_collision_preserves_existing_temp(
     """Existing temp file created by foreign or stale process is never overwritten or deleted."""
     import app.api.v1.endpoints.attachments as att_module
     conv = await _create_test_conversation(test_session)
-    target_dir = settings.ATTACHMENT_DIR / "local_user" / conv.id
+    target_dir = settings.ATTACHMENT_DIR / conv.profile_id / conv.id
     target_dir.mkdir(parents=True, exist_ok=True)
 
     # Pre-create an existing temp file
@@ -844,10 +847,10 @@ async def test_preview_wrong_conversation_returns_404(
 
 
 @pytest.mark.asyncio
-async def test_preview_foreign_owner_returns_403(
+async def test_preview_foreign_profile_returns_404(
     client: AsyncClient, auth_headers: dict, test_session: AsyncSession
 ):
-    """Attachment row with foreign owner_id under owned conversation returns 403."""
+    """Attachment row with a foreign Profile under an owned conversation stays hidden."""
     conv = await _create_test_conversation(test_session)
     upload_res = await client.post(
         f"/api/v1/conversations/{conv.id}/attachments",
@@ -859,15 +862,15 @@ async def test_preview_foreign_owner_returns_403(
     # Tamper with attachment owner in DB to simulate foreign owner
     stmt = select(Attachment).where(Attachment.id == att_id)
     att = (await test_session.execute(stmt)).scalar_one()
-    att.owner_id = "foreign_owner"
+    att.profile_id = (await session_for_owner(test_session, "foreign_owner")).profile_id
     await test_session.commit()
 
     res = await client.get(
         f"/api/v1/conversations/{conv.id}/attachments/{att_id}/preview",
         headers=auth_headers,
     )
-    assert res.status_code == 403
-    assert "not authorized" in res.json()["error"]["message"].lower()
+    assert res.status_code == 404
+    assert "attachment not found" in res.json()["error"]["message"].lower()
 
 
 @pytest.mark.asyncio

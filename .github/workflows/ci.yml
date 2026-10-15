@@ -367,7 +367,8 @@ jobs:
 
       - name: Run desktop application widget tests
         working-directory: frontend/flutter
-        run: flutter test apps/desktop/test
+        # Keep real Windows process acceptance checks from competing with other test files.
+        run: flutter test --concurrency=1 apps/desktop/test
 
       - name: Build Windows desktop debug runner
         working-directory: frontend/flutter/apps/desktop

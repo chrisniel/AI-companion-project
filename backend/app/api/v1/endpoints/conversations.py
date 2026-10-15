@@ -12,7 +12,9 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_owner, get_db
+from app.api.deps import get_current_profile_session, get_db
+from app.core.profile_sessions import validate_profile_session
+from app.models.profile_session import ProfileSession
 from app.core.config import settings
 from app.models.attachment import Attachment
 from app.models.base import utc_now
@@ -76,12 +78,13 @@ def sanitize_conversation_title(raw_title: Optional[str]) -> Optional[str]:
     return text
 
 
-async def _get_conversation_message_count(db: AsyncSession, conversation_id: str) -> int:
+async def _get_conversation_message_count(db: AsyncSession, conversation_id: str, session: ProfileSession) -> int:
     """Return authoritative active message count for a conversation."""
     stmt = (
         select(func.count(Message.id))
         .where(
             Message.conversation_id == conversation_id,
+            Message.profile_id == session.profile_id,
             Message.deleted_at.is_(None),
         )
     )
@@ -99,7 +102,7 @@ router = APIRouter()
 )
 async def create_conversation(
     payload: Optional[ConversationCreate] = None,
-    owner_id: str = Depends(get_current_owner),
+    session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
 ) -> ConversationOut:
     """Create a new persistent conversation thread."""
@@ -110,9 +113,10 @@ async def create_conversation(
         id=str(uuid.uuid4()),
         title=title,
         character_id=character_id,
-        owner_id=owner_id,
+        profile_id=session.profile_id,
     )
     db.add(conversation)
+    await validate_profile_session(db, session)
     await db.commit()
     await db.refresh(conversation)
     return ConversationOut(
@@ -134,12 +138,12 @@ async def create_conversation(
 async def list_conversations(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    owner_id: str = Depends(get_current_owner),
+    session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
 ) -> ConversationListOut:
     """List active conversations for the authenticated owner with authoritative message counts."""
     base_query = select(Conversation).where(
-        Conversation.owner_id == owner_id,
+        Conversation.profile_id == session.profile_id,
         Conversation.deleted_at.is_(None),
     )
 
@@ -151,6 +155,7 @@ async def list_conversations(
         select(func.count(Message.id))
         .where(
             Message.conversation_id == Conversation.id,
+            Message.profile_id == session.profile_id,
             Message.deleted_at.is_(None),
         )
         .scalar_subquery()
@@ -159,7 +164,7 @@ async def list_conversations(
     items_query = (
         select(Conversation, msg_count_sub.label("message_count"))
         .where(
-            Conversation.owner_id == owner_id,
+            Conversation.profile_id == session.profile_id,
             Conversation.deleted_at.is_(None),
         )
         .order_by(Conversation.updated_at.desc())
@@ -190,7 +195,7 @@ async def list_conversations(
 )
 async def get_conversation(
     conversation_id: str,
-    owner_id: str = Depends(get_current_owner),
+    session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
 ) -> ConversationOut:
     """Get single conversation by ID with authoritative message count."""
@@ -198,6 +203,7 @@ async def get_conversation(
         select(func.count(Message.id))
         .where(
             Message.conversation_id == Conversation.id,
+            Message.profile_id == session.profile_id,
             Message.deleted_at.is_(None),
         )
         .scalar_subquery()
@@ -206,7 +212,7 @@ async def get_conversation(
         select(Conversation, msg_count_sub.label("message_count"))
         .where(
             Conversation.id == conversation_id,
-            Conversation.owner_id == owner_id,
+            Conversation.profile_id == session.profile_id,
             Conversation.deleted_at.is_(None),
         )
     )
@@ -234,13 +240,13 @@ async def get_conversation(
 async def rename_conversation(
     conversation_id: str,
     payload: ConversationUpdate,
-    owner_id: str = Depends(get_current_owner),
+    session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
 ) -> ConversationOut:
     """Rename a conversation title."""
     query = select(Conversation).where(
         Conversation.id == conversation_id,
-        Conversation.owner_id == owner_id,
+        Conversation.profile_id == session.profile_id,
         Conversation.deleted_at.is_(None),
     )
     result = await db.execute(query)
@@ -249,9 +255,10 @@ async def rename_conversation(
         raise HTTPException(status_code=404, detail="Conversation not found")
 
     conversation.title = payload.title
+    await validate_profile_session(db, session)
     await db.commit()
     await db.refresh(conversation)
-    count = await _get_conversation_message_count(db, conversation_id)
+    count = await _get_conversation_message_count(db, conversation_id, session)
     return ConversationOut(
         id=conversation.id,
         title=conversation.title,
@@ -271,7 +278,7 @@ async def rename_conversation(
 async def generate_conversation_title(
     conversation_id: str,
     payload: Optional[GenerateTitleRequest] = None,
-    owner_id: str = Depends(get_current_owner),
+    session: ProfileSession = Depends(get_current_profile_session),
     provider: BaseLLMProvider = Depends(get_llm_provider),
     db: AsyncSession = Depends(get_db),
 ) -> ConversationOut:
@@ -285,7 +292,7 @@ async def generate_conversation_title(
     """
     query = select(Conversation).where(
         Conversation.id == conversation_id,
-        Conversation.owner_id == owner_id,
+        Conversation.profile_id == session.profile_id,
         Conversation.deleted_at.is_(None),
     )
     result = await db.execute(query)
@@ -293,7 +300,7 @@ async def generate_conversation_title(
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    message_count = await _get_conversation_message_count(db, conversation_id)
+    message_count = await _get_conversation_message_count(db, conversation_id, session)
 
     # Manual edit protection: if the title is neither default "New Conversation" nor matches
     # current/fallback title provided by client, it was manually customized by the user.
@@ -319,6 +326,7 @@ async def generate_conversation_title(
         select(Message)
         .where(
             Message.conversation_id == conversation_id,
+            Message.profile_id == session.profile_id,
             Message.sender == "user",
             Message.deleted_at.is_(None),
         )
@@ -383,32 +391,34 @@ async def generate_conversation_title(
             update(Conversation)
             .where(
                 Conversation.id == conversation_id,
-                Conversation.owner_id == owner_id,
+                Conversation.profile_id == session.profile_id,
                 Conversation.deleted_at.is_(None),
                 Conversation.title.in_(allowed_titles),
             )
             .values(title=sanitized_title)
         )
         await db.execute(update_stmt)
+        await validate_profile_session(db, session)
         await db.commit()
     elif payload and payload.fallback_title:
         update_stmt = (
             update(Conversation)
             .where(
                 Conversation.id == conversation_id,
-                Conversation.owner_id == owner_id,
+                Conversation.profile_id == session.profile_id,
                 Conversation.deleted_at.is_(None),
                 Conversation.title == "New Conversation",
             )
             .values(title=payload.fallback_title[:255])
         )
         await db.execute(update_stmt)
+        await validate_profile_session(db, session)
         await db.commit()
 
     # Re-fetch authoritative row from DB to return exact title (preserving any concurrent user rename)
     refresh_stmt = select(Conversation).where(
         Conversation.id == conversation_id,
-        Conversation.owner_id == owner_id,
+        Conversation.profile_id == session.profile_id,
         Conversation.deleted_at.is_(None),
     )
     refreshed_res = await db.execute(refresh_stmt)
@@ -432,13 +442,13 @@ async def generate_conversation_title(
 )
 async def delete_conversation(
     conversation_id: str,
-    owner_id: str = Depends(get_current_owner),
+    session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Soft-delete a conversation and cascade soft-delete to all its active child attachments."""
     query = select(Conversation).where(
         Conversation.id == conversation_id,
-        Conversation.owner_id == owner_id,
+        Conversation.profile_id == session.profile_id,
         Conversation.deleted_at.is_(None),
     )
     result = await db.execute(query)
@@ -449,11 +459,12 @@ async def delete_conversation(
     now = utc_now()
 
     # 1. Bulk soft-delete ALL active attachments belonging to this conversation
-    # Note: No owner_id filter here; all child attachments of this conversation must soft-delete
+    # Child ownership must agree with the validated parent Profile.
     cascade_stmt = (
         update(Attachment)
         .where(
             Attachment.conversation_id == conversation_id,
+            Attachment.profile_id == session.profile_id,
             Attachment.is_deleted.is_(False),
         )
         .values(
@@ -467,6 +478,7 @@ async def delete_conversation(
     conversation.is_deleted = True
     conversation.deleted_at = now
     try:
+        await validate_profile_session(db, session)
         await db.commit()
     except Exception:
         await db.rollback()
@@ -482,13 +494,13 @@ async def list_messages(
     conversation_id: str,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=200),
-    owner_id: str = Depends(get_current_owner),
+    session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
 ) -> MessageListOut:
     """List messages for a conversation ordered chronologically by sequence_no ASC."""
     conv_check = select(Conversation).where(
         Conversation.id == conversation_id,
-        Conversation.owner_id == owner_id,
+        Conversation.profile_id == session.profile_id,
         Conversation.deleted_at.is_(None),
     )
     conv_res = await db.execute(conv_check)
@@ -497,7 +509,7 @@ async def list_messages(
 
     query = select(Message).where(
         Message.conversation_id == conversation_id,
-        Message.owner_id == owner_id,
+        Message.profile_id == session.profile_id,
         Message.deleted_at.is_(None),
     )
 
@@ -518,6 +530,7 @@ async def list_messages(
             )
             for att in msg.attachments
             if not att.is_deleted and att.message_id == msg.id
+            and att.profile_id == session.profile_id and att.conversation_id == conversation_id
         ]
         output_items.append(
             MessageOut(
@@ -557,14 +570,14 @@ async def list_messages(
 async def send_message_stream(
     conversation_id: str,
     payload: MessageSend,
-    owner_id: str = Depends(get_current_owner),
+    session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
     """Send user message and receive streaming assistant tokens via SSE."""
     # Pre-flight 1: Validate conversation
     conv_check = select(Conversation).where(
         Conversation.id == conversation_id,
-        Conversation.owner_id == owner_id,
+        Conversation.profile_id == session.profile_id,
         Conversation.deleted_at.is_(None),
     )
     conv = (await db.execute(conv_check)).scalar_one_or_none()
@@ -578,8 +591,8 @@ async def send_message_stream(
     if payload.client_message_id:
         dup_query = select(Message).where(
             Message.conversation_id == conversation_id,
+            Message.profile_id == session.profile_id,
             Message.client_message_id == payload.client_message_id,
-            Message.owner_id == owner_id,
         )
         if (await db.execute(dup_query)).scalar_one_or_none():
             raise HTTPException(status_code=409, detail="DUPLICATE_MESSAGE")
@@ -619,7 +632,7 @@ async def send_message_stream(
         prepared_turn = await prepare_turn(
             db=db,
             conversation_id=conversation_id,
-            owner_id=owner_id,
+            profile_session=session,
             user_text=payload.user_text,
             client_message_id=payload.client_message_id,
             attachment_ids=payload.attachment_ids,
@@ -629,7 +642,7 @@ async def send_message_stream(
             db=db,
             conversation_id=conversation_id,
             user_text=payload.user_text,
-            owner_id=owner_id,
+            profile_session=session,
             prepared_turn=prepared_turn,
             conversation_lock=lock,
         )

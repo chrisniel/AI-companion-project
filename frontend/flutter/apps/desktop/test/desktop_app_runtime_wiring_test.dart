@@ -73,7 +73,7 @@ class MockTrayAdapter implements DesktopTrayAdapter {
 class FakeChatClient extends CompanionClient {
   int healthCallCount = 0;
   FakeChatClient({super.baseUrl = 'http://127.0.0.1:8000'})
-      : super(credentialStore: InMemoryCredentialStore('test-token'));
+      : super(credentialStore: InMemoryCredentialStore('test-token'), sessionStore: InMemoryCredentialStore('psk_test'));
 
   @override
   Future<HealthResponse> getHealth({Duration timeout = const Duration(seconds: 3)}) async {
@@ -89,6 +89,12 @@ class FakeChatClient extends CompanionClient {
       message: 'Token verified',
     );
   }
+
+  @override
+  Future<void> revokeProfileSession() async => sessionStore.deleteToken();
+
+  @override
+  Future<Map<String, dynamic>> getOwnSession() async => {'id':'test-profile', 'expires_at':'2099-01-01T00:00:00Z'};
 
   @override
   Future<ModelStatusResponse> getModelStatus() async {
@@ -258,6 +264,8 @@ void main() {
 
       expect(fakeClient.healthCallCount, greaterThan(0));
 
+      await tester.pumpWidget(const SizedBox());
+      chatController.dispose();
       runtimeCoordinator.dispose();
       await lifecycleCoordinator.dispose();
     });

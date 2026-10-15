@@ -2,7 +2,7 @@
  * Chat completions and Server-Sent Events (SSE) streaming API service.
  */
 
-import { getApiBaseUrl, getApiKey, ApiError } from './client';
+import { getApiBaseUrl, getApiKey, invalidateUnauthorizedSession, ApiError } from './client';
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -57,6 +57,7 @@ export async function streamChatCompletion({
     });
 
     if (!response.ok) {
+    invalidateUnauthorizedSession(response.status);
       let errorMessage = `Inference failed with status ${response.status}`;
       try {
         const errorJson = await response.json();

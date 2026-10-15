@@ -1,5 +1,7 @@
 """Tests for Memory CRUD, FTS5 full-text indexing, token sanitization, and multilingual matching."""
 
+from tests.profile_helpers import session_for_owner
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,7 +58,7 @@ async def test_fts5_sync_and_search(test_session: AsyncSession, client: AsyncCli
     mem_id = mem["id"]
 
     # FTS5 search finds it
-    results = await search_relevant_memories(test_session, "Steins Gate", owner_id)
+    results = await search_relevant_memories(test_session, "Steins Gate", (await session_for_owner(test_session, owner_id)))
     assert len(results) >= 1
     assert any("Steins" in r.content for r in results)
 
@@ -68,18 +70,18 @@ async def test_fts5_sync_and_search(test_session: AsyncSession, client: AsyncCli
     )
 
     # Search old term -> empty
-    old_res = await search_relevant_memories(test_session, "Steins", owner_id)
+    old_res = await search_relevant_memories(test_session, "Steins", (await session_for_owner(test_session, owner_id)))
     assert len(old_res) == 0
 
     # Search new term -> found
-    new_res = await search_relevant_memories(test_session, "Cyberpunk", owner_id)
+    new_res = await search_relevant_memories(test_session, "Cyberpunk", (await session_for_owner(test_session, owner_id)))
     assert len(new_res) >= 1
 
     # Soft delete memory
     await client.delete(f"/api/v1/memories/{mem_id}", headers=auth_headers)
 
     # Search after delete -> empty
-    del_search = await search_relevant_memories(test_session, "Cyberpunk", owner_id)
+    del_search = await search_relevant_memories(test_session, "Cyberpunk", (await session_for_owner(test_session, owner_id)))
     assert len(del_search) == 0
 
 
@@ -92,7 +94,7 @@ async def test_fts5_sanitization_and_multilingual(test_session: AsyncSession, cl
     assert _sanitize_fts_query("'''\"\"\"---***") == ""
 
     # Test that empty / punctuation queries do not crash search
-    res = await search_relevant_memories(test_session, "!@#$%^&*()", "test-owner")
+    res = await search_relevant_memories(test_session, "!@#$%^&*()", (await session_for_owner(test_session, "test-owner")))
     assert res == []
 
     # Test multilingual insertion (Tagalog & Japanese)
@@ -110,9 +112,9 @@ async def test_fts5_sanitization_and_multilingual(test_session: AsyncSession, cl
     )
 
     # Search Tagalog term
-    fil_res = await search_relevant_memories(test_session, "halo-halo tag-init", owner_id)
+    fil_res = await search_relevant_memories(test_session, "halo-halo tag-init", (await session_for_owner(test_session, owner_id)))
     assert len(fil_res) >= 1
 
     # Search Japanese term
-    ja_res = await search_relevant_memories(test_session, "シュタインズ", owner_id)
+    ja_res = await search_relevant_memories(test_session, "シュタインズ", (await session_for_owner(test_session, owner_id)))
     assert len(ja_res) >= 1

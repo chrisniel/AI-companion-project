@@ -144,9 +144,9 @@ async def test_request_id_sanitizer_discards_malicious_header(client: AsyncClien
 
 
 def test_router_architecture_is_fail_closed():
-    """Item 2: Verify public_router contains only /health and protected_router enforces verify_token."""
+    """Item 2: Verify public_router contains only /health and protected_router enforces get_current_profile_session."""
     from app.api.v1.router import public_router, protected_router
-    from app.api.deps import verify_token
+    from app.api.deps import get_current_profile_session
 
     def extract_paths(router):
         paths = []
@@ -163,8 +163,8 @@ def test_router_architecture_is_fail_closed():
     public_paths = extract_paths(public_router)
     assert public_paths == ["/health"]
 
-    # Protected router must have verify_token dependency
-    assert any(dep.dependency == verify_token for dep in protected_router.dependencies)
+    # Protected router must have get_current_profile_session dependency
+    assert any(dep.dependency == get_current_profile_session for dep in protected_router.dependencies)
 
 
 def _run_disposable_startup_boundary(tmp_path: Path, body: str) -> None:

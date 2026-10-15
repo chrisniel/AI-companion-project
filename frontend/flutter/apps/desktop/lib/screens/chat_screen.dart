@@ -39,6 +39,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isHistoryOpen = false;
   bool _isSubmitting = false;
   String? _currentConversationId;
+  int _profileEpoch = 0;
   String? _restoredConversationId;
   bool _isRestorationScheduled = false;
   bool _userExplicitlySent = false;
@@ -78,6 +79,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _textController.addListener(_onTextChanged);
     _scrollController.addListener(_onScroll);
     _effectiveController.addListener(_onChatControllerChanged);
+    _profileEpoch = _effectiveController.profileEpoch;
 
     // Initialize current conversation state if already selected
     final activeId = _effectiveController.activeConversation?.id;
@@ -246,6 +248,14 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _onChatControllerChanged() {
+    if (_profileEpoch != _effectiveController.profileEpoch) {
+      _profileEpoch = _effectiveController.profileEpoch;
+      _currentConversationId = null;
+      _restoredConversationId = null;
+      _isHistoryOpen = false;
+      _isSubmitting = false;
+      _textController.clear();
+    }
     final activeId = _effectiveController.activeConversation?.id;
     if (activeId != _currentConversationId) {
       // 1. Save state of previous conversation
@@ -321,6 +331,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _handleSend() async {
+    final epoch = _effectiveController.profileEpoch;
     final text = _textController.text.trim();
     if (text.isEmpty) return;
     if (_isSubmitting ||
@@ -339,7 +350,7 @@ class _ChatScreenState extends State<ChatScreen> {
       await _effectiveController.sendMessage(
         text,
         onAccepted: () {
-          if (mounted) {
+          if (mounted && epoch == _effectiveController.profileEpoch) {
             _userExplicitlySent = true;
             _textController.clear();
             setState(() {
@@ -352,7 +363,7 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (_) {
       // Pre-acceptance rejection/failure: draft remains intact in _textController!
     } finally {
-      if (mounted) {
+      if (mounted && epoch == _effectiveController.profileEpoch) {
         setState(() {
           _isSubmitting = false;
           _canSend = _textController.text.trim().isNotEmpty;
@@ -360,7 +371,7 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
 
-    if (mounted) {
+    if (mounted && epoch == _effectiveController.profileEpoch) {
       _focusNode.requestFocus();
     }
   }

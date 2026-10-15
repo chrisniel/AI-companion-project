@@ -15,6 +15,8 @@ def constant_time_compare(val1: str, val2: str) -> bool:
     """Compare two token strings in constant time to prevent timing attacks."""
     if not val1 or not val2:
         return False
+    if not val1.isascii() or not val2.isascii():
+        return False
     return hmac.compare_digest(val1.strip(), val2.strip())
 
 

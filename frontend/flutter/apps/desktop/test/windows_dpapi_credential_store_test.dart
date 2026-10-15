@@ -24,6 +24,17 @@ void main() {
     test('readToken returns null when file is absent', () async {
       expect(await store.readToken(), isNull);
     });
+    test('Profile session and legacy pairing slots never overwrite each other', () async {
+      final pairing = WindowsDpapiCredentialStore(localAppDataOverride:tempDir.path);
+      final session = WindowsDpapiCredentialStore(localAppDataOverride:tempDir.path, slot:DesktopCredentialSlot.profileSession);
+      await pairing.writeToken('pairing_diagnostic');
+      await session.writeToken('psk_profile');
+      expect(await pairing.readToken(),'pairing_diagnostic');
+      expect(await session.readToken(),'psk_profile');
+      await session.deleteToken();
+      expect(await pairing.readToken(),'pairing_diagnostic');
+      expect(await session.readToken(),isNull);
+    });
 
     test('writes encrypted token and reads it back without plaintext leakage on disk', () async {
       const secret = 'super_secret_pairing_token_abc123';

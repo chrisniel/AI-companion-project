@@ -1,6 +1,6 @@
 /**
  * Base HTTP API client for Local AI Companion Core.
- * Handles base URL configuration, local pairing key authentication, and error handling.
+ * Handles base URL configuration, in-memory Profile Sessions, and error handling.
  */
 
 const DEFAULT_BASE_URL = 'http://127.0.0.1:8000';
@@ -28,12 +28,27 @@ export function setApiBaseUrl(url: string): void {
   localStorage.setItem('companion_api_url', url.replace(/\/+$/, ''));
 }
 
-export function getApiKey(): string {
-  return localStorage.getItem('companion_api_key') || '';
+let sessionToken = '';
+export function purgeLegacyPairingKeys(): void {
+  localStorage.removeItem('companion_api_key');
+  localStorage.removeItem('COMPANION_API_KEY');
 }
-
-export function setApiKey(key: string): void {
-  localStorage.setItem('companion_api_key', key.trim());
+export function getSessionToken(): string {
+  purgeLegacyPairingKeys();
+  return sessionToken;
+}
+export function setSessionToken(token: string): void {
+  purgeLegacyPairingKeys();
+  sessionToken = token;
+}
+// Compatibility name for existing transport consumers; this is exclusively a session.
+export const getApiKey = getSessionToken;
+export function setApiKey(_key: string): void { purgeLegacyPairingKeys(); }
+export function invalidateUnauthorizedSession(status: number): void {
+  if ((status === 401 || status === 403) && sessionToken) {
+    setSessionToken('');
+    window.dispatchEvent(new Event('companion-session-invalid'));
+  }
 }
 
 export interface ApiErrorDetail {
@@ -64,12 +79,16 @@ export async function apiFetch<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
+  if (/^\/?api\/v1\/(system\/status|models\/(load|select|unload|profile)|auth\/bootstrap(?:\/|$)|profiles(?:\/|$))/.test(path)) {
+    throw new ApiError({ code:'HOST_ADMIN_REQUIRED', message:'Host administration is available in Flutter Desktop.', status:403 });
+  }
   const baseUrl = getApiBaseUrl();
   const apiKey = getApiKey();
 
   const url = `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
 
   const headers = new Headers(options.headers || {});
+  headers.delete('X-Host-Admin-Secret');
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
@@ -84,6 +103,7 @@ export async function apiFetch<T>(
   });
 
   if (!response.ok) {
+    invalidateUnauthorizedSession(response.status);
     let errorDetail: ApiErrorDetail = {
       code: 'HTTP_ERROR',
       message: `Request failed with status ${response.status}`,

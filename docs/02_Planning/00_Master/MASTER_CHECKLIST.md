@@ -20,7 +20,7 @@
 | **PC Host** | Storage Roots (`APP`, `DATA`, `LIBRARY`)| `storage-and-assets.md` | `app.core.storage` (Partial)| Pytest storage | G1 | **PARTIAL** |
 | **Contracts** | OpenAPI Schema 3.1 & Drift Check | `DOCUMENTATION_MAP.md` | `contracts/openapi/openapi.json` | Python drift check| G1 | **VERIFIED** |
 | **Contracts** | Durable FIFO Conversation Queues | `assistant-and-conversations.md` | Pending implementation | Queue unit tests | G4 | **NOT STARTED** |
-| **Identity** | Multi-Profile PC V1 Model | `profiles-and-devices.md` | Migration 007 & Schema (Batch A Verified); Sessions/Auth (Batch B Pending) | Migration & isolation tests | G2 | **PARTIAL (BATCH A SCHEMA VERIFIED)** |
+| **Identity** | Multi-Profile PC V1 Model | `profiles-and-devices.md` | Batch A schema; Batch B migration 008, Sessions, Host Admin/browser approval, ownership isolation and Desktop restoration/expiry implemented and locally verified | Migration/isolation/client checks passed locally; hosted PR CI not run | G2 manual acceptance pending | **PARTIAL; BATCH B INDEPENDENT GATES PENDING; CRUD/PIN/DEVICE ENROLLMENT FUTURE** |
 | **Identity** | Satellite Device Revocable Token | `profiles-and-devices.md` | Pending implementation | Auth unit tests | G2 | **NOT STARTED** |
 | **Models** | Local `llama.cpp` Vulkan GPU Offload | `runtime-and-models.md` | `llama_cpp.py` (b10936 RX 580) | Pytest mocks | G3 | **PARTIAL** (reference/mock evidence only until supported live/packaged verification exists) |
 | **Models** | D6 Controlled Manual Import (Bundles)| `runtime-and-models.md` | GGUF parser done; service gap | Import unit tests| G3 | **PARTIAL** |
@@ -63,7 +63,7 @@
 - [ ] **M2 Host Launch & Supervision (PC-HOST-001):** Proved working with single-instance kernel locking, detached rotating logging, process provenance, and crash survival.
 - [ ] **M2 Host Lifecycle & Autostart (PC-HOST-005 / PC-HOST-002):** Proved working with secure graceful full exit, model process draining, and login autostart for runtime and Flutter.
 - [ ] **M2 Native Desktop Notifications (PC-HOST-003):** Proved working without open browser tab.
-- [ ] **M2 Multi-Profile Migration:** Database schema updated with full privacy isolation.
+- [ ] **M2 Multi-Profile Migration & G2 Acceptance:** Batch A schema and Batch B session/ownership isolation were implemented and locally verified. Independent delivery gates, hosted PR CI and Windows/Desktop/browser manual acceptance remain pending; full Profile CRUD, PIN/device enrollment and deletion lifecycle remain future work.
 - [ ] **M2 D6 Model Import:** Proved working with GGUF + mmproj paired bundle.
 - [ ] **M3 Character Studio & 8 Traits:** Proved modulating prompt without functional corruption.
 - [ ] **M3 Persistent Mood:** Proved surviving restart with natural decay.

@@ -65,18 +65,24 @@ typedef _LocalFreeDart = Pointer<Void> Function(Pointer<Void> hMem);
 ///
 /// Plaintext tokens are encrypted at rest using the active Windows user logon key,
 /// preventing plaintext credential leakage in files, logs, or backups.
+enum DesktopCredentialSlot { pairing, profileSession }
+
 class WindowsDpapiCredentialStore implements CredentialStore {
   final String? customFilePath;
+  final String? localAppDataOverride;
+  final DesktopCredentialSlot slot;
 
-  WindowsDpapiCredentialStore({this.customFilePath});
+  WindowsDpapiCredentialStore({this.customFilePath, this.localAppDataOverride, this.slot = DesktopCredentialSlot.pairing});
 
   String get _filePath {
     if (customFilePath != null) return customFilePath!;
-    final localAppData = Platform.environment['LOCALAPPDATA'];
+    final localAppData = localAppDataOverride ?? Platform.environment['LOCALAPPDATA'];
     if (localAppData == null || localAppData.trim().isEmpty) {
       throw StateError('LOCALAPPDATA environment variable is unset.');
     }
-    return '$localAppData\\AI Companion\\credentials.bin';
+    return slot == DesktopCredentialSlot.pairing
+        ? '$localAppData\\AI Companion\\credentials.bin'
+        : '$localAppData\\AICompanion\\profile_session.bin';
   }
 
   Uint8List _encryptDpapi(Uint8List plaintextBytes) {

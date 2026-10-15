@@ -1,5 +1,7 @@
 """B2 regressions through actual providers, callers and lifecycle operations."""
 
+from tests.profile_helpers import session_for_owner
+
 import asyncio
 import json
 import threading
@@ -78,15 +80,15 @@ CASES = [
 async def test_adapter_to_assistant_terminal_and_persistence(server_provider, test_session, http_status, body, success, partial):
     provider, router = server_provider
     router["completion"] = lambda request: httpx.Response(http_status, text=body)
-    conversation = Conversation(id="b2-conversation", owner_id="test-owner", title="Boundary")
+    conversation = Conversation(profile_id=(await session_for_owner(test_session, "test-owner")).profile_id, id="b2-conversation", owner_id="test-owner", title="Boundary")
     test_session.add(conversation)
     await test_session.commit()
     lock = _get_lock(conversation.id)
     await lock.acquire()
-    prepared = await prepare_turn(db=test_session, conversation_id=conversation.id, owner_id="test-owner", user_text="Hello")
+    prepared = await prepare_turn(db=test_session, conversation_id=conversation.id, profile_session=(await session_for_owner(test_session, "test-owner")), user_text="Hello")
     assistant_id = prepared.assistant_message.id
     chunks = [chunk async for chunk in orchestrate_chat_stream(
-        db=test_session, conversation_id=conversation.id, user_text="Hello", owner_id="test-owner",
+        db=test_session, conversation_id=conversation.id, user_text="Hello", profile_session=(await session_for_owner(test_session, "test-owner")),
         prepared_turn=prepared, conversation_lock=lock,
     )]
     wire = "".join(chunks)
@@ -124,12 +126,12 @@ async def test_adapter_to_direct_endpoint_terminal(server_provider, client, auth
 
 @pytest.mark.asyncio
 async def test_successful_inference_with_failed_commit_never_emits_done(server_provider, test_session):
-    conversation = Conversation(id="b2-commit-failure", owner_id="test-owner", title="Boundary")
+    conversation = Conversation(profile_id=(await session_for_owner(test_session, "test-owner")).profile_id, id="b2-commit-failure", owner_id="test-owner", title="Boundary")
     test_session.add(conversation)
     await test_session.commit()
     lock = _get_lock(conversation.id)
     await lock.acquire()
-    prepared = await prepare_turn(db=test_session, conversation_id=conversation.id, owner_id="test-owner", user_text="Hello")
+    prepared = await prepare_turn(db=test_session, conversation_id=conversation.id, profile_session=(await session_for_owner(test_session, "test-owner")), user_text="Hello")
     assistant_id = prepared.assistant_message.id
 
     def fail_completion_commit(session):
@@ -140,7 +142,7 @@ async def test_successful_inference_with_failed_commit_never_emits_done(server_p
     event.listen(test_session.sync_session, "before_commit", fail_completion_commit)
     try:
         wire = "".join([chunk async for chunk in orchestrate_chat_stream(
-            db=test_session, conversation_id=conversation.id, user_text="Hello", owner_id="test-owner",
+            db=test_session, conversation_id=conversation.id, user_text="Hello", profile_session=(await session_for_owner(test_session, "test-owner")),
             prepared_turn=prepared, conversation_lock=lock,
         )])
     finally:
@@ -179,15 +181,15 @@ async def test_assistant_close_releases_only_its_provider_operation(server_provi
     streams = [ControlledStream(), ControlledStream()]
     responses = iter(streams)
     router["completion"] = lambda request: httpx.Response(200, stream=next(responses))
-    conversation = Conversation(id="b2-close-overlap", owner_id="test-owner", title="Boundary")
+    conversation = Conversation(profile_id=(await session_for_owner(test_session, "test-owner")).profile_id, id="b2-close-overlap", owner_id="test-owner", title="Boundary")
     test_session.add(conversation)
     await test_session.commit()
     lock = _get_lock(conversation.id)
     await lock.acquire()
-    prepared = await prepare_turn(db=test_session, conversation_id=conversation.id, owner_id="test-owner", user_text="Hello")
+    prepared = await prepare_turn(db=test_session, conversation_id=conversation.id, profile_session=(await session_for_owner(test_session, "test-owner")), user_text="Hello")
     assistant_id = prepared.assistant_message.id
     assistant = orchestrate_chat_stream(
-        db=test_session, conversation_id=conversation.id, user_text="Hello", owner_id="test-owner",
+        db=test_session, conversation_id=conversation.id, user_text="Hello", profile_session=(await session_for_owner(test_session, "test-owner")),
         prepared_turn=prepared, conversation_lock=lock,
     )
     other = None
@@ -363,15 +365,15 @@ async def test_upstream_finish_reason_propagation_length_and_stop(server_provide
     """Verify that when upstream emits finish_reason 'length', provider records it and orchestrator persists 'length'."""
     provider, router = server_provider
     router["completion"] = lambda request: httpx.Response(200, text=TOKEN + LENGTH)
-    conversation = Conversation(id="b2-conv-length", owner_id="test-owner", title="Boundary Length")
+    conversation = Conversation(profile_id=(await session_for_owner(test_session, "test-owner")).profile_id, id="b2-conv-length", owner_id="test-owner", title="Boundary Length")
     test_session.add(conversation)
     await test_session.commit()
     lock = _get_lock(conversation.id)
     await lock.acquire()
-    prepared = await prepare_turn(db=test_session, conversation_id=conversation.id, owner_id="test-owner", user_text="Hello")
+    prepared = await prepare_turn(db=test_session, conversation_id=conversation.id, profile_session=(await session_for_owner(test_session, "test-owner")), user_text="Hello")
     assistant_id = prepared.assistant_message.id
     chunks = [chunk async for chunk in orchestrate_chat_stream(
-        db=test_session, conversation_id=conversation.id, user_text="Hello", owner_id="test-owner",
+        db=test_session, conversation_id=conversation.id, user_text="Hello", profile_session=(await session_for_owner(test_session, "test-owner")),
         prepared_turn=prepared, conversation_lock=lock,
     )]
     wire = "".join(chunks)

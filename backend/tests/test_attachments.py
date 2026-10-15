@@ -8,6 +8,8 @@ Covers Phase 8B.1:
 - ORM relationship mechanics (Conversation.attachments, Message.attachments, staged vs committed)
 """
 
+from tests.profile_helpers import session_for_owner
+
 import os
 import subprocess
 import sys
@@ -351,7 +353,7 @@ async def test_attachment_orm_relationships_and_staged_vs_committed():
         try:
             async with async_session() as session:
                 # Create a conversation
-                conv = Conversation(
+                conv = Conversation(profile_id=(await session_for_owner(session, "user-1")).profile_id,
                     id="conv-test-1",
                     owner_id="user-1",
                     title="Multimodal Thread",
@@ -361,7 +363,7 @@ async def test_attachment_orm_relationships_and_staged_vs_committed():
                 await session.flush()
 
                 # 1. Staged attachment: message_id is None
-                staged_att = Attachment(
+                staged_att = Attachment(profile_id=(await session_for_owner(session, "user-1")).profile_id,
                     id="att-staged-1",
                     owner_id="user-1",
                     conversation_id="conv-test-1",
@@ -394,7 +396,7 @@ async def test_attachment_orm_relationships_and_staged_vs_committed():
                 assert any(a.id == "att-staged-1" for a in loaded_conv.attachments)
 
                 # 2. Commit a message and bind an attachment
-                msg = Message(
+                msg = Message(profile_id=(await session_for_owner(session, "user-1")).profile_id,
                     id="msg-test-1",
                     owner_id="user-1",
                     conversation_id="conv-test-1",
@@ -406,7 +408,7 @@ async def test_attachment_orm_relationships_and_staged_vs_committed():
                 session.add(msg)
                 await session.flush()
 
-                committed_att = Attachment(
+                committed_att = Attachment(profile_id=(await session_for_owner(session, "user-1")).profile_id,
                     id="att-committed-1",
                     owner_id="user-1",
                     conversation_id="conv-test-1",

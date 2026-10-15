@@ -1,20 +1,25 @@
 """Attachment REST endpoints adhering to Phase 8B.3 specifications and security boundaries."""
 
 import asyncio
+from contextlib import suppress
 import os
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_owner, get_db
+from app.api.deps import get_current_profile_session, get_db
+from app.core.profile_sessions import validate_profile_session
+from app.models.profile_session import ProfileSession
 from app.core.config import settings
 from app.models.attachment import Attachment
 from app.models.base import generate_uuid, utc_now
 from app.models.conversation import Conversation
+from app.models.message import Message
 from app.schemas.attachment import AttachmentOut, MAX_SIZE_BYTES
 from app.services.attachment_validator import (
     AttachmentValidationError,
@@ -132,14 +137,14 @@ def save_attachment_file_no_clobber(
 async def upload_attachment(
     conversation_id: str,
     file: UploadFile = File(...),
-    owner_id: str = Depends(get_current_owner),
+    session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
 ) -> AttachmentOut:
     """Upload a new staged image attachment associated with an active conversation."""
     # 1. Verify parent conversation exists, is owned by current user, and is not soft-deleted
     conv_stmt = select(Conversation).where(
         Conversation.id == conversation_id,
-        Conversation.owner_id == owner_id,
+        Conversation.profile_id == session.profile_id,
         Conversation.deleted_at.is_(None),
     )
     conv = (await db.execute(conv_stmt)).scalar_one_or_none()
@@ -171,6 +176,7 @@ async def upload_attachment(
         data = b"".join(chunks)
     finally:
         await file.close()
+    await validate_profile_session(db, session)
 
     # 4. In-memory validation
     try:
@@ -182,7 +188,7 @@ async def upload_attachment(
 
     # 5. Storage paths preflight
     canonical_ext = ".png" if validated_meta.mime_type == "image/png" else ".jpg"
-    target_dir = settings.ATTACHMENT_DIR / owner_id / conversation_id
+    target_dir = settings.ATTACHMENT_DIR / session.profile_id / conversation_id
 
     attachment_root = settings.ATTACHMENT_DIR.resolve()
     if not target_dir.resolve().is_relative_to(attachment_root):
@@ -204,12 +210,12 @@ async def upload_attachment(
         attachment_id = generate_uuid()
         initial_storage_filename = f"{attachment_id}{canonical_ext}"
 
-    initial_storage_path = f"attachments/{owner_id}/{conversation_id}/{initial_storage_filename}"
+    initial_storage_path = f"attachments/{session.profile_id}/{conversation_id}/{initial_storage_filename}"
 
     # 6. Construct ORM instance
     attachment = Attachment(
         id=attachment_id,
-        owner_id=owner_id,
+        profile_id=session.profile_id,
         conversation_id=conversation_id,
         message_id=None,  # Staged
         filename_display=safe_display_name,
@@ -232,6 +238,7 @@ async def upload_attachment(
     # 8. Exclusive Disk Write & Promotion followed by Commit
     final_target_path: Optional[Path] = None
     try:
+        await validate_profile_session(db, session)
         final_filename, final_target_path = await asyncio.to_thread(
             save_attachment_file_no_clobber,
             target_dir,
@@ -241,8 +248,10 @@ async def upload_attachment(
         )
         if final_filename != initial_storage_filename:
             attachment.storage_filename = final_filename
-            attachment.storage_path = f"attachments/{owner_id}/{conversation_id}/{final_filename}"
+            attachment.storage_path = f"attachments/{session.profile_id}/{conversation_id}/{final_filename}"
             await db.flush()
+
+        await validate_profile_session(db, session)
 
         await db.commit()
     except Exception:
@@ -272,14 +281,14 @@ async def upload_attachment(
 async def preview_attachment(
     conversation_id: str,
     attachment_id: str,
-    owner_id: str = Depends(get_current_owner),
+    session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
-) -> FileResponse:
+) -> StreamingResponse:
     """Stream attachment image content if parent conversation and attachment are active and owned."""
     # 1. Verify parent conversation
     conv_stmt = select(Conversation).where(
         Conversation.id == conversation_id,
-        Conversation.owner_id == owner_id,
+        Conversation.profile_id == session.profile_id,
         Conversation.deleted_at.is_(None),
     )
     conv = (await db.execute(conv_stmt)).scalar_one_or_none()
@@ -292,6 +301,8 @@ async def preview_attachment(
     # 2. Verify attachment
     att_stmt = select(Attachment).where(
         Attachment.id == attachment_id,
+        Attachment.profile_id == session.profile_id,
+        Attachment.conversation_id == conversation_id,
         Attachment.is_deleted.is_(False),
     )
     att = (await db.execute(att_stmt)).scalar_one_or_none()
@@ -301,11 +312,13 @@ async def preview_attachment(
             detail="Attachment not found",
         )
 
-    if att.owner_id != owner_id:
+    if att.profile_id != session.profile_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to access this attachment",
         )
+
+    await _require_attachment_message(db, session, att)
 
     # 3. Verify path containment and physical file existence
     try:
@@ -322,11 +335,92 @@ async def preview_attachment(
             detail="Attachment file not found",
         )
 
-    return FileResponse(
-        path=file_path,
-        media_type=att.mime_type,
-        filename=att.filename_display,
+    encoded_filename = quote(att.filename_display)
+    disposition = (
+        f"attachment; filename*=utf-8''{encoded_filename}"
+        if encoded_filename != att.filename_display
+        else f'attachment; filename="{att.filename_display}"'
     )
+    return _AttachmentPreviewResponse(
+        _stream_attachment_file(db, session, conversation_id, attachment_id, file_path),
+        media_type=att.mime_type,
+        headers={
+            "Content-Disposition": disposition,
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+class _AttachmentPreviewResponse(StreamingResponse):
+    """Close the download iterator even when cancellation happens during send."""
+
+    async def __call__(self, scope, receive, send):
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            await asyncio.shield(self.body_iterator.aclose())
+
+
+async def _require_download_authority(db, session, conversation_id, attachment_id):
+    # Complete a DB check before consumer cancellation can invalidate SQLite's
+    # connection, matching the chat stream's cancellation protection.
+    check = asyncio.create_task(_validate_download_authority(db, session, conversation_id, attachment_id))
+    try:
+        await asyncio.shield(check)
+    except asyncio.CancelledError:
+        with suppress(Exception):
+            await asyncio.shield(check)
+        raise
+
+
+async def _validate_download_authority(db, session, conversation_id, attachment_id):
+    await validate_profile_session(db, session)
+    att = await db.scalar(select(Attachment).join(
+        Conversation, Conversation.id == Attachment.conversation_id,
+    ).where(
+        Attachment.id == attachment_id,
+        Attachment.profile_id == session.profile_id,
+        Attachment.conversation_id == conversation_id,
+        Attachment.is_deleted.is_(False), Attachment.deleted_at.is_(None),
+        Conversation.profile_id == session.profile_id,
+        Conversation.is_deleted.is_(False), Conversation.deleted_at.is_(None),
+    ).execution_options(populate_existing=True))
+    if att is None:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    await _require_attachment_message(db, session, att)
+
+
+async def _stream_attachment_file(db, session, conversation_id, attachment_id, file_path):
+    """Own the file and revalidate before every chunk and while a read is idle."""
+    pending = None
+    try:
+        await _require_download_authority(db, session, conversation_id, attachment_id)
+        with file_path.open("rb") as handle:
+            try:
+                while True:
+                    await _require_download_authority(db, session, conversation_id, attachment_id)
+                    pending = asyncio.create_task(asyncio.to_thread(handle.read, 65536))
+                    while True:
+                        done, _ = await asyncio.wait({pending}, timeout=0.25)
+                        await _require_download_authority(db, session, conversation_id, attachment_id)
+                        if done:
+                            break
+                    chunk = pending.result()
+                    pending = None
+                    if not chunk:
+                        return
+                    yield chunk
+            finally:
+                if pending is not None:
+                    # A thread performing a file read cannot be forcibly stopped.
+                    # Finish it without emitting bytes before closing its handle.
+                    with suppress(Exception):
+                        await asyncio.shield(pending)
+    except HTTPException as exc:
+        if exc.status_code in (401, 403, 404):
+            return
+        raise
 
 
 @router.delete(
@@ -337,14 +431,14 @@ async def preview_attachment(
 async def delete_attachment(
     conversation_id: str,
     attachment_id: str,
-    owner_id: str = Depends(get_current_owner),
+    session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Soft-delete an attachment. Retains physical file on disk for retention lifecycle."""
     # 1. Verify parent conversation
     conv_stmt = select(Conversation).where(
         Conversation.id == conversation_id,
-        Conversation.owner_id == owner_id,
+        Conversation.profile_id == session.profile_id,
         Conversation.deleted_at.is_(None),
     )
     conv = (await db.execute(conv_stmt)).scalar_one_or_none()
@@ -357,6 +451,8 @@ async def delete_attachment(
     # 2. Verify attachment
     att_stmt = select(Attachment).where(
         Attachment.id == attachment_id,
+        Attachment.profile_id == session.profile_id,
+        Attachment.conversation_id == conversation_id,
         Attachment.is_deleted.is_(False),
     )
     att = (await db.execute(att_stmt)).scalar_one_or_none()
@@ -366,13 +462,29 @@ async def delete_attachment(
             detail="Attachment not found",
         )
 
-    if att.owner_id != owner_id:
+    if att.profile_id != session.profile_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to access this attachment",
         )
 
+    await _require_attachment_message(db, session, att)
+
     # 3. Soft-delete
     att.is_deleted = True
     att.deleted_at = utc_now()
+    await validate_profile_session(db, session)
     await db.commit()
+
+
+async def _require_attachment_message(db: AsyncSession, session: ProfileSession, att: Attachment) -> None:
+    """A bound attachment also requires the same active, owned message parent."""
+    if att.message_id is None:
+        return
+    message = await db.scalar(select(Message.id).where(
+        Message.id == att.message_id, Message.profile_id == session.profile_id,
+        Message.conversation_id == att.conversation_id, Message.deleted_at.is_(None),
+        Message.is_deleted.is_(False),
+    ))
+    if message is None:
+        raise HTTPException(status_code=404, detail="Attachment not found")

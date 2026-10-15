@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Fixed — PR #27 CI scheduling
+
+- Serialized Desktop test files in CI so real Windows runtime acceptance checks do not compete with other test files; retained all tests, production deadlines and fail-closed process checks.
+
+### Implemented & Locally Verified (2026-10-15 - M2: Profile Sessions & Cross-Profile Isolation — Batch B)
+
+- Added migration 008 with Profile Sessions and single-use authorization grants; removed implicit Profile ownership defaults while preserving existing data, foreign keys and FTS5 behavior.
+- Separated pairing diagnostics, independent Windows Host Admin authority and Profile Session personal-data access. Added explicit Desktop approval and browser proof-of-possession exchange without bearer credentials in URLs or browser storage.
+- Enforced Profile isolation across conversations, messages, tasks, memories, attachments and ongoing streams; retained trusted maintenance authority for retention and fail-closed migration recovery.
+- Added Flutter existing-Profile selection, DPAPI session storage, saved-Profile restoration and server-deadline expiry cleanup. `/auth/session/me` preserves Profile metadata and returns validated `expires_at` without renewing the session. Explicit switching revokes prior authority and clears private caches/subscriptions. React uses in-memory sessions; API contracts and client regressions were updated.
+- Reconciled canonical architecture and delivery tracking. Batch B is implemented and locally verified; final independent Implementation, Documentation and Closure review is pending. Hosted PR CI has not run and Windows/Desktop/browser manual acceptance is pending. Full Profile CRUD, PIN enrollment, device enrollment and Character Studio remain future work; wider M2 remains **IN PROGRESS**. Exact local results and prepared PR handoff are recorded in the [branch task](docs/01_Tracking/active/task-feature-m2-profile-foundation-b.md).
+
 ### Added & Verified (2026-10-13 - M2: Profile Schema Foundation & Pre-Migration WAL Backup — Batch A)
 
 - **Profile Schema Foundation (`PC-IDENTITY-001`)**:

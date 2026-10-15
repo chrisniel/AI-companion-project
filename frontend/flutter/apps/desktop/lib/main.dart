@@ -16,6 +16,8 @@ import 'lifecycle/desktop_lifecycle_coordinator.dart';
 import 'lifecycle/live_desktop_adapters.dart';
 import 'platform/desktop_client_settings.dart';
 import 'platform/windows_dpapi_credential_store.dart';
+import 'platform/host_admin_secret_store.dart';
+import 'features/profiles/desktop_profile_controller.dart';
 import 'shell/desktop_shell.dart';
 
 void main(List<String> args) async {
@@ -137,6 +139,7 @@ class AiCompanionDesktopApp extends StatefulWidget {
 class _AiCompanionDesktopAppState extends State<AiCompanionDesktopApp> {
   late final DesktopSettingsController _controller;
   late final DesktopChatController _chatController;
+  DesktopProfileController? _profileController;
   DesktopRuntimeCoordinator? _runtimeCoordinator;
   StreamSubscription<RuntimeProcessState>? _runtimeSubscription;
   bool _ownsRuntimeCoordinator = false;
@@ -157,8 +160,13 @@ class _AiCompanionDesktopAppState extends State<AiCompanionDesktopApp> {
       final client = CompanionClient(
         baseUrl: defaultHostUrl,
         credentialStore: store,
+        hostAdminStore: HostAdminSecretStore(),
+        sessionStore: ['127.0.0.1','localhost','::1'].contains(Uri.parse(defaultHostUrl).host)
+            ? WindowsDpapiCredentialStore(slot:DesktopCredentialSlot.profileSession)
+            : InMemoryCredentialStore(),
       );
       _chatController = DesktopChatController(client: client);
+      _profileController = DesktopProfileController(chat:_chatController);
     }
 
     _initializeRuntime(defaultHostUrl, store);
@@ -174,7 +182,8 @@ class _AiCompanionDesktopAppState extends State<AiCompanionDesktopApp> {
       _effectiveClientSettings.readHostUrl(defaultValue: defaultHostUrl).then((host) {
         if (!mounted) return;
         if (host != defaultHostUrl && widget.chatController == null) {
-          _chatController.updateConfiguration(baseUrl: host);
+          _chatController.updateConfiguration(
+              baseUrl: host, restoreSavedSession: true);
         }
         _runtimeCoordinator = DesktopRuntimeCoordinator(
           baseUrl: host,
@@ -197,8 +206,12 @@ class _AiCompanionDesktopAppState extends State<AiCompanionDesktopApp> {
       if (!mounted) return;
       _controller.updateRuntimeState(state, rc.activeRuntimeInfo);
       widget.coordinator?.updateRuntimeStatus(state);
-      if (state.isOperational) {
-        _chatController.checkConnection();
+      if (state.isOperational || state.status == RuntimeStatus.reachableUnauthenticated) {
+        if (_profileController != null) {
+          _profileController!.refresh(initializeDefault:true);
+        } else {
+          _chatController.checkConnection();
+        }
       }
     });
 
@@ -208,6 +221,7 @@ class _AiCompanionDesktopAppState extends State<AiCompanionDesktopApp> {
 
   @override
   void dispose() {
+    _profileController?.dispose();
     _runtimeSubscription?.cancel();
     if (_ownsRuntimeCoordinator) {
       _runtimeCoordinator?.dispose();
@@ -230,6 +244,7 @@ class _AiCompanionDesktopAppState extends State<AiCompanionDesktopApp> {
             controller: _controller,
             coordinator: widget.coordinator,
             chatController: _chatController,
+            profileController: _profileController,
             runtimeCoordinator: _runtimeCoordinator,
             clientSettings: widget.clientSettings,
             credentialStore: widget.credentialStore,

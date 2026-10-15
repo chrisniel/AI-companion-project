@@ -6,6 +6,8 @@ from app.models.conversation import Conversation
 from app.models.message import Message
 from app.models.memory import Memory
 from app.models.attachment import Attachment
+from app.models.profile_session import ProfileSession
+from app.models.session_ticket import SessionTicket
 
 __all__ = [
     "Profile",
@@ -14,4 +16,6 @@ __all__ = [
     "Message",
     "Memory",
     "Attachment",
+    "ProfileSession",
+    "SessionTicket",
 ]

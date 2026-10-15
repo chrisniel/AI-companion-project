@@ -73,8 +73,8 @@ export const DevicesView: React.FC = () => {
       return {
         title: 'Workstation Telemetry Protected',
         description:
-          'The local companion runtime is online and reachable, but detailed workstation telemetry requires pairing or an API authorization key. You can configure your pairing key in Settings.',
-        badgeText: 'Pairing Required',
+          'The local companion runtime is online and reachable. Workstation administration and detailed telemetry are available in Flutter Desktop.',
+        badgeText: 'Desktop Required',
         iconType: 'auth',
       };
     }
@@ -82,7 +82,7 @@ export const DevicesView: React.FC = () => {
       return {
         title: 'Workstation Telemetry Access Denied',
         description:
-          'The configured pairing key does not have permission to access workstation telemetry.',
+          'Open Flutter Desktop on the host to view workstation telemetry. Browser Profile Sessions do not grant host administration.',
         badgeText: 'Forbidden',
         iconType: 'forbidden',
       };

@@ -6,7 +6,9 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_owner, get_db
+from app.api.deps import get_current_profile_session, get_db
+from app.core.profile_sessions import validate_profile_session
+from app.models.profile_session import ProfileSession
 from app.core.errors import CompanionNotFoundError
 from app.models.task import Task
 from app.schemas.task import (
@@ -32,12 +34,12 @@ async def list_tasks(
     category_filter: Optional[TaskCategory] = Query(None, alias="category", description="Filter tasks by category."),
     skip: int = Query(0, ge=0, description="Offset for pagination."),
     limit: int = Query(50, ge=1, le=100, description="Page limit."),
-    owner_id: str = Depends(get_current_owner),
+    session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
 ) -> TaskListResponse:
     """List active (non-deleted) tasks owned by the authenticated profile with optional filtering."""
     query = select(Task).where(
-        Task.owner_id == owner_id,
+        Task.profile_id == session.profile_id,
         Task.is_deleted.is_(False),
     )
 
@@ -67,7 +69,7 @@ async def list_tasks(
 @router.post("", response_model=TaskResponse, status_code=status.HTTP_201_CREATED, summary="Create Task")
 async def create_task(
     payload: TaskCreate,
-    owner_id: str = Depends(get_current_owner),
+    session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
 ) -> TaskResponse:
     """Create a new action item or reminder strictly scoped to the authenticated owner."""
@@ -77,7 +79,7 @@ async def create_task(
         reminder_at = payload.due_date - timedelta(minutes=payload.reminder_minutes_before)
 
     task = Task(
-        owner_id=owner_id,
+        profile_id=session.profile_id,
         title=payload.title,
         notes=payload.notes,
         category=payload.category.value,
@@ -90,6 +92,7 @@ async def create_task(
         deleted_at=None,
     )
     db.add(task)
+    await validate_profile_session(db, session)
     await db.commit()
     await db.refresh(task)
     return TaskResponse.model_validate(task)
@@ -99,12 +102,12 @@ async def create_task(
 async def list_trash(
     skip: int = Query(0, ge=0, description="Offset for pagination."),
     limit: int = Query(50, ge=1, le=100, description="Page limit."),
-    owner_id: str = Depends(get_current_owner),
+    session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
 ) -> TrashListResponse:
     """List soft-deleted tasks in the Recycle Bin for the authenticated profile with purge expiry countdown."""
     query = select(Task).where(
-        Task.owner_id == owner_id,
+        Task.profile_id == session.profile_id,
         Task.is_deleted.is_(True),
     )
 
@@ -128,13 +131,13 @@ async def list_trash(
 @router.get("/{task_id}", response_model=TaskResponse, summary="Get Task by ID")
 async def get_task(
     task_id: str,
-    owner_id: str = Depends(get_current_owner),
+    session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
 ) -> TaskResponse:
     """Retrieve an active single task by its unique UUID identifier."""
     query = select(Task).where(
         Task.id == task_id,
-        Task.owner_id == owner_id,
+        Task.profile_id == session.profile_id,
         Task.is_deleted.is_(False),
     )
     result = await db.execute(query)
@@ -150,13 +153,13 @@ async def get_task(
 async def update_task(
     task_id: str,
     payload: TaskUpdate,
-    owner_id: str = Depends(get_current_owner),
+    session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
 ) -> TaskResponse:
     """Partially update specific fields on an existing active task."""
     query = select(Task).where(
         Task.id == task_id,
-        Task.owner_id == owner_id,
+        Task.profile_id == session.profile_id,
         Task.is_deleted.is_(False),
     )
     result = await db.execute(query)
@@ -177,6 +180,8 @@ async def update_task(
         else:
             task.reminder_at = None
 
+    await validate_profile_session(db, session)
+
     await db.commit()
     await db.refresh(task)
     return TaskResponse.model_validate(task)
@@ -185,13 +190,13 @@ async def update_task(
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Soft Delete Task")
 async def delete_task(
     task_id: str,
-    owner_id: str = Depends(get_current_owner),
+    session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Move a task to the Recycle Bin (soft delete, Section 16.1)."""
     query = select(Task).where(
         Task.id == task_id,
-        Task.owner_id == owner_id,
+        Task.profile_id == session.profile_id,
         Task.is_deleted.is_(False),
     )
     result = await db.execute(query)
@@ -202,19 +207,20 @@ async def delete_task(
 
     task.is_deleted = True
     task.deleted_at = datetime.now(timezone.utc)
+    await validate_profile_session(db, session)
     await db.commit()
 
 
 @router.post("/{task_id}/restore", response_model=TaskResponse, summary="Restore Soft-Deleted Task")
 async def restore_task(
     task_id: str,
-    owner_id: str = Depends(get_current_owner),
+    session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
 ) -> TaskResponse:
     """Restore a soft-deleted task from the Recycle Bin back to active status."""
     query = select(Task).where(
         Task.id == task_id,
-        Task.owner_id == owner_id,
+        Task.profile_id == session.profile_id,
         Task.is_deleted.is_(True),
     )
     result = await db.execute(query)
@@ -225,6 +231,7 @@ async def restore_task(
 
     task.is_deleted = False
     task.deleted_at = None
+    await validate_profile_session(db, session)
     await db.commit()
     await db.refresh(task)
     return TaskResponse.model_validate(task)
@@ -233,13 +240,13 @@ async def restore_task(
 @router.delete("/{task_id}/permanent", status_code=status.HTTP_204_NO_CONTENT, summary="Permanently Delete Task")
 async def permanent_delete_task(
     task_id: str,
-    owner_id: str = Depends(get_current_owner),
+    session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Permanently delete a task row from the database (must currently reside in Trash)."""
     query = select(Task).where(
         Task.id == task_id,
-        Task.owner_id == owner_id,
+        Task.profile_id == session.profile_id,
         Task.is_deleted.is_(True),
     )
     result = await db.execute(query)
@@ -249,4 +256,5 @@ async def permanent_delete_task(
         raise CompanionNotFoundError(message=f"Task with ID {task_id!r} not found in Trash.")
 
     await db.delete(task)
+    await validate_profile_session(db, session)
     await db.commit()

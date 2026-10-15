@@ -13,7 +13,7 @@ import {
   RegistryEntry,
 } from '../services/api/registryApi';
 import { streamSendMessage } from '../services/api/conversationApi';
-import { ApiError } from '../services/api/client';
+import { ApiError, setSessionToken } from '../services/api/client';
 
 describe('Phase 8B.6 Attachment API & Registry Tests', () => {
   const originalFetch = globalThis.fetch;
@@ -23,7 +23,7 @@ describe('Phase 8B.6 Attachment API & Registry Tests', () => {
   beforeEach(() => {
     localStorage.clear();
     localStorage.setItem('companion_api_url', 'http://127.0.0.1:8000');
-    localStorage.setItem('companion_api_key', 'test-pairing-key');
+    setSessionToken('psk_test-profile');
     URL.createObjectURL = vi.fn().mockReturnValue('blob:http://localhost/test-blob-uuid');
     URL.revokeObjectURL = vi.fn();
   });
@@ -33,6 +33,7 @@ describe('Phase 8B.6 Attachment API & Registry Tests', () => {
     URL.createObjectURL = originalCreateObjectURL;
     URL.revokeObjectURL = originalRevokeObjectURL;
     vi.restoreAllMocks();
+    setSessionToken('');
   });
 
   describe('canonical constraints', () => {
@@ -76,7 +77,7 @@ describe('Phase 8B.6 Attachment API & Registry Tests', () => {
       expect(capturedUrl).toBe('http://127.0.0.1:8000/api/v1/conversations/conv-1/attachments');
       expect(capturedInit?.method).toBe('POST');
       const headers = capturedInit?.headers as Headers;
-      expect(headers.get('Authorization')).toBe('Bearer test-pairing-key');
+      expect(headers.get('Authorization')).toBe('Bearer psk_test-profile');
       // Crucial: Content-Type must NOT be set manually on FormData requests
       expect(headers.get('Content-Type')).toBeNull();
       expect(capturedInit?.body).toBeInstanceOf(FormData);
@@ -129,7 +130,7 @@ describe('Phase 8B.6 Attachment API & Registry Tests', () => {
 
       // Assert EXACT /preview route
       expect(capturedUrl).toBe('http://127.0.0.1:8000/api/v1/conversations/conv-1/attachments/att-123/preview');
-      expect(capturedHeaders?.get('Authorization')).toBe('Bearer test-pairing-key');
+      expect(capturedHeaders?.get('Authorization')).toBe('Bearer psk_test-profile');
       expect(URL.createObjectURL).toHaveBeenCalledWith(mockBlob);
       expect(blobUrl).toBe('blob:http://localhost/test-blob-uuid');
     });

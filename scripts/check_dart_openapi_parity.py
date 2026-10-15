@@ -70,8 +70,21 @@ M1_ROUTE_DART_METHODS: Dict[Tuple[str, str], Tuple[str, str]] = {
     ("POST", "/api/v1/conversations/{conversation_id}/messages"): ("sendMessageStream", "/api/v1/conversations/$conversationId/messages"),
 }
 
-# Explicitly cataloged M2-M4 future routes to prevent silent omissions
+# Native identity routes delivered in M2 Batch B. Paths below are relative
+# arguments to CompanionClient._sessionRequest, which prefixes /api/v1/.
+M2_ROUTE_DART_METHODS: Dict[Tuple[str, str], Tuple[str, str]] = {
+    ("GET", "/api/v1/profiles"): ("listProfiles", "'profiles'"),
+    ("GET", "/api/v1/auth/bootstrap/requests"): ("pendingBrowserRequests", "'auth/bootstrap/requests'"),
+    ("POST", "/api/v1/auth/bootstrap/ticket"): ("approveBrowserRequest", "'auth/bootstrap/ticket'"),
+    ("POST", "/api/v1/auth/session/exchange"): ("establishProfileSession", "'auth/session/exchange'"),
+    ("GET", "/api/v1/auth/session/me"): ("getOwnSession", "'auth/session/me'"),
+    ("POST", "/api/v1/auth/session/revoke"): ("revokeProfileSession", "'auth/session/revoke'"),
+}
+
+# Explicitly cataloged routes outside CompanionClient to prevent silent omissions.
 UNMAPPED_FUTURE_ROUTES: Dict[Tuple[str, str], str] = {
+    ("POST", "/api/v1/auth/session/claim"): "M2 browser-only authorization initiation",
+    ("GET", "/api/v1/profiles/{profile_id}"): "M2 scoped metadata; native client uses session/me",
     ("GET", "/api/v1/tasks"): "M2 Tasks / Task Management",
     ("POST", "/api/v1/tasks"): "M2 Tasks / Task Management",
     ("GET", "/api/v1/tasks/trash"): "M2 Tasks / Trash Management",
@@ -317,12 +330,18 @@ def verify_route_coverage(openapi_data: Dict[str, Any]) -> Tuple[List[str], List
         else:
             errors.append(f"[Route Coverage] Required M1 route missing from OpenAPI: {method} {path}")
 
+    for method, path in sorted(M2_ROUTE_DART_METHODS):
+        if (method, path) in all_openapi_routes:
+            verified_m1.append((method, path))
+        else:
+            errors.append(f"[Route Coverage] Required M2 route missing from OpenAPI: {method} {path}")
+
     # Check unmapped routes against catalog
     unmapped_cataloged: List[Tuple[str, str, str]] = []
     unaccounted_routes: List[Tuple[str, str]] = []
 
     for method, path in sorted(all_openapi_routes):
-        if (method, path) in M1_COVERED_ROUTES:
+        if (method, path) in M1_COVERED_ROUTES or (method, path) in M2_ROUTE_DART_METHODS:
             continue
         if (method, path) in UNMAPPED_FUTURE_ROUTES:
             unmapped_cataloged.append((method, path, UNMAPPED_FUTURE_ROUTES[(method, path)]))
@@ -351,11 +370,12 @@ def verify_companion_client_implementations(client_path: Path) -> Tuple[List[str
 
     content = client_path.read_text(encoding="utf-8")
 
-    for (http_method, openapi_path), (method_name, dart_path_template) in sorted(M1_ROUTE_DART_METHODS.items()):
+    covered_methods = {**M1_ROUTE_DART_METHODS, **M2_ROUTE_DART_METHODS}
+    for (http_method, openapi_path), (method_name, dart_path_template) in sorted(covered_methods.items()):
         method_pattern = rf"\b{re.escape(method_name)}\s*\("
         if not re.search(method_pattern, content):
             errors.append(
-                f"[Client Implementation] Route {http_method} {openapi_path} is claimed in M1, but CompanionClient lacks method '{method_name}()'"
+                f"[Client Implementation] Route {http_method} {openapi_path} is claimed, but CompanionClient lacks method '{method_name}()'"
             )
             continue
 
@@ -425,11 +445,11 @@ def run_checks() -> Tuple[bool, str]:
     if route_errors:
         all_errors.extend(route_errors)
 
-    report_lines.append(f"\n[M1 Covered Routes: {len(verified_m1)}/{len(M1_COVERED_ROUTES)}]")
+    report_lines.append(f"\n[M1 + M2 Native Covered Routes: {len(verified_m1)}/{len(M1_COVERED_ROUTES) + len(M2_ROUTE_DART_METHODS)}]")
     for method, path in verified_m1:
         report_lines.append(f"  [OK] {method:<6} {path}")
 
-    report_lines.append(f"\n[Unmapped Future Routes (M2-M4): {len(unmapped_future)} registered]")
+    report_lines.append(f"\n[Registered Routes Outside CompanionClient: {len(unmapped_future)} registered]")
     for method, path, target in unmapped_future:
         report_lines.append(f"  -    {method:<6} {path:<65} [{target}]")
 
@@ -438,7 +458,7 @@ def run_checks() -> Tuple[bool, str]:
     if client_errors:
         all_errors.extend(client_errors)
 
-    report_lines.append(f"\n[Verified CompanionClient Route Methods: {len(verified_impls)}/{len(M1_ROUTE_DART_METHODS)}]")
+    report_lines.append(f"\n[Verified CompanionClient Route Methods: {len(verified_impls)}/{len(M1_ROUTE_DART_METHODS) + len(M2_ROUTE_DART_METHODS)}]")
     for method, path, dart_method in verified_impls:
         report_lines.append(f"  [OK] {method:<6} {path:<48} -> {dart_method}()")
 

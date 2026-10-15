@@ -92,9 +92,39 @@ def test_token() -> str:
 
 
 @pytest.fixture(scope="session")
-def auth_headers(test_token: str) -> dict:
-    """Fixture providing Authorization: Bearer header."""
+def pairing_headers(test_token: str) -> dict:
+    """Legacy pairing grants diagnostic telemetry only."""
     return {"Authorization": f"Bearer {test_token}"}
+
+
+@pytest.fixture
+async def profile_id(test_session):
+    return test_session.info["default_profile_id"]
+
+
+@pytest.fixture
+async def profile_session(test_session, profile_id):
+    from app.core.profile_sessions import new_profile_session
+    token, session = new_profile_session(profile_id, "desktop")
+    test_session.add(session)
+    await test_session.commit()
+    session_token = token
+    test_session.info["profile_session_token"] = session_token
+    return session
+
+
+@pytest.fixture
+async def auth_headers(test_session, profile_session) -> dict:
+    """Personal API tests use real persisted, expiring Profile Sessions."""
+    return {"Authorization": f"Bearer {test_session.info['profile_session_token']}"}
+
+
+@pytest.fixture
+def host_admin_headers(monkeypatch):
+    from app.core import host_admin
+    credential = "test-host-admin-independent-credential"
+    monkeypatch.setattr(host_admin, "read_host_admin_secret", lambda: credential)
+    return {"X-Host-Admin-Secret": credential}
 
 
 @pytest.fixture(scope="session")
@@ -142,6 +172,10 @@ async def test_session() -> AsyncGenerator[AsyncSession, None]:
         """))
 
     async with async_session() as session:
+        from sqlalchemy import select
+        from app.models.profile import Profile
+        session.info["default_profile_id"] = (await session.execute(
+            select(Profile.id).where(Profile.is_default.is_(True)))).scalar_one()
         yield session
 
     async with engine.begin() as conn:
@@ -156,9 +190,11 @@ async def test_session() -> AsyncGenerator[AsyncSession, None]:
 async def client(test_session: AsyncSession, test_token: str) -> AsyncGenerator[AsyncClient, None]:
     """Async test client with get_db overridden to use the in-memory test_session."""
     app.dependency_overrides[get_db] = lambda: test_session
+    if hasattr(app.state, "bootstrap_attempts"):
+        app.state.bootstrap_attempts.clear()
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
+    async with AsyncClient(transport=transport, base_url="http://127.0.0.1") as ac:
         yield ac
 
     app.dependency_overrides.clear()

@@ -36,7 +36,7 @@ def test_fresh_database_does_not_create_backup():
         backup_dir = tmp_root / "backups"
 
         rev = prepare_database_schema(db_path, backup_dir=backup_dir)
-        assert rev == "007_profiles_and_owner_id_migration"
+        assert rev == "008_profile_sessions_and_tickets"
 
         # Verify no backups created
         if backup_dir.exists():
@@ -69,7 +69,7 @@ def test_existing_older_database_creates_backup_before_upgrade():
 
         # Run prepare_database_schema which should detect upgrade needed and trigger backup
         rev = prepare_database_schema(db_path, backup_dir=backup_dir)
-        assert rev == "007_profiles_and_owner_id_migration"
+        assert rev == "008_profile_sessions_and_tickets"
 
         # Verify backup was created
         assert backup_dir.exists()
@@ -123,13 +123,13 @@ def test_database_already_at_head_creates_no_redundant_backup():
         db_path = tmp_root / "database" / "companion.db"
         backup_dir = tmp_root / "backups"
 
-        # First run upgrades fresh to 007
+        # First run upgrades fresh to 008
         rev1 = prepare_database_schema(db_path, backup_dir=backup_dir)
-        assert rev1 == "007_profiles_and_owner_id_migration"
+        assert rev1 == "008_profile_sessions_and_tickets"
 
         # Subsequent startup
         rev2 = prepare_database_schema(db_path, backup_dir=backup_dir)
-        assert rev2 == "007_profiles_and_owner_id_migration"
+        assert rev2 == "008_profile_sessions_and_tickets"
 
         if backup_dir.exists():
             backups = list(backup_dir.glob("pre_migration_*.db"))

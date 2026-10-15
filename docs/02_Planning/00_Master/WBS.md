@@ -69,8 +69,8 @@
 - **`PC-API-005`**: Structured Error Codes & Diagnostic Correlation IDs.
 
 ### Stream: `PC-IDENTITY` — Multi-Profile & Accounts
-- **`PC-IDENTITY-001`**: Account & Multi-Profile Database Schema Migration (`owner_id` → `profile_id` transition; Batch A Schema Foundation & Migration 007 verified; Batch B Profile Sessions & cutover pending).
-- **`PC-IDENTITY-002`**: Strict Profile Authorization Context Middleware & Isolation Enforcement.
+- **`PC-IDENTITY-001`**: Account & Multi-Profile Database Schema Migration (`owner_id` → `profile_id` transition; Batch A migration 007 verified; Batch B migration 008 removed implicit ownership defaults and implemented the Profile Session cutover, locally verified; independent delivery review pending).
+- **`PC-IDENTITY-002`**: Strict Profile Authorization Context Middleware & Isolation Enforcement — Batch B implemented and locally verified: personal-data/service/stream ownership, independent Host Admin/browser approval, Desktop session restoration and absolute-expiry cleanup ([plan](../01_Plans/plan-m2-profile-foundation-b.md)); independent delivery gates and manual G2 acceptance pending.
 - **`PC-IDENTITY-003`**: Satellite Device Enrollment & Single-Profile Binding (Individually revocable credentials).
 - **`PC-IDENTITY-004`**: Local PC Admin Profile Management Service (Create, rename, PIN protect, delete).
 - **`PC-IDENTITY-005`**: 7-Day Recoverable Profile Deletion Lifecycle & Hard Purge Maintenance.

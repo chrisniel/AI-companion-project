@@ -8,6 +8,10 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.attachment import Attachment
+from app.models.conversation import Conversation
+from app.models.message import Message
+from app.models.profile_session import ProfileSession
+from app.core.profile_sessions import validate_profile_session
 from app.schemas.attachment import MAX_ATTACHMENTS_PER_MESSAGE
 
 logger = logging.getLogger("app.services.attachment_service")
@@ -77,7 +81,7 @@ async def claim_attachments_for_message(
     attachment_ids: list[str],
     *,
     message_id: str,
-    owner_id: str,
+    profile_session: ProfileSession,
     conversation_id: str,
 ) -> None:
     """Claim staged attachments atomically for message_id within the caller's transaction.
@@ -90,6 +94,20 @@ async def claim_attachments_for_message(
 
     The caller must catch exceptions and roll back the entire preparation transaction.
     """
+    profile_session = await validate_profile_session(db, profile_session)
+    parent = await db.scalar(select(Conversation.id).where(
+        Conversation.id == conversation_id,
+        Conversation.profile_id == profile_session.profile_id,
+        Conversation.deleted_at.is_(None),
+        Conversation.is_deleted.is_(False),
+    ))
+    message = await db.scalar(select(Message.id).where(
+        Message.id == message_id, Message.conversation_id == conversation_id,
+        Message.profile_id == profile_session.profile_id, Message.deleted_at.is_(None),
+    ))
+    if parent is None or message is None:
+        raise AttachmentNotFoundError()
+    validate_attachment_ids_syntax(attachment_ids)
     if not attachment_ids:
         return
 
@@ -99,7 +117,7 @@ async def claim_attachments_for_message(
             update(Attachment)
             .where(
                 Attachment.id == att_id,
-                Attachment.owner_id == owner_id,
+                Attachment.profile_id == profile_session.profile_id,
                 Attachment.conversation_id == conversation_id,
                 Attachment.message_id.is_(None),
                 Attachment.is_deleted.is_(False),
@@ -121,7 +139,7 @@ async def claim_attachments_for_message(
                 raise AttachmentNotFoundError("ATTACHMENT_NOT_FOUND")
 
             # Rule 2: Foreign owner under validated parent conversation (BOLA guard)
-            if att.owner_id != owner_id:
+            if att.profile_id != profile_session.profile_id:
                 raise AttachmentForbiddenError("ATTACHMENT_FORBIDDEN")
 
             # Rule 3: Soft-deleted
