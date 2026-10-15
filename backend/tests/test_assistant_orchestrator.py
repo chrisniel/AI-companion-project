@@ -318,7 +318,10 @@ async def test_conversation_reusable_after_failure_and_cancellation(test_session
 
 
 @pytest.mark.anyio
-async def test_stream_task_cancellation_exercises_cancelled_error(test_session: AsyncSession):
+@pytest.mark.parametrize("cancel_at", ["consumer", "provider_wait", "token_ready"])
+async def test_stream_task_cancellation_exercises_cancelled_error(
+    test_session: AsyncSession, monkeypatch, cancel_at,
+):
     """Verify that cancelling an asyncio.Task running the stream triggers CancelledError and preserves state."""
     conv = Conversation(profile_id=(await session_for_owner(test_session, "test-owner")).profile_id, id="conv-task-cancel-test", owner_id="test-owner", title="Task Cancel Test")
     test_session.add(conv)
@@ -345,27 +348,57 @@ async def test_stream_task_cancellation_exercises_cancelled_error(test_session: 
     )
 
     received_tokens = []
+    consumer_paused = asyncio.Event()
+    provider_paused = asyncio.Event()
+    provider_closed = asyncio.Event()
+
+    if cancel_at != "consumer":
+        async def ready_token_stream(*args, **kwargs):
+            try:
+                if cancel_at == "provider_wait":
+                    provider_paused.set()
+                    await asyncio.Event().wait()
+                else:
+                    # Complete the token future and cancel its waiting consumer in
+                    # the same loop turn: Python 3.11 wait_for can lose this cancel.
+                    loop = asyncio.get_running_loop()
+                    loop.call_soon(loop.call_soon, task.cancel)
+                yield "must not escape cancellation"
+            finally:
+                provider_closed.set()
+
+        monkeypatch.setattr(provider, "generate_stream", ready_token_stream)
 
     async def consume_stream():
         try:
             async for chunk in stream_gen:
                 received_tokens.append(chunk)
-                await asyncio.sleep(0.01)
+                if cancel_at == "consumer":
+                    consumer_paused.set()
+                    await asyncio.Event().wait()
         finally:
             await stream_gen.aclose()
 
     task = asyncio.create_task(consume_stream())
 
-    # Wait for at least one chunk to be consumed
-    for _ in range(50):
-        if received_tokens:
-            break
-        await asyncio.sleep(0.01)
+    try:
+        async with asyncio.timeout(5):
+            if cancel_at == "consumer":
+                await consumer_paused.wait()
+                task.cancel()
+            elif cancel_at == "provider_wait":
+                await provider_paused.wait()
+                task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+    finally:
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
 
-    # Cancel the task
-    task.cancel()
-    with pytest.raises(asyncio.CancelledError):
-        await task
+    if cancel_at != "consumer":
+        assert received_tokens == []
+        assert provider_closed.is_set()
 
     # Assert lock is released and provider inactive
     assert lock.locked() is False

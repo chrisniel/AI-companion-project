@@ -200,11 +200,13 @@ async def _authorized_tokens(db, profile_session, conversation_id, turn, tokens)
             await _require_prepared_turn(db, profile_session, conversation_id, turn)
             pending = asyncio.create_task(anext(tokens))
             while True:
-                try:
-                    token = await asyncio.wait_for(asyncio.shield(pending), timeout=0.25)
+                # wait() preserves consumer cancellation when a token completes
+                # concurrently (Python 3.11 wait_for can swallow that race).
+                done, _ = await asyncio.wait({pending}, timeout=0.25)
+                if done:
+                    token = pending.result()
                     break
-                except asyncio.TimeoutError:
-                    await _require_prepared_turn(db, profile_session, conversation_id, turn)
+                await _require_prepared_turn(db, profile_session, conversation_id, turn)
             pending = None
             await _require_prepared_turn(db, profile_session, conversation_id, turn)
             yield token
