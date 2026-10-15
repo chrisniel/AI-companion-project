@@ -15,6 +15,7 @@ class DesktopProfileController extends ChangeNotifier {
   String? error;
   bool busy = false;
   bool _disposed = false;
+  bool _allowDefaultBootstrap = true;
   late int _chatEpoch;
   void _onChatChanged() {
     if (_chatEpoch != chat.profileEpoch) {
@@ -43,12 +44,30 @@ class DesktopProfileController extends ChangeNotifier {
     error = null;
     _notify();
     try {
-      if (await chat.client.sessionStore.readToken() == null) {
+      final savedToken = await chat.client.sessionStore.readToken();
+      if (savedToken == null) {
         activeProfileId = null;
+      } else {
+        _allowDefaultBootstrap = false;
+        if (initializeDefault) {
+          await chat.checkConnection(preserveSavedSessionOnFailure: true);
+          final restoredProfileId = chat.authenticatedProfileId;
+          if (restoredProfileId == null) {
+            activeProfileId = null;
+            selectedProfileId = null;
+            error =
+                'Saved Profile access could not be restored. Select a Profile to authorize access.';
+          } else {
+            activeProfileId = restoredProfileId;
+            selectedProfileId = restoredProfileId;
+          }
+        }
       }
       profiles = await chat.client.listProfiles();
       requests = await chat.client.pendingBrowserRequests();
-      if (!profiles.any((p) => p['id'] == selectedProfileId)) {
+      if (_allowDefaultBootstrap &&
+          activeProfileId == null &&
+          !profiles.any((p) => p['id'] == selectedProfileId)) {
         final eligible = profiles.where((p) =>
             p['is_default'] == true &&
             p['status'] == 'active' &&
@@ -56,9 +75,14 @@ class DesktopProfileController extends ChangeNotifier {
         selectedProfileId =
             eligible.isEmpty ? null : eligible.first['id'] as String;
       }
-      if (initializeDefault && activeProfileId == null && canUseSelected) {
+      if (initializeDefault &&
+          _allowDefaultBootstrap &&
+          activeProfileId == null &&
+          canUseSelected &&
+          profiles.any((p) => p['id'] == selectedProfileId && p['is_default'] == true)) {
+        _allowDefaultBootstrap = false;
         await chat.selectProfile(selectedProfileId!);
-        activeProfileId = selectedProfileId;
+        activeProfileId = chat.authenticatedProfileId;
       }
     } catch (_) {
       error =

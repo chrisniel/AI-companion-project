@@ -52,6 +52,7 @@ class DesktopChatController extends ChangeNotifier {
   List<MessageOut> _messages = [];
   String _streamingText = '';
   String? _activeModelName;
+  String? _authenticatedProfileId;
   ModelStatusResponse? _modelStatus;
   String? _errorMessage;
   bool _isLoadingConversations = false;
@@ -97,9 +98,12 @@ class DesktopChatController extends ChangeNotifier {
 
   CompanionClient get client => _client;
   int get profileEpoch => _configEpoch;
+  String? get authenticatedProfileId =>
+      isConnected ? _authenticatedProfileId : null;
 
   void _clearPersonalState() {
     _sessionExpiryTimer?.cancel();
+    _authenticatedProfileId = null;
     ++_configEpoch;
     ++_loadSequenceToken;
     _conversations = [];
@@ -117,10 +121,12 @@ class DesktopChatController extends ChangeNotifier {
     _connectionStatus = RuntimeConnectionStatus.unauthorized;
   }
 
-  Future<void> invalidateProfileSession() async {
+  Future<void> invalidateProfileSession({bool clearStoredToken = true}) async {
     _clearPersonalState();
     await cancelGeneration();
-    await _client.sessionStore.deleteToken();
+    if (clearStoredToken) {
+      await _client.sessionStore.deleteToken();
+    }
     if (!_isDisposed) notifyListeners();
   }
 
@@ -294,15 +300,21 @@ class DesktopChatController extends ChangeNotifier {
   }
 
   /// Updates runtime configuration authoritatively, discarding in-flight operations.
-  Future<void> updateConfiguration({required String baseUrl, String? pairingToken}) async {
+  Future<void> updateConfiguration({
+    required String baseUrl,
+    String? pairingToken,
+    bool restoreSavedSession = false,
+  }) async {
     if (_isDisposed) return;
-    CompanionClient.validateBaseUrl(baseUrl);
+    final targetUri = CompanionClient.validateBaseUrl(baseUrl);
+    final isLocalRuntime =
+        ['127.0.0.1', 'localhost', '::1'].contains(targetUri.host);
     final currentEpoch = ++_configEpoch;
 
     if (isGenerating) {
       await cancelGeneration();
     }
-    if (await _client.sessionStore.readToken() != null) {
+    if (!restoreSavedSession && await _client.sessionStore.readToken() != null) {
       try { await _client.revokeProfileSession(); }
       on CompanionApiException catch (error) {
         if (error.statusCode != 401 && error.statusCode != 403) rethrow;
@@ -315,13 +327,15 @@ class DesktopChatController extends ChangeNotifier {
       await _client.credentialStore!.writeToken(pairingToken.trim());
     }
 
-    _client = _clientFactory != null
+    _client = _clientFactory != null && (!restoreSavedSession || isLocalRuntime)
         ? _clientFactory(baseUrl: baseUrl, credentialStore: _client.credentialStore)
         : CompanionClient(
             baseUrl: baseUrl,
             credentialStore: _client.credentialStore,
             hostAdminStore: _client.hostAdminStore,
-            sessionStore: _client.sessionStore,
+            sessionStore: restoreSavedSession && !isLocalRuntime
+                ? InMemoryCredentialStore()
+                : _client.sessionStore,
           );
 
     _conversations = [];
@@ -329,7 +343,15 @@ class DesktopChatController extends ChangeNotifier {
     _messages = [];
     _streamingText = '';
     _errorMessage = null;
+    if (restoreSavedSession) {
+      _authenticatedProfileId = null;
+      _connectionStatus = RuntimeConnectionStatus.unauthorized;
+    }
     notifyListeners();
+
+    // Startup authenticates through /session/me only after runtime readiness.
+    // Keep saved local authority intact; explicit configuration changes revoke.
+    if (restoreSavedSession) return;
 
     await checkConnection();
     if (_configEpoch == currentEpoch && isConnected && !_isDisposed) {
@@ -338,9 +360,10 @@ class DesktopChatController extends ChangeNotifier {
   }
 
   /// Probes public health and protected auth to update connection status.
-  Future<void> checkConnection() async {
+  Future<void> checkConnection({bool preserveSavedSessionOnFailure = false}) async {
     if (_isDisposed) return;
     final epoch = _configEpoch;
+    _authenticatedProfileId = null;
     _connectionStatus = RuntimeConnectionStatus.connecting;
     _errorMessage = null;
     notifyListeners();
@@ -368,6 +391,7 @@ class DesktopChatController extends ChangeNotifier {
           if (_configEpoch != epoch || _isDisposed) return;
 
           if (auth['id'] is String) {
+            _authenticatedProfileId = auth['id'] as String;
             _connectionStatus = RuntimeConnectionStatus.connected;
             _errorMessage = null;
 
@@ -397,7 +421,10 @@ class DesktopChatController extends ChangeNotifier {
           }
         } on CompanionApiException catch (authEx) {
           if (_configEpoch != epoch || _isDisposed) return;
-          if (authEx.statusCode == 401 || authEx.statusCode == 403) await invalidateProfileSession();
+          if (authEx.statusCode == 401 || authEx.statusCode == 403) {
+            await invalidateProfileSession(
+                clearStoredToken: !preserveSavedSessionOnFailure);
+          }
           _connectionStatus = RuntimeConnectionStatus.unauthorized;
           _errorMessage = authEx.message.isNotEmpty
               ? authEx.message

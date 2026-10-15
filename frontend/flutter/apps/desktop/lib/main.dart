@@ -182,7 +182,8 @@ class _AiCompanionDesktopAppState extends State<AiCompanionDesktopApp> {
       _effectiveClientSettings.readHostUrl(defaultValue: defaultHostUrl).then((host) {
         if (!mounted) return;
         if (host != defaultHostUrl && widget.chatController == null) {
-          _chatController.updateConfiguration(baseUrl: host);
+          _chatController.updateConfiguration(
+              baseUrl: host, restoreSavedSession: true);
         }
         _runtimeCoordinator = DesktopRuntimeCoordinator(
           baseUrl: host,
