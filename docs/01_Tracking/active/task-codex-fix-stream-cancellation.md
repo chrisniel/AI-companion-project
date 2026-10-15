@@ -22,4 +22,9 @@
 
 ## Delivery Boundary
 
+- Hosted run `38771304957` passed backend, frontend, contracts and documentation checks on `27c88d9`, but reproduced the older Flutter acceptance failure: real CIM inspection exceeded 3000 ms even with serialized tests; dependent scenarios also failed.
+- Extended only the real launch/stale-lock acceptance fixture's discovery budget to 15 seconds within the existing 25-second startup budget. The real discovery implementation, provenance checks, fail-closed behavior, production three-second deadline and dedicated timeout tests are unchanged. This fixture does not claim successful operation within the production deadline.
+- Advisory review of the fixture adjustment reported no actionable findings. Hosted re-verification is pending at this checkpoint.
+- Local follow-up verification: `flutter test --no-pub --concurrency=1` for `windows_runtime_supervision_acceptance_test.dart` and `windows_runtime_process_supervisor_test.dart` passed **22 tests** using the isolated Python 3.11.9 runtime; `dart analyze` on the changed test reported **No issues found**. `git diff --check` passed.
+
 Commit/push only this correction after verification. Independent human review and merge remain pending; do not modify or close the wider M2 delivery.

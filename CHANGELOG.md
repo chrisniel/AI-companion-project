@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Fixed — Windows acceptance inspection budget
+
+- Gave real-process launch and stale-lock recovery acceptance fixtures a bounded 15-second CIM inspection budget for shared runners. Production deadlines, provenance validation and dedicated timeout regressions remain unchanged.
+
 ### Fixed — Python 3.11 stream cancellation
 
 - Preserved consumer cancellation when a provider token completes concurrently by using cancellation-safe token polling. Retained periodic Profile authority validation and cleanup; added deterministic consumer, blocked-provider and token-ready cancellation regressions.
