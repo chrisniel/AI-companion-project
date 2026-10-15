@@ -43,6 +43,7 @@ typedef CompanionClientFactory = CompanionClient Function({
 class DesktopChatController extends ChangeNotifier {
   CompanionClient _client;
   final CompanionClientFactory? _clientFactory;
+  final DateTime Function() _now;
 
   RuntimeConnectionStatus _connectionStatus = RuntimeConnectionStatus.unconnected;
   ChatGenerationState _generationState = ChatGenerationState.idle;
@@ -59,6 +60,7 @@ class DesktopChatController extends ChangeNotifier {
   String? _conversationError;
 
   StreamSubscription<SseEvent>? _currentStreamSubscription;
+  final Set<StreamSubscription<SseEvent>> _profileSubscriptions = {};
   Completer<bool>? _turnCompleter;
   int _configEpoch = 0;
   int _turnSequenceToken = 0;
@@ -93,8 +95,10 @@ class DesktopChatController extends ChangeNotifier {
   DesktopChatController({
     required CompanionClient client,
     CompanionClientFactory? clientFactory,
+    DateTime Function()? now,
   })  : _client = client,
-        _clientFactory = clientFactory;
+        _clientFactory = clientFactory,
+        _now = now ?? DateTime.now;
 
   CompanionClient get client => _client;
   int get profileEpoch => _configEpoch;
@@ -103,6 +107,7 @@ class DesktopChatController extends ChangeNotifier {
 
   void _clearPersonalState() {
     _sessionExpiryTimer?.cancel();
+    _sessionExpiryTimer = null;
     _authenticatedProfileId = null;
     ++_configEpoch;
     ++_loadSequenceToken;
@@ -110,6 +115,8 @@ class DesktopChatController extends ChangeNotifier {
     _activeConversation = null;
     _messages = [];
     _streamingText = '';
+    _errorMessage = null;
+    _conversationError = null;
     _conversationDrafts.clear();
     _conversationScrollOffsets.clear();
     _userRenamedConversationIds.clear();
@@ -118,7 +125,16 @@ class DesktopChatController extends ChangeNotifier {
     _pendingRenameFutures.clear();
     _isLoadingConversations = false;
     _isCreatingConversation = false;
+    _cancelProfileSubscriptions();
     _connectionStatus = RuntimeConnectionStatus.unauthorized;
+  }
+
+  void _cancelProfileSubscriptions() {
+    for (final subscription in _profileSubscriptions) {
+      unawaited(subscription.cancel());
+    }
+    _profileSubscriptions.clear();
+    _currentStreamSubscription = null;
   }
 
   Future<void> invalidateProfileSession({bool clearStoredToken = true}) async {
@@ -128,6 +144,21 @@ class DesktopChatController extends ChangeNotifier {
       await _client.sessionStore.deleteToken();
     }
     if (!_isDisposed) notifyListeners();
+  }
+
+  void _scheduleSessionExpiry(DateTime expiresAt) {
+    _sessionExpiryTimer?.cancel();
+    final epoch = _configEpoch;
+    final remaining = expiresAt.difference(_now().toUtc());
+    _sessionExpiryTimer = Timer(
+      remaining.isNegative ? Duration.zero : remaining,
+      () {
+        if (!_isDisposed && epoch == _configEpoch) {
+          // Keep expired saved authority inert until explicit authorization.
+          unawaited(invalidateProfileSession(clearStoredToken: false));
+        }
+      },
+    );
   }
 
   /// A Profile change invalidates every pending operation and personal cache.
@@ -143,9 +174,8 @@ class DesktopChatController extends ChangeNotifier {
     }
     final session = await _client.establishProfileSession(profileId);
     final expires = DateTime.tryParse(session['expires_at']?.toString() ?? '');
-    if (expires != null) {
-      final duration = expires.difference(DateTime.now().toUtc());
-      _sessionExpiryTimer = Timer(duration.isNegative ? Duration.zero : duration, invalidateProfileSession);
+    if (expires != null && expires.isUtc) {
+      _scheduleSessionExpiry(expires);
     }
     await checkConnection();
   }
@@ -310,10 +340,13 @@ class DesktopChatController extends ChangeNotifier {
     final isLocalRuntime =
         ['127.0.0.1', 'localhost', '::1'].contains(targetUri.host);
     final currentEpoch = ++_configEpoch;
+    _sessionExpiryTimer?.cancel();
+    _sessionExpiryTimer = null;
 
     if (isGenerating) {
       await cancelGeneration();
     }
+    _cancelProfileSubscriptions();
     if (!restoreSavedSession && await _client.sessionStore.readToken() != null) {
       try { await _client.revokeProfileSession(); }
       on CompanionApiException catch (error) {
@@ -390,7 +423,12 @@ class DesktopChatController extends ChangeNotifier {
           final auth = await _client.getOwnSession();
           if (_configEpoch != epoch || _isDisposed) return;
 
-          if (auth['id'] is String) {
+          final expires = DateTime.tryParse(auth['expires_at']?.toString() ?? '');
+          if (auth['id'] is String &&
+              expires != null &&
+              expires.isUtc &&
+              expires.isAfter(_now().toUtc())) {
+            _scheduleSessionExpiry(expires);
             _authenticatedProfileId = auth['id'] as String;
             _connectionStatus = RuntimeConnectionStatus.connected;
             _errorMessage = null;
@@ -415,7 +453,7 @@ class DesktopChatController extends ChangeNotifier {
               await loadConversations();
             }
           } else {
-            _connectionStatus = RuntimeConnectionStatus.unauthorized;
+            await invalidateProfileSession(clearStoredToken: false);
             _errorMessage = 'Profile session verification failed.';
             _activeModelName = null;
           }
@@ -737,7 +775,8 @@ class DesktopChatController extends ChangeNotifier {
         onAccepted: commitAcceptance,
       );
 
-      _currentStreamSubscription = stream.listen(
+      late final StreamSubscription<SseEvent> subscription;
+      subscription = stream.listen(
         (event) {
           if (_isDisposed ||
               _turnSequenceToken != turnToken ||
@@ -836,6 +875,7 @@ class DesktopChatController extends ChangeNotifier {
           if (!completer.isCompleted) completer.complete(hasBeenAccepted);
         },
         onDone: () {
+          _profileSubscriptions.remove(subscription);
           if (_isDisposed ||
               _turnSequenceToken != turnToken ||
               _activeConversation?.id != boundConvId) {
@@ -866,6 +906,8 @@ class DesktopChatController extends ChangeNotifier {
         },
         cancelOnError: false,
       );
+      _currentStreamSubscription = subscription;
+      _profileSubscriptions.add(subscription);
     } catch (e) {
       _isAwaitingAcceptance = false;
       _generationState = ChatGenerationState.error;
@@ -1045,6 +1087,7 @@ class DesktopChatController extends ChangeNotifier {
 
     final sub = _currentStreamSubscription;
     _currentStreamSubscription = null;
+    _profileSubscriptions.remove(sub);
 
     if (_turnCompleter != null && !_turnCompleter!.isCompleted) {
       _turnCompleter!.complete(!wasAwaitingAcceptance);
@@ -1062,7 +1105,7 @@ class DesktopChatController extends ChangeNotifier {
   void dispose() {
     _sessionExpiryTimer?.cancel();
     _isDisposed = true;
-    _currentStreamSubscription?.cancel();
+    _cancelProfileSubscriptions();
     super.dispose();
   }
 }

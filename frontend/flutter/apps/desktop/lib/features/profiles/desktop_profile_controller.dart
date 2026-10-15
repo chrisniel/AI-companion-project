@@ -101,7 +101,7 @@ class DesktopProfileController extends ChangeNotifier {
     _notify();
     try {
       await chat.selectProfile(selectedProfileId!);
-      activeProfileId = selectedProfileId;
+      activeProfileId = chat.authenticatedProfileId;
     } catch (_) {
       error =
           'Could not establish Profile access. Protected Profiles require an authorized unlock challenge.';

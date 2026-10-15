@@ -5,7 +5,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.models.profile import Profile
 
@@ -134,6 +134,68 @@ async def test_expired_approved_request_and_session_fail_closed(client, test_ses
     await test_session.commit()
     assert (await client.post("/api/v1/auth/bootstrap/ticket", headers=host_authority,
                              json={"profile_id": profile.id, "request_id": request_id})).status_code == 401
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stale_identity_map", [False, True])
+async def test_session_me_returns_persisted_utc_expiry_without_renewal(
+    client, test_session, auth_headers, profile_session, stale_identity_map,
+):
+    from app.models.profile_session import ProfileSession
+
+    profile = await default_profile(test_session)
+    original_created = profile_session.created_at.replace(tzinfo=None)
+    original_active = profile_session.last_active_at.replace(tzinfo=None)
+    expiry = (datetime.now(timezone.utc) + timedelta(minutes=37)).replace(microsecond=123456)
+    if stale_identity_map:
+        await test_session.execute(update(ProfileSession).where(ProfileSession.id == profile_session.id)
+                                   .values(expires_at=expiry).execution_options(synchronize_session=False))
+    else:
+        profile_session.expires_at = expiry
+    await test_session.commit()
+
+    for _ in range(2):
+        response = await client.get("/api/v1/auth/session/me", headers=auth_headers)
+        assert response.status_code == 200
+        body = response.json()
+        assert {key: body[key] for key in ("id", "name", "is_default", "status", "pin_protected")} == {
+            "id": profile.id, "name": profile.name, "is_default": profile.is_default,
+            "status": "active", "pin_protected": False,
+        }
+        returned_expiry = datetime.fromisoformat(body["expires_at"].replace("Z", "+00:00"))
+        assert returned_expiry.utcoffset() == timedelta(0)
+        assert returned_expiry == expiry
+
+    record = (await test_session.execute(select(ProfileSession.expires_at, ProfileSession.created_at,
+                                               ProfileSession.last_active_at)
+                                        .where(ProfileSession.id == profile_session.id))).one()
+    assert record.expires_at.replace(tzinfo=timezone.utc) == expiry
+    assert record.created_at.replace(tzinfo=None) == original_created
+    assert record.last_active_at.replace(tzinfo=None) == original_active
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("invalid_state", ["expired", "revoked", "inactive", "deleted", "deleted_at"])
+async def test_session_me_rejects_invalid_authority_without_metadata(
+    client, test_session, auth_headers, profile_session, invalid_state,
+):
+    profile = await default_profile(test_session)
+    if invalid_state == "expired":
+        profile_session.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+    elif invalid_state == "revoked":
+        profile_session.revoked_at = datetime.now(timezone.utc)
+    elif invalid_state == "inactive":
+        profile.status = "inactive"
+    elif invalid_state == "deleted":
+        profile.is_deleted = True
+    else:
+        profile.deleted_at = datetime.now(timezone.utc)
+    await test_session.commit()
+
+    response = await client.get("/api/v1/auth/session/me", headers=auth_headers)
+    assert response.status_code == 401
+    assert "expires_at" not in response.json()
+    assert "name" not in response.json()
 
 
 @pytest.mark.asyncio

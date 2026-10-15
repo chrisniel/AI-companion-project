@@ -1662,7 +1662,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProfileMetadata"
+                  "$ref": "#/components/schemas/SessionMetadata"
                 }
               }
             }
@@ -3933,6 +3933,46 @@
           "unknown"
         ],
         "title": "ReasoningMode"
+      },
+      "SessionMetadata": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "is_default": {
+            "type": "boolean",
+            "title": "Is Default"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "pin_protected": {
+            "type": "boolean",
+            "title": "Pin Protected"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At",
+            "description": "Validated Profile Session expiry in UTC; introspection does not renew it."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "is_default",
+          "status",
+          "pin_protected",
+          "expires_at"
+        ],
+        "title": "SessionMetadata"
       },
       "SessionResponse": {
         "properties": {

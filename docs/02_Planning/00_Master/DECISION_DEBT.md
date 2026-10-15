@@ -33,7 +33,7 @@
 
 - **`DEBT-V1-03`: Multi-Profile Database Migration Schema Design [RESOLVED IN BATCH A]**
   - *Context:* Transitioning from single-user `owner_id` to multi-Profile `profile_id` (ADR-0018).
-  - *Resolution:* Delivered in Batch A via Alembic migration 007 (`007_profiles_and_owner_id_migration.py`). Introduces `profiles` table with unique per-installation Default Profile UUID, partial unique index, and foreign keys across existing user entity tables while retaining `owner_id` for backward compatibility. Fail-closed legacy owner validation enforces data safety. Profile Sessions and multi-profile authorization cutover remain tracked under Batch B (`PC-IDENTITY-002`).
+  - *Resolution:* Delivered in Batch A via Alembic migration 007 (`007_profiles_and_owner_id_migration.py`). Introduces `profiles` table with unique per-installation Default Profile UUID, partial unique index, and foreign keys across existing user entity tables while retaining `owner_id` for compatibility. Fail-closed legacy owner validation enforces data safety. Batch B migration 008 removed implicit Profile defaults and implemented Profile Sessions and the authorization/ownership cutover (`PC-IDENTITY-002`), locally verified; independent delivery review remains pending ([plan](../01_Plans/plan-m2-profile-foundation-b.md)). Profile administration, PIN/device enrollment and deletion lifecycle remain future deliveries; this schema resolution does not resolve remote-browser, enrollment, packaging or restore-quiescence debt.
 
 - **`DEBT-V1-04`: Local STT & TTS Process Architecture**
   - *Context:* Pre-staged binaries (`runtime/whisper.cpp/`) and Kokoro-82M ONNX weights exist locally.

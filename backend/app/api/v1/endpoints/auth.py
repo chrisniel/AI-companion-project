@@ -60,6 +60,10 @@ class SessionResponse(BaseModel):
     client_type: str
 
 
+class SessionMetadata(ProfileMetadata):
+    expires_at: datetime = Field(description="Validated Profile Session expiry in UTC; introspection does not renew it.")
+
+
 def browser_origin(request: Request) -> str:
     require_loopback(request)
     origin = request.headers.get("origin")
@@ -197,7 +201,7 @@ async def revoke_session(session: ProfileSession = Depends(get_current_profile_s
     await db.commit()
 
 
-@router.get("/session/me", response_model=ProfileMetadata)
+@router.get("/session/me", response_model=SessionMetadata)
 async def session_me(session: ProfileSession = Depends(get_current_profile_session), db: AsyncSession = Depends(get_db)):
     profile = await db.get(Profile, session.profile_id)
-    return profile_metadata(profile)
+    return SessionMetadata(**profile_metadata(profile).model_dump(), expires_at=session.expires_at)

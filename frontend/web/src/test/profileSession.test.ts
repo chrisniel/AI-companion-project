@@ -1,10 +1,27 @@
-import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { apiFetch, getApiKey, setSessionToken } from '../services/api/client';
-import { createBrowserClaim, exchangeBrowserClaim } from '../services/api/sessionApi';
+import { createBrowserClaim, exchangeBrowserClaim, getOwnSession } from '../services/api/sessionApi';
 
 describe('profile session transport', () => {
   beforeEach(() => { localStorage.clear(); setSessionToken(''); });
   afterEach(() => vi.unstubAllGlobals());
+  it('returns complete own-profile metadata with the server expiry unchanged', async () => {
+    expectTypeOf<Awaited<ReturnType<typeof getOwnSession>>>().toHaveProperty('expires_at').toBeString();
+    expectTypeOf<Awaited<ReturnType<typeof getOwnSession>>>().toHaveProperty('is_default').toBeBoolean();
+    const metadata = {
+      id: 'p1', name: 'Test Profile', is_default: true, status: 'active',
+      pin_protected: false, expires_at: '2099-01-01T00:37:00.123456Z',
+    };
+    const fetcher = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify(metadata))));
+    vi.stubGlobal('fetch', fetcher);
+    setSessionToken('psk_test');
+    expect(await getOwnSession()).toEqual(metadata);
+    expect(await getOwnSession()).toEqual(metadata);
+    const [url, init] = fetcher.mock.calls[0];
+    expect(url).toContain('/api/v1/auth/session/me');
+    expect(new Headers(init.headers).get('Authorization')).toBe('Bearer psk_test');
+    expect(new Headers(init.headers).has('X-Host-Admin-Secret')).toBe(false);
+  });
   it('purges legacy pairing keys and never uses them as personal authority', async () => {
     localStorage.setItem('companion_api_key', 'legacy-pairing');
     localStorage.setItem('COMPANION_API_KEY', 'legacy-pairing');

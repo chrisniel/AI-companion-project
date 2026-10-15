@@ -26,7 +26,7 @@ This specification defines cryptographic authentication mechanisms, secret stora
 ### 2.1 Fail-Closed Authentication & Network Boundaries (Decision D5)
 
 In accordance with Decision D5:
-- **Fail-Closed by Construction:** All companion endpoints require explicit cryptographic authentication by default. Endpoints are protected unless explicitly assigned to a strictly bounded public whitelist (`GET /api/v1/health` only).
+- **Fail-Closed by Construction:** Protected companion operations require explicit cryptographic authority by default. `GET /api/v1/health` is the public telemetry whitelist. Bounded loopback authorization request/exchange operations are reachable before a Profile Session exists, but issue one only through independent Host Admin approval and valid single-use grant proof; reachability grants no personal-data authority.
 - **Proximity is Not Authentication:** Physical or network-layer proximity (sharing local Wi-Fi or subnet) does **not** grant implicit trust or bypass authentication. Network proximity never substitutes for application auth.
 
 
@@ -52,7 +52,7 @@ In accordance with Decision D5:
 - Never expose raw provider credentials to browser clients.
 - Never store the root/master companion credential in browser `localStorage`.
 - Prefer a secure server-session / `HttpOnly`-cookie-style browser session architecture.
-- Exact implementation mechanism remains open.
+- The production remote-browser mechanism remains **OPEN**. The implemented local browser approval flow in §3 does not establish production remote-browser readiness.
 
 ### 2.5 Rate Limiting & DoS Protection
 
@@ -81,21 +81,28 @@ Repository source code establishes the following baseline reality:
 
 ### 3.1 Authentication Pipeline & Router Protection
 
-Verified in `backend/app/core/security.py`, `backend/app/api/deps.py`, and `backend/app/api/v1/router.py`:
-- **Dual-Header Support:** `verify_token` accepts credentials via either `Authorization: Bearer <token>` or `X-API-Key: <token>`.
+Verified in `backend/app/core/security.py`, `backend/app/core/profile_sessions.py`, `backend/app/core/host_admin.py`, `backend/app/api/deps.py`, `backend/app/api/v1/router.py`, and `backend/app/api/v1/endpoints/auth.py`:
+- **Legacy Pairing Authority:** `verify_token` accepts the pairing credential via `Authorization: Bearer <token>` or `X-API-Key: <token>` for `/auth/verify`. Read-only `/models` and `/models/registry` accept pairing credentials or a validated Profile Session. Pairing credentials cannot authorize personal data, model mutations, Profile enumeration or session issuance.
 - **Timing-Attack Defense:** Tokens are compared using `constant_time_compare()`, which wraps `hmac.compare_digest` to prevent timing side-channel discovery.
 - **Fail-Closed Router Assembly:**
   - `public_router`: Whitelists only `GET /api/v1/health` (`public_health_router`).
-  - `protected_router`: Applies `dependencies=[Depends(verify_token)]` at the root router level across all other endpoints (`/system`, `/auth`, `/tasks`, `/llm`, `/conversations`, conversation attachment routes, and `/memories`).
+  - `protected_router`: Requires `get_current_profile_session` across tasks, conversations, messages, attachments and memories. `/chat/completions` also requires a Profile Session.
+  - **Host Admin:** `/system/status`, model load/select/unload/hardware-profile mutation, Profile catalog enumeration and bootstrap approval require independent native Host Admin credentials over loopback. Browser Origin/fetch-metadata requests cannot use Host Admin authority.
+  - **Mixed Authority:** Auth and Profile lookup operations declare their own authority checks. `GET /profiles/{profile_id}` permits Host Admin or the matching Profile Session only.
+- **Profile Session Lifecycle:** High-entropy `psk_` bearer tokens are stored as SHA-256 hashes, bound to one Profile and issued with a twelve-hour absolute expiry. Validation freshly checks expiry, revocation and active/non-deleted Profile state. `GET /auth/session/me` returns own-Profile metadata and the validated UTC `expires_at`; it does not renew the session. `POST /auth/session/revoke` revokes the active session. Streaming generation, persistence and attachment downloads revalidate authority while work is in progress.
+- **Browser Approval:** The browser retains a generated claim secret in memory and submits its hash through `POST /auth/session/claim`. Exact configured Origin, JSON/custom-header CSRF controls, loopback transport, bounded pending requests and rate limits constrain bootstrap. Native Desktop reviews the request identifier/Origin and approves a selected active unprotected Profile. `POST /auth/session/exchange` requires the matching secret, Origin, explicit approval and unexpired grant, consuming the grant atomically with session creation. Grants expire within sixty seconds; concurrent replay fails closed. Desktop direct tickets cannot bypass browser proof binding. PIN-protected Profiles fail closed until an authorized unlock challenge exists.
 - **CORS Configuration:** `settings.CORS_ORIGINS` in `backend/app/core/config.py` specifies four development localhost/loopback origins: `http://localhost:5173`, `http://127.0.0.1:5173`, `http://localhost:3000`, and `http://127.0.0.1:3000`. These represent current development localhost/loopback origins, not production origins, and are not promoted into durable architecture.
-- **Current Token Schema:** Uses a single shared pairing key (`COMPANION_API_KEY`). On initial launch without a configured key, `ensure_pairing_token()` generates a URL-safe token from 32 random bytes of entropy and prefixes it with `companion_sec_` (`companion_sec_<token>`).
+- **Pairing Token Generation:** On initial launch without a configured pairing key, `ensure_pairing_token()` generates a URL-safe token from 32 random bytes of entropy and prefixes it with `companion_sec_`. This credential remains distinct from Host Admin and Profile Session authority.
 
 ### 3.2 Secret Storage Reality
 
-Verified in `backend/app/core/config.py`:
+Verified in `backend/app/core/config.py`, `backend/app/core/host_admin.py`, `backend/app/core/windows_security.py`, Flutter Desktop credential/session controllers, and React Web session handling:
 - **Current File Persistence:** Generated pairing tokens are persisted by writing directly into the `backend/.env` file.
 - **Implementation Status:** Storing secrets in `backend/.env` is a **current development implementation reality**, not permanent secure secret-storage architecture.
-- **Per-Device Credentials Status:** **NOT IMPLEMENTED**. The current codebase does not generate, validate, or store independent per-device credentials; all clients (web and Android) share the single `COMPANION_API_KEY`.
+- **Host Admin Store:** `%LOCALAPPDATA%\AICompanion\secrets\desktop_admin.secret` contains independent native administrator authority. Windows SID ACL checks and reparse-path rejection fail closed on unsafe storage; the secret is never supplied to browsers.
+- **Flutter Client Store & Restoration:** Flutter Desktop caches credentials through Windows DPAPI. Saved Profile Sessions are validated before personal-data use, and the returned absolute expiry restores the cleanup timer. Expiry clears Profile-scoped personal caches, errors and subscriptions; a failed saved-session restoration does not implicitly authorize the Default Profile. An expired saved credential can remain inert in protected storage pending explicit reauthorization.
+- **Browser Store:** React holds Profile Session tokens and claim secrets in memory, removes legacy pairing-key entries from `localStorage`, and never places bearer grants or sessions in URLs/history. Refresh requires fresh Desktop approval. Expiry, invalidation and logout clear Profile-scoped client state.
+- **Per-Device Credentials Status:** **NOT IMPLEMENTED**. Profile Sessions are temporary authenticated contexts, not enrolled Device identities. Independent satellite credentials, registry/enrollment and device revocation remain future work.
 
 ---
 
@@ -113,16 +120,16 @@ When implemented for target milestones:
 The normative architecture for D4 and D5 is frozen. The following implementation-level details are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
 
 - **Rate Limiting Parameters:** Request rate thresholds, burst limits, and backoff windows per endpoint tier (`DEBT-V1-014`).
-- **Host Secret Store Mechanism:** Specific host credential storage mechanism (Windows Credential Manager, DPAPI wrappers, or encrypted configuration files).
+- **Remaining Host Secret Storage:** Host Admin uses verified Windows ACL storage and Flutter client caches use DPAPI. Platform storage for development pairing credentials and provider keys remains future work.
 - **Client Secret Store Mechanism:** **[BATCH-A DECISION]** Sensitive Mobile credentials MUST use approved platform-protected device-local storage. For Android, Android Keystore (or a vetted abstraction backed by it) is the primary target. Plaintext storage is prohibited.
-- **Token Rotation & Expiration:** Policies and automation for periodic credential rotation and inactivity timeouts.
+- **Token Rotation & Expiration:** Profile Session absolute expiry and revocation are implemented in §3. Policies and automation for periodic credential rotation and inactivity timeouts remain open.
 
 ---
 
 ## 6. Security & Ownership Boundaries
 
 - **Constant-Time Verification:** All token comparisons must use constant-time operations to eliminate timing side-channels.
-- **No Client Elevation:** Possession of a client token permits interaction with companion conversational APIs, but does not grant administrative authority to read host filesystem paths or manipulate host process lifecycles.
+- **No Client Elevation:** A validated Profile Session permits Profile-scoped conversational APIs, without administrative authority to read host filesystem paths or manipulate host process lifecycles. A legacy pairing credential grants only its bounded diagnostic/telemetry authority.
 - **CORS Containment:** CORS origins restrict cross-origin browser access to explicitly authorized development loopback origins.
 - **Rate Limiting Enforced:** Fail-closed rate limiting on all public and protected routes.
 

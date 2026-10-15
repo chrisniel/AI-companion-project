@@ -90,15 +90,16 @@ In accordance with Decision D4 and Decision D-PHONE-01B:
 
 Repository source code establishes the following baseline reality:
 
-- **Entity Ownership & Profile Schema Foundation (Batch A Verified):**
+- **Entity Ownership & Profile Schema Foundation:**
   - **Migration 007 (`007_profiles_and_owner_id_migration.py`):** Introduces the `profiles` table with stable UUID primary keys. Generates a unique, non-hardcoded Profile UUID per installation/database during migration or fresh database initialization, enforced with a partial unique index (`uq_profiles_single_default`) ensuring exactly one default profile (`is_default = 1`).
   - **Foreign Key Integration:** Adds indexed `profile_id` foreign keys referencing `profiles.id` across `conversations`, `messages`, `tasks`, `memories`, and `attachments`.
-  - **Backward-Compatible Ownership:** Retains existing `owner_id: Mapped[str]` columns and indices across all five entity tables. `OwnerMixin` in `backend/app/models/base.py` defaults new instances to `local_user`, ensuring all existing single-user runtime operations, models, and endpoints remain operational without regression.
-  - **Dynamic Default Profile Resolution:** `ProfileMixin` dynamically resolves `profile_id` from the database's active default profile during flush (`resolve_default_profile_id`), ensuring newly created records receive a valid, consistent Default Profile association.
+  - **Compatibility Fields:** Existing `owner_id` columns and indices remain across all five entity tables, with `local_user` defaults retained for compatibility. Personal-data authorization derives from a validated Profile Session, never from `owner_id`.
+  - **Explicit Profile Ownership:** Migration 008 (`008_profile_sessions_and_tickets.py`) removes SQLite `profile_id` defaults, and `ProfileMixin` requires explicit ownership without an ORM fallback. Raw SQL and ORM writes omitting `profile_id` fail closed. The migration preserves existing records, foreign keys, indexes and FTS5 behavior; downgrade does not restore implicit ownership defaults.
   - **Fail-Closed Legacy Owner Validation:** `backend/app/db/legacy_owner_validation.py` accepts only explicitly approved legacy owner aliases (`local_user`, `default_user`) and strictly rejects unexpected, empty, whitespace-only, case-variant, or NULL owner values, preserving source data untouched if migration refuses.
-- **Shared Credential Reality:** The FastAPI backend currently validates a single shared pairing key (`COMPANION_API_KEY`) via `Authorization: Bearer <token>` or `X-API-Key` headers (`app/core/security.py`).
-- **Profile Sessions & Multi-Profile Authorization Status:** `NOT IMPLEMENTED`. Profile Sessions (`POST /api/v1/auth/profile/session`), token-bound profile context, multi-profile authorization isolation, profile CRUD/switching APIs, and PIN security remain not implemented (deferred to Batch B and subsequent identity tasks).
-- **Client Profile Switcher UI:** `NOT IMPLEMENTED`. No profile management or switching interface exists in the Flutter Desktop or React Web clients.
+- **Profile Sessions & Isolation:** Migration 008 adds hashed Profile Sessions and single-use authorization grants. Personal-data routes and services derive ownership from validated `session.profile_id`, including conversations/messages, attachments, tasks and memory/FTS5 retrieval. Cross-Profile identifiers fail closed; child and parent ownership are checked where applicable. Ongoing generation and attachment downloads revalidate session expiry, revocation and Profile availability, stopping unauthorized output and persistence.
+- **Independent Host Admin & Pairing Boundary:** Native Desktop Host Admin authority is separate from Profile Sessions and the legacy `COMPANION_API_KEY`. Host Admin alone enumerates the Profile catalog and approves browser authorization. A Profile Session reads only its own Profile metadata; pairing credentials provide no personal-data or session-issuance authority. See [authentication and secrets](authentication-and-secrets.md) for credential and grant controls.
+- **Client Profile Access:** Flutter Desktop selects existing active, unprotected Profiles and clears Profile-scoped state/subscriptions when authority changes. It validates a saved session through `GET /api/v1/auth/session/me` and schedules cleanup from the returned absolute UTC `expires_at`, without renewing the session or silently switching a failed restoration to the Default Profile. Expired saved credentials may remain stored inert until explicit reauthorization. React Web receives only an explicitly Desktop-approved session, holds it in memory and requires fresh approval after refresh.
+- **Profile Administration Status:** General create/rename/delete/restore APIs, PIN enrollment/unlock challenges and the complete management UI remain **NOT IMPLEMENTED**. PIN-protected Profiles fail closed during session bootstrap. Character Studio and Character-specific ownership capabilities remain future work.
 - **Device Registry Status:** `NOT IMPLEMENTED`. No `devices` table or endpoint exists yet.
 - **Android Client Connection:** `SharedPreferencesConnectionRepository` stores the host URL and shared pairing token in unencrypted `SharedPreferences`.
 
@@ -106,10 +107,9 @@ Repository source code establishes the following baseline reality:
 
 ## 5. Approved Target Architecture / Not Yet Implemented
 
-The target implementation requires robust, structurally separate persistence for Profiles and Devices. Exact database columns and schema remain implementation-open, but the system must implement the following conceptual target architecture:
+Profile persistence and explicit personal-data ownership are implemented as described in §4. Remaining identity delivery includes the following target capabilities:
 
-- **Stable UUID Profile record:** `profile_id` must be the root authority for memories, assets, and settings.
-- **Migration:** A migration from legacy `owner_id` to `profile_id` is required.
+- **Complete Profile Administration & Lifecycle:** Local PC administration, PIN enrollment/unlock, deletion/recovery and full Profile-owned settings/assets integration remain to be implemented.
 - **Device Enrollment:** Device enrollment/credential records must exist, distinct from Profiles.
 - **Single-Profile Satellite:** One normal satellite Device binds to exactly one Profile.
 - **Revocable Credentials:** Each device must have independently revocable device credentials.

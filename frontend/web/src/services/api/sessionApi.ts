@@ -6,6 +6,14 @@ export interface ProfileSession {
   expires_at: string;
   client_type: string;
 }
+export interface SessionMetadata {
+  id: string;
+  name: string;
+  is_default: boolean;
+  status: string;
+  pin_protected: boolean;
+  expires_at: string;
+}
 export interface BrowserClaim { request_id: string; expires_at: string; secret: string; origin: string; runtimeUrl: string }
 const bootstrapHeaders = { 'X-Companion-Bootstrap': '1', 'Content-Type': 'application/json' };
 
@@ -35,6 +43,6 @@ export function exchangeBrowserClaim(claim: BrowserClaim): Promise<ProfileSessio
 export function revokeProfileSession(): Promise<void> {
   return apiFetch('/api/v1/auth/session/revoke', { method: 'POST' });
 }
-export function getOwnSession(): Promise<{id: string; name: string; status: string; pin_protected: boolean}> {
+export function getOwnSession(): Promise<SessionMetadata> {
   return apiFetch('/api/v1/auth/session/me');
 }

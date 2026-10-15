@@ -25,7 +25,7 @@ void main() {
             return http.Response('{"status":"healthy"}', 200);
           }
           if (r.url.path.endsWith('/me')) {
-            return http.Response('{"id":"p1"}', 200);
+            return http.Response('{"id":"p1","expires_at":"2099-01-01T00:00:00Z"}', 200);
           }
           if (r.url.path.endsWith('/models')) return http.Response('{}', 200);
           if (r.url.path.endsWith('/revoke')) return http.Response('', 204);
@@ -65,6 +65,12 @@ void main() {
         hostAdminStore: InMemoryCredentialStore('admin'),
         httpClient: MockClient((r) async {
           requests.add(r);
+          if (r.url.path.endsWith('/health')) {
+            return http.Response('{"status":"healthy"}', 200);
+          }
+          if (r.url.path.endsWith('/me')) {
+            return http.Response('{"id":"p1","expires_at":"2099-01-01T00:00:00Z"}', 200);
+          }
           if (r.url.path.endsWith('/profiles')) {
             return http.Response(
                 '[{"id":"p1","name":"Chris","is_default":true,"status":"active","pin_protected":false}]',

@@ -2,7 +2,7 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- Status: Plan Gate CONDITIONALLY APPROVED — binding handoff addendum recorded before implementation
+- Status: IMPLEMENTED / LOCALLY VERIFIED — final independent PR-ready review pending (current authorization and evidence in §8)
 - Scope Mode: Authorization Hardening & Session Security — `PC-IDENTITY-002` Profile Authorization & Isolation
 - Target Files:
   - `backend/migrations/versions/008_profile_sessions_and_tickets.py`
@@ -326,25 +326,28 @@ Deliver `PC-IDENTITY-002` (Milestone M2 Batch B) to establish fail-closed multi-
 ## 5. Acceptance Criteria & Verification Plan
 
 ### Automated Repository Checks
-- [ ] `pytest backend/tests/test_migration_008.py`: Migration 008 applies up and down cleanly without data loss.
-- [ ] `pytest backend/tests/test_profile_authorization.py`:
+
+Completed checks below record local automated evidence from §8, not independent gate approval.
+
+- [x] `pytest backend/tests/test_migration_008.py`: Upgrade/downgrade preserves pre-existing personal data. Downgrade retires sessions/grants without restoring implicit ownership defaults.
+- [x] `pytest backend/tests/test_profile_authorization.py`:
   - Profile A cannot access Profile B's conversations, messages, attachments, tasks, or memories (100% fail-closed 404/403).
   - Pairing key `COMPANION_API_KEY` receives 401/403 on all personal-data endpoints.
   - Raw SQL inserts and ORM writes without `profile_id` raise `IntegrityError` (NOT NULL constraint).
   - Memory FTS5 retrieval for Profile A never returns Profile B's records.
   - SSE turns in Profile A never stream to or leak data from Profile B.
-- [ ] `pytest backend/tests/test_profile_sessions.py`:
+- [x] `pytest backend/tests/test_profile_sessions.py`:
   - Bootstrap ticket cannot be redeemed more than once (atomic burn).
   - Concurrent ticket replay fails with 401/409.
   - Expired tickets ($\gt 60\text{s}$) and expired sessions fail with 401.
   - Revoked sessions fail immediately with 401.
   - PIN-protected profile ticket request fails closed (403).
-- [ ] `pytest backend/tests/test_windows_security.py`:
+- [x] `pytest backend/tests/test_windows_security.py`:
   - Secret file with permissions granting access to `Everyone` or other users fails closed on startup.
   - Secret file restricted to Current User SID and `SYSTEM` passes.
-- [ ] Full backend test suite passes (`pytest backend/tests`).
-- [ ] `flutter analyze` passes across all monorepo packages.
-- [ ] `npm test` and `npm run lint` pass in `frontend/web`.
+- [x] Full backend test suite passes (`pytest backend/tests`).
+- [x] `flutter analyze` passes across all monorepo packages.
+- [x] `npm test` and `npm run lint` pass in `frontend/web`.
 
 ### Manual / User-Owned Checks
 - [ ] Confirm `%LOCALAPPDATA%\AICompanion\secrets\desktop_admin.secret` permissions via `icacls` are restricted to Current User SID.
@@ -356,7 +359,7 @@ Deliver `PC-IDENTITY-002` (Milestone M2 Batch B) to establish fail-closed multi-
 ## 6. Risks, Recovery & Rollback
 
 - **Risk: Accidental Breakage of Single-User Experience.**
-  - *Mitigation:* The local Flutter desktop client maintains Host Admin authority and automatically mints an active Default Profile session upon application startup, ensuring seamless local desktop companion usage.
+  - *Mitigation:* Startup restores a saved Profile Session only after authenticated introspection, preserving its Profile identity and absolute server expiry. Only an installation without prior session authority may bootstrap Default through independent Host Admin authorization. Invalid saved authority requires explicit authorization; explicit switching revokes the old session and clears private state.
 - **Risk: Browser Refresh Session State Loss.**
   - *Mitigation:* Browser context retains session in memory; refresh starts a new authorization request requiring explicit trusted Desktop approval. Loopback proximity does not authorize a session.
 - **Risk: Migration 008 Failure.**
@@ -401,3 +404,13 @@ This addendum binds implementation and supersedes less restrictive pseudocode ab
 
 - Commit this in-place correction on `feature/m2-profile-foundation-b`, then execute B.1–B.8 using failing tests first. Related runtime startup, client wiring/UI, fixtures and generated OpenAPI contract changes necessary for the cutover are included; no unrelated infrastructure or dependency changes.
 - Verify focused and full relevant backend, React and Flutter checks, keeping pre-existing failures distinct from candidate results. Commit and HTTPS-push the implementation on this same branch, verify remote HEAD equals local HEAD, then STOP for independent Implementation Gate review. Do not create a PR, merge, begin canonical documentation/closure or self-approve any gate.
+
+## 8. Final Correction and Documentation/Closure Preparation (Chris authorization, 2026-10-15)
+
+Chris confirmed that independent review of `92225c86f7deb5f25b077e60f207f047eb8ab512` found the original saved-Profile restart defect corrected. The remaining correction adds the validated persisted session `expires_at` to `/auth/session/me`, preserves existing Profile metadata and schedules Flutter cleanup at that absolute deadline. Introspection and restart never renew server expiry. Regressions cover repeated restoration, expiration, switching, private cache/error clearing, retained subscriptions and late asynchronous completions.
+
+For this final task, Chris explicitly authorized the scoped correction, local verification, canonical documentation reconciliation and closure preparation on the same branch, ordinary commits and HTTPS push. This supersedes the earlier §7 no-documentation stop boundary for this task only; it preserves the historical approval record. No new plan/branch, force-push, PR creation or merge is authorized.
+
+Local verification passed: backend **600 tests** (one existing Starlette deprecation warning), focused backend **90**; Flutter **334** (API 63, core 22, design 18, Desktop 231), focused Desktop **86**; Flutter analysis **no issues**; React **242**, lint/typecheck/build passed; script tests **38 plus 49 subtests**; OpenAPI drift check **32 paths** and Dart parity **13 DTOs / 18 routes** passed. Backend used the existing Python **3.13.14** environment; Python 3.11 qualification remains unverified. Commands, evidence locations and prepared PR title/extended summary/squash message are owned by the [branch task](../../01_Tracking/active/task-feature-m2-profile-foundation-b.md).
+
+Batch B is implemented and locally verified. Canonical documentation and closure records are prepared for independent review; no authoring agent certifies the Implementation, Documentation or Closure Gate. Hosted PR CI has not run, branch CI is not verified, and Windows/Desktop/browser manual acceptance remains pending. Full Profile CRUD, PIN enrollment, device enrollment and Character Studio remain future work. Wider M2 remains **IN PROGRESS**. Stop for final independent PR-ready review; archive the branch task only after independently approved closure.

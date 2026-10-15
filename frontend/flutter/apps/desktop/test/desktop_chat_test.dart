@@ -72,7 +72,7 @@ class MockCompanionClient extends CompanionClient {
   @override
   Future<Map<String, dynamic>> getOwnSession() async {
     final result = await verifyAuth();
-    return result.authenticated ? {'id':'test-profile'} : {};
+    return result.authenticated ? {'id':'test-profile', 'expires_at':'2099-01-01T00:00:00Z'} : {};
   }
 
   bool deleteConvCalled = false;

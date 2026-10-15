@@ -43,14 +43,15 @@ async def validate_profile_session(db: AsyncSession, session: ProfileSession) ->
     if record is None:
         raise HTTPException(401, "Inactive Profile Session")
     profile_id, expiry, revoked, state, deleted, deleted_at = record
-    expiry = expiry.replace(tzinfo=timezone.utc) if expiry.tzinfo is None else expiry
+    expiry = expiry.replace(tzinfo=timezone.utc) if expiry.tzinfo is None else expiry.astimezone(timezone.utc)
     if profile_id != original_profile_id or revoked is not None or expiry <= now_utc() or state != "active" or deleted or deleted_at is not None:
         raise HTTPException(401, "Inactive Profile Session")
     inspect(session).info["authenticated_profile_id"] = profile_id
-    # Restore only identity fields freshly verified above; the context can belong
+    # Restore only authority fields freshly verified above; the context can belong
     # to a request session while cleanup validates using an isolated DB session.
     set_committed_value(session, "id", session_id)
     set_committed_value(session, "profile_id", profile_id)
+    set_committed_value(session, "expires_at", expiry)
     return session
 
 

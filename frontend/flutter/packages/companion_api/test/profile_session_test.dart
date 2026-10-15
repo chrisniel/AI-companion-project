@@ -5,6 +5,30 @@ import 'package:http/testing.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('own-session introspection preserves metadata and exact server expiry', () async {
+    const expiry = '2099-01-01T00:37:00.123456Z';
+    final metadata = {
+      'id': 'p1', 'name': 'Test Profile', 'is_default': true,
+      'status': 'active', 'pin_protected': false, 'expires_at': expiry,
+    };
+    final store = InMemoryCredentialStore('psk_session');
+    final client = CompanionClient(
+      sessionStore: store,
+      hostAdminStore: InMemoryCredentialStore('admin'),
+      httpClient: MockClient((request) async {
+        expect(request.url.path, '/api/v1/auth/session/me');
+        expect(request.method, 'GET');
+        expect(request.followRedirects, isFalse);
+        expect(request.headers['Authorization'], 'Bearer psk_session');
+        expect(request.headers['X-Host-Admin-Secret'], isNull);
+        return http.Response(jsonEncode(metadata), 200);
+      }),
+    );
+    expect(await client.getOwnSession(), metadata);
+    expect(await client.getOwnSession(), metadata);
+    expect(await store.readToken(), 'psk_session');
+    client.close();
+  });
   test('native ticket exchange refuses proof forwarding through redirects', () async {
     final client = CompanionClient(hostAdminStore:InMemoryCredentialStore('admin'), httpClient:MockClient((r) async {
       if (r.url.path.endsWith('/ticket')) return http.Response('{"ticket":"ptk_proof"}',200);

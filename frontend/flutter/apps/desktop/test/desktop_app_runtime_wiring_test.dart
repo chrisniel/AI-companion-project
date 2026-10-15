@@ -94,7 +94,7 @@ class FakeChatClient extends CompanionClient {
   Future<void> revokeProfileSession() async => sessionStore.deleteToken();
 
   @override
-  Future<Map<String, dynamic>> getOwnSession() async => {'id':'test-profile'};
+  Future<Map<String, dynamic>> getOwnSession() async => {'id':'test-profile', 'expires_at':'2099-01-01T00:00:00Z'};
 
   @override
   Future<ModelStatusResponse> getModelStatus() async {
@@ -264,6 +264,8 @@ void main() {
 
       expect(fakeClient.healthCallCount, greaterThan(0));
 
+      await tester.pumpWidget(const SizedBox());
+      chatController.dispose();
       runtimeCoordinator.dispose();
       await lifecycleCoordinator.dispose();
     });

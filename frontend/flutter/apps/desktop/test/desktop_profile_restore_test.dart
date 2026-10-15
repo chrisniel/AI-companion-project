@@ -51,7 +51,10 @@ class _Runtime {
                   }),
                   401);
             }
-            return http.Response(jsonEncode(_profile(profile)), 200);
+            return http.Response(jsonEncode({
+              ..._profile(profile),
+              'expires_at': '2099-01-01T00:00:00Z',
+            }), 200);
           }
           if (path.endsWith('/profiles')) {
             return adminAvailable
