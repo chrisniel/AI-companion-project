@@ -36,6 +36,7 @@ from app.services.assistant.orchestrator import (
     prepare_turn,
 )
 from app.services.attachment_service import validate_attachment_ids_syntax
+from app.services.character_service import resolve_conversation_character
 from app.services.llm.base import BaseLLMProvider
 from app.services.llm.manager import get_llm_provider
 from app.services.llm.runtime_state import LLMRuntimeState
@@ -107,12 +108,16 @@ async def create_conversation(
 ) -> ConversationOut:
     """Create a new persistent conversation thread."""
     title = payload.title if payload and payload.title else "New Conversation"
-    character_id = payload.character_id if payload and payload.character_id else "default"
+    raw_character_id = payload.character_id if payload else None
+    resolved_char_id, resolved_inst_id = await resolve_conversation_character(
+        db, session, raw_character_id
+    )
 
     conversation = Conversation(
         id=str(uuid.uuid4()),
         title=title,
-        character_id=character_id,
+        character_id=resolved_char_id,
+        character_instance_id=resolved_inst_id,
         profile_id=session.profile_id,
     )
     db.add(conversation)
@@ -123,6 +128,7 @@ async def create_conversation(
         id=conversation.id,
         title=conversation.title,
         character_id=conversation.character_id,
+        character_instance_id=conversation.character_instance_id,
         owner_id=conversation.owner_id,
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
@@ -177,6 +183,7 @@ async def list_conversations(
             id=conv.id,
             title=conv.title,
             character_id=conv.character_id,
+            character_instance_id=conv.character_instance_id,
             owner_id=conv.owner_id,
             created_at=conv.created_at,
             updated_at=conv.updated_at,
@@ -225,6 +232,7 @@ async def get_conversation(
         id=conv.id,
         title=conv.title,
         character_id=conv.character_id,
+        character_instance_id=conv.character_instance_id,
         owner_id=conv.owner_id,
         created_at=conv.created_at,
         updated_at=conv.updated_at,
@@ -263,6 +271,7 @@ async def rename_conversation(
         id=conversation.id,
         title=conversation.title,
         character_id=conversation.character_id,
+        character_instance_id=conversation.character_instance_id,
         owner_id=conversation.owner_id,
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
@@ -315,6 +324,7 @@ async def generate_conversation_title(
                 id=conversation.id,
                 title=conversation.title,
                 character_id=conversation.character_id,
+                character_instance_id=conversation.character_instance_id,
                 owner_id=conversation.owner_id,
                 created_at=conversation.created_at,
                 updated_at=conversation.updated_at,
@@ -342,6 +352,7 @@ async def generate_conversation_title(
             id=conversation.id,
             title=conversation.title,
             character_id=conversation.character_id,
+            character_instance_id=conversation.character_instance_id,
             owner_id=conversation.owner_id,
             created_at=conversation.created_at,
             updated_at=conversation.updated_at,
@@ -428,6 +439,7 @@ async def generate_conversation_title(
         id=current_conv.id,
         title=current_conv.title,
         character_id=current_conv.character_id,
+        character_instance_id=current_conv.character_instance_id,
         owner_id=current_conv.owner_id,
         created_at=current_conv.created_at,
         updated_at=current_conv.updated_at,

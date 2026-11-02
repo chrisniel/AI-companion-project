@@ -34,17 +34,27 @@ async def test_conversation_endpoints_require_auth(client: AsyncClient):
 @pytest.mark.anyio
 async def test_conversation_crud_lifecycle(client: AsyncClient, auth_headers: dict):
     """Test full CRUD lifecycle of persistent conversations."""
+    # 0. Create character instance to bind
+    inst_resp = await client.post(
+        "/api/v1/characters/instances",
+        json={"template_id": "warm-companion", "name": "Companion 1"},
+        headers=auth_headers,
+    )
+    assert inst_resp.status_code == 201
+    inst_id = inst_resp.json()["id"]
+
     # 1. Create conversation
     create_resp = await client.post(
         "/api/v1/conversations",
-        json={"title": "Project Planning", "character_id": "companion-1"},
+        json={"title": "Project Planning", "character_id": inst_id},
         headers=auth_headers,
     )
     assert create_resp.status_code == 201
     conv = create_resp.json()
     conv_id = conv["id"]
     assert conv["title"] == "Project Planning"
-    assert conv["character_id"] == "companion-1"
+    assert conv["character_id"] == inst_id
+    assert conv["character_instance_id"] == inst_id
     assert "owner_id" in conv
 
     # 2. Get conversation
