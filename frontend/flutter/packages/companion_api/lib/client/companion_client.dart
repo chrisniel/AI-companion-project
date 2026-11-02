@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../auth/credential_store.dart';
 import '../auth/in_memory_credential_store.dart';
+import '../dto/character_dto.dart';
 import '../dto/auth_dto.dart';
 import '../dto/conversation_dto.dart';
 import '../dto/health_dto.dart';
@@ -540,6 +541,160 @@ class CompanionClient {
     );
 
     return outputController.stream;
+  }
+
+
+  /// Lists application-owned character templates via GET /api/v1/characters/templates.
+  Future<List<CharacterTemplateOut>> listCharacterTemplates() async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/characters/templates');
+    final headers = await _buildHeaders(requiresAuth: true);
+    final response = await _httpClient.get(uri, headers: headers);
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return (json as List)
+          .map((e) => CharacterTemplateOut.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Lists frozen personality presets via GET /api/v1/characters/presets.
+  Future<List<CharacterPresetOut>> listCharacterPresets() async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/characters/presets');
+    final headers = await _buildHeaders(requiresAuth: true);
+    final response = await _httpClient.get(uri, headers: headers);
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return (json as List)
+          .map((e) => CharacterPresetOut.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Retrieves the immutable Neutral Assistant fallback via GET /api/v1/characters/neutral.
+  Future<NeutralAssistantOut> getNeutralAssistant() async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/characters/neutral');
+    final headers = await _buildHeaders(requiresAuth: true);
+    final response = await _httpClient.get(uri, headers: headers);
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return NeutralAssistantOut.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Retrieves the active character state for the profile via GET /api/v1/characters/active.
+  Future<ActiveCharacterStateOut> getActiveCharacterState() async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/characters/active');
+    final headers = await _buildHeaders(requiresAuth: true);
+    final response = await _httpClient.get(uri, headers: headers);
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return ActiveCharacterStateOut.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Selects the active character via PUT /api/v1/characters/active.
+  Future<ActiveCharacterStateOut> selectActiveCharacter(String characterId) async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/characters/active');
+    final headers = await _buildHeaders(requiresAuth: true);
+    final payload = ActiveCharacterSelectRequest(characterId: characterId);
+    final response = await _httpClient.put(
+      uri,
+      headers: headers,
+      body: jsonEncode(payload.toJson()),
+    );
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return ActiveCharacterStateOut.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Resets the active character to Neutral Assistant via POST /api/v1/characters/active/reset-neutral.
+  Future<ActiveCharacterStateOut> resetActiveCharacterToNeutral() async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/characters/active/reset-neutral');
+    final headers = await _buildHeaders(requiresAuth: true);
+    final response = await _httpClient.post(uri, headers: headers);
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return ActiveCharacterStateOut.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Lists character instances owned by the Profile via GET /api/v1/characters/instances.
+  Future<List<CharacterInstanceOut>> listCharacterInstances() async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/characters/instances');
+    final headers = await _buildHeaders(requiresAuth: true);
+    final response = await _httpClient.get(uri, headers: headers);
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return (json as List)
+          .map((e) => CharacterInstanceOut.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Creates a new character instance via POST /api/v1/characters/instances.
+  Future<CharacterInstanceOut> createCharacterInstance(CharacterInstanceCreate payload) async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/characters/instances');
+    final headers = await _buildHeaders(requiresAuth: true);
+    final response = await _httpClient.post(
+      uri,
+      headers: headers,
+      body: jsonEncode(payload.toJson()),
+    );
+    if (response.statusCode == 201) {
+      final dynamic json = jsonDecode(response.body);
+      return CharacterInstanceOut.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Retrieves a character instance by ID via GET /api/v1/characters/instances/{instance_id}.
+  Future<CharacterInstanceOut> getCharacterInstance(String instanceId) async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/characters/instances/$instanceId');
+    final headers = await _buildHeaders(requiresAuth: true);
+    final response = await _httpClient.get(uri, headers: headers);
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return CharacterInstanceOut.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Updates a character instance by ID via PATCH /api/v1/characters/instances/{instance_id}.
+  Future<CharacterInstanceOut> updateCharacterInstance(
+    String instanceId,
+    CharacterInstanceUpdate payload,
+  ) async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/characters/instances/$instanceId');
+    final headers = await _buildHeaders(requiresAuth: true);
+    final response = await _httpClient.patch(
+      uri,
+      headers: headers,
+      body: jsonEncode(payload.toJson()),
+    );
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return CharacterInstanceOut.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Deletes/archives a character instance by ID via DELETE /api/v1/characters/instances/{instance_id}.
+  Future<void> deleteCharacterInstance(String instanceId) async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/characters/instances/$instanceId');
+    final headers = await _buildHeaders(requiresAuth: true);
+    final response = await _httpClient.delete(uri, headers: headers);
+    if (response.statusCode == 200 || response.statusCode == 204) {
+      return;
+    }
+    _handleErrorResponse(response);
   }
 
   void close() {

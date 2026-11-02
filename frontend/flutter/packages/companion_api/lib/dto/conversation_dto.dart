@@ -8,13 +8,13 @@ class ConversationCreate {
 
   const ConversationCreate({
     this.title = 'New Conversation',
-    this.characterId = 'default',
+    this.characterId,
   });
 
   factory ConversationCreate.fromJson(Map<String, dynamic> json) {
     return ConversationCreate(
       title: json['title'] as String? ?? 'New Conversation',
-      characterId: json['character_id'] as String? ?? 'default',
+      characterId: json['character_id'] as String?,
     );
   }
 
@@ -44,6 +44,7 @@ class ConversationOut {
   final String id;
   final String title;
   final String characterId;
+  final String? characterInstanceId;
   final String ownerId;
   final String createdAt;
   final String updatedAt;
@@ -53,6 +54,7 @@ class ConversationOut {
     required this.id,
     required this.title,
     required this.characterId,
+    this.characterInstanceId,
     required this.ownerId,
     required this.createdAt,
     required this.updatedAt,
@@ -75,6 +77,8 @@ class ConversationOut {
       throw FormatException('ConversationOut: character_id must be a string, got $charIdVal');
     }
 
+    final charInstIdVal = json['character_instance_id'] as String?;
+
     final ownerIdVal = json['owner_id'];
     if (ownerIdVal is! String) {
       throw FormatException('ConversationOut: owner_id must be a string, got $ownerIdVal');
@@ -96,6 +100,7 @@ class ConversationOut {
       id: idVal,
       title: titleVal,
       characterId: charIdVal,
+      characterInstanceId: charInstIdVal,
       ownerId: ownerIdVal,
       createdAt: createdVal,
       updatedAt: updatedVal,
@@ -107,6 +112,7 @@ class ConversationOut {
         'id': id,
         'title': title,
         'character_id': characterId,
+        if (characterInstanceId != null) 'character_instance_id': characterInstanceId,
         'owner_id': ownerId,
         'created_at': createdAt,
         'updated_at': updatedAt,
@@ -121,6 +127,7 @@ class ConversationOut {
           id == other.id &&
           title == other.title &&
           characterId == other.characterId &&
+          characterInstanceId == other.characterInstanceId &&
           ownerId == other.ownerId &&
           createdAt == other.createdAt &&
           updatedAt == other.updatedAt &&
@@ -131,6 +138,7 @@ class ConversationOut {
         id,
         title,
         characterId,
+        characterInstanceId,
         ownerId,
         createdAt,
         updatedAt,

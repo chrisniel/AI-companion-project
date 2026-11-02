@@ -9,6 +9,7 @@ export interface ConversationOut {
   id: string;
   title: string;
   character_id: string;
+  character_instance_id?: string | null;
   owner_id: string;
   created_at: string;
   updated_at: string;
@@ -70,9 +71,13 @@ export function deriveDeterministicTitle(userPrompt: string): string {
 }
 
 export async function createConversation(title?: string, characterId?: string): Promise<ConversationOut> {
+  const body: Record<string, string> = { title: title || 'New Conversation' };
+  if (characterId !== undefined && characterId !== '') {
+    body.character_id = characterId;
+  }
   return apiFetch<ConversationOut>('/api/v1/conversations', {
     method: 'POST',
-    body: JSON.stringify({ title: title || 'New Conversation', character_id: characterId || 'default' }),
+    body: JSON.stringify(body),
   });
 }
 
