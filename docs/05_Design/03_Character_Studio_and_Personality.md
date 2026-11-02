@@ -11,7 +11,7 @@
 Character Studio is the dedicated creative workspace where users craft, tune, and personalize their companion's persona, conversational style, and expressive behavior.
 
 The design strictly reflects the architectural separation between:
-1. **Character Templates:** Read-only system distributions packaged with the application.
+1. **Character Templates:** Read-only system distributions packaged with the application or seeded via migrations.
 2. **Character Instances:** Mutable, profile-owned companion personas customized by the user.
 
 ---
@@ -28,14 +28,14 @@ The Character Studio is structured into three coordinated panels:
 ## 3. Eight Continuous Personality Traits
 
 The character foundation defines exactly eight continuous (0–100 integer) dimensions:
-- `warmth`: Level of emotional warmth, kindness, and welcoming tone.
-- `humor`: Frequency and style of jokes, wit, and banter.
-- `empathy`: Attunement and sensitivity to the user's emotional state.
-- `formality`: Politeness, professional diction, and linguistic restraint.
-- `curiosity`: Tendency to ask probing questions and show exploratory interest.
-- `energy`: Enthusiasm, pacing, and exclamation in conversational responses.
-- `assertiveness`: Directness, opinionated stance, and willingness to guide or push back.
-- `rebelliousness`: Unconventional suggestions, playful nonconformity, and quirkiness.
+- `warmth`: Empathy, friendliness, and emotional warmth.
+- `teasing`: Playfulness, banter, and lighthearted sarcasm.
+- `guardedness`: Emotional reserve and boundary maintenance.
+- `directness`: Candor, frankness, and communication directness.
+- `expressiveness`: Emotional and linguistic expressiveness.
+- `affection`: Affectionate phrasing and emotional closeness.
+- `formality`: Grammatical and stylistic formality.
+- `verbosity`: Sentence length and elaboration depth.
 
 ### Planned Slider Interaction Design (Target UX — PC-CHAR-002)
 - Each slider features a real-time numerical indicator and descriptive tooltip describing how extreme positions manifest in speech.
@@ -48,17 +48,16 @@ The character foundation defines exactly eight continuous (0–100 integer) dime
 ## 4. Presets as Template Configurations
   
 A prominent **"Load Preset Style"** dropdown allows users to load initial baseline trait configurations from the approved preset catalog:
-- `warm` (Warm Companion)
-- `playful` (Playful Friend)
-- `formal` (Formal Advisor)
-- `creative` (Creative Collaborator)
-- `analytical` (Analytical Thinker)
-- `empathetic` (Empathetic Listener)
-- `stoic` (Stoic Mentor)
-- `unhinged` (Chaotic Banter)
-- `custom` (User-defined custom trait configuration)
+- `custom`: User-configured custom trait settings.
+- `warm_companion`: Affectionate, empathetic, and encouraging companion baseline.
+- `playful`: Witty, humorous, and lighthearted companion baseline.
+- `formal_advisor`: Structured, precise, and articulate advisor baseline.
+- `tsundere`: High guardedness, sharp teasing, and hidden warmth/affection baseline.
+- `kuudere`: High guardedness, extreme formality/directness, and low expressiveness baseline.
+- `dandere`: High warmth, low directness, and reserved verbosity baseline.
+- `yandere`: Intense affection, extreme warmth, and low guardedness baseline.
 
-*Behavioral Rule:* Selecting a preset **copies** the preset's initial baseline trait values into the active configuration. Presets are provisional numeric baselines, not rigid or immutable architectural archetypes; all traits remain fully editable by the user.
+*Behavioral Rule:* Selecting a preset **copies** the preset's initial baseline trait values into the active configuration. Presets are provisional numeric initialization baselines, not permanently frozen behavioral definitions; all traits remain fully editable by the user.
 
 ---
 
@@ -67,8 +66,9 @@ A prominent **"Load Preset Style"** dropdown allows users to load initial baseli
 A prominent button and safety toggle labeled **"Reset to Neutral Assistant"** is permanently accessible:
 - Instantly switches active conversation persona to the immutable built-in Neutral Assistant fallback (`is_neutral_fallback = True`).
 - Traits are strictly `NULL` (enforced by SQLite CHECK constraints).
-- Strips custom roleplay lore cards and reverts to the immutable, objective system assistant prompt.
+- Strips custom roleplay lore cards and reverts to the immutable, objective system assistant prompt (`DEFAULT_PERSONA`).
 - Serves as an unalterable, dependable fallback if custom prompt tuning leads to erratic, repetitive, or confusing behavior.
+- Activated via `PUT /api/v1/characters/active` (`character_id = "default"` or `"neutral-assistant"`) or `POST /api/v1/characters/active/reset-neutral`.
 
 ---
 
@@ -76,4 +76,4 @@ A prominent button and safety toggle labeled **"Reset to Neutral Assistant"** is
 
 - **Persona Lore Editor:** Multi-line markdown text area for background story, world lore, and specific conversational preferences (e.g., *"Loves retro computers and gardening"*).
 - **Token Counter & Budget Warning:** Real-time token counter comparing the character definition against the model's active context window (e.g., *"Character prompt uses 412 / 4096 context tokens"*). Warns if persona text consumes more than 25% of available context.
-- **Safety Framing Note:** Clear inline reminder that personality traits modulate social and expressive tone only and **never bypass safety policies or system tool permissions**.
+- **Safety Framing Note:** Clear inline reminder that personality traits modulate social and expressive tone only and **never bypass safety policies or system tool permissions**. User-editable Character persona text is treated strictly as lower-trust configuration data; delimiter escaping alone does not provide complete prompt-injection security, and the system prompt explicitly bounds the persona block.
