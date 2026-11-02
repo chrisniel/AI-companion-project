@@ -124,6 +124,19 @@ class FakeSupervisor extends WindowsRuntimeProcessSupervisor {
     portListening = true; // Simulates process coming online
     return 9999;
   }
+
+  ProcessDiscoveryResult discoveryResult = const ProcessDiscoveryResult(
+    status: ProcessDiscoveryStatus.noProcess,
+  );
+
+  @override
+  Future<ProcessDiscoveryResult> discoverRuntimeProcesses({
+    required int port,
+    required String expectedExecutable,
+    Duration timeout = const Duration(seconds: 3),
+  }) async {
+    return discoveryResult;
+  }
 }
 
 void main() {

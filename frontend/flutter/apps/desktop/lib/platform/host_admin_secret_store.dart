@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:companion_api/companion_api.dart';
+import 'package:flutter/foundation.dart';
 
 typedef SecretReaderProcess = Future<ProcessResult> Function(
     String executable, List<String> arguments);
@@ -25,8 +26,9 @@ try {
     if (($node.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Reparse path' }
     if ($node -is [IO.FileInfo]) { $node = $node.Directory } else { $node = $node.Parent }
   }
-  foreach ($target in @($directory, $secretPath)) {
-    $acl = Get-Acl -LiteralPath $target
+  $dirAcl = [System.IO.Directory]::GetAccessControl($directory)
+  $fileAcl = [System.IO.File]::GetAccessControl($secretPath)
+  foreach ($acl in @($dirAcl, $fileAcl)) {
     if (-not $acl.AreAccessRulesProtected) { throw 'Inherited ACL' }
     $owner = $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value
     if ($owner -notin $allowed) { throw 'Unexpected owner' }
@@ -37,13 +39,21 @@ try {
   $secret = [IO.File]::ReadAllText($secretPath).Trim()
   if ([string]::IsNullOrWhiteSpace($secret) -or $secret -match '\s') { throw 'Invalid secret' }
   [Console]::Out.Write($secret)
-} catch { exit 1 }
+} catch {
+  [Console]::Error.WriteLine($_.Exception.Message)
+  exit 1
+}
 ''';
   @override
   Future<String?> readToken() async {
     final result = await _run('powershell.exe',
         ['-NoProfile', '-NonInteractive', '-Command', _script]);
     if (result.exitCode != 0) {
+      final stderr = result.stderr.toString().trim();
+      if (stderr.isNotEmpty) {
+        debugPrint(
+            'HostAdminSecretStore: PowerShell authority validation failed (exit ${result.exitCode}): $stderr');
+      }
       throw StateError(
           'Trusted local Host Admin authority could not be validated.');
     }
