@@ -78,10 +78,10 @@ class TestCheckDartOpenApiParity(unittest.TestCase):
         self.assertTrue(any("uncataloged route" in err for err in errors))
 
     def test_verify_companion_client_implementations_passes(self):
-        """CompanionClient must implement all 12 M1 and 6 native identity routes."""
+        """CompanionClient must implement all 12 M1, 6 native identity, and 11 character routes."""
         errors, verified = checker.verify_companion_client_implementations(checker.CLIENT_PATH)
         self.assertEqual(errors, [])
-        self.assertEqual(len(verified), 18)
+        self.assertEqual(len(verified), 29)
 
     def test_native_identity_routes_cannot_silently_disappear(self):
         import json
