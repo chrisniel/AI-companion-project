@@ -19,6 +19,7 @@ from app.core.storage import prepare_database_schema, StorageError
 from app.db.backup import SQLiteBackupError
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
+HEAD_REVISION = "009_character_foundation"
 
 
 def _get_alembic_config(db_path: Path) -> Config:
@@ -36,7 +37,7 @@ def test_fresh_database_does_not_create_backup():
         backup_dir = tmp_root / "backups"
 
         rev = prepare_database_schema(db_path, backup_dir=backup_dir)
-        assert rev == "008_profile_sessions_and_tickets"
+        assert rev == HEAD_REVISION
 
         # Verify no backups created
         if backup_dir.exists():
@@ -69,7 +70,7 @@ def test_existing_older_database_creates_backup_before_upgrade():
 
         # Run prepare_database_schema which should detect upgrade needed and trigger backup
         rev = prepare_database_schema(db_path, backup_dir=backup_dir)
-        assert rev == "008_profile_sessions_and_tickets"
+        assert rev == HEAD_REVISION
 
         # Verify backup was created
         assert backup_dir.exists()
@@ -125,11 +126,11 @@ def test_database_already_at_head_creates_no_redundant_backup():
 
         # First run upgrades fresh to 008
         rev1 = prepare_database_schema(db_path, backup_dir=backup_dir)
-        assert rev1 == "008_profile_sessions_and_tickets"
+        assert rev1 == HEAD_REVISION
 
         # Subsequent startup
         rev2 = prepare_database_schema(db_path, backup_dir=backup_dir)
-        assert rev2 == "008_profile_sessions_and_tickets"
+        assert rev2 == HEAD_REVISION
 
         if backup_dir.exists():
             backups = list(backup_dir.glob("pre_migration_*.db"))

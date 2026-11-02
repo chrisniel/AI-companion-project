@@ -18,6 +18,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Serialized Desktop test files in CI so real Windows runtime acceptance checks do not compete with other test files; retained all tests, production deadlines and fail-closed process checks.
 
+### Fixed — Windows Desktop Host Admin authority validation
+
+- Replaced PowerShell `Get-Acl` module loading in `HostAdminSecretStore` with direct .NET CLR access control (`[System.IO.Directory]::GetAccessControl`, `[System.IO.File]::GetAccessControl`), resolving PowerShell 5.1 module-loading collisions in environments where modern PowerShell editions reside in `PSModulePath`. Preserved fixed-path constraints, reparse point rejection, and owner/SYSTEM SID checks; confirmed manual Windows Desktop Profile access acceptance.
+
+### Implemented & Verified (2026-11-02 - M3: Character Foundation — Batch A)
+
+- Added Alembic migration 009 with application-owned `character_templates`, profile-owned `character_instances`, column additions `profiles.active_character_instance_id` and `conversations.character_instance_id`, 8 SQLite triggers, and pre-migration SQLite WAL backup hook with dynamic head discovery.
+- Seeded initial application-owned templates: `neutral-assistant` (immutable fallback with NULL traits), `warm-companion`, `playful-companion`, and `formal-advisor`.
+- Implemented immutable Neutral Assistant fallback (`is_neutral_fallback = True`, NULL traits via SQLite CHECK constraints) accessible via `GET /api/v1/characters/neutral` and activatable via `PUT /api/v1/characters/active` (`character_id = "default"` or `"neutral-assistant"`) or `POST /api/v1/characters/active/reset-neutral`.
+- Added personality preset catalog with 8 continuous dimensions (`warmth`, `teasing`, `guardedness`, `directness`, `expressiveness`, `affection`, `formality`, `verbosity` as 0–100 integers) and 8 approved presets (`custom`, `warm_companion`, `playful`, `formal_advisor`, `tsundere`, `kuudere`, `dandere`, `yandere`); enforced precedence where non-custom preset initializes traits from preset baseline, custom/omitted initializes from template baseline, and explicit traits override baseline values (requires complete 8-dimensional `CharacterTraitVector`; partial vectors rejected by schema).
+- Preserved historical conversation identity and legacy `character_id` values via deterministic UUIDv5 legacy placeholder mapping (`canonical = f"{len(profile_id)}:{profile_id}|{len(legacy_character_id)}:{legacy_character_id}"`); added `include_legacy` query filter to `GET /api/v1/characters/instances` (default false); guarded against modification and deletion via API/service-layer validation, SQLite CHECK constraints limiting valid placeholder structure, trigger `trg_character_instances_immutable_provenance` protecting provenance columns, and `conversations.character_instance_id` foreign key RESTRICT constraints.
+- Enforced ordered relational purge invariants: `CharacterInstance.profile_id` uses `ON DELETE CASCADE`, while `conversations.character_instance_id` uses `ON DELETE RESTRICT`, requiring conversation cleanup prior to deleting character instances.
+- Implemented runtime turn persona resolution framing user character instructions inside a lower-trust, XML-escaped persona block with structural defense-in-depth.
+- Enforced loss-aware fail-closed migration downgrade verifying substantive fields of seeded templates against `SEED_TEMPLATES` (excluding incidental timestamps) and refusing downgrade on modification, active selections, or user instances, preserving all user data intact.
+- Implemented 11 character REST endpoints with profile isolation; synchronized OpenAPI 3.1 contract; added Dart DTOs and `CompanionClient` character methods with verified route and schema parity; updated React Web conversation creation for optional character ID.
+- Batch A is implemented, locally verified, confirmed on Windows, and independently review-approved with minor documentation conditions; hosted CI Run #114 (and historical Run #113) passed 100%; same-branch closure records archived. Draft PR #29 updated for final verification; post-merge CI and wider M3 capabilities (Character Studio UI, dynamic personality, mood, relationship, voice) remain future work. Execution evidence is tracked in [archived branch task](docs/01_Tracking/archive/task-feature-m3-character-foundation-a.md).
+
 ### Implemented & Locally Verified (2026-10-15 - M2: Profile Sessions & Cross-Profile Isolation — Batch B)
 
 - Added migration 008 with Profile Sessions and single-use authorization grants; removed implicit Profile ownership defaults while preserving existing data, foreign keys and FTS5 behavior.

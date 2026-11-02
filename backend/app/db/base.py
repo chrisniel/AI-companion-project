@@ -2,16 +2,26 @@
 
 from app.db.session import Base
 from app.models.attachment import Attachment
+from app.models.character_instance import CharacterInstance
+from app.models.character_template import CharacterTemplate
 from app.models.conversation import Conversation
 from app.models.memory import Memory
 from app.models.message import Message
+from app.models.profile import Profile
+from app.models.profile_session import ProfileSession
+from app.models.session_ticket import SessionTicket
 from app.models.task import Task
 
 __all__ = [
     "Base",
+    "Profile",
+    "ProfileSession",
+    "SessionTicket",
     "Task",
     "Conversation",
     "Message",
     "Memory",
     "Attachment",
+    "CharacterTemplate",
+    "CharacterInstance",
 ]

@@ -18,73 +18,115 @@ Key working principles:
 
 ---
 
-## 2. The 7-Stage Delivery Gate Lifecycle
+## 2. The Unified Engineering Delivery Lifecycle & Quality Gates
 
-For all non-trivial implementation, refactoring, or bug fixes, contributors and AI agents must follow the explicit delivery lifecycle:
+For all non-trivial implementation, refactoring, or bug fixes, contributors and AI implementation agents (Gemini, Codex, etc.) must follow the unified delivery lifecycle:
 
 ```text
-┌────────┐     ┌───────────┐     ┌─────────────────────┐     ┌──────────┐
-│  PLAN  │ ──► │ IMPLEMENT │ ──► │ IMPLEMENTATION GATE │ ──► │ DOCUMENT │
-└────────┘     └───────────┘     └─────────────────────┘     └──────────┘
-                                                                  │
-┌──────────────┐     ┌─────────┐     ┌────────────────────┐       │
-│ CLOSURE GATE │ ◄── │ CLOSURE │ ◄── │ DOCUMENTATION GATE │ ◄─────┘
-└──────────────┘     └─────────┘     └────────────────────┘
+PLAN
+  │
+  ▼
+PLAN APPROVAL
+  │
+  ▼
+IMPLEMENTATION
+  │
+  ▼
+RISK-BASED INDEPENDENT IMPLEMENTATION REVIEW
+  │
+  ▼
+DOCUMENTATION + PROVISIONAL CLOSURE
+  │
+  ▼
+DRAFT PR
+  │
+  ▼
+COMBINED INDEPENDENT DOCUMENTATION/CLOSURE/PR REVIEW
+  │
+  ▼
+FINAL PRE-MERGE CLOSURE RECONCILIATION
+  │
+  ▼
+HUMAN SQUASH MERGE
+  │
+  ▼
+READ-ONLY POST-MERGE VERIFICATION
 ```
 
 ### Stage 1: PLAN
 - **Action:** Formulate the implementation strategy before touching product code.
 - **Plan File:** Create a feature-named plan under [`docs/02_Planning/01_Plans/plan-[feature-name].md`](../02_Planning/01_Plans/README.md) using the standard template in [`docs/02_Planning/02_Templates/implementation-plan-template.md`](../02_Planning/02_Templates/implementation-plan-template.md).
-- **Contents:** Affected files, acceptance criteria, step-by-step pseudocode, error-handling paths, test strategies, and manual verification steps.
-- **Approval Gate:** Explicit human (Chris) approval must be secured before implementation begins.
+- **Contents:** Affected files, acceptance criteria, step-by-step implementation phases, error-handling paths, test strategies, and manual verification steps.
 
-### Stage 2: IMPLEMENT
+### Stage 2: PLAN APPROVAL
+- **Action:** Independent evaluation of the proposed plan.
+- **Gate:** Explicit human (Chris) approval must be secured before implementation begins. Unapproved plans must not be implemented.
+
+### Stage 3: IMPLEMENTATION
 - **Action:** Execute the approved plan using Test-Driven Development (Red-Green-Refactor).
 - **Discipline:**
   - Write a focused failing test demonstrating desired behavior (RED).
-  - Verify failure for expected reason.
+  - Verify failure for the expected architectural reason.
   - Implement minimal code to pass (GREEN).
   - Clean up duplication and structure while maintaining all green tests (REFACTOR).
 - **Surgical Changes:** Modify only lines and files required for the approved scope. Preserve unrelated working behavior and user code.
 
-### Stage 3: IMPLEMENTATION GATE
-- **Action:** Mechanical and functional verification of code.
+### Stage 4: RISK-BASED INDEPENDENT IMPLEMENTATION REVIEW
+- **Action:** Mechanical and architectural verification of code before documentation begins.
+- **Review Scope:** Review effort scales with change risk. High-risk, architectural, database schema, migration, or security-sensitive changes retain a dedicated independent implementation review.
 - **Checks:**
   - Automated test suites pass cleanly with zero ignored regressions.
   - Linters and static analysis report zero errors.
   - Generated API contracts (`contracts/openapi/openapi.json`) and database migrations match code reality.
-- **Review:** Independent architectural review (Chris and independent reviewer GPT) evaluates implementation quality before documentation begins.
+- **Gate:** Independent architectural evaluation (Chris and independent reviewer) evaluates implementation quality and issues an explicit gate verdict (APPROVED or CHANGES REQUIRED). The authoring agent must not self-approve this gate.
 
-### Stage 4: DOCUMENT
-- **Action:** Synchronize canonical technical documentation to reflect verified changes.
+### Stage 5: DOCUMENTATION + PROVISIONAL CLOSURE
+- **Action:** Synchronize canonical technical documentation and prepare delivery tracking in a single coordinated pass once implementation is approved.
 - **Rules:**
   - Update the closest canonical owner document (e.g. focused domain spec under `docs/04_Architecture/`).
   - Do not create substitute documentation files or loose notes.
-  - If a delivery walkthrough is required for knowledge transfer, draft it under `docs/03_Walkthroughs/` using the 7-section template.
-
-### Stage 5: DOCUMENTATION GATE (No Self-Verification)
-- **Principle:** An authoring agent **MUST NOT** self-certify its own canonical documentation edits as complete or verified.
-- **Action:** The agent stops after mechanical verification (valid markdown, working links, accurate code references) and presents the exact diff and rationale for human inspection.
-- **Approval:** Chris and reviewer verify that documentation accurately reflects implemented reality without speculative claims.
-
-### Stage 6: CLOSURE
-- **Action:** Prepare delivery tracking updates.
-- **Tracker Updates:**
-  - Mark delivered items complete in the branch active task (`docs/01_Tracking/active/task-[branch-slug].md`).
-  - Surface any manual hardware verification steps (audio, physical device, GPU benchmarks) or known non-blocking issues.
+  - Author a technical walkthrough under `docs/03_Walkthroughs/` using the established 7-section template.
   - Append an entry to [`CHANGELOG.md`](../../CHANGELOG.md) under `## [Unreleased]`.
+  - Update or create the branch active task tracker (`docs/01_Tracking/active/task-[branch-slug].md`) recording provisional closure:
+    - Implementation completed and independently approved.
+    - Documentation prepared and verified mechanically.
+    - Verification evidence recorded.
+    - Final combined documentation and closure gate awaiting independent evaluation.
+- **Principle (No Self-Verification):** The authoring agent **MUST NOT** mark the documentation or closure gate as passed.
 
-### Stage 7: CLOSURE GATE & ARCHIVING
-- **Verification:** Independent check confirming:
-  - Branch tracking matches independently verified code, tests, contracts and documentation as applicable.
-  - Delivered scope matches approved requirements.
-  - No unverified capability or test result is claimed; agents never claim self-approved gates.
-  - Known blockers, deferred work, and manual/hardware checks remain explicit.
-- **Mandatory Quality Gates:** Independent Implementation, Documentation, and Closure Gates remain mandatory for all non-trivial deliveries.
-- **Delivery Destination (PR-READY):** The delivery destination after these gates are approved is **PR-READY**.
-- **Same-Branch Closure:** Reconcile documentation/tracking on the same branch.
-- **Archiving:** Archive the branch active task to `docs/01_Tracking/archive/`.
-- **Git Handoff & Authorization:** Agents may commit/push ONLY with explicit, task-bounded human authorization. PR creation and merge require separately authorized action by Chris. Prepare PR/squash handoff and provide a proposed Conventional Commit message.
+### Stage 6: DRAFT PR
+- **Action:** Under explicit task-bounded human authorization, commit scoped documentation and tracking updates, HTTPS-push to the remote branch, and open a draft pull request targeting `develop`.
+- **Requirements:**
+  - The PR must be created as **draft** (`gh pr create --draft`), clearly indicating it is awaiting combined independent review.
+  - Inspect and report GitHub CI status and checks.
+  - Never merge, rebase, or force-push.
+
+### Stage 7: COMBINED INDEPENDENT DOCUMENTATION/CLOSURE/PR REVIEW
+- **Action:** Independent evaluation of the complete delivery package:
+  - Canonical documentation accuracy against committed source code and tests.
+  - Walkthrough completeness and clarity.
+  - Provisional closure tracking and changelog accuracy.
+  - Draft PR diff, target branch (`develop`), and CI status.
+- **Gate:** Chris and the independent reviewer evaluate the package and issue approval or request corrections. The authoring agent halts at this boundary.
+
+### Stage 8: FINAL PRE-MERGE CLOSURE RECONCILIATION
+- **Action:** Performed on the **SAME** feature branch only after independent review approval and human authorization:
+  - Archive the branch active task to `docs/01_Tracking/archive/task-[branch-slug].md`.
+  - Reconcile any final tracking details so the branch does not merge with stale or provisional status.
+  - Commit and HTTPS-push reconciliation updates to the feature branch.
+  - The draft PR updates automatically with the final commit.
+  - Supply the final proposed Conventional Commit squash message.
+
+### Stage 9: HUMAN SQUASH MERGE
+- **Action:** Exclusive human operation. Chris reviews the final PR diff, verifies passing CI checks, and executes the squash merge into `develop` on GitHub.
+- **Invariant:** Agents **NEVER** execute repository merges or modify protected branches.
+
+### Stage 10: READ-ONLY POST-MERGE VERIFICATION
+- **Action:** Once merged, a subsequently invoked agent performs read-only verification:
+  - Inspect remote `develop` to confirm the PR squash commit landed successfully.
+  - Check post-merge / `develop`-push CI status.
+  - Report a clear PASS / FAIL / INCOMPLETE integration verdict with traceable commit SHAs.
+- **The No-Stale-Documentation Rule:** Do NOT create a follow-up cleanup branch or commit solely to replace a historical branch HEAD with a squash SHA, update a historical PR checkpoint, or alter a historically truthful pending status. Canonical documentation must remain durable and stable across Git lifecycle events.
 
 ---
 
@@ -122,12 +164,14 @@ All proposed commits must adhere to the Conventional Commits specification:
 ```
 *Valid types:* `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `chore`.
 
-### 4.3 Pull Request Protocol
+### 4.3 Pull Request & Integration Protocol
 When a milestone or major feature batch is ready for upstream integration:
-1. **Before PR Creation:** Verify base branch (`develop` or `main`); verify head branch and pushed HEAD SHA; verify all local test suites pass; provide structured PR title and markdown body.
-2. **After PR Opens:** Inspect reported status of CI checks and linters.
-3. **Before Merge:** Confirm zero merge conflicts and all required status checks green; provide squash commit message.
-4. **After Merge:** Verify target branch commit SHA and ensure clean local working tree state.
+1. **Draft PR Creation:** Under explicit task authorization, the agent pushes verified commits to the feature branch and creates a **draft PR** (`gh pr create --draft`) targeting `develop`. The draft PR clearly states that it is awaiting combined independent documentation/closure review.
+2. **Review & CI Verification:** Independent reviewer and human owner evaluate the diff, walkthrough, and CI checks. Any corrections remain on the same branch.
+3. **Pre-Merge Reconciliation:** Upon review approval, branch-owned tracking is updated on the same branch to record final closure. The draft PR updates automatically.
+4. **Human Squash Merge:** Chris executes the squash merge into `develop` using GitHub's UI or CLI.
+5. **Read-Only Post-Merge Verification:** A subsequent agent verifies that the squash commit landed on `develop` and inspects post-merge CI.
+6. **No-Stale-Documentation Rule:** Post-merge verification must not trigger cleanup branches or commits solely to update historical SHAs, PR numbers, or CI run counters.
 
 ---
 
@@ -159,8 +203,8 @@ When a deliverable introduces new architectural patterns, complex workflows, or 
   - **Planned Capabilities:** Document in **target/future wording** (*"target design"*, *"will support"*, *"planned"*).
   - **No Ephemeral State:** Never embed temporary branch names, volatile test run counts, or in-flight PR numbers into permanent canonical documentation.
 
-### PR & Integration Protocol
-- **Before PR:** Closure-ready branch tracking.
-- **PR:** Candidate CI/review evidence.
-- **Before merge:** Confirm required checks applicable to the delivery.
-- **After merge:** Read-only target-branch verification by default. Do not require a dedicated post-merge documentation commit.
+### PR & Integration Summary
+- **Before PR:** Provisional closure tracking and canonical documentation prepared on feature branch.
+- **Draft PR:** Candidate CI and independent combined review evidence.
+- **Before Merge:** Final pre-merge reconciliation on same branch; confirm required checks green.
+- **After Merge:** Read-only target-branch verification by default. Do not require a dedicated post-merge documentation commit.

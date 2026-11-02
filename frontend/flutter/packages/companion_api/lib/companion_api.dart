@@ -5,6 +5,7 @@ export 'auth/in_memory_credential_store.dart';
 export 'client/companion_api_exception.dart';
 export 'client/companion_client.dart';
 export 'dto/auth_dto.dart';
+export 'dto/character_dto.dart';
 export 'dto/conversation_dto.dart';
 export 'dto/health_dto.dart';
 export 'dto/message_dto.dart';

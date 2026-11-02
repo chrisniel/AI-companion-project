@@ -84,7 +84,8 @@ class DesktopProfileController extends ChangeNotifier {
         await chat.selectProfile(selectedProfileId!);
         activeProfileId = chat.authenticatedProfileId;
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('DesktopProfileController.refresh failed: $e');
       error =
           'Local Profile authority is unavailable. Check the trusted Windows host runtime.';
     } finally {

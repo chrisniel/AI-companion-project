@@ -15,6 +15,8 @@ from app.db.session import (
     get_engine,
 )
 
+HEAD_REVISION = "009_character_foundation"
+
 
 def _create_legacy_v004_db(path: Path) -> None:
     """Helper to create an authentic SQLite DB at Alembic revision 004."""
@@ -52,7 +54,7 @@ def test_fresh_install_runs_alembic_upgrade_to_head(tmp_path):
 
     # Prepare schema upgrades to head
     head_rev = prepare_database_schema(canonical_db)
-    assert head_rev == "008_profile_sessions_and_tickets"
+    assert head_rev == HEAD_REVISION
 
     # Verify tables exist
     conn = sqlite3.connect(canonical_db)
@@ -60,6 +62,8 @@ def test_fresh_install_runs_alembic_upgrade_to_head(tmp_path):
     conn.close()
 
     assert "profiles" in tables
+    assert "character_templates" in tables
+    assert "character_instances" in tables
     assert "conversations" in tables
     assert "messages" in tables
     assert "tasks" in tables
@@ -89,13 +93,13 @@ def test_migrated_older_db_upgraded_on_canonical_copy_while_source_remains_at_ol
 
     # Run schema preparation on canonical copy
     head_rev = prepare_database_schema(canonical_db)
-    assert head_rev == "008_profile_sessions_and_tickets"
+    assert head_rev == HEAD_REVISION
 
-    # Canonical copy has revision 008
+    # Canonical copy has revision 009
     conn_canon = sqlite3.connect(canonical_db)
     canon_rev = conn_canon.execute("SELECT version_num FROM alembic_version;").fetchone()[0]
     conn_canon.close()
-    assert canon_rev == "008_profile_sessions_and_tickets"
+    assert canon_rev == HEAD_REVISION
 
     # Legacy source MUST remain at 004
     conn_source = sqlite3.connect(legacy_db)
@@ -117,9 +121,9 @@ def test_existing_canonical_db_safely_upgraded_if_behind(tmp_path):
     assert decision.action == "CANONICAL_EXISTS"
 
     head_rev = prepare_database_schema(canonical_db)
-    assert head_rev == "008_profile_sessions_and_tickets"
+    assert head_rev == HEAD_REVISION
 
     conn = sqlite3.connect(canonical_db)
     rev = conn.execute("SELECT version_num FROM alembic_version;").fetchone()[0]
     conn.close()
-    assert rev == "008_profile_sessions_and_tickets"
+    assert rev == HEAD_REVISION

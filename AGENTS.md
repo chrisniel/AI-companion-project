@@ -105,14 +105,49 @@ Relevant Active Implementation Plan (in docs/02_Planning/01_Plans/)
 
 ## 4. Engineering Delivery Lifecycle & Quality Gates
 
-All non-trivial implementation must pass through the 7-stage delivery lifecycle defined in [`docs/06_Guides/DELIVERY_WORKFLOW.md`](docs/06_Guides/DELIVERY_WORKFLOW.md):
+All non-trivial implementation across Gemini, Codex, and other AI implementation agents must follow the canonical delivery lifecycle defined in [`docs/06_Guides/DELIVERY_WORKFLOW.md`](docs/06_Guides/DELIVERY_WORKFLOW.md):
+
 ```text
-PLAN → IMPLEMENT → IMPLEMENTATION GATE → DOCUMENT → DOCUMENTATION GATE → CLOSURE → CLOSURE GATE
+PLAN
+  │
+  ▼
+PLAN APPROVAL
+  │
+  ▼
+IMPLEMENTATION
+  │
+  ▼
+RISK-BASED INDEPENDENT IMPLEMENTATION REVIEW
+  │
+  ▼
+DOCUMENTATION + PROVISIONAL CLOSURE
+  │
+  ▼
+DRAFT PR
+  │
+  ▼
+COMBINED INDEPENDENT DOCUMENTATION/CLOSURE/PR REVIEW
+  │
+  ▼
+FINAL PRE-MERGE CLOSURE RECONCILIATION
+  │
+  ▼
+HUMAN SQUASH MERGE
+  │
+  ▼
+READ-ONLY POST-MERGE VERIFICATION
 ```
 
-- **Implementation Gate:** Inspect code, tests, schema contracts, and migrations before claiming completion. Implementation intent is never documentation evidence.
-- **Documentation Gate (No Self-Verification):** An agent authoring or materially editing canonical documentation **MUST NOT** self-certify it as complete. The agent stops after mechanical verification and presents the diff for independent review.
-- **Closure Gate:** Final task closure occurs only after independent human approval. Active `task.md` must accurately reflect verified delivery.
+### Core Lifecycle Governance Principles
+- **Nontrivial Implementation Requires Approved Plan:** No production code without an explicitly approved implementation plan.
+- **Risk-Scaled Independent Review:** Review effort scales with change risk. High-risk, architectural, schema, or security-sensitive changes retain a dedicated independent implementation review before documentation begins.
+- **Coordinated Documentation & Provisional Closure:** Documentation reconciliation and provisional closure tracking may be prepared together once implementation is approved.
+- **No Self-Verification:** Authoring agents **MUST NOT** self-certify their own quality gates (Implementation, Documentation, Closure, or PR approval). Agents halt after mechanical checks and present exact diffs and evidence for independent review.
+- **Explicit Task-Bounded Git Writes:** Git write operations default strictly to read-only. Within an explicitly authorized task, scoped branch commits and HTTPS pushes may be executed. Draft PR creation targeting `develop` may be authorized for the active task. Blanket merge, rebase, reset, force-push, or protected-branch mutation remains strictly prohibited.
+- **Human-Controlled Squash Merge:** The human repository owner (Chris) exclusively controls and executes the squash merge into `develop`.
+- **Single Delivery Branch:** One coherent branch owns the entire delivery lifecycle from plan through final pre-merge reconciliation.
+- **Read-Only Post-Merge Verification:** Post-merge verification is read-only by default, confirming that squash integration into `develop` succeeded without modifying repository files.
+- **No-Stale-Documentation Rule:** Never create follow-up cleanup commits solely to replace historical branch HEADs with squash SHAs, update historical PR checkpoints, add CI run numbers, or alter historically accurate pending statuses.
 - **Subsystem Batching:** Scope tasks to the largest tightly related batch that preserves reliable first-pass accuracy and reviewability. Avoid microscopic over-ceremony for trivial fixes.
 
 ---
@@ -121,15 +156,13 @@ PLAN → IMPLEMENT → IMPLEMENTATION GATE → DOCUMENT → DOCUMENTATION GATE �
 
 - **Shared `task.md`:** Tracks milestone/integration direction. Does not track every temporary branch heartbeat. Should avoid volatile "PR pending", "current HEAD", and temporary branch-state wording.
 - **Branch active task:** Tracks plan execution, implementation, verification, documentation, independent review, closure, blockers, and relevant evidence.
-- **One coherent delivery branch owns:**
-  `PLAN → IMPLEMENT → IMPLEMENTATION GATE → DOCUMENT → DOCUMENTATION GATE → CLOSURE → CLOSURE GATE`
-  Do not create new branches merely because the delivery moves between those stages.
+- **One coherent delivery branch owns:** The entire delivery lifecycle from `PLAN` through `FINAL PRE-MERGE CLOSURE RECONCILIATION`. Do not create new branches merely because delivery moves between stages.
 
 ## 5.1 SAME-BRANCH CLOSURE & POST-MERGE RECONCILIATION
 
-- Planning, implementation, verification, review fixes, documentation, and closure normally stay on the same short-lived branch.
-- Before PR/merge, reconcile branch-owned tracking so the delivery does not knowingly land with stale execution state.
-- Archive/remove the branch active task on that same branch when closure is verified.
+- Planning, implementation, verification, review fixes, documentation, draft PR, and pre-merge closure reconciliation normally stay on the same short-lived branch.
+- Before final merge, reconcile branch-owned tracking so the delivery does not knowingly land with stale execution state.
+- Archive the branch active task on that same branch under `docs/01_Tracking/archive/` when closure has been independently verified.
 - Do not create a follow-up branch merely to replace: pending, uncommitted, current HEAD, awaiting review, PR pending, merge pending, or similar transient wording.
 - Historical records preserve point-in-time truth. Use labels such as "implementation checkpoint", "reviewed revision", or "publication checkpoint" rather than claiming a SHA is eternally current.
 

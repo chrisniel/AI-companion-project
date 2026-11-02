@@ -1332,6 +1332,449 @@
         }
       }
     },
+    "/api/v1/characters/templates": {
+      "get": {
+        "tags": [
+          "Characters"
+        ],
+        "summary": "List Character Templates",
+        "description": "List application-owned character templates.",
+        "operationId": "get_templates_api_v1_characters_templates_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CharacterTemplateOut"
+                  },
+                  "type": "array",
+                  "title": "Response Get Templates Api V1 Characters Templates Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/characters/presets": {
+      "get": {
+        "tags": [
+          "Characters"
+        ],
+        "summary": "List Character Presets",
+        "description": "List frozen eight personality presets.",
+        "operationId": "get_presets_api_v1_characters_presets_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CharacterPresetOut"
+                  },
+                  "type": "array",
+                  "title": "Response Get Presets Api V1 Characters Presets Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/characters/neutral": {
+      "get": {
+        "tags": [
+          "Characters"
+        ],
+        "summary": "Get Neutral Assistant Fallback",
+        "description": "Get immutable Neutral Assistant fallback definition.",
+        "operationId": "get_neutral_fallback_api_v1_characters_neutral_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeutralAssistantOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/characters/active": {
+      "get": {
+        "tags": [
+          "Characters"
+        ],
+        "summary": "Get Active Character State",
+        "description": "Get the active character state for the authenticated Profile.",
+        "operationId": "get_active_character_api_v1_characters_active_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveCharacterStateOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Characters"
+        ],
+        "summary": "Select Active Character",
+        "description": "Set active character for the authenticated Profile.",
+        "operationId": "set_active_character_api_v1_characters_active_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActiveCharacterSelectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveCharacterStateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/characters/active/reset-neutral": {
+      "post": {
+        "tags": [
+          "Characters"
+        ],
+        "summary": "Reset Active Character to Neutral Assistant",
+        "description": "Reset active character selection to Neutral Assistant fallback.",
+        "operationId": "reset_active_character_api_v1_characters_active_reset_neutral_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveCharacterStateOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/characters/instances": {
+      "get": {
+        "tags": [
+          "Characters"
+        ],
+        "summary": "List Profile Character Instances",
+        "description": "List character instances owned by the authenticated Profile.",
+        "operationId": "get_instances_api_v1_characters_instances_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "include_archived",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Whether to include archived character instances",
+              "default": true,
+              "title": "Include Archived"
+            },
+            "description": "Whether to include archived character instances"
+          },
+          {
+            "name": "include_legacy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Whether to include preserved legacy placeholders",
+              "default": false,
+              "title": "Include Legacy"
+            },
+            "description": "Whether to include preserved legacy placeholders"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CharacterInstanceOut"
+                  },
+                  "title": "Response Get Instances Api V1 Characters Instances Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Characters"
+        ],
+        "summary": "Create Character Instance",
+        "description": "Create a new Profile-owned CharacterInstance snapshot from a template.",
+        "operationId": "post_instance_api_v1_characters_instances_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CharacterInstanceCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterInstanceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/characters/instances/{instance_id}": {
+      "get": {
+        "tags": [
+          "Characters"
+        ],
+        "summary": "Get Profile Character Instance",
+        "description": "Get a specific CharacterInstance owned by the authenticated Profile.",
+        "operationId": "get_instance_api_v1_characters_instances__instance_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterInstanceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Characters"
+        ],
+        "summary": "Update Profile Character Instance",
+        "description": "Update a specific CharacterInstance owned by the authenticated Profile.",
+        "operationId": "patch_instance_api_v1_characters_instances__instance_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CharacterInstanceUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterInstanceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Characters"
+        ],
+        "summary": "Delete Profile Character Instance",
+        "description": "Soft-delete/archive a CharacterInstance owned by the authenticated Profile.",
+        "operationId": "delete_instance_api_v1_characters_instances__instance_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/system/status": {
       "get": {
         "tags": [
@@ -2150,6 +2593,73 @@
   },
   "components": {
     "schemas": {
+      "ActiveCharacterSelectRequest": {
+        "properties": {
+          "character_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Character Id",
+            "description": "'default', 'neutral-assistant', or owned instance ID"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "character_id"
+        ],
+        "title": "ActiveCharacterSelectRequest",
+        "description": "Request to select active character for the authenticated Profile."
+      },
+      "ActiveCharacterStateOut": {
+        "properties": {
+          "profile_id": {
+            "type": "string",
+            "title": "Profile Id"
+          },
+          "is_neutral_fallback": {
+            "type": "boolean",
+            "title": "Is Neutral Fallback"
+          },
+          "active_character_id": {
+            "type": "string",
+            "title": "Active Character Id"
+          },
+          "active_character_instance_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Character Instance Id"
+          },
+          "neutral_fallback": {
+            "$ref": "#/components/schemas/NeutralAssistantOut"
+          },
+          "active_instance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CharacterInstanceOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "profile_id",
+          "is_neutral_fallback",
+          "active_character_id",
+          "neutral_fallback"
+        ],
+        "title": "ActiveCharacterStateOut",
+        "description": "Current active character state for the authenticated Profile."
+      },
       "AttachmentOut": {
         "properties": {
           "id": {
@@ -2325,6 +2835,566 @@
           "unknown"
         ],
         "title": "CapabilityProvenance"
+      },
+      "CharacterInstanceCreate": {
+        "properties": {
+          "template_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Template Id"
+          },
+          "preset_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "custom",
+                  "warm_companion",
+                  "playful",
+                  "formal_advisor",
+                  "tsundere",
+                  "kuudere",
+                  "dandere",
+                  "yandere"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "lore": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lore"
+          },
+          "system_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System Prompt"
+          },
+          "avatar_asset": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Asset"
+          },
+          "traits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CharacterTraitVector"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "template_id"
+        ],
+        "title": "CharacterInstanceCreate",
+        "description": "Payload to instantiate a Profile-owned CharacterInstance snapshot from a template."
+      },
+      "CharacterInstanceOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "profile_id": {
+            "type": "string",
+            "title": "Profile Id"
+          },
+          "is_legacy_placeholder": {
+            "type": "boolean",
+            "title": "Is Legacy Placeholder",
+            "default": false
+          },
+          "legacy_character_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Legacy Character Id"
+          },
+          "template_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Id"
+          },
+          "source_template_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Template Version"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "lore": {
+            "type": "string",
+            "title": "Lore"
+          },
+          "system_prompt": {
+            "type": "string",
+            "title": "System Prompt"
+          },
+          "avatar_asset": {
+            "type": "string",
+            "title": "Avatar Asset"
+          },
+          "preset_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "custom",
+                  "warm_companion",
+                  "playful",
+                  "formal_advisor",
+                  "tsundere",
+                  "kuudere",
+                  "dandere",
+                  "yandere"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset Id"
+          },
+          "traits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CharacterTraitVector"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "is_active_for_profile": {
+            "type": "boolean",
+            "title": "Is Active For Profile",
+            "default": false
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "profile_id",
+          "name",
+          "summary",
+          "lore",
+          "system_prompt",
+          "avatar_asset",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "CharacterInstanceOut",
+        "description": "Profile-owned character instance representation."
+      },
+      "CharacterInstanceUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "lore": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lore"
+          },
+          "system_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System Prompt"
+          },
+          "avatar_asset": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Asset"
+          },
+          "preset_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "custom",
+                  "warm_companion",
+                  "playful",
+                  "formal_advisor",
+                  "tsundere",
+                  "kuudere",
+                  "dandere",
+                  "yandere"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset Id"
+          },
+          "traits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CharacterTraitVector"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "archived"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "CharacterInstanceUpdate",
+        "description": "Payload to update a Profile-owned CharacterInstance snapshot.\n\nCondition A:\n- Omitted fields mean unchanged.\n- Explicit null is rejected for fields that must retain non-null values."
+      },
+      "CharacterPresetOut": {
+        "properties": {
+          "preset_id": {
+            "type": "string",
+            "enum": [
+              "custom",
+              "warm_companion",
+              "playful",
+              "formal_advisor",
+              "tsundere",
+              "kuudere",
+              "dandere",
+              "yandere"
+            ],
+            "title": "Preset Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "traits": {
+            "$ref": "#/components/schemas/CharacterTraitVector"
+          }
+        },
+        "type": "object",
+        "required": [
+          "preset_id",
+          "label",
+          "description",
+          "traits"
+        ],
+        "title": "CharacterPresetOut",
+        "description": "Candidate baseline trait configuration for a frozen personality preset."
+      },
+      "CharacterTemplateOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "template_version": {
+            "type": "integer",
+            "title": "Template Version"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "lore": {
+            "type": "string",
+            "title": "Lore"
+          },
+          "system_prompt": {
+            "type": "string",
+            "title": "System Prompt"
+          },
+          "avatar_asset": {
+            "type": "string",
+            "title": "Avatar Asset"
+          },
+          "default_preset_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "custom",
+                  "warm_companion",
+                  "playful",
+                  "formal_advisor",
+                  "tsundere",
+                  "kuudere",
+                  "dandere",
+                  "yandere"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Preset Id"
+          },
+          "is_neutral_fallback": {
+            "type": "boolean",
+            "title": "Is Neutral Fallback"
+          },
+          "traits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CharacterTraitVector"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "template_version",
+          "name",
+          "summary",
+          "lore",
+          "system_prompt",
+          "avatar_asset",
+          "is_neutral_fallback",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "CharacterTemplateOut",
+        "description": "Application-owned, immutable/versioned character template definition."
+      },
+      "CharacterTraitVector": {
+        "properties": {
+          "warmth": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Warmth",
+            "description": "Empathy, friendliness, and emotional warmth"
+          },
+          "teasing": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Teasing",
+            "description": "Playfulness, banter, and lighthearted sarcasm"
+          },
+          "guardedness": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Guardedness",
+            "description": "Emotional reserve and boundary maintenance"
+          },
+          "directness": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Directness",
+            "description": "Candor, frankness, and communication directness"
+          },
+          "expressiveness": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Expressiveness",
+            "description": "Emotional and linguistic expressiveness"
+          },
+          "affection": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Affection",
+            "description": "Affectionate phrasing and emotional closeness"
+          },
+          "formality": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Formality",
+            "description": "Grammatical and stylistic formality"
+          },
+          "verbosity": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Verbosity",
+            "description": "Sentence length and elaboration depth"
+          }
+        },
+        "type": "object",
+        "required": [
+          "warmth",
+          "teasing",
+          "guardedness",
+          "directness",
+          "expressiveness",
+          "affection",
+          "formality",
+          "verbosity"
+        ],
+        "title": "CharacterTraitVector",
+        "description": "Eight continuous personality trait dimensions (0-100)."
       },
       "ChatCompletionChoice": {
         "properties": {
@@ -2613,8 +3683,7 @@
                 "type": "null"
               }
             ],
-            "title": "Character Id",
-            "default": "default"
+            "title": "Character Id"
           }
         },
         "additionalProperties": false,
@@ -2658,6 +3727,17 @@
           "character_id": {
             "type": "string",
             "title": "Character Id"
+          },
+          "character_instance_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Character Instance Id"
           },
           "owner_id": {
             "type": "string",
@@ -3866,6 +4946,70 @@
           "unknown"
         ],
         "title": "ModelVariant"
+      },
+      "NeutralAssistantOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "default": "neutral-assistant"
+          },
+          "compatibility_alias": {
+            "type": "string",
+            "title": "Compatibility Alias",
+            "default": "default"
+          },
+          "template_version": {
+            "type": "integer",
+            "title": "Template Version",
+            "default": 1
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": "Neutral Assistant"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary",
+            "default": "Objective, dependable system assistant fallback."
+          },
+          "system_prompt": {
+            "type": "string",
+            "title": "System Prompt"
+          },
+          "avatar_asset": {
+            "type": "string",
+            "title": "Avatar Asset",
+            "default": "neutral_avatar"
+          },
+          "is_neutral_fallback": {
+            "type": "boolean",
+            "title": "Is Neutral Fallback",
+            "default": true
+          },
+          "traits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CharacterTraitVector"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lore": {
+            "type": "string",
+            "title": "Lore",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "system_prompt"
+        ],
+        "title": "NeutralAssistantOut",
+        "description": "Immutable Neutral Assistant fallback definition."
       },
       "PendingRequest": {
         "properties": {

@@ -9,7 +9,7 @@ from app.schemas.common import BaseSchema
 class ConversationCreate(BaseSchema):
     """Payload to start a new persistent conversation."""
     title: Optional[str] = Field(default="New Conversation", max_length=255)
-    character_id: Optional[str] = Field(default="default", max_length=64)
+    character_id: Optional[str] = Field(default=None, max_length=64)
 
 
 class ConversationUpdate(BaseSchema):
@@ -28,6 +28,7 @@ class ConversationOut(BaseSchema):
     id: str
     title: str
     character_id: str
+    character_instance_id: Optional[str] = None
     owner_id: str
     created_at: datetime
     updated_at: datetime

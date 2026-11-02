@@ -403,7 +403,22 @@ async def orchestrate_chat_stream(
 
         status_resp = await provider.get_status()
         context_capacity = status_resp.context_size or 4096
-        active_persona = persona or DEFAULT_PERSONA
+        if persona:
+            active_persona = persona
+        else:
+            from app.models.conversation import Conversation
+            from app.services.character_service import resolve_turn_persona_prompt
+            conv = await db.scalar(
+                select(Conversation).where(
+                    Conversation.id == conversation_id,
+                    Conversation.profile_id == profile_session.profile_id,
+                    Conversation.deleted_at.is_(None),
+                )
+            )
+            if conv:
+                active_persona = await resolve_turn_persona_prompt(db, profile_session, conv)
+            else:
+                active_persona = DEFAULT_PERSONA
 
         prompt_messages = _build_context(
             history=history,
