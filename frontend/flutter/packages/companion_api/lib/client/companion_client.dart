@@ -626,8 +626,18 @@ class CompanionClient {
   }
 
   /// Lists character instances owned by the Profile via GET /api/v1/characters/instances.
-  Future<List<CharacterInstanceOut>> listCharacterInstances() async {
-    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/characters/instances');
+  Future<List<CharacterInstanceOut>> listCharacterInstances({
+    bool includeArchived = true,
+    bool includeLegacy = false,
+  }) async {
+    final queryParams = <String, String>{
+      'include_archived': includeArchived.toString(),
+      'include_legacy': includeLegacy.toString(),
+    };
+    final uri = baseUri.replace(
+      path: '${baseUri.path}/api/v1/characters/instances',
+      queryParameters: queryParams,
+    );
     final headers = await _buildHeaders(requiresAuth: true);
     final response = await _httpClient.get(uri, headers: headers);
     if (response.statusCode == 200) {

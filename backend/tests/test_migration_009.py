@@ -562,3 +562,65 @@ def test_downgrade_009_to_008_fails_closed_when_user_instances_exist_and_succeed
     command.upgrade(cfg, REVISION)
     with sqlite3.connect(db_path) as conn:
         assert conn.execute("SELECT version_num FROM alembic_version").fetchone()[0] == REVISION
+
+
+def test_migration_009_downgrade_refuses_on_modified_seed_templates_and_preserves_data(tmp_path: Path):
+    """Verify that any substantive alteration to seed templates prevents downgrade without data loss."""
+    db_path = tmp_path / "modified_templates_downgrade.db"
+    cfg = config(db_path)
+
+    command.upgrade(cfg, REVISION)
+
+    # 1. Test modified template name causes refusal
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("UPDATE character_templates SET name = 'Modified Warm Companion' WHERE id = 'warm-companion'")
+        conn.commit()
+
+    with pytest.raises(Exception) as exc_info:
+        command.downgrade(cfg, PREVIOUS)
+    assert "Downgrade refused" in str(exc_info.value)
+    assert "modified field 'name'" in str(exc_info.value)
+
+    # 2. Verify rejected downgrade did NOT destroy data
+    with sqlite3.connect(db_path) as conn:
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchone()[0] == REVISION
+        tmpl = conn.execute("SELECT name FROM character_templates WHERE id = 'warm-companion'").fetchone()
+        assert tmpl[0] == "Modified Warm Companion"
+
+        # Restore name, test modified version causes refusal
+        conn.execute("UPDATE character_templates SET name = 'Warm Companion', template_version = 2 WHERE id = 'warm-companion'")
+        conn.commit()
+
+    with pytest.raises(Exception) as exc_info:
+        command.downgrade(cfg, PREVIOUS)
+    assert "Downgrade refused" in str(exc_info.value)
+    assert "modified field 'template_version'" in str(exc_info.value)
+
+    # Restore version, test modified prompt causes refusal
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("UPDATE character_templates SET template_version = 1, system_prompt = 'Hacked prompt' WHERE id = 'warm-companion'")
+        conn.commit()
+
+    with pytest.raises(Exception) as exc_info:
+        command.downgrade(cfg, PREVIOUS)
+    assert "Downgrade refused" in str(exc_info.value)
+    assert "modified field 'system_prompt'" in str(exc_info.value)
+
+    # Restore prompt, test modified trait causes refusal
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("UPDATE character_templates SET system_prompt = 'You are a warm, empathetic, and encouraging companion. Offer supportive and friendly conversation.', warmth = 99 WHERE id = 'warm-companion'")
+        conn.commit()
+
+    with pytest.raises(Exception) as exc_info:
+        command.downgrade(cfg, PREVIOUS)
+    assert "Downgrade refused" in str(exc_info.value)
+    assert "modified field 'warmth'" in str(exc_info.value)
+
+    # Restore trait: now unmodified, downgrade must succeed cleanly
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("UPDATE character_templates SET warmth = 85 WHERE id = 'warm-companion'")
+        conn.commit()
+
+    command.downgrade(cfg, PREVIOUS)
+    with sqlite3.connect(db_path) as conn:
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchone()[0] == PREVIOUS

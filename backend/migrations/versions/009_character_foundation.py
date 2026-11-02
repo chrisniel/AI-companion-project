@@ -41,6 +41,85 @@ ALLOWED_PRESETS = (
     "yandere",
 )
 
+SEED_TEMPLATES = [
+    {
+        "id": "neutral-assistant",
+        "template_version": 1,
+        "name": "Neutral Assistant",
+        "summary": "Objective, dependable system assistant fallback.",
+        "lore": "",
+        "system_prompt": DEFAULT_PERSONA,
+        "avatar_asset": "neutral_avatar",
+        "default_preset_id": None,
+        "is_neutral_fallback": 1,
+        "warmth": None,
+        "teasing": None,
+        "guardedness": None,
+        "directness": None,
+        "expressiveness": None,
+        "affection": None,
+        "formality": None,
+        "verbosity": None,
+    },
+    {
+        "id": "warm-companion",
+        "template_version": 1,
+        "name": "Warm Companion",
+        "summary": "An affectionate, empathetic, and encouraging companion.",
+        "lore": "",
+        "system_prompt": "You are a warm, empathetic, and encouraging companion. Offer supportive and friendly conversation.",
+        "avatar_asset": "warm_companion_avatar",
+        "default_preset_id": "warm_companion",
+        "is_neutral_fallback": 0,
+        "warmth": 85,
+        "teasing": 35,
+        "guardedness": 15,
+        "directness": 60,
+        "expressiveness": 75,
+        "affection": 80,
+        "formality": 25,
+        "verbosity": 60,
+    },
+    {
+        "id": "playful-companion",
+        "template_version": 1,
+        "name": "Playful Companion",
+        "summary": "A lighthearted, witty, and humorous companion.",
+        "lore": "",
+        "system_prompt": "You are a witty, lighthearted, and playful companion. Enjoy banter and gentle humor.",
+        "avatar_asset": "playful_companion_avatar",
+        "default_preset_id": "playful",
+        "is_neutral_fallback": 0,
+        "warmth": 75,
+        "teasing": 80,
+        "guardedness": 20,
+        "directness": 55,
+        "expressiveness": 85,
+        "affection": 65,
+        "formality": 15,
+        "verbosity": 55,
+    },
+    {
+        "id": "formal-advisor",
+        "template_version": 1,
+        "name": "Formal Advisor",
+        "summary": "A structured, precise, and articulate advisor.",
+        "lore": "",
+        "system_prompt": "You are a formal, analytical, and highly structured advisor. Maintain professional clarity and precision.",
+        "avatar_asset": "formal_advisor_avatar",
+        "default_preset_id": "formal_advisor",
+        "is_neutral_fallback": 0,
+        "warmth": 45,
+        "teasing": 10,
+        "guardedness": 45,
+        "directness": 85,
+        "expressiveness": 30,
+        "affection": 20,
+        "formality": 90,
+        "verbosity": 65,
+    },
+]
+
 
 def derive_legacy_instance_id(profile_id: str, legacy_character_id: str) -> str:
     canonical = f"{len(profile_id)}:{profile_id}|{len(legacy_character_id)}:{legacy_character_id}"
@@ -111,85 +190,7 @@ def upgrade() -> None:
     )
 
     # 2. Seed character_templates
-    seed_templates = [
-        {
-            "id": "neutral-assistant",
-            "template_version": 1,
-            "name": "Neutral Assistant",
-            "summary": "Objective, dependable system assistant fallback.",
-            "lore": "",
-            "system_prompt": DEFAULT_PERSONA,
-            "avatar_asset": "neutral_avatar",
-            "default_preset_id": None,
-            "is_neutral_fallback": 1,
-            "warmth": None,
-            "teasing": None,
-            "guardedness": None,
-            "directness": None,
-            "expressiveness": None,
-            "affection": None,
-            "formality": None,
-            "verbosity": None,
-        },
-        {
-            "id": "warm-companion",
-            "template_version": 1,
-            "name": "Warm Companion",
-            "summary": "An affectionate, empathetic, and encouraging companion.",
-            "lore": "",
-            "system_prompt": "You are a warm, empathetic, and encouraging companion. Offer supportive and friendly conversation.",
-            "avatar_asset": "warm_companion_avatar",
-            "default_preset_id": "warm_companion",
-            "is_neutral_fallback": 0,
-            "warmth": 85,
-            "teasing": 35,
-            "guardedness": 15,
-            "directness": 60,
-            "expressiveness": 75,
-            "affection": 80,
-            "formality": 25,
-            "verbosity": 60,
-        },
-        {
-            "id": "playful-companion",
-            "template_version": 1,
-            "name": "Playful Companion",
-            "summary": "A lighthearted, witty, and humorous companion.",
-            "lore": "",
-            "system_prompt": "You are a witty, lighthearted, and playful companion. Enjoy banter and gentle humor.",
-            "avatar_asset": "playful_companion_avatar",
-            "default_preset_id": "playful",
-            "is_neutral_fallback": 0,
-            "warmth": 75,
-            "teasing": 80,
-            "guardedness": 20,
-            "directness": 55,
-            "expressiveness": 85,
-            "affection": 65,
-            "formality": 15,
-            "verbosity": 55,
-        },
-        {
-            "id": "formal-advisor",
-            "template_version": 1,
-            "name": "Formal Advisor",
-            "summary": "A structured, precise, and articulate advisor.",
-            "lore": "",
-            "system_prompt": "You are a formal, analytical, and highly structured advisor. Maintain professional clarity and precision.",
-            "avatar_asset": "formal_advisor_avatar",
-            "default_preset_id": "formal_advisor",
-            "is_neutral_fallback": 0,
-            "warmth": 45,
-            "teasing": 10,
-            "guardedness": 45,
-            "directness": 85,
-            "expressiveness": 30,
-            "affection": 20,
-            "formality": 90,
-            "verbosity": 65,
-        },
-    ]
-    for tmpl in seed_templates:
+    for tmpl in SEED_TEMPLATES:
         conn.execute(
             sa.text("""
                 INSERT INTO character_templates (
@@ -512,12 +513,53 @@ def downgrade() -> None:
             "Please restore from verified pre-migration backup instead."
         )
 
-    template_count = conn.execute(sa.text("SELECT COUNT(*) FROM character_templates")).scalar() or 0
-    if template_count != 4:
+    # Deterministic loss-aware check: verify that character_templates substantive contents match seed templates exactly
+    rows = conn.execute(
+        sa.text("""
+            SELECT id, template_version, name, summary, lore, system_prompt, avatar_asset,
+                   default_preset_id, is_neutral_fallback,
+                   warmth, teasing, guardedness, directness, expressiveness, affection, formality, verbosity
+            FROM character_templates
+            ORDER BY id
+        """)
+    ).mappings().all()
+
+    expected_by_id = {t["id"]: t for t in SEED_TEMPLATES}
+    if len(rows) != len(SEED_TEMPLATES) or set(r["id"] for r in rows) != set(expected_by_id.keys()):
         raise RuntimeError(
-            f"Downgrade refused: character_templates count is {template_count} (expected 4 seed templates). "
-            "Please restore from verified pre-migration backup instead."
+            f"Downgrade refused: character_templates set has been modified (found {[r['id'] for r in rows]}, "
+            f"expected {sorted(expected_by_id.keys())}). Please restore from verified backup instead."
         )
+
+    substantive_fields = (
+        "template_version",
+        "name",
+        "summary",
+        "lore",
+        "system_prompt",
+        "avatar_asset",
+        "default_preset_id",
+        "is_neutral_fallback",
+        "warmth",
+        "teasing",
+        "guardedness",
+        "directness",
+        "expressiveness",
+        "affection",
+        "formality",
+        "verbosity",
+    )
+    for row in rows:
+        expected = expected_by_id[row["id"]]
+        for field in substantive_fields:
+            actual_val = row[field]
+            exp_val = expected[field]
+            if actual_val != exp_val:
+                raise RuntimeError(
+                    f"Downgrade refused: character template '{row['id']}' has modified field '{field}' "
+                    f"(actual: {actual_val!r}, expected: {exp_val!r}). "
+                    "Please restore from verified backup instead."
+                )
 
     # 1. Drop triggers
     triggers = [

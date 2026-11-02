@@ -1528,27 +1528,63 @@
         "summary": "List Profile Character Instances",
         "description": "List character instances owned by the authenticated Profile.",
         "operationId": "get_instances_api_v1_characters_instances_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "include_archived",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Whether to include archived character instances",
+              "default": true,
+              "title": "Include Archived"
+            },
+            "description": "Whether to include archived character instances"
+          },
+          {
+            "name": "include_legacy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Whether to include preserved legacy placeholders",
+              "default": false,
+              "title": "Include Legacy"
+            },
+            "description": "Whether to include preserved legacy placeholders"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/CharacterInstanceOut"
                   },
-                  "type": "array",
                   "title": "Response Get Instances Api V1 Characters Instances Get"
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       },
       "post": {
         "tags": [
@@ -1557,15 +1593,20 @@
         "summary": "Create Character Instance",
         "description": "Create a new Profile-owned CharacterInstance snapshot from a template.",
         "operationId": "post_instance_api_v1_characters_instances_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/CharacterInstanceCreate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -1588,12 +1629,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/characters/instances/{instance_id}": {

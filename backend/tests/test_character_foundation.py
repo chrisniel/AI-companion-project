@@ -320,3 +320,84 @@ async def test_instruction_trust_boundary_and_delimiter_escaping(
     assert "&lt;/character_persona&gt;" in prompt
     # The only unescaped closing </character_persona> is the authoritative end tag
     assert prompt.count("</character_persona>") == 1
+
+
+@pytest.mark.asyncio
+async def test_preset_initialization_precedence_and_overrides(
+    test_session: AsyncSession,
+    profile_session: ProfileSession,
+):
+    """Regression test for Correction 1: Approved preset initialization precedence.
+    - Explicit non-custom preset: initialize from the selected preset's trait baseline.
+    - Custom or omitted preset: initialize from the template baseline.
+    - Explicit supplied trait vector: override initial baseline values.
+    """
+    # 1. Mismatched template and preset: warm-companion template with playful preset
+    mismatched = await create_character_instance(
+        test_session,
+        profile_session,
+        CharacterInstanceCreate(
+            template_id="warm-companion",
+            preset_id="playful",
+        ),
+    )
+    assert mismatched.preset_id == "playful"
+    assert mismatched.traits is not None
+    # Must have playful traits, NOT warm-companion traits!
+    assert mismatched.traits.warmth == 75  # playful is 75, warm-companion is 85
+    assert mismatched.traits.teasing == 80  # playful is 80, warm-companion is 35
+    assert mismatched.traits.guardedness == 20
+    assert mismatched.traits.formality == 15
+
+    # 2. Omitted preset: inherits template default preset and template traits
+    omitted = await create_character_instance(
+        test_session,
+        profile_session,
+        CharacterInstanceCreate(
+            template_id="warm-companion",
+            preset_id=None,
+        ),
+    )
+    assert omitted.preset_id == "warm_companion"
+    assert omitted.traits is not None
+    assert omitted.traits.warmth == 85
+    assert omitted.traits.teasing == 35
+    assert omitted.traits.guardedness == 15
+
+    # 3. Custom preset: preset_id is custom, traits initialized from template baseline
+    custom = await create_character_instance(
+        test_session,
+        profile_session,
+        CharacterInstanceCreate(
+            template_id="warm-companion",
+            preset_id="custom",
+        ),
+    )
+    assert custom.preset_id == "custom"
+    assert custom.traits is not None
+    assert custom.traits.warmth == 85
+    assert custom.traits.teasing == 35
+
+    # 4. Explicit trait vector overrides baseline
+    explicit_traits = CharacterTraitVector(
+        warmth=12,
+        teasing=34,
+        guardedness=56,
+        directness=78,
+        expressiveness=90,
+        affection=21,
+        formality=43,
+        verbosity=65,
+    )
+    overridden = await create_character_instance(
+        test_session,
+        profile_session,
+        CharacterInstanceCreate(
+            template_id="warm-companion",
+            preset_id="playful",
+            traits=explicit_traits,
+        ),
+    )
+    assert overridden.preset_id == "playful"
+    assert overridden.traits is not None
+    assert overridden.traits == explicit_traits

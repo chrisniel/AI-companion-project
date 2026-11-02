@@ -331,5 +331,20 @@ void main() {
 
       await client.deleteCharacterInstance('inst-123');
     });
+
+    test('listCharacterInstances passes include_archived and include_legacy query parameters', () async {
+      final mock = MockClient((request) async {
+        expect(request.url.path, '/api/v1/characters/instances');
+        expect(request.url.queryParameters['include_archived'], 'true');
+        expect(request.url.queryParameters['include_legacy'], 'true');
+        return http.Response(jsonEncode([]), 200);
+      });
+      final client = CompanionClient(
+        httpClient: mock,
+        sessionStore: InMemoryCredentialStore('test_session_token'),
+      );
+      final res = await client.listCharacterInstances(includeLegacy: true);
+      expect(res, isEmpty);
+    });
   });
 }

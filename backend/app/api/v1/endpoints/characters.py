@@ -1,7 +1,7 @@
 """Character REST endpoints adhering to PC-CHAR-001 and PC-CHAR-005."""
 
 from typing import List
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_profile_session, get_db
@@ -117,11 +117,15 @@ async def reset_active_character(
     summary="List Profile Character Instances",
 )
 async def get_instances(
+    include_archived: bool = Query(True, description="Whether to include archived character instances"),
+    include_legacy: bool = Query(False, description="Whether to include preserved legacy placeholders"),
     session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
 ) -> List[CharacterInstanceOut]:
     """List character instances owned by the authenticated Profile."""
-    return await list_profile_character_instances(db, session)
+    return await list_profile_character_instances(
+        db, session, include_archived=include_archived, include_legacy=include_legacy
+    )
 
 
 @router.post(

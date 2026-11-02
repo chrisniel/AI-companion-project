@@ -1,11 +1,13 @@
 """Authentication, authorization, and adversarial cross-profile isolation tests for Characters API (PC-CHAR-001, PC-CHAR-005)."""
 
+import uuid
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.profile_sessions import new_profile_session
 from app.models.profile import Profile
+from app.models.character_instance import CharacterInstance
 
 
 @pytest.fixture
@@ -313,3 +315,111 @@ async def test_conversation_character_resolution_modes(
     c5 = resp.json()
     assert c5["character_id"] == inst_id
     assert c5["character_instance_id"] == inst_id
+
+
+@pytest.mark.asyncio
+async def test_legacy_placeholder_listing_and_protection(
+    client: AsyncClient,
+    two_profiles_with_sessions: dict,
+    test_session: AsyncSession,
+):
+    """Test Correction 3: Legacy placeholder listing API, cross-profile isolation, and immutability guards."""
+    headers_a = two_profiles_with_sessions["headers_a"]
+    headers_b = two_profiles_with_sessions["headers_b"]
+    prof_a_id = two_profiles_with_sessions["profile_a"].id
+    prof_b_id = two_profiles_with_sessions["profile_b"].id
+
+    # 1. Seed legacy placeholder instances directly into DB for Profile A and Profile B
+    legacy_a_id = f"legacy-placeholder-a-{uuid.uuid4().hex[:8]}"
+    legacy_b_id = f"legacy-placeholder-b-{uuid.uuid4().hex[:8]}"
+
+    inst_a = CharacterInstance(
+        id=legacy_a_id,
+        profile_id=prof_a_id,
+        is_legacy_placeholder=True,
+        legacy_character_id="legacy-char-a",
+        template_id=None,
+        source_template_version=None,
+        name="legacy-char-a",
+        summary="Legacy conversation character placeholder",
+        lore="",
+        system_prompt="",
+        avatar_asset="default_avatar",
+        preset_id=None,
+        status="archived",
+        is_deleted=False,
+    )
+    inst_b = CharacterInstance(
+        id=legacy_b_id,
+        profile_id=prof_b_id,
+        is_legacy_placeholder=True,
+        legacy_character_id="legacy-char-b",
+        template_id=None,
+        source_template_version=None,
+        name="legacy-char-b",
+        summary="Legacy conversation character placeholder",
+        lore="",
+        system_prompt="",
+        avatar_asset="default_avatar",
+        preset_id=None,
+        status="archived",
+        is_deleted=False,
+    )
+    test_session.add_all([inst_a, inst_b])
+    await test_session.commit()
+
+    # 2. Default GET /instances excludes legacy placeholders
+    resp = await client.get("/api/v1/characters/instances", headers=headers_a)
+    assert resp.status_code == 200
+    ids = [i["id"] for i in resp.json()]
+    assert legacy_a_id not in ids
+
+    # 3. Explicit include_legacy=true includes Profile A's legacy placeholder
+    resp = await client.get("/api/v1/characters/instances?include_legacy=true", headers=headers_a)
+    assert resp.status_code == 200
+    ids_a = [i["id"] for i in resp.json()]
+    assert legacy_a_id in ids_a
+    # Cross-Profile records remain strictly inaccessible
+    assert legacy_b_id not in ids_a
+
+    # Profile B with include_legacy=true only sees Profile B's legacy placeholder
+    resp = await client.get("/api/v1/characters/instances?include_legacy=true", headers=headers_b)
+    assert resp.status_code == 200
+    ids_b = [i["id"] for i in resp.json()]
+    assert legacy_b_id in ids_b
+    assert legacy_a_id not in ids_b
+
+    # 4. Legacy placeholders remain non-editable (PATCH returns 400)
+    resp = await client.patch(
+        f"/api/v1/characters/instances/{legacy_a_id}",
+        json={"name": "Attempted Edit"},
+        headers=headers_a,
+    )
+    assert resp.status_code == 400
+    assert "Cannot modify a legacy conversation placeholder" in resp.text
+
+    # 5. Legacy placeholders cannot become active Characters (PUT /active returns 400)
+    resp = await client.put(
+        "/api/v1/characters/active",
+        json={"character_id": legacy_a_id},
+        headers=headers_a,
+    )
+    assert resp.status_code == 400
+    assert "Cannot select a legacy conversation placeholder as active character" in resp.text
+
+    # 6. Legacy placeholders cannot be deleted via DELETE /instances/{id} (returns 400)
+    resp = await client.delete(
+        f"/api/v1/characters/instances/{legacy_a_id}",
+        headers=headers_a,
+    )
+    assert resp.status_code == 400
+    assert "Cannot delete a legacy conversation placeholder" in resp.text
+
+    # 7. Legacy placeholders cannot start new conversations (returns 400)
+    resp = await client.post(
+        "/api/v1/conversations",
+        json={"title": "New Chat", "character_id": legacy_a_id},
+        headers=headers_a,
+    )
+    assert resp.status_code == 400
+    assert "Cannot start a new conversation with a legacy conversation placeholder" in resp.text

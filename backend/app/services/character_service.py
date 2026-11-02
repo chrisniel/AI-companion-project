@@ -303,8 +303,9 @@ async def list_profile_character_instances(
     db: AsyncSession,
     session: ProfileSession,
     include_archived: bool = True,
+    include_legacy: bool = False,
 ) -> list[CharacterInstanceOut]:
-    """List Profile-owned CharacterInstances (excluding soft-deleted and legacy placeholders)."""
+    """List Profile-owned CharacterInstances (excluding soft-deleted; legacy placeholders optional)."""
     session = await validate_profile_session(db, session)
     profile = await db.scalar(select(Profile).where(Profile.id == session.profile_id))
     active_id = profile.active_character_instance_id if profile else None
@@ -312,8 +313,10 @@ async def list_profile_character_instances(
     stmt = select(CharacterInstance).where(
         CharacterInstance.profile_id == session.profile_id,
         CharacterInstance.is_deleted.is_(False),
-        CharacterInstance.is_legacy_placeholder.is_(False),
     ).order_by(CharacterInstance.created_at.desc())
+
+    if not include_legacy:
+        stmt = stmt.where(CharacterInstance.is_legacy_placeholder.is_(False))
 
     if not include_archived:
         stmt = stmt.where(CharacterInstance.status == "active")
@@ -364,23 +367,54 @@ async def create_character_instance(
     if template is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Character template not found")
 
-    # 2. Derive initial traits from preset or template
-    preset_id: str = payload.preset_id or template.default_preset_id or "custom"
-    if preset_id not in PRESET_REGISTRY:
+    # 2. Derive initial traits according to approved precedence:
+    # - Explicit non-custom preset: initialize from the selected preset's trait baseline.
+    # - Custom or omitted preset: initialize from the template baseline.
+    # - Explicit supplied trait vector: override initial baseline values.
+    if payload.preset_id is not None and payload.preset_id != "custom":
+        if payload.preset_id in PRESET_REGISTRY:
+            preset_id: str = payload.preset_id
+            preset_traits = PRESET_REGISTRY[payload.preset_id]["traits"]
+            trait_dict = preset_traits.model_dump()
+        else:
+            preset_id = "custom"
+            trait_dict = {
+                "warmth": template.warmth if template.warmth is not None else 50,
+                "teasing": template.teasing if template.teasing is not None else 30,
+                "guardedness": template.guardedness if template.guardedness is not None else 30,
+                "directness": template.directness if template.directness is not None else 60,
+                "expressiveness": template.expressiveness if template.expressiveness is not None else 50,
+                "affection": template.affection if template.affection is not None else 40,
+                "formality": template.formality if template.formality is not None else 45,
+                "verbosity": template.verbosity if template.verbosity is not None else 50,
+            }
+    elif payload.preset_id == "custom":
         preset_id = "custom"
+        trait_dict = {
+            "warmth": template.warmth if template.warmth is not None else 50,
+            "teasing": template.teasing if template.teasing is not None else 30,
+            "guardedness": template.guardedness if template.guardedness is not None else 30,
+            "directness": template.directness if template.directness is not None else 60,
+            "expressiveness": template.expressiveness if template.expressiveness is not None else 50,
+            "affection": template.affection if template.affection is not None else 40,
+            "formality": template.formality if template.formality is not None else 45,
+            "verbosity": template.verbosity if template.verbosity is not None else 50,
+        }
+    else:
+        # Omitted preset: initialize from template baseline
+        preset_id = template.default_preset_id or "custom"
+        trait_dict = {
+            "warmth": template.warmth if template.warmth is not None else 50,
+            "teasing": template.teasing if template.teasing is not None else 30,
+            "guardedness": template.guardedness if template.guardedness is not None else 30,
+            "directness": template.directness if template.directness is not None else 60,
+            "expressiveness": template.expressiveness if template.expressiveness is not None else 50,
+            "affection": template.affection if template.affection is not None else 40,
+            "formality": template.formality if template.formality is not None else 45,
+            "verbosity": template.verbosity if template.verbosity is not None else 50,
+        }
 
-    baseline_traits = PRESET_REGISTRY[preset_id]["traits"]  # type: ignore[index]
-    trait_dict = {
-        "warmth": template.warmth if template.warmth is not None else baseline_traits.warmth,
-        "teasing": template.teasing if template.teasing is not None else baseline_traits.teasing,
-        "guardedness": template.guardedness if template.guardedness is not None else baseline_traits.guardedness,
-        "directness": template.directness if template.directness is not None else baseline_traits.directness,
-        "expressiveness": template.expressiveness if template.expressiveness is not None else baseline_traits.expressiveness,
-        "affection": template.affection if template.affection is not None else baseline_traits.affection,
-        "formality": template.formality if template.formality is not None else baseline_traits.formality,
-        "verbosity": template.verbosity if template.verbosity is not None else baseline_traits.verbosity,
-    }
-
+    # Explicit supplied trait vector overrides initial baseline values
     if payload.traits is not None:
         trait_dict = payload.traits.model_dump()
 
@@ -510,6 +544,12 @@ async def delete_character_instance(
     )
     if instance is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Character instance not found")
+
+    if instance.is_legacy_placeholder:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete a legacy conversation placeholder",
+        )
 
     instance.is_deleted = True
     instance.status = "archived"
