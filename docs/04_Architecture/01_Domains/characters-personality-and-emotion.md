@@ -47,7 +47,7 @@ In accordance with Decision D11, companion character systems enforce strict conc
    - **Initialization Precedence:**
      - Explicit non-custom preset: initializes trait vector from the selected preset's baseline values.
      - Custom or omitted preset: initializes trait vector from the source template's baseline values.
-     - Explicit trait vector: overrides baseline trait values for any supplied dimensions.
+     - Explicit trait vector: caller supplies a complete 8-dimensional `CharacterTraitVector` overriding baseline values (partial vectors are rejected by Pydantic schema validation).
 5. **Emotion & Mood Dynamics (Persistent & Bounded):**
    - **Persistent Simulated Mood:** Emotion/Mood is a persistent bounded simulated state across Runtime/Windows restart. It rebalances/decays based on elapsed time. Exact mathematical decay curve remains open. Do NOT mandate exponential decay in the durable architecture. Do NOT call PC V1 emotion state ephemeral.
    - **Mood Isolation:** Mood affects social presentation only. Never affects facts, permissions, tools, alarms, scheduler, privacy, queue priority or correctness.
@@ -56,7 +56,7 @@ In accordance with Decision D11, companion character systems enforce strict conc
    - Traits are strictly `NULL` in the database, enforced by SQLite CHECK constraints.
    - Non-editable, non-deletable, non-archivable.
    - Accessible via `GET /api/v1/characters/neutral`.
-   - Active character can be set to Neutral Assistant via `PUT /api/v1/characters/active` (using request payload `{"character_id": "default"}` or `"neutral-assistant"`) or `POST /api/v1/characters/active/reset-neutral`.
+   - Active character can be set to Neutral Assistant via `PUT /api/v1/characters/active` (using request payload `{"character_id": "default"}` or `"neutral-assistant"`) or `POST /api/v1/characters/active/reset-neutral`. Resetting or switching active character updates `profiles.active_character_instance_id`. Future conversations inherit that selection; existing conversations retain their original Character association (`conversations.character_instance_id` / `conversations.character_id`), and no retroactive conversation reassignment occurs.
 7. **Voice (Acoustic & Prosodic Configuration):**
    - Decoupled speech synthesis configuration (e.g., target voice identifier, speed, pitch, prosody).
    - Interchangeable across TTS providers without modifying character lore or personality schemas.
@@ -80,7 +80,7 @@ In accordance with Decision D11, companion character systems enforce strict conc
    - Protections:
      - `GET /api/v1/characters/instances` accepts `include_legacy: bool = False` (defaults to excluding legacy placeholders). Explicit `include_legacy=True` includes them for the authenticated profile only.
      - Legacy placeholders cannot be modified (`PATCH`), deleted (`DELETE`), activated (`PUT /active`), or directly assigned to new conversations (`POST /conversations`), failing with HTTP 400.
-     - Database safeguards: SQLite CHECK constraint `ck_character_instances_legacy_or_standard` (requires `status='archived'`, `lore=''`, `system_prompt=''`, `template_id IS NULL`, `preset_id IS NULL`, all 8 traits `NULL`), SQLite trigger `trg_character_instances_immutable_provenance` (prevents altering `is_legacy_placeholder`, `profile_id`, `legacy_character_id`, `template_id`, `source_template_version`), triggers `trg_profiles_active_character_owner_insert/update` (require `is_legacy_placeholder = 0`), and Python service layer checks.
+     - Database safeguards: SQLite CHECK constraint `ck_character_instances_legacy_or_standard` (requires `status='archived'`, `lore=''`, `system_prompt=''`, `template_id IS NULL`, `preset_id IS NULL`, all 8 traits `NULL`), SQLite trigger `trg_character_instances_immutable_provenance` (prevents altering `is_legacy_placeholder`, `profile_id`, `legacy_character_id`, `template_id`, `source_template_version`), triggers `trg_profiles_active_character_owner_insert/update` (require `is_legacy_placeholder = 0`), and Python service layer mutation guards. Referenced placeholders are protected against raw SQL deletion by foreign key `conversations.character_instance_id` (`ON DELETE RESTRICT`). There is no blanket SQLite trigger specifically blocking raw SQL `DELETE` on unreferenced legacy placeholders; protection against mutation or deletion via the API is enforced by service-layer guards.
 
 ### 2.2 Character Switching Invariants
 
@@ -163,7 +163,7 @@ Alembic Migration 009 (`backend/migrations/versions/009_character_foundation.py`
   - `formality` (0–100 integer): Grammatical and stylistic formality.
   - `verbosity` (0–100 integer): Sentence length and elaboration depth.
 - **Approved Presets:** `custom`, `warm_companion`, `playful`, `formal_advisor`, `tsundere`, `kuudere`, `dandere`, `yandere`. Presets provide initial baseline traits. Selecting a preset initializes the instance traits from preset baseline values.
-- **Precedence Order:** Non-custom preset selects preset baseline; custom or omitted preset selects template baseline; explicit trait vector overrides baseline values.
+- **Precedence Order:** Non-custom preset selects preset baseline; custom or omitted preset selects template baseline; explicit trait vector overrides baseline values (requires complete 8-dimensional `CharacterTraitVector`; partial vectors are rejected by Pydantic validation).
 
 ### 3.3 Character Service & REST API
 

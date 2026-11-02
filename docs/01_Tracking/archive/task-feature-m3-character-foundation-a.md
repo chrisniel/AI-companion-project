@@ -1,8 +1,8 @@
 # M3 Batch A — Character Templates, Profile-Owned Instances & Neutral Assistant Fallback
 
-> **Status:** IMPLEMENTED / LOCALLY VERIFIED — provisional closure prepared; independent combined review pending.
+> **Status:** ARCHIVED ON BRANCH — Independent implementation approved; Windows Profile-access fix accepted; documentation corrected; same-branch closure reconciled; candidate PR #29 ready for final review.
 > **Branch:** `feature/m3-character-foundation-a`
-> **Owner / Authorization:** Chris; implementation authorized 2026-11-02; corrections authorized 2026-11-02; documentation, provisional closure, and draft PR authorized 2026-11-02. No merge or protected-branch mutation.
+> **Owner / Authorization:** Chris; implementation authorized 2026-11-02; corrections authorized 2026-11-02; documentation, provisional closure, and draft PR authorized 2026-11-02; final documentation corrections and pre-merge closure authorized 2026-11-02. No merge or protected-branch mutation.
 > **Plan:** [M3 Character Foundation Batch A Plan](../../02_Planning/01_Plans/plan-m3-character-foundation-a.md)
 > **Milestone:** Wider M3 remains **IN PROGRESS**.
 
@@ -14,10 +14,12 @@
 - **Initial Implementation Checkpoint:** `bca34446f674c6fc5ee3a9725c3e89b6d45b476d`.
 - **Implementation Gate Review:** Independent review issued verdict `CHANGES REQUIRED` citing preset trait initialization precedence, downgrade template comparison depth, and legacy instance listing API.
 - **Implementation Correction Checkpoint:** `6c38b61f2a615d0e6d0c0df09a9305f9e7ada2d0`.
-- **Implementation Gate Decision:** Independently approved to proceed into documentation and provisional closure on 2026-11-02.
+- **Implementation Gate Decision:** Independently approved to proceed into documentation and provisional closure on 2026-11-02 (commit `1147e873b59e12adfc204a36331c2630e00fe905`).
 - **Windows Acceptance Diagnosis & Correction:** Commit `9c9bd052861df6760e75e7b7f5c204cb7faeed19` resolved a Windows PowerShell `Get-Acl` autoloading conflict by using direct .NET CLR access control (`[System.IO.Directory]::GetAccessControl`, `[System.IO.File]::GetAccessControl`) in `HostAdminSecretStore._script`. Manual Desktop Profile access confirmed working by Chris. Hosted GitHub Actions CI Run #113 passed 100% across all 7 jobs.
-- **Documentation & Provisional Closure Checkpoint:** Reconciled canonical documentation (`characters-personality-and-emotion.md`, `03_Character_Studio_and_Personality.md`), 7-section walkthrough, changelog, and PR #29 description.
-- **Current Stage:** Combined independent Documentation, Closure, and PR review pending (no self-approval).
+- **Documentation & Provisional Closure Checkpoint:** Reconciled canonical documentation (`characters-personality-and-emotion.md`, `03_Character_Studio_and_Personality.md`), 7-section walkthrough, changelog, and PR #29 description at commit `6b4f55ef0f15e31b5d7dd691c894da878094bee0`. Hosted GitHub Actions CI Run #114 passed 100% across all 7 jobs.
+- **Independent Combined Review Decision:** Independently reviewed on 2026-11-02 with verdict `APPROVED WITH MINOR CORRECTIONS` (character switching semantics, conversation API accuracy, legacy placeholder database protections, and CI verification evidence).
+- **Final Documentation Corrections & Pre-Merge Closure:** Reconciled design spec, canonical architecture, walkthrough, changelog, master planning index, shared milestone task, and archived branch task.
+- **Current Stage:** Same-branch closure reconciled; candidate PR #29 ready for final review. Awaiting final independent verification before human squash merge by Chris.
 
 ---
 
@@ -25,8 +27,8 @@
 
 - [x] **Migration 009:** Schema tables (`character_templates`, `character_instances`), column additions (`profiles.active_character_instance_id`, `conversations.character_instance_id`), indices, SQLite CHECK constraints, 8 defense-in-depth triggers, and pre-migration backup hook via `prepare_database_schema()`.
 - [x] **Immutable Neutral Assistant Fallback:** Seeded template (`id = "neutral-assistant"`) with `is_neutral_fallback = True` and NULL traits; non-editable, non-deletable, accessible via `GET /api/v1/characters/neutral`, activatable via `PUT /api/v1/characters/active` (`character_id = "default"` or `"neutral-assistant"`) or `POST /api/v1/characters/active/reset-neutral`.
-- [x] **Personality Preset Catalog & Precedence:** 8 continuous trait dimensions (`warmth`, `teasing`, `guardedness`, `directness`, `expressiveness`, `affection`, `formality`, `verbosity` as 0–100 integers) and 8 approved presets (`custom`, `warm_companion`, `playful`, `formal_advisor`, `tsundere`, `kuudere`, `dandere`, `yandere`); enforced precedence: explicit non-custom preset baseline $\to$ custom/omitted template baseline $\to$ explicit trait overrides.
-- [x] **Permanent Conversation Identity & Legacy Preservation:** Conversations permanently bind to `character_id` and `character_instance_id`; deterministic length-prefixed UUIDv5 legacy placeholder mapping (`canonical = f"{len(profile_id)}:{profile_id}|{len(legacy_character_id)}:{legacy_character_id}"`); SQLite CHECK constraints, triggers, and service guards preventing editing, deletion, activation, or new conversation creation with legacy placeholders.
+- [x] **Personality Preset Catalog & Precedence:** 8 continuous trait dimensions (`warmth`, `teasing`, `guardedness`, `directness`, `expressiveness`, `affection`, `formality`, `verbosity` as 0–100 integers) and 8 approved presets (`custom`, `warm_companion`, `playful`, `formal_advisor`, `tsundere`, `kuudere`, `dandere`, `yandere`); enforced precedence: explicit non-custom preset baseline $\to$ custom/omitted template baseline $\to$ explicit trait overrides (requires complete 8-dimensional `CharacterTraitVector`; partial vectors rejected by schema).
+- [x] **Permanent Conversation Identity & Legacy Preservation:** Conversations permanently bind to `character_id` and `character_instance_id`; deterministic length-prefixed UUIDv5 legacy placeholder mapping (`canonical = f"{len(profile_id)}:{profile_id}|{len(legacy_character_id)}:{legacy_character_id}"`); API service mutation guards, SQLite CHECK constraints, trigger `trg_character_instances_immutable_provenance`, and `conversations.character_instance_id` foreign key `RESTRICT` preventing editing, deletion, activation, or new conversation creation with legacy placeholders.
 - [x] **Ordered Relational Purge Invariants:** `CharacterInstance.profile_id` uses `ON DELETE CASCADE`, while `conversations.character_instance_id` uses `ON DELETE RESTRICT`. Future Profile hard-purge routines must purge conversations before deleting character instances.
 - [x] **Profile-Isolated Character REST API:** 11 endpoints under `/api/v1/characters`, including `include_legacy` query parameter on `GET /instances` (default false).
 - [x] **Loss-Aware Fail-Closed Downgrade Guard:** `downgrade()` in Migration 009 queries substantive template attributes and verifies equality against `SEED_TEMPLATES` (excluding incidental timestamp metadata); refuses downgrade on modified templates, active selections, or existing user instances, preserving all user data and schema intact.
@@ -34,12 +36,11 @@
 - [x] **Windows Desktop Profile Access Authority:** `HostAdminSecretStore` uses direct .NET CLR access control (`[System.IO.Directory]::GetAccessControl`, `[System.IO.File]::GetAccessControl`), verified against live Windows host runtime with manual acceptance confirmed.
 - [x] **Client Contracts & Parity:** Synchronized OpenAPI 3.1 specification; Dart DTOs and `CompanionClient` character methods in `frontend/flutter/packages/companion_api` with verified parity; updated React Web client `conversationApi.ts` for optional `character_id`.
 - [x] **Documentation & Walkthrough:** Reconciled `characters-personality-and-emotion.md`, `03_Character_Studio_and_Personality.md`, `CHANGELOG.md`, and created 7-section walkthrough `docs/03_Walkthroughs/walkthrough-m3-character-foundation-a.md`.
-- [x] **Implementation Gate Independently Approved.**
-- [x] **Draft PR Updated:** PR #29 targeting `develop` updated awaiting combined independent review.
-- [ ] **Independent Documentation Gate Approval.**
-- [ ] **Independent Closure Gate Approval.**
-- [ ] **Final Pre-Merge Closure Reconciliation:** Archive active task to `docs/01_Tracking/archive/`.
-- [ ] **Human Squash Merge into `develop`.**
+- [x] **Implementation Gate Independently Approved** (2026-11-02).
+- [x] **Independent Documentation Gate Approval:** Approved with minor corrections (2026-11-02).
+- [x] **Independent Closure Gate Approval:** Approved with minor corrections (2026-11-02).
+- [x] **Final Pre-Merge Closure Reconciliation:** Reconciled same-branch closure records and archived task to `docs/01_Tracking/archive/task-feature-m3-character-foundation-a.md`.
+- [ ] **Human Squash Merge into `develop`** (Exclusively executed by Chris).
 
 ---
 
@@ -58,7 +59,7 @@ All data-bearing verification checks used synthetic test profiles and disposable
 | Repository root | `.\venv\Scripts\python.exe scripts/check_openapi_contract.py` | Exact generated match, **39 routes up to date** (exit 0) |
 | Repository root | `.\venv\Scripts\python.exe scripts/check_dart_openapi_parity.py --check` | **22/22 DTOs, 29/18 covered route methods verified** (exit 0) |
 | Repository root | `git diff --check` | **Passed; 0 whitespace errors** (exit 0) |
-| GitHub Actions Hosted CI | PR #29 Run #113 (commit `9c9bd05`) | **7 / 7 jobs succeeded (100% green)** |
+| GitHub Actions Hosted CI | PR #29 Run #114 (commit `6b4f55e`) | **7 / 7 jobs succeeded (100% green)**; historical Run #113 (commit `9c9bd05`) also passed 100% |
 | Windows Host Runtime | Manual acceptance by Chris | **Confirmed working** (Default Profile appears and activates) |
 
 ---
@@ -69,9 +70,9 @@ All data-bearing verification checks used synthetic test profiles and disposable
 | :--- | :--- |
 | Implementation Gate | **INDEPENDENTLY APPROVED** (2026-11-02) |
 | Windows Acceptance | **MANUALLY CONFIRMED BY CHRIS** (2026-11-02) |
-| Hosted Candidate PR CI | **PASSED (Run #113, 100% Green)** (2026-11-02) |
-| Documentation Gate | **PENDING INDEPENDENT REVIEW** (No self-approval) |
-| Closure Gate / PR-Ready | **PROVISIONAL** (Awaiting combined independent review) |
+| Hosted Candidate PR CI | **PASSED (Run #114, 100% Green)** (2026-11-02) |
+| Documentation Gate | **APPROVED WITH MINOR CORRECTIONS** (2026-11-02) |
+| Closure Gate / PR-Ready | **ARCHIVED ON BRANCH / PR-READY** (2026-11-02) |
 | Post-Merge Integration CI | **NOT APPLICABLE** (No merge performed) |
 | Wider M3 | **IN PROGRESS** |
 
@@ -91,15 +92,15 @@ Alembic Migration 009 establishes application-owned Character Templates (`charac
 
 The Neutral Assistant provides an immutable built-in fallback with strictly NULL personality traits enforced by SQLite CHECK constraints. It is accessible via `GET /api/v1/characters/neutral` and can be selected via `PUT /api/v1/characters/active` (`character_id = "default"` or `"neutral-assistant"`) or `POST /api/v1/characters/active/reset-neutral`.
 
-Personality presets introduce 8 continuous dimensions (`warmth`, `teasing`, `guardedness`, `directness`, `expressiveness`, `affection`, `formality`, `verbosity` as 0–100 integers) across 8 approved presets (`custom`, `warm_companion`, `playful`, `formal_advisor`, `tsundere`, `kuudere`, `dandere`, `yandere`). Instance initialization follows the approved precedence: non-custom preset baseline $\to$ custom/omitted template baseline $\to$ explicit trait overrides.
+Personality presets introduce 8 continuous dimensions (`warmth`, `teasing`, `guardedness`, `directness`, `expressiveness`, `affection`, `formality`, `verbosity` as 0–100 integers) across 8 approved presets (`custom`, `warm_companion`, `playful`, `formal_advisor`, `tsundere`, `kuudere`, `dandere`, `yandere`). Instance initialization follows the approved precedence: non-custom preset baseline $\to$ custom/omitted template baseline $\to$ explicit trait overrides (requiring complete 8-dimensional `CharacterTraitVector`).
 
-Historical conversation identity is preserved by maintaining existing `character_id` values and deterministically generating collision-resistant legacy placeholder instances via UUIDv5 with pipe-delimited length prefixing (`f"{len(profile_id)}:{profile_id}|{len(legacy_character_id)}:{legacy_character_id}"`). Legacy placeholders are excluded from instance listings by default (`include_legacy=False`) and protected against modification, deletion, activation, or new conversation creation via service guards, SQLite CHECK constraints, and provenance triggers.
+Historical conversation identity is preserved by maintaining existing `character_id` values and deterministically generating collision-resistant legacy placeholder instances via UUIDv5 with pipe-delimited length prefixing (`f"{len(profile_id)}:{profile_id}|{len(legacy_character_id)}:{legacy_character_id}"`). Legacy placeholders are excluded from instance listings by default (`include_legacy=False`) and protected against modification, deletion, activation, or new conversation creation via service guards, SQLite CHECK constraints, trigger `trg_character_instances_immutable_provenance`, and `conversations.character_instance_id` foreign key `RESTRICT` constraints.
 
 Runtime turn persona resolution (`resolve_turn_persona_prompt()`) structures prompt generation with top-level trusted `DEFAULT_PERSONA` instructions, followed by an XML-escaped `<character_persona>` block bounded as lower-trust configuration data that cannot override system rules or claim developer authority.
 
 On the Windows desktop client, `HostAdminSecretStore` was corrected to use direct .NET CLR access control (`[System.IO.Directory]::GetAccessControl`, `[System.IO.File]::GetAccessControl`), resolving PowerShell 5.1 module-loading conflicts and restoring Profile selection authority on Windows.
 
-Verification passed across all suites: full backend pytest (624 tests passed), focused character domain (35 tests passed), Flutter companion API (79 tests passed), Flutter desktop (232 tests passed), Flutter static analysis (`dart analyze .`, 0 issues), React web (248 tests passed), OpenAPI contract check (39 routes up to date), Dart contract parity (22 DTOs, 29 routes covered), manual Windows acceptance confirmed by Chris, and hosted GitHub Actions CI Run #113 passing 100% across all 7 jobs.
+Verification passed across all suites: full backend pytest (624 tests passed), focused character domain (35 tests passed), Flutter companion API (79 tests passed), Flutter desktop (232 tests passed), Flutter static analysis (`dart analyze .`, 0 issues), React web (248 tests passed), OpenAPI contract check (39 routes up to date), Dart contract parity (22 DTOs, 29 routes covered), manual Windows acceptance confirmed by Chris, and hosted GitHub Actions CI Run #114 passing 100% across all 7 jobs.
 
 **Proposed Conventional Commit Squash Message:**
 

@@ -4,7 +4,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - **Purpose:** Document the implementation, architectural mechanisms, data models, API endpoints, client contracts, and verification evidence for AI Companion's Character Foundation (`PC-CHAR-001` and `PC-CHAR-005`).
 - **Audience:** Core developers, client application engineers (Flutter Desktop & React Web), security auditors, and system maintainers.
-- **Status:** Implemented & Verified (Implementation Gate independently approved; Windows Desktop Profile access manually confirmed; hosted CI Run #113 passed 100%; combined documentation/closure review pending).
+- **Status:** Implemented & Verified (Implementation Gate independently approved; Windows Desktop Profile access manually confirmed; hosted CI Run #114 passed 100% on commit `6b4f55e`; closure reconciled; PR #29 ready for final verification).
 - **Last Updated:** 2026-11-02
 
 ---
@@ -17,22 +17,24 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 - **Personality Presets & Initialization Precedence:** Catalog of 8 approved presets (`custom`, `warm_companion`, `playful`, `formal_advisor`, `tsundere`, `kuudere`, `dandere`, `yandere`). In `create_character_instance`:
   1. Explicit non-custom preset initializes traits from preset baseline.
   2. Custom or omitted preset initializes traits from template baseline.
-  3. Explicit trait vector overrides baseline values.
+  3. Explicit trait vector overrides baseline values (requires a complete 8-dimensional `CharacterTraitVector`; partial trait vectors are rejected by Pydantic validation).
 - **Eight Continuous Personality Dimensions:** Persisted as integers from 0 to 100: `warmth`, `teasing`, `guardedness`, `directness`, `expressiveness`, `affection`, `formality`, `verbosity`.
 - **Permanent Conversation Identity & Legacy Preservation:**
   - Conversations permanently bind to `character_id` and `character_instance_id`.
-  - Creating a conversation without specifying `character_id` defaults to the Profile's active character instance (or Neutral Assistant if none active).
-  - Explicit `"default"` or `"neutral-assistant"` selects Neutral Assistant.
+  - Creating a conversation without specifying `character_id` defaults to the Profile's active character instance (or `"default"` with `character_instance_id = NULL` when no character is active).
+  - Explicit `"default"` or `"neutral-assistant"` selects Neutral Assistant (`character_instance_id = NULL`) while preserving the explicitly supplied `character_id` string.
   - Historical conversations with pre-existing `character_id` values (from migrations 001–008) are preserved without inventing speculative personalities.
   - Deterministic legacy placeholder instances are derived via collision-resistant UUIDv5 with pipe-delimited length prefixing:
     ```python
     canonical = f"{len(profile_id)}:{profile_id}|{len(legacy_character_id)}:{legacy_character_id}"
     instance_id = f"legacy-{uuid.uuid5(LEGACY_CHARACTER_NAMESPACE, canonical)}"
     ```
-- **Legacy Placeholder Security & API Listing:**
+- **Legacy Placeholder Security & Database Protections:**
   - `GET /api/v1/characters/instances` defaults to excluding legacy placeholders (`include_legacy=False`). Explicit `include_legacy=True` includes them for the owning Profile only.
-  - Legacy placeholders are rejected with HTTP 400 on `PATCH` (updates), `DELETE` (deletion), `PUT /active` (activation), and `POST /conversations` (new conversation creation).
-  - SQLite CHECK constraint `ck_character_instances_legacy_or_standard` and trigger `trg_character_instances_immutable_provenance` enforce database-level immutability.
+  - Legacy placeholders are rejected with HTTP 400 on `PATCH` (`"Cannot modify a legacy conversation placeholder"`), `DELETE` (`"Cannot delete a legacy conversation placeholder"`), `PUT /active` (`"Cannot activate a legacy conversation placeholder"`), and `POST /conversations` (`"Cannot start a new conversation with a legacy conversation placeholder"`).
+  - SQLite CHECK constraint `ck_character_instances_legacy_or_standard` enforces placeholder storage structure (`status='archived'`, `lore=''`, `system_prompt=''`, `template_id IS NULL`, `preset_id IS NULL`, all 8 traits `NULL`).
+  - Trigger `trg_character_instances_immutable_provenance` locks identity and provenance columns against post-creation modification.
+  - Foreign key `conversations.character_instance_id` (`ON DELETE RESTRICT`) prevents raw SQL deletion of referenced legacy placeholders. (There is no blanket SQLite trigger specifically blocking raw SQL `DELETE` on unreferenced legacy placeholders; protection against mutation or deletion via the API is enforced by service-layer guards).
 - **Ordered Relational Purge Boundaries:**
   - `CharacterInstance.profile_id` uses `ON DELETE CASCADE`.
   - `conversations.character_instance_id` uses `ON DELETE RESTRICT`.
@@ -62,8 +64,8 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | `backend/migrations/versions/009_character_foundation.py` | ADD | Alembic migration creating `character_templates`, `character_instances`, adding `profiles.active_character_instance_id` and `conversations.character_instance_id`, 8 SQLite triggers, indices, and fail-closed downgrade guard. |
 | `backend/app/models/character_template.py` | ADD | SQLAlchemy 2.0 ORM model for application-owned `CharacterTemplate`. |
 | `backend/app/models/character_instance.py` | ADD | SQLAlchemy 2.0 ORM model for Profile-owned `CharacterInstance`. |
-| `backend/app/models/profile.py` | MODIFY | Added `active_character_instance_id` foreign key with `SET NULL` on delete and ORM relationships for character instances. |
-| `backend/app/models/conversation.py` | MODIFY | Added `character_instance_id` foreign key with `RESTRICT` on delete and ORM relationship. |
+| `backend/app/models/profile.py` | MODIFY | Added `active_character_instance_id` foreign key column with `SET NULL` on delete to store the active Character instance pointer. |
+| `backend/app/models/conversation.py` | MODIFY | Added `character_instance_id` foreign key column with `RESTRICT` on delete to bind each conversation thread to a Character instance. |
 | `backend/app/models/__init__.py` | MODIFY | Exported character models. |
 | `backend/app/schemas/character.py` | ADD | Pydantic v2 schemas: `CharacterTraitVector`, `CharacterPresetOut`, `CharacterTemplateOut`, `CharacterInstanceCreate`, `CharacterInstanceUpdate`, `CharacterInstanceOut`, `ActiveCharacterStateOut`, `ActiveCharacterSelectRequest`. |
 | `backend/app/schemas/conversation.py` | MODIFY | Made `character_id` optional in `ConversationCreate` (defaults to active character). |
@@ -102,7 +104,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
    - Evaluates preset baseline precedence:
      - If explicit non-custom preset: pulls trait baseline from `PRESET_REGISTRY[preset_id]["traits"]`.
      - If custom or omitted: pulls trait baseline from `template` traits.
-     - If explicit `traits` vector provided: overrides baseline values on a per-dimension basis.
+     - If explicit `traits` vector provided: caller supplies a complete 8-dimensional `CharacterTraitVector` that overrides the baseline values (partial trait vectors are rejected by Pydantic validation).
    - Generates UUIDv4 `id`, associates with `profile_id`, sets `is_legacy_placeholder = False`.
    - Persists record in `character_instances`.
 4. **Completion:** Returns HTTP 201 with `CharacterInstanceOut` JSON payload.
@@ -112,10 +114,10 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 1. **Event Trigger:** Client submits `POST /api/v1/conversations`.
 2. **Resolution:**
    - If `payload.character_id` is omitted: query `profiles.active_character_instance_id` for the Profile's active character. If set, bind `character_id` and `character_instance_id` to that instance ID. If not set, bind `character_id = "default"` and `character_instance_id = NULL` (Neutral Assistant).
-   - If `payload.character_id in ("default", "neutral-assistant")`: bind to `"default"` and `character_instance_id = NULL` (Neutral Assistant).
-   - If `payload.character_id` is an instance ID: verify that the character instance exists and belongs to the authenticated profile (and is NOT a legacy placeholder).
+   - If `payload.character_id in ("default", "neutral-assistant")`: selects Neutral Assistant (`character_instance_id = NULL`), while preserving the explicitly supplied `character_id` string (`"default"` or `"neutral-assistant"`).
+   - If `payload.character_id` is an instance ID: verify that the character instance exists and belongs to the authenticated profile (fails with HTTP 404 if not found or foreign). If it is a legacy placeholder, fails with HTTP 400 (`"Cannot start a new conversation with a legacy conversation placeholder"`). If it is archived, fails with HTTP 400 (`"Cannot start a conversation with an archived character instance"`).
 3. **Core Processing:** Inserts conversation record with permanent `character_id` and `character_instance_id`. Trigger `trg_conversations_character_immutable_update` locks these fields permanently against post-creation changes.
-4. **Completion:** Returns HTTP 200 with `ConversationOut` containing the bound character identifiers.
+4. **Completion:** Returns HTTP 201 Created with `ConversationOut` containing the bound character identifiers.
 
 ### 3.3 Runtime Persona Resolution with Trust Boundaries
 1. **Event Trigger:** User sends a chat message; `orchestrate_chat_stream` begins turn processing.
@@ -217,8 +219,8 @@ All automated verification suites pass with 100% green results:
   git diff --check
   ```
   *Observed Result:* `Clean; 0 errors (exit 0).`
-- **Hosted GitHub Actions CI (PR #29, Run #113 on commit `9c9bd05`):**
-  *Observed Result:* `7 / 7 jobs succeeded (Path Classification, Flutter Desktop, Contract, Backend, Frontend, Docs Integrity, CI Gate: 100% green).`
+- **Hosted GitHub Actions CI (PR #29, Run #114 on commit `6b4f55e`; historical Run #113 on commit `9c9bd05`):**
+  *Observed Result:* `7 / 7 jobs succeeded on both runs (Path Classification, Flutter Desktop, Contract, Backend, Frontend, Docs Integrity, CI Gate: all green). Note: CI Docs Integrity step specifically executes git diff --check on Markdown files and verifies presence of canonical files (SYSTEM_BASELINE.md, AGENTS.md, DOCUMENTATION_MAP.md); it does not run markdownlint, frontmatter parsing, or link crawlers.`
 
 ### Manual / User-Owned Checks
 
@@ -243,7 +245,7 @@ All automated verification suites pass with 100% green results:
 
 - **Eight Trait Continuous Scales:** All 8 personality traits (`warmth`, `teasing`, `guardedness`, `directness`, `expressiveness`, `affection`, `formality`, `verbosity`) must be integers in the range `0` to `100`.
 - **Neutral Assistant Immutability:** `is_neutral_fallback = True` records must always maintain `NULL` traits. SQLite CHECK constraint `ck_character_templates_neutral_invariants` enforces this at the storage level, and triggers `trg_character_templates_protect_neutral_update` and `trg_character_templates_protect_neutral_delete` reject mutations.
-- **Legacy Placeholder Immutability:** Instances with `is_legacy_placeholder = True` cannot be updated or deleted. Enforced by SQLite CHECK constraint `ck_character_instances_legacy_or_standard`, trigger `trg_character_instances_immutable_provenance`, and Python service layer checks.
+- **Legacy Placeholder Database Protections & Immutability:** Instances with `is_legacy_placeholder = True` cannot be updated, deleted, activated, or assigned to new conversations via the API (enforced by service-layer guards). In the database, SQLite CHECK constraint `ck_character_instances_legacy_or_standard` constrains placeholder rows to `status='archived'`, `lore=''`, `system_prompt=''`, `template_id IS NULL`, `preset_id IS NULL`, and all 8 traits `NULL`. Trigger `trg_character_instances_immutable_provenance` locks identity and provenance columns against post-creation changes. Referenced placeholders are protected against raw SQL deletion by foreign key `conversations.character_instance_id` (`ON DELETE RESTRICT`). There is no blanket SQLite trigger specifically blocking raw SQL `DELETE` on unreferenced legacy placeholders.
 - **Profile Data Cascade vs. Hard Purge:** When a profile is deleted, SQLite cascade deletion automatically purges child character instances. However, because `conversations.character_instance_id` uses `ON DELETE RESTRICT`, direct deletion of a profile with bound conversations is blocked by foreign key constraints. Application-level hard-purge routines must purge conversations before deleting character instances.
 - **Multimodal Attachments Status:** Image attachment backend and React Web interfaces are implemented; Flutter Desktop image-upload button remains disabled/planned, and vision processing depends on a compatible vision-enabled model.
 
@@ -253,8 +255,8 @@ All automated verification suites pass with 100% green results:
 
 | Symptom | Likely Cause | Resolution |
 | :--- | :--- | :--- |
-| `HTTP 400: Cannot instantiate the Neutral Assistant as a custom instance.` | Client sent `POST /api/v1/characters/instances` with `template_id="neutral-assistant"`. | Neutral Assistant is an immutable built-in fallback. Select it via `PUT /api/v1/characters/active` instead of attempting to clone it. |
-| `HTTP 400: Cannot modify a legacy character placeholder.` | Client attempted `PATCH` or `DELETE` on a legacy placeholder instance ID. | Legacy placeholders exist exclusively to anchor historical conversations. They cannot be edited or deleted. |
+| `HTTP 422: Neutral Assistant fallback is immutable and cannot be instantiated as an editable instance.` | Client sent `POST /api/v1/characters/instances` with `template_id="neutral-assistant"` or `"default"`. | Neutral Assistant is an immutable built-in fallback. Select it via `PUT /api/v1/characters/active` instead of attempting to instantiate it. |
+| `HTTP 400: Cannot modify a legacy conversation placeholder.` / `Cannot delete a legacy conversation placeholder.` | Client attempted `PATCH` or `DELETE` on a legacy placeholder instance ID. | Legacy placeholders exist exclusively to anchor historical conversations. They cannot be edited or deleted via the API. |
 | `RuntimeError: Cannot safely downgrade migration 009: one or more seeded character templates have been substantively modified.` | Downgrade aborted because seeded template names, versions, prompts, or traits were altered in the database. | Restore original seeded template attributes or export user configurations before running downgrade. |
 | `HTTP 404: Character instance not found.` | Client attempted to access a character instance belonging to a different Profile. | Character instances are strictly Profile-isolated. Ensure request carries the correct bearer token for the owning profile. |
 | `"Local Profile authority is unavailable. Check the trusted Windows host runtime."` | Desktop `HostAdminSecretStore` failed ACL inspection or could not find `desktop_admin.secret`. | Ensure runtime is operational, `%LOCALAPPDATA%\AICompanion\secrets\desktop_admin.secret` exists with inheritance disabled, and owner matches the active user SID or SYSTEM. |

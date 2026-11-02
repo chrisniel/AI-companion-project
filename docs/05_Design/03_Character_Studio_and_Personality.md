@@ -64,7 +64,9 @@ A prominent **"Load Preset Style"** dropdown allows users to load initial baseli
 ## 5. Immutable Neutral Assistant Fallback
 
 A prominent button and safety toggle labeled **"Reset to Neutral Assistant"** is permanently accessible:
-- Instantly switches active conversation persona to the immutable built-in Neutral Assistant fallback (`is_neutral_fallback = True`).
+- Updates the Profile's active character selection to the immutable built-in Neutral Assistant fallback (`is_neutral_fallback = True`).
+- Future conversations inherit this Neutral Assistant selection.
+- Existing conversations retain their original Character association; no retroactive conversation reassignment occurs.
 - Traits are strictly `NULL` (enforced by SQLite CHECK constraints).
 - Strips custom roleplay lore cards and reverts to the immutable, objective system assistant prompt (`DEFAULT_PERSONA`).
 - Serves as an unalterable, dependable fallback if custom prompt tuning leads to erratic, repetitive, or confusing behavior.
