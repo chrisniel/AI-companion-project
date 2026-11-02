@@ -1,5 +1,5 @@
-from typing import List, TYPE_CHECKING
-from sqlalchemy import String
+from typing import List, Optional, TYPE_CHECKING
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.session import Base
 from app.models.base import (
@@ -21,6 +21,12 @@ class Conversation(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, Profil
 
     title: Mapped[str] = mapped_column(String(255), nullable=False, default="New Conversation")
     character_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    character_instance_id: Mapped[Optional[str]] = mapped_column(
+        String(64),
+        ForeignKey("character_instances.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     messages: Mapped[List["Message"]] = relationship(
         "Message",
         back_populates="conversation",

@@ -52,7 +52,7 @@ def index_contract(conn, table):
 @pytest.fixture
 def migrated(tmp_path):
     path = tmp_path / "synthetic.db"
-    command.upgrade(config(path), "head")
+    command.upgrade(config(path), REVISION)
     return path
 
 

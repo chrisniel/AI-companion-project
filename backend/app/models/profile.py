@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import Boolean, DateTime, Index, String, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -45,6 +45,12 @@ class Profile(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
         nullable=True,
         index=True,
     )
+    active_character_instance_id: Mapped[Optional[str]] = mapped_column(
+        String(64),
+        ForeignKey("character_instances.id", ondelete="SET NULL", use_alter=True, name="fk_profiles_active_character_instance_id"),
+        nullable=True,
+        index=True,
+    )
 
     def __init__(
         self,
@@ -54,6 +60,7 @@ class Profile(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
         pin_hash: Optional[str] = None,
         is_default: bool = False,
         status: str = "active",
+        active_character_instance_id: Optional[str] = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -64,6 +71,7 @@ class Profile(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
         self.pin_hash = pin_hash
         self.is_default = is_default
         self.status = status
+        self.active_character_instance_id = active_character_instance_id
         self.is_deleted = kwargs.get("is_deleted", False)
         self.deleted_at = kwargs.get("deleted_at", None)
         self.purge_after = kwargs.get("purge_after", None)
@@ -75,7 +83,7 @@ class Profile(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
 from sqlalchemy import event
 
 
-@event.listens_for(Profile.__table__, "after_create")
+@event.listens_for(Profile.__table__.metadata, "after_create")
 def _insert_default_profile_after_create(target, connection, **kw):
     """Seed this database's own random Default Profile when the table is created via metadata.
 

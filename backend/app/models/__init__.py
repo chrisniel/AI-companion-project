@@ -8,6 +8,8 @@ from app.models.memory import Memory
 from app.models.attachment import Attachment
 from app.models.profile_session import ProfileSession
 from app.models.session_ticket import SessionTicket
+from app.models.character_template import CharacterTemplate
+from app.models.character_instance import CharacterInstance
 
 __all__ = [
     "Profile",
@@ -18,4 +20,6 @@ __all__ = [
     "Attachment",
     "ProfileSession",
     "SessionTicket",
+    "CharacterTemplate",
+    "CharacterInstance",
 ]
