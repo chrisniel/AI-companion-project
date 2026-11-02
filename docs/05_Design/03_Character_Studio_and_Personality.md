@@ -27,38 +27,48 @@ The Character Studio is structured into three coordinated panels:
 
 ## 3. Eight Continuous Personality Traits
 
-Exactly eight continuous (0–100) dimensions: Warmth, Teasing, Guardedness, Directness, Expressiveness, Affection, Formality, Verbosity.
+The character foundation defines exactly eight continuous (0–100 integer) dimensions:
+- `warmth`: Level of emotional warmth, kindness, and welcoming tone.
+- `humor`: Frequency and style of jokes, wit, and banter.
+- `empathy`: Attunement and sensitivity to the user's emotional state.
+- `formality`: Politeness, professional diction, and linguistic restraint.
+- `curiosity`: Tendency to ask probing questions and show exploratory interest.
+- `energy`: Enthusiasm, pacing, and exclamation in conversational responses.
+- `assertiveness`: Directness, opinionated stance, and willingness to guide or push back.
+- `rebelliousness`: Unconventional suggestions, playful nonconformity, and quirkiness.
 
-### Slider Interaction Design
+### Planned Slider Interaction Design (Target UX — PC-CHAR-002)
 - Each slider features a real-time numerical indicator and descriptive tooltip describing how extreme positions manifest in speech.
 - Sliders snap to 5-point increments for tactile precision.
 - Double-clicking any slider resets it to its template default value.
+- *Implementation Status:* Backend persistence, API contracts, and Dart client DTOs are implemented; full visual interactive slider widgets are planned for `PC-CHAR-002`.
 
 ---
 
 ## 4. Presets as Template Configurations
   
-A prominent **"Load Preset Style"** dropdown allows users to load exactly these frozen presets:
-- Custom
-- Warm Companion
-- Playful
-- Formal Advisor
-- Tsundere
-- Kuudere
-- Dandere
-- Yandere
+A prominent **"Load Preset Style"** dropdown allows users to load initial baseline trait configurations from the approved preset catalog:
+- `warm` (Warm Companion)
+- `playful` (Playful Friend)
+- `formal` (Formal Advisor)
+- `creative` (Creative Collaborator)
+- `analytical` (Analytical Thinker)
+- `empathetic` (Empathetic Listener)
+- `stoic` (Stoic Mentor)
+- `unhinged` (Chaotic Banter)
+- `custom` (User-defined custom trait configuration)
 
-*Behavioral Rule:* Selecting a preset **copies** the preset's initial trait values into the active configuration. All sliders remain fully editable. Do not invent rigid archetype behavior. Preset values use only the eight continuous traits (Warmth, Teasing, Guardedness, Directness, Expressiveness, Affection, Formality, Verbosity).
-  
+*Behavioral Rule:* Selecting a preset **copies** the preset's initial baseline trait values into the active configuration. Presets are provisional numeric baselines, not rigid or immutable architectural archetypes; all traits remain fully editable by the user.
+
 ---
-  
+
 ## 5. Immutable Neutral Assistant Fallback
 
-
 A prominent button and safety toggle labeled **"Reset to Neutral Assistant"** is permanently accessible:
-- Instantly sets all behavioral traits to a neutral, balanced baseline.
+- Instantly switches active conversation persona to the immutable built-in Neutral Assistant fallback (`is_neutral_fallback = True`).
+- Traits are strictly `NULL` (enforced by SQLite CHECK constraints).
 - Strips custom roleplay lore cards and reverts to the immutable, objective system assistant prompt.
-- Serves as an unalterable fallback if custom prompt tuning leads to erratic, repetitive, or confusing behavior.
+- Serves as an unalterable, dependable fallback if custom prompt tuning leads to erratic, repetitive, or confusing behavior.
 
 ---
 

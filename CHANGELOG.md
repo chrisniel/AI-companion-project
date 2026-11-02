@@ -18,6 +18,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Serialized Desktop test files in CI so real Windows runtime acceptance checks do not compete with other test files; retained all tests, production deadlines and fail-closed process checks.
 
+### Implemented & Locally Verified (2026-11-02 - M3: Character Foundation — Batch A)
+
+- Added Alembic migration 009 with application-owned `character_templates`, profile-owned `character_instances`, and `profile_active_characters` mapping tables, with pre-migration SQLite WAL backup hook and dynamic Alembic head discovery.
+- Implemented immutable Neutral Assistant fallback (`is_neutral_fallback = True`, NULL traits via SQLite CHECK constraints) accessible via `GET /api/v1/characters/neutral` and activatable via `PUT /api/v1/characters/active` or `POST /api/v1/characters/active/reset-neutral`.
+- Added personality preset catalog with 8 continuous dimensions (`warmth`, `humor`, `empathy`, `formality`, `curiosity`, `energy`, `assertiveness`, `rebelliousness`) and 8 approved presets; enforced precedence where non-custom preset initializes traits from preset baseline, custom/omitted initializes from template baseline, and explicit traits override baseline values.
+- Preserved historical conversation identity and legacy `character_id` values via deterministic UUIDv5 legacy placeholder mapping (`f"legacy-{uuid.uuid5(LEGACY_CHARACTER_NAMESPACE, canonical)}"`); added `include_legacy` query filter to `GET /api/v1/characters/instances` (default false) and SQLite triggers preventing modification or deletion of legacy placeholders.
+- Enforced loss-aware fail-closed migration downgrade verifying substantive fields of seeded templates against `SEED_TEMPLATES` (excluding incidental timestamps) and refusing downgrade on modification or user instances, preserving all user data intact.
+- Implemented 11 character REST endpoints with profile isolation; synchronized OpenAPI 3.1 contract; added Dart DTOs and `CompanionClient` character methods with verified route and schema parity; updated React Web conversation creation for optional character ID.
+- Batch A is implemented and locally verified; final combined independent Documentation, Closure, and PR review is pending. Draft PR created for review; post-merge CI and wider M3 capabilities (Character Studio UI, dynamic personality, mood, relationship, voice) remain future work. Execution evidence is tracked in [branch task](docs/01_Tracking/active/task-feature-m3-character-foundation-a.md).
+
 ### Implemented & Locally Verified (2026-10-15 - M2: Profile Sessions & Cross-Profile Isolation — Batch B)
 
 - Added migration 008 with Profile Sessions and single-use authorization grants; removed implicit Profile ownership defaults while preserving existing data, foreign keys and FTS5 behavior.

@@ -30,25 +30,33 @@ In accordance with Decision D11, companion character systems enforce strict conc
    - In accordance with Decision D4, device authentication credentials remain separated from profile-owned personal data (Profile does not own client device credentials).
    - Character switching must never mutate or reassign Profile ownership or Profile-owned personal data. A Character never owns Profile data.
 2. **Character Template vs. Character Instance:**
-   - **Character Template (App-Owned):** Shipped with the application or imported; defines base immutable persona lore, archetype backstory, default display name, and avatar artwork.
+   - **Character Template (App-Owned):** Shipped with the application or seeded via migrations; defines base immutable persona lore, archetype backstory, default display name, avatar artwork, and default preset (`character_templates` table; no `profile_id`).
    - **Character Instance (Profile-Owned):**
      - is instantiated from a Character Template as an initial snapshot/configuration;
-     - stores Profile-owned customizations and persistent Character state;
+     - stores Profile-owned customizations and persistent Character state (`character_instances` table; `profile_id` FK referencing `profiles.id` with `ON DELETE CASCADE`);
      - is NOT a live binding to the Template;
      - later Template updates MUST NOT silently mutate existing Character Instances.
+     - *Note on Cascade vs. Purge:* The database `ON DELETE CASCADE` definition automatically cleans up child character instances upon raw profile row deletion, which is distinct from service-level ordered hard-purge requirements for user data retention.
 3. **Conversation:**
    - Belongs to the user Profile.
-   - References a specific Character persona; conversation history remains permanently bound to that Character as recorded.
+   - References a specific Character persona; conversation history remains permanently bound to that Character as recorded in `conversations.character_id`.
+   - New conversations select the Profile's active character instance when `character_id` is omitted, or Neutral Assistant when `"default"` or `"neutral-assistant"` is supplied.
 4. **Personality Dimensions (8 Continuous Scales):**
-   - **Eight Continuous Dimensions:** Exact frozen V1 dimensions are: Warmth, Teasing, Guardedness, Directness, Expressiveness, Affection, Formality, Verbosity. These are represented as 0-100 continuous values.
-   - **Frozen Presets:** Custom, Warm Companion, Playful, Formal Advisor, Tsundere, Kuudere, Dandere, Yandere. Presets copy/initialize trait values and remain editable. Do not treat presets as rigid personality classes.
-   - **Character Template:** App-owned/versioned initial template.
-   - **Character Instance:** Profile-owned snapshot/configuration instantiated from a template. Future Template updates MUST NOT silently mutate existing Character instances. Do not describe Character instances as permanently or live "bound" to templates.
+   - **Eight Continuous Dimensions:** Exact frozen V1 dimensions from source are: `warmth`, `humor`, `empathy`, `formality`, `curiosity`, `energy`, `assertiveness`, `rebelliousness`. These are represented as 0–100 integer values.
+   - **Approved Presets:** `warm`, `playful`, `formal`, `creative`, `analytical`, `empathetic`, `stoic`, `unhinged` (and `custom`). Presets copy/initialize baseline trait values and remain editable. Preset values are provisional numeric baselines, not rigid or immutable architectural constants.
+   - **Initialization Precedence:**
+     - Explicit non-custom preset: initializes trait vector from the selected preset's baseline values.
+     - Custom or omitted preset: initializes trait vector from the source template's baseline values.
+     - Explicit trait vector: overrides baseline trait values for any supplied dimensions.
 5. **Emotion & Mood Dynamics (Persistent & Bounded):**
    - **Persistent Simulated Mood:** Emotion/Mood is a persistent bounded simulated state across Runtime/Windows restart. It rebalances/decays based on elapsed time. Exact mathematical decay curve remains open. Do NOT mandate exponential decay in the durable architecture. Do NOT call PC V1 emotion state ephemeral.
    - **Mood Isolation:** Mood affects social presentation only. Never affects facts, permissions, tools, alarms, scheduler, privacy, queue priority or correctness.
 6. **Neutral Assistant (Immutable Fallback):**
-   - Immutable built-in fallback. Do not hardcode all sliders = 50 unless separately approved.
+   - Immutable built-in fallback with `is_neutral_fallback = True`.
+   - Traits are strictly `NULL` in the database, enforced by SQLite CHECK constraints.
+   - Non-editable, non-deletable, non-archivable.
+   - Accessible via `GET /api/v1/characters/neutral`.
+   - Active character can be set to Neutral Assistant via `PUT /api/v1/characters/active` (`character_instance_id="default"` or `"neutral-assistant"`) or `POST /api/v1/characters/active/reset-neutral`.
 7. **Voice (Acoustic & Prosodic Configuration):**
    - Decoupled speech synthesis configuration (e.g., target voice identifier, speed, pitch, prosody).
    - Interchangeable across TTS providers without modifying character lore or personality schemas.
@@ -61,6 +69,15 @@ In accordance with Decision D11, companion character systems enforce strict conc
    - Formally decoupled from Personality and Emotion under Decision D11.
    - Scheduled for **PC Later** (not a PC V1 milestone requirement).
    - Strictly opt-in and hidden by default; user controls are required, while the exact reset lifecycle remains OPEN DESIGN.
+10. **Historical Identity Preservation & Legacy Placeholders:**
+   - Historical conversations containing legacy `character_id` values (from migrations 001–008) are preserved without inventing speculative personalities.
+   - A legacy placeholder instance is derived deterministically via length-prefixed UUIDv5:
+     `f"legacy-{uuid.uuid5(LEGACY_CHARACTER_NAMESPACE, f'{len(profile_id)}:{profile_id}:{len(legacy_character_id)}:{legacy_character_id}')}"`
+   - Legacy placeholders have `is_legacy_placeholder = True`.
+   - Protections:
+     - `GET /api/v1/characters/instances` accepts `include_legacy: bool = False` (defaults to excluding legacy placeholders). Explicit `include_legacy=True` includes them for the authenticated profile only.
+     - Legacy placeholders cannot be modified (`PATCH`), deleted (`DELETE`), activated (`PUT /active`), or directly assigned to new conversations (`POST /conversations`), failing with HTTP 400.
+     - SQLite triggers `trg_character_instances_prevent_legacy_update` and `trg_character_instances_prevent_legacy_delete` enforce legacy immutability at the database level.
 
 ### 2.2 Character Switching Invariants
 
@@ -102,27 +119,69 @@ Conversations remain permanently bound to the `character_id` under which turns w
 
 ## 3. Current Verified Implementation
 
-Repository source code and frontend truthfulness test suites verify the following baseline reality:
+Repository source code, database migrations, API contracts, and automated test suites verify the following implementation reality:
 
-### 3.1 Backend Data Model & Endpoints
+### 3.1 Backend Persistence & Alembic Migration 009
 
-- **Conversation Association:** In `app.models.conversation.Conversation`, conversations maintain a single string identifier:
-  ```python
-  character_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
-  ```
-- **Backend Character Catalog:** `NOT IMPLEMENTED`. There is no `characters`, `personas`, `personalities`, or `emotions` table or ORM model in the backend SQLite schema.
-- **Runtime Personality & Emotion Engines:** `NOT IMPLEMENTED`. The backend orchestrator operates with static prompt templates without dynamic trait weighting or emotional state tracking.
+Alembic Migration 009 (`backend/migrations/versions/009_character_foundation.py`) establishes the character persistence foundation:
+- **Character Templates Table (`character_templates`):** Application-owned definitions with `template_version >= 1`, `name`, `summary`, `lore`, `system_prompt`, `avatar_asset`, `default_preset_id`, `is_neutral_fallback`, and the eight personality dimensions.
+- **Seeded Templates:** Four initial templates are seeded in Migration 009:
+  1. `warm-companion` (Default preset: `warm`)
+  2. `playful-friend` (Default preset: `playful`)
+  3. `stoic-mentor` (Default preset: `stoic`)
+  4. `neutral-assistant` (Immutable fallback; `is_neutral_fallback = True`, all traits `NULL`)
+- **Character Instances Table (`character_instances`):** Profile-owned mutable snapshots (`id` UUIDv4, `profile_id` FK referencing `profiles.id` with `ON DELETE CASCADE`, `template_id` FK referencing `character_templates.id`, `name`, `system_prompt`, `avatar_asset`, `preset_id`, 8 personality traits, `is_legacy_placeholder`, `archived_at`).
+- **Profile Active Character Table (`profile_active_characters`):** Stores 1-to-1 active character instance mapping per profile (`profile_id` PK/FK, `character_instance_id` FK).
+- **SQLite CHECK Constraints:** Enforce non-null preset and trait dimensions for non-Neutral templates, while requiring strictly `NULL` traits for Neutral Assistant fallback.
+- **Database Triggers:** SQLite triggers `trg_character_instances_prevent_legacy_update` and `trg_character_instances_prevent_legacy_delete` prevent updates and deletions of legacy placeholder instances.
+- **Pre-Migration Safety & Dynamic Head Discovery:** Pre-migration SQLite WAL backup hook in `backend/app/core/storage.py::prepare_database_schema()` dynamically discovers the Alembic head and creates a verified pre-migration backup before upgrading existing databases.
+- **Loss-Aware Fail-Closed Downgrade:** Migration 009 `downgrade()` deterministically compares substantive attributes of `character_templates` against `SEED_TEMPLATES` (excluding incidental timestamp metadata) and checks for user-created instances; refuses downgrade with `RuntimeError` on modified templates or existing instances, preserving all user data and schema intact.
 
-### 3.2 Frontend Implementation & Truthfulness Guards
+### 3.2 Models, Schemas & Personality Presets
 
-- **Preview Component:** The frontend provides a `CharactersView` component in `frontend/web/src/components/workspace/CharactersView.tsx`.
-- **Truthfulness Contract:** Verified by `frontend/web/src/test/phase8b3Truthfulness.test.tsx`:
-  - Renders as an interactive visual *Preview* with Neutral Assistant fallback.
-  - Does **not** import mock character persistence fixtures in production builds.
-  - Does **not** maintain fake `activeCharacterId` persistence state or claim backend synchronization.
-  - Does **not** bind unapproved voice synthesis engines.
+- **Models:** Defined in `backend/app/models/character.py` (`CharacterTemplate`, `CharacterInstance`, `ProfileActiveCharacter`) and integrated with `backend/app/models/profile.py` and `backend/app/models/conversation.py`.
+- **Eight Continuous Trait Dimensions:**
+  - `warmth` (0–100 integer)
+  - `humor` (0–100 integer)
+  - `empathy` (0–100 integer)
+  - `formality` (0–100 integer)
+  - `curiosity` (0–100 integer)
+  - `energy` (0–100 integer)
+  - `assertiveness` (0–100 integer)
+  - `rebelliousness` (0–100 integer)
+- **Approved Presets:** `warm`, `playful`, `formal`, `creative`, `analytical`, `empathetic`, `stoic`, `unhinged` (and `custom`). Presets provide initial baseline traits. Selecting a preset initializes the instance traits from preset baseline values.
+- **Precedence Order:** Non-custom preset selects preset baseline; custom or omitted preset selects template baseline; explicit trait vector overrides baseline values.
 
-### 3.3 Mobile Implementation Reality
+### 3.3 Character Service & REST API
+
+The `CharacterService` (`backend/app/services/character_service.py`) and FastAPI endpoints (`backend/app/api/v1/endpoints/characters.py`) provide:
+- `GET /api/v1/characters/templates` — List installed Character Templates.
+- `GET /api/v1/characters/presets` — List approved personality presets with baseline traits.
+- `GET /api/v1/characters/neutral` — Get immutable Neutral Assistant fallback definition.
+- `GET /api/v1/characters/instances` — List Profile-owned Character Instances (supports `include_archived: bool = True` and `include_legacy: bool = False`).
+- `POST /api/v1/characters/instances` — Create a new Character Instance from a template snapshot.
+- `GET /api/v1/characters/instances/{instance_id}` — Get single Character Instance.
+- `PATCH /api/v1/characters/instances/{instance_id}` — Update instance lore, prompt, traits, preset, or archive state (legacy placeholders rejected with HTTP 400).
+- `DELETE /api/v1/characters/instances/{instance_id}` — Hard-delete instance or soft-archive (legacy placeholders rejected with HTTP 400).
+- `GET /api/v1/characters/active` — Get active character state for authenticated Profile.
+- `PUT /api/v1/characters/active` — Select active character instance for Profile; supports selecting instance ID or `"default"` / `"neutral-assistant"` to reset to Neutral Assistant.
+- `POST /api/v1/characters/active/reset-neutral` — Explicitly reset Profile's active character to Neutral Assistant.
+
+### 3.4 Runtime Persona Resolution & Security Boundaries
+
+- **Runtime Persona Resolution:** The orchestrator (`backend/app/services/assistant/orchestrator.py`) dynamically resolves the bound character identity for the conversation:
+  - If bound to Neutral Assistant: injects immutable, objective assistant instructions without persona lore or traits.
+  - If bound to a Character Instance: composes the system prompt with instance name, lore, and instructions.
+- **Trust Boundaries & Enforcement:** Profile isolation and security boundaries are enforced deterministically by backend bearer-token authentication, SQLite Foreign Keys, and database triggers—not by XML delimiter tags alone. Prompt formatting employs structural framing as defense-in-depth against prompt injection, while core safety boundaries and tool permissions remain non-bypassable.
+
+### 3.5 Client Contract & SDK Parity
+
+- **OpenAPI 3.1 Specification:** All 11 character routes and DTOs synchronized in `contracts/openapi/openapi.json`.
+- **Flutter Companion API SDK:** Complete Dart DTO schemas and `CompanionClient` character methods implemented in `frontend/flutter/packages/companion_api` with verified contract parity (`scripts/check_dart_openapi_parity.py`).
+- **React Web Client:** `conversationApi.createConversation()` updated in `frontend/web/src/services/api/conversationApi.ts` to support optional `character_id` parameter, preserving backward compatibility.
+- **Frontend Truthfulness Contract:** `frontend/web/src/test/phase8b3Truthfulness.test.tsx` confirms web character UI acts as a preview component without claiming unbacked persistence or unauthorized voice engines.
+
+### 3.6 Mobile Implementation Reality
 
 - **Mobile Character Studio:** `NOT IMPLEMENTED`. Flutter mobile character authoring and trait customization UI is not implemented in the repository.
 - **Mobile Emotion Event Outbox & Sync:** `NOT IMPLEMENTED`. Offline emotion event recording, durable outbox queuing, and host reconciliation are not implemented.
@@ -130,16 +189,20 @@ Repository source code and frontend truthfulness test suites verify the followin
 
 ---
 
-## 4. Approved Target Architecture / Not Yet Implemented
+## 4. Approved Target Architecture / Deferred Capabilities
 
-The following target capabilities are approved under Decision D11:
+The following capabilities are approved under Decision D11 and scheduled for subsequent M3 batches:
 
-1. **Persistent Character Configuration (PC V1):**
-   - Host-backed storage for custom and predefined character profiles (e.g., name, avatar reference, lore, persona/system-prompt composition, personality and voice references). Exact schema remains OPEN DESIGN.
-2. **Decoupled Personality Configuration (PC V1):**
-   - Structured style trait settings (e.g., verbosity scale, humor frequency, technical depth) evaluated during persona/system-prompt composition.
-3. **Lightweight Conceptual Emotion State (PC V1):**
-   - Persistent companion state tracking that subtly influences tone without state-locking the assistant or impairing tool utility.
+1. **Full Character Studio UI (`PC-CHAR-002`, `PC-CHAR-003`):**
+   - Three-panel desktop and web authoring UI (template browser, trait slider editor, live interactive conversation scratchpad).
+2. **Dynamic Personality Engine (PC V1 Follow-on):**
+   - Dynamic trait weighting, conversational drift within bounded limits, and real-time interaction feedback.
+3. **Persistent Mood Dynamics (PC V1):**
+   - Persistent simulated companion mood across restarts with time decay back to baseline.
+4. **Relationship Continuity State (PC Later):**
+   - Long-term interaction familiarity depth and opt-in relationship progression.
+5. **Decoupled Voice Synthesis Integration (PC V1):**
+   - TTS acoustic profiles and prosody mapping bound to character definitions.
 
 ---
 
