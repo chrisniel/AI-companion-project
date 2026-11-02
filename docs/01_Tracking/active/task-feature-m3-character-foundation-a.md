@@ -1,9 +1,9 @@
 # M3 Batch A — Character Templates, Profile-Owned Instances & Neutral Assistant Fallback
 
-> **Status:** IMPLEMENTED / LOCALLY VERIFIED — provisional closure prepared; independent combined review pending.  
-> **Branch:** `feature/m3-character-foundation-a`  
-> **Owner / Authorization:** Chris; implementation authorized 2026-11-02; corrections authorized 2026-11-02; documentation, provisional closure, and draft PR authorized 2026-11-02. No merge or protected-branch mutation.  
-> **Plan:** [M3 Character Foundation Batch A Plan](../../02_Planning/01_Plans/plan-m3-character-foundation-a.md)  
+> **Status:** IMPLEMENTED / LOCALLY VERIFIED — provisional closure prepared; independent combined review pending.
+> **Branch:** `feature/m3-character-foundation-a`
+> **Owner / Authorization:** Chris; implementation authorized 2026-11-02; corrections authorized 2026-11-02; documentation, provisional closure, and draft PR authorized 2026-11-02. No merge or protected-branch mutation.
+> **Plan:** [M3 Character Foundation Batch A Plan](../../02_Planning/01_Plans/plan-m3-character-foundation-a.md)
 > **Milestone:** Wider M3 remains **IN PROGRESS**.
 
 ---
