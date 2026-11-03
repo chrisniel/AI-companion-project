@@ -86,7 +86,7 @@ class _StudioScreenState extends State<StudioScreen> {
           widget.controller.sessionStatus != StudioSessionStatus.authenticatedReady) {
         return false;
       }
-      if (success) {
+      if (success && widget.controller.draft?.isDirty == false) {
         performSwitch();
         _closeDrawer();
         return true;

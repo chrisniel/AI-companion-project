@@ -136,6 +136,26 @@ void main() {
           return http.Response(jsonEncode(newInst), 201);
         }
       }
+      if (path.contains('/characters/instances/')) {
+        final id = path.split('/characters/instances/').last;
+        final instances = mockServerState['instances'] as List;
+        final idx = instances.indexWhere((i) => i['id'] == id);
+        if (request.method == 'PATCH') {
+          if (idx == -1) return http.Response('{"error":"not_found"}', 404);
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          final inst = Map<String, dynamic>.from(instances[idx] as Map);
+          for (final key in body.keys) {
+            inst[key] = body[key];
+          }
+          inst['updated_at'] = DateTime.now().toIso8601String();
+          instances[idx] = inst;
+          return http.Response(jsonEncode(inst), 200);
+        }
+        if (request.method == 'DELETE') {
+          if (idx != -1) instances.removeAt(idx);
+          return http.Response('{"status":"archived"}', 200);
+        }
+      }
       if (path.endsWith('/characters/active')) {
         if (request.method == 'GET') {
           return http.Response(jsonEncode(mockServerState['activeState']), 200);
@@ -824,6 +844,480 @@ void main() {
       studio.resetZoom();
       expect(studio.zoomLevel, 1.0);
       expect(studio.panOffset, Offset.zero);
+
+      studio.dispose();
+      chat.dispose();
+    });
+
+    test('Uncertain PATCH reconciliation preserves dirty draft when server still contains original name', () async {
+      mockServerState['instances'] = <Map<String, dynamic>>[
+        {
+          'id': 'inst-aria',
+          'template_id': 'warm-companion',
+          'profile_id': 'profile-1',
+          'name': 'Aria',
+          'summary': 'Companion',
+          'lore': '',
+          'system_prompt': '',
+          'avatar_asset': 'warm_companion_avatar',
+          'preset_id': 'custom',
+          'traits': {
+            'warmth': 50, 'teasing': 50, 'guardedness': 50, 'directness': 50,
+            'expressiveness': 50, 'affection': 50, 'formality': 50, 'verbosity': 50,
+          },
+          'status': 'active',
+          'created_at': '2025-01-01',
+          'updated_at': '2025-01-01',
+        }
+      ];
+
+      final client = CompanionClient(
+        sessionStore: InMemoryCredentialStore('psk_test'),
+        httpClient: MockClient((request) async {
+          if (request.url.path.contains('/instances/inst-aria') && request.method == 'PATCH') {
+            return http.Response('{"detail":"Request timeout"}', 408);
+          }
+          return handleStudioRequest(request);
+        }),
+      );
+
+      final chat = DesktopChatController(client: client);
+      await chat.checkConnection();
+
+      final studio = DesktopStudioController(chat: chat);
+      await studio.loadStudioCatalog();
+      final aria = studio.instances.first;
+      studio.selectInstance(aria);
+
+      studio.draft!.updateName('Aria V2');
+      expect(studio.draft!.isDirty, isTrue);
+
+      final saveResult = await studio.saveDraft();
+      expect(saveResult, isFalse);
+
+      await pumpEventQueue();
+
+      expect(studio.draft!.name, 'Aria V2');
+      expect(studio.draft!.isDirty, isTrue);
+      expect(studio.error, contains('not confirmed'));
+
+      studio.dispose();
+      chat.dispose();
+    });
+
+    test('Uncertain PATCH reconciliation clears dirty draft when server committed Aria V2 before timeout', () async {
+      mockServerState['instances'] = <Map<String, dynamic>>[
+        {
+          'id': 'inst-aria',
+          'template_id': 'warm-companion',
+          'profile_id': 'profile-1',
+          'name': 'Aria',
+          'summary': 'Companion',
+          'lore': '',
+          'system_prompt': '',
+          'avatar_asset': 'warm_companion_avatar',
+          'preset_id': 'custom',
+          'traits': {
+            'warmth': 50, 'teasing': 50, 'guardedness': 50, 'directness': 50,
+            'expressiveness': 50, 'affection': 50, 'formality': 50, 'verbosity': 50,
+          },
+          'status': 'active',
+          'created_at': '2025-01-01',
+          'updated_at': '2025-01-01',
+        }
+      ];
+
+      final client = CompanionClient(
+        sessionStore: InMemoryCredentialStore('psk_test'),
+        httpClient: MockClient((request) async {
+          if (request.url.path.contains('/instances/inst-aria') && request.method == 'PATCH') {
+            (mockServerState['instances'] as List)[0]['name'] = 'Aria V2';
+            return http.Response('{"detail":"Request timeout"}', 408);
+          }
+          return handleStudioRequest(request);
+        }),
+      );
+
+      final chat = DesktopChatController(client: client);
+      await chat.checkConnection();
+
+      final studio = DesktopStudioController(chat: chat);
+      await studio.loadStudioCatalog();
+      final aria = studio.instances.first;
+      studio.selectInstance(aria);
+
+      studio.draft!.updateName('Aria V2');
+      expect(studio.draft!.isDirty, isTrue);
+
+      final saveResult = await studio.saveDraft();
+      expect(saveResult, isFalse);
+
+      await pumpEventQueue();
+
+      expect(studio.draft!.name, 'Aria V2');
+      expect(studio.draft!.isDirty, isFalse);
+      expect(studio.uncertainWriteWarning, isFalse);
+
+      studio.dispose();
+      chat.dispose();
+    });
+
+    test('Uncertain PATCH reconciliation detects remote conflict when server record changed concurrently', () async {
+      mockServerState['instances'] = <Map<String, dynamic>>[
+        {
+          'id': 'inst-aria',
+          'template_id': 'warm-companion',
+          'profile_id': 'profile-1',
+          'name': 'Aria',
+          'summary': 'Companion',
+          'lore': '',
+          'system_prompt': '',
+          'avatar_asset': 'warm_companion_avatar',
+          'preset_id': 'custom',
+          'traits': {
+            'warmth': 50, 'teasing': 50, 'guardedness': 50, 'directness': 50,
+            'expressiveness': 50, 'affection': 50, 'formality': 50, 'verbosity': 50,
+          },
+          'status': 'active',
+          'created_at': '2025-01-01',
+          'updated_at': '2025-01-01',
+        }
+      ];
+
+      final client = CompanionClient(
+        sessionStore: InMemoryCredentialStore('psk_test'),
+        httpClient: MockClient((request) async {
+          if (request.url.path.contains('/instances/inst-aria') && request.method == 'PATCH') {
+            (mockServerState['instances'] as List)[0]['name'] = 'Aria Remote';
+            return http.Response('{"detail":"Request timeout"}', 408);
+          }
+          return handleStudioRequest(request);
+        }),
+      );
+
+      final chat = DesktopChatController(client: client);
+      await chat.checkConnection();
+
+      final studio = DesktopStudioController(chat: chat);
+      await studio.loadStudioCatalog();
+      final aria = studio.instances.first;
+      studio.selectInstance(aria);
+
+      studio.draft!.updateName('Aria V2');
+
+      final saveResult = await studio.saveDraft();
+      expect(saveResult, isFalse);
+
+      await pumpEventQueue();
+
+      expect(studio.draft!.name, 'Aria V2');
+      expect(studio.draft!.isDirty, isTrue);
+      expect(studio.error, contains('Conflict detected'));
+
+      studio.dispose();
+      chat.dispose();
+    });
+
+    test('Selection transitions are rejected while Character creation or save is in flight', () async {
+      mockServerState['templates'] = [
+        {
+          'id': 'warm-companion',
+          'template_version': 1,
+          'name': 'Warm Companion',
+          'summary': 'Empathetic presence.',
+          'lore': 'A kind companion.',
+          'system_prompt': 'Be kind and attentive.',
+          'avatar_asset': 'avatar_warm',
+          'default_preset_id': 'warm_companion',
+          'is_neutral_fallback': false,
+          'traits': {
+            'warmth': 85, 'teasing': 35, 'guardedness': 25, 'directness': 60,
+            'expressiveness': 70, 'affection': 80, 'formality': 30, 'verbosity': 60,
+          },
+          'created_at': '2026-01-01',
+          'updated_at': '2026-01-01',
+        },
+        {
+          'id': 'playful',
+          'template_version': 1,
+          'name': 'Playful Companion',
+          'summary': 'Witty and energetic.',
+          'lore': 'A fun friend.',
+          'system_prompt': 'Be playful and fun.',
+          'avatar_asset': 'avatar_playful',
+          'default_preset_id': 'playful',
+          'is_neutral_fallback': false,
+          'traits': {
+            'warmth': 75, 'teasing': 80, 'guardedness': 20, 'directness': 75,
+            'expressiveness': 85, 'affection': 70, 'formality': 15, 'verbosity': 70,
+          },
+          'created_at': '2026-01-01',
+          'updated_at': '2026-01-01',
+        },
+      ];
+
+      final saveCompleter = Completer<http.Response>();
+      final client = CompanionClient(
+        sessionStore: InMemoryCredentialStore('psk_test'),
+        httpClient: MockClient((request) async {
+          if (request.url.path.endsWith('/instances') && request.method == 'POST') {
+            return saveCompleter.future;
+          }
+          return handleStudioRequest(request);
+        }),
+      );
+
+      final chat = DesktopChatController(client: client);
+      await chat.checkConnection();
+
+      final studio = DesktopStudioController(chat: chat);
+      await studio.loadStudioCatalog();
+      studio.selectTemplate(studio.templates.first);
+      studio.draft!.updateName('Character A');
+
+      final saveFuture = studio.saveDraft();
+      expect(studio.isMutating, isTrue);
+
+      studio.selectTemplate(studio.templates[1]);
+      expect(studio.draft!.name, 'Character A');
+      expect(studio.draft!.sourceTemplateId, studio.templates.first.id);
+
+      studio.selectNeutral();
+      expect(studio.isNeutralSelected, isFalse);
+      expect(studio.draft, isNotNull);
+
+      saveCompleter.complete(await handleStudioRequest(
+        http.Request('POST', Uri.parse('http://127.0.0.1:8000/api/v1/characters/instances'))
+          ..body = jsonEncode({
+            'template_id': studio.templates.first.id,
+            'name': 'Character A',
+          }),
+      ));
+      final success = await saveFuture;
+      expect(success, isTrue);
+      expect(studio.draft!.name, 'Character A');
+      expect(studio.draft!.isNew, isFalse);
+
+      studio.dispose();
+      chat.dispose();
+    });
+
+    test('Saving instance A rejects selecting instance B while mutation in flight', () async {
+      mockServerState['instances'] = <Map<String, dynamic>>[
+        {
+          'id': 'inst-a',
+          'template_id': 'warm-companion',
+          'profile_id': 'profile-1',
+          'name': 'Instance A',
+          'summary': '',
+          'lore': '',
+          'system_prompt': '',
+          'avatar_asset': 'warm_companion_avatar',
+          'preset_id': 'custom',
+          'traits': {
+            'warmth': 50, 'teasing': 50, 'guardedness': 50, 'directness': 50,
+            'expressiveness': 50, 'affection': 50, 'formality': 50, 'verbosity': 50,
+          },
+          'status': 'active',
+          'created_at': '2025-01-01',
+          'updated_at': '2025-01-01',
+        },
+        {
+          'id': 'inst-b',
+          'template_id': 'playful',
+          'profile_id': 'profile-1',
+          'name': 'Instance B',
+          'summary': '',
+          'lore': '',
+          'system_prompt': '',
+          'avatar_asset': 'playful_companion_avatar',
+          'preset_id': 'custom',
+          'traits': {
+            'warmth': 70, 'teasing': 70, 'guardedness': 30, 'directness': 50,
+            'expressiveness': 70, 'affection': 60, 'formality': 30, 'verbosity': 60,
+          },
+          'status': 'active',
+          'created_at': '2025-01-01',
+          'updated_at': '2025-01-01',
+        },
+      ];
+
+      final patchCompleter = Completer<http.Response>();
+      final client = CompanionClient(
+        sessionStore: InMemoryCredentialStore('psk_test'),
+        httpClient: MockClient((request) async {
+          if (request.url.path.contains('/instances/inst-a') && request.method == 'PATCH') {
+            return patchCompleter.future;
+          }
+          return handleStudioRequest(request);
+        }),
+      );
+
+      final chat = DesktopChatController(client: client);
+      await chat.checkConnection();
+
+      final studio = DesktopStudioController(chat: chat);
+      await studio.loadStudioCatalog();
+      studio.selectInstance(studio.instances[0]);
+      studio.draft!.updateName('Instance A Updated');
+
+      final saveFuture = studio.saveDraft();
+      expect(studio.isMutating, isTrue);
+
+      studio.selectInstance(studio.instances[1]);
+      expect(studio.draft!.instanceId, 'inst-a');
+      expect(studio.draft!.name, 'Instance A Updated');
+
+      patchCompleter.complete(await handleStudioRequest(
+        http.Request('PATCH', Uri.parse('http://127.0.0.1:8000/api/v1/characters/instances/inst-a'))
+          ..body = jsonEncode({'name': 'Instance A Updated'}),
+      ));
+
+      expect(await saveFuture, isTrue);
+      expect(studio.draft!.instanceId, 'inst-a');
+      expect(studio.draft!.isDirty, isFalse);
+
+      studio.dispose();
+      chat.dispose();
+    });
+
+    test('Profile A delayed response does not unlock or interfere with Profile B pending mutation', () async {
+      final profileAResponseCompleter = Completer<http.Response>();
+      final profileBResponseCompleter = Completer<http.Response>();
+
+      var callCount = 0;
+      final client = CompanionClient(
+        sessionStore: InMemoryCredentialStore('psk_test'),
+        httpClient: MockClient((request) async {
+          if (request.url.path.endsWith('/instances') && request.method == 'POST') {
+            callCount++;
+            if (callCount == 1) {
+              return profileAResponseCompleter.future;
+            } else {
+              return profileBResponseCompleter.future;
+            }
+          }
+          return handleStudioRequest(request);
+        }),
+      );
+
+      final chat = DesktopChatController(client: client);
+      await chat.checkConnection();
+
+      final studio = DesktopStudioController(chat: chat);
+      await studio.loadStudioCatalog();
+      studio.selectTemplate(studio.templates.first);
+      studio.draft!.updateName('Profile A Character');
+
+      final profileAFuture = studio.saveDraft();
+      expect(studio.isMutating, isTrue);
+
+      studio.simulateChatState(
+        connectionStatus: RuntimeConnectionStatus.connected,
+        authenticatedProfileId: 'profile-b',
+        profileEpoch: 2,
+      );
+      expect(studio.boundProfileId, 'profile-b');
+      expect(studio.isMutating, isFalse);
+
+      await studio.loadStudioCatalog();
+      studio.selectTemplate(studio.templates.first);
+      studio.draft!.updateName('Profile B Character');
+      final profileBFuture = studio.saveDraft();
+      expect(studio.isMutating, isTrue);
+
+      profileAResponseCompleter.complete(http.Response(
+        jsonEncode({
+          'id': 'inst-profile-a-late',
+          'profile_id': 'profile-1',
+          'template_id': 'warm-companion',
+          'name': 'Profile A Character',
+          'summary': '',
+          'lore': '',
+          'system_prompt': '',
+          'avatar_asset': 'warm_companion_avatar',
+          'preset_id': 'custom',
+          'traits': null,
+          'status': 'active',
+          'created_at': '2025-01-01',
+          'updated_at': '2025-01-01',
+        }),
+        200,
+      ));
+      await profileAFuture;
+
+      // Profile B mutation is STILL PENDING and isMutating MUST REMAIN TRUE!
+      expect(studio.isMutating, isTrue);
+      expect(studio.draft!.name, 'Profile B Character');
+
+      profileBResponseCompleter.complete(http.Response(
+        jsonEncode({
+          'id': 'inst-profile-b',
+          'profile_id': 'profile-b',
+          'template_id': 'warm-companion',
+          'name': 'Profile B Character',
+          'summary': '',
+          'lore': '',
+          'system_prompt': '',
+          'avatar_asset': 'warm_companion_avatar',
+          'preset_id': 'custom',
+          'traits': null,
+          'status': 'active',
+          'created_at': '2025-01-01',
+          'updated_at': '2025-01-01',
+        }),
+        201,
+      ));
+      final profileBSuccess = await profileBFuture;
+      expect(profileBSuccess, isTrue);
+      expect(studio.isMutating, isFalse);
+      expect(studio.draft!.instanceId, 'inst-profile-b');
+
+      studio.dispose();
+      chat.dispose();
+    });
+
+    test('Changing selections retains protection against unguarded retry of uncertain creation', () async {
+      mockServerState['instances'] = <Map<String, dynamic>>[];
+      var postAttempts = 0;
+      final client = CompanionClient(
+        sessionStore: InMemoryCredentialStore('psk_test'),
+        httpClient: MockClient((request) async {
+          if (request.url.path.endsWith('/instances') && request.method == 'POST') {
+            postAttempts++;
+            return http.Response('{"detail":"Timeout"}', 408);
+          }
+          return handleStudioRequest(request);
+        }),
+      );
+
+      final chat = DesktopChatController(client: client);
+      await chat.checkConnection();
+
+      final studio = DesktopStudioController(chat: chat);
+      await studio.loadStudioCatalog();
+      studio.selectTemplate(studio.templates.first);
+      studio.draft!.updateName('Uncertain Hero');
+
+      final result1 = await studio.saveDraft();
+      expect(result1, isFalse);
+      expect(studio.uncertainCreateWarning, isTrue);
+      expect(postAttempts, 1);
+
+      studio.selectNeutral();
+      expect(studio.isNeutralSelected, isTrue);
+
+      studio.selectTemplate(studio.templates.first);
+      studio.draft!.updateName('Uncertain Hero');
+
+      final result2 = await studio.saveDraft();
+      expect(result2, isFalse);
+      expect(postAttempts, 1);
+      expect(studio.error, contains('timed out'));
+
+      final result3 = await studio.retryCreateDraft();
+      expect(result3, isFalse);
+      expect(postAttempts, 2);
 
       studio.dispose();
       chat.dispose();

@@ -24,6 +24,12 @@
   - Finding 5: Corrected showcase stage with Migration 009 seeded avatar identifiers, fallback to neutral silhouette on unknown keys, 32-bit RGBA transparent PNG portraits, and interactive pan/drag inspection.
   - Finding 6: Removed duplicate Custom chip, added per-trait reset with safe template fallback, and disabled mutating actions when offline/validating/read-only.
   - Finding 7 (Review Condition 8): Verified full prompt budgeting with adversarial delimiter injection, exhaustive trait modulation $\le 700$ chars, and 4,096-token assembled prompt context budgeting.
+- [x] **Stage 3c — FINAL DATA-INTEGRITY REVIEW CORRECTIONS:** Resolved remaining save-state, uncertain write, and mutation concurrency issues:
+  - Finding 1: Implemented snapshot-based PATCH reconciliation via immutable `PendingUpdateSnapshot`. On uncertain write recovery, fetches instance by exact ID, compares persisted fields with submitted update snapshot, and only marks clean if expected state is confirmed and no newer edits were made. If server is unconfirmed or remote conflict is observed, preserves local dirty draft edits and reports clear message without discarding work.
+  - Finding 2: Bound save attempts to originating draft identity and snapshot revision. Blocked character selection and neutral transitions while mutation is in flight (`_isMutating`). Guarded `Save & Continue` (`StudioScreen`) and `Save & Leave` (`DesktopShell`) so navigation/switching proceeds only when `draft?.isDirty == false` or user explicitly discards.
+  - Finding 3: Replaced shared boolean mutation flags with single-flight ownership via monotonically increasing `_activeMutationToken`. Mutation completion and lock release check matching token and profile session validity (`_isSessionValid`), preventing delayed responses from old profile sessions from unlocking or corrupting active mutations on a new profile.
+  - Finding 4: Maintained uncertain creation protections (`_uncertainCreatePayload` and `draft.hasUncertainCreation`). Retained warning banner with explicit user retry (`retryCreateDraft()`) and guarded against silent unguarded retries on item switches.
+  - Finding 5: Clarified verification documentation to explicitly distinguish sampled dynamic tests ($\le 695 \le 700$) from mathematically proven bounds, and reserved full WCAG compliance claims for Windows Desktop visual acceptance.
 - [ ] **Stage 4 — INDEPENDENT IMPLEMENTATION REVIEW (`ACTIVE STOP BOUNDARY`):** Implementation review corrections submitted for independent verification.
 - [ ] **Stage 5 — DOCUMENTATION + PROVISIONAL CLOSURE:** Pending Implementation Gate approval.
 - [ ] **Stage 6 — DRAFT PR:** Pending authorization.
@@ -57,7 +63,7 @@
 | **Dart OpenAPI Parity** | `backend/.venv/Scripts/python.exe scripts/check_dart_openapi_parity.py --check` | **PASSED (22/22 DTO schemas, 29/18 covered routes)** |
 | **Flutter `companion_api`** | `flutter test packages/companion_api` | **PASSED (79/79 passed)** |
 | **Flutter `companion_design`** | `flutter test packages/companion_design` | **PASSED (18/18 passed)** |
-| **Flutter Desktop App** | `flutter test apps/desktop` | **PASSED (260/260 passed)** |
+| **Flutter Desktop App** | `flutter test apps/desktop` | **PASSED (269/269 passed)** |
 | **Dart Static Analysis** | `dart analyze .` (in `frontend/flutter`) | **PASSED (0 issues found)** |
 | **React Web Harness** | `npm test -- --run` (in `frontend/web`) | **PASSED (16 test files, 248/248 passed)** |
 | **Git Whitespace** | `git diff --check` | **PASSED (0 errors)** |

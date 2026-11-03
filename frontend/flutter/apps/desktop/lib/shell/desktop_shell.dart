@@ -109,7 +109,10 @@ class _DesktopShellState extends State<DesktopShell> {
 
       if (decision == 'save') {
         final success = await studio.saveDraft();
-        return success;
+        if (success && studio.draft?.isDirty == false) {
+          return true;
+        }
+        return false;
       } else if (decision == 'discard') {
         return true;
       }

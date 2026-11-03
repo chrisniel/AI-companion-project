@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:ai_companion_desktop/features/chat/desktop_chat_controller.dart';
@@ -611,6 +612,68 @@ void main() {
       // Save button says Read-Only and is disabled
       final readOnlyBtn = find.widgetWithText(NeumorphicButton, 'Read-Only');
       expect(readOnlyBtn, findsOneWidget);
+
+      studio.dispose();
+      chat.dispose();
+    });
+
+    testWidgets('Save & Continue does not perform switch if newer edits arrived while save was in flight', (tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final saveCompleter = Completer<http.Response>();
+      final client = CompanionClient(
+        sessionStore: InMemoryCredentialStore('psk_test'),
+        httpClient: MockClient((request) async {
+          if (request.url.path.endsWith('/instances') && request.method == 'POST') {
+            return saveCompleter.future;
+          }
+          return handleStudioRequest(request);
+        }),
+      );
+      final chat = DesktopChatController(client: client);
+      await chat.checkConnection();
+
+      final studio = DesktopStudioController(chat: chat);
+      await studio.loadStudioCatalog();
+      studio.selectTemplate(studio.templates.first);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: StudioScreen(controller: studio),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      studio.draft!.updateName('Aria V1');
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Neutral Assistant'));
+      await tester.pumpAndSettle();
+      expect(find.text('Unsaved Studio Customizations'), findsOneWidget);
+
+      await tester.tap(find.text('Save & Continue'));
+      await tester.pump();
+
+      studio.draft!.updateName('Aria V2 Newer Edit');
+      expect(studio.draft!.isDirty, isTrue);
+
+      saveCompleter.complete(await handleStudioRequest(
+        http.Request('POST', Uri.parse('http://127.0.0.1:8000/api/v1/characters/instances'))
+          ..body = jsonEncode({
+            'template_id': studio.templates.first.id,
+            'name': 'Aria V1',
+          }),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(studio.draft!.isDirty, isTrue);
+      expect(studio.draft!.name, 'Aria V2 Newer Edit');
+      expect(studio.isNeutralSelected, isFalse);
 
       studio.dispose();
       chat.dispose();

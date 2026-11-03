@@ -443,8 +443,13 @@ async def test_adversarial_delimiter_injection_and_escaped_field_measurement(
     assert "</character_persona>" not in escaped_lore
 
 
-def test_exhaustive_modulation_budget_all_dynamics_and_autonomy_guard():
-    """Verify all 4 interaction dynamic rules + Autonomy Guard stay within 700 chars."""
+def test_sampled_modulation_budget_all_dynamics_and_autonomy_guard():
+    """Sampled verification: each of the 4 interaction dynamic rules + Autonomy Guard stay within 700 chars.
+
+    Note: This tests representative vectors for each dynamic rule rather than exhaustive enumeration
+    of all trait combinations (the strict upper bound limit <= 695 chars is proven mathematically
+    by summing maximum clause lengths across all 8 bands plus dynamic and guard).
+    """
     vectors_to_test = [
         # Rule 2a: Tsundere + Autonomy Guard (affection >= 80)
         (

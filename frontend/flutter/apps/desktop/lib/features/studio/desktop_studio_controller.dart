@@ -53,6 +53,14 @@ class CharacterStudioDraft {
   bool get isReadOnly => isLegacyPlaceholder;
   int _revision = 0;
   int get revision => _revision;
+  bool _hasUncertainCreation = false;
+  bool get hasUncertainCreation => _hasUncertainCreation;
+
+  void markUncertainCreation() {
+    _hasUncertainCreation = true;
+    _revision++;
+    onChanged();
+  }
 
   String _name;
   String _summary;
@@ -80,6 +88,7 @@ class CharacterStudioDraft {
   CharacterTraitVector? get traits => _traits;
 
   bool get isDirty =>
+      _hasUncertainCreation ||
       _name != _initialName ||
       _summary != _initialSummary ||
       _lore != _initialLore ||
@@ -193,6 +202,7 @@ class CharacterStudioDraft {
   /// user edits that occurred after the request snapshot was taken.
   void reconcileSavedInstance(CharacterInstanceOut saved, int snapshotRevision) {
     _instanceId = saved.id;
+    _hasUncertainCreation = false;
     _initialName = saved.name;
     _initialSummary = saved.summary;
     _initialLore = saved.lore;
@@ -214,6 +224,23 @@ class CharacterStudioDraft {
   }
 }
 
+/// Immutable snapshot of a submitted update payload for uncertain write reconciliation.
+class PendingUpdateSnapshot {
+  const PendingUpdateSnapshot({
+    required this.instanceId,
+    required this.targetDraft,
+    required this.snapshotRevision,
+    required this.submittedUpdate,
+    required this.baselineInstance,
+  });
+
+  final String instanceId;
+  final CharacterStudioDraft targetDraft;
+  final int snapshotRevision;
+  final CharacterInstanceUpdate submittedUpdate;
+  final CharacterInstanceOut? baselineInstance;
+}
+
 /// Controller managing Character Studio catalog, session fencing, and mutation locks.
 class DesktopStudioController extends ChangeNotifier {
   DesktopStudioController({required this.chat}) {
@@ -231,8 +258,12 @@ class DesktopStudioController extends ChangeNotifier {
 
   int _sessionFenceId = 0;
   int _readGeneration = 0;
+  int _activeMutationToken = 0;
   bool _isMutating = false;
   bool _isDisposed = false;
+
+  PendingUpdateSnapshot? _pendingUpdateSnapshot;
+  CharacterInstanceCreate? _uncertainCreatePayload;
 
   String? _boundProfileId;
   int _boundProfileEpoch = -1;
@@ -266,6 +297,8 @@ class DesktopStudioController extends ChangeNotifier {
   String? get error => _error;
   bool get uncertainWriteWarning => _uncertainWriteWarning;
   bool get uncertainCreateWarning => _uncertainCreateWarning;
+  PendingUpdateSnapshot? get pendingUpdateSnapshot => _pendingUpdateSnapshot;
+  CharacterInstanceCreate? get uncertainCreatePayload => _uncertainCreatePayload;
   double get zoomLevel => _zoomLevel;
   Offset get panOffset => _panOffset;
   StudioBackdropPreset get backdropPreset => _backdropPreset;
@@ -340,11 +373,14 @@ class DesktopStudioController extends ChangeNotifier {
   void _handleAuthorizationLoss() {
     _sessionFenceId++;
     _readGeneration++;
+    _activeMutationToken++;
     _isMutating = false;
     _boundProfileId = null;
     _instances = [];
     _activeState = null;
     _draft = null;
+    _pendingUpdateSnapshot = null;
+    _uncertainCreatePayload = null;
     _isNeutralSelected = false;
     _sessionStatus = StudioSessionStatus.sessionExpiredOrRevoked;
     _error = 'Profile authorization lost. Select or authenticate a Profile in Settings.';
@@ -382,11 +418,14 @@ class DesktopStudioController extends ChangeNotifier {
     if (status == RuntimeConnectionStatus.unauthorized) {
       _sessionFenceId++;
       _readGeneration++;
+      _activeMutationToken++;
       _isMutating = false;
       _boundProfileId = null;
       _instances = [];
       _activeState = null;
       _draft = null;
+      _pendingUpdateSnapshot = null;
+      _uncertainCreatePayload = null;
       _isNeutralSelected = false;
       _sessionStatus = StudioSessionStatus.sessionExpiredOrRevoked;
       _notify();
@@ -399,10 +438,13 @@ class DesktopStudioController extends ChangeNotifier {
         (authProfileId != _boundProfileId || epoch != _boundProfileEpoch)) {
       _sessionFenceId++;
       _readGeneration++;
+      _activeMutationToken++;
       _isMutating = false;
       _instances = [];
       _activeState = null;
       _draft = null;
+      _pendingUpdateSnapshot = null;
+      _uncertainCreatePayload = null;
       _isNeutralSelected = false;
       _boundProfileId = authProfileId;
       _boundProfileEpoch = epoch;
@@ -469,17 +511,32 @@ class DesktopStudioController extends ChangeNotifier {
       _instances = futures[3] as List<CharacterInstanceOut>;
       _activeState = futures[4] as ActiveCharacterStateOut;
 
-      if (reconcileUncertainWrite && _draft != null) {
-        if (!_draft!.isNew && _draft!.instanceId != null) {
-          // Reconcile uncertain update by exact instance ID only
-          final matching = _instances.where((i) => i.id == _draft!.instanceId);
-          if (matching.isNotEmpty) {
-            _draft!.reconcileSavedInstance(matching.first, _draft!.revision);
+      if (reconcileUncertainWrite && _pendingUpdateSnapshot != null) {
+        final snapshot = _pendingUpdateSnapshot!;
+        final matching = _instances.where((i) => i.id == snapshot.instanceId).firstOrNull;
+        if (matching != null) {
+          final isCommitted = _matchesUpdatePayload(matching, snapshot.submittedUpdate);
+          if (isCommitted) {
+            snapshot.targetDraft.reconcileSavedInstance(matching, snapshot.snapshotRevision);
             _uncertainWriteWarning = false;
+            _pendingUpdateSnapshot = null;
+            _error = null;
+          } else {
+            final isConflict = snapshot.baselineInstance != null &&
+                !_matchesBaseline(matching, snapshot.baselineInstance!);
+            if (isConflict) {
+              _error = 'Conflict detected: this character was modified remotely on the server. Your local edits have been preserved.';
+            } else {
+              _error = 'Character update was not confirmed by the server. Your unsaved edits have been preserved.';
+            }
+            _uncertainWriteWarning = false;
+            _pendingUpdateSnapshot = null;
           }
+        } else {
+          _error = 'Character update failed: instance no longer exists on server.';
+          _uncertainWriteWarning = false;
+          _pendingUpdateSnapshot = null;
         }
-        // If _draft.isNew: do NOT auto-confirm by matching editable fields.
-        // The catalog refresh is read-only investigation; draft stays dirty.
       }
     } catch (e) {
       if (_isSessionValid(fenceSession, fenceProfile)) {
@@ -497,7 +554,29 @@ class DesktopStudioController extends ChangeNotifier {
     }
   }
 
+  bool _matchesUpdatePayload(CharacterInstanceOut inst, CharacterInstanceUpdate update) {
+    if (update.name != null && inst.name != update.name) return false;
+    if (update.summary != null && inst.summary != update.summary) return false;
+    if (update.lore != null && inst.lore != update.lore) return false;
+    if (update.systemPrompt != null && inst.systemPrompt != update.systemPrompt) return false;
+    if (update.avatarAsset != null && inst.avatarAsset != update.avatarAsset) return false;
+    if (update.presetId != null && inst.presetId != update.presetId) return false;
+    if (update.traits != null && inst.traits != update.traits) return false;
+    return true;
+  }
+
+  bool _matchesBaseline(CharacterInstanceOut inst, CharacterInstanceOut baseline) {
+    return inst.name == baseline.name &&
+        inst.summary == baseline.summary &&
+        inst.lore == baseline.lore &&
+        inst.systemPrompt == baseline.systemPrompt &&
+        inst.avatarAsset == baseline.avatarAsset &&
+        inst.presetId == baseline.presetId &&
+        inst.traits == baseline.traits;
+  }
+
   void selectTemplate(CharacterTemplateOut tmpl) {
+    if (_isMutating) return;
     _isNeutralSelected = false;
     final defaultPreset = tmpl.defaultPresetId ?? 'custom';
     final initialTraits = tmpl.traits ??
@@ -525,6 +604,7 @@ class DesktopStudioController extends ChangeNotifier {
   }
 
   void selectInstance(CharacterInstanceOut inst) {
+    if (_isMutating) return;
     _isNeutralSelected = false;
     _selectInstanceDirect(inst);
     _notify();
@@ -549,6 +629,7 @@ class DesktopStudioController extends ChangeNotifier {
   }
 
   void selectNeutral() {
+    if (_isMutating) return;
     _isNeutralSelected = true;
     _draft = null;
     _notify();
@@ -558,63 +639,81 @@ class DesktopStudioController extends ChangeNotifier {
     if (_isMutating || _draft == null || _draft!.isReadOnly) return false;
 
     // Guard against silent duplicate creation after uncertain outcome
-    if (_draft!.isNew && _uncertainCreateWarning && !forceRetryCreate) {
+    final isSameAsUncertain = _uncertainCreatePayload != null &&
+        _draft!.isNew &&
+        _draft!.sourceTemplateId == _uncertainCreatePayload!.templateId &&
+        _draft!.name == _uncertainCreatePayload!.name;
+
+    if (_draft!.isNew && (_uncertainCreateWarning || isSameAsUncertain) && !forceRetryCreate) {
+      _uncertainCreateWarning = true;
       _error = 'Previous creation attempt timed out. Confirm retry to attempt creation again.';
       _notify();
       return false;
     }
 
+    final mutationToken = ++_activeMutationToken;
     _isMutating = true;
     _error = null;
     _notify();
 
     final fenceSession = _sessionFenceId;
     final fenceProfile = _boundProfileId;
-    final snapshotRevision = _draft!.revision;
+    final targetDraft = _draft!;
+    final snapshotRevision = targetDraft.revision;
+
+    CharacterInstanceCreate? createPayload;
+    CharacterInstanceUpdate? updatePayload;
+    CharacterInstanceOut? baselineInstance;
 
     try {
       CharacterInstanceOut saved;
-      if (_draft!.isNew) {
-        saved = await chat.client.createCharacterInstance(
-          CharacterInstanceCreate(
-            templateId: _draft!.sourceTemplateId,
-            name: _draft!.name,
-            summary: _draft!.summary.isNotEmpty ? _draft!.summary : null,
-            lore: _draft!.lore.isNotEmpty ? _draft!.lore : null,
-            systemPrompt: _draft!.systemPrompt.isNotEmpty ? _draft!.systemPrompt : null,
-            avatarAsset: _draft!.avatarAsset,
-            presetId: _draft!.presetId,
-            traits: _draft!.traits ??
-                const CharacterTraitVector(
-                  warmth: 50, teasing: 50, guardedness: 50, directness: 50,
-                  expressiveness: 50, affection: 50, formality: 50, verbosity: 50,
-                ),
-          ),
+      if (targetDraft.isNew) {
+        createPayload = CharacterInstanceCreate(
+          templateId: targetDraft.sourceTemplateId,
+          name: targetDraft.name,
+          summary: targetDraft.summary.isNotEmpty ? targetDraft.summary : null,
+          lore: targetDraft.lore.isNotEmpty ? targetDraft.lore : null,
+          systemPrompt: targetDraft.systemPrompt.isNotEmpty ? targetDraft.systemPrompt : null,
+          avatarAsset: targetDraft.avatarAsset,
+          presetId: targetDraft.presetId,
+          traits: targetDraft.traits ??
+              const CharacterTraitVector(
+                warmth: 50, teasing: 50, guardedness: 50, directness: 50,
+                expressiveness: 50, affection: 50, formality: 50, verbosity: 50,
+              ),
         );
+        saved = await chat.client.createCharacterInstance(createPayload);
       } else {
+        baselineInstance = _instances.where((i) => i.id == targetDraft.instanceId).firstOrNull;
+        updatePayload = CharacterInstanceUpdate(
+          name: targetDraft.name,
+          summary: targetDraft.summary,
+          lore: targetDraft.lore,
+          systemPrompt: targetDraft.systemPrompt,
+          avatarAsset: targetDraft.avatarAsset,
+          presetId: targetDraft.presetId,
+          traits: targetDraft.traits,
+        );
         saved = await chat.client.updateCharacterInstance(
-          _draft!.instanceId!,
-          CharacterInstanceUpdate(
-            name: _draft!.name,
-            summary: _draft!.summary,
-            lore: _draft!.lore,
-            systemPrompt: _draft!.systemPrompt,
-            avatarAsset: _draft!.avatarAsset,
-            presetId: _draft!.presetId,
-            traits: _draft!.traits,
-          ),
+          targetDraft.instanceId!,
+          updatePayload,
         );
       }
 
-      if (!_isSessionValid(fenceSession, fenceProfile)) {
-        _isMutating = false;
-        return false; // Dropped cross-session response
+      if (!_isSessionValid(fenceSession, fenceProfile) || _activeMutationToken != mutationToken) {
+        return false; // Dropped cross-session or superseded mutation response
       }
 
       _readGeneration++;
-      _draft!.reconcileSavedInstance(saved, snapshotRevision);
+      if (identical(_draft, targetDraft)) {
+        _draft!.reconcileSavedInstance(saved, snapshotRevision);
+      } else {
+        targetDraft.reconcileSavedInstance(saved, snapshotRevision);
+      }
       _uncertainWriteWarning = false;
       _uncertainCreateWarning = false;
+      _uncertainCreatePayload = null;
+      _pendingUpdateSnapshot = null;
       _isMutating = false;
       _notify();
 
@@ -622,8 +721,7 @@ class DesktopStudioController extends ChangeNotifier {
       await loadStudioCatalog();
       return true;
     } catch (e) {
-      if (!_isSessionValid(fenceSession, fenceProfile)) {
-        _isMutating = false;
+      if (!_isSessionValid(fenceSession, fenceProfile) || _activeMutationToken != mutationToken) {
         return false;
       }
       _isMutating = false;
@@ -634,12 +732,21 @@ class DesktopStudioController extends ChangeNotifier {
 
       if (e.toString().contains('408') || e.toString().contains('Timeout') || e.toString().contains('SocketException')) {
         _uncertainWriteWarning = true;
-        if (_draft!.isNew) {
+        if (targetDraft.isNew) {
           _uncertainCreateWarning = true;
+          _uncertainCreatePayload = createPayload;
+          targetDraft.markUncertainCreation();
           _error = 'Character creation timed out. The server outcome is uncertain; the character may have been created.';
           _notify();
           unawaited(loadStudioCatalog(reconcileUncertainWrite: false));
         } else {
+          _pendingUpdateSnapshot = PendingUpdateSnapshot(
+            instanceId: targetDraft.instanceId!,
+            targetDraft: targetDraft,
+            snapshotRevision: snapshotRevision,
+            submittedUpdate: updatePayload!,
+            baselineInstance: baselineInstance,
+          );
           _error = 'Character update timed out. Investigating server state...';
           _notify();
           unawaited(loadStudioCatalog(reconcileUncertainWrite: true));
@@ -662,6 +769,7 @@ class DesktopStudioController extends ChangeNotifier {
       _notify();
       return false;
     }
+    final mutationToken = ++_activeMutationToken;
     _isMutating = true;
     _error = null;
     _notify();
@@ -671,8 +779,7 @@ class DesktopStudioController extends ChangeNotifier {
 
     try {
       final updated = await chat.client.selectActiveCharacter(instanceId);
-      if (!_isSessionValid(fenceSession, fenceProfile)) {
-        _isMutating = false;
+      if (!_isSessionValid(fenceSession, fenceProfile) || _activeMutationToken != mutationToken) {
         return false;
       }
       _readGeneration++;
@@ -681,8 +788,7 @@ class DesktopStudioController extends ChangeNotifier {
       _notify();
       return true;
     } catch (e) {
-      if (!_isSessionValid(fenceSession, fenceProfile)) {
-        _isMutating = false;
+      if (!_isSessionValid(fenceSession, fenceProfile) || _activeMutationToken != mutationToken) {
         return false;
       }
       _isMutating = false;
@@ -698,6 +804,7 @@ class DesktopStudioController extends ChangeNotifier {
 
   Future<bool> resetProfileToNeutral() async {
     if (_isMutating) return false;
+    final mutationToken = ++_activeMutationToken;
     _isMutating = true;
     _error = null;
     _notify();
@@ -707,8 +814,7 @@ class DesktopStudioController extends ChangeNotifier {
 
     try {
       final updated = await chat.client.resetActiveCharacterToNeutral();
-      if (!_isSessionValid(fenceSession, fenceProfile)) {
-        _isMutating = false;
+      if (!_isSessionValid(fenceSession, fenceProfile) || _activeMutationToken != mutationToken) {
         return false;
       }
       _readGeneration++;
@@ -717,8 +823,7 @@ class DesktopStudioController extends ChangeNotifier {
       _notify();
       return true;
     } catch (e) {
-      if (!_isSessionValid(fenceSession, fenceProfile)) {
-        _isMutating = false;
+      if (!_isSessionValid(fenceSession, fenceProfile) || _activeMutationToken != mutationToken) {
         return false;
       }
       _isMutating = false;
@@ -740,6 +845,7 @@ class DesktopStudioController extends ChangeNotifier {
       _notify();
       return false;
     }
+    final mutationToken = ++_activeMutationToken;
     _isMutating = true;
     _error = null;
     _notify();
@@ -749,8 +855,7 @@ class DesktopStudioController extends ChangeNotifier {
 
     try {
       await chat.client.deleteCharacterInstance(instanceId);
-      if (!_isSessionValid(fenceSession, fenceProfile)) {
-        _isMutating = false;
+      if (!_isSessionValid(fenceSession, fenceProfile) || _activeMutationToken != mutationToken) {
         return false;
       }
       _readGeneration++;
@@ -763,8 +868,7 @@ class DesktopStudioController extends ChangeNotifier {
       await loadStudioCatalog();
       return true;
     } catch (e) {
-      if (!_isSessionValid(fenceSession, fenceProfile)) {
-        _isMutating = false;
+      if (!_isSessionValid(fenceSession, fenceProfile) || _activeMutationToken != mutationToken) {
         return false;
       }
       _isMutating = false;
@@ -829,6 +933,11 @@ class DesktopStudioController extends ChangeNotifier {
   void dispose() {
     _isDisposed = true;
     _sessionFenceId++;
+    _readGeneration++;
+    _activeMutationToken++;
+    _isMutating = false;
+    _pendingUpdateSnapshot = null;
+    _uncertainCreatePayload = null;
     chat.removeListener(_onChatChanged);
     super.dispose();
   }
