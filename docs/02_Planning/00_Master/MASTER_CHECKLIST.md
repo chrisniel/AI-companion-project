@@ -20,16 +20,16 @@
 | **PC Host** | Storage Roots (`APP`, `DATA`, `LIBRARY`)| `storage-and-assets.md` | `app.core.storage` (Partial)| Pytest storage | G1 | **PARTIAL** |
 | **Contracts** | OpenAPI Schema 3.1 & Drift Check | `DOCUMENTATION_MAP.md` | `contracts/openapi/openapi.json` | Python drift check| G1 | **VERIFIED** |
 | **Contracts** | Durable FIFO Conversation Queues | `assistant-and-conversations.md` | Pending implementation | Queue unit tests | G4 | **NOT STARTED** |
-| **Identity** | Multi-Profile PC V1 Model | `profiles-and-devices.md` | Batch A schema; Batch B migration 008, Sessions, Host Admin/browser approval, ownership isolation and Desktop restoration/expiry implemented and locally verified | Migration/isolation/client checks passed locally; hosted PR CI not run | G2 manual acceptance pending | **PARTIAL; BATCH B INDEPENDENT GATES PENDING; CRUD/PIN/DEVICE ENROLLMENT FUTURE** |
+| **Identity** | Multi-Profile PC V1 Model | `profiles-and-devices.md` | Batch A schema (PR #25) and Batch B sessions/isolation (PR #27, PR #28) squash-merged to develop | Hosted PR CI passed; manual acceptance verified | G2 | **IMPLEMENTED / VERIFIED (PR #25, #27, #28 SQUASH-MERGED; CRUD/PIN/DEVICE ENROLLMENT FUTURE)** |
 | **Identity** | Satellite Device Revocable Token | `profiles-and-devices.md` | Pending implementation | Auth unit tests | G2 | **NOT STARTED** |
 | **Models** | Local `llama.cpp` Vulkan GPU Offload | `runtime-and-models.md` | `llama_cpp.py` (b10936 RX 580) | Pytest mocks | G3 | **PARTIAL** (reference/mock evidence only until supported live/packaged verification exists) |
 | **Models** | D6 Controlled Manual Import (Bundles)| `runtime-and-models.md` | GGUF parser done; service gap | Import unit tests| G3 | **PARTIAL** |
 | **Models** | Default Single Resident Model | `runtime-and-models.md` | Router `--models-max 1` | Router tests | G3 | **VERIFIED** |
 | **Multimodal**| Image Attachment Ingestion & History | `multimodal-and-media.md` | Phase 8B verified | Attachment tests | G4 | **VERIFIED** |
-| **Persona** | Character Templates & Profile Instances| `characters-personality-and-emotion.md`| Pending DB schema | Model unit tests | G5 | **NOT STARTED** |
-| **Persona** | 8 Continuous Personality Traits | `characters-personality-and-emotion.md`| Pending trait engine | Prompt tests | G5 | **NOT STARTED** |
+| **Persona** | Character Templates & Profile Instances| `characters-personality-and-emotion.md`| Migration 009, models, service, REST API, templates seed, desktop selection & chat integration | Pytest character / Flutter character | G5 | **IMPLEMENTED / VERIFIED (PR #29 SQUASH-MERGED)** |
+| **Persona** | 8 Continuous Personality Traits & Studio| `characters-personality-and-emotion.md`| `compile_personality_modulation_block` (8 traits, 5 bands, Autonomy Guard, <=700 bound), Flutter Character Studio V1 (`PC-CLIENT-007`), draft/dirty state, sequential Save & Activate, snapshot PATCH reconciliation, chat identity visibility | 641 pytest (17 modulator), 278 flutter desktop, 248 web (16 files), Windows acceptance 14 PASS | G5 | **IMPLEMENTED / VERIFIED (BRANCH fd0c558; STAGE 5 DOCUMENTATION PREPARED; MERGE PENDING)** |
 | **Persona** | Persistent Bounded Mood & Decay | `characters-personality-and-emotion.md`| Pending mood service | State tests | G5 | **NOT STARTED** |
-| **Persona** | Immutable Neutral Assistant Fallback | `characters-personality-and-emotion.md`| Prompt baseline | Fallback tests | G5 | **PARTIAL** |
+| **Persona** | Immutable Neutral Assistant Fallback | `characters-personality-and-emotion.md`| Template 00000000-0000-0000-0000-000000000001, immutable fallback logic, UI fallback safeguards | Unit & API tests | G5 | **IMPLEMENTED / VERIFIED (PR #29 SQUASH-MERGED)** |
 | **Memory** | Profile & Character Scopes | `memory-and-personalization.md` | SQLite+FTS5 baseline exists | FTS5 tests | G6 | **PARTIAL** |
 | **Memory** | Selective Automatic Memory Extraction | `memory-and-personalization.md` | Pending policy engine | Extraction tests | G6 | **NOT STARTED** |
 | **Memory** | Temporary Memory Validity & Expiry | `memory-and-personalization.md` | Pending schema columns | Expiry tests | G6 | **NOT STARTED** |
@@ -60,12 +60,12 @@
 ## 2. Release Blocker Audit
 
 - [x] **M1 Flutter Scaffolding:** Flutter Desktop app foundation operational, connecting to Local AI Runtime, delivered via PR #23 (commit `7c1d1a2ddb5c57ddaae9bbacbcab2e25f9938fe1`) with all 193 workspace tests, 0 analyzer issues, Win32 debug build, and hosted PR CI passed.
-- [ ] **M2 Host Launch & Supervision (PC-HOST-001):** Proved working with single-instance kernel locking, detached rotating logging, process provenance, and crash survival.
+- [x] **M2 Host Launch & Supervision (PC-HOST-001):** Proved working with single-instance kernel locking, detached rotating logging, process provenance, and crash survival (delivered via PR #24, commit `d0f96fc`).
 - [ ] **M2 Host Lifecycle & Autostart (PC-HOST-005 / PC-HOST-002):** Proved working with secure graceful full exit, model process draining, and login autostart for runtime and Flutter.
 - [ ] **M2 Native Desktop Notifications (PC-HOST-003):** Proved working without open browser tab.
-- [ ] **M2 Multi-Profile Migration & G2 Acceptance:** Batch A schema and Batch B session/ownership isolation were implemented and locally verified. Independent delivery gates, hosted PR CI and Windows/Desktop/browser manual acceptance remain pending; full Profile CRUD, PIN/device enrollment and deletion lifecycle remain future work.
+- [ ] **M2 Multi-Profile Migration & G2 Acceptance:** Batch A schema (PR #25) and Batch B session/ownership isolation (PR #27, PR #28) squash-merged to develop. Desktop Profile CRUD UI, PIN challenge/device enrollment, and final G2 manual acceptance remain planned.
 - [ ] **M2 D6 Model Import:** Proved working with GGUF + mmproj paired bundle.
-- [ ] **M3 Character Studio & 8 Traits:** Proved modulating prompt without functional corruption.
+- [ ] **M3 Character Studio & 8 Traits:** Batch A foundation delivered (PR #29). Batch B 8-trait modulator and immersive Studio V1 implemented, verified, and provisionally closed on branch `feature/m3-character-studio-personality-b` (commit `fd0c558`), awaiting draft PR and squash-merge.
 - [ ] **M3 Persistent Mood:** Proved surviving restart with natural decay.
 - [ ] **M3 Memory & Scheduling:** Proved auto-extraction and alarm dispatch.
 - [ ] **M4 Voice Pipeline:** Proved live spoken turn with instant barge-in cancellation.

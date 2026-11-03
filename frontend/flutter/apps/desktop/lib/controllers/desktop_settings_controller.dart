@@ -110,6 +110,18 @@ class DesktopSettingsController extends ChangeNotifier {
     }
   }
 
+  Future<bool> Function(DesktopNavDestination from, DesktopNavDestination to)? navigationGuard;
+
+  Future<bool> requestDestination(DesktopNavDestination destination) async {
+    if (_currentDestination == destination) return true;
+    if (navigationGuard != null) {
+      final allowed = await navigationGuard!(_currentDestination, destination);
+      if (!allowed) return false;
+    }
+    setDestination(destination);
+    return true;
+  }
+
   void setDestination(DesktopNavDestination destination) {
     if (_currentDestination != destination) {
       _currentDestination = destination;

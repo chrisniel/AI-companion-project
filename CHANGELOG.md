@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added — M3: Character Studio & Personality Prompt Modulator (Batch B)
+
+- **8-Continuous-Trait Personality Prompt Modulator (`PC-CHAR-002`)**:
+  - Implemented `compile_personality_modulation_block()` in `backend/app/services/character_service.py` mapping 8 continuous personality traits (0–100) across 5 calibrated behavioral bands (Very Low 0–19, Low 20–39, Balanced 40–59, High 60–79, Very High 80–100) into deterministic prompt instructions.
+  - Always emits four paired directive lines covering all eight traits (Tone, Expression, Delivery, Register), including balanced trait-band clauses.
+  - Implemented four prioritized interaction dynamics: Guarded Banter / Tsundere, Shy Devotion / Dandere, Stoic Care / Kuudere, and Analytical Precision.
+  - Enforced mandatory Autonomy Guard whenever `affection >= 80` or preset is `yandere` ("- Autonomy Guard: Express devotion supportively; never use coercion, possessiveness, exclusivity, manipulation, or dependency claims.").
+  - Enforced strict $\le 700$ characters length invariant (`MODULATION_BLOCK_MAX_CHARS = 700`), with mathematically conservative candidate maximum $\le 695$ characters confirmed by sampled test combinations.
+  - Added pre-escaping bounding for user persona fields (`system_prompt` $\le 1,200$ chars, `lore` $\le 1,600$ chars) on word boundaries before XML-delimiter escaping inside lower-trust `<character_persona>` turn block.
+- **Immersive Character Studio V1 (`PC-CLIENT-007`)**:
+  - Built full-window immersive Character Studio in Flutter Desktop (`screens/studio_screen.dart`) replacing static forms with a character customization experience.
+  - Added centered Character Showcase Stage (`character_showcase_stage.dart`) with transparent 2D character PNG portraits, on-screen zoom toolbar ($1.0\times..2.0\times$), pan/drag inspection, and procedural avatar fallback.
+  - Implemented atmospheric Studio Backdrop Layer (`studio_backdrop_layer.dart`) supporting 4 environments (`Cozy Studio`, `Cyber Lounge`, `Twilight Balcony`, `Minimalist Vault`) with procedural gradient fallback.
+  - Added translucent side dock panels: Left Library Panel with category browsing of Starter Templates, System Fallback, and My Characters; Right Inspector Panel with 8 trait sliders, per-trait reset, preset chips, dynamic "Custom" preset chip, backdrop selector, and persona fields.
+  - Implemented sequential "Save & Activate" workflow in `DesktopStudioController`: saves draft via `PATCH /api/v1/characters/instances/{id}`, reconciles snapshot response, and sequentially activates the character via `PUT /api/v1/characters/active`.
+  - Added single-flight mutation tokens, session fencing across profile switches, dirty draft tracking, unsaved changes discard confirmation dialogs, and snapshot-aware uncertain write reconciliation.
+  - Established documented 3D renderer boundary abstraction in `character_stage_presenter.dart` isolating 2D sprite rendering from future 3D/glTF mesh renderers.
+- **Desktop Chat Character Visibility & Turn Binding**:
+  - Implemented dual-indicator chat header pills (`This Conversation: [Name]` and `New Conversations: [Name]`) and history drawer character badges.
+  - Corrected empty conversation reuse: an untouched empty conversation is reusable only when its existing Character binding matches the intended Character; if the Character differs, the client creates a new conversation with the intended binding, preserving existing threads without silent rebinding.
+  - Resolved character names truthfully from instance cache and neutral fallback.
+- **Verification & Acceptance**:
+  - Author-reported local automated tests passing: 641 backend pytest (including 17 tests in `test_character_personality_modulator.py`), 278 Flutter desktop tests, 248 React web tests across 16 test files, 0 Dart analyze warnings, and 0 Git diff whitespace errors.
+  - Independent Implementation Gate review approved at commit `fd0c558`.
+  - Human Windows Desktop manual acceptance confirmed across 14 checkpoints by Chris (Test 10 confirmed after acceptance correction).
+  - Hosted PR CI Run 41638166724 passed 100% across all 7 jobs at PR candidate checkpoint `d50edd4`.
+  - Stage 7 Combined Independent Documentation/Closure/PR Review approved; Stage 8 final pre-merge closure reconciliation completed on branch; PR #30 ready for human squash merge; post-merge integration CI and wider M2/M3 capabilities remain planned. Execution evidence is tracked in [archived branch task](docs/01_Tracking/archive/task-feature-m3-character-studio-personality-b.md).
+
 ### Fixed — Windows acceptance inspection budget
 
 - Gave real-process launch and stale-lock recovery acceptance fixtures a bounded 15-second CIM inspection budget for shared runners. Production deadlines, provenance validation and dedicated timeout regressions remain unchanged.

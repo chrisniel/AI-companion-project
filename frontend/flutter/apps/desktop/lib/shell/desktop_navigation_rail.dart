@@ -107,7 +107,7 @@ class DesktopNavigationRail extends StatelessWidget {
                     destination: destination,
                     isSelected: isSelected,
                     isCollapsed: isCollapsed,
-                    onTap: () => controller.setDestination(destination),
+                    onTap: () => controller.requestDestination(destination),
                   );
                 }).toList(),
               ),
