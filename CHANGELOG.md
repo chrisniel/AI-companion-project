@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Changed — Autonomous Delivery Workflow Reform (S1 Governance Revision)
+
+- Replaced the mandatory ten-stage engineering delivery lifecycle with four cohesive phases (**Phase 1: Plan and Authorization**, **Phase 2: Autonomous Implementation and Verification**, **Phase 3: Documentation, Closure, and Draft PR**, and **Phase 4: Combined Independent Review and Human Merge**) in [`AGENTS.md`](AGENTS.md) and [`docs/06_Guides/DELIVERY_WORKFLOW.md`](docs/06_Guides/DELIVERY_WORKFLOW.md).
+- Adopted agent-neutral governance terminology replacing AI vendor hardcoding with four distinct operational roles: Human Owner, Implementing Agent, Independent Reviewer, and CI System.
+- Established a four-tier Risk-Based Supervision Matrix (**Level A — Routine Autonomous**, **Level B — Planned Autonomous**, **Level C — Sensitive Design**, and **Level D — Human-Controlled Operations**) targeting 1 human review for routine deliveries and 2 human reviews for substantial deliverables.
+- Enforced scope-based, agent-agnostic Git mutation permissions granted by the Human Owner for the dedicated feature branch, preserving exclusive human authority over repository merges, protected branches, and destructive operations.
+- Eliminated intermediate implementation review stops between implementation and documentation for ordinary authorized deliveries, enabling autonomous continuation from approved plan to complete review package.
+- Aligned [`docs/02_Planning/02_Templates/implementation-plan-template.md`](docs/02_Planning/02_Templates/implementation-plan-template.md) with Phase 1 plan requirements and genuine stop conditions.
+
 ### Added — M3: Character Studio & Personality Prompt Modulator (Batch B)
 
 - **8-Continuous-Trait Personality Prompt Modulator (`PC-CHAR-002`)**:

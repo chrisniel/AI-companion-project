@@ -1,12 +1,14 @@
 # Implementation Planning Directory (`docs/02_Planning/`)
 
-> **Directory Role:** Implementation planning hub for the AI Companion project. Houses the canonical Master Planning Spine, active feature implementation plans, standard planning templates, and historical planning archives.  
-> **Status:** Active Canonical  
+> **Directory Role:** Implementation planning hub for the AI Companion project. Houses the canonical Master Planning Spine, feature implementation plans, standard planning templates, and historical planning archives.
+> **Status:** Active Canonical
+> **Workflow Authority:** Governed by the Four-Phase Engineering Delivery Lifecycle in [`docs/06_Guides/DELIVERY_WORKFLOW.md`](../06_Guides/DELIVERY_WORKFLOW.md) and [`AGENTS.md`](../../AGENTS.md).
 > **Authority Precedence:**
 > 1. **System Architecture:** [`docs/04_Architecture/SYSTEM_BASELINE.md`](../04_Architecture/SYSTEM_BASELINE.md) and canonical domain specifications.
 > 2. **Master Planning Spine:** [`docs/02_Planning/00_Master/`](./00_Master/) owns release milestones, work breakdown, backlog, and decision tracking.
-> 3. **Active Sprint Execution State:** [`docs/01_Tracking/task.md`](../01_Tracking/task.md) owns the immediate in-flight task tracking.
-> 4. **Feature Implementation Plans:** Specific feature plans in `01_Plans/` control step-by-step logic during approved implementation passes.
+> 3. **Shared Milestone State:** [`docs/01_Tracking/task.md`](../01_Tracking/task.md) owns shared milestone and integration state on `develop`/`master`.
+> 4. **Branch Execution State:** Dedicated branch tasks in [`docs/01_Tracking/active/`](../01_Tracking/active/README.md) own in-flight branch execution state.
+> 5. **Feature Implementation Plans:** Specific feature plans in [`01_Plans/`](./01_Plans/README.md) control step-by-step logic during approved implementation passes.
 
 ---
 
@@ -31,9 +33,9 @@ The Master Planning Spine is the single operational authority for release delive
 ```text
 docs/02_Planning/
 ├── 00_Master/              # Canonical Master Planning Spine (active authority)
-├── 01_Plans/               # Active feature implementation plans (per-feature execution)
+├── 01_Plans/               # Feature implementation plans (per-feature execution)
 ├── 02_Templates/           # Standard implementation plan and RFC templates
-├── 03_Archive/             # Completed feature plans and historical planning records
+├── 03_Archive/             # Completed historical planning records
 ├── phase-08/               # Completed Phase 8 planning hub and delivery records (reference)
 ├── post-v1/                # Historical post-V1 design notes (superseded by 00_Master/BACKLOG.md)
 ├── ROADMAP.md              # Historical milestone roadmap (superseded by 00_Master/SPRINT_ROADMAP.md)
@@ -42,17 +44,15 @@ docs/02_Planning/
 
 ---
 
-## 3. Active Plans (`01_Plans/`)
+## 3. Feature Plans (`01_Plans/`)
 
-Active, approved implementation plans reside in [`01_Plans/`](./01_Plans/). Each plan is scoped to a specific subsystem or cohesive feature batch, following the standard template in [`02_Templates/implementation-plan-template.md`](./02_Templates/implementation-plan-template.md).
-
-*(Note: Execution is currently paused after Phase 8 verification while the documentation and delivery workflow canonicalization completes; no active feature plan is in flight.)*
+Implementation plans reside in [`01_Plans/`](./01_Plans/README.md). Each plan is scoped to a specific subsystem or cohesive feature batch, following the standard template in [`02_Templates/implementation-plan-template.md`](./02_Templates/implementation-plan-template.md) and the four-phase workflow in [`docs/06_Guides/DELIVERY_WORKFLOW.md`](../06_Guides/DELIVERY_WORKFLOW.md).
 
 ---
 
 ## 4. Templates (`02_Templates/`)
 
-- [`02_Templates/implementation-plan-template.md`](./02_Templates/implementation-plan-template.md): Required 6-section template for drafting new feature implementation plans.
+- [`02_Templates/implementation-plan-template.md`](./02_Templates/implementation-plan-template.md): Standard template for authoring feature implementation plans under Phase 1.
 
 ---
 

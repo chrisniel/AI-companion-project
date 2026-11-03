@@ -5,7 +5,7 @@ Template Component: Docs_ProjectWorkflowStarterKit_v2.0
 These rules establish the master repository-wide governance contract and operational baseline for AI-assisted engineering across the AI Companion project.
 
 ### Core Governance Hierarchy
-1. Antigravity / Gemini system requirements
+1. Host environment and system requirements
 2. Repository ROOT `AGENTS.md` (authoritative across the entire repository)
 3. Valid scoped/nested repository agent rules, where supported
 4. Explicit current-task human authorization and constraints
@@ -36,7 +36,12 @@ For comprehensive procedural details on delivery gates, pull requests, walkthrou
   - **Supported Web Client & Dev Harness:** React 19, TypeScript 5.8, Vite 6, Tailwind CSS 4 (`frontend/web/`).
   - **Mobile Companion Prototype:** Kotlin, Jetpack Compose (`android/`, V1 follow-on).
 - **Execution Mode:** Read-only by default; inspect and report unless the user explicitly authorizes specific file edits or command execution.
-- **Git Authority:** Default read-only for AI agents. Chris alone executes all Git mutations (`add`, `commit`, `push`, `branch`, `merge`, `rebase`, `stash`, `tag`, `PR`) unless explicit, task-bounded mutation authorization is granted by Chris for the active task. Skills cannot self-authorize Git mutations.
+- **Git Authority:** Default read-only for AI agents. The Human Owner retains exclusive authority over repository mutations, destructive Git operations, and final merges (`develop` and `master`). For a named delivery scope, the Human Owner may grant the Implementing Agent task-bounded Git permissions on a dedicated feature branch. Skills cannot self-authorize Git mutations.
+- **Governance Roles:**
+  - **Human Owner:** Authorizes product direction, significant scope, material design decisions, sensitive operations, and final merges.
+  - **Implementing Agent:** Any authorized AI coding agent that plans, implements, tests, documents, and prepares a delivery.
+  - **Independent Reviewer:** An appropriate reviewer who did not author the implementation under review (another AI agent or human).
+  - **CI System:** Executes automated verification and supplies evidence; does not grant implementation or merge approval.
 - **Protected Boundaries:** Never expose secrets; preserve uncommitted user work; do not alter Git/LFS configurations, remotes, external services, or dependencies without an approved task-specific plan. `SYSTEM_BASELINE.md` and canonical domain architecture own normative truth.
 
 ---
@@ -103,76 +108,67 @@ Relevant Active Implementation Plan (in docs/02_Planning/01_Plans/)
 
 ---
 
-## 4. Engineering Delivery Lifecycle & Quality Gates
+## 4. Four-Phase Engineering Delivery Lifecycle & Quality Gates
 
-All non-trivial implementation across Gemini, Codex, and other AI implementation agents must follow the canonical delivery lifecycle defined in [`docs/06_Guides/DELIVERY_WORKFLOW.md`](docs/06_Guides/DELIVERY_WORKFLOW.md):
+All non-trivial implementation across any authorized implementing agent must follow the canonical four-phase delivery lifecycle defined in [`docs/06_Guides/DELIVERY_WORKFLOW.md`](docs/06_Guides/DELIVERY_WORKFLOW.md):
 
 ```text
-PLAN
-  │
-  ▼
-PLAN APPROVAL
-  │
-  ▼
-IMPLEMENTATION
-  │
-  ▼
-RISK-BASED INDEPENDENT IMPLEMENTATION REVIEW
-  │
-  ▼
-DOCUMENTATION + PROVISIONAL CLOSURE
-  │
-  ▼
-DRAFT PR
-  │
-  ▼
-COMBINED INDEPENDENT DOCUMENTATION/CLOSURE/PR REVIEW
-  │
-  ▼
-FINAL PRE-MERGE CLOSURE RECONCILIATION
-  │
-  ▼
-HUMAN SQUASH MERGE
-  │
-  ▼
-READ-ONLY POST-MERGE VERIFICATION
+PHASE 1: PLAN AND AUTHORIZATION
+  │  (Scope, canonical alignment, risk level, architecture, verification strategy)
+  ▼  [Gate: Human Plan Approval for substantial / sensitive design]
+PHASE 2: AUTONOMOUS IMPLEMENTATION AND VERIFICATION
+  │  (Surgical implementation, tests, static analysis, contract drift, automated fixes)
+  ▼  [Prerequisite: All automated checks pass cleanly before Phase 3]
+PHASE 3: DOCUMENTATION, CLOSURE, AND DRAFT PR
+  │  (Canonical doc sync, tracking, changelog, walkthrough if complex, push, draft PR)
+  ▼  [Output: Complete delivery package presented for review]
+PHASE 4: COMBINED INDEPENDENT REVIEW AND HUMAN MERGE
+  │  (Independent review of diff, docs, tests, and CI; focused corrections on same branch)
+  ▼  [Gate: Human Owner squash merge; read-only post-merge verification]
 ```
 
 ### Core Lifecycle Governance Principles
-- **Nontrivial Implementation Requires Approved Plan:** No production code without an explicitly approved implementation plan.
-- **Risk-Scaled Independent Review:** Review effort scales with change risk. High-risk, architectural, schema, or security-sensitive changes retain a dedicated independent implementation review before documentation begins.
-- **Coordinated Documentation & Provisional Closure:** Documentation reconciliation and provisional closure tracking may be prepared together once implementation is approved.
-- **No Self-Verification:** Authoring agents **MUST NOT** self-certify their own quality gates (Implementation, Documentation, Closure, or PR approval). Agents halt after mechanical checks and present exact diffs and evidence for independent review.
-- **Explicit Task-Bounded Git Writes:** Git write operations default strictly to read-only. Within an explicitly authorized task, scoped branch commits and HTTPS pushes may be executed. Draft PR creation targeting `develop` may be authorized for the active task. Blanket merge, rebase, reset, force-push, or protected-branch mutation remains strictly prohibited.
-- **Human-Controlled Squash Merge:** The human repository owner (Chris) exclusively controls and executes the squash merge into `develop`.
-- **Single Delivery Branch:** One coherent branch owns the entire delivery lifecycle from plan through final pre-merge reconciliation.
-- **Read-Only Post-Merge Verification:** Post-merge verification is read-only by default, confirming that squash integration into `develop` succeeded without modifying repository files.
+- **Risk-Based Supervision:** Supervised by four portable delivery levels:
+  - **Level A — Routine Autonomous:** Low-risk mechanical changes and straightforward implementation under settled requirements. No mandatory separate plan ceremony; verified in one combined final review.
+  - **Level B — Planned Autonomous:** Substantial features within established architecture. Requires a written plan and human plan approval, followed by autonomous implementation, verification, documentation, closure, and one combined final review.
+  - **Level C — Sensitive Design:** High-impact changes (auth, authorization, Profile isolation, privacy, concurrency, public API, database/schema, material architecture). Requires explicit human approval of the material design before implementation, followed by autonomous execution within that approved boundary and independent final review.
+  - **Level D — Human-Controlled Operations:** Production deployments, production migration execution, destructive operations, secrets/signing key modifications, and irreversible external actions. Requires specific human authorization for the exact operation and environment; AI autonomy never overrides these controls.
+- **Autonomous Continuation within Scope:** Once the applicable Phase 1 plan gate is satisfied, the Implementing Agent continues automatically through Phase 2 (implementation & verification) and Phase 3 (documentation, closure, and draft PR) within its authorized scope without requiring micro-approvals for each implementation substep or ordinary in-scope bug fixes.
+- **Prerequisite Gate Before Documentation:** The Implementing Agent must complete implementation and its required automated verification before beginning canonical documentation and closure preparation.
+- **No Mid-Flight Implementation Stop:** Do not introduce a mandatory independent implementation-review stop between implementation and documentation for ordinary authorized deliveries. Escalate only for genuine stop conditions: material scope expansion, unapproved architectural decisions, security conflicts, or unresolvable test failures.
+- **No Self-Verification:** Implementing agents **MUST NOT** self-certify their own quality gates. Agents complete mechanical checks and present exact diffs, test evidence, documentation, and CI status to an Independent Reviewer.
+- **Agent-Agnostic Git Permissions:** Git write permissions belong to the human-approved delivery scope, not to an AI provider. When authorized for a named delivery, an Implementing Agent may branch, stage, commit, push, create/update draft PRs, and apply in-scope fixes on the feature branch. Direct protected-branch writes, merges, force-pushes, and destructive history changes remain strictly prohibited.
+- **Human-Controlled Squash Merge:** The Human Owner exclusively controls and executes the squash merge into `develop`.
+- **Single Delivery Branch:** One coherent branch owns the entire delivery lifecycle from Phase 1 through Phase 4 pre-merge reconciliation.
+- **Read-Only Post-Merge Verification:** Post-merge verification is read-only by default, confirming that squash integration into `develop` succeeded without modifying repository files. Never equate pre-merge CI with post-merge CI.
 - **No-Stale-Documentation Rule:** Never create follow-up cleanup commits solely to replace historical branch HEADs with squash SHAs, update historical PR checkpoints, add CI run numbers, or alter historically accurate pending statuses.
 - **Subsystem Batching:** Scope tasks to the largest tightly related batch that preserves reliable first-pass accuracy and reviewability. Avoid microscopic over-ceremony for trivial fixes.
 
 ---
 
-## 5. SHARED MILESTONE VS BRANCH TRACKING
+## 5. Shared Milestone vs Branch Tracking
 
 - **Shared `task.md`:** Tracks milestone/integration direction. Does not track every temporary branch heartbeat. Should avoid volatile "PR pending", "current HEAD", and temporary branch-state wording.
 - **Branch active task:** Tracks plan execution, implementation, verification, documentation, independent review, closure, blockers, and relevant evidence.
-- **One coherent delivery branch owns:** The entire delivery lifecycle from `PLAN` through `FINAL PRE-MERGE CLOSURE RECONCILIATION`. Do not create new branches merely because delivery moves between stages.
+- **One coherent delivery branch owns:** The entire delivery lifecycle from Phase 1 through Phase 4 pre-merge review. Do not create new branches merely because delivery moves between workflow phases.
 
-## 5.1 SAME-BRANCH CLOSURE & POST-MERGE RECONCILIATION
+## 5.1 Same-Branch Closure & Post-Merge Reconciliation
 
-- Planning, implementation, verification, review fixes, documentation, draft PR, and pre-merge closure reconciliation normally stay on the same short-lived branch.
-- Before final merge, reconcile branch-owned tracking so the delivery does not knowingly land with stale execution state.
-- Archive the branch active task on that same branch under `docs/01_Tracking/archive/` when closure has been independently verified.
+- Planning, implementation, verification, review fixes, documentation, draft PR, and pre-merge closure reconciliation stay on the same short-lived branch.
+- In Phase 3, reconcile branch-owned tracking so the delivery does not knowingly land with stale execution state.
+- Archive the branch active task on that same branch under `docs/01_Tracking/archive/` as part of closure preparation.
 - Do not create a follow-up branch merely to replace: pending, uncommitted, current HEAD, awaiting review, PR pending, merge pending, or similar transient wording.
 - Historical records preserve point-in-time truth. Use labels such as "implementation checkpoint", "reviewed revision", or "publication checkpoint" rather than claiming a SHA is eternally current.
 
-## 5.2 POST-MERGE INTEGRATION & CI EVIDENCE
+## 5.2 Post-Merge Integration & CI Evidence
 
-- After merge, perform read-only integration verification. Verify develop contains the expected squash/integration.
+- After merge, perform read-only integration verification. Verify `develop` contains the expected squash commit.
 - Do NOT create a cleanup branch solely to add a merge SHA, post-merge CI result, or replace harmless historical pending-at-the-time wording.
 - Only create a corrective delivery if current canonical/master planning is materially false, dependent work is blocked, or a real integration defect exists.
 - **CI is evidence, not shared task state.** Record separately: local verification, PR/candidate CI, post-merge/integration CI, Golden release verification.
 - Never infer one from another. A delivery may truthfully record "PR-head CI PASSED, Post-merge CI NOT VERIFIED" without reopening the delivery solely to update that historical fact.
+
+---
 
 ## 6. Single Source of Truth & Stable Tense
 
@@ -204,11 +200,24 @@ READ-ONLY POST-MERGE VERIFICATION
 
 ## 9. Git Authority & External Boundaries
 
-- **Default Read-Only for AI Agents:** Git operations default strictly to read-only (`git status`, `git diff`, `git log`, `git show`, `git rev-parse`, `git branch --show-current`, read-only history/inspection). Agents MUST NOT execute `git add`, `commit`, `push`, `branch`, `merge`, `checkout`, `switch` (altering state), `tag`, `stash`, `reset`, `restore`, worktree mutation, or PR commands unless Chris explicitly authorizes specific mutations for the current task.
-- **Git Mutation Authorization:** Chris owns Git writes. If Chris provides explicit current-task authorization (e.g. narrow: *"commit these changes"* or bounded: *"create branch, commit approved changes, push"*), agents may execute ONLY the authorized operations within that explicit boundary. Generic skill workflows or templates never constitute Git authorization. If unauthorized, prepare proposed commands and Conventional Commit messages for Chris.
+- **Default Read-Only for AI Agents:** Git operations default strictly to read-only (`git status`, `git diff`, `git log`, `git show`, `git rev-parse`, `git branch --show-current`, read-only history/inspection). Agents MUST NOT execute `git add`, `commit`, `push`, `branch`, `merge`, `checkout`, `switch` (altering state), `tag`, `stash`, `reset`, `restore`, worktree mutation, or PR commands unless the Human Owner explicitly authorizes specific mutations for the current task.
+- **Scope-Based Mutation Authorization:** The Human Owner owns Git writes. For an authorized delivery scope, the Human Owner may grant the Implementing Agent permission to:
+  1. Create and switch to the dedicated feature branch from a verified clean baseline.
+  2. Stage authorized changes.
+  3. Create Conventional Commits.
+  4. Push commits to the authorized remote feature branch.
+  5. Create or update one draft PR against `develop`.
+  6. Perform normal in-scope defect fixes without requesting repeated command-by-command approval.
+- **Strictly Prohibited Git Operations:** The following remain strictly prohibited for AI agents without separate explicit authorization:
+  - Direct protected-branch writes (`develop`, `master`).
+  - Squash merges, rebase merges, or other merges.
+  - Force pushes, rebases, resets, or destructive history mutations.
+  - Modifying repository security settings, branch protections, or CI workflows outside authorized tasks.
+  - Secret, credential, production, or sensitive operational actions.
+- **Permissions Non-Transferability:** Git permissions granted for a specific delivery scope never transfer silently to another repository, branch, unrelated task, or external service. Generic skill workflows or templates never constitute Git authorization.
 - **Git Mutation Clarification:** `git checkout <ref> -- <path>` and `git restore ...` are Git mutations and MUST NOT be used by agents without authorization. Historical content must be read using `git show` and written through normal file editing only.
-- **Git Branch Preflight:** Before non-trivial edits, inspect the current Git branch (`git branch --show-current`). If on `develop` or `master`, STOP before editing. Recommend an appropriate task branch, ask Chris to create/switch/push it (or confirm authorization), and resume only after confirmation.
-- **Stop After Verification:** Unless Git commits are explicitly authorized, provide a clean Conventional Commit message proposal and stop for human execution.
+- **Git Branch Preflight:** Before non-trivial edits, inspect the current Git branch (`git branch --show-current`). If on `develop` or `master`, STOP before editing. Recommend an appropriate task branch, confirm authorization, and resume only on the authorized branch.
+- **Stop After Verification:** In Phase 3 / Phase 4 handoff, provide clean Conventional Commit proposals, PR diff summary, and verification evidence, and stop for independent review.
 - **Read-Only External Environment:** Treat system paths, external repositories, and package caches outside the workspace as strictly read-only.
 - **Model Storage Policy:** Git repository and LFS pointers reside on GitHub; private Hugging Face dataset stores LFS model binaries. Do not alter Git/LFS configurations without explicit authorization.
 
@@ -229,17 +238,17 @@ Skills and plugins are procedural execution aids, subordinate to this master rep
   - Skills may never self-authorize Git mutations.
 - **Skill Non-Expansion Principle:**
   - An activated skill cannot broaden task scope beyond the explicit user prompt and authorized path boundaries.
-  - Skills must strictly respect task file allowlists, task ignore boundaries, approved/frozen architecture decisions, current lifecycle stage, and explicit `STOP` boundaries.
+  - Skills must strictly respect task file allowlists, task ignore boundaries, approved/frozen architecture decisions, current workflow phase, and explicit `STOP` boundaries.
   - Procedural advice in skills to "also refactor", "also write a plan", "also normalize docs", or "also finish the branch" does not authorize those actions.
 - **Task Mode Adaptation:**
   Repository tasks may declare an operational mode, or one may be inferred from prompt intent. Skills must adapt their behavior accordingly:
   - `AUDIT` / `REVIEW` / `VERIFICATION`: Strictly read-only; no file modifications or system mutations unless explicitly authorized.
   - `CORRECTION`: Surgical repair only; make only changes necessary to resolve and verify the identified defect. Do not broaden into unrelated cleanup, redesign, refactoring, or documentation normalization. Do not automatically brainstorm replacement designs or generate new plan suites.
-  - `PLANNING` / `OPEN DESIGN`: Brainstorming and plan authoring are permitted.
-  - `IMPLEMENTATION`: Execute the approved design/plan. Do not reopen frozen architecture or ADR decisions without an explicit unresolved defect or human instruction.
+  - `PLANNING` / `OPEN DESIGN`: Brainstorming and plan authoring are permitted (Phase 1).
+  - `IMPLEMENTATION`: Execute the approved design/plan (Phase 2). Do not reopen frozen architecture or ADR decisions without an explicit unresolved defect or human instruction.
   - `DEBUGGING`: Systematically investigate root cause. Escalating from a bug fix to architectural redesign requires explicit human approval if outside current task scope.
-  - `DOCUMENTATION`: Update closest canonical owner; do not normalize unrelated files or create loose substitute docs.
-  - `CLOSURE`: Perform only closure actions defined by the active workflow/task. Do not automatically begin the next lifecycle stage.
+  - `DOCUMENTATION`: Update closest canonical owner (Phase 3); do not normalize unrelated files or create loose substitute docs.
+  - `CLOSURE`: Perform only closure actions defined by the active workflow/task (Phase 3). Do not automatically begin the next lifecycle stage or merge.
 - **Explicit Stop Boundaries:**
   - Directives such as `STOP`, `WAIT`, `PAUSE`, `AWAIT REVIEW`, `DO NOT CONTINUE`, or `DO NOT START NEXT STAGE` strictly terminate automatic skill chaining.
   - Continuous-execution skills (`executing-plans`, etc.) must halt at the declared boundary and present results for human review.
@@ -255,5 +264,5 @@ Skills and plugins are procedural execution aids, subordinate to this master rep
   - Skills performing broad repository scans (`rg --files`, documentation inventories) must first respect project-declared ignore boundaries (`docs/00_Drafts/`, `docs/07_Archive/`, `docs/01_Tracking/archive/`, historical trackers, generated artifacts).
   - Discoverable historical or scratch material must not be treated as current canonical truth.
 - **Independent Gates & No Self-Verification:**
-  - Where governance requires an independent gate or human approval (e.g. Implementation Gate, Documentation Gate, Closure Gate), authoring agents may run mechanical verification but **MUST NOT** self-certify or self-promote the task past that gate.
-  - Authoring agents stop after mechanical checks and submit diffs for independent human/reviewer evaluation.
+  - Where governance requires an independent gate or human approval (e.g. Plan Gate in Phase 1, Combined Review Gate in Phase 4), implementing agents may run mechanical verification but **MUST NOT** self-certify or self-promote the task past that gate.
+  - Implementing agents stop after mechanical checks and submit diffs for independent human/reviewer evaluation.
