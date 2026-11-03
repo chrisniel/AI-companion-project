@@ -1,6 +1,6 @@
 # M3 Batch B — Immersive Character Studio V1 & Personality Prompt Modulator (`PC-CLIENT-007`, `PC-CHAR-002`)
 
-> **Status:** IMPLEMENTATION — Plan Gate approved by Chris and independent review; executing Phase B.1–B.4 implementation (`STOP AT IMPLEMENTATION GATE`).
+> **Status:** IMPLEMENTATION COMPLETE — Awaiting Independent Implementation Review Gate (`STOP BOUNDARY`).
 > **Branch:** `feature/m3-character-studio-personality-b`
 > **Base:** `develop` @ `d22dd7e1dbbd0a50c9a4e6fd28ab5fbdbcce34de`
 > **Owner / Authorization:** Chris; M3 Batch B Plan Gate approved and implementation authorized 2026-11-03. Explicit Git write operations authorized on feature branch. Stop at Independent Implementation Review Gate.
@@ -15,8 +15,8 @@
 - [x] **Stage 1b — PLAN GATE CORRECTIONS (Rev 2):** Applied initial 4 Plan Gate design corrections + asset provenance at `50cf5ddca65d718d285f3b7f07e42d06bed6bda4`.
 - [x] **Stage 1c — FINAL PLAN GATE CORRECTIONS (Rev 3):** Resolved the remaining 2 technical blockers and 2 accuracy improvements in place on `feature/m3-character-studio-personality-b` at commit `1f283d64310268a77a721af5befaad72af922c1e`.
 - [x] **Stage 2 — PLAN APPROVAL:** Approved by Chris with three implementation conditions (Condition A: Prompt-Budget Evidence; Condition B: Final Assembled Prompt Safety; Condition C: Controlled Mutation Sequencing, Uncertain Results & Profile Isolation).
-- [ ] **Stage 3 — IMPLEMENTATION (`CURRENT STAGE`):** In progress across Phase B.1 (Backend Modulator), Phase B.2 (Controller & Stage Presenter), Phase B.3 (Studio UI & Shell Wiring), and Phase B.4 (Full Automated Regression).
-- [ ] **Stage 4 — INDEPENDENT IMPLEMENTATION REVIEW (`STOP BOUNDARY`):** Pending implementation completion.
+- [x] **Stage 3 — IMPLEMENTATION:** Completed across Phase B.1 (Backend Modulator), Phase B.2 (Controller & Stage Presenter), Phase B.3 (Studio UI & Shell Wiring), and Phase B.4 (Full Automated Regression). Commits: `3b62b95`, `1fb5beb`, `3e93dd8`.
+- [ ] **Stage 4 — INDEPENDENT IMPLEMENTATION REVIEW (`ACTIVE STOP BOUNDARY`):** Implementation and regression verification submitted for independent review.
 - [ ] **Stage 5 — DOCUMENTATION + PROVISIONAL CLOSURE:** Pending Implementation Gate approval.
 - [ ] **Stage 6 — DRAFT PR:** Pending authorization.
 - [ ] **Stage 7 — COMBINED INDEPENDENT DOCUMENTATION/CLOSURE/PR REVIEW:** Pending draft PR.
@@ -25,15 +25,31 @@
 
 ---
 
-## 2. Planned Batch B Scope Summary
+## 2. Completed Batch B Scope Summary
 
-- **`PC-CHAR-002` (Backend Personality Prompt Modulator):**
-  - [ ] Deterministic 8-trait (`0–100`) 5-band concise clause compiler, mandatory `Autonomy Guard` (`affection >= 80` / `yandere`), cross-trait interaction synthesis (`compile_personality_modulation_block`, `<= 695` chars worst-case $\le$ `MODULATION_BLOCK_MAX_CHARS = 700`), and pre-escaping turn-assembly bounding for `system_prompt` (`1,200`) and `lore` (`1,600`) in `backend/app/services/character_service.py`.
-  - [ ] Integration into `resolve_turn_persona_prompt()` inside `<character_persona>` while preserving `DEFAULT_PERSONA` safety precedence and keeping `Neutral Assistant` and legacy placeholders unmodulated.
-  - [ ] Unit, worst-case budget-limit, field-bounding, and autonomy-safety regression tests in `backend/tests/test_character_personality_modulator.py`.
-- **`PC-CLIENT-007` (Immersive Windows Desktop Character Studio V1):**
-  - [ ] `DesktopStudioController` (`desktop_studio_controller.dart`) with 5-state `StudioSessionStatus` machine (including immediate purge on unchanged-epoch `unauthorized`), separated `_sessionFenceId` / `_readGeneration` / serialized `_isMutating` concurrency, uncertain-write timeout reconciliation, and dirty-state protection.
-  - [ ] `CharacterStagePresenter` (`character_stage_presenter.dart`) & `CharacterShowcaseStage` (`character_showcase_stage.dart`) providing an unobstructed center portrait/archetype stage with zoom/pan controls and a clean boundary for future 3D/VRM rendering.
-  - [ ] `StudioBackdropLayer` (`studio_backdrop_layer.dart`) providing full-content-area project-original thematic background imagery (`ASSET_PROVENANCE.md`) with `StudioAtmospherePainter` procedural fallback and readability scrims.
-  - [ ] Translucent `SoftGlassPanel` docks (`StudioLibraryPanel` on left, `StudioInspectorPanel` on right with inline `Illustrative Style Summary` and scrollable large-text `lore`/`system_prompt` editors), post-rail responsive breakpoints (`>= 1120px`, `920px..1119px`, `< 920px`), and `DesktopShell` / `DesktopSettingsController` dirty-navigation guard wiring.
-  - [ ] Controller, concurrency/fencing, widget, breakpoint-boundary, `computeLuminance()` WCAG contrast, keyboard focus/text-scaling, and dirty-navigation tests (`desktop_studio_controller_test.dart`, `studio_screen_test.dart`, `desktop_shell_test.dart`).
+- **`PC-CHAR-002` (Backend Personality Prompt Modulator — commit `3b62b95`):**
+  - [x] Deterministic 8-trait (`0–100`) 5-band concise clause compiler, mandatory `Autonomy Guard` (`affection >= 80` / `yandere`), cross-trait interaction synthesis (`compile_personality_modulation_block`, `<= 695` chars worst-case $\le$ `MODULATION_BLOCK_MAX_CHARS = 700`), and pre-escaping turn-assembly bounding for `system_prompt` (`1,200`) and `lore` (`1,600`) in `backend/app/services/character_service.py`.
+  - [x] Integration into `resolve_turn_persona_prompt()` inside `<character_persona>` while preserving `DEFAULT_PERSONA` safety precedence and keeping `Neutral Assistant` and legacy placeholders unmodulated. Respectful, non-possessive wording for `yandere` preset.
+  - [x] Comprehensive unit, worst-case budget-limit, field-bounding, and autonomy-safety regression tests in `backend/tests/test_character_personality_modulator.py` (13 tests passing).
+- **`PC-CLIENT-007` (Immersive Windows Desktop Character Studio V1 — commits `1fb5beb`, `3e93dd8`):**
+  - [x] `DesktopStudioController` (`desktop_studio_controller.dart`) with 5-state `StudioSessionStatus` machine (including immediate fail-closed purge on unchanged-epoch `unauthorized`), separated `_sessionFenceId` / `_readGeneration` / serialized `_isMutating` concurrency, uncertain-write timeout (`408`) reconciliation, and dirty-state protection.
+  - [x] `CharacterStagePresenter` (`character_stage_presenter.dart`) & `CharacterShowcaseStage` (`character_showcase_stage.dart`) providing an unobstructed center portrait/archetype stage with zoom/pan controls, status badges, and a clean future-3D boundary.
+  - [x] `StudioBackdropLayer` (`studio_backdrop_layer.dart`) providing full-content-area project-original thematic background imagery (`assets/studio/`, `ASSET_PROVENANCE.md`) with procedural `StudioAtmospherePainter` fallback and contrast scrims.
+  - [x] Translucent `SoftGlassPanel` docks (`StudioLibraryPanel` on left, `StudioInspectorPanel` on right with inline `Illustrative Style Summary`, 8 continuous trait sliders, 8 presets, and scrollable large-text `lore`/`system_prompt` editors), post-rail responsive breakpoints (`>= 1120px`, `920px..1119px`, `< 920px`), and `DesktopShell` / `DesktopSettingsController` dirty-navigation guard wiring.
+  - [x] Comprehensive controller, concurrency/fencing, widget, breakpoint-boundary, `computeLuminance()` WCAG AA contrast (text $\ge 4.5:1$, controls $\ge 3.0:1$), keyboard focus/text-scaling, and dirty-navigation tests (`desktop_studio_controller_test.dart`, `studio_screen_test.dart`, `desktop_shell_test.dart`).
+
+---
+
+## 3. Automated Verification Evidence (Phase B.4)
+
+| Test Suite | Command | Result |
+| :--- | :--- | :--- |
+| **Backend Pytest** | `pytest backend/tests -q` | **637 passed, 1 warning (145.00s)** |
+| **OpenAPI Contract** | `python scripts/check_openapi_contract.py` | **PASSED (39 routes, all models verified)** |
+| **Dart OpenAPI Parity** | `python scripts/check_dart_openapi_parity.py --check` | **PASSED (22/22 DTO schemas, 29/18 covered routes)** |
+| **Flutter `companion_api`** | `flutter test packages/companion_api` | **PASSED (79/79 passed)** |
+| **Flutter `companion_design`** | `flutter test packages/companion_design` | **PASSED (18/18 passed)** |
+| **Flutter Desktop App** | `flutter test apps/desktop` | **PASSED (250/250 passed)** |
+| **Dart Static Analysis** | `dart analyze .` (in `frontend/flutter`) | **PASSED (0 issues found)** |
+| **React Web Harness** | `npm test -- --run` (in `frontend/web`) | **PASSED (16 test files, 248/248 passed)** |
+| **Git Whitespace** | `git diff --check` | **PASSED (0 errors)** |
