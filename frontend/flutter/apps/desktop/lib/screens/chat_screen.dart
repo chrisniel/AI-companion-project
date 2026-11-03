@@ -468,6 +468,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   isLoading: chatCtrl.isLoadingConversations,
                   errorMessage: chatCtrl.conversationError,
                   onRetry: () => chatCtrl.loadConversations(),
+                  characterNameResolver: (conv) => chatCtrl.getConversationCharacterName(conv),
                   isActionsDisabled: !chatCtrl.isConnected,
                   isSwitchingDisabled: chatCtrl.isGenerating,
                 ),
@@ -488,6 +489,9 @@ class _ChatScreenState extends State<ChatScreen> {
     final statusColor = _statusColor(chatCtrl.connectionStatus, ext);
     final badgeColor = _modelBadgeColor(chatCtrl.modelStateCategory, ext);
     final badgeIcon = _modelBadgeIcon(chatCtrl.modelStateCategory);
+    final thisConvName = chatCtrl.getConversationCharacterName(chatCtrl.activeConversation);
+    final newConvName = chatCtrl.getActiveProfileCharacterName();
+    final bool sameCharacter = (thisConvName == newConvName);
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -525,11 +529,90 @@ class _ChatScreenState extends State<ChatScreen> {
                 ],
               ),
               const SizedBox(height: CompanionSpacing.xs),
-              Text(
-                'Conversational workspace',
-                style: CompanionTypography.bodySmall.copyWith(
-                  color: ext?.textSecondary,
-                ),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: CompanionSpacing.sm,
+                runSpacing: 4,
+                children: [
+                  Text(
+                    'Conversational workspace',
+                    style: CompanionTypography.bodySmall.copyWith(
+                      color: ext?.textSecondary,
+                    ),
+                  ),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 240),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: (ext?.accent ?? CompanionColors.lightAccent).withValues(alpha: 0.1),
+                        borderRadius: CompanionRadius.borderSm,
+                        border: Border.all(
+                          color: (ext?.accent ?? CompanionColors.lightAccent).withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.face_rounded,
+                            size: 12,
+                            color: ext?.accent ?? CompanionColors.lightAccent,
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              'This Conversation: $thisConvName',
+                              style: CompanionTypography.caption.copyWith(
+                                color: ext?.textPrimary,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 11,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (!sameCharacter)
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 240),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.04),
+                          borderRadius: CompanionRadius.borderSm,
+                          border: Border.all(
+                            color: ext?.borderSubtle ?? Colors.transparent,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.add_circle_outline_rounded,
+                              size: 12,
+                              color: ext?.textSecondary,
+                            ),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                'New Conversations: $newConvName',
+                                style: CompanionTypography.caption.copyWith(
+                                  color: ext?.textSecondary,
+                                  fontSize: 11,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ],
           ),
@@ -717,13 +800,19 @@ class _ChatScreenState extends State<ChatScreen> {
     CompanionThemeExtension? ext,
     DesktopChatController chatCtrl,
   ) {
+    final thisConvName = chatCtrl.getConversationCharacterName(chatCtrl.activeConversation);
+    final newConvName = chatCtrl.getActiveProfileCharacterName();
+    final bool sameCharacter = (thisConvName == newConvName);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return SoftGlassPanel(
-      padding: const EdgeInsets.all(CompanionSpacing.xxl),
+      padding: const EdgeInsets.all(CompanionSpacing.lg),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
             children: [
               Container(
                 width: 56,
@@ -754,6 +843,52 @@ class _ChatScreenState extends State<ChatScreen> {
                   color: ext?.textSecondary,
                 ),
                 textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: CompanionSpacing.md),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: CompanionSpacing.md,
+                  vertical: CompanionSpacing.sm,
+                ),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.black.withValues(alpha: 0.03),
+                  borderRadius: CompanionRadius.borderMd,
+                  border: Border.all(
+                    color: ext?.borderSubtle ?? Colors.transparent,
+                  ),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.face_rounded,
+                          size: 14,
+                          color: ext?.accent ?? CompanionColors.lightAccent,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Character: $thisConvName',
+                          style: CompanionTypography.bodySmall.copyWith(
+                            color: ext?.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (!sameCharacter) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Profile active Character for new chats: $newConvName',
+                        style: CompanionTypography.caption.copyWith(
+                          color: ext?.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
               if (chatCtrl.modelStateCategory == ModelRuntimeStateCategory.modelSelectionRequired) ...[
                 const SizedBox(height: CompanionSpacing.lg),
@@ -804,7 +939,8 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildMessageList(

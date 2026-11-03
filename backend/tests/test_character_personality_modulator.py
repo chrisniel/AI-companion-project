@@ -1,5 +1,6 @@
 import uuid
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.character_instance import CharacterInstance
@@ -28,7 +29,10 @@ from app.services.character_service import (
     _escape_delimiters,
     compile_personality_modulation_block,
     create_character_instance,
+    reset_to_neutral_assistant,
+    resolve_conversation_character,
     resolve_turn_persona_prompt,
+    select_active_character,
 )
 
 
@@ -585,3 +589,122 @@ async def test_assembled_system_prompt_context_budgeting_in_4096_context_window(
     heuristic_system_tokens = _estimate_tokens(system_msg.content)
     assert heuristic_system_tokens == max(1, system_chars // 4)
     assert prompt_tokens < context_capacity
+
+
+@pytest.mark.asyncio
+async def test_end_to_end_character_activation_chat_conversation_and_title_retention(
+    test_session: AsyncSession,
+    profile_session: ProfileSession,
+):
+    """Trace end-to-end:
+    Studio Save -> Character Instance persistence -> Profile active Character ->
+    Chat new conversation -> Conversation Character binding -> resolve_turn_persona_prompt ->
+    deterministic title retention without historical mutation.
+    """
+    # 1. Studio Save: Create character instance with custom traits
+    traits = CharacterTraitVector(
+        warmth=90,
+        teasing=75,
+        guardedness=20,
+        directness=60,
+        expressiveness=85,
+        affection=70,
+        formality=25,
+        verbosity=60,
+    )
+    instance = await create_character_instance(
+        test_session,
+        profile_session,
+        CharacterInstanceCreate(
+            template_id="warm-companion",
+            preset_id="tsundere",
+            name="Aria",
+            summary="A lively companion.",
+            system_prompt="Be sharp at first but genuinely supportive.",
+            lore="Grew up by the sea in a quiet coastal town.",
+            traits=traits,
+        ),
+    )
+    assert instance.id is not None
+    assert instance.traits.warmth == 90
+
+    # 2. Profile active Character: Activate this instance
+    active_state = await select_active_character(test_session, profile_session, instance.id)
+    assert active_state.active_character_id == instance.id
+    assert active_state.active_character_instance_id == instance.id
+    assert not active_state.is_neutral_fallback
+
+    # 3. Chat new conversation: create conversation without explicit character_id (relying on active profile character)
+    char_id, inst_id = await resolve_conversation_character(test_session, profile_session, None)
+    assert char_id == instance.id
+    assert inst_id == instance.id
+
+    conv_char = Conversation(
+        id=str(uuid.uuid4()),
+        title="New Conversation",
+        character_id=char_id,
+        character_instance_id=inst_id,
+        profile_id=profile_session.profile_id,
+    )
+    test_session.add(conv_char)
+    await test_session.commit()
+    await test_session.refresh(conv_char)
+
+    # 4. Create an older conversation with Neutral Assistant
+    neutral_char_id, neutral_inst_id = await resolve_conversation_character(test_session, profile_session, "default")
+    assert neutral_char_id == "default"
+    assert neutral_inst_id is None
+
+    conv_neutral = Conversation(
+        id=str(uuid.uuid4()),
+        title="Neutral Thread",
+        character_id=neutral_char_id,
+        character_instance_id=neutral_inst_id,
+        profile_id=profile_session.profile_id,
+    )
+    test_session.add(conv_neutral)
+    await test_session.commit()
+    await test_session.refresh(conv_neutral)
+
+    conv_char_id = conv_char.id
+    conv_neutral_id = conv_neutral.id
+
+    # 5. Profile active Character change: Reset profile to Neutral Assistant
+    reset_state = await reset_to_neutral_assistant(test_session, profile_session)
+    assert reset_state.is_neutral_fallback is True
+    assert reset_state.active_character_id in ("default", "neutral-assistant")
+
+    # Verify that resetting profile active character DID NOT alter conv_char's binding
+    test_session.expire_all()
+    reloaded_conv_char = await test_session.scalar(
+        select(Conversation).where(Conversation.id == conv_char_id)
+    )
+    assert reloaded_conv_char.character_id == instance.id
+    assert reloaded_conv_char.character_instance_id == instance.id
+
+    # 6. resolve_turn_persona_prompt verification:
+    # Character conversation receives compiled personality modulation block
+    prompt_char = await resolve_turn_persona_prompt(test_session, profile_session, reloaded_conv_char)
+    assert DEFAULT_PERSONA in prompt_char
+    assert "<character_persona>" in prompt_char
+    assert "Name: Aria" in prompt_char
+    assert "Personality Modulation:" in prompt_char
+    assert "</character_persona>" in prompt_char
+
+    # Neutral conversation receives unmodulated DEFAULT_PERSONA
+    reloaded_conv_neutral = await test_session.scalar(
+        select(Conversation).where(Conversation.id == conv_neutral_id)
+    )
+    prompt_neutral = await resolve_turn_persona_prompt(test_session, profile_session, reloaded_conv_neutral)
+    assert prompt_neutral == DEFAULT_PERSONA
+    assert "<character_persona>" not in prompt_neutral
+
+    # 7. Title change & rename retention:
+    reloaded_conv_char.title = "Stargazing Plans"
+    test_session.add(reloaded_conv_char)
+    await test_session.commit()
+    await test_session.refresh(reloaded_conv_char)
+
+    assert reloaded_conv_char.title == "Stargazing Plans"
+    assert reloaded_conv_char.character_id == instance.id
+    assert reloaded_conv_char.character_instance_id == instance.id

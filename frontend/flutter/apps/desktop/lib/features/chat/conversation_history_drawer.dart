@@ -21,6 +21,7 @@ class ConversationHistoryDrawer extends StatefulWidget {
     this.isLoading = false,
     this.errorMessage,
     this.onRetry,
+    this.characterNameResolver,
     this.isActionsDisabled = false,
     this.isSwitchingDisabled = false,
   });
@@ -35,6 +36,7 @@ class ConversationHistoryDrawer extends StatefulWidget {
   final bool isLoading;
   final String? errorMessage;
   final VoidCallback? onRetry;
+  final String Function(ConversationOut)? characterNameResolver;
   final bool isActionsDisabled;
   final bool isSwitchingDisabled;
 
@@ -523,23 +525,47 @@ class _ConversationHistoryDrawerState extends State<ConversationHistoryDrawer> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.access_time_rounded,
-                              size: 11,
-                              color: ext?.textMuted,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              _formatDate(conv.createdAt),
-                              style: CompanionTypography.caption.copyWith(
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.access_time_rounded,
+                                size: 11,
                                 color: ext?.textMuted,
-                                fontSize: 10,
-                                fontFamily: 'monospace',
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 4),
+                              Text(
+                                _formatDate(conv.createdAt),
+                                style: CompanionTypography.caption.copyWith(
+                                  color: ext?.textMuted,
+                                  fontSize: 10,
+                                  fontFamily: 'monospace',
+                                ),
+                              ),
+                              if (widget.characterNameResolver != null) ...[
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: (ext?.accent ?? CompanionColors.lightAccent).withValues(alpha: 0.1),
+                                      borderRadius: CompanionRadius.borderSm,
+                                    ),
+                                    child: Text(
+                                      widget.characterNameResolver!(conv),
+                                      style: CompanionTypography.caption.copyWith(
+                                        color: ext?.accent ?? CompanionColors.lightAccent,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
                         if (widget.onDeleteConversation != null)
                           IconButton(

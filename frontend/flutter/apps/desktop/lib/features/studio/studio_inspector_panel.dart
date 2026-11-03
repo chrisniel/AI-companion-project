@@ -650,6 +650,7 @@ class _StudioInspectorPanelState extends State<StudioInspectorPanel> {
   }
 
   Widget _buildActionFooter(BuildContext context) {
+    final ext = Theme.of(context).extension<CompanionThemeExtension>();
     final controller = widget.controller;
     final draft = controller.draft!;
     final isActive = draft.instanceId != null && draft.instanceId == controller.activeInstanceId;
@@ -716,13 +717,37 @@ class _StudioInspectorPanelState extends State<StudioInspectorPanel> {
                 child: NeumorphicButton(
                   onPressed: isActive || !canMutate
                       ? null
-                      : () => widget.onActivate(draft.instanceId!),
-                  child: Text(isActive ? 'Active in Chat' : 'Set Active for Profile'),
+                      : () async {
+                          if (draft.isDirty) {
+                            await controller.saveAndActivateDraft();
+                          } else {
+                            await controller.activateCharacter(draft.instanceId!);
+                          }
+                        },
+                  child: Text(
+                    isActive
+                        ? 'Active in Chat'
+                        : (draft.isDirty ? 'Save & Activate' : 'Set Active for Profile'),
+                  ),
                 ),
               ),
             ],
           ],
         ),
+        if (!draft.isReadOnly && !draft.isNew && draft.instanceId != null && draft.isDirty) ...[
+          const SizedBox(height: 6.0),
+          Text(
+            isActive
+                ? 'Note: You have unsaved changes. Chat uses saved traits until you click "Save Changes".'
+                : 'Note: Unsaved trait changes will be saved before activating for Chat.',
+            style: CompanionTypography.caption.copyWith(
+              color: isActive
+                  ? (ext?.warning ?? CompanionColors.warning)
+                  : ext?.textSecondary,
+              fontSize: 11,
+            ),
+          ),
+        ],
         if (!draft.isReadOnly && !draft.isNew && draft.instanceId != null) ...[
           const SizedBox(height: 8.0),
           TextButton.icon(

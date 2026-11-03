@@ -59,6 +59,11 @@ class DesktopChatController extends ChangeNotifier {
   bool _isLoadingConversations = false;
   String? _conversationError;
 
+  ActiveCharacterStateOut? _activeCharacterState;
+  final Map<String, CharacterInstanceOut> _characterCache = <String, CharacterInstanceOut>{};
+  final Set<String> _missingCharacterIds = <String>{};
+  final Set<String> _fetchingCharacterIds = <String>{};
+
   StreamSubscription<SseEvent>? _currentStreamSubscription;
   final Set<StreamSubscription<SseEvent>> _profileSubscriptions = {};
   Completer<bool>? _turnCompleter;
@@ -123,6 +128,10 @@ class DesktopChatController extends ChangeNotifier {
     _titleGenerationInProgress.clear();
     _modelRefinedConversationIds.clear();
     _pendingRenameFutures.clear();
+    _activeCharacterState = null;
+    _characterCache.clear();
+    _missingCharacterIds.clear();
+    _fetchingCharacterIds.clear();
     _isLoadingConversations = false;
     _isCreatingConversation = false;
     _cancelProfileSubscriptions();
@@ -192,6 +201,105 @@ class DesktopChatController extends ChangeNotifier {
   bool get isCreatingConversation => _isCreatingConversation;
   bool get isAwaitingAcceptance => _isAwaitingAcceptance;
   String? get conversationError => _conversationError;
+  ActiveCharacterStateOut? get activeCharacterState => _activeCharacterState;
+
+  /// Explicitly updates or sets the active character state for the active profile.
+  void updateActiveCharacterState(ActiveCharacterStateOut state) {
+    _activeCharacterState = state;
+    if (state.activeInstance != null) {
+      _characterCache[state.activeInstance!.id] = state.activeInstance!;
+    }
+    notifyListeners();
+  }
+
+  /// Caches an authoritative instance definition in memory.
+  void cacheCharacterInstance(CharacterInstanceOut instance) {
+    _characterCache[instance.id] = instance;
+    _missingCharacterIds.remove(instance.id);
+    notifyListeners();
+  }
+
+  /// Re-fetches active character state from the backend.
+  Future<void> refreshActiveCharacter() async {
+    if (!isConnected || _authenticatedProfileId == null) return;
+    final epoch = _configEpoch;
+    try {
+      final state = await _client.getActiveCharacterState();
+      if (_configEpoch != epoch || _isDisposed) return;
+      _activeCharacterState = state;
+      if (state.activeInstance != null) {
+        _characterCache[state.activeInstance!.id] = state.activeInstance!;
+      }
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> _fetchAndCacheCharacterInstance(String instanceId) async {
+    if (_fetchingCharacterIds.contains(instanceId) ||
+        _missingCharacterIds.contains(instanceId) ||
+        _characterCache.containsKey(instanceId) ||
+        !isConnected) {
+      return;
+    }
+    final epoch = _configEpoch;
+    _fetchingCharacterIds.add(instanceId);
+    try {
+      final inst = await _client.getCharacterInstance(instanceId);
+      if (_configEpoch != epoch || _isDisposed) return;
+      _characterCache[instanceId] = inst;
+      notifyListeners();
+    } catch (e) {
+      if (_configEpoch != epoch || _isDisposed) return;
+      if (e is CompanionApiException && e.statusCode == 404) {
+        _missingCharacterIds.add(instanceId);
+        notifyListeners();
+      }
+    } finally {
+      _fetchingCharacterIds.remove(instanceId);
+    }
+  }
+
+  /// Authoritative display name for the profile's active character.
+  String getActiveProfileCharacterName() {
+    if (!isConnected) return 'Disconnected';
+    if (_activeCharacterState == null) return 'Neutral Assistant';
+    if (_activeCharacterState!.isNeutralFallback || _activeCharacterState!.activeCharacterInstanceId == null) {
+      return 'Neutral Assistant';
+    }
+    if (_activeCharacterState!.activeInstance != null) {
+      return _activeCharacterState!.activeInstance!.name;
+    }
+    return _activeCharacterState!.activeCharacterId;
+  }
+
+  /// Authoritative display name for the character permanently bound to a conversation.
+  String getConversationCharacterName(ConversationOut? conv) {
+    if (conv == null) return 'No Conversation';
+    if (conv.characterInstanceId == null ||
+        conv.characterId == 'default' ||
+        conv.characterId == 'neutral-assistant') {
+      return 'Neutral Assistant';
+    }
+    final instId = conv.characterInstanceId!;
+    if (_activeCharacterState?.activeCharacterInstanceId == instId &&
+        _activeCharacterState?.activeInstance != null) {
+      return _formatInstanceName(_activeCharacterState!.activeInstance!);
+    }
+    if (_characterCache.containsKey(instId)) {
+      return _formatInstanceName(_characterCache[instId]!);
+    }
+    if (_missingCharacterIds.contains(instId)) {
+      return 'Missing Character';
+    }
+    unawaited(_fetchAndCacheCharacterInstance(instId));
+    return 'Loading...';
+  }
+
+  String _formatInstanceName(CharacterInstanceOut inst) {
+    if (inst.isLegacyPlaceholder) return '${inst.name} (Legacy)';
+    if (inst.status == 'archived') return '${inst.name} (Archived)';
+    return inst.name;
+  }
 
   bool get isGenerating =>
       _generationState == ChatGenerationState.generating || _isAwaitingAcceptance;
@@ -449,6 +557,18 @@ class DesktopChatController extends ChangeNotifier {
               _activeModelName = 'Unavailable';
             }
 
+            try {
+              final charState = await _client.getActiveCharacterState();
+              if (_configEpoch == epoch && !_isDisposed) {
+                _activeCharacterState = charState;
+                if (charState.activeInstance != null) {
+                  _characterCache[charState.activeInstance!.id] = charState.activeInstance!;
+                }
+              }
+            } catch (_) {
+              // Non-fatal if character service unavailable
+            }
+
             if (!_isDisposed && _configEpoch == epoch) {
               await loadConversations();
             }
@@ -527,18 +647,27 @@ class DesktopChatController extends ChangeNotifier {
     _messages = [];
     _streamingText = '';
     _generationState = ChatGenerationState.idle;
+
+    if (conversation.characterInstanceId != null &&
+        !_characterCache.containsKey(conversation.characterInstanceId) &&
+        !_missingCharacterIds.contains(conversation.characterInstanceId)) {
+      unawaited(_fetchAndCacheCharacterInstance(conversation.characterInstanceId!));
+    }
+
     notifyListeners();
 
     await loadMessages(conversation.id);
   }
 
   /// Creates a new persistent conversation thread and selects it.
-  /// Creates a new persistent conversation thread and selects it.
   ///
-  /// Reuses existing untouched empty draft conversation if already active (matching Web Phase 8C).
+  /// Reuses existing untouched empty draft conversation if already active and its bound
+  /// Character matches the intended Character selection (matching Web Phase 8C + PC-CLIENT-007).
+  /// If the active Profile Character has changed, creates a genuinely new conversation
+  /// without mutating historical associations.
   /// Enforces synchronous transition lock to prevent duplicate creation on rapid clicks.
   /// Never fabricates fake local conversation records when backend calls fail.
-  Future<void> createNewConversation({String title = 'New Conversation'}) async {
+  Future<void> createNewConversation({String title = 'New Conversation', String? targetCharacterId}) async {
     if (_isDisposed) return;
     final epoch = _configEpoch;
     if (_isCreatingConversation) return;
@@ -548,14 +677,27 @@ class DesktopChatController extends ChangeNotifier {
       throw StateError('Runtime is not connected.');
     }
 
-    // Replicate React Web AssistantView.tsx (Phase 8C):
-    // If the active conversation is already an untouched empty draft, reuse it rather than POSTing another row.
+    final String? intendedInstanceId;
+    if (targetCharacterId != null) {
+      intendedInstanceId = (targetCharacterId == 'default' || targetCharacterId == 'neutral-assistant')
+          ? null
+          : targetCharacterId;
+    } else {
+      intendedInstanceId = (_activeCharacterState?.isNeutralFallback == true)
+          ? null
+          : _activeCharacterState?.activeCharacterInstanceId;
+    }
+
+    final convInstanceId = _activeConversation?.characterInstanceId;
+    final bool characterMatches = convInstanceId == intendedInstanceId;
+
     final isCurrentEmptyDraft = _activeConversation != null &&
         (_activeConversation!.title == 'New Conversation' ||
             _activeConversation!.title.isEmpty ||
             _activeConversation!.title == title) &&
         _messages.isEmpty &&
-        _activeConversation!.messageCount == 0;
+        _activeConversation!.messageCount == 0 &&
+        characterMatches;
     if (isCurrentEmptyDraft) {
       _errorMessage = null;
       notifyListeners();
@@ -565,7 +707,10 @@ class DesktopChatController extends ChangeNotifier {
     _isCreatingConversation = true;
     notifyListeners();
     try {
-      final created = await _client.createConversation(title: title);
+      final created = await _client.createConversation(
+        title: title,
+        characterId: intendedInstanceId,
+      );
       if (_isDisposed || epoch != _configEpoch) return;
       _conversations = [created, ..._conversations];
       await selectConversation(created);
@@ -749,6 +894,7 @@ class DesktopChatController extends ChangeNotifier {
           id: activeConv.id,
           title: deterministicTitle,
           characterId: activeConv.characterId,
+          characterInstanceId: activeConv.characterInstanceId,
           ownerId: activeConv.ownerId,
           createdAt: activeConv.createdAt,
           updatedAt: DateTime.now().toUtc().toIso8601String(),

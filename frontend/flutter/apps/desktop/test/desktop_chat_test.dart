@@ -127,18 +127,52 @@ class MockCompanionClient extends CompanionClient {
     lastDeletedConvId = conversationId;
   }
 
+  ActiveCharacterStateOut? customActiveCharacterState;
+  final Map<String, CharacterInstanceOut> customCharacterInstances = {};
+  String? customNextConversationId;
+  String? lastCreatedWithCharacterId;
+
+  @override
+  Future<ActiveCharacterStateOut> getActiveCharacterState() async {
+    return customActiveCharacterState ??
+        const ActiveCharacterStateOut(
+          profileId: 'test-profile',
+          isNeutralFallback: true,
+          activeCharacterId: 'default',
+          neutralFallback: NeutralAssistantOut(
+            id: 'neutral-assistant',
+            name: 'Neutral Assistant',
+            systemPrompt: 'Default neutral assistant prompt',
+          ),
+        );
+  }
+
+  @override
+  Future<CharacterInstanceOut> getCharacterInstance(String instanceId) async {
+    if (customCharacterInstances.containsKey(instanceId)) {
+      return customCharacterInstances[instanceId]!;
+    }
+    throw CompanionApiException(statusCode: 404, message: 'Character instance $instanceId not found');
+  }
+
   @override
   Future<ConversationOut> createConversation({String? title, String? characterId}) async {
     if (onCreate != null) await onCreate!();
     createConvCalled = true;
+    lastCreatedWithCharacterId = characterId;
     _storedMessages = [];
     if (!shouldCreateConvSucceed) {
       throw const CompanionApiException(statusCode: 500, message: 'Internal database error');
     }
+    final id = customNextConversationId ?? 'mock-conv-1';
+    final isCustomInstance = characterId != null &&
+        characterId != 'default' &&
+        characterId != 'neutral-assistant';
     return ConversationOut(
-      id: 'mock-conv-1',
+      id: id,
       title: title ?? 'Mock Chat',
       characterId: characterId ?? 'default',
+      characterInstanceId: isCustomInstance ? characterId : null,
       ownerId: 'mock-owner',
       createdAt: DateTime.now().toUtc().toIso8601String(),
       updatedAt: DateTime.now().toUtc().toIso8601String(),
@@ -204,14 +238,24 @@ class MockCompanionClient extends CompanionClient {
     if (onRename != null) {
       await onRename!(conversationId, title);
     }
+    ConversationOut? existing;
+    if (customConversations != null) {
+      for (final c in customConversations!) {
+        if (c.id == conversationId) {
+          existing = c;
+          break;
+        }
+      }
+    }
     return ConversationOut(
       id: conversationId,
       title: title,
-      characterId: 'default',
-      ownerId: 'owner',
-      createdAt: DateTime.now().toUtc().toIso8601String(),
+      characterId: existing?.characterId ?? 'default',
+      characterInstanceId: existing?.characterInstanceId,
+      ownerId: existing?.ownerId ?? 'owner',
+      createdAt: existing?.createdAt ?? DateTime.now().toUtc().toIso8601String(),
       updatedAt: DateTime.now().toUtc().toIso8601String(),
-      messageCount: 1,
+      messageCount: existing?.messageCount ?? 1,
     );
   }
 
@@ -225,14 +269,24 @@ class MockCompanionClient extends CompanionClient {
     if (onGenerateTitle != null) {
       await onGenerateTitle!(conversationId);
     }
+    ConversationOut? existing;
+    if (customConversations != null) {
+      for (final c in customConversations!) {
+        if (c.id == conversationId) {
+          existing = c;
+          break;
+        }
+      }
+    }
     return ConversationOut(
       id: conversationId,
       title: 'Model-Generated Title',
-      characterId: 'default',
-      ownerId: 'owner',
-      createdAt: DateTime.now().toUtc().toIso8601String(),
+      characterId: existing?.characterId ?? 'default',
+      characterInstanceId: existing?.characterInstanceId,
+      ownerId: existing?.ownerId ?? 'owner',
+      createdAt: existing?.createdAt ?? DateTime.now().toUtc().toIso8601String(),
       updatedAt: DateTime.now().toUtc().toIso8601String(),
-      messageCount: 1,
+      messageCount: existing?.messageCount ?? 1,
     );
   }
 
@@ -972,6 +1026,303 @@ void main() {
       expect(e2eController.messages.isNotEmpty, isTrue);
 
       e2eController.dispose();
+    });
+
+    test('createNewConversation creates genuinely new conversation when Profile active character has changed', () async {
+      await controller.checkConnection();
+      mockClient.customMessages = [];
+
+      // 1. Initial empty conversation with Neutral Assistant
+      final emptyNeutralConv = ConversationOut(
+        id: 'mock-neutral-empty',
+        title: 'New Conversation',
+        characterId: 'default',
+        characterInstanceId: null,
+        ownerId: 'mock-owner',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+        messageCount: 0,
+      );
+      mockClient.customConversations = [emptyNeutralConv];
+      await controller.loadConversations();
+      await controller.selectConversation(emptyNeutralConv);
+      expect(controller.activeConversation?.id, 'mock-neutral-empty');
+      expect(controller.getConversationCharacterName(controller.activeConversation), 'Neutral Assistant');
+
+      // 2. Profile activates character "inst-aria"
+      const ariaInstance = CharacterInstanceOut(
+        id: 'inst-aria',
+        profileId: 'test-profile',
+        templateId: 'warm-companion',
+        sourceTemplateVersion: 1,
+        name: 'Aria',
+        summary: 'Warm and lively',
+        avatarAsset: 'avatar_warm_companion',
+        systemPrompt: 'Be friendly',
+        lore: 'Coastal memories',
+        presetId: 'warm_companion',
+        traits: CharacterTraitVector(
+          warmth: 85, teasing: 40, guardedness: 20, directness: 60,
+          expressiveness: 80, affection: 75, formality: 20, verbosity: 65,
+        ),
+        status: 'active',
+        isLegacyPlaceholder: false,
+        createdAt: '2026-11-03T00:00:00Z',
+        updatedAt: '2026-11-03T00:00:00Z',
+      );
+      controller.updateActiveCharacterState(
+        const ActiveCharacterStateOut(
+          profileId: 'test-profile',
+          isNeutralFallback: false,
+          activeCharacterId: 'inst-aria',
+          activeCharacterInstanceId: 'inst-aria',
+          neutralFallback: NeutralAssistantOut(
+            id: 'neutral-assistant',
+            name: 'Neutral Assistant',
+            systemPrompt: 'Default neutral prompt',
+          ),
+          activeInstance: ariaInstance,
+        ),
+      );
+
+      expect(controller.getActiveProfileCharacterName(), 'Aria');
+      // Existing conversation is still bound to Neutral Assistant
+      expect(controller.getConversationCharacterName(controller.activeConversation), 'Neutral Assistant');
+
+      // 3. Click New Conversation -> Must NOT reuse empty Neutral conversation!
+      mockClient.customNextConversationId = 'mock-aria-conv-1';
+      mockClient.createConvCalled = false;
+      await controller.createNewConversation();
+
+      expect(mockClient.createConvCalled, isTrue);
+      expect(mockClient.lastCreatedWithCharacterId, 'inst-aria');
+      expect(controller.activeConversation?.id, 'mock-aria-conv-1');
+      expect(controller.activeConversation?.characterInstanceId, 'inst-aria');
+      expect(controller.getConversationCharacterName(controller.activeConversation), 'Aria');
+
+      // 4. Clicking New Conversation AGAIN while on empty Aria conversation -> reuses without duplicate row
+      mockClient.createConvCalled = false;
+      await controller.createNewConversation();
+      expect(mockClient.createConvCalled, isFalse);
+      expect(controller.activeConversation?.id, 'mock-aria-conv-1');
+
+      // 5. Verify the old empty Neutral conversation still exists with its original binding
+      final oldNeutral = controller.conversations.firstWhere((c) => c.id == 'mock-neutral-empty');
+      expect(oldNeutral.characterId, 'default');
+      expect(oldNeutral.characterInstanceId, isNull);
+    });
+
+    test('Switching Profile active Character does not mutate existing conversation binding', () async {
+      await controller.checkConnection();
+
+      final ariaConv = ConversationOut(
+        id: 'conv-aria-persisted',
+        title: 'Chat with Aria',
+        characterId: 'inst-aria',
+        characterInstanceId: 'inst-aria',
+        ownerId: 'mock-owner',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+        messageCount: 5,
+      );
+      mockClient.customCharacterInstances['inst-aria'] = const CharacterInstanceOut(
+        id: 'inst-aria',
+        profileId: 'test-profile',
+        templateId: 'warm-companion',
+        sourceTemplateVersion: 1,
+        name: 'Aria',
+        summary: 'Warm',
+        avatarAsset: 'avatar_warm_companion',
+        systemPrompt: 'Be warm',
+        lore: 'Lore',
+        presetId: 'warm_companion',
+        traits: CharacterTraitVector(
+          warmth: 85, teasing: 40, guardedness: 20, directness: 60,
+          expressiveness: 80, affection: 75, formality: 20, verbosity: 65,
+        ),
+        status: 'active',
+        isLegacyPlaceholder: false,
+        createdAt: '2026-11-03T00:00:00Z',
+        updatedAt: '2026-11-03T00:00:00Z',
+      );
+
+      await controller.selectConversation(ariaConv);
+      expect(controller.getConversationCharacterName(ariaConv), 'Aria');
+
+      // Switch Profile active character back to Neutral Assistant
+      controller.updateActiveCharacterState(
+        const ActiveCharacterStateOut(
+          profileId: 'test-profile',
+          isNeutralFallback: true,
+          activeCharacterId: 'default',
+          neutralFallback: NeutralAssistantOut(
+            id: 'neutral-assistant',
+            name: 'Neutral Assistant',
+            systemPrompt: 'Default neutral prompt',
+          ),
+        ),
+      );
+
+      expect(controller.getActiveProfileCharacterName(), 'Neutral Assistant');
+      expect(controller.getConversationCharacterName(controller.activeConversation), 'Aria');
+      expect(controller.activeConversation?.characterInstanceId, 'inst-aria');
+    });
+
+    test('Truthful Character name resolution handles archived, legacy, 404, and loading states', () async {
+      await controller.checkConnection();
+
+      // Neutral Assistant
+      expect(controller.getConversationCharacterName(null), 'No Conversation');
+      const neutralConv = ConversationOut(
+        id: 'c-neutral',
+        title: 'Neutral',
+        characterId: 'default',
+        ownerId: 'owner',
+        createdAt: '2026',
+        updatedAt: '2026',
+      );
+      expect(controller.getConversationCharacterName(neutralConv), 'Neutral Assistant');
+
+      // Archived instance
+      mockClient.customCharacterInstances['inst-archived'] = const CharacterInstanceOut(
+        id: 'inst-archived',
+        profileId: 'test-profile',
+        templateId: 'formal-advisor',
+        sourceTemplateVersion: 1,
+        name: 'Marcus',
+        summary: 'Advisor',
+        avatarAsset: 'avatar_formal_advisor',
+        systemPrompt: 'Advise',
+        lore: 'Lore',
+        presetId: 'formal_advisor',
+        traits: CharacterTraitVector(
+          warmth: 30, teasing: 10, guardedness: 70, directness: 80,
+          expressiveness: 30, affection: 20, formality: 90, verbosity: 50,
+        ),
+        status: 'archived',
+        isLegacyPlaceholder: false,
+        createdAt: '2026-11-03T00:00:00Z',
+        updatedAt: '2026-11-03T00:00:00Z',
+      );
+      controller.cacheCharacterInstance(mockClient.customCharacterInstances['inst-archived']!);
+      const archivedConv = ConversationOut(
+        id: 'c-archived',
+        title: 'Archived Conv',
+        characterId: 'inst-archived',
+        characterInstanceId: 'inst-archived',
+        ownerId: 'owner',
+        createdAt: '2026',
+        updatedAt: '2026',
+      );
+      expect(controller.getConversationCharacterName(archivedConv), 'Marcus (Archived)');
+
+      // Legacy placeholder instance
+      mockClient.customCharacterInstances['inst-legacy'] = const CharacterInstanceOut(
+        id: 'inst-legacy',
+        profileId: 'test-profile',
+        templateId: null,
+        sourceTemplateVersion: null,
+        name: 'Legacy Bot',
+        summary: 'Legacy',
+        avatarAsset: '',
+        systemPrompt: '',
+        lore: '',
+        presetId: null,
+        traits: null,
+        status: 'archived',
+        isLegacyPlaceholder: true,
+        createdAt: '2026-11-03T00:00:00Z',
+        updatedAt: '2026-11-03T00:00:00Z',
+      );
+      controller.cacheCharacterInstance(mockClient.customCharacterInstances['inst-legacy']!);
+      const legacyConv = ConversationOut(
+        id: 'c-legacy',
+        title: 'Legacy Conv',
+        characterId: 'inst-legacy',
+        characterInstanceId: 'inst-legacy',
+        ownerId: 'owner',
+        createdAt: '2026',
+        updatedAt: '2026',
+      );
+      expect(controller.getConversationCharacterName(legacyConv), 'Legacy Bot (Legacy)');
+
+      // Missing 404 instance
+      const missingConv = ConversationOut(
+        id: 'c-missing',
+        title: 'Missing Conv',
+        characterId: 'inst-deleted-404',
+        characterInstanceId: 'inst-deleted-404',
+        ownerId: 'owner',
+        createdAt: '2026',
+        updatedAt: '2026',
+      );
+      // First call triggers fetch and returns 'Loading...'
+      final initialName = controller.getConversationCharacterName(missingConv);
+      expect(initialName, 'Loading...');
+      // Allow async fetch to fail with 404
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      // Second call returns 'Missing Character'
+      expect(controller.getConversationCharacterName(missingConv), 'Missing Character');
+    });
+
+    test('Conversation title update and model refinement preserve characterInstanceId', () async {
+      await controller.checkConnection();
+
+      final ariaConv = ConversationOut(
+        id: 'conv-title-preservation',
+        title: 'New Conversation',
+        characterId: 'inst-aria',
+        characterInstanceId: 'inst-aria',
+        ownerId: 'mock-owner',
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+        updatedAt: DateTime.now().toUtc().toIso8601String(),
+        messageCount: 0,
+      );
+      mockClient.customConversations = [ariaConv];
+      mockClient.customMessages = [];
+      await controller.loadConversations();
+      await controller.selectConversation(ariaConv);
+
+      final streamController = StreamController<SseEvent>();
+      mockClient.customEventStream = streamController.stream;
+
+      final sendFuture = controller.sendMessage('Tell me about your favorite book');
+      streamController.add(const SseTokenEvent('I '));
+      streamController.add(const SseTokenEvent('love '));
+      streamController.add(const SseTokenEvent('astronomy.'));
+      streamController.add(const SseDoneEvent(finishReason: 'stop'));
+      await streamController.close();
+      await sendFuture;
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      // After first turn acceptance and deterministic fallback title:
+      expect(controller.activeConversation?.characterId, 'inst-aria');
+      expect(controller.activeConversation?.characterInstanceId, 'inst-aria');
+      expect(controller.activeConversation?.title, isNot('New Conversation'));
+    });
+
+    test('Profile session invalidation cleans active character state and cache', () async {
+      await controller.checkConnection();
+
+      controller.updateActiveCharacterState(
+        const ActiveCharacterStateOut(
+          profileId: 'test-profile',
+          isNeutralFallback: false,
+          activeCharacterId: 'inst-aria',
+          activeCharacterInstanceId: 'inst-aria',
+          neutralFallback: NeutralAssistantOut(
+            id: 'neutral-assistant',
+            name: 'Neutral Assistant',
+            systemPrompt: 'Default neutral prompt',
+          ),
+        ),
+      );
+      expect(controller.activeCharacterState?.activeCharacterInstanceId, 'inst-aria');
+
+      await controller.invalidateProfileSession(clearStoredToken: false);
+
+      expect(controller.activeCharacterState, isNull);
+      expect(controller.getActiveProfileCharacterName(), 'Disconnected');
     });
   });
 
@@ -2322,6 +2673,194 @@ void main() {
 
       controller.dispose();
       tempDir.deleteSync(recursive: true);
+    });
+
+    testWidgets('ChatScreen header renders Character indicators truthfully for active and bound characters', (tester) async {
+      final mockClient = MockCompanionClient();
+      const ariaInstance = CharacterInstanceOut(
+        id: 'inst-aria',
+        profileId: 'test-profile',
+        templateId: 'warm-companion',
+        sourceTemplateVersion: 1,
+        name: 'Aria',
+        summary: 'Warm and lively',
+        avatarAsset: 'avatar_warm_companion',
+        systemPrompt: 'Be friendly',
+        lore: 'Coastal memories',
+        presetId: 'warm_companion',
+        traits: CharacterTraitVector(
+          warmth: 85, teasing: 40, guardedness: 20, directness: 60,
+          expressiveness: 80, affection: 75, formality: 20, verbosity: 65,
+        ),
+        status: 'active',
+        isLegacyPlaceholder: false,
+        createdAt: '2026-11-03T00:00:00Z',
+        updatedAt: '2026-11-03T00:00:00Z',
+      );
+      mockClient.customCharacterInstances['inst-aria'] = ariaInstance;
+
+      const marcusInstance = CharacterInstanceOut(
+        id: 'inst-marcus',
+        profileId: 'test-profile',
+        templateId: 'formal-advisor',
+        sourceTemplateVersion: 1,
+        name: 'Marcus',
+        summary: 'Formal advisor',
+        avatarAsset: 'avatar_formal',
+        systemPrompt: 'Be analytical',
+        lore: 'Analytical mind',
+        presetId: 'formal',
+        traits: CharacterTraitVector(
+          warmth: 30, teasing: 10, guardedness: 80, directness: 85,
+          expressiveness: 30, affection: 20, formality: 90, verbosity: 50,
+        ),
+        status: 'active',
+        isLegacyPlaceholder: false,
+        createdAt: '2026-11-03T00:00:00Z',
+        updatedAt: '2026-11-03T00:00:00Z',
+      );
+      mockClient.customCharacterInstances['inst-marcus'] = marcusInstance;
+
+      const ariaConv = ConversationOut(
+        id: 'conv-aria-test',
+        title: 'Chat with Aria',
+        characterId: 'inst-aria',
+        characterInstanceId: 'inst-aria',
+        ownerId: 'mock-owner',
+        createdAt: '2026-03-30T10:00:00Z',
+        updatedAt: '2026-03-30T10:00:00Z',
+        messageCount: 1,
+      );
+      mockClient.customConversations = [ariaConv];
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+      await controller.selectConversation(ariaConv);
+
+      controller.updateActiveCharacterState(
+        const ActiveCharacterStateOut(
+          profileId: 'test-profile',
+          isNeutralFallback: false,
+          activeCharacterId: 'inst-aria',
+          activeCharacterInstanceId: 'inst-aria',
+          neutralFallback: NeutralAssistantOut(
+            id: 'neutral-assistant',
+            name: 'Neutral Assistant',
+            systemPrompt: 'Default neutral prompt',
+          ),
+          activeInstance: ariaInstance,
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // When bound character and active profile character match:
+      expect(find.text('This Conversation: Aria'), findsOneWidget);
+      expect(find.textContaining('New Conversations:'), findsNothing);
+
+      // Switch Profile active character to Marcus:
+      controller.updateActiveCharacterState(
+        const ActiveCharacterStateOut(
+          profileId: 'test-profile',
+          isNeutralFallback: false,
+          activeCharacterId: 'inst-marcus',
+          activeCharacterInstanceId: 'inst-marcus',
+          neutralFallback: NeutralAssistantOut(
+            id: 'neutral-assistant',
+            name: 'Neutral Assistant',
+            systemPrompt: 'Default neutral prompt',
+          ),
+          activeInstance: marcusInstance,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Now both pills should be rendered:
+      expect(find.text('This Conversation: Aria'), findsOneWidget);
+      expect(find.text('New Conversations: Marcus'), findsOneWidget);
+
+      controller.dispose();
+    });
+
+    testWidgets('ChatScreen welcome stage displays bound Character and profile active Character card', (tester) async {
+      final mockClient = MockCompanionClient();
+      const ariaInstance = CharacterInstanceOut(
+        id: 'inst-aria',
+        profileId: 'test-profile',
+        templateId: 'warm-companion',
+        sourceTemplateVersion: 1,
+        name: 'Aria',
+        summary: 'Warm and lively',
+        avatarAsset: 'avatar_warm_companion',
+        systemPrompt: 'Be friendly',
+        lore: 'Coastal memories',
+        presetId: 'warm_companion',
+        traits: CharacterTraitVector(
+          warmth: 85, teasing: 40, guardedness: 20, directness: 60,
+          expressiveness: 80, affection: 75, formality: 20, verbosity: 65,
+        ),
+        status: 'active',
+        isLegacyPlaceholder: false,
+        createdAt: '2026-11-03T00:00:00Z',
+        updatedAt: '2026-11-03T00:00:00Z',
+      );
+      mockClient.customCharacterInstances['inst-aria'] = ariaInstance;
+
+      const emptyConv = ConversationOut(
+        id: 'conv-empty-test',
+        title: 'New Conversation',
+        characterId: 'inst-aria',
+        characterInstanceId: 'inst-aria',
+        ownerId: 'mock-owner',
+        createdAt: '2026-03-30T10:00:00Z',
+        updatedAt: '2026-03-30T10:00:00Z',
+        messageCount: 0,
+      );
+      mockClient.customConversations = [emptyConv];
+      mockClient.customMessages = [];
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+      await controller.selectConversation(emptyConv);
+
+      controller.updateActiveCharacterState(
+        const ActiveCharacterStateOut(
+          profileId: 'test-profile',
+          isNeutralFallback: true,
+          activeCharacterId: 'default',
+          neutralFallback: NeutralAssistantOut(
+            id: 'neutral-assistant',
+            name: 'Neutral Assistant',
+            systemPrompt: 'Default neutral prompt',
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Welcome stage card displays both bound character and profile active character:
+      expect(find.text('Character: Aria'), findsOneWidget);
+      expect(find.text('Profile active Character for new chats: Neutral Assistant'), findsOneWidget);
+
+      controller.dispose();
     });
   });
 }

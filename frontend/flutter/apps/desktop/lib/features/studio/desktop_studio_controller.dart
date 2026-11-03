@@ -710,6 +710,12 @@ class DesktopStudioController extends ChangeNotifier {
       } else {
         targetDraft.reconcileSavedInstance(saved, snapshotRevision);
       }
+      if (chat.authenticatedProfileId == _boundProfileId) {
+        chat.cacheCharacterInstance(saved);
+        if (chat.activeCharacterState?.activeCharacterInstanceId == saved.id) {
+          unawaited(chat.refreshActiveCharacter());
+        }
+      }
       _uncertainWriteWarning = false;
       _uncertainCreateWarning = false;
       _uncertainCreatePayload = null;
@@ -761,6 +767,21 @@ class DesktopStudioController extends ChangeNotifier {
 
   Future<bool> retryCreateDraft() => saveDraft(forceRetryCreate: true);
 
+  /// Saves dirty edits first (if any) and upon verified clean persistence,
+  /// activates the Character instance for the Profile.
+  Future<bool> saveAndActivateDraft() async {
+    if (_draft == null || _draft!.isReadOnly || _isMutating) return false;
+    if (_draft!.isDirty) {
+      final saved = await saveDraft();
+      if (!saved || _draft?.isDirty != false) {
+        return false;
+      }
+    }
+    final targetId = _draft?.instanceId;
+    if (targetId == null) return false;
+    return activateCharacter(targetId);
+  }
+
   Future<bool> activateCharacter(String instanceId) async {
     if (_isMutating) return false;
     final inst = _instances.where((i) => i.id == instanceId).firstOrNull;
@@ -784,6 +805,9 @@ class DesktopStudioController extends ChangeNotifier {
       }
       _readGeneration++;
       _activeState = updated;
+      if (chat.authenticatedProfileId == _boundProfileId) {
+        chat.updateActiveCharacterState(updated);
+      }
       _isMutating = false;
       _notify();
       return true;
@@ -819,6 +843,9 @@ class DesktopStudioController extends ChangeNotifier {
       }
       _readGeneration++;
       _activeState = updated;
+      if (chat.authenticatedProfileId == _boundProfileId) {
+        chat.updateActiveCharacterState(updated);
+      }
       _isMutating = false;
       _notify();
       return true;

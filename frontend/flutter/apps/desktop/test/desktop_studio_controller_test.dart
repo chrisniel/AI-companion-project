@@ -1322,5 +1322,127 @@ void main() {
       studio.dispose();
       chat.dispose();
     });
+
+    test('saveAndActivateDraft saves dirty draft changes before activating for Chat', () async {
+      mockServerState['instances'] = [
+        {
+          'id': 'inst-existing-1',
+          'profile_id': 'profile-1',
+          'is_legacy_placeholder': false,
+          'legacy_character_id': null,
+          'template_id': 'warm-companion',
+          'source_template_version': 1,
+          'name': 'Existing Character',
+          'summary': 'Summary',
+          'lore': 'Lore',
+          'system_prompt': 'Prompt',
+          'avatar_asset': 'default_avatar',
+          'preset_id': 'custom',
+          'traits': {
+            'warmth': 50, 'teasing': 50, 'guardedness': 50, 'directness': 50,
+            'expressiveness': 50, 'affection': 50, 'formality': 50, 'verbosity': 50,
+          },
+          'status': 'active',
+          'created_at': '2026-01-01',
+          'updated_at': '2026-01-01',
+        }
+      ];
+
+      final client = CompanionClient(
+        sessionStore: InMemoryCredentialStore('psk_test'),
+        httpClient: MockClient(handleStudioRequest),
+      );
+
+      final chat = DesktopChatController(client: client);
+      await chat.checkConnection();
+
+      final studio = DesktopStudioController(chat: chat);
+      await studio.loadStudioCatalog();
+
+      final target = studio.instances.first;
+      studio.selectInstance(target);
+      expect(studio.draft, isNotNull);
+      expect(studio.draft!.isDirty, isFalse);
+
+      studio.draft!.updateTrait('warmth', 99);
+      expect(studio.draft!.isDirty, isTrue);
+
+      final success = await studio.saveAndActivateDraft();
+      expect(success, isTrue);
+
+      expect(studio.draft!.isDirty, isFalse);
+      expect(studio.draft!.traits?.warmth, 99);
+      expect(studio.activeInstanceId, target.id);
+      expect(chat.activeCharacterState?.activeCharacterInstanceId, target.id);
+
+      studio.dispose();
+      chat.dispose();
+    });
+
+    test('saveAndActivateDraft aborts activation and preserves dirty draft if save fails', () async {
+      mockServerState['instances'] = [
+        {
+          'id': 'inst-existing-1',
+          'profile_id': 'profile-1',
+          'is_legacy_placeholder': false,
+          'legacy_character_id': null,
+          'template_id': 'warm-companion',
+          'source_template_version': 1,
+          'name': 'Existing Character',
+          'summary': 'Summary',
+          'lore': 'Lore',
+          'system_prompt': 'Prompt',
+          'avatar_asset': 'default_avatar',
+          'preset_id': 'custom',
+          'traits': {
+            'warmth': 50, 'teasing': 50, 'guardedness': 50, 'directness': 50,
+            'expressiveness': 50, 'affection': 50, 'formality': 50, 'verbosity': 50,
+          },
+          'status': 'active',
+          'created_at': '2026-01-01',
+          'updated_at': '2026-01-01',
+        }
+      ];
+
+      var patchCalled = false;
+      var putActiveCalled = false;
+
+      final client = CompanionClient(
+        sessionStore: InMemoryCredentialStore('psk_test'),
+        httpClient: MockClient((request) async {
+          if (request.url.path.contains('/characters/instances/') && request.method == 'PATCH') {
+            patchCalled = true;
+            return http.Response('{"detail":"Database write error"}', 500);
+          }
+          if (request.url.path.endsWith('/characters/active') && request.method == 'PUT') {
+            putActiveCalled = true;
+          }
+          return handleStudioRequest(request);
+        }),
+      );
+
+      final chat = DesktopChatController(client: client);
+      await chat.checkConnection();
+
+      final studio = DesktopStudioController(chat: chat);
+      await studio.loadStudioCatalog();
+
+      final target = studio.instances.first;
+      studio.selectInstance(target);
+      studio.draft!.updateTrait('warmth', 99);
+      expect(studio.draft!.isDirty, isTrue);
+
+      final success = await studio.saveAndActivateDraft();
+      expect(success, isFalse);
+
+      expect(patchCalled, isTrue);
+      expect(putActiveCalled, isFalse);
+      expect(studio.draft!.isDirty, isTrue);
+      expect(studio.draft!.traits?.warmth, 99);
+      expect(studio.error, isNotNull);
+
+      studio.dispose();
+      chat.dispose();
+    });
   });
 }

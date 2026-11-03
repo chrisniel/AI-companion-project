@@ -30,6 +30,13 @@
   - Finding 3: Replaced shared boolean mutation flags with single-flight ownership via monotonically increasing `_activeMutationToken`. Mutation completion and lock release check matching token and profile session validity (`_isSessionValid`), preventing delayed responses from old profile sessions from unlocking or corrupting active mutations on a new profile.
   - Finding 4: Maintained uncertain creation protections (`_uncertainCreatePayload` and `draft.hasUncertainCreation`). Retained warning banner with explicit user retry (`retryCreateDraft()`) and guarded against silent unguarded retries on item switches.
   - Finding 5: Clarified verification documentation to explicitly distinguish sampled dynamic tests ($\le 695 \le 700$) from mathematically proven bounds, and reserved full WCAG compliance claims for Windows Desktop visual acceptance.
+- [x] **Stage 3d — WINDOWS ACCEPTANCE CORRECTIONS (TEST 10: CHARACTER ACTIVATION & CHAT VISIBILITY):** Resolved Windows User Acceptance Test 10 gap:
+  - Confirmed end-to-end pipeline: `Studio Save -> Character Instance persistence -> Profile active Character -> Chat new conversation -> Conversation Character binding -> resolve_turn_persona_prompt -> Model generation`. Added backend integration test `test_end_to_end_character_activation_chat_conversation_and_title_retention` in `backend/tests/test_character_personality_modulator.py`.
+  - Fixed empty-conversation reuse in `DesktopChatController.createNewConversation()`: Reuses empty conversations only when their bound character matches the intended Character selection. Creates a genuinely new conversation when the active Profile Character has changed, avoiding silent conversation re-binding or thread corruption.
+  - Preserved `characterInstanceId` in `DesktopChatController`: Fixed `commitAcceptance` and `ConversationOut` reconstructions so `characterInstanceId` is never lost across deterministic title generation, AI title refinement, message list refreshes, or thread switching.
+  - Made Character identity visible in Chat Screen (`ChatScreen`): Added responsive header indicator pills ("This Conversation: [Name]" and "New Conversations: [Name]" when they differ), session card Character badges in `ConversationHistoryDrawer`, and an initial Character status card in `_buildWelcomeStage`.
+  - Truthful Character name resolution: Implemented `getActiveProfileCharacterName()` and `getConversationCharacterName()` in `DesktopChatController` with truthful handling for Neutral Assistant, active profiles, archived instances, legacy placeholders, missing 404 records, and loading states.
+  - Reconciled Save versus Activate in Studio (`DesktopStudioController` & `StudioInspectorPanel`): Implemented `saveAndActivateDraft()` ensuring dirty draft edits are safely persisted to the backend first and verified before activating for Chat. Added explanatory notes in `StudioInspectorPanel` to clarify when unsaved edits will be saved or are pending.
 - [ ] **Stage 4 — INDEPENDENT IMPLEMENTATION REVIEW (`ACTIVE STOP BOUNDARY`):** Implementation review corrections submitted for independent verification.
 - [ ] **Stage 5 — DOCUMENTATION + PROVISIONAL CLOSURE:** Pending Implementation Gate approval.
 - [ ] **Stage 6 — DRAFT PR:** Pending authorization.
@@ -54,16 +61,16 @@
 
 ---
 
-## 3. Automated Verification Evidence (Review Corrections Revision)
+## 3. Automated Verification Evidence (Review & Acceptance Corrections Revision)
 
 | Test Suite | Command | Result |
 | :--- | :--- | :--- |
-| **Backend Pytest** | `backend/.venv/Scripts/pytest.exe backend/tests -q` | **640 passed, 1 warning (189.90s)** |
+| **Backend Pytest** | `backend/.venv/Scripts/pytest.exe backend/tests -q` | **641 passed, 1 warning (164.27s)** |
 | **OpenAPI Contract** | `backend/.venv/Scripts/python.exe scripts/check_openapi_contract.py` | **PASSED (39 routes, all models verified)** |
 | **Dart OpenAPI Parity** | `backend/.venv/Scripts/python.exe scripts/check_dart_openapi_parity.py --check` | **PASSED (22/22 DTO schemas, 29/18 covered routes)** |
 | **Flutter `companion_api`** | `flutter test packages/companion_api` | **PASSED (79/79 passed)** |
 | **Flutter `companion_design`** | `flutter test packages/companion_design` | **PASSED (18/18 passed)** |
-| **Flutter Desktop App** | `flutter test apps/desktop` | **PASSED (269/269 passed)** |
+| **Flutter Desktop App** | `flutter test apps/desktop` | **PASSED (278/278 passed)** |
 | **Dart Static Analysis** | `dart analyze .` (in `frontend/flutter`) | **PASSED (0 issues found)** |
 | **React Web Harness** | `npm test -- --run` (in `frontend/web`) | **PASSED (16 test files, 248/248 passed)** |
 | **Git Whitespace** | `git diff --check` | **PASSED (0 errors)** |
