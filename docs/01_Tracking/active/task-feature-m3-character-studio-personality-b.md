@@ -1,10 +1,10 @@
 # M3 Batch B — Immersive Character Studio V1 & Personality Prompt Modulator (`PC-CLIENT-007`, `PC-CHAR-002`)
 
-> **Status:** STAGE 5 COMPLETE — Provisional Closure Achieved. Awaiting Stage 6 Draft PR Authorization (`STOP BOUNDARY`).
+> **Status:** STAGE 5 APPROVED — Stage 6 Draft PR Authorized. Awaiting Stage 7 Combined Review (`STOP BOUNDARY`).
 > **Branch:** `feature/m3-character-studio-personality-b`
 > **Base:** `develop` @ `d22dd7e1dbbd0a50c9a4e6fd28ab5fbdbcce34de`
 > **Latest Reviewed Implementation Checkpoint:** `fd0c558bc6f98005d6b305bbd453feb6b8d849e9`
-> **Owner / Authorization:** Chris; M3 Batch B Plan Gate and Implementation Gate approved; Stage 5 documentation and provisional closure authorized 2026-11-03. Explicit Git write operations authorized on feature branch. Stop at Stage 5 Stop Boundary.
+> **Owner / Authorization:** Chris; Stage 5 documentation review approved; Stage 6 Draft PR creation authorized 2026-11-03. Explicit Git write operations authorized on feature branch. Stop at Stage 7 Review Gate.
 > **Plan:** [`docs/02_Planning/01_Plans/plan-m3-character-studio-personality-b.md`](../../02_Planning/01_Plans/plan-m3-character-studio-personality-b.md)
 > **Work Items:** `PC-CLIENT-007` (Immersive Character Studio V1 — Windows Desktop) & `PC-CHAR-002` (8-Trait Personality Prompt Modulator)
 
@@ -21,9 +21,9 @@
 - [x] **Stage 3c — FINAL DATA-INTEGRITY REVIEW CORRECTIONS:** Resolved remaining save-state, uncertain write, and mutation concurrency issues (commit `e6a15273bc0abdda238ac9c9701b2e27d07e396f`).
 - [x] **Stage 3d — WINDOWS ACCEPTANCE CORRECTIONS (TEST 10: CHARACTER ACTIVATION & CHAT VISIBILITY):** Resolved Windows User Acceptance Test 10 gap: verified end-to-end activation, chat dual indicators, empty-conversation reuse title preservation, and truthful character name resolution (checkpoint `fd0c558bc6f98005d6b305bbd453feb6b8d849e9`).
 - [x] **Stage 4 — INDEPENDENT IMPLEMENTATION REVIEW:** Independent Implementation Gate passed; Chris confirmed all 14 Windows Desktop user acceptance checks. Approved implementation checkpoint: `fd0c558bc6f98005d6b305bbd453feb6b8d849e9`.
-- [x] **Stage 5 — DOCUMENTATION + PROVISIONAL CLOSURE:** Canonical design and domain architecture reconciled; master planning documents (WBS, DELIVERY_INDEX, SPRINT_ROADMAP, MASTER_CHECKLIST, task.md) updated; 7-section technical walkthrough authored; CHANGELOG.md updated; active branch tracker reconciled; documentation prepared and under independent review awaiting Stage 6 authorization.
-- [ ] **Stage 6 — DRAFT PR (`STOP BOUNDARY`):** Pending human authorization.
-- [ ] **Stage 7 — COMBINED INDEPENDENT DOCUMENTATION/CLOSURE/PR REVIEW:** Pending draft PR creation.
+- [x] **Stage 5 — DOCUMENTATION + PROVISIONAL CLOSURE:** Approved by independent reviewer; pre-PR wording corrections applied (actual mutation locking, revision-aware save reconciliation, prompt token-budget clarification); canonical documentation, master planning, walkthrough, and changelog fully reconciled.
+- [ ] **Stage 6 — DRAFT PR:** Draft PR creation authorized and in progress.
+- [ ] **Stage 7 — COMBINED INDEPENDENT DOCUMENTATION/CLOSURE/PR REVIEW (`STOP BOUNDARY`):** Pending draft PR creation.
 - [ ] **Stage 8 — FINAL PRE-MERGE CLOSURE RECONCILIATION:** Pending combined review approval.
 - [ ] **Stage 9 — HUMAN SQUASH MERGE:** Exclusively executed by Chris.
 
