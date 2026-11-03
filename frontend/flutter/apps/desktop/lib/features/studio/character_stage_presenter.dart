@@ -78,6 +78,7 @@ class CharacterStageVisualSpec {
   final String displayName;
   final String badgeText;
   final double zoomLevel;
+  final Offset panOffset;
   final StudioBackdropPreset backdropPreset;
 
   const CharacterStageVisualSpec({
@@ -86,12 +87,48 @@ class CharacterStageVisualSpec {
     required this.displayName,
     this.badgeText = '',
     this.zoomLevel = 1.0,
+    this.panOffset = Offset.zero,
     this.backdropPreset = StudioBackdropPreset.cozyStudio,
   });
 }
 
 /// Presenter coordinating visual presentation, zoom state, and illustrative summary logic.
 class CharacterStagePresenter {
+  /// Resolves the raster asset path for a given avatar identifier.
+  ///
+  /// Supports Migration 009 seeded avatar identifiers:
+  /// - 'neutral_avatar', 'avatar_neutral', 'neutral-assistant', 'default_avatar'
+  /// - 'warm_companion_avatar', 'avatar_warm', 'warm_companion'
+  /// - 'playful_companion_avatar', 'avatar_playful', 'playful'
+  /// - 'formal_advisor_avatar', 'avatar_formal', 'formal_advisor'
+  ///
+  /// Returns null for unknown/unsupported keys so the stage renders a truthful
+  /// neutral silhouette fallback rather than displaying an unrelated Character portrait.
+  static String? resolveAvatarPath(String asset) {
+    switch (asset) {
+      case 'neutral_avatar':
+      case 'avatar_neutral':
+      case 'neutral-assistant':
+      case 'default_avatar':
+        return 'assets/studio/portrait_neutral_assistant.png';
+      case 'warm_companion_avatar':
+      case 'avatar_warm':
+      case 'warm_companion':
+        return 'assets/studio/portrait_warm_companion.png';
+      case 'playful_companion_avatar':
+      case 'avatar_playful':
+      case 'playful':
+        return 'assets/studio/portrait_playful.png';
+      case 'formal_advisor_avatar':
+      case 'avatar_formal':
+      case 'formal_advisor':
+        return 'assets/studio/portrait_formal_advisor.png';
+      default:
+        if (asset.startsWith('assets/')) return asset;
+        return null;
+    }
+  }
+
   static String getTraitBandLabel(int value) {
     if (value <= 19) return 'Very Low';
     if (value <= 39) return 'Low';

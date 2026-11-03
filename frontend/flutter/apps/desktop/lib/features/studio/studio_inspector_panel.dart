@@ -1,3 +1,4 @@
+import 'package:companion_api/companion_api.dart';
 import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
 import 'character_stage_presenter.dart';
@@ -277,7 +278,56 @@ class _StudioInspectorPanelState extends State<StudioInspectorPanel> {
   Widget _buildPersonalityTab(BuildContext context) {
     final ext = Theme.of(context).extension<CompanionThemeExtension>();
     final draft = widget.controller.draft!;
-    final summary = CharacterStagePresenter.buildIllustrativeStyleSummary(draft.traits, draft.presetId);
+
+    // Legacy placeholder inspection: read-only banner, no fake continuous sliders
+    if (draft.isLegacyPlaceholder || draft.traits == null) {
+      return ListView(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12.0),
+            decoration: BoxDecoration(
+              color: (ext?.surfaceElevated ?? const Color(0xFF1E293B)).withValues(alpha: 0.8),
+              borderRadius: CompanionRadius.borderLg,
+              border: Border.all(color: ext?.borderSubtle ?? Colors.transparent),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.history_toggle_off_rounded, size: 20, color: ext?.textSecondary),
+                const SizedBox(width: 8.0),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Legacy Placeholder (Read-Only)',
+                        style: CompanionTypography.bodyMedium.copyWith(
+                          color: ext?.textPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4.0),
+                      Text(
+                        'This character was created prior to continuous trait modulation and is preserved for historical conversation continuity. Continuous personality sliders, activation, and editing are disabled for legacy placeholders.',
+                        style: CompanionTypography.caption.copyWith(color: ext?.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    final traits = draft.traits!;
+    final summary = CharacterStagePresenter.buildIllustrativeStyleSummary(traits, draft.presetId);
+
+    // Safely lookup source template for trait resets (firstOrNull avoids throw on empty catalog)
+    final sourceTmpl = widget.controller.templates.where(
+      (t) => t.id == draft.sourceTemplateId,
+    ).firstOrNull ?? widget.controller.templates.firstOrNull;
 
     return ListView(
       children: [
@@ -328,7 +378,7 @@ class _StudioInspectorPanelState extends State<StudioInspectorPanel> {
 
         const SizedBox(height: 14.0),
 
-        // 2. Preset Selector
+        // 2. Preset Selector (no duplicate custom chip: presets from backend already includes custom)
         Text(
           'Personality Presets',
           style: CompanionTypography.caption.copyWith(color: ext?.textSecondary, fontWeight: FontWeight.w600),
@@ -342,46 +392,35 @@ class _StudioInspectorPanelState extends State<StudioInspectorPanel> {
             return ChoiceChip(
               label: Text(p.label),
               selected: isSelected,
-              onSelected: (_) => draft.updatePreset(p.presetId, p.traits),
+              onSelected: draft.isReadOnly
+                  ? null
+                  : (_) => draft.updatePreset(p.presetId, p.traits),
             );
-          }).toList()
-            ..add(
-              ChoiceChip(
-                label: const Text('Custom'),
-                selected: draft.presetId == 'custom',
-                onSelected: (_) => draft.updatePreset('custom', draft.traits),
-              ),
-            ),
+          }).toList(),
         ),
 
         const SizedBox(height: 16.0),
 
-        // 3. 8 Trait Sliders
+        // 3. 8 Trait Sliders with individual reset controls
         Text(
           'Continuous Traits (0–100)',
           style: CompanionTypography.caption.copyWith(color: ext?.textSecondary, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8.0),
-        _buildTraitSlider('Warmth', 'warmth', draft.traits.warmth),
-        _buildTraitSlider('Teasing', 'teasing', draft.traits.teasing),
-        _buildTraitSlider('Guardedness', 'guardedness', draft.traits.guardedness),
-        _buildTraitSlider('Directness', 'directness', draft.traits.directness),
-        _buildTraitSlider('Expressiveness', 'expressiveness', draft.traits.expressiveness),
-        _buildTraitSlider('Affection', 'affection', draft.traits.affection),
-        _buildTraitSlider('Formality', 'formality', draft.traits.formality),
-        _buildTraitSlider('Verbosity', 'verbosity', draft.traits.verbosity),
+        _buildTraitSlider('Warmth', 'warmth', traits.warmth, sourceTmpl),
+        _buildTraitSlider('Teasing', 'teasing', traits.teasing, sourceTmpl),
+        _buildTraitSlider('Guardedness', 'guardedness', traits.guardedness, sourceTmpl),
+        _buildTraitSlider('Directness', 'directness', traits.directness, sourceTmpl),
+        _buildTraitSlider('Expressiveness', 'expressiveness', traits.expressiveness, sourceTmpl),
+        _buildTraitSlider('Affection', 'affection', traits.affection, sourceTmpl),
+        _buildTraitSlider('Formality', 'formality', traits.formality, sourceTmpl),
+        _buildTraitSlider('Verbosity', 'verbosity', traits.verbosity, sourceTmpl),
 
         const SizedBox(height: 10.0),
         OutlinedButton.icon(
-          onPressed: () {
-            final tmpl = widget.controller.templates.firstWhere(
-              (t) => t.id == draft.sourceTemplateId,
-              orElse: () => widget.controller.templates.first,
-            );
-            if (tmpl.traits != null) {
-              draft.resetAllTraitsToTemplate(tmpl.traits!, tmpl.defaultPresetId);
-            }
-          },
+          onPressed: (draft.isReadOnly || sourceTmpl?.traits == null)
+              ? null
+              : () => draft.resetAllTraitsToTemplate(sourceTmpl!.traits!, sourceTmpl.defaultPresetId),
           icon: const Icon(Icons.restart_alt_rounded, size: 16),
           label: const Text('Reset All to Template Defaults'),
         ),
@@ -419,10 +458,11 @@ class _StudioInspectorPanelState extends State<StudioInspectorPanel> {
     );
   }
 
-  Widget _buildTraitSlider(String label, String key, int value) {
+  Widget _buildTraitSlider(String label, String key, int value, CharacterTemplateOut? sourceTmpl) {
     final ext = Theme.of(context).extension<CompanionThemeExtension>();
     final draft = widget.controller.draft!;
     final bandLabel = CharacterStagePresenter.getTraitBandLabel(value);
+    final canResetTrait = !draft.isReadOnly && sourceTmpl?.traits != null;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10.0),
@@ -446,6 +486,15 @@ class _StudioInspectorPanelState extends State<StudioInspectorPanel> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (canResetTrait) ...[
+                    IconButton(
+                      icon: const Icon(Icons.restart_alt_rounded, size: 14),
+                      tooltip: 'Reset $label to template default',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => draft.resetTraitToTemplate(key, sourceTmpl!.traits!),
+                    ),
+                    const SizedBox(width: 4.0),
+                  ],
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 1.0),
                     decoration: BoxDecoration(
@@ -473,7 +522,7 @@ class _StudioInspectorPanelState extends State<StudioInspectorPanel> {
               min: 0,
               max: 100,
               divisions: 100,
-              onChanged: (newVal) => draft.updateTrait(key, newVal.toInt()),
+              onChanged: draft.isReadOnly ? null : (newVal) => draft.updateTrait(key, newVal.toInt()),
             ),
           ),
         ],
@@ -491,6 +540,7 @@ class _StudioInspectorPanelState extends State<StudioInspectorPanel> {
         TextField(
           controller: _nameController,
           maxLength: 120,
+          enabled: !draft.isReadOnly,
           decoration: const InputDecoration(
             labelText: 'Character Name',
             hintText: 'Enter character name...',
@@ -504,6 +554,7 @@ class _StudioInspectorPanelState extends State<StudioInspectorPanel> {
           controller: _summaryController,
           maxLength: 500,
           maxLines: 2,
+          enabled: !draft.isReadOnly,
           decoration: const InputDecoration(
             labelText: 'Summary',
             hintText: 'Short one or two sentence summary...',
@@ -517,6 +568,7 @@ class _StudioInspectorPanelState extends State<StudioInspectorPanel> {
           controller: _promptController,
           minLines: 3,
           maxLines: 6,
+          enabled: !draft.isReadOnly,
           decoration: InputDecoration(
             labelText: 'Persona Instructions',
             hintText: 'Stylistic instructions (e.g. tone, quirks)...',
@@ -535,6 +587,7 @@ class _StudioInspectorPanelState extends State<StudioInspectorPanel> {
           controller: _loreController,
           minLines: 3,
           maxLines: 6,
+          enabled: !draft.isReadOnly,
           decoration: InputDecoration(
             labelText: 'Backstory & Lore',
             hintText: 'Character backstory, memories, or world lore...',
@@ -575,17 +628,20 @@ class _StudioInspectorPanelState extends State<StudioInspectorPanel> {
         const SizedBox(height: 8.0),
         Wrap(
           spacing: 8.0,
+          runSpacing: 8.0,
           children: [
-            'avatar_warm',
-            'avatar_playful',
-            'avatar_formal',
-            'avatar_neutral',
-          ].map((asset) {
-            final isSelected = draft.avatarAsset == asset;
+            ('warm_companion_avatar', 'Warm Companion'),
+            ('playful_companion_avatar', 'Playful'),
+            ('formal_advisor_avatar', 'Formal Advisor'),
+            ('neutral_avatar', 'Neutral Assistant'),
+          ].map((item) {
+            final isSelected = draft.avatarAsset == item.$1 ||
+                draft.avatarAsset == item.$1.replaceAll('_avatar', '') ||
+                draft.avatarAsset == 'avatar_${item.$1.replaceAll('_avatar', '')}';
             return ChoiceChip(
-              label: Text(asset.replaceAll('avatar_', '').replaceAll('_', ' ').toUpperCase()),
+              label: Text(item.$2),
               selected: isSelected,
-              onSelected: (_) => draft.updateAvatar(asset),
+              onSelected: draft.isReadOnly ? null : (_) => draft.updateAvatar(item.$1),
             );
           }).toList(),
         ),
@@ -597,41 +653,81 @@ class _StudioInspectorPanelState extends State<StudioInspectorPanel> {
     final controller = widget.controller;
     final draft = controller.draft!;
     final isActive = draft.instanceId != null && draft.instanceId == controller.activeInstanceId;
+    final isReady = controller.sessionStatus == StudioSessionStatus.authenticatedReady;
+    final canMutate = !controller.isMutating && isReady && !draft.isReadOnly;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (controller.uncertainCreateWarning && draft.isNew) ...[
+          Container(
+            padding: const EdgeInsets.all(8.0),
+            margin: const EdgeInsets.only(bottom: 8.0),
+            decoration: BoxDecoration(
+              color: (Theme.of(context).extension<CompanionThemeExtension>()?.warning ?? Colors.amber).withValues(alpha: 0.15),
+              borderRadius: CompanionRadius.borderMd,
+              border: Border.all(
+                color: (Theme.of(context).extension<CompanionThemeExtension>()?.warning ?? Colors.amber).withValues(alpha: 0.5),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.warning_amber_rounded,
+                  size: 16,
+                  color: Theme.of(context).extension<CompanionThemeExtension>()?.warning ?? Colors.amber,
+                ),
+                const SizedBox(width: 6.0),
+                Expanded(
+                  child: Text(
+                    'Creation timed out. The character may have been created on the server. Confirm retry to proceed.',
+                    style: CompanionTypography.caption.copyWith(
+                      color: Theme.of(context).extension<CompanionThemeExtension>()?.textPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         Row(
           children: [
             // Save / Create Button
             Expanded(
               child: NeumorphicButton(
-                onPressed: controller.isMutating ? null : widget.onSave,
+                onPressed: canMutate
+                    ? (controller.uncertainCreateWarning && draft.isNew
+                        ? () => controller.retryCreateDraft()
+                        : widget.onSave)
+                    : null,
                 child: Text(
-                  draft.isNew ? 'Create Character' : (draft.isDirty ? 'Save Changes' : 'Saved'),
+                  draft.isReadOnly
+                      ? 'Read-Only'
+                      : (controller.uncertainCreateWarning && draft.isNew
+                          ? 'Confirm Retry Creation'
+                          : (draft.isNew ? 'Create Character' : (draft.isDirty ? 'Save Changes' : 'Saved'))),
                 ),
               ),
             ),
-            const SizedBox(width: 8.0),
-
-            // Activate Button (if existing instance)
-            if (!draft.isNew && draft.instanceId != null)
+            if (!draft.isReadOnly && !draft.isNew && draft.instanceId != null) ...[
+              const SizedBox(width: 8.0),
+              // Activate Button (if existing instance)
               Expanded(
                 child: NeumorphicButton(
-                  onPressed: isActive || controller.isMutating
+                  onPressed: isActive || !canMutate
                       ? null
                       : () => widget.onActivate(draft.instanceId!),
                   child: Text(isActive ? 'Active in Chat' : 'Set Active for Profile'),
                 ),
               ),
+            ],
           ],
         ),
-        if (!draft.isNew && draft.instanceId != null) ...[
+        if (!draft.isReadOnly && !draft.isNew && draft.instanceId != null) ...[
           const SizedBox(height: 8.0),
           TextButton.icon(
-            onPressed: controller.isMutating
-                ? null
-                : () async {
+            onPressed: canMutate
+                ? () async {
                     final confirm = await showDialog<bool>(
                       context: context,
                       builder: (ctx) => AlertDialog(
@@ -646,7 +742,8 @@ class _StudioInspectorPanelState extends State<StudioInspectorPanel> {
                     if (confirm == true) {
                       widget.onArchive(draft.instanceId!);
                     }
-                  },
+                  }
+                : null,
             icon: const Icon(Icons.archive_outlined, size: 16),
             label: const Text('Archive Character'),
           ),

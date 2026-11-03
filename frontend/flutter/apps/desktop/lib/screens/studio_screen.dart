@@ -42,6 +42,10 @@ class _StudioScreenState extends State<StudioScreen> {
       return true;
     }
 
+    // Capture owning Profile, session fence, and session status prior to asynchronous gap
+    final initialProfileId = widget.controller.boundProfileId;
+    final initialFenceId = widget.controller.sessionFenceId;
+
     final decision = await showDialog<String>(
       context: context,
       barrierDismissible: false,
@@ -65,8 +69,23 @@ class _StudioScreenState extends State<StudioScreen> {
       ),
     );
 
+    // Revalidate session after showDialog gap
+    if (!mounted) return false;
+    if (widget.controller.boundProfileId != initialProfileId ||
+        widget.controller.sessionFenceId != initialFenceId ||
+        widget.controller.sessionStatus != StudioSessionStatus.authenticatedReady) {
+      return false; // Session invalidated or Profile switched during dialog
+    }
+
     if (decision == 'save') {
       final success = await widget.controller.saveDraft();
+      // Revalidate session after saveDraft gap
+      if (!mounted) return false;
+      if (widget.controller.boundProfileId != initialProfileId ||
+          widget.controller.sessionFenceId != initialFenceId ||
+          widget.controller.sessionStatus != StudioSessionStatus.authenticatedReady) {
+        return false;
+      }
       if (success) {
         performSwitch();
         _closeDrawer();
@@ -160,6 +179,7 @@ class _StudioScreenState extends State<StudioScreen> {
               onZoomIn: widget.controller.zoomIn,
               onZoomOut: widget.controller.zoomOut,
               onResetZoom: widget.controller.resetZoom,
+              onPanUpdate: widget.controller.updatePan,
               onSelectBackdrop: widget.controller.setBackdropPreset,
             ),
           ),
@@ -206,6 +226,7 @@ class _StudioScreenState extends State<StudioScreen> {
               onZoomIn: widget.controller.zoomIn,
               onZoomOut: widget.controller.zoomOut,
               onResetZoom: widget.controller.resetZoom,
+              onPanUpdate: widget.controller.updatePan,
               onSelectBackdrop: widget.controller.setBackdropPreset,
             ),
           ),
@@ -242,6 +263,7 @@ class _StudioScreenState extends State<StudioScreen> {
                   onZoomIn: widget.controller.zoomIn,
                   onZoomOut: widget.controller.zoomOut,
                   onResetZoom: widget.controller.resetZoom,
+                  onPanUpdate: widget.controller.updatePan,
                   onSelectBackdrop: widget.controller.setBackdropPreset,
                   isCompactMode: true,
                   onToggleDrawer: _toggleDrawer,

@@ -437,6 +437,184 @@ void main() {
       studio.dispose();
       chat.dispose();
     });
+
+    testWidgets('Pending unsaved-changes dialog cancels switch when Profile changes or session is revoked', (tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final client = CompanionClient(
+        sessionStore: InMemoryCredentialStore('psk_test'),
+        httpClient: MockClient(handleStudioRequest),
+      );
+      final chat = DesktopChatController(client: client);
+      await chat.checkConnection();
+
+      final studio = DesktopStudioController(chat: chat);
+      await studio.loadStudioCatalog();
+      studio.selectTemplate(studio.templates.first);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: StudioScreen(controller: studio),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Make draft dirty
+      studio.draft!.updateName('Aria Unsaved');
+      await tester.pumpAndSettle();
+
+      // Tap Neutral Assistant to trigger unsaved dialog
+      await tester.tap(find.text('Neutral Assistant'));
+      await tester.pumpAndSettle();
+      expect(find.text('Unsaved Studio Customizations'), findsOneWidget);
+
+      // Session revoked while dialog is open
+      studio.simulateChatState(connectionStatus: RuntimeConnectionStatus.unauthorized);
+
+      // User taps Discard Changes
+      await tester.tap(find.text('Discard Changes'));
+      await tester.pumpAndSettle();
+
+      // Dialog closed and switch was cancelled due to session invalidation;
+      // Profile access gate is displayed
+      expect(find.text('Profile Access Required'), findsOneWidget);
+
+      studio.dispose();
+      chat.dispose();
+    });
+
+    testWidgets('Preset chips contain exactly one Custom chip and individual trait reset works', (tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      // Ensure mock presets includes custom
+      mockServerState['presets'] = [
+        {
+          'preset_id': 'warm_companion',
+          'label': 'Warm Companion',
+          'description': 'Warm and gentle.',
+          'traits': {
+            'warmth': 85, 'teasing': 35, 'guardedness': 25, 'directness': 60,
+            'expressiveness': 70, 'affection': 80, 'formality': 30, 'verbosity': 60,
+          },
+        },
+        {
+          'preset_id': 'custom',
+          'label': 'Custom',
+          'description': 'Custom traits.',
+          'traits': {
+            'warmth': 50, 'teasing': 50, 'guardedness': 50, 'directness': 50,
+            'expressiveness': 50, 'affection': 50, 'formality': 50, 'verbosity': 50,
+          },
+        },
+      ];
+
+      final client = CompanionClient(
+        sessionStore: InMemoryCredentialStore('psk_test'),
+        httpClient: MockClient(handleStudioRequest),
+      );
+      final chat = DesktopChatController(client: client);
+      await chat.checkConnection();
+
+      final studio = DesktopStudioController(chat: chat);
+      await studio.loadStudioCatalog();
+      studio.selectTemplate(studio.templates.first);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: StudioScreen(controller: studio),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Verify exactly ONE 'Custom' ChoiceChip is present (no duplicate)
+      expect(find.widgetWithText(ChoiceChip, 'Custom'), findsOneWidget);
+
+      // Verify individual trait reset icon button
+      studio.draft!.updateTrait('warmth', 10);
+      await tester.pumpAndSettle();
+      expect(studio.draft!.traits!.warmth, 10);
+
+      final resetWarmthFinder = find.byTooltip('Reset Warmth to template default');
+      expect(resetWarmthFinder, findsOneWidget);
+      await tester.tap(resetWarmthFinder);
+      await tester.pumpAndSettle();
+      expect(studio.draft!.traits!.warmth, 85);
+
+      studio.dispose();
+      chat.dispose();
+    });
+
+    testWidgets('Legacy placeholder presents read-only notice banner and disables mutations', (tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      mockServerState['instances'] = [
+        {
+          'id': 'inst-legacy-1',
+          'profile_id': 'profile-1',
+          'is_legacy_placeholder': true,
+          'legacy_character_id': 'spark-old',
+          'template_id': null,
+          'source_template_version': null,
+          'name': 'Spark Historical',
+          'summary': 'Historical placeholder from migration.',
+          'lore': '',
+          'system_prompt': '',
+          'avatar_asset': 'neutral_avatar',
+          'preset_id': null,
+          'traits': null,
+          'status': 'archived',
+          'created_at': '2025-01-01',
+          'updated_at': '2025-01-01',
+        }
+      ];
+
+      final client = CompanionClient(
+        sessionStore: InMemoryCredentialStore('psk_test'),
+        httpClient: MockClient(handleStudioRequest),
+      );
+      final chat = DesktopChatController(client: client);
+      await chat.checkConnection();
+
+      final studio = DesktopStudioController(chat: chat);
+      await studio.loadStudioCatalog();
+      studio.toggleShowArchived();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: StudioScreen(controller: studio),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Tap the legacy instance in the library
+      await tester.tap(find.text('Spark Historical'));
+      await tester.pumpAndSettle();
+
+      // Notice banner is displayed
+      expect(find.text('Legacy Placeholder (Read-Only)'), findsOneWidget);
+
+      // Save button says Read-Only and is disabled
+      final readOnlyBtn = find.widgetWithText(NeumorphicButton, 'Read-Only');
+      expect(readOnlyBtn, findsOneWidget);
+
+      studio.dispose();
+      chat.dispose();
+    });
   });
 
   group('Procedural Fallbacks Rendering', () {

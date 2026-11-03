@@ -55,6 +55,33 @@ void main() {
       expect(StudioBackdropPreset.twilightBalcony.label, 'Twilight Balcony');
       expect(StudioBackdropPreset.minimalistVault.label, 'Minimalist Vault');
     });
+
+    test('resolveAvatarPath resolves Migration 009 seeded avatar identifiers and null for unknown', () {
+      expect(
+        CharacterStagePresenter.resolveAvatarPath('neutral_avatar'),
+        'assets/studio/portrait_neutral_assistant.png',
+      );
+      expect(
+        CharacterStagePresenter.resolveAvatarPath('warm_companion_avatar'),
+        'assets/studio/portrait_warm_companion.png',
+      );
+      expect(
+        CharacterStagePresenter.resolveAvatarPath('playful_companion_avatar'),
+        'assets/studio/portrait_playful.png',
+      );
+      expect(
+        CharacterStagePresenter.resolveAvatarPath('formal_advisor_avatar'),
+        'assets/studio/portrait_formal_advisor.png',
+      );
+      expect(
+        CharacterStagePresenter.resolveAvatarPath('assets/custom/path.png'),
+        'assets/custom/path.png',
+      );
+      expect(
+        CharacterStagePresenter.resolveAvatarPath('unknown_avatar_key'),
+        isNull,
+      );
+    });
   });
 
   group('DesktopStudioController Unit Tests', () {
@@ -246,7 +273,7 @@ void main() {
       // Edit slider -> auto-transitions presetId to 'custom'
       studio.draft!.updateTrait('warmth', 95);
       expect(studio.draft!.presetId, 'custom');
-      expect(studio.draft!.traits.warmth, 95);
+      expect(studio.draft!.traits!.warmth, 95);
 
       // Save draft creates instance
       final success = await studio.saveDraft();
@@ -435,11 +462,11 @@ void main() {
       final tmpl = studio.templates.first;
       studio.selectTemplate(tmpl);
       studio.draft!.updateTrait('warmth', 10);
-      expect(studio.draft!.traits.warmth, 10);
+      expect(studio.draft!.traits!.warmth, 10);
       expect(studio.draft!.presetId, 'custom');
 
       studio.draft!.resetTraitToTemplate('warmth', tmpl.traits!);
-      expect(studio.draft!.traits.warmth, tmpl.traits!.warmth);
+      expect(studio.draft!.traits!.warmth, tmpl.traits!.warmth);
 
       studio.draft!.resetAllTraitsToTemplate(tmpl.traits!, tmpl.defaultPresetId);
       expect(studio.draft!.presetId, tmpl.defaultPresetId);
@@ -470,6 +497,333 @@ void main() {
 
       studio.toggleShowArchived();
       expect(studio.showArchived, isTrue);
+
+      studio.dispose();
+      chat.dispose();
+    });
+
+    test('Uncertain Character creation does not confirm on matching editable fields and requires deliberate retry', () async {
+      mockServerState['instances'] = [
+        {
+          'id': 'inst-existing-1',
+          'profile_id': 'profile-1',
+          'is_legacy_placeholder': false,
+          'legacy_character_id': null,
+          'template_id': 'warm-companion',
+          'source_template_version': 1,
+          'name': 'Identical Name',
+          'summary': 'Identical Summary',
+          'lore': 'Identical Lore',
+          'system_prompt': 'Identical Prompt',
+          'avatar_asset': 'default_avatar',
+          'preset_id': 'custom',
+          'traits': {
+            'warmth': 80, 'teasing': 50, 'guardedness': 50, 'directness': 50,
+            'expressiveness': 50, 'affection': 50, 'formality': 50, 'verbosity': 50,
+          },
+          'status': 'active',
+          'created_at': '2026-01-01',
+          'updated_at': '2026-01-01',
+        }
+      ];
+
+      bool shouldTimeoutCreate = false;
+      final client = CompanionClient(
+        sessionStore: InMemoryCredentialStore('psk_test'),
+        httpClient: MockClient((req) async {
+          if (req.url.path.endsWith('/characters/instances') && req.method == 'POST') {
+            if (shouldTimeoutCreate) {
+              return http.Response('{"detail":"Request timeout"}', 408);
+            }
+          }
+          return handleStudioRequest(req);
+        }),
+      );
+
+      final chat = DesktopChatController(client: client);
+      await chat.checkConnection();
+
+      final studio = DesktopStudioController(chat: chat);
+      await studio.loadStudioCatalog();
+      expect(studio.instances.length, 1);
+
+      // User creates a new draft with identical fields to inst-existing-1
+      studio.selectTemplate(studio.templates.first);
+      studio.draft!.updateName('Identical Name');
+      studio.draft!.updateSummary('Identical Summary');
+      studio.draft!.updateLore('Identical Lore');
+      studio.draft!.updateSystemPrompt('Identical Prompt');
+      studio.draft!.updateTrait('warmth', 80);
+
+      // Save times out (408)
+      shouldTimeoutCreate = true;
+      final success = await studio.saveDraft();
+      expect(success, isFalse);
+      expect(studio.uncertainCreateWarning, isTrue);
+      expect(studio.uncertainWriteWarning, isTrue);
+
+      // Critical Invariant: Draft must NOT be replaced by inst-existing-1
+      expect(studio.draft!.isNew, isTrue);
+      expect(studio.draft!.instanceId, isNull);
+      expect(studio.draft!.isDirty, isTrue);
+
+      // An ordinary second saveDraft() click must not silently duplicate
+      final secondClick = await studio.saveDraft();
+      expect(secondClick, isFalse);
+      expect(studio.error, contains('Confirm retry'));
+
+      // Deliberate user retry when server is healthy succeeds
+      shouldTimeoutCreate = false;
+      final retrySuccess = await studio.retryCreateDraft();
+      expect(retrySuccess, isTrue);
+      expect(studio.draft!.isNew, isFalse);
+      expect(studio.draft!.instanceId, isNotNull);
+      expect(studio.uncertainCreateWarning, isFalse);
+
+      studio.dispose();
+      chat.dispose();
+    });
+
+    test('Character API 401/403 authorization failures trigger fail-closed session invalidation', () async {
+      String? failEndpoint;
+      final client = CompanionClient(
+        sessionStore: InMemoryCredentialStore('psk_test'),
+        httpClient: MockClient((req) async {
+          if (failEndpoint != null && req.url.path.endsWith(failEndpoint)) {
+            return http.Response('{"detail":"Unauthorized"}', 401);
+          }
+          return handleStudioRequest(req);
+        }),
+      );
+
+      final chat = DesktopChatController(client: client);
+      await chat.checkConnection();
+
+      final studio = DesktopStudioController(chat: chat);
+      await studio.loadStudioCatalog();
+      expect(studio.sessionStatus, StudioSessionStatus.authenticatedReady);
+
+      // 1. Catalog reload 401
+      failEndpoint = '/characters/instances';
+      await studio.loadStudioCatalog();
+      expect(studio.sessionStatus, StudioSessionStatus.sessionExpiredOrRevoked);
+      expect(studio.draft, isNull);
+      expect(studio.instances, isEmpty);
+
+      // Restore session
+      failEndpoint = null;
+      await chat.checkConnection();
+      await studio.loadStudioCatalog();
+      expect(studio.sessionStatus, StudioSessionStatus.authenticatedReady);
+
+      // 2. saveDraft 401
+      studio.selectTemplate(studio.templates.first);
+      failEndpoint = '/characters/instances';
+      final saveSuccess = await studio.saveDraft();
+      expect(saveSuccess, isFalse);
+      expect(studio.sessionStatus, StudioSessionStatus.sessionExpiredOrRevoked);
+      expect(studio.draft, isNull);
+
+      studio.dispose();
+      chat.dispose();
+    });
+
+    test('Concurrent edits during save request are preserved after response snapshot', () async {
+      Completer<http.Response>? saveCompleter;
+      final client = CompanionClient(
+        sessionStore: InMemoryCredentialStore('psk_test'),
+        httpClient: MockClient((req) async {
+          if (req.url.path.endsWith('/characters/instances') && req.method == 'POST') {
+            if (saveCompleter != null) {
+              return saveCompleter.future;
+            }
+          }
+          return handleStudioRequest(req);
+        }),
+      );
+
+      final chat = DesktopChatController(client: client);
+      await chat.checkConnection();
+
+      final studio = DesktopStudioController(chat: chat);
+      await studio.loadStudioCatalog();
+
+      studio.selectTemplate(studio.templates.first);
+      studio.draft!.updateName('Aria Initial');
+
+      // Trigger save with delayed server response
+      saveCompleter = Completer<http.Response>();
+      final saveFuture = studio.saveDraft();
+
+      // While in flight, user makes additional edits (revision increments)
+      studio.draft!.updateName('Aria Concurrent Edit');
+      studio.draft!.updateTrait('warmth', 99);
+
+      // Complete save with server response from snapshot
+      final serverInst = {
+        'id': 'inst-saved-1',
+        'profile_id': 'profile-1',
+        'is_legacy_placeholder': false,
+        'legacy_character_id': null,
+        'template_id': 'warm-companion',
+        'source_template_version': 1,
+        'name': 'Aria Initial',
+        'summary': '',
+        'lore': '',
+        'system_prompt': '',
+        'avatar_asset': 'default_avatar',
+        'preset_id': 'warm_companion',
+        'traits': {
+          'warmth': 85, 'teasing': 35, 'guardedness': 25, 'directness': 60,
+          'expressiveness': 70, 'affection': 80, 'formality': 30, 'verbosity': 60,
+        },
+        'status': 'active',
+        'created_at': '2026-01-01',
+        'updated_at': '2026-01-01',
+      };
+      saveCompleter.complete(http.Response(jsonEncode(serverInst), 201));
+      final result = await saveFuture;
+
+      expect(result, isTrue);
+      // Critical Invariant: Instance ID is adopted, but newer edits are preserved
+      expect(studio.draft!.instanceId, 'inst-saved-1');
+      expect(studio.draft!.name, 'Aria Concurrent Edit');
+      expect(studio.draft!.traits!.warmth, 99);
+      expect(studio.draft!.isDirty, isTrue);
+
+      studio.dispose();
+      chat.dispose();
+    });
+
+    test('Stale catalog read does not overwrite active character state after mutation', () async {
+      Completer<http.Response>? slowInstancesCompleter;
+      final client = CompanionClient(
+        sessionStore: InMemoryCredentialStore('psk_test'),
+        httpClient: MockClient((req) async {
+          if (req.url.path.endsWith('/characters/instances') && req.method == 'GET') {
+            if (slowInstancesCompleter != null) {
+              return slowInstancesCompleter.future;
+            }
+          }
+          return handleStudioRequest(req);
+        }),
+      );
+
+      final chat = DesktopChatController(client: client);
+      await chat.checkConnection();
+
+      final studio = DesktopStudioController(chat: chat);
+      await studio.loadStudioCatalog();
+
+      // Trigger a slow catalog load
+      slowInstancesCompleter = Completer<http.Response>();
+      final slowLoadFuture = studio.loadStudioCatalog();
+
+      // In the meantime, reset active character to neutral (increments _readGeneration)
+      final resetSuccess = await studio.resetProfileToNeutral();
+      expect(resetSuccess, isTrue);
+      expect(studio.isNeutralActive, isTrue);
+
+      // Now complete the slow catalog read with a pre-reset active character
+      slowInstancesCompleter.complete(http.Response(jsonEncode(mockServerState['instances']), 200));
+      await slowLoadFuture;
+
+      // Stale read was dropped; neutral active state remains intact
+      expect(studio.isNeutralActive, isTrue);
+
+      studio.dispose();
+      chat.dispose();
+    });
+
+    test('Legacy placeholder instances are loaded with includeLegacy, read-only, and reject mutations', () async {
+      mockServerState['instances'] = [
+        {
+          'id': 'inst-legacy-1',
+          'profile_id': 'profile-1',
+          'is_legacy_placeholder': true,
+          'legacy_character_id': 'spark-old',
+          'template_id': null,
+          'source_template_version': null,
+          'name': 'Spark Legacy',
+          'summary': 'Historical character.',
+          'lore': '',
+          'system_prompt': '',
+          'avatar_asset': 'neutral_avatar',
+          'preset_id': null,
+          'traits': null,
+          'status': 'archived',
+          'created_at': '2025-01-01',
+          'updated_at': '2025-01-01',
+        }
+      ];
+
+      final client = CompanionClient(
+        sessionStore: InMemoryCredentialStore('psk_test'),
+        httpClient: MockClient(handleStudioRequest),
+      );
+
+      final chat = DesktopChatController(client: client);
+      await chat.checkConnection();
+
+      final studio = DesktopStudioController(chat: chat);
+      await studio.loadStudioCatalog();
+
+      expect(studio.instances.length, 1);
+      final legacyInst = studio.instances.first;
+      expect(legacyInst.isLegacyPlaceholder, isTrue);
+
+      // Select legacy instance
+      studio.selectInstance(legacyInst);
+      expect(studio.draft!.isLegacyPlaceholder, isTrue);
+      expect(studio.draft!.isReadOnly, isTrue);
+      expect(studio.draft!.traits, isNull);
+
+      // Edits are no-ops
+      studio.draft!.updateName('Attempted Edit');
+      expect(studio.draft!.name, 'Spark Legacy');
+      studio.draft!.updateTrait('warmth', 99);
+      expect(studio.draft!.traits, isNull);
+
+      // Mutations rejected
+      expect(await studio.saveDraft(), isFalse);
+      expect(await studio.activateCharacter(legacyInst.id), isFalse);
+      expect(await studio.archiveInstance(legacyInst.id), isFalse);
+
+      studio.dispose();
+      chat.dispose();
+    });
+
+    test('Pan offset updates when zoomed and resets with zoom', () {
+      final client = CompanionClient(
+        sessionStore: InMemoryCredentialStore('psk_test'),
+        httpClient: MockClient(handleStudioRequest),
+      );
+      final chat = DesktopChatController(client: client);
+      final studio = DesktopStudioController(chat: chat);
+
+      expect(studio.panOffset, Offset.zero);
+
+      // Pan at 1.0 zoom is ignored
+      studio.updatePan(const Offset(50, 50));
+      expect(studio.panOffset, Offset.zero);
+
+      // Zoom in to 1.5x
+      studio.zoomIn();
+      studio.zoomIn();
+      studio.zoomIn();
+      studio.zoomIn();
+      studio.zoomIn();
+      expect(studio.zoomLevel, closeTo(1.5, 0.001));
+
+      // Pan is permitted and clamped
+      studio.updatePan(const Offset(30, 40));
+      expect(studio.panOffset.dx, 30.0);
+      expect(studio.panOffset.dy, 40.0);
+
+      // Reset zoom resets pan to zero
+      studio.resetZoom();
+      expect(studio.zoomLevel, 1.0);
+      expect(studio.panOffset, Offset.zero);
 
       studio.dispose();
       chat.dispose();

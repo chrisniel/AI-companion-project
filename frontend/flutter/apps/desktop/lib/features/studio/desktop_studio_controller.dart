@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:ai_companion_desktop/features/chat/desktop_chat_controller.dart';
 import 'package:companion_api/companion_api.dart';
 import 'package:flutter/foundation.dart';
@@ -16,7 +17,7 @@ enum StudioSessionStatus {
 /// Mutable draft for the Character Studio inspector.
 class CharacterStudioDraft {
   CharacterStudioDraft({
-    this.instanceId,
+    String? instanceId,
     required this.sourceTemplateId,
     required String name,
     required String summary,
@@ -24,9 +25,11 @@ class CharacterStudioDraft {
     required String systemPrompt,
     required String avatarAsset,
     required String presetId,
-    required CharacterTraitVector traits,
+    CharacterTraitVector? traits,
+    this.isLegacyPlaceholder = false,
     required this.onChanged,
-  })  : _name = name,
+  })  : _instanceId = instanceId,
+        _name = name,
         _summary = summary,
         _lore = lore,
         _systemPrompt = systemPrompt,
@@ -41,9 +44,15 @@ class CharacterStudioDraft {
         _initialPresetId = presetId,
         _initialTraits = traits;
 
-  final String? instanceId;
+  String? _instanceId;
+  String? get instanceId => _instanceId;
   final String sourceTemplateId;
+  final bool isLegacyPlaceholder;
   final VoidCallback onChanged;
+
+  bool get isReadOnly => isLegacyPlaceholder;
+  int _revision = 0;
+  int get revision => _revision;
 
   String _name;
   String _summary;
@@ -51,24 +60,24 @@ class CharacterStudioDraft {
   String _systemPrompt;
   String _avatarAsset;
   String _presetId;
-  CharacterTraitVector _traits;
+  CharacterTraitVector? _traits;
 
-  final String _initialName;
-  final String _initialSummary;
-  final String _initialLore;
-  final String _initialSystemPrompt;
-  final String _initialAvatarAsset;
-  final String _initialPresetId;
-  final CharacterTraitVector _initialTraits;
+  String _initialName;
+  String _initialSummary;
+  String _initialLore;
+  String _initialSystemPrompt;
+  String _initialAvatarAsset;
+  String _initialPresetId;
+  CharacterTraitVector? _initialTraits;
 
-  bool get isNew => instanceId == null;
+  bool get isNew => _instanceId == null;
   String get name => _name;
   String get summary => _summary;
   String get lore => _lore;
   String get systemPrompt => _systemPrompt;
   String get avatarAsset => _avatarAsset;
   String get presetId => _presetId;
-  CharacterTraitVector get traits => _traits;
+  CharacterTraitVector? get traits => _traits;
 
   bool get isDirty =>
       _name != _initialName ||
@@ -80,64 +89,83 @@ class CharacterStudioDraft {
       _traits != _initialTraits;
 
   void updateName(String val) {
+    if (isReadOnly) return;
     if (_name != val) {
       _name = val;
+      _revision++;
       onChanged();
     }
   }
 
   void updateSummary(String val) {
+    if (isReadOnly) return;
     if (_summary != val) {
       _summary = val;
+      _revision++;
       onChanged();
     }
   }
 
   void updateLore(String val) {
+    if (isReadOnly) return;
     if (_lore != val) {
       _lore = val;
+      _revision++;
       onChanged();
     }
   }
 
   void updateSystemPrompt(String val) {
+    if (isReadOnly) return;
     if (_systemPrompt != val) {
       _systemPrompt = val;
+      _revision++;
       onChanged();
     }
   }
 
   void updateAvatar(String val) {
+    if (isReadOnly) return;
     if (_avatarAsset != val) {
       _avatarAsset = val;
+      _revision++;
       onChanged();
     }
   }
 
   void updatePreset(String newPresetId, CharacterTraitVector presetTraits) {
+    if (isReadOnly) return;
     _presetId = newPresetId;
     _traits = presetTraits;
+    _revision++;
     onChanged();
   }
 
   void updateTrait(String traitName, int val) {
+    if (isReadOnly) return;
     final clamped = val.clamp(0, 100);
+    final cur = _traits ?? const CharacterTraitVector(
+      warmth: 50, teasing: 50, guardedness: 50, directness: 50,
+      expressiveness: 50, affection: 50, formality: 50, verbosity: 50,
+    );
     _traits = CharacterTraitVector(
-      warmth: traitName == 'warmth' ? clamped : _traits.warmth,
-      teasing: traitName == 'teasing' ? clamped : _traits.teasing,
-      guardedness: traitName == 'guardedness' ? clamped : _traits.guardedness,
-      directness: traitName == 'directness' ? clamped : _traits.directness,
-      expressiveness: traitName == 'expressiveness' ? clamped : _traits.expressiveness,
-      affection: traitName == 'affection' ? clamped : _traits.affection,
-      formality: traitName == 'formality' ? clamped : _traits.formality,
-      verbosity: traitName == 'verbosity' ? clamped : _traits.verbosity,
+      warmth: traitName == 'warmth' ? clamped : cur.warmth,
+      teasing: traitName == 'teasing' ? clamped : cur.teasing,
+      guardedness: traitName == 'guardedness' ? clamped : cur.guardedness,
+      directness: traitName == 'directness' ? clamped : cur.directness,
+      expressiveness: traitName == 'expressiveness' ? clamped : cur.expressiveness,
+      affection: traitName == 'affection' ? clamped : cur.affection,
+      formality: traitName == 'formality' ? clamped : cur.formality,
+      verbosity: traitName == 'verbosity' ? clamped : cur.verbosity,
     );
     // Diverging from named preset switches presetId to 'custom'
     _presetId = 'custom';
+    _revision++;
     onChanged();
   }
 
   void resetTraitToTemplate(String traitName, CharacterTraitVector tmplTraits) {
+    if (isReadOnly) return;
     int resetVal;
     switch (traitName) {
       case 'warmth': resetVal = tmplTraits.warmth; break;
@@ -154,8 +182,34 @@ class CharacterStudioDraft {
   }
 
   void resetAllTraitsToTemplate(CharacterTraitVector tmplTraits, String? tmplPresetId) {
+    if (isReadOnly) return;
     _traits = tmplTraits;
     _presetId = tmplPresetId ?? 'custom';
+    _revision++;
+    onChanged();
+  }
+
+  /// Reconciles draft with a committed server instance while strictly preserving
+  /// user edits that occurred after the request snapshot was taken.
+  void reconcileSavedInstance(CharacterInstanceOut saved, int snapshotRevision) {
+    _instanceId = saved.id;
+    _initialName = saved.name;
+    _initialSummary = saved.summary;
+    _initialLore = saved.lore;
+    _initialSystemPrompt = saved.systemPrompt;
+    _initialAvatarAsset = saved.avatarAsset;
+    _initialPresetId = saved.presetId ?? 'custom';
+    _initialTraits = saved.traits;
+
+    if (_revision == snapshotRevision) {
+      _name = saved.name;
+      _summary = saved.summary;
+      _lore = saved.lore;
+      _systemPrompt = saved.systemPrompt;
+      _avatarAsset = saved.avatarAsset;
+      _presetId = saved.presetId ?? 'custom';
+      _traits = saved.traits;
+    }
     onChanged();
   }
 }
@@ -196,19 +250,24 @@ class DesktopStudioController extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   bool _uncertainWriteWarning = false;
+  bool _uncertainCreateWarning = false;
 
   double _zoomLevel = 1.0;
+  Offset _panOffset = Offset.zero;
   StudioBackdropPreset _backdropPreset = StudioBackdropPreset.cozyStudio;
   bool _showArchived = false;
 
   // Getters
   StudioSessionStatus get sessionStatus => _sessionStatus;
+  int get sessionFenceId => _sessionFenceId;
   String? get boundProfileId => _boundProfileId;
   bool get isMutating => _isMutating;
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get uncertainWriteWarning => _uncertainWriteWarning;
+  bool get uncertainCreateWarning => _uncertainCreateWarning;
   double get zoomLevel => _zoomLevel;
+  Offset get panOffset => _panOffset;
   StudioBackdropPreset get backdropPreset => _backdropPreset;
   bool get showArchived => _showArchived;
 
@@ -229,16 +288,21 @@ class DesktopStudioController extends ChangeNotifier {
         displayName: _neutral?.name ?? 'Neutral Assistant',
         badgeText: isNeutralActive ? 'Active in Chat' : '',
         zoomLevel: _zoomLevel,
+        panOffset: _panOffset,
         backdropPreset: _backdropPreset,
       );
     }
     if (_draft != null) {
       final isActive = _draft!.instanceId != null && _draft!.instanceId == activeInstanceId;
+      final badge = _draft!.isLegacyPlaceholder
+          ? 'Legacy (Read-Only)'
+          : (isActive ? 'Active in Chat' : (_draft!.isNew ? 'New Draft' : 'Customizing'));
       return CharacterStageVisualSpec(
         avatarAsset: _draft!.avatarAsset,
         displayName: _draft!.name.isNotEmpty ? _draft!.name : 'Custom Character',
-        badgeText: isActive ? 'Active in Chat' : (_draft!.isNew ? 'New Draft' : 'Customizing'),
+        badgeText: badge,
         zoomLevel: _zoomLevel,
+        panOffset: _panOffset,
         backdropPreset: _backdropPreset,
       );
     }
@@ -246,6 +310,7 @@ class DesktopStudioController extends ChangeNotifier {
       avatarAsset: 'default_avatar',
       displayName: 'Character Studio',
       zoomLevel: _zoomLevel,
+      panOffset: _panOffset,
       backdropPreset: _backdropPreset,
     );
   }
@@ -259,6 +324,32 @@ class DesktopStudioController extends ChangeNotifier {
         _sessionFenceId == fenceSession &&
         _boundProfileId == fenceProfile &&
         _sessionStatus != StudioSessionStatus.sessionExpiredOrRevoked;
+  }
+
+  bool _isAuthFailure(dynamic e) {
+    if (e is CompanionApiException && (e.statusCode == 401 || e.statusCode == 403)) {
+      return true;
+    }
+    final msg = e.toString();
+    return msg.contains('401') ||
+        msg.contains('403') ||
+        msg.contains('Unauthorized') ||
+        msg.contains('Forbidden');
+  }
+
+  void _handleAuthorizationLoss() {
+    _sessionFenceId++;
+    _readGeneration++;
+    _isMutating = false;
+    _boundProfileId = null;
+    _instances = [];
+    _activeState = null;
+    _draft = null;
+    _isNeutralSelected = false;
+    _sessionStatus = StudioSessionStatus.sessionExpiredOrRevoked;
+    _error = 'Profile authorization lost. Select or authenticate a Profile in Settings.';
+    _notify();
+    unawaited(chat.invalidateProfileSession(clearStoredToken: false));
   }
 
   void _onChatChanged() {
@@ -364,7 +455,7 @@ class DesktopStudioController extends ChangeNotifier {
         chat.client.listCharacterPresets(),
         chat.client.listCharacterTemplates(),
         chat.client.getNeutralAssistant(),
-        chat.client.listCharacterInstances(),
+        chat.client.listCharacterInstances(includeArchived: true, includeLegacy: true),
         chat.client.getActiveCharacterState(),
       ]);
 
@@ -378,23 +469,24 @@ class DesktopStudioController extends ChangeNotifier {
       _instances = futures[3] as List<CharacterInstanceOut>;
       _activeState = futures[4] as ActiveCharacterStateOut;
 
-      if (reconcileUncertainWrite && _draft != null && _draft!.isDirty) {
-        // Reconcile uncertain write
-        final matching = _instances.where((i) =>
-            i.name == _draft!.name &&
-            i.summary == _draft!.summary &&
-            i.lore == _draft!.lore &&
-            i.systemPrompt == _draft!.systemPrompt &&
-            i.avatarAsset == _draft!.avatarAsset &&
-            i.presetId == _draft!.presetId &&
-            i.traits == _draft!.traits);
-        if (matching.isNotEmpty) {
-          _selectInstanceDirect(matching.first);
-          _uncertainWriteWarning = false;
+      if (reconcileUncertainWrite && _draft != null) {
+        if (!_draft!.isNew && _draft!.instanceId != null) {
+          // Reconcile uncertain update by exact instance ID only
+          final matching = _instances.where((i) => i.id == _draft!.instanceId);
+          if (matching.isNotEmpty) {
+            _draft!.reconcileSavedInstance(matching.first, _draft!.revision);
+            _uncertainWriteWarning = false;
+          }
         }
+        // If _draft.isNew: do NOT auto-confirm by matching editable fields.
+        // The catalog refresh is read-only investigation; draft stays dirty.
       }
     } catch (e) {
       if (_isSessionValid(fenceSession, fenceProfile)) {
+        if (_isAuthFailure(e)) {
+          _handleAuthorizationLoss();
+          return;
+        }
         _error = 'Failed to load Character Studio: $e';
       }
     } finally {
@@ -417,6 +509,7 @@ class DesktopStudioController extends ChangeNotifier {
     _draft = CharacterStudioDraft(
       instanceId: null,
       sourceTemplateId: tmpl.id,
+      isLegacyPlaceholder: false,
       name: tmpl.name,
       summary: tmpl.summary,
       lore: tmpl.lore,
@@ -426,6 +519,8 @@ class DesktopStudioController extends ChangeNotifier {
       traits: initialTraits,
       onChanged: _notify,
     );
+    _uncertainCreateWarning = false;
+    _uncertainWriteWarning = false;
     _notify();
   }
 
@@ -439,19 +534,18 @@ class DesktopStudioController extends ChangeNotifier {
     _draft = CharacterStudioDraft(
       instanceId: inst.id,
       sourceTemplateId: inst.templateId ?? '',
+      isLegacyPlaceholder: inst.isLegacyPlaceholder,
       name: inst.name,
       summary: inst.summary,
       lore: inst.lore,
       systemPrompt: inst.systemPrompt,
       avatarAsset: inst.avatarAsset,
       presetId: inst.presetId ?? 'custom',
-      traits: inst.traits ??
-          const CharacterTraitVector(
-            warmth: 50, teasing: 50, guardedness: 50, directness: 50,
-            expressiveness: 50, affection: 50, formality: 50, verbosity: 50,
-          ),
+      traits: inst.traits,
       onChanged: _notify,
     );
+    _uncertainCreateWarning = false;
+    _uncertainWriteWarning = false;
   }
 
   void selectNeutral() {
@@ -460,14 +554,23 @@ class DesktopStudioController extends ChangeNotifier {
     _notify();
   }
 
-  Future<bool> saveDraft() async {
-    if (_isMutating || _draft == null) return false;
+  Future<bool> saveDraft({bool forceRetryCreate = false}) async {
+    if (_isMutating || _draft == null || _draft!.isReadOnly) return false;
+
+    // Guard against silent duplicate creation after uncertain outcome
+    if (_draft!.isNew && _uncertainCreateWarning && !forceRetryCreate) {
+      _error = 'Previous creation attempt timed out. Confirm retry to attempt creation again.';
+      _notify();
+      return false;
+    }
+
     _isMutating = true;
     _error = null;
     _notify();
 
     final fenceSession = _sessionFenceId;
     final fenceProfile = _boundProfileId;
+    final snapshotRevision = _draft!.revision;
 
     try {
       CharacterInstanceOut saved;
@@ -481,7 +584,11 @@ class DesktopStudioController extends ChangeNotifier {
             systemPrompt: _draft!.systemPrompt.isNotEmpty ? _draft!.systemPrompt : null,
             avatarAsset: _draft!.avatarAsset,
             presetId: _draft!.presetId,
-            traits: _draft!.traits,
+            traits: _draft!.traits ??
+                const CharacterTraitVector(
+                  warmth: 50, teasing: 50, guardedness: 50, directness: 50,
+                  expressiveness: 50, affection: 50, formality: 50, verbosity: 50,
+                ),
           ),
         );
       } else {
@@ -504,8 +611,10 @@ class DesktopStudioController extends ChangeNotifier {
         return false; // Dropped cross-session response
       }
 
-      _selectInstanceDirect(saved);
+      _readGeneration++;
+      _draft!.reconcileSavedInstance(saved, snapshotRevision);
       _uncertainWriteWarning = false;
+      _uncertainCreateWarning = false;
       _isMutating = false;
       _notify();
 
@@ -518,10 +627,23 @@ class DesktopStudioController extends ChangeNotifier {
         return false;
       }
       _isMutating = false;
+      if (_isAuthFailure(e)) {
+        _handleAuthorizationLoss();
+        return false;
+      }
+
       if (e.toString().contains('408') || e.toString().contains('Timeout') || e.toString().contains('SocketException')) {
         _uncertainWriteWarning = true;
-        _notify();
-        unawaited(loadStudioCatalog(reconcileUncertainWrite: true));
+        if (_draft!.isNew) {
+          _uncertainCreateWarning = true;
+          _error = 'Character creation timed out. The server outcome is uncertain; the character may have been created.';
+          _notify();
+          unawaited(loadStudioCatalog(reconcileUncertainWrite: false));
+        } else {
+          _error = 'Character update timed out. Investigating server state...';
+          _notify();
+          unawaited(loadStudioCatalog(reconcileUncertainWrite: true));
+        }
       } else {
         _error = 'Failed to save changes: $e';
         _notify();
@@ -530,8 +652,16 @@ class DesktopStudioController extends ChangeNotifier {
     }
   }
 
+  Future<bool> retryCreateDraft() => saveDraft(forceRetryCreate: true);
+
   Future<bool> activateCharacter(String instanceId) async {
     if (_isMutating) return false;
+    final inst = _instances.where((i) => i.id == instanceId).firstOrNull;
+    if (inst?.isLegacyPlaceholder == true) {
+      _error = 'Legacy placeholders cannot be activated.';
+      _notify();
+      return false;
+    }
     _isMutating = true;
     _error = null;
     _notify();
@@ -545,15 +675,22 @@ class DesktopStudioController extends ChangeNotifier {
         _isMutating = false;
         return false;
       }
+      _readGeneration++;
       _activeState = updated;
       _isMutating = false;
       _notify();
       return true;
     } catch (e) {
-      if (_isSessionValid(fenceSession, fenceProfile)) {
-        _error = 'Failed to activate character: $e';
+      if (!_isSessionValid(fenceSession, fenceProfile)) {
+        _isMutating = false;
+        return false;
       }
       _isMutating = false;
+      if (_isAuthFailure(e)) {
+        _handleAuthorizationLoss();
+        return false;
+      }
+      _error = 'Failed to activate character: $e';
       _notify();
       return false;
     }
@@ -574,15 +711,22 @@ class DesktopStudioController extends ChangeNotifier {
         _isMutating = false;
         return false;
       }
+      _readGeneration++;
       _activeState = updated;
       _isMutating = false;
       _notify();
       return true;
     } catch (e) {
-      if (_isSessionValid(fenceSession, fenceProfile)) {
-        _error = 'Failed to reset to neutral: $e';
+      if (!_isSessionValid(fenceSession, fenceProfile)) {
+        _isMutating = false;
+        return false;
       }
       _isMutating = false;
+      if (_isAuthFailure(e)) {
+        _handleAuthorizationLoss();
+        return false;
+      }
+      _error = 'Failed to reset to neutral: $e';
       _notify();
       return false;
     }
@@ -590,6 +734,12 @@ class DesktopStudioController extends ChangeNotifier {
 
   Future<bool> archiveInstance(String instanceId) async {
     if (_isMutating) return false;
+    final inst = _instances.where((i) => i.id == instanceId).firstOrNull;
+    if (inst?.isLegacyPlaceholder == true) {
+      _error = 'Legacy placeholders cannot be archived.';
+      _notify();
+      return false;
+    }
     _isMutating = true;
     _error = null;
     _notify();
@@ -603,6 +753,7 @@ class DesktopStudioController extends ChangeNotifier {
         _isMutating = false;
         return false;
       }
+      _readGeneration++;
       if (_draft?.instanceId == instanceId) {
         _draft = null;
         _isNeutralSelected = true;
@@ -612,10 +763,16 @@ class DesktopStudioController extends ChangeNotifier {
       await loadStudioCatalog();
       return true;
     } catch (e) {
-      if (_isSessionValid(fenceSession, fenceProfile)) {
-        _error = 'Failed to archive character: $e';
+      if (!_isSessionValid(fenceSession, fenceProfile)) {
+        _isMutating = false;
+        return false;
       }
       _isMutating = false;
+      if (_isAuthFailure(e)) {
+        _handleAuthorizationLoss();
+        return false;
+      }
+      _error = 'Failed to archive character: $e';
       _notify();
       return false;
     }
@@ -628,18 +785,38 @@ class DesktopStudioController extends ChangeNotifier {
     }
   }
 
+  void updatePan(Offset delta) {
+    if (_zoomLevel <= 1.0) {
+      if (_panOffset != Offset.zero) {
+        _panOffset = Offset.zero;
+        _notify();
+      }
+      return;
+    }
+    final maxPanX = 180.0 * (_zoomLevel - 1.0);
+    final maxPanY = 240.0 * (_zoomLevel - 1.0);
+    final nextX = (_panOffset.dx + delta.dx).clamp(-maxPanX, maxPanX);
+    final nextY = (_panOffset.dy + delta.dy).clamp(-maxPanY, maxPanY);
+    _panOffset = Offset(nextX, nextY);
+    _notify();
+  }
+
   void zoomIn() {
-    _zoomLevel = (_zoomLevel + 0.1).clamp(1.0, 2.0);
+    _zoomLevel = double.parse((_zoomLevel + 0.1).clamp(1.0, 2.0).toStringAsFixed(1));
     _notify();
   }
 
   void zoomOut() {
-    _zoomLevel = (_zoomLevel - 0.1).clamp(1.0, 2.0);
+    _zoomLevel = double.parse((_zoomLevel - 0.1).clamp(1.0, 2.0).toStringAsFixed(1));
+    if (_zoomLevel <= 1.0) {
+      _panOffset = Offset.zero;
+    }
     _notify();
   }
 
   void resetZoom() {
     _zoomLevel = 1.0;
+    _panOffset = Offset.zero;
     _notify();
   }
 

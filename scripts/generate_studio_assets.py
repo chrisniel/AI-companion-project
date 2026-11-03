@@ -52,6 +52,27 @@ def generate_backdrop(width: int, height: int, c_top: tuple[int, int, int], c_mi
     return create_png(width, height, bytes(pixels))
 
 
+def create_png_rgba(width: int, height: int, pixel_data_rgba: bytes) -> bytes:
+    """Generate a valid PNG byte string from raw RGBA bytes (width * height * 4)."""
+    raw_scanlines = bytearray()
+    row_bytes = width * 4
+    for y in range(height):
+        raw_scanlines.append(0)  # filter type None
+        start = y * row_bytes
+        raw_scanlines.extend(pixel_data_rgba[start : start + row_bytes])
+
+    compressed = zlib.compress(bytes(raw_scanlines), level=9)
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        crc = zlib.crc32(tag + data) & 0xFFFFFFFF
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", crc)
+
+    header = b"\x89PNG\r\n\x1a\n"
+    # IHDR: width (4), height (4), bit depth (1), color type (6: RGBA), comp (0), filter (0), interlace (0)
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+    return header + chunk(b"IHDR", ihdr) + chunk(b"IDAT", compressed) + chunk(b"IEND", b"")
+
+
 def generate_portrait(width: int, height: int, base_color: tuple[int, int, int], accent_color: tuple[int, int, int]) -> bytes:
     pixels = bytearray()
     cx, cy = width / 2.0, height / 2.0
@@ -59,28 +80,34 @@ def generate_portrait(width: int, height: int, base_color: tuple[int, int, int],
         for x in range(width):
             dx = (x - cx) / (width / 2.0)
             dy = (y - cy) / (height / 2.0)
-            dist_sq = dx * dx + dy * dy
 
-            # Radial glow around center silhouette
-            glow = max(0.0, 1.0 - dist_sq * 0.8)
-            # Stylized torso/head silhouette calculation
-            head_dist = (dx * 2.0) ** 2 + ((dy + 0.35) * 2.2) ** 2
-            body_dist = (dx * 1.3) ** 2 + ((dy - 0.3) * 1.0) ** 2
-            is_figure = (head_dist < 0.28) or (body_dist < 0.7 and dy > -0.15)
+            # Stylized torso/head silhouette calculation with smooth antialiased alpha
+            head_metric = (dx * 2.0) ** 2 + ((dy + 0.35) * 2.2) ** 2
+            body_metric = (dx * 1.3) ** 2 + ((dy - 0.3) * 1.0) ** 2 if dy > -0.15 else 999.0
 
-            if is_figure:
-                # Figure foreground
-                r = int(accent_color[0] * 0.85 + base_color[0] * 0.15)
-                g = int(accent_color[1] * 0.85 + base_color[1] * 0.15)
-                b = int(accent_color[2] * 0.85 + base_color[2] * 0.15)
+            # Calculate distance to threshold for antialiased boundary
+            head_coverage = max(0.0, min(1.0, (0.30 - head_metric) / 0.05))
+            body_coverage = max(0.0, min(1.0, (0.75 - body_metric) / 0.08))
+            coverage = max(head_coverage, body_coverage)
+
+            if coverage > 0.0:
+                # Figure foreground with soft shading
+                depth_shade = max(0.6, min(1.0, 1.0 - (dy + 0.2) * 0.25))
+                r = int((accent_color[0] * 0.85 + base_color[0] * 0.15) * depth_shade)
+                g = int((accent_color[1] * 0.85 + base_color[1] * 0.15) * depth_shade)
+                b = int((accent_color[2] * 0.85 + base_color[2] * 0.15) * depth_shade)
+                alpha = int(coverage * 255)
             else:
-                # Ambient background glow
-                r = int(base_color[0] * (1 - glow * 0.6) + accent_color[0] * (glow * 0.6))
-                g = int(base_color[1] * (1 - glow * 0.6) + accent_color[1] * (glow * 0.6))
-                b = int(base_color[2] * (1 - glow * 0.6) + accent_color[2] * (glow * 0.6))
+                # Transparent background allows studio backdrop to show through
+                r, g, b, alpha = 0, 0, 0, 0
 
-            pixels.extend((max(0, min(255, r)), max(0, min(255, g)), max(0, min(255, b))))
-    return create_png(width, height, bytes(pixels))
+            pixels.extend((
+                max(0, min(255, r)),
+                max(0, min(255, g)),
+                max(0, min(255, b)),
+                max(0, min(255, alpha)),
+            ))
+    return create_png_rgba(width, height, bytes(pixels))
 
 
 def main():

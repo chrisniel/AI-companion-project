@@ -10,6 +10,7 @@ class CharacterShowcaseStage extends StatelessWidget {
     required this.onZoomIn,
     required this.onZoomOut,
     required this.onResetZoom,
+    this.onPanUpdate,
     required this.onSelectBackdrop,
     this.isCompactMode = false,
     this.onToggleDrawer,
@@ -19,6 +20,7 @@ class CharacterShowcaseStage extends StatelessWidget {
   final VoidCallback onZoomIn;
   final VoidCallback onZoomOut;
   final VoidCallback onResetZoom;
+  final ValueChanged<Offset>? onPanUpdate;
   final ValueChanged<StudioBackdropPreset> onSelectBackdrop;
   final bool isCompactMode;
   final VoidCallback? onToggleDrawer;
@@ -27,29 +29,36 @@ class CharacterShowcaseStage extends StatelessWidget {
   Widget build(BuildContext context) {
     final ext = Theme.of(context).extension<CompanionThemeExtension>();
 
-    // Resolve portrait asset path from avatarAsset string
-    final assetPath = _resolveAvatarPath(spec.avatarAsset);
+    // Resolve portrait asset path from avatarAsset string (seeded IDs or null fallback)
+    final assetPath = CharacterStagePresenter.resolveAvatarPath(spec.avatarAsset);
 
     return LayoutBuilder(
       builder: (context, constraints) {
         return Stack(
           alignment: Alignment.center,
           children: [
-            // 1. Center Character Figure with interactive scale
+            // 1. Center Character Figure with interactive zoom scale & pan translation
             Positioned.fill(
-              child: AnimatedScale(
-                scale: spec.zoomLevel,
-                duration: const Duration(milliseconds: 150),
-                curve: Curves.easeOutCubic,
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onPanUpdate: onPanUpdate != null ? (details) => onPanUpdate!(details.delta) : null,
                 child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 48.0, horizontal: 24.0),
-                    child: Image.asset(
-                      assetPath,
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) {
-                        return ArchetypeSilhouetteStageWidget(name: spec.displayName);
-                      },
+                  child: Transform.translate(
+                    offset: spec.panOffset,
+                    child: Transform.scale(
+                      scale: spec.zoomLevel,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 48.0, horizontal: 24.0),
+                        child: assetPath != null
+                            ? Image.asset(
+                                assetPath,
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return ArchetypeSilhouetteStageWidget(name: spec.displayName);
+                                },
+                              )
+                            : ArchetypeSilhouetteStageWidget(name: spec.displayName),
+                      ),
                     ),
                   ),
                 ),
@@ -221,27 +230,6 @@ class CharacterShowcaseStage extends StatelessWidget {
         );
       },
     );
-  }
-
-  static String _resolveAvatarPath(String asset) {
-    switch (asset) {
-      case 'avatar_warm':
-      case 'warm_companion':
-        return 'assets/studio/portrait_warm_companion.png';
-      case 'avatar_playful':
-      case 'playful':
-        return 'assets/studio/portrait_playful.png';
-      case 'avatar_formal':
-      case 'formal_advisor':
-        return 'assets/studio/portrait_formal_advisor.png';
-      case 'avatar_neutral':
-      case 'neutral-assistant':
-      case 'default_avatar':
-        return 'assets/studio/portrait_neutral_assistant.png';
-      default:
-        if (asset.startsWith('assets/')) return asset;
-        return 'assets/studio/portrait_warm_companion.png';
-    }
   }
 }
 
