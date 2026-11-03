@@ -1,9 +1,9 @@
 # M3 Batch B — Immersive Character Studio V1 & Personality Prompt Modulator (`PC-CLIENT-007`, `PC-CHAR-002`)
 
-> **Status:** PLANNING (Rev 3) — Final Plan Gate corrections applied in place; awaiting Independent Plan Gate re-review (`STOP AT PLAN GATE`).
+> **Status:** IMPLEMENTATION — Plan Gate approved by Chris and independent review; executing Phase B.1–B.4 implementation (`STOP AT IMPLEMENTATION GATE`).
 > **Branch:** `feature/m3-character-studio-personality-b`
 > **Base:** `develop` @ `d22dd7e1dbbd0a50c9a4e6fd28ab5fbdbcce34de`
-> **Owner / Authorization:** Chris; planning branch creation, plan file authoring, and Plan Gate Rev 2 / Rev 3 corrections authorized 2026-11-03. No production implementation, PR creation, or protected-branch mutation authorized yet.
+> **Owner / Authorization:** Chris; M3 Batch B Plan Gate approved and implementation authorized 2026-11-03. Explicit Git write operations authorized on feature branch. Stop at Independent Implementation Review Gate.
 > **Plan:** [`docs/02_Planning/01_Plans/plan-m3-character-studio-personality-b.md`](../../02_Planning/01_Plans/plan-m3-character-studio-personality-b.md)
 > **Work Items:** `PC-CLIENT-007` (Immersive Character Studio V1 — Windows Desktop) & `PC-CHAR-002` (8-Trait Personality Prompt Modulator)
 
@@ -13,14 +13,10 @@
 
 - [x] **Stage 1 — PLAN (Rev 1):** Initial plan authored and committed at `88774d79df1a8807d1f207faa34aa7774b5b745c`.
 - [x] **Stage 1b — PLAN GATE CORRECTIONS (Rev 2):** Applied initial 4 Plan Gate design corrections + asset provenance at `50cf5ddca65d718d285f3b7f07e42d06bed6bda4`.
-- [x] **Stage 1c — FINAL PLAN GATE CORRECTIONS (Rev 3):** Resolved the remaining 2 technical blockers and 2 accuracy improvements in place on `feature/m3-character-studio-personality-b`:
-  1. **Reproducible Prompt-Budget Proof (`<= 695` chars exact worst-case $\le$ `MODULATION_BLOCK_MAX_CHARS = 700`):** Verified exact character counts for every header (`<= 171`), `Style Directives:` (`17`), all 4 paired trait lines (`67 + 74 + 69 + 68 = 278` max), optional `Dynamic` (`<= 89`), mandatory `Autonomy Guard` (`133`), and newline separators (`7`), proving `695` chars absolute maximum (`605` chars with `Autonomy Guard` only) with zero mid-sentence truncation and defense-in-depth priority preservation of `Autonomy Guard`.
-  2. **Unchanged-Epoch `unauthorized` & Separated Read/Write Concurrency:** Made `chat.connectionStatus == RuntimeConnectionStatus.unauthorized` the highest-priority trigger for `sessionExpiredOrRevoked` (immediately purging personal catalog and drafts even when `profileEpoch` is unchanged), separated `_sessionFenceId` and `_readGeneration` from serialized `_isMutating` mutations so overlapping reads never discard committed write responses, and specified delayed-commit dropping after Profile switches and uncertain-write timeout reconciliation.
-  3. **Accurate Schema Field Limits & Turn-Assembly Bounding:** Corrected schema documentation to reflect that `lore` and `system_prompt` are unbounded `Optional[str]` / `Text` columns in `backend/app/schemas/character.py`, and specified deterministic pre-escaping turn-assembly bounds (`TURN_PERSONA_INSTRUCTIONS_MAX_CHARS = 1200`, `TURN_PERSONA_LORE_MAX_CHARS = 1600`) plus non-breaking Studio UI recommended-length counters.
-  4. **Programmatic WCAG Contrast, Keyboard/Text-Scaling A11y & Truthful Milestone Tracking:** Specified high-contrast token surfaces, `Color.computeLuminance()` automated contrast tests (`>= 4.5:1` text, `>= 3.0:1` controls/focus rings) across Light/Dark themes, backdrops, and accent presets, `1.0x`/`1.25x` text scaling at `1024x640`, and preserved wider M2 and wider M3 as `IN PROGRESS` during Stage 5 planning reconciliation.
-- [ ] **Stage 2 — PLAN APPROVAL (`CURRENT GATE`):** Halted at the Independent Plan Gate awaiting re-review and approval by Chris and the independent reviewer.
-- [ ] **Stage 3 — IMPLEMENTATION:** Pending Plan Gate approval.
-- [ ] **Stage 4 — INDEPENDENT IMPLEMENTATION REVIEW:** Pending implementation completion.
+- [x] **Stage 1c — FINAL PLAN GATE CORRECTIONS (Rev 3):** Resolved the remaining 2 technical blockers and 2 accuracy improvements in place on `feature/m3-character-studio-personality-b` at commit `1f283d64310268a77a721af5befaad72af922c1e`.
+- [x] **Stage 2 — PLAN APPROVAL:** Approved by Chris with three implementation conditions (Condition A: Prompt-Budget Evidence; Condition B: Final Assembled Prompt Safety; Condition C: Controlled Mutation Sequencing, Uncertain Results & Profile Isolation).
+- [ ] **Stage 3 — IMPLEMENTATION (`CURRENT STAGE`):** In progress across Phase B.1 (Backend Modulator), Phase B.2 (Controller & Stage Presenter), Phase B.3 (Studio UI & Shell Wiring), and Phase B.4 (Full Automated Regression).
+- [ ] **Stage 4 — INDEPENDENT IMPLEMENTATION REVIEW (`STOP BOUNDARY`):** Pending implementation completion.
 - [ ] **Stage 5 — DOCUMENTATION + PROVISIONAL CLOSURE:** Pending Implementation Gate approval.
 - [ ] **Stage 6 — DRAFT PR:** Pending authorization.
 - [ ] **Stage 7 — COMBINED INDEPENDENT DOCUMENTATION/CLOSURE/PR REVIEW:** Pending draft PR.
