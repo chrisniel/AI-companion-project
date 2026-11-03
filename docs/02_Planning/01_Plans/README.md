@@ -1,11 +1,28 @@
-# Active Feature Implementation Plans (`docs/02_Planning/01_Plans/`)
+# Feature Implementation Plans (`docs/02_Planning/01_Plans/`)
 
-> **Directory Role:** Active, approved implementation plans for non-trivial features, refactors, and migrations.  
-> **Workflow Invariant:** Each non-trivial task has a dedicated plan authored using [`docs/02_Planning/02_Templates/implementation-plan-template.md`](../02_Templates/implementation-plan-template.md). After plan approval by Chris and GPT, live execution tracking switches entirely to [`docs/01_Tracking/task.md`](../../01_Tracking/task.md).
+> **Directory Role:** Feature-specific implementation plans for substantial features, sensitive designs, refactors, and migrations.
+> **Workflow Authority:** Governed by the Four-Phase Engineering Delivery Lifecycle in [`docs/06_Guides/DELIVERY_WORKFLOW.md`](../../06_Guides/DELIVERY_WORKFLOW.md) and [`AGENTS.md`](../../../AGENTS.md).
 
 ---
 
-## Plan Directory Structure
+## 1. Plan Authoring & Approval Policy
 
-- When authoring a new plan, name the file by feature or work ID (e.g., `plan-m1-flutter-scaffolding.md`, `plan-m2-multi-profile-migration.md`).
-- Completed implementation plans are archived into [`docs/02_Planning/03_Archive/`](../03_Archive/) upon sprint closure.
+Feature implementation plans are authored using [`docs/02_Planning/02_Templates/implementation-plan-template.md`](../02_Templates/implementation-plan-template.md). Plan requirements and approvals scale with change risk according to the four delivery levels:
+
+- **Level A (Routine Autonomous):** Low-risk mechanical changes and straightforward implementation proceed under prompt authorization without a separate formal plan ceremony.
+- **Levels B & C (Planned Autonomous & Sensitive Design):** Substantial features and high-impact designs require an authored implementation plan and explicit **Human Owner** plan approval before Phase 2 implementation begins.
+- **Autonomous Continuation:** Once the applicable plan gate is satisfied, the Implementing Agent continues autonomously through implementation, testing, canonical documentation, and draft PR packaging without requiring micro-approvals for intermediate substeps or ordinary in-scope bug fixes.
+
+---
+
+## 2. Tracking & Execution Discipline
+
+- **Branch Active Execution Tracker:** While a delivery is in flight on an authorized feature branch, transient execution state (sub-slices, passing tests, blockers, provisional evidence) is tracked in [`docs/01_Tracking/active/task-[branch-slug].md`](../../01_Tracking/active/README.md).
+- **Shared Milestone Tracker:** [`docs/01_Tracking/task.md`](../../01_Tracking/task.md) is reserved strictly for shared milestone goals, integration direction, and delivered checkpoints on `develop`/`master`. It does not track temporary branch heartbeats or in-flight PR state.
+
+---
+
+## 3. Plan Retention & Document Stability
+
+- **Stable Document Paths:** Implementation plans remain at stable paths under `docs/02_Planning/01_Plans/` (named by work ID or feature, e.g. `plan-m3-character-studio-personality-b.md`) to serve as durable technical references for delivered architecture.
+- **Branch Task Archival:** Branch-owned execution records are archived to [`docs/01_Tracking/archive/task-[branch-slug].md`](../../01_Tracking/archive/) on the feature branch during Phase 3 closure preparation, ensuring stable historical records without creating churn in planning document paths.
