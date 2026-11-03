@@ -46,7 +46,7 @@
 - **`PC-CLIENT-004`**: API Client Layer (OpenAPI-derived Dart client, SSE token stream consumer, WebSocket duplex client).
 - **`PC-CLIENT-005`**: Multi-Profile Navigation & Local Admin Switcher UI (PIN / Windows Hello challenge).
 - **`PC-CLIENT-006`**: Conversation View & Multimodal Attachment Composer with Lightbox.
-- **`PC-CLIENT-007`**: Character Studio & Personality Trait Editor (8 continuous sliders, preset templates).
+- **`PC-CLIENT-007`**: Character Studio & Personality Trait Editor (Immersive 2D showcase stage, 8 continuous sliders, presets, Illustrative Style Summary, sequential Save & Activate, chat dual-indicator visibility; implemented and independently approved for provisional closure on `feature/m3-character-studio-personality-b`, not yet merged into develop).
 - **`PC-CLIENT-008`**: Schedule, Reminder, Alarm & Routine Management View.
 - **`PC-CLIENT-009`**: Memory Inspection, Correction & Deletion Control Center.
 - **`PC-CLIENT-010`**: Model Management UI (D6 manual scan trigger, bundle install confirmation, VRAM metrics).
@@ -69,8 +69,8 @@
 - **`PC-API-005`**: Structured Error Codes & Diagnostic Correlation IDs.
 
 ### Stream: `PC-IDENTITY` — Multi-Profile & Accounts
-- **`PC-IDENTITY-001`**: Account & Multi-Profile Database Schema Migration (`owner_id` → `profile_id` transition; Batch A migration 007 verified; Batch B migration 008 removed implicit ownership defaults and implemented the Profile Session cutover, locally verified; independent delivery review pending).
-- **`PC-IDENTITY-002`**: Strict Profile Authorization Context Middleware & Isolation Enforcement — Batch B implemented and locally verified: personal-data/service/stream ownership, independent Host Admin/browser approval, Desktop session restoration and absolute-expiry cleanup ([plan](../01_Plans/plan-m2-profile-foundation-b.md)); independent delivery gates and manual G2 acceptance pending.
+- **`PC-IDENTITY-001`**: Account & Multi-Profile Database Schema Migration (`owner_id` → `profile_id` transition; delivered via PR #25, commit `369d787`).
+- **`PC-IDENTITY-002`**: Strict Profile Authorization Context Middleware & Isolation Enforcement (Delivered via PR #27, commit `5cb2fe6`, stabilized in PR #28, commit `0bb0894`).
 - **`PC-IDENTITY-003`**: Satellite Device Enrollment & Single-Profile Binding (Individually revocable credentials).
 - **`PC-IDENTITY-004`**: Local PC Admin Profile Management Service (Create, rename, PIN protect, delete).
 - **`PC-IDENTITY-005`**: 7-Day Recoverable Profile Deletion Lifecycle & Hard Purge Maintenance.
@@ -84,11 +84,11 @@
 - **`PC-MODEL-006`**: Single-Resident Model Lifecycle Policy & Advanced Multi-Model Warning Guard.
 
 ### Stream: `PC-CHAR` — Character, Personality & Mood
-- **`PC-CHAR-001`**: Character Template (App-Owned) & Character Instance (Profile-Owned) Storage Schema.
-- **`PC-CHAR-002`**: 8 Continuous Personality Traits Scoring & Prompt Modulator.
+- **`PC-CHAR-001`**: Character Template (App-Owned) & Character Instance (Profile-Owned) Storage Schema (Delivered via PR #29, commit `d22dd7e`).
+- **`PC-CHAR-002`**: 8 Continuous Personality Traits Scoring & Prompt Modulator (Deterministic 5-band modulation, Autonomy Guard, <= 700 char bound, context budgeting; implemented and independently approved for provisional closure on `feature/m3-character-studio-personality-b`, not yet merged into develop).
 - **`PC-CHAR-003`**: Persistent Bounded Emotion & Mood Engine (Restart persistence, decay over elapsed time).
 - **`PC-CHAR-004`**: Appraisal Engine & Typed Emotion Events (Ensuring mood cannot alter system correctness).
-- **`PC-CHAR-005`**: Immutable Neutral Assistant Fallback Definition.
+- **`PC-CHAR-005`**: Immutable Neutral Assistant Fallback Definition (Delivered via PR #29, commit `d22dd7e`).
 
 ### Stream: `PC-MEM` — Memory & Continuity
 - **`PC-MEM-001`**: Profile & Character Scoped Memory Schema Extension.

@@ -1,9 +1,10 @@
 # M3 Batch B — Immersive Character Studio V1 & Personality Prompt Modulator (`PC-CLIENT-007`, `PC-CHAR-002`)
 
-> **Status:** IMPLEMENTATION COMPLETE — Awaiting Independent Implementation Review Gate (`STOP BOUNDARY`).
+> **Status:** STAGE 5 COMPLETE — Provisional Closure Achieved. Awaiting Stage 6 Draft PR Authorization (`STOP BOUNDARY`).
 > **Branch:** `feature/m3-character-studio-personality-b`
 > **Base:** `develop` @ `d22dd7e1dbbd0a50c9a4e6fd28ab5fbdbcce34de`
-> **Owner / Authorization:** Chris; M3 Batch B Plan Gate approved and implementation authorized 2026-11-03. Explicit Git write operations authorized on feature branch. Stop at Independent Implementation Review Gate.
+> **Latest Reviewed Implementation Checkpoint:** `fd0c558bc6f98005d6b305bbd453feb6b8d849e9`
+> **Owner / Authorization:** Chris; M3 Batch B Plan Gate and Implementation Gate approved; Stage 5 documentation and provisional closure authorized 2026-11-03. Explicit Git write operations authorized on feature branch. Stop at Stage 5 Stop Boundary.
 > **Plan:** [`docs/02_Planning/01_Plans/plan-m3-character-studio-personality-b.md`](../../02_Planning/01_Plans/plan-m3-character-studio-personality-b.md)
 > **Work Items:** `PC-CLIENT-007` (Immersive Character Studio V1 — Windows Desktop) & `PC-CHAR-002` (8-Trait Personality Prompt Modulator)
 
@@ -16,31 +17,13 @@
 - [x] **Stage 1c — FINAL PLAN GATE CORRECTIONS (Rev 3):** Resolved the remaining 2 technical blockers and 2 accuracy improvements in place on `feature/m3-character-studio-personality-b` at commit `1f283d64310268a77a721af5befaad72af922c1e`.
 - [x] **Stage 2 — PLAN APPROVAL:** Approved by Chris with three implementation conditions (Condition A: Prompt-Budget Evidence; Condition B: Final Assembled Prompt Safety; Condition C: Controlled Mutation Sequencing, Uncertain Results & Profile Isolation).
 - [x] **Stage 3 — IMPLEMENTATION:** Completed across Phase B.1 (Backend Modulator), Phase B.2 (Controller & Stage Presenter), Phase B.3 (Studio UI & Shell Wiring), and Phase B.4 (Full Automated Regression). Commits: `3b62b95`, `1fb5beb`, `3e93dd8`.
-- [x] **Stage 3b — IMPLEMENTATION REVIEW CORRECTIONS:** Resolved all 7 independent review findings across backend and Flutter desktop:
-  - Finding 1: Prohibited field-matching heuristic on uncertain Character creation; preserved dirty draft, surfaced warning banner with explicit retry confirmation, reconciled catalog by exact ID.
-  - Finding 2: Enforced fail-closed session invalidation on 401/403 Character API responses; revalidated profile ID, epoch fence, and `mounted` across asynchronous dialog gaps.
-  - Finding 3: Preserved newer local draft edits made after request snapshot via revision tracking; incremented `_readGeneration` on active character mutations to drop stale reads.
-  - Finding 4: Handled legacy placeholder instances with `includeLegacy: true`, read-only draft, null traits, and disabled mutations.
-  - Finding 5: Corrected showcase stage with Migration 009 seeded avatar identifiers, fallback to neutral silhouette on unknown keys, 32-bit RGBA transparent PNG portraits, and interactive pan/drag inspection.
-  - Finding 6: Removed duplicate Custom chip, added per-trait reset with safe template fallback, and disabled mutating actions when offline/validating/read-only.
-  - Finding 7 (Review Condition 8): Verified full prompt budgeting with adversarial delimiter injection, exhaustive trait modulation $\le 700$ chars, and 4,096-token assembled prompt context budgeting.
-- [x] **Stage 3c — FINAL DATA-INTEGRITY REVIEW CORRECTIONS:** Resolved remaining save-state, uncertain write, and mutation concurrency issues:
-  - Finding 1: Implemented snapshot-based PATCH reconciliation via immutable `PendingUpdateSnapshot`. On uncertain write recovery, fetches instance by exact ID, compares persisted fields with submitted update snapshot, and only marks clean if expected state is confirmed and no newer edits were made. If server is unconfirmed or remote conflict is observed, preserves local dirty draft edits and reports clear message without discarding work.
-  - Finding 2: Bound save attempts to originating draft identity and snapshot revision. Blocked character selection and neutral transitions while mutation is in flight (`_isMutating`). Guarded `Save & Continue` (`StudioScreen`) and `Save & Leave` (`DesktopShell`) so navigation/switching proceeds only when `draft?.isDirty == false` or user explicitly discards.
-  - Finding 3: Replaced shared boolean mutation flags with single-flight ownership via monotonically increasing `_activeMutationToken`. Mutation completion and lock release check matching token and profile session validity (`_isSessionValid`), preventing delayed responses from old profile sessions from unlocking or corrupting active mutations on a new profile.
-  - Finding 4: Maintained uncertain creation protections (`_uncertainCreatePayload` and `draft.hasUncertainCreation`). Retained warning banner with explicit user retry (`retryCreateDraft()`) and guarded against silent unguarded retries on item switches.
-  - Finding 5: Clarified verification documentation to explicitly distinguish sampled dynamic tests ($\le 695 \le 700$) from mathematically proven bounds, and reserved full WCAG compliance claims for Windows Desktop visual acceptance.
-- [x] **Stage 3d — WINDOWS ACCEPTANCE CORRECTIONS (TEST 10: CHARACTER ACTIVATION & CHAT VISIBILITY):** Resolved Windows User Acceptance Test 10 gap:
-  - Confirmed end-to-end pipeline: `Studio Save -> Character Instance persistence -> Profile active Character -> Chat new conversation -> Conversation Character binding -> resolve_turn_persona_prompt -> Model generation`. Added backend integration test `test_end_to_end_character_activation_chat_conversation_and_title_retention` in `backend/tests/test_character_personality_modulator.py`.
-  - Fixed empty-conversation reuse in `DesktopChatController.createNewConversation()`: Reuses empty conversations only when their bound character matches the intended Character selection. Creates a genuinely new conversation when the active Profile Character has changed, avoiding silent conversation re-binding or thread corruption.
-  - Preserved `characterInstanceId` in `DesktopChatController`: Fixed `commitAcceptance` and `ConversationOut` reconstructions so `characterInstanceId` is never lost across deterministic title generation, AI title refinement, message list refreshes, or thread switching.
-  - Made Character identity visible in Chat Screen (`ChatScreen`): Added responsive header indicator pills ("This Conversation: [Name]" and "New Conversations: [Name]" when they differ), session card Character badges in `ConversationHistoryDrawer`, and an initial Character status card in `_buildWelcomeStage`.
-  - Truthful Character name resolution: Implemented `getActiveProfileCharacterName()` and `getConversationCharacterName()` in `DesktopChatController` with truthful handling for Neutral Assistant, active profiles, archived instances, legacy placeholders, missing 404 records, and loading states.
-  - Reconciled Save versus Activate in Studio (`DesktopStudioController` & `StudioInspectorPanel`): Implemented `saveAndActivateDraft()` ensuring dirty draft edits are safely persisted to the backend first and verified before activating for Chat. Added explanatory notes in `StudioInspectorPanel` to clarify when unsaved edits will be saved or are pending.
-- [ ] **Stage 4 — INDEPENDENT IMPLEMENTATION REVIEW (`ACTIVE STOP BOUNDARY`):** Implementation review corrections submitted for independent verification.
-- [ ] **Stage 5 — DOCUMENTATION + PROVISIONAL CLOSURE:** Pending Implementation Gate approval.
-- [ ] **Stage 6 — DRAFT PR:** Pending authorization.
-- [ ] **Stage 7 — COMBINED INDEPENDENT DOCUMENTATION/CLOSURE/PR REVIEW:** Pending draft PR.
+- [x] **Stage 3b — IMPLEMENTATION REVIEW CORRECTIONS:** Resolved all 7 independent review findings across backend and Flutter desktop (commit `4d4d87c1d90be939a5cc631a65048692ee09426b`).
+- [x] **Stage 3c — FINAL DATA-INTEGRITY REVIEW CORRECTIONS:** Resolved remaining save-state, uncertain write, and mutation concurrency issues (commit `e6a15273bc0abdda238ac9c9701b2e27d07e396f`).
+- [x] **Stage 3d — WINDOWS ACCEPTANCE CORRECTIONS (TEST 10: CHARACTER ACTIVATION & CHAT VISIBILITY):** Resolved Windows User Acceptance Test 10 gap: verified end-to-end activation, chat dual indicators, empty-conversation reuse title preservation, and truthful character name resolution (checkpoint `fd0c558bc6f98005d6b305bbd453feb6b8d849e9`).
+- [x] **Stage 4 — INDEPENDENT IMPLEMENTATION REVIEW:** Independent Implementation Gate passed; Chris confirmed all 14 Windows Desktop user acceptance checks. Approved implementation checkpoint: `fd0c558bc6f98005d6b305bbd453feb6b8d849e9`.
+- [x] **Stage 5 — DOCUMENTATION + PROVISIONAL CLOSURE:** Canonical design and domain architecture reconciled; master planning documents (WBS, DELIVERY_INDEX, SPRINT_ROADMAP, MASTER_CHECKLIST, task.md) updated; 7-section technical walkthrough authored; CHANGELOG.md updated; active branch tracker reconciled; provisional closure achieved on branch.
+- [ ] **Stage 6 — DRAFT PR (`STOP BOUNDARY`):** Pending human authorization.
+- [ ] **Stage 7 — COMBINED INDEPENDENT DOCUMENTATION/CLOSURE/PR REVIEW:** Pending draft PR creation.
 - [ ] **Stage 8 — FINAL PRE-MERGE CLOSURE RECONCILIATION:** Pending combined review approval.
 - [ ] **Stage 9 — HUMAN SQUASH MERGE:** Exclusively executed by Chris.
 
@@ -74,3 +57,23 @@
 | **Dart Static Analysis** | `dart analyze .` (in `frontend/flutter`) | **PASSED (0 issues found)** |
 | **React Web Harness** | `npm test -- --run` (in `frontend/web`) | **PASSED (16 test files, 248/248 passed)** |
 | **Git Whitespace** | `git diff --check` | **PASSED (0 errors)** |
+
+---
+
+## 4. Known Limitations & Follow-Up Observations (Stage 5 Reconciliation)
+
+1. **Header Name Comparison (Minor Non-Blocking Follow-Up Observation):**
+   - The chat header indicator currently compares formatted display names (`thisConvName == newConvName`) when deciding whether to render the secondary `New Conversations: [Name]` indicator pill.
+   - If two distinct character instances share the exact same persona name, the secondary pill will not display.
+   - This does not impact underlying data binding, foreign keys, or runtime turn prompt modulation, as conversations remain strictly bound by immutable `character_instance_id`.
+2. **Active Character Fetch Interruption (Minor Non-Blocking Follow-Up Observation):**
+   - A transient network failure or unavailable active-Character state fetch can temporarily cause a misleading `Neutral Assistant` display label until the active state is successfully fetched.
+   - Subsequent successful refresh updates the pointer and header pills truthfully.
+3. **Stage 5 Provisional Closure Status:**
+   - Implementation review: APPROVED.
+   - Windows Desktop user acceptance: 14/14 PASS.
+   - Canonical documentation: RECONCILED.
+   - Master planning documents: RECONCILED.
+   - Walkthrough and changelog: CREATED.
+   - Stage 6 Draft PR creation and Stage 7 Combined Review: NOT YET AUTHORIZED.
+   - Post-merge integration CI and merge into develop: NOT YET EXECUTED.

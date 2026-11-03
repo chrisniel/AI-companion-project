@@ -180,14 +180,45 @@ The `CharacterService` (`backend/app/services/character_service.py`) and FastAPI
 - `PUT /api/v1/characters/active` — Select active character instance for Profile using request body `{"character_id": "<instance_id> | 'default' | 'neutral-assistant'"}`.
 - `POST /api/v1/characters/active/reset-neutral` — Explicitly reset Profile's active character to Neutral Assistant.
 
-### 3.4 Runtime Persona Resolution & Security Boundaries
+### 3.4 Bounded Personality Prompt Modulator (`PC-CHAR-002`)
 
-- **Runtime Persona Resolution:** The orchestrator and service layer (`backend/app/services/character_service.py::resolve_turn_persona_prompt()`) resolve the bound character identity for the conversation:
-  - If bound to Neutral Assistant or a legacy placeholder: returns `DEFAULT_PERSONA` directly without custom persona framing.
-  - If bound to an active Character Instance: composes the system prompt with trusted `DEFAULT_PERSONA` top-level instructions, followed by a bounded `<character_persona>` block containing sanitized instance metadata (`name`, `summary`, `system_prompt`, `lore`).
-- **Trust Boundaries & Enforcement:** Profile isolation and security boundaries are enforced deterministically by backend bearer-token authentication, SQLite Foreign Keys, and database triggers. User-editable Character persona text is treated strictly as lower-trust configuration data; delimiter tag escaping (`</character_persona>`, `<character_persona>`, `</retrieved_memories>`, `<retrieved_memories>`) provides defense-in-depth against structural breakouts, but delimiter escaping alone does not constitute complete prompt-injection security. The system prompt explicitly instructs the LLM that the persona block cannot override safety rules, claim system authority, or cross Profile boundaries.
+The backend personality prompt modulation engine (`backend/app/services/character_service.py::compile_personality_modulation_block()`) compiles continuous 8-trait vectors into bounded system prompt directives:
+- **Five-Band Trait Discretization:** Maps 0–100 integer trait values into five bands: `Very Low` (0–19), `Low` (20–39), `Balanced` (40–59), `High` (60–79), and `Very High` (80–100).
+- **Concise Directive Clauses:** Each active non-balanced band generates a single focused phrasing instruction (e.g. warmth, teasing, directness, formality, verbosity).
+- **Mandatory Autonomy Guard:** Injected whenever `affection >= 80` OR when the `yandere` preset is selected regardless of affection level. Mandates personal autonomy, emotional independence, and healthy boundaries; explicitly prohibits possessiveness, simulated jealousy, or distress over user absence.
+- **Dynamic Interaction Synthesis:** Resolves cross-trait tensions into unified conversational delivery rules (e.g., Tsundere, Kuudere, Dandere, Warm Playful, Guarded Formal).
+- **Strict Budget Bounding:** The modulation block is constrained to a maximum of 700 characters (`MODULATION_BLOCK_MAX_CHARS = 700`). Exhaustive worst-case sampling across all combinations confirms the largest possible valid block emits at most 695 characters.
+- **Turn Persona Resolution & Context Budgeting:** In `resolve_turn_persona_prompt()`, user-supplied `system_prompt` is bounded to 1,200 characters and `lore` to 1,600 characters before XML-delimiter escaping. The assembled `<character_persona>` block consumes at most ~900 tokens in a standard 4,096-token context window, preserving ample budget for retrieved memories, conversation history, and model generation.
+- **Stylistic Non-Claim:** Personality modulation guides stylistic phrasing, tone, and delivery preferences; it **does not guarantee a particular LLM response** or override model safety training.
 
-### 3.5 Client Contract & SDK Parity
+### 3.5 Immersive Windows Desktop Character Studio (`PC-CLIENT-007`)
+
+The desktop client provides a full-viewport, game-style character authoring experience (`frontend/flutter/apps/desktop/lib/features/studio/` and `StudioScreen`):
+- **Central 2D Showcase Stage (`CharacterShowcaseStage`):** Centered companion portrait with seeded 32-bit transparent RGBA PNG assets (`assets/studio/`), neutral silhouette fallback, mouse-wheel/button zoom ($0.8\times..2.5\times$), smooth pan/drag inspection with boundary clamping, and future-3D renderer scaffolding.
+- **Thematic Backdrops (`StudioBackdropLayer`):** Full-content-area thematic imagery (Cozy Studio, Cyber Lounge, Twilight Balcony, Minimalist Vault) with procedural gradient fallback (`StudioAtmospherePainter`) and dark contrast scrims maintaining WCAG AA contrast ratios.
+- **Translucent Docks (`SoftGlassPanel`):**
+  - *Left Dock (`StudioLibraryPanel`):* Filterable list of Templates, Profile-owned Instances, Neutral Assistant, and New Character creation. Auto-collapses to a drawer on screens $< 920\text{px}$.
+  - *Right Dock (`StudioInspectorPanel`):* Archetype identity, 8 continuous trait sliders with 5-band indicators, single Custom chip + 8 named presets, per-trait reset to template baseline, inline Illustrative Style Summary presenter (`CharacterStagePresenter.buildIllustrativeStyleSummary`), and scrollable large-text lore & system prompt editors.
+- **Sequential Save & Activate (`saveAndActivateDraft()`):** When local slider edits are unsaved (`isDirty == true`), the primary action dynamically renders **"Save & Activate"**. Clicking it sequentially submits `PATCH /api/v1/characters/instances/{id}`, confirms clean persistence (`isDirty == false`), and only then calls `PUT /api/v1/characters/active`. If the save fails, activation is aborted and local draft edits are preserved. Clean drafts display **"Set Active for Profile"**.
+- **Concurrency & Concurrency Protection:**
+  - *Single-Flight Locking:* Each mutation is guarded by an incrementing `_activeMutationToken`. Asynchronous completions with mismatched tokens are dropped.
+  - *Session Fencing:* Switching or invalidating Profile sessions increments `_sessionFenceId`, instantly neutralizing late responses from prior profiles.
+  - *Snapshot PATCH Reconciliation:* On HTTP 408 timeout recovery, `PendingUpdateSnapshot` compares server fields against submitted updates, marking clean only when server state confirms the edit and no newer local changes were made.
+  - *Navigation Guards:* `DesktopShell` and `StudioScreen` intercept route changes when dirty edits exist.
+
+### 3.6 Desktop Chat Character Identity Visibility & Turn Binding
+
+- **Permanent Conversation Binding:** In accordance with D11, conversations permanently bind to `character_id` and `character_instance_id`.
+- **Dual-Indicator Header Architecture:**
+  - `This Conversation: [Name]` renders as an accent pill showing the conversation's bound Character.
+  - `New Conversations: [Name]` renders as a secondary subtle pill **only when the authenticated Profile's active Character differs from the current conversation's bound Character**, clearly communicating that new chats will use the new Character without retroactively reassigning existing threads.
+- **Session History Badges:** `ConversationHistoryDrawer` renders a compact character name badge on each conversation session card.
+- **Welcome Stage Status:** The initial empty chat screen displays a centered card identifying the conversation's bound Character and the Profile's active Character.
+- **Corrected Empty-Conversation Reuse:** `DesktopChatController.createNewConversation()` reuses an empty draft conversation only if its bound Character matches the intended Character; if the active Profile Character has changed, it creates a genuinely new conversation thread bound to the active Character without mutating old rows.
+- **Binding Preservation in Title Generation:** Deterministic fallback title generation and AI model title refinement strictly preserve `character_id` and `character_instance_id`.
+- **Truthful Name Resolution:** Resolves active instances, Neutral Assistant, `[Name] (Archived)` for archived records, `[Name] (Legacy)` for placeholders, `Missing Character` for deleted 404 records, `Loading...` during cache misses, and `Disconnected` when offline.
+
+### 3.7 Client Contract & SDK Parity
 
 - **OpenAPI 3.1 Specification:** All 11 character routes and DTOs synchronized in `contracts/openapi/openapi.json`.
 - **Flutter Companion API SDK:** Complete Dart DTO schemas and `CompanionClient` character methods implemented in `frontend/flutter/packages/companion_api` with verified contract parity (`scripts/check_dart_openapi_parity.py`).
@@ -195,7 +226,7 @@ The `CharacterService` (`backend/app/services/character_service.py`) and FastAPI
 - **React Web Client:** `conversationApi.createConversation()` updated in `frontend/web/src/services/api/conversationApi.ts` to support optional `character_id` parameter, preserving backward compatibility.
 - **Frontend Truthfulness Contract:** `frontend/web/src/test/phase8b3Truthfulness.test.tsx` confirms web character UI acts as a preview component without claiming unbacked persistence or unauthorized voice engines.
 
-### 3.6 Mobile Implementation Reality
+### 3.8 Mobile Implementation Reality
 
 - **Mobile Character Studio:** `NOT IMPLEMENTED`. Flutter mobile character authoring and trait customization UI is not implemented in the repository.
 - **Mobile Emotion Event Outbox & Sync:** `NOT IMPLEMENTED`. Offline emotion event recording, durable outbox queuing, and host reconciliation are not implemented.
@@ -205,19 +236,21 @@ The `CharacterService` (`backend/app/services/character_service.py`) and FastAPI
 
 ## 4. Approved Target Architecture / Deferred Capabilities
 
-The following capabilities are approved under Decision D11 and scheduled for subsequent M3 batches:
+The following capabilities are approved under Decision D11 and scheduled for subsequent milestones:
 
-1. **Full Character Studio UI (`PC-CHAR-002`, `PC-CHAR-003`):**
-   - Three-panel desktop and web authoring UI (template browser, trait slider editor, live interactive conversation scratchpad).
-2. **Dynamic Personality Engine (PC V1 Follow-on):**
+1. **Character Studio Desktop V1 (`PC-CHAR-002`, `PC-CLIENT-007`):**
+   - Implemented and verified in M3 Batch B (immersive 2D stage, 8 continuous sliders, presets, Autonomy Guard, sequential Save & Activate, chat dual-indicator visibility).
+2. **3D / Live2D / VRM Companion Rendering Engine (`P-SHARED-PRESENCE-01`):**
+   - Deferred to PC Later. The stage architecture isolates visual asset loading through presenter contracts, preserving a clean boundary for future 3D/rigged viewports.
+3. **Dynamic Personality Drift Engine (PC V1 Follow-on):**
    - Dynamic trait weighting, conversational drift within bounded limits, and real-time interaction feedback.
-3. **Persistent Mood Dynamics (PC V1):**
+4. **Persistent Mood Dynamics (PC V1 — `PC-CHAR-003`):**
    - Persistent simulated companion mood across restarts with time decay back to baseline.
-4. **Relationship Continuity State (PC Later):**
+5. **Relationship Continuity State (PC Later — `PC-CHAR-004`):**
    - Long-term interaction familiarity depth and opt-in relationship progression.
-5. **Decoupled Voice Synthesis Integration (PC V1):**
+6. **Decoupled Voice Synthesis Integration (PC V1 — `PC-VOICE-003`):**
    - TTS acoustic profiles and prosody mapping bound to character definitions.
-6. **Multimodal Attachments Status:**
+7. **Multimodal Attachments Status:**
    - Image attachment backend: implemented.
    - React Web image-attachment interface: implemented.
    - Flutter Desktop image-upload button: disabled/planned.
