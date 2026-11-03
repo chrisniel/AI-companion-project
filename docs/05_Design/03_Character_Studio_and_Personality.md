@@ -3,7 +3,7 @@
 > **Document Role:** UX/UI presentation and interaction design specification.  
 > **Status:** Active Baseline (PC V1 — M3 Batch B Implemented & Verified).
 > **Normative Architectural Authority:** [`docs/04_Architecture/01_Domains/characters-personality-and-emotion.md`](../04_Architecture/01_Domains/characters-personality-and-emotion.md), [`ADR-0012`](../04_Architecture/decisions/ADR-0012-d11-persona-and-state-separation.md).
-> **Primary Implementation Components:** [`StudioScreen`](file:///d:/OtherProjects/AI-companion-project/frontend/flutter/apps/desktop/lib/screens/studio_screen.dart), [`DesktopStudioController`](file:///d:/OtherProjects/AI-companion-project/frontend/flutter/apps/desktop/lib/features/studio/desktop_studio_controller.dart), [`CharacterStagePresenter`](file:///d:/OtherProjects/AI-companion-project/frontend/flutter/apps/desktop/lib/features/studio/character_stage_presenter.dart), [`CharacterShowcaseStage`](file:///d:/OtherProjects/AI-companion-project/frontend/flutter/apps/desktop/lib/features/studio/character_showcase_stage.dart), [`StudioBackdropLayer`](file:///d:/OtherProjects/AI-companion-project/frontend/flutter/apps/desktop/lib/features/studio/studio_backdrop_layer.dart), [`StudioLibraryPanel`](file:///d:/OtherProjects/AI-companion-project/frontend/flutter/apps/desktop/lib/features/studio/studio_library_panel.dart), [`StudioInspectorPanel`](file:///d:/OtherProjects/AI-companion-project/frontend/flutter/apps/desktop/lib/features/studio/studio_inspector_panel.dart), [`ChatScreen`](file:///d:/OtherProjects/AI-companion-project/frontend/flutter/apps/desktop/lib/screens/chat_screen.dart), and [`DesktopChatController`](file:///d:/OtherProjects/AI-companion-project/frontend/flutter/apps/desktop/lib/features/chat/desktop_chat_controller.dart).
+> **Primary Implementation Components:** [`StudioScreen`](../../frontend/flutter/apps/desktop/lib/screens/studio_screen.dart), [`DesktopStudioController`](../../frontend/flutter/apps/desktop/lib/features/studio/desktop_studio_controller.dart), [`CharacterStagePresenter`](../../frontend/flutter/apps/desktop/lib/features/studio/character_stage_presenter.dart), [`CharacterShowcaseStage`](../../frontend/flutter/apps/desktop/lib/features/studio/character_showcase_stage.dart), [`StudioBackdropLayer`](../../frontend/flutter/apps/desktop/lib/features/studio/studio_backdrop_layer.dart), [`StudioLibraryPanel`](../../frontend/flutter/apps/desktop/lib/features/studio/studio_library_panel.dart), [`StudioInspectorPanel`](../../frontend/flutter/apps/desktop/lib/features/studio/studio_inspector_panel.dart), [`ChatScreen`](../../frontend/flutter/apps/desktop/lib/screens/chat_screen.dart), and [`DesktopChatController`](../../frontend/flutter/apps/desktop/lib/features/chat/desktop_chat_controller.dart).
 
 ---
 
@@ -24,7 +24,7 @@ The design strictly reflects the D11 architectural model:
 
 ### Current Scope & Non-Claims
 - **Current Visual Scope:** 2D static portrait presentation using high-resolution 32-bit transparent RGBA PNG assets (`assets/studio/`) with procedural fallback rendering.
-- **Future Renderer Boundary:** The stage architecture isolates visual asset loading through [`CharacterStagePresenter`](file:///d:/OtherProjects/AI-companion-project/frontend/flutter/apps/desktop/lib/features/studio/character_stage_presenter.dart), establishing a clean boundary for future 3D/VRM or Live2D companion rendering runtimes. No live 3D rendering, mesh deformation, physics, or skeletal rigging is implemented in PC V1.
+- **Future Renderer Boundary:** The stage architecture isolates visual asset loading through [`CharacterStagePresenter`](../../frontend/flutter/apps/desktop/lib/features/studio/character_stage_presenter.dart), establishing a clean boundary for future 3D/VRM or Live2D companion rendering runtimes. No live 3D rendering, mesh deformation, physics, skeletal rigging, or animation is implemented in PC V1.
 - **Stylistic Guidance Non-Claim:** Personality trait sliders modulate prompt framing and stylistic tone instructions; they guide phrasing preferences and conversational delivery, but **do not guarantee a particular LLM response** or override model safety alignments.
 - **Deferred Subsystems:** Persistent emotional decay, acoustic voice synthesis, and relationship progression mechanics remain separate future milestones.
 
@@ -42,10 +42,10 @@ The Character Studio (`StudioScreen`) organizes workspace real estate into layer
 │  │ SoftGlass    │     │ CharacterShowcaseStage     │     │ SoftGlass │  │
 │  │ Library Dock │     │ (Center 2D Portrait Stage) │     │ Inspector │  │
 │  │              │     │                            │     │ Dock      │  │
-│  │ • Templates  │     │ • Transparent PNG Portrait │     │ • Archetype│ │
-│  │ • Instances  │     │ • Pan & Zoom Controls      │     │ • 8 Traits│  │
+│  │ • Templates  │     │ • Transparent PNG Portrait │     │ • Identity│  │
+│  │ • Instances  │     │ • On-Screen Zoom & Pan     │     │ • 8 Traits│  │
 │  │ • Neutral    │     │ • Status & Archetype Badges│     │ • Presets │  │
-│  │ • New Char   │     │ • Future 3D Renderer Scaff.│     │ • Summary │  │
+│  │ • Categories │     │ • Future 3D Renderer Scaff.│     │ • Summary │  │
 │  │              │     │                            │     │ • Editors │  │
 │  │ (300px min)  │     │ (Unobstructed Focus)       │     │ (380px max│  │
 │  └──────────────┘     └────────────────────────────┘     └───────────┘  │
@@ -58,31 +58,30 @@ The Character Studio (`StudioScreen`) organizes workspace real estate into layer
   - `Cyber Lounge` (`assets/studio/backdrop_cyber_lounge.png`) — Cool neon and modern tech accents.
   - `Twilight Balcony` (`assets/studio/backdrop_twilight_balcony.png`) — Deep twilight sky and terrace lighting.
   - `Minimalist Vault` (`assets/studio/backdrop_minimalist_vault.png`) — Monochromatic architectural geometry.
-- **Procedural Atmosphere Fallback:** If backdrop assets are absent or loading fails, [`StudioAtmospherePainter`](file:///d:/OtherProjects/AI-companion-project/frontend/flutter/apps/desktop/lib/features/studio/studio_backdrop_layer.dart) renders smooth radial and linear gradients matching theme tokens.
-- **Contrast Scrim:** Semi-transparent dark overlays ensure text and UI controls maintain verified WCAG AA contrast (text $\ge 4.5:1$, controls $\ge 3.0:1$).
+- **Procedural Atmosphere Fallback:** If backdrop assets are absent or loading fails, [`StudioAtmospherePainter`](../../frontend/flutter/apps/desktop/lib/features/studio/studio_backdrop_layer.dart) renders smooth radial and linear gradients matching theme tokens.
+- **Contrast Scrim:** Semi-transparent dark overlays ensure text and UI controls maintain verified contrast across light and dark themes (automated checks: text $\ge 4.5:1$, controls $\ge 3.0:1$).
 
 ### 2.2 Character Showcase Stage (`CharacterShowcaseStage`)
 - Centered, unobstructed focal area showcasing the companion's current portrait.
-- **Asset Resolution:** [`CharacterStagePresenter.resolveAvatarPath`](file:///d:/OtherProjects/AI-companion-project/frontend/flutter/apps/desktop/lib/features/studio/character_stage_presenter.dart) maps seeded avatar identifiers (`neutral_avatar`, `warm_companion_avatar`, `playful_companion_avatar`, `formal_advisor_avatar`) to bundled 32-bit transparent PNG portraits, with fallback to a neutral companion silhouette for unknown keys.
+- **Asset Resolution:** [`CharacterStagePresenter.resolveAvatarPath`](../../frontend/flutter/apps/desktop/lib/features/studio/character_stage_presenter.dart) maps seeded avatar identifiers (`neutral_avatar`, `warm_companion_avatar`, `playful_companion_avatar`, `formal_advisor_avatar`) to bundled 32-bit transparent PNG portraits, with fallback to a neutral companion silhouette for unknown keys.
 - **Interactive Inspection:**
-  - Mouse-wheel and on-screen zoom controls ($0.8\times$ to $2.5\times$).
-  - Smooth pan/drag inspection when zoomed, automatically clamping bounds and resetting on zoom reset.
+  - On-screen zoom toolbar controls bounded to $1.0\times$ to $2.0\times$ ($100\%$ to $200\%$, with Zoom In `+`, Zoom Out `-`, and Reset `100%`).
+  - Smooth pan/drag inspection via pointer gestures when zoomed, translating the character sprite.
   - Status badges for active Profile assignment, baseline template provenance, and legacy placeholder warnings.
 
 ### 2.3 Left Dock: Library Panel (`StudioLibraryPanel`)
 - Floating translucent dock with backdrop blur (`SoftGlassPanel`).
-- Displays three distinct categories:
-  1. **Character Templates:** System archetypes available to instantiate.
-  2. **Profile Character Instances:** User-created and customized personas belonging to the active Profile.
-  3. **Neutral Assistant Fallback:** Direct access to inspect the immutable baseline.
-- **New Character Action:** Primary action button to create a fresh draft from selected templates.
+- Organizes companion options via category browsing:
+  1. **Starter Templates:** System archetypes available to instantiate. Selecting a starter template begins character creation from that template's baseline.
+  2. **System Fallback:** Direct access to inspect the immutable Neutral Assistant baseline.
+  3. **My Characters:** User-created and customized personas belonging to the active Profile, along with archived records.
 - **Responsive Collapse:** On screens $< 920\text{px}$, automatically collapses into an overlay drawer accessible via header button.
 
 ### 2.4 Right Dock: Inspector Panel (`StudioInspectorPanel`)
 - Floating translucent dock housing all customization controls:
   - **Identity Card:** Name, summary, template provenance version, and active status badge.
   - **8 Continuous Trait Sliders:** Continuous 0–100 sliders with qualitative band labels and individual trait reset buttons.
-  - **Personality Preset Selector:** Single "Custom" chip + 8 named presets with descriptive baselines.
+  - **Personality Preset Selector:** 8 identifiers total: 7 named styles plus `custom`, dynamically updating as traits change.
   - **Illustrative Style Summary:** Real-time presenter preview of expected conversational delivery, register, and interaction dynamics.
   - **Persona Lore & System Prompt Editors:** Scrollable large-text editors for background lore and system prompt overrides.
   - **Action Footer:** Dynamic sequential save, activate, and delete controls with unsaved draft notices.
@@ -116,13 +115,13 @@ Sliders map numeric values into five discrete qualitative bands for clear visual
 Each slider includes a dedicated reset button that reverts that specific trait to its parent template baseline value without altering any other modified traits.
 
 ### 3.3 Illustrative Local Style Summary
-[`CharacterStagePresenter.buildIllustrativeStyleSummary`](file:///d:/OtherProjects/AI-companion-project/frontend/flutter/apps/desktop/lib/features/studio/character_stage_presenter.dart) provides instant visual feedback on how trait combinations shape companion demeanor:
+[`CharacterStagePresenter.buildIllustrativeStyleSummary`](../../frontend/flutter/apps/desktop/lib/features/studio/character_stage_presenter.dart) provides instant visual feedback on how trait combinations shape companion demeanor:
 - **Tone Directive:** Formatted label reflecting warmth and affection bands (e.g., *"Warm and Empathetic"*).
 - **Expression Directive:** Formatted label reflecting expressiveness and guardedness bands.
 - **Delivery Directive:** Formatted label reflecting directness, verbosity, and teasing bands.
 - **Register Directive:** Formatted label reflecting formality band.
-- **Interaction Dynamic:** Detected cross-trait synthesis (e.g., *"Tsundere Dynamic"*, *"Kuudere Dynamic"*).
-- **Autonomy Guard Badge:** Displays active status whenever affection is high or yandere baseline is selected.
+- **Interaction Dynamic:** Detected cross-trait synthesis from the four prioritized dynamics (Guarded Banter / Tsundere, Shy Devotion / Dandere, Stoic Care / Kuudere, or Analytical Precision).
+- **Autonomy Guard Badge:** Displays active status whenever affection is at least 80 or the yandere preset is selected.
 
 > [!NOTE]
 > The Style Summary is explicitly labeled in the UI as an **Illustrative Local Style Preview**. It communicates the behavioral intent of the sliders in Dart without claiming to be an exact copy of the backend-generated prompt modulation block.
@@ -132,7 +131,7 @@ Each slider includes a dedicated reset button that reverts that specific trait t
 ## 4. Presets & The Autonomy Guard
 
 ### 4.1 Preset Catalog as Baseline Initializers
-Users can load initial baseline trait configurations from the approved preset catalog:
+Users can load initial baseline trait configurations from the approved preset catalog (8 identifiers total: 7 named styles plus `custom`):
 - `custom`: Dynamic indicator active whenever traits diverge from named preset definitions.
 - `warm_companion`: Affectionate, empathetic, encouraging companion baseline.
 - `playful`: Witty, humorous, sarcastic companion baseline.
@@ -147,8 +146,8 @@ Users can load initial baseline trait configurations from the approved preset ca
 ### 4.2 Mandatory Autonomy Guard
 To ensure companion interactions remain healthy, safe, and free from coercive or simulated obsessive dynamics:
 - **Trigger Conditions:** Activates whenever `affection >= 80` OR when the `yandere` preset is selected regardless of affection level.
-- **Backend Enforcement:** The prompt modulator automatically appends the mandatory Autonomy Guard instruction:
-  > *"Maintain emotional independence and healthy personal boundaries. Never express possessiveness, jealousy, obsession, or distress over the user's absence."*
+- **Backend Enforcement:** The prompt modulator automatically appends the exact mandatory Autonomy Guard instruction:
+  > - Autonomy Guard: Express devotion supportively; never use coercion, possessiveness, exclusivity, manipulation, or dependency claims.
 - **UI Visibility:** The Inspector panel surfaces a prominent security badge informing the user that the Autonomy Guard is active.
 - **Respectful Preset Phrasing:** The `yandere` preset description and prompt framing use respectful, non-possessive language focusing on unwavering dedication rather than toxic fixation.
 
@@ -163,7 +162,7 @@ To eliminate data loss and prevent activating stale database records while local
 2. When a Character draft has unsaved edits (`isDirty == true`):
    - The primary activation button dynamically changes to **"Save & Activate"**.
    - An explanatory notice informs the user: *"Note: Unsaved trait changes will be saved before activating for Chat."*
-   - Clicking `Save & Activate` executes [`saveAndActivateDraft()`](file:///d:/OtherProjects/AI-companion-project/frontend/flutter/apps/desktop/lib/features/studio/desktop_studio_controller.dart#L770):
+   - Clicking `Save & Activate` executes [`saveAndActivateDraft()`](../../frontend/flutter/apps/desktop/lib/features/studio/desktop_studio_controller.dart):
      - Sequentially submits `PATCH /api/v1/characters/instances/{id}`.
      - Strictly verifies that persistence succeeded and the draft is confirmed clean (`isDirty == false`).
      - Only upon confirmed save does it invoke `activateCharacter()`.
@@ -192,12 +191,12 @@ Chat displays character identity truthfully across two distinct scopes without c
    - Renders as a secondary subtle pill next to the conversation pill **only when the active Profile Character differs from the current conversation's bound Character**.
    - Informs the user that clicking `+ New Conversation` will start a chat with the newly active Character, without misleading them into thinking the existing conversation was retroactively reassigned.
 3. **Session Card Badges:**
-   - [`ConversationHistoryDrawer`](file:///d:/OtherProjects/AI-companion-project/frontend/flutter/apps/desktop/lib/features/chat/conversation_history_drawer.dart) displays a character name badge on every session card.
+   - [`ConversationHistoryDrawer`](../../frontend/flutter/apps/desktop/lib/features/chat/conversation_history_drawer.dart) displays a character name badge on every session card.
 4. **Welcome Stage Status Card:**
    - The initial empty conversation screen displays a centered card confirming the bound Character and the active Profile Character.
 
 ### 6.2 Truthful Name Resolution
-[`DesktopChatController`](file:///d:/OtherProjects/AI-companion-project/frontend/flutter/apps/desktop/lib/features/chat/desktop_chat_controller.dart) resolves character names authoritatively from backend IDs:
+[`DesktopChatController`](../../frontend/flutter/apps/desktop/lib/features/chat/desktop_chat_controller.dart) resolves character names authoritatively from backend IDs:
 - Active custom instances $\rightarrow$ `[Name]`
 - Neutral Assistant fallback $\rightarrow$ `Neutral Assistant`
 - Archived instances $\rightarrow$ `[Name] (Archived)`
@@ -207,9 +206,10 @@ Chat displays character identity truthfully across two distinct scopes without c
 - Unconnected runtime $\rightarrow$ `Disconnected`
 
 ### 6.3 Corrected Empty-Conversation Reuse
-In [`DesktopChatController.createNewConversation()`](file:///d:/OtherProjects/AI-companion-project/frontend/flutter/apps/desktop/lib/features/chat/desktop_chat_controller.dart#L670):
-- **Same Character:** Reuses an untouched empty draft conversation if already active and its bound Character matches the intended Character, preventing duplicate empty threads.
-- **Changed Character:** If the active Profile Character has changed since the empty conversation was created, it **does not reuse** the old conversation. Instead, it creates a genuinely new conversation thread bound to the new Character via `createConversation(characterId: intendedInstanceId)`.
+In [`DesktopChatController.createNewConversation()`](../../frontend/flutter/apps/desktop/lib/features/chat/desktop_chat_controller.dart):
+- **Same Character:** An untouched empty conversation draft is reusable only when its existing Character binding matches the intended Character (`convInstanceId == intendedInstanceId`), avoiding redundant empty conversations with identical character bindings.
+- **Changed Character:** If the intended Character differs, the client does not rebind or reassign the existing conversation; it creates a genuinely new conversation thread bound to the intended Character via `createConversation(characterId: intendedInstanceId)`.
+- **Relationship Preservation:** The previous conversation retains its original identity, title, and Character relationship intact. No historical or draft conversation is silently rebound.
 - **Title Updates:** Deterministic title generation and AI model refinement strictly preserve `character_id` and `character_instance_id`.
 
 ---
