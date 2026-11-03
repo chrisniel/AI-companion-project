@@ -1,10 +1,12 @@
 # M3 Batch B — Immersive Character Studio V1 & Personality Prompt Modulator (`PC-CLIENT-007`, `PC-CHAR-002`)
 
-> **Status:** STAGE 5 APPROVED — Stage 6 Draft PR Authorized. Awaiting Stage 7 Combined Review (`STOP BOUNDARY`).
+> **Status:** STAGE 8 FINAL PRE-MERGE CLOSURE RECONCILED — Archived Branch Delivery Record. Ready for Human Squash Merge (`STOP BOUNDARY`).
 > **Branch:** `feature/m3-character-studio-personality-b`
 > **Base:** `develop` @ `d22dd7e1dbbd0a50c9a4e6fd28ab5fbdbcce34de`
-> **Latest Reviewed Implementation Checkpoint:** `fd0c558bc6f98005d6b305bbd453feb6b8d849e9`
-> **Owner / Authorization:** Chris; Stage 5 documentation review approved; Stage 6 Draft PR creation authorized 2026-11-03. Explicit Git write operations authorized on feature branch. Stop at Stage 7 Review Gate.
+> **Approved PR Checkpoint:** `d50edd4cc0f6ea4d76c0bea2291424529ef3d331`
+> **Draft Pull Request:** [#30](https://github.com/chrisniel/AI-companion-project/pull/30)
+> **Hosted PR CI Evidence:** Run `41638166724` PASSED (all 7 jobs green at checkpoint `d50edd4`).
+> **Owner / Authorization:** Chris; Stages 1–7 approved; Stage 8 final pre-merge closure reconciliation authorized 2026-11-03. Stop before Human Squash Merge.
 > **Plan:** [`docs/02_Planning/01_Plans/plan-m3-character-studio-personality-b.md`](../../02_Planning/01_Plans/plan-m3-character-studio-personality-b.md)
 > **Work Items:** `PC-CLIENT-007` (Immersive Character Studio V1 — Windows Desktop) & `PC-CHAR-002` (8-Trait Personality Prompt Modulator)
 
@@ -22,10 +24,10 @@
 - [x] **Stage 3d — WINDOWS ACCEPTANCE CORRECTIONS (TEST 10: CHARACTER ACTIVATION & CHAT VISIBILITY):** Resolved Windows User Acceptance Test 10 gap: verified end-to-end activation, chat dual indicators, empty-conversation reuse title preservation, and truthful character name resolution (checkpoint `fd0c558bc6f98005d6b305bbd453feb6b8d849e9`).
 - [x] **Stage 4 — INDEPENDENT IMPLEMENTATION REVIEW:** Independent Implementation Gate passed; Chris confirmed all 14 Windows Desktop user acceptance checks. Approved implementation checkpoint: `fd0c558bc6f98005d6b305bbd453feb6b8d849e9`.
 - [x] **Stage 5 — DOCUMENTATION + PROVISIONAL CLOSURE:** Approved by independent reviewer; pre-PR wording corrections applied (actual mutation locking, revision-aware save reconciliation, prompt token-budget clarification); canonical documentation, master planning, walkthrough, and changelog fully reconciled.
-- [ ] **Stage 6 — DRAFT PR:** Draft PR creation authorized and in progress.
-- [ ] **Stage 7 — COMBINED INDEPENDENT DOCUMENTATION/CLOSURE/PR REVIEW (`STOP BOUNDARY`):** Pending draft PR creation.
-- [ ] **Stage 8 — FINAL PRE-MERGE CLOSURE RECONCILIATION:** Pending combined review approval.
-- [ ] **Stage 9 — HUMAN SQUASH MERGE:** Exclusively executed by Chris.
+- [x] **Stage 6 — DRAFT PR:** Draft PR #30 created targeting `develop` (head: `feature/m3-character-studio-personality-b`). Pre-PR documentation polish applied at commit `d50edd4cc0f6ea4d76c0bea2291424529ef3d331`.
+- [x] **Stage 7 — COMBINED INDEPENDENT DOCUMENTATION/CLOSURE/PR REVIEW:** Independent Stage 7 review PASSED. Hosted PR CI Run `41638166724` passed all 7 jobs at PR candidate checkpoint `d50edd4`.
+- [x] **Stage 8 — FINAL PRE-MERGE CLOSURE RECONCILIATION:** Branch delivery tracker archived to `docs/01_Tracking/archive/task-feature-m3-character-studio-personality-b.md`; durable links updated; PR #30 description reconciled with factual CI and review evidence. Performed on the same branch.
+- [ ] **Stage 9 — HUMAN SQUASH MERGE (`ACTIVE STOP BOUNDARY`):** PENDING human execution by Chris. Post-merge integration verification NOT PERFORMED.
 
 ---
 
@@ -44,23 +46,26 @@
 
 ---
 
-## 3. Automated Verification Evidence (Review & Acceptance Corrections Revision)
+## 3. Automated & Hosted Verification Evidence
 
-| Test Suite | Command | Result |
+| Verification Lane | Scope / Command | Result |
 | :--- | :--- | :--- |
-| **Backend Pytest** | `backend/.venv/Scripts/pytest.exe backend/tests -q` | **641 passed, 1 warning (164.27s)** |
-| **OpenAPI Contract** | `backend/.venv/Scripts/python.exe scripts/check_openapi_contract.py` | **PASSED (39 routes, all models verified)** |
-| **Dart OpenAPI Parity** | `backend/.venv/Scripts/python.exe scripts/check_dart_openapi_parity.py --check` | **PASSED (22/22 DTO schemas, 29/18 covered routes)** |
-| **Flutter `companion_api`** | `flutter test packages/companion_api` | **PASSED (79/79 passed)** |
-| **Flutter `companion_design`** | `flutter test packages/companion_design` | **PASSED (18/18 passed)** |
-| **Flutter Desktop App** | `flutter test apps/desktop` | **PASSED (278/278 passed)** |
-| **Dart Static Analysis** | `dart analyze .` (in `frontend/flutter`) | **PASSED (0 issues found)** |
-| **React Web Harness** | `npm test -- --run` (in `frontend/web`) | **PASSED (16 test files, 248/248 passed)** |
-| **Git Whitespace** | `git diff --check` | **PASSED (0 errors)** |
+| **Backend Pytest (Local)** | `backend/.venv/Scripts/pytest.exe backend/tests -q` | **641 passed, 1 warning (164.27s)** |
+| **Dedicated Modulator Pytest (Local)** | `backend/.venv/Scripts/pytest.exe backend/tests/test_character_personality_modulator.py -q` | **17 passed (0.52s)** |
+| **OpenAPI Contract (Local)** | `backend/.venv/Scripts/python.exe scripts/check_openapi_contract.py` | **PASSED (39 routes, all models verified)** |
+| **Dart OpenAPI Parity (Local)** | `backend/.venv/Scripts/python.exe scripts/check_dart_openapi_parity.py --check` | **PASSED (22/22 DTO schemas, 29/18 covered routes)** |
+| **Flutter `companion_api` (Local)** | `flutter test packages/companion_api` | **PASSED (79/79 passed)** |
+| **Flutter `companion_design` (Local)** | `flutter test packages/companion_design` | **PASSED (18/18 passed)** |
+| **Flutter Desktop App (Local)** | `flutter test apps/desktop` | **PASSED (278/278 passed)** |
+| **Dart Static Analysis (Local)** | `dart analyze .` (in `frontend/flutter`) | **PASSED (0 issues found)** |
+| **React Web Harness (Local)** | `npm test -- --run` (in `frontend/web`) | **PASSED (16 test files, 248/248 passed)** |
+| **Git Whitespace (Local)** | `git diff --check` | **PASSED (0 errors)** |
+| **Physical Windows Acceptance** | Physical reference workstation manual testing (Chris) | **14 / 14 PASS** |
+| **Hosted PR CI Run `41638166724`** | PR candidate checkpoint `d50edd4` (7 jobs including CI Gate) | **100% PASSED (All 7 jobs green)** |
 
 ---
 
-## 4. Known Limitations & Follow-Up Observations (Stage 5 Reconciliation)
+## 4. Known Limitations & Follow-Up Observations (Closure Reconciliation)
 
 1. **Header Name Comparison (Minor Non-Blocking Follow-Up Observation):**
    - The chat header indicator currently compares formatted display names (`thisConvName == newConvName`) when deciding whether to render the secondary `New Conversations: [Name]` indicator pill.
@@ -69,11 +74,14 @@
 2. **Active Character Fetch Interruption (Minor Non-Blocking Follow-Up Observation):**
    - A transient network failure or unavailable active-Character state fetch can temporarily cause a misleading `Neutral Assistant` display label until the active state is successfully fetched.
    - Subsequent successful refresh updates the pointer and header pills truthfully.
-3. **Stage 5 Provisional Closure Status:**
+3. **Stage 8 Final Pre-Merge Closure Status:**
    - Implementation review: APPROVED.
    - Windows Desktop user acceptance: 14/14 PASS.
-   - Canonical documentation: RECONCILED.
+   - Canonical documentation & Walkthrough: RECONCILED.
    - Master planning documents: RECONCILED.
-   - Walkthrough and changelog: CREATED.
-   - Stage 6 Draft PR creation and Stage 7 Combined Review: NOT YET AUTHORIZED.
-   - Post-merge integration CI and merge into develop: NOT YET EXECUTED.
+   - Stage 6 Draft PR #30: CREATED.
+   - Stage 7 Combined Review: PASSED.
+   - Hosted PR CI Run `41638166724`: PASSED.
+   - Stage 8 Final Closure Reconciliation: COMPLETED on branch.
+   - Human Squash Merge: PENDING human action by Chris.
+   - Post-merge integration CI and verification: NOT PERFORMED.

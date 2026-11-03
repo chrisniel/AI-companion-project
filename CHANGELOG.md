@@ -31,8 +31,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Author-reported local automated tests passing: 641 backend pytest (including 17 tests in `test_character_personality_modulator.py`), 278 Flutter desktop tests, 248 React web tests across 16 test files, 0 Dart analyze warnings, and 0 Git diff whitespace errors.
   - Independent Implementation Gate review approved at commit `fd0c558`.
   - Human Windows Desktop manual acceptance confirmed across 14 checkpoints by Chris (Test 10 confirmed after acceptance correction).
-  - Hosted PR CI not yet run (pending draft PR creation).
-  - Implemented and verified on branch `feature/m3-character-studio-personality-b` (checkpoint `fd0c558`), Stage 5 documentation prepared and under independent review awaiting Stage 6 draft PR authorization.
+  - Hosted PR CI Run 41638166724 passed 100% across all 7 jobs at PR candidate checkpoint `d50edd4`.
+  - Stage 7 Combined Independent Documentation/Closure/PR Review approved; Stage 8 final pre-merge closure reconciliation completed on branch; PR #30 ready for human squash merge; post-merge integration CI and wider M2/M3 capabilities remain planned. Execution evidence is tracked in [archived branch task](docs/01_Tracking/archive/task-feature-m3-character-studio-personality-b.md).
 
 ### Fixed — Windows acceptance inspection budget
 

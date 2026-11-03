@@ -6,7 +6,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 - **Date:** 2026-11-03
 - **Author:** AI Agent
 - **Branch:** `feature/m3-character-studio-personality-b` (branched from `develop` @ `d22dd7e1dbbd0a50c9a4e6fd28ab5fbdbcce34de`)
-- **Active Branch Tracker:** [`docs/01_Tracking/active/task-feature-m3-character-studio-personality-b.md`](../../01_Tracking/active/task-feature-m3-character-studio-personality-b.md)
+- **Branch Delivery Tracker (Archived):** [`docs/01_Tracking/archive/task-feature-m3-character-studio-personality-b.md`](../../01_Tracking/archive/task-feature-m3-character-studio-personality-b.md)
 - **WBS Mapping:**
   - `PC-CLIENT-007`: Character Studio V1 — Immersive Windows Desktop customization workspace (Character Library, Center Character Showcase Stage, Translucent Customization Inspector, Presets, 8 Sliders, Lore/Prompt Editor, Neutral Assistant Fallback & Profile Activation).
   - `PC-CHAR-002`: 8 Continuous Personality Traits Scoring (`0–100`) & Deterministic Personality Prompt Modulator.
@@ -44,7 +44,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
     - `docs/03_Walkthroughs/walkthrough-m3-character-studio-personality-b.md` (`[ADD]`)
     - `CHANGELOG.md` (`[MODIFY]`)
 
-Notice: Update this plan in place during planning. After approval, track live branch execution in [`docs/01_Tracking/active/task-feature-m3-character-studio-personality-b.md`](../../01_Tracking/active/task-feature-m3-character-studio-personality-b.md) and reopen this plan only when revising scope or architecture.
+Notice: Update this plan in place during planning. After approval, track live branch execution in [`docs/01_Tracking/archive/task-feature-m3-character-studio-personality-b.md`](../../01_Tracking/archive/task-feature-m3-character-studio-personality-b.md) and reopen this plan only when revising scope or architecture.
 
 ---
 

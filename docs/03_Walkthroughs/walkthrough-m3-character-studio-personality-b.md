@@ -76,7 +76,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | `docs/02_Planning/00_Master/SPRINT_ROADMAP.md` | MODIFY | Reconciled sprint roadmap timeline and milestone status for M2 and M3. |
 | `docs/02_Planning/00_Master/MASTER_CHECKLIST.md` | MODIFY | Updated master readiness matrix and release blocker audit. |
 | `docs/01_Tracking/task.md` | MODIFY | Updated shared milestone integration state for M2 and M3. |
-| `docs/01_Tracking/active/task-feature-m3-character-studio-personality-b.md` | MODIFY | Reconciled branch active task tracking with Stage 5 documentation and provisional closure. |
+| `docs/01_Tracking/archive/task-feature-m3-character-studio-personality-b.md` | ARCHIVE | Reconciled lifecycle checkpoints, recorded Stage 7 PR review approval, and archived branch tracker for pre-merge closure. |
 | `CHANGELOG.md` | MODIFY | Appended release notes under `## [Unreleased]`. |
 
 ---
