@@ -7,6 +7,7 @@ import '../controllers/desktop_settings_controller.dart';
 import '../coordinator/desktop_runtime_coordinator.dart';
 import '../features/chat/desktop_chat_controller.dart';
 import '../features/profiles/desktop_profile_controller.dart';
+import '../features/studio/desktop_studio_controller.dart';
 import '../lifecycle/desktop_lifecycle_coordinator.dart';
 import '../platform/desktop_client_settings.dart';
 import '../screens/chat_screen.dart';
@@ -32,6 +33,7 @@ class DesktopShell extends StatefulWidget {
     this.coordinator,
     this.chatController,
     this.profileController,
+    this.studioController,
     this.runtimeCoordinator,
     this.clientSettings,
     this.credentialStore,
@@ -41,6 +43,7 @@ class DesktopShell extends StatefulWidget {
   final DesktopLifecycleCoordinator? coordinator;
   final DesktopChatController? chatController;
   final DesktopProfileController? profileController;
+  final DesktopStudioController? studioController;
   final DesktopRuntimeCoordinator? runtimeCoordinator;
   final DesktopClientSettings? clientSettings;
   final CredentialStore? credentialStore;
@@ -51,11 +54,68 @@ class DesktopShell extends StatefulWidget {
 
 class _DesktopShellState extends State<DesktopShell> {
   final Set<DesktopNavDestination> _visitedDestinations = <DesktopNavDestination>{};
+  late final DesktopStudioController? _studioController;
+  bool _ownsStudioController = false;
 
   @override
   void initState() {
     super.initState();
     _visitedDestinations.add(widget.controller.currentDestination);
+    if (widget.studioController != null) {
+      _studioController = widget.studioController;
+    } else if (widget.chatController != null) {
+      _studioController = DesktopStudioController(chat: widget.chatController!);
+      _ownsStudioController = true;
+    } else {
+      _studioController = null;
+    }
+    widget.controller.navigationGuard = _handleNavigationGuard;
+  }
+
+  @override
+  void dispose() {
+    if (_ownsStudioController) {
+      _studioController?.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<bool> _handleNavigationGuard(DesktopNavDestination from, DesktopNavDestination to) async {
+    final studio = _studioController;
+    if (from == DesktopNavDestination.studio && studio != null && studio.draft?.isDirty == true) {
+      final draft = studio.draft!;
+      final decision = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Unsaved Studio Customizations'),
+          content: Text('You have unsaved changes to "${draft.name}". What would you like to do before leaving Studio?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop('stay'),
+              child: const Text('Stay in Studio'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop('discard'),
+              child: const Text('Discard & Leave'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop('save'),
+              child: const Text('Save & Leave'),
+            ),
+          ],
+        ),
+      );
+
+      if (decision == 'save') {
+        final success = await studio.saveDraft();
+        return success;
+      } else if (decision == 'discard') {
+        return true;
+      }
+      return false;
+    }
+    return true;
   }
 
   @override
@@ -77,7 +137,7 @@ class _DesktopShellState extends State<DesktopShell> {
         final actions = <Type, Action<Intent>>{
           OpenSettingsIntent: CallbackAction<OpenSettingsIntent>(
             onInvoke: (_) {
-              widget.controller.setDestination(DesktopNavDestination.settings);
+              widget.controller.requestDestination(DesktopNavDestination.settings);
               return null;
             },
           ),
@@ -161,7 +221,7 @@ class _DesktopShellState extends State<DesktopShell> {
         return ChatScreen(
           key: const ValueKey('chat_screen'),
           controller: widget.chatController,
-          onNavigateToSettings: () => widget.controller.setDestination(DesktopNavDestination.settings),
+          onNavigateToSettings: () => widget.controller.requestDestination(DesktopNavDestination.settings),
         );
       case DesktopNavDestination.voice:
         return const VoiceScreen(key: ValueKey('voice_screen'));
@@ -170,7 +230,15 @@ class _DesktopShellState extends State<DesktopShell> {
       case DesktopNavDestination.memory:
         return const MemoryScreen(key: ValueKey('memory_screen'));
       case DesktopNavDestination.studio:
-        return const StudioScreen(key: ValueKey('studio_screen'));
+        final studio = _studioController;
+        if (studio != null) {
+          return StudioScreen(
+            key: const ValueKey('studio_screen'),
+            controller: studio,
+            onNavigateToSettings: () => widget.controller.requestDestination(DesktopNavDestination.settings),
+          );
+        }
+        return const Center(child: Text('Studio unavailable'));
       case DesktopNavDestination.settings:
         return SettingsScreen(
           key: const ValueKey('settings_screen'),

@@ -152,9 +152,11 @@ class _NeumorphicButtonState extends State<NeumorphicButton> {
             ),
         ],
         if (widget.child != null)
-          DefaultTextStyle(
-            style: textStyle.copyWith(color: contentColor),
-            child: widget.child!,
+          Flexible(
+            child: DefaultTextStyle(
+              style: textStyle.copyWith(color: contentColor),
+              child: widget.child!,
+            ),
           ),
       ],
     );

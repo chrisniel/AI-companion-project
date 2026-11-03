@@ -181,14 +181,16 @@ class _SegmentItemState<T> extends State<_SegmentItem<T>> {
           Icon(widget.segment.icon, size: 16, color: color),
           const SizedBox(width: CompanionSpacing.xs),
         ],
-        Text(
-          widget.segment.label,
-          style: CompanionTypography.bodySmall.copyWith(
-            color: color,
-            fontWeight: fontWeight,
+        Flexible(
+          child: Text(
+            widget.segment.label,
+            style: CompanionTypography.bodySmall.copyWith(
+              color: color,
+              fontWeight: fontWeight,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
         ),
       ],
     );

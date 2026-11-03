@@ -18,6 +18,7 @@ import 'platform/desktop_client_settings.dart';
 import 'platform/windows_dpapi_credential_store.dart';
 import 'platform/host_admin_secret_store.dart';
 import 'features/profiles/desktop_profile_controller.dart';
+import 'features/studio/desktop_studio_controller.dart';
 import 'shell/desktop_shell.dart';
 
 void main(List<String> args) async {
@@ -140,6 +141,7 @@ class _AiCompanionDesktopAppState extends State<AiCompanionDesktopApp> {
   late final DesktopSettingsController _controller;
   late final DesktopChatController _chatController;
   DesktopProfileController? _profileController;
+  DesktopStudioController? _studioController;
   DesktopRuntimeCoordinator? _runtimeCoordinator;
   StreamSubscription<RuntimeProcessState>? _runtimeSubscription;
   bool _ownsRuntimeCoordinator = false;
@@ -169,6 +171,7 @@ class _AiCompanionDesktopAppState extends State<AiCompanionDesktopApp> {
       _profileController = DesktopProfileController(chat:_chatController);
     }
 
+    _studioController = DesktopStudioController(chat: _chatController);
     _initializeRuntime(defaultHostUrl, store);
   }
 
@@ -221,6 +224,7 @@ class _AiCompanionDesktopAppState extends State<AiCompanionDesktopApp> {
 
   @override
   void dispose() {
+    _studioController?.dispose();
     _profileController?.dispose();
     _runtimeSubscription?.cancel();
     if (_ownsRuntimeCoordinator) {
@@ -245,6 +249,7 @@ class _AiCompanionDesktopAppState extends State<AiCompanionDesktopApp> {
             coordinator: widget.coordinator,
             chatController: _chatController,
             profileController: _profileController,
+            studioController: _studioController,
             runtimeCoordinator: _runtimeCoordinator,
             clientSettings: widget.clientSettings,
             credentialStore: widget.credentialStore,

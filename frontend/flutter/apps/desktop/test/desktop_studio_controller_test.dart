@@ -11,7 +11,7 @@ import 'package:http/testing.dart';
 void main() {
   group('CharacterStagePresenter Unit Tests', () {
     test('buildIllustrativeStyleSummary returns formatted band labels and directives', () {
-      final traits = const CharacterTraitVector(
+      const traits = CharacterTraitVector(
         warmth: 60,
         teasing: 75,
         guardedness: 80,
@@ -33,14 +33,14 @@ void main() {
     });
 
     test('buildIllustrativeStyleSummary enables autonomyGuardActive for affection >= 80 or yandere', () {
-      final highAffection = const CharacterTraitVector(
+      const highAffection = CharacterTraitVector(
         warmth: 50, teasing: 50, guardedness: 50, directness: 50,
         expressiveness: 50, affection: 85, formality: 50, verbosity: 50,
       );
       final summaryA = CharacterStagePresenter.buildIllustrativeStyleSummary(highAffection, 'custom');
       expect(summaryA.autonomyGuardActive, isTrue);
 
-      final yandereTraits = const CharacterTraitVector(
+      const yandereTraits = CharacterTraitVector(
         warmth: 50, teasing: 50, guardedness: 50, directness: 50,
         expressiveness: 50, affection: 40, formality: 50, verbosity: 50,
       );
@@ -193,7 +193,7 @@ void main() {
           'traits': null,
           'lore': '',
         },
-        'instances': [],
+        'instances': <Map<String, dynamic>>[],
         'activeState': {
           'profile_id': 'profile-1',
           'is_neutral_fallback': true,
@@ -414,6 +414,7 @@ void main() {
       expect(studio.draft, isNotNull);
       expect(studio.draft!.isDirty, isTrue);
       expect(studio.draft!.name, 'Timeout Character');
+      expect(callCount, 1);
 
       studio.dispose();
       chat.dispose();
