@@ -9,38 +9,42 @@
 - **Branch:** `feature/m2-secure-host-lifecycle`
 - **Target Integration Branch:** `develop`
 - **Verified Baseline SHA:** `261d4b43930d3dcdad2dbd913d4dd4d60c8a4887`
-- **Previously Reviewed Plan Commit:** `8adfae0f964de81528883f73b8165e1cb9f62fae`
+- **Previously Reviewed Plan Commits:** `8adfae0f964de81528883f73b8165e1cb9f62fae` (Initial), `350ba136b3786a761337e1df8b6720ce4161bc4d` (Revision 1)
 - **Active Branch Tracker:** [`docs/01_Tracking/active/task-feature-m2-secure-host-lifecycle.md`](../../01_Tracking/active/task-feature-m2-secure-host-lifecycle.md)
 - **Date:** `2026-11-04`
-- **Author / Role:** `Authorized Implementing Agent (Phase 1 Independent Review Revision)`
+- **Author / Role:** `Authorized Implementing Agent (Final Phase 1 Design Corrections)`
 
 > [!IMPORTANT]
-> **Phase 1 Planning Candidate Notice:** This revised document is a **Phase 1 planning review candidate** published on `feature/m2-secure-host-lifecycle` addressing the Phase 1 Independent Review findings (`C1`–`C6`) and the Human Owner's confirmed Model-Loading Reliability report (`Issue B1`). It is **NOT** approved for Phase 2 implementation, and zero production source code, tests, contracts, or database migrations have been modified in Phase 1. Implementation begins only after explicit **Human Owner** and **Independent Reviewer** plan/design approval.
+> **Phase 1 Planning Candidate Notice:** This document is a **Phase 1 planning review candidate** published on `feature/m2-secure-host-lifecycle` incorporating the final Phase 1 Independent Review corrections (`C1`–`C6` and §9 Process Termination Safety). It is **NOT** yet approved for Phase 2 implementation, and zero production source code, tests, contracts, or database migrations have been modified in Phase 1. Implementation begins only after explicit **Human Owner** and **Independent Reviewer** final plan approval.
 
 ---
 
-## 1. Corrected Baseline and Scope (`Track A` + `Track B`)
+## 1. Approved Product Directions, Baseline and Scope (`Track A` + `Track B`)
 
-### 1.1 Problem Statement & Two-Track Delivery Scope
-This delivery addresses two tightly coupled host/model lifecycle reliability tracks that share the exact same backend provider ([`backend/app/services/llm/llama_cpp.py`](../../../backend/app/services/llm/llama_cpp.py)), Flutter API client ([`frontend/flutter/packages/companion_api/lib/client/companion_client.dart`](../../../frontend/flutter/packages/companion_api/lib/client/companion_client.dart)), and Desktop Settings/Runtime coordinators ([`settings_screen.dart`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart), [`desktop_runtime_coordinator.dart`](../../../frontend/flutter/apps/desktop/lib/coordinator/desktop_runtime_coordinator.dart)):
+### 1.1 Approved Architectural Directions (Human Owner Decisions)
+The Human Owner has approved the following baseline directions for this delivery:
+1. **Combined Two-Track Delivery Scope:** Deliver **Track A (`PC-HOST-005`: Secure Host Lifecycle & Provider Cleanup)** and **Track B (Bounded Model-Loading Reliability under `PC-CLIENT-010` / `PC-CLIENT-004` / `PC-MODEL-006`)** together on `feature/m2-secure-host-lifecycle`.
+2. **Primary Shutdown Mechanism:** Use cooperative, authenticated Host Administration HTTP shutdown (`POST /api/v1/system/shutdown` protected by `require_host_admin`) as the primary Runtime termination path.
+3. **Emergency OS Fallback:** Permit a Windows OS process termination fallback **only** when process identity and ownership are established safely via handle-bound provenance verification, failing closed on any ambiguity.
+4. **Four Distinct Provider Lifecycle Operations:** Preserve distinct semantics for (a) ordinary model unloading (`unload_model()`), (b) Core-managed router termination (`stop_managed_router()`), (c) full Runtime shutdown (`shutdown()`), and (d) supervisor emergency recovery, while never terminating an externally started `llama-server.exe` (`_managed_by_core == False`).
+5. **Initial Tunable Timeout Candidates:** Use the `5.0s` active-generation/quiescence drain budget, `90.0s` model-load HTTP timeout, and `60.0s` automatic status-reconciliation polling window as initial tunable design budgets, subject to truthful state reporting and non-deadlocking cancellation.
+6. **Remote Host Protection:** Never shut down a remote Runtime (`isRemoteHost == true`) from the Desktop client's **Exit Companion** action.
+7. **Governance Continuity:** Preserve the S1 four-phase delivery workflow, same feature branch continuity, autonomous Phase 2/3 execution once Phase 1 is approved, and the Human Owner's exclusive squash-merge authority.
 
-1. **Track A — Secure Host Lifecycle & Provider Cleanup (`PC-HOST-005`):**
-   - Complete the privileged Host Administration shutdown boundary (`POST /api/v1/system/shutdown` protected by `require_host_admin`).
-   - Fix [`LlamaCppProvider`](../../../backend/app/services/llm/llama_cpp.py) lifecycle separation so ordinary model unload (`unload_model()`), stopping the Core-managed `llama-server.exe` router (`stop_managed_router()`), full runtime shutdown (`shutdown()`), and supervisor emergency recovery are distinct, deterministic, and never orphan Core-managed `llama-server.exe` processes or kill externally started routers (`Issue A1`).
-   - Replace unverified Windows `SIGINT` self-signaling with deterministic in-process `uvicorn.Server.should_exit = True` lifecycle control (`Correction C1`), whole-runtime mutation admission control and drain before `dispose_database_runtime()` (`Correction C6`), Route A vs. Route B native worker cancellation safety (`Correction C3`), and handle-bound TOCTOU-free OS fallback termination (`Correction C2`).
-   - Wire `HostAdminSecretStore` into `DesktopRuntimeCoordinator` (`Correction C4`) and unify the System Tray and Settings **"Exit Companion"** actions behind a mandatory confirmation dialog (`Issue A2`).
-2. **Track B — Model-Loading Reliability & Readiness Reconciliation (`Issue B1` — Bounded Extension under `PC-CLIENT-010` / `PC-CLIENT-004` / `PC-MODEL-006`):**
-   - Resolve the user-observed defect where selecting/loading a model in Settings reports an activation timeout after 5 seconds while `llama-server.exe` continues spawning and loading weights in the background, leaving the UI falsely reporting the model as unloaded until the user clicks **Load Model** a second time.
+### 1.2 Independent Review Resolution Ledger (Commits `8adfae0` & `350ba13` $\rightarrow$ Current)
 
-### 1.2 Canonical WBS Ownership & Scope Recommendation for Track B
-In [`docs/02_Planning/00_Master/WBS.md`](../../02_Planning/00_Master/WBS.md) and [`docs/02_Planning/00_Master/DELIVERY_INDEX.md`](../../02_Planning/00_Master/DELIVERY_INDEX.md), model selection, loading transport, and single-resident router lifecycle map to:
-- **`PC-CLIENT-004`** (*API Client Layer* — OpenAPI-derived Dart client, request timeouts, transport error handling).
-- **`PC-CLIENT-010`** (*Model Management UI* — Settings model selection, load/unload controls, status display, previously hardened alongside `PC-CLIENT-006` in [`plan-desktop-chat-quality-followup.md`](plan-desktop-chat-quality-followup.md)).
-- **`PC-MODEL-006`** (*Single-Resident Model Lifecycle Policy & Advanced Multi-Model Warning Guard*).
-
-**Architectural Recommendation:** Include Track B as a **bounded in-scope reliability correction** within this `feature/m2-secure-host-lifecycle` delivery rather than deferring it to a separate branch:
-- Both Track A and Track B modify [`LlamaCppProvider`](../../../backend/app/services/llm/llama_cpp.py) (`_lock`, `_server_process`, `_managed_by_core`, `load_model()`, `unload_model()`, `get_status()`, `shutdown()`), [`CompanionClient._requestWithoutRedirects` / `_adminRequest`](../../../frontend/flutter/packages/companion_api/lib/client/companion_client.dart), and [`SettingsScreen`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart).
-- Fixing the 5-second hardcoded client timeout, the `get_status()` lockless state-clobber race, model ID normalization, timeout-to-polling reconciliation, and `DesktopChatController` model-status synchronization requires ~120 lines of targeted surgical changes in the exact files already opened for `PC-HOST-005`, eliminating merge conflicts and immediately resolving a user-facing reliability bug without introducing a multi-job async queue architecture.
+| Finding ID | Review Finding Summary | Resolution Status | Selected Mechanism & Verification Tier |
+| :--- | :--- | :--- | :--- |
+| **`Issue A1`** | `LlamaCppProvider.shutdown()` left Core-managed `llama-server.exe` running after HTTP router unload or drain timeout. | `RESOLVED IN DESIGN` *(Requires Phase 2 unit/acceptance evidence)* | Separate `unload_model()`, `stop_managed_router()`, and `shutdown()`. `shutdown()` unconditionally calls `stop_managed_router()` when `_managed_by_core == True` and preserves external routers (`_managed_by_core == False`) (§3.1). |
+| **`Issue A2`** | Settings `Exit Companion` invoked unconfirmed UI-only exit (`handleExitRequested()`). | `RESOLVED IN DESIGN` *(Requires Phase 2 widget test evidence)* | Route both System Tray `exit_full` and Settings `Exit Companion` through `requestFullExitCompanion()` with mandatory confirmation dialog while preserving `Close Window (×)` and `Close UI Only (Dev Test)` (§3.2). |
+| **`Issue B1`** | Cold model loads ($> 5\text{s}$) hit hardcoded `5s` client timeout while `llama-server.exe` continued loading in background. | `RESOLVED IN DESIGN` *(Requires Phase 2 unit/widget evidence)* | `90s` HTTP timeout on `selectModel(loadImmediately: true)` and `loadModel()`, lock-free snapshot `get_status()` during active load, canonical model ID normalization, 4-state truthful status reconciliation (`CONFIRMED_READY`, `CONFIRMED_FAILED`, `STILL_LOADING`, `STATUS_UNKNOWN_TIMED_OUT`), and Chat controller sync (§4, §11). |
+| **`Final C1`** | Relying on `gc.get_objects()` or asyncio stack inspection to find `uvicorn.Server` is unacceptable for security-sensitive shutdown. | `RESOLVED IN DESIGN` *(Requires Phase 2 unit + isolated Windows acceptance evidence)* | Dedicated programmatic entry point `backend/app/runtime_server.py` (`pythonw.exe -m app.runtime_server --app app.main:app --host <host> --port <port> --no-use-colors`) explicitly constructs `uvicorn.Config` & `uvicorn.Server`, registers `server` with `RuntimeLifecycleCoordinator` before `server.serve()`, and updates supervisor launch + provenance checks (§5). |
+| **`Final C2`** | `shutdown()` acquiring `self._lock` before setting `_closing = True` deadlocks behind an active `load_model()` holding `self._lock`. | `RESOLVED IN DESIGN` *(Requires Phase 2 concurrency unit test evidence)* | Lock-free shutdown signaling (`_closing = True`, `_shutdown_event.set()`, cancelling `_active_load_task` and closing active router `httpx` clients) executes **before** acquiring `self._lock`; `load_model()` uses interruptible `_sleep_or_abort()` waits, cleans up partial router spawn on abort, and releases `self._lock` immediately (§6). |
+| **`Final C3`** | Route-level middleware counters miss `StreamingResponse` lifetimes, and `asyncio.shield()` does not guarantee `_persist_terminal_assistant_status()` has committed before `dispose_database_runtime()`. | `RESOLVED IN DESIGN` *(Requires Phase 2 async DB quiescence test evidence)* | `RuntimeLifecycleCoordinator` tracks (1) full ASGI body-completion scope for mutating/streaming requests, (2) active streaming turn tasks, and (3) explicit `asyncio.Task[bool]` handles in `_pending_persistence_tasks` spawned for terminal status writes. `dispose_database_runtime()` awaits completion of `_pending_persistence_tasks` and distinguishes `CLEAN_QUIESCENCE`, `PERSISTENCE_INCOMPLETE`, and `DRAIN_TIMED_OUT` (§7). |
+| **`Final C4`** | Previous plan referenced nonexistent `GET /api/v1/models/status` and `model_id` instead of actual `GET /api/v1/models` and `model_name`. | `RESOLVED IN DESIGN` *(Verified directly against `llm.py` & `companion_client.dart`)* | All architecture text, sequence diagrams, tables, tests, and implementation steps updated to use `GET /api/v1/models` and `model_name` (`ModelSelectRequest` / `ModelLoadRequest`) with zero breaking contract changes (§4, §9). |
+| **`Final C5`** | Treating expiration of the `60s` status-polling window as a confirmed model-load failure misrepresents a still-loading model. | `RESOLVED IN DESIGN` *(Requires Phase 2 widget/controller test evidence)* | Four distinct states (`CONFIRMED_READY`, `CONFIRMED_FAILED`, `STILL_LOADING`, `STATUS_UNKNOWN_TIMED_OUT`). Expiring the observation window while backend is `SERVER_STARTING` / `MODEL_LOADING` surfaces `STILL_LOADING` with a `Refresh Model Status` action (no duplicate load POST), and `DesktopChatController` continues lightweight background status polling (§4.3, §11). |
+| **`Final C6`** | Inaccurate claim that `CompanionClient._adminRequest` already retries/clears secret on `401`/`403`; test matrix used `X-Profile-Session` instead of `Authorization: Bearer psk_...`. | `RESOLVED IN DESIGN` *(Verified against `companion_client.dart`, `host_admin_secret_store.dart`, `profile_sessions.py`)* | Accurately documents that `HostAdminSecretStore.readToken()` reads and ACL-verifies `desktop_admin.secret` fresh from disk on every `_adminRequest` without in-memory caching. Security test matrix updated to test `Authorization: Bearer psk_...` (Profile Session), `Authorization: Bearer companion_sec_...` / `X-API-Key` (paired device), and malformed custom headers separately (§8, §16). |
+| **`Process Safety (§9)`** | Handle-bound OS termination guarantees must be framed as propositions requiring Phase 2 implementation and isolated Windows verification. | `REQUIRES IMPLEMENTATION EVIDENCE` *(Design complete in §10; empirical verification in Phase 2 Tasks 4 & 7)* | Specifies exact PowerShell/`System.Diagnostics.Process` handle acquisition (`$proc = GetProcessById($pid); $_ = $proc.Handle`), 4-factor verification before `$proc.Kill()`, independent child `llama-server.exe` handle verification, fail-closed ambiguity handling, and isolated Windows test cases (§10, §16, §17). |
 
 ### 1.3 Canonical References
 
@@ -49,50 +53,45 @@ In [`docs/02_Planning/00_Master/WBS.md`](../../02_Planning/00_Master/WBS.md) and
 | [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) | **§2 & §5:** Single-Machine Split Architecture; Local AI Runtime (`127.0.0.1:8000`) runs independently of Flutter UI; **Close Window (`×`)** hides UI to tray; **Exit Companion** performs confirmed full shutdown of UI + Local AI Runtime + Core-managed `llama.cpp`; **Host Administration Authority (`D15`)** separates normal Profile Session (`psk_`) and Device Pairing (`companion_sec_`) tokens from host-wide privileged operations (`X-Host-Admin-Secret`). |
 | [`docs/04_Architecture/04_Infrastructure/windows-host-and-notifications.md`](../../04_Architecture/04_Infrastructure/windows-host-and-notifications.md) | **§1.2, §1.3, §2.1, §2.2, §4.2:** Four distinct lifecycle actions (**Close Window (`×`)**, **Quit UI Only (Dev/Diagnostics)**, **Pause Companion** [deferred], **Exit Companion**); mandatory user confirmation before full shutdown; intentional exit suppresses crash-recovery restart loops; `PC-HOST-005` owns authenticated host shutdown. |
 | [`docs/04_Architecture/02_Data_and_Security/profiles-and-devices.md`](../../04_Architecture/02_Data_and_Security/profiles-and-devices.md) | **§1.3 & §3.2 (`D15`):** Profile sessions and remote paired devices must never stop the host runtime or mutate shared host-wide process state. |
-| [`docs/04_Architecture/02_Data_and_Security/authentication-and-secrets.md`](../../04_Architecture/02_Data_and_Security/authentication-and-secrets.md) | **§1.1, §2.2, §3.1, §5.3 (`D15`):** `%LOCALAPPDATA%\AICompanion\secrets\desktop_admin.secret` ACL-restricted to current Windows user SID + `SYSTEM`; `X-Host-Admin-Secret` required with loopback IP/Host and non-browser (`Origin`/`Sec-Fetch-Site` rejected) enforcement. |
+| [`docs/04_Architecture/02_Data_and_Security/authentication-and-secrets.md`](../../04_Architecture/02_Data_and_Security/authentication-and-secrets.md) | **§1.1, §2.2, §3.1, §5.3 (`D15`):** Three distinct credential classes (`Authorization: Bearer psk_`, `Authorization: Bearer companion_sec_` / `X-API-Key`, and `X-Host-Admin-Secret: hsk_`); `%LOCALAPPDATA%\AICompanion\secrets\desktop_admin.secret` ACL-restricted to current Windows user SID + `SYSTEM`; loopback IP/Host and non-browser (`Origin`/`Sec-Fetch-Site` rejected) enforcement. |
 | [`docs/04_Architecture/04_Infrastructure/runtime-and-models.md`](../../04_Architecture/04_Infrastructure/runtime-and-models.md) | **§2.2 & §5.3:** Core-managed `llama-server.exe` lifecycle ownership (`_managed_by_core`), single-resident model loading, active generation cancellation, and clean subprocess termination on runtime exit. |
 | [`docs/05_Design/01_PC_Desktop_Shell_and_Tray.md`](../../05_Design/01_PC_Desktop_Shell_and_Tray.md) | **§5 (Tray & Background Behavior):** Tray menu actions and explicit user-facing distinction between hiding window, developer UI-only exit, and confirmed full **"Exit Companion"** shutdown. |
 | [`docs/04_Architecture/decisions/ADR-0003-d2-windows-host-model.md`](../../04_Architecture/decisions/ADR-0003-d2-windows-host-model.md) | **ADR-0003 (`D2`) — Per-User Background Host Model:** Runtime runs under interactive Windows user session without requiring UAC elevation or a Windows Service (`services.msc`). |
 
 ---
 
-## 2. Independently Supported Source Findings
+## 2. Independently Supported Source Findings (Verified Current Implementation)
 
-Direct inspection of the repository on `feature/m2-secure-host-lifecycle` (base `develop` SHA `261d4b43930d3dcdad2dbd913d4dd4d60c8a4887`) established the following verified facts vs. hypotheses:
+Direct inspection of the repository on `feature/m2-secure-host-lifecycle` (base `develop` SHA `261d4b43930d3dcdad2dbd913d4dd4d60c8a4887`) established the following source-verified facts:
 
-| Finding ID | Classification | Exact Source Evidence | Summary of Verified Mechanism / Defect |
-| :--- | :--- | :--- | :--- |
-| **`Issue A1`** | **Confirmed Source Defect** | [`backend/app/services/llm/llama_cpp.py`](../../../backend/app/services/llm/llama_cpp.py#L663-L711) & [`#L1086-L1105`](../../../backend/app/services/llm/llama_cpp.py#L1086-L1105) | `LlamaCppProvider.shutdown()` calls `await self.unload_model()`, which returns `True` at line 677 immediately after HTTP `POST /models/unload` succeeds (`"unloaded via router API (router alive)"`), skipping lines 681–690 where `self._server_process` (`llama-server.exe`) is terminated. Also, if `_active_work_drained.wait()` times out at line 1099, `shutdown()` returns early at line 1104 without stopping `self._server_process`. |
-| **`Issue A2`** | **Confirmed Source Defect** | [`frontend/flutter/apps/desktop/lib/screens/settings_screen.dart`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart#L563-L569) & [`desktop_lifecycle_coordinator.dart`](../../../frontend/flutter/apps/desktop/lib/lifecycle/desktop_lifecycle_coordinator.dart#L72-L87) | Settings **Exit Companion** calls `coordinator?.handleExitRequested()`, which immediately closes the Flutter UI (`exit(0)`) without confirmation and leaves the detached Local AI Runtime running. Meanwhile, System Tray `exit_full` is hardcoded `disabled: true`. |
-| **`Issue B1-RC1`** | **Confirmed Source Defect** | [`frontend/flutter/packages/companion_api/lib/client/companion_client.dart`](../../../frontend/flutter/packages/companion_api/lib/client/companion_client.dart#L102-L108) & [`#L238-L270`](../../../frontend/flutter/packages/companion_api/lib/client/companion_client.dart#L238-L270) | `_requestWithoutRedirects()` enforces a hardcoded `const Duration(seconds: 5)` timeout on **all** `_adminRequest` calls, including `selectModel(..., loadImmediately: true)` and `loadModel()`. Meanwhile, [`LlamaCppProvider.load_model()`](../../../backend/app/services/llm/llama_cpp.py#L246-L278) allows up to `45.0s` for `llama-server.exe` startup (`#L610-L631`) plus `45.0s` POST + `30.0s` polling in `_router_load_model()`. Any model load taking $> 5.0\text{s}$ deterministically throws `TimeoutException` in Flutter while the backend continues loading weights in the background. |
-| **`Issue B1-RC2`** | **Confirmed Source Defect** | [`frontend/flutter/apps/desktop/lib/screens/settings_screen.dart`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart#L1025-L1046) | When `selectModel` throws `TimeoutException` at $t = 5.0\text{s}$, the `catch` block performs a single immediate `getModelStatus()` call (while the backend is still in `SERVER_STARTING` or `MODEL_LOADING`), unconditionally overwrites `_modelActionMessage` with `'Model selection saved, but activation failed: TimeoutException... Model is NOT active.'`, sets `_isExecutingModelAction = false`, and performs **zero follow-up polling**. |
-| **`Issue B1-RC3`** | **Confirmed Source Defect** | [`backend/app/services/llm/llama_cpp.py`](../../../backend/app/services/llm/llama_cpp.py#L792-L859) | `LlamaCppProvider.get_status()` does not acquire `self._lock` and does not guard against in-flight `SERVER_STARTING` / `MODEL_LOADING` transitions: at lines 830 and 845, a concurrent `get_status()` poll while `llama-server.exe` is starting or loading mutates `self._active_model_name = None` and `self._server_is_active = False`. Furthermore, lines 817–822 assign raw `loaded_model_id` from `llama-server` without normalizing through `find_model_registry_entry(loaded_model_id)`, causing [`settings_screen.dart`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart#L1014-L1020) `isActivated` check to false-negative when `llama-server` returns a filename/path matching `primaryFile` rather than `id` or `runtimeModelId`. |
-| **`Issue B1-RC4`** | **Confirmed Source Defect** | [`frontend/flutter/apps/desktop/lib/screens/settings_screen.dart`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart#L998-L1047) & [`desktop_chat_controller.dart`](../../../frontend/flutter/apps/desktop/lib/features/chat/desktop_chat_controller.dart#L292-L343) | Unlike `_unloadModel()` (which calls `widget.chatController!.checkConnection()` at line 1082), `_selectModel()` **never notifies `widget.chatController`**, leaving `DesktopChatController._modelStatus` and the Chat screen header model badge stale after model selection/activation in Settings. |
-| **`Correction C1`** | **Confirmed Source Evidence** | `backend/.venv/Lib/site-packages/uvicorn/server.py` (lines 96–101, 233–264, 326–340) & [`backend/app/main.py`](../../../backend/app/main.py#L140-L186) | Uvicorn's `Server.main_loop()` checks `self.should_exit` every `0.1s` and exits cleanly into `await self.shutdown(sockets=sockets)` $\rightarrow$ `await self.lifespan.shutdown()`. By contrast, `os.kill(os.getpid(), signal.SIGINT)` on Windows (`pythonw.exe` detached without console) either fails or invokes Win32 `TerminateProcess` / re-raises captured signals (`signal.raise_signal` at `uvicorn/server.py` line 340), bypassing clean lifespan teardown. |
-| **`Correction C2`** | **Confirmed Source Evidence** | [`frontend/flutter/apps/desktop/lib/platform/windows_runtime_process_supervisor.dart`](../../../frontend/flutter/apps/desktop/lib/platform/windows_runtime_process_supervisor.dart#L316-L361) | Querying `Win32_Process` by PID and subsequently running a separate `Stop-Process -Id <pid>` has a classic TOCTOU PID-reuse window if the target process exits between the query and the kill command. Opening and holding a single OS process handle (`System.Diagnostics.Process.GetProcessById(pid)`) before verifying identity and calling `.Kill()` on that same handle object eliminates PID reuse because Windows cannot recycle a PID while an open process `HANDLE` exists. |
-| **`Correction C3`** | **Confirmed Source Defect** | [`backend/app/services/llm/llama_cpp.py`](../../../backend/app/services/llm/llama_cpp.py#L214-L233) & [`#L969-L1084`](../../../backend/app/services/llm/llama_cpp.py#L969-L1084) | Route A (`httpx.AsyncClient` to `llama-server.exe`) does not abort active HTTP stream tasks on `shutdown()`. Route B (`asyncio.to_thread` calling native C++ `self._llm.create_chat_completion`) cannot be preempted mid-C++-call by `asyncio.Task.cancel()`; if `shutdown()` executes `del self._llm` after a drain timeout while a Route B worker thread is still inside native C++ inference, it risks a native use-after-free crash. |
-| **`Correction C4`** | **Confirmed Source Defect** | [`frontend/flutter/apps/desktop/lib/main.dart`](../../../frontend/flutter/apps/desktop/lib/main.dart#L191-L194), [`desktop_runtime_coordinator.dart`](../../../frontend/flutter/apps/desktop/lib/coordinator/desktop_runtime_coordinator.dart#L52-L56), & [`settings_screen.dart`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart#L950-L953) | `DesktopRuntimeCoordinator` constructs `CompanionClient(baseUrl: baseUrl, credentialStore: credentialStore)` **without `hostAdminStore`**, and `SettingsScreen._resolveClient()` fallback also omits `hostAdminStore`. Any `_adminRequest` call made through `DesktopRuntimeCoordinator._client` (`getSystemStatus()`, `shutdownSystem()`) would fail with `StateError('Host admin secret provider is not configured...')` unless `hostAdminStore` is wired. |
-| **`Correction C5`** | **Confirmed Source Evidence** | [`backend/app/api/v1/endpoints/health.py`](../../../backend/app/api/v1/endpoints/health.py#L1-L78), [`desktop_runtime_coordinator.dart`](../../../frontend/flutter/apps/desktop/lib/coordinator/desktop_runtime_coordinator.dart#L155-L171), & [`host_admin.py`](../../../backend/app/core/host_admin.py#L31-L35) | (1) Only `GET /api/v1/health` and `GET /api/v1/system/status` exist (no `/api/v1/health/ready` endpoint exists). (2) Runtime lockfile path is `%LOCALAPPDATA%\AI Companion\runtime.lock` (with space, locked directly via `FileMode.append` + `FileLock.exclusive`, no `.guard` file), whereas Host Admin secret path is `%LOCALAPPDATA%\AICompanion\secrets\desktop_admin.secret` (no space). (3) Runtime port is configurable (`_port`), not hardcoded to `8000`. |
-| **`Correction C6`** | **Confirmed Source Evidence** | [`backend/app/api/v1/router.py`](../../../backend/app/api/v1/router.py#L1-L34) & [`backend/app/db/session.py`](../../../backend/app/db/session.py#L84-L115) | Calling `dispose_database_runtime()` while in-flight CRUD requests (messages, memories, tasks, attachments, characters, profiles, auth sessions) are mid-transaction can interrupt SQLite commits. Whole-runtime admission control + in-flight request drain must precede `dispose_database_runtime()`. |
+| Subsystem / File | Verified Source Behavior & Line References |
+| :--- | :--- |
+| [`backend/app/api/v1/endpoints/llm.py`](../../../backend/app/api/v1/endpoints/llm.py#L40-L164) | Exposes `GET /api/v1/models` (`get_model_status`, protected by `Depends(verify_telemetry)`), `GET /api/v1/models/registry`, `POST /api/v1/models/load` (`ModelLoadRequest(model_name, profile)`), `POST /api/v1/models/select` (`ModelSelectRequest(model_name, load_immediately, profile)`), `POST /api/v1/models/unload`, and `PATCH /api/v1/models/profile` (all four mutations protected by `Depends(require_host_admin)`). |
+| [`backend/app/api/v1/endpoints/health.py`](../../../backend/app/api/v1/endpoints/health.py#L1-L78) | Exposes public `GET /api/v1/health` (`HealthResponse(status="healthy")`) and Host-Admin-protected `GET /api/v1/system/status` (`SystemStatusResponse`). No shutdown endpoint exists yet. |
+| [`backend/app/core/host_admin.py`](../../../backend/app/core/host_admin.py#L31-L108) & [`windows_security.py`](../../../backend/app/core/windows_security.py) | Provisions `%LOCALAPPDATA%\AICompanion\secrets\desktop_admin.secret` (`hsk_<token_urlsafe(48)>`) with protected DACL `O:<user_sid>D:P(A;;FA;;;<user_sid>)(A;;FA;;;SY)` and non-reparse directory validation. `require_host_admin` enforces loopback peer IP, loopback `Host` header, absence of `Origin` and `Sec-Fetch-Site`, and `secrets.compare_digest` on `X-Host-Admin-Secret`. |
+| [`backend/app/core/profile_sessions.py`](../../../backend/app/core/profile_sessions.py#L58-L69) & [`deps.py`](../../../backend/app/api/deps.py#L20-L27) | `get_current_profile_session` extracts `Authorization: Bearer psk_<token>` via `Security(bearer_security)` and validates the hashed session against SQLite `profile_sessions`. `verify_telemetry` accepts either `Authorization: Bearer psk_<token>` or `Authorization: Bearer companion_sec_<token>` / `X-API-Key`. |
+| [`backend/app/services/llm/llama_cpp.py`](../../../backend/app/services/llm/llama_cpp.py#L377-L711) & [`#L792-L1105`](../../../backend/app/services/llm/llama_cpp.py#L792-L1105) | (1) `load_model()` holds `async with self._lock:` (`#L378`) across up to `45s` of router startup (`#L610-L631`) and `45s + 30s` of `/models/load` HTTP + polling (`#L246-L278`).<br>(2) `shutdown()` (`#L1086-L1105`) calls `await self.unload_model()`, which returns `True` at line 677 after HTTP `/models/unload` succeeds, leaving `self._server_process` (`llama-server.exe`) running; if `_active_work_drained.wait()` times out at line 1099, `shutdown()` also returns early at line 1104 without stopping `self._server_process`.<br>(3) `get_status()` (`#L792-L859`) runs without `self._lock` and at lines 830 and 845 overwrites `self._active_model_name = None` and `self._server_is_active = False` if called while `load_model()` is mid-transition, and sets raw `loaded_model_id` from `llama-server` without normalizing via `find_model_registry_entry`. |
+| [`backend/app/services/assistant/orchestrator.py`](../../../backend/app/services/assistant/orchestrator.py#L317-L354) & [`#L518-L539`](../../../backend/app/services/assistant/orchestrator.py#L518-L539) | On stream cancellation (`CancelledError` / `GeneratorExit`), rolls back the request `db` session and calls `await asyncio.shield(_persist_terminal_assistant_status(...))` using a separate session from `get_session_factory()`. Because `_persist_terminal_assistant_status` is passed as a bare coroutine to `asyncio.shield` and is not registered in a central runtime task set, a second cancellation or immediate `dispose_database_runtime()` call can race with the uncommitted terminal status write. |
+| [`frontend/flutter/packages/companion_api/lib/client/companion_client.dart`](../../../backend/app/api/v1/endpoints/llm.py) ([`#L57-L108`](../../../frontend/flutter/packages/companion_api/lib/client/companion_client.dart#L57-L108), [`#L209-L281`](../../../frontend/flutter/packages/companion_api/lib/client/companion_client.dart#L209-L281)) | (1) `_buildHeaders(admin: true)` reads `await hostAdminStore?.readToken()` on each call and sets `X-Host-Admin-Secret`.<br>(2) `_requestWithoutRedirects()` (`#L102-L108`) hardcodes `.timeout(const Duration(seconds: 5))` on **every** `_adminRequest`, including `selectModel(modelName, loadImmediately: true)` (`POST /api/v1/models/select`) and `loadModel()` (`POST /api/v1/models/load`).<br>(3) `getModelStatus()` (`#L209-L218`) calls `GET /api/v1/models`. |
+| [`frontend/flutter/apps/desktop/lib/platform/host_admin_secret_store.dart`](../../../frontend/flutter/apps/desktop/lib/platform/host_admin_secret_store.dart#L10-L73) | `readToken()` invokes `powershell.exe` on every call to verify non-reparse attributes and Windows DACLs (`current user SID + SYSTEM`) on `%LOCALAPPDATA%\AICompanion\secrets\desktop_admin.secret` before reading the secret from disk. Does not cache tokens in memory. |
+| [`frontend/flutter/apps/desktop/lib/coordinator/desktop_runtime_coordinator.dart`](../../../frontend/flutter/apps/desktop/lib/coordinator/desktop_runtime_coordinator.dart#L52-L56) & [`#L789-L795`](../../../frontend/flutter/apps/desktop/lib/coordinator/desktop_runtime_coordinator.dart#L789-L795) | (1) Constructs `CompanionClient` without `hostAdminStore` (`Correction C4`).<br>(2) Spawns detached runtime with `args: ['-m', 'uvicorn', 'app.main:app', '--host', targetHost, '--port', '$targetPort', '--no-use-colors']`.<br>(3) Uses lockfile `%LOCALAPPDATA%\AI Companion\runtime.lock` locked directly via `FileMode.append` + `FileLock.exclusive`. |
+| [`frontend/flutter/apps/desktop/lib/screens/settings_screen.dart`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart#L563-L569) & [`#L998-L1047`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart#L998-L1047) | (1) Line 564: **Exit Companion** button calls `coordinator?.handleExitRequested()` (unconfirmed UI-only exit).<br>(2) Lines 1025–1046: When `selectModel(modelId, loadImmediately: true)` throws `TimeoutException` at `5.0s`, the `catch` block calls `getModelStatus()` (`GET /api/v1/models`) once immediately while the backend is still loading, overwrites `_modelActionMessage` with `'Model selection saved, but activation failed: ... Model is NOT active.'`, does not poll, and never updates `widget.chatController`. |
 
 ---
 
 ## 3. Confirmed Shutdown Defects (`Issue A1` & `Issue A2`)
 
 ### 3.1 `Issue A1` — Explicit Separation of Four Provider Lifecycle Operations
-Inspection of [`backend/app/services/llm/llama_cpp.py`](../../../backend/app/services/llm/llama_cpp.py) shows that `LlamaCppProvider` tracks whether the `llama-server.exe` process was spawned by AI Companion (`self._managed_by_core = True` at line 588, `self._server_process = subprocess.Popen(...)` at line 575) or was an externally started router discovered on `127.0.0.1:8080` (`Mode 1` at lines 489–537, where `self._managed_by_core = False` and `self._server_process = None`).
+We explicitly separate and enforce four distinct operations in [`LlamaCppProvider`](../../../backend/app/services/llm/llama_cpp.py):
 
-We explicitly separate and define four distinct lifecycle operations:
-
-| Operation | Method / Trigger | Target Effect on Model Weights | Target Effect on Core-Managed `llama-server.exe` (`_managed_by_core == True`) | Target Effect on External `llama-server.exe` (`_managed_by_core == False`) | Resulting `LLMRuntimeState` |
+| Operation | Method / Trigger | Effect on Model Weights | Effect on Core-Managed `llama-server.exe` (`_managed_by_core == True`) | Effect on External `llama-server.exe` (`_managed_by_core == False`) | Resulting `LLMRuntimeState` |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **1. Ordinary Model Unload** | `await provider.unload_model()` (`POST /api/v1/models/unload`) | Unloads active model from VRAM (`POST /models/unload` on router or frees `self._llm` if idle). | **Preserves running `llama-server.exe` router** when HTTP `/models/unload` succeeds so subsequent model loads are fast. Only terminates `_server_process` if router HTTP unload fails. | Sends HTTP `POST /models/unload` only; **never** terminates external OS process. | `MODEL_UNLOADED` (or `SERVER_STOPPED` if fallback process kill was required) |
-| **2. Stop Managed Router** | `await provider.stop_managed_router()` (Internal helper & router restart path) | Unloaded as part of router stop. | Closes `self._server_client`; terminates `self._server_process` (`terminate()` $\rightarrow$ `wait(5.0s)` $\rightarrow$ `kill()` + `wait(2.0s)`); clears `_server_process`, `_server_pid`, `_managed_by_core = False`. | Closes `self._server_client` and detaches provider state (`_server_is_active = False`); **never** kills external OS process. | `SERVER_STOPPED` |
-| **3. Full Runtime Shutdown** | `await provider.shutdown(drain_timeout=5.0)` (`POST /api/v1/system/shutdown` & FastAPI `lifespan` exit) | Releases model weights safely (respecting Route B native worker guard in §7). | Cancels active Route A HTTP streams, waits up to `drain_timeout` for `_active_work_drained`, and **unconditionally executes `await self.stop_managed_router()`** even if drain wait timed out. | Cancels active Route A HTTP streams to the external router and closes `_server_client`; **never** kills external OS process. | `SERVER_STOPPED` |
-| **4. Emergency Recovery** | `WindowsRuntimeProcessSupervisor.terminateVerifiedRuntimeProcess()` | N/A (OS process level). | Terminated by supervisor **only** if handle-bound child provenance confirms `llama-server.exe` is the Core-managed child of the verified runtime process (§6). | **Never touched** (fails closed on missing/external provenance). | `RuntimeStatus.stopped` |
+| **2. Stop Managed Router** | `await provider.stop_managed_router()` | Unloaded as part of router stop. | Closes `self._server_client`; terminates `self._server_process` (`terminate()` $\rightarrow$ `wait(5.0s)` $\rightarrow$ `kill()` + `wait(2.0s)`); clears `_server_process`, `_server_pid`, `_managed_by_core = False`. | Closes `self._server_client` and detaches provider state (`_server_is_active = False`); **never** kills external OS process. | `SERVER_STOPPED` |
+| **3. Full Runtime Shutdown** | `await provider.shutdown(drain_timeout=5.0)` (`POST /api/v1/system/shutdown` & FastAPI `lifespan` exit) | Releases model weights safely (respecting Route B native worker guard in §6.3). | Signals lock-free shutdown (`_closing = True`, `_shutdown_event.set()`), aborts any active `load_model()` or Route A stream, waits up to `drain_timeout` for `_active_work_drained`, and **unconditionally executes `await self.stop_managed_router()`** even if drain wait or lock acquisition timed out. | Cancels active Route A HTTP streams to the external router and closes `_server_client`; **never** kills external OS process. | `SERVER_STOPPED` |
+| **4. Emergency Recovery** | `WindowsRuntimeProcessSupervisor.terminateVerifiedRuntimeProcess()` | N/A (OS process level). | Terminated by supervisor **only** if handle-bound child provenance confirms `llama-server.exe` is the Core-managed child of the verified runtime process (§10). | **Never touched** (fails closed on missing/external provenance). | `RuntimeStatus.stopped` |
 
 ### 3.2 `Issue A2` — Preserving Four Distinct Desktop Lifecycle Operations
-In [`settings_screen.dart`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart#L563-L569), the **Exit Companion** button currently calls `coordinator?.handleExitRequested()`, performing an unconfirmed UI-only exit (`exit(0)`) while leaving the Local AI Runtime running. We correct this while preserving all four canonical lifecycle semantics from [`windows-host-and-notifications.md`](../../04_Architecture/04_Infrastructure/windows-host-and-notifications.md) §2.1:
 
 | User Action | Entry Points | Confirmation Required? | Desktop UI (`flutter_desktop.exe`) | Local AI Runtime (`pythonw.exe`) | Core-Managed `llama-server.exe` | Crash-Recovery Auto-Restart |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -103,39 +102,27 @@ In [`settings_screen.dart`](../../../frontend/flutter/apps/desktop/lib/screens/s
 
 ---
 
-## 4. Model-Loading Reliability Investigation & Bounded Correction (`Issue B1`)
+## 4. Model-Loading Reliability & Truthful Timeout Reconciliation (`Issue B1`, `Corrections C4 & C5`)
 
-### 4.1 Answers to the 12 Mandatory Investigation Questions for Track B
+### 4.1 Verified Root Causes in Existing Source
+1. **Hardcoded 5-Second Client Timeout (`Issue B1-RC1`):** [`CompanionClient._requestWithoutRedirects()`](../../../frontend/flutter/packages/companion_api/lib/client/companion_client.dart#L106) enforces `const Duration(seconds: 5)` on all `_adminRequest` calls, including `selectModel(modelName, loadImmediately: true)` (`POST /api/v1/models/select` with `{"model_name": modelName, "load_immediately": true}`) and `loadModel()` (`POST /api/v1/models/load`). Meanwhile, [`LlamaCppProvider.load_model()`](../../../backend/app/services/llm/llama_cpp.py#L610-L631) allows up to `45.0s` for `llama-server.exe` startup plus `45.0s` POST + `30.0s` polling in `_router_load_model()` (`#L246-L278`). Any cold model load taking $> 5.0\text{s}$ throws `TimeoutException` in Flutter at `5.0s` while the backend continues spawning `llama-server.exe` and loading weights in the background.
+2. **Premature Failure Declaration Without Polling (`Issue B1-RC2`):** In [`settings_screen.dart`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart#L1025-L1046), catching `TimeoutException` at $t = 5.0\text{s}$ immediately calls `client.getModelStatus()` (`GET /api/v1/models`) once while `runtime_state` is still `SERVER_STARTING` or `MODEL_LOADING`, overwrites `_modelActionMessage` with `'Model selection saved, but activation failed: ... Model is NOT active.'`, sets `_isExecutingModelAction = false`, and performs zero follow-up polling.
+3. **Lockless State Clobbering & Unnormalized Model IDs in `get_status()` (`Issue B1-RC3`):** In [`llama_cpp.py`](../../../backend/app/services/llm/llama_cpp.py#L792-L859), `get_status()` (`GET /api/v1/models`) runs without checking `self._lock` or transitional states, overwriting `self._active_model_name = None` (line 830) and `self._server_is_active = False` (line 845) if probed while `load_model()` is starting the router or loading weights. Additionally, lines 817–822 assign raw `loaded_model_id` from `llama-server` without normalizing through `find_model_registry_entry(loaded_model_id)`, causing `SettingsScreen`'s activation check (`#L1014-L1020`) to false-negative when `llama-server` reports a filename/path matching `primaryFile`.
+4. **Why Clicking "Load Model" a Second Time Succeeds (`Issue B1-RC4`):** Once the background load from the first click completes, a second click hits the active-model reuse fast path (`#L425-L442`) or `Mode 0` (`#L466-L480`, where `_router_load_model` receives HTTP 400 `"already running"` at `#L254-L256` and returns `True`), returning HTTP 200 in $< 10\text{ms}$.
+5. **Missing Cross-Screen Chat Controller Sync (`Issue B1-RC5`):** Unlike `_unloadModel()` (line 1082), `_selectModel()` never updates `widget.chatController`, leaving `DesktopChatController._modelStatus` stale.
 
-1. **What exact endpoint is called when the user selects or loads a model in Settings?**
-   - In [`SettingsScreen._selectModel(String modelId)`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart#L998-L1047), clicking **Select & Load** / **Load Model** calls [`client.selectModel(modelId, loadImmediately: true)`](../../../frontend/flutter/packages/companion_api/lib/client/companion_client.dart#L238-L253), which sends `POST /api/v1/models/select` with JSON body `{"model_id": modelId, "load_immediately": true}` via `_adminRequest`.
-2. **What timeout is configured on the Flutter API client, Settings controller, and backend router/model client?**
-   - **Flutter API Client (`companion_client.dart` line 106):** `_requestWithoutRedirects()` hardcodes `await _httpClient.send(request).timeout(const Duration(seconds: 5));` for **every** Host Admin request!
-   - **Backend `LlamaCppProvider` (`llama_cpp.py`):**
-     - `llama-server.exe` process spawn & `/health` loop (`#L610-L631`): up to **45.0 seconds** (`90 * 0.5s`).
-     - `_router_load_model()` (`#L246-L278`): `httpx.AsyncClient(timeout=45.0)` for `POST /models/load`, followed by up to **30.0 seconds** (`60 * 0.5s`) polling `GET /models` until `status.value == "loaded"`.
-3. **Is model loading synchronous or asynchronous from the HTTP caller's perspective?**
-   - Synchronous: [`POST /api/v1/models/select`](../../../backend/app/api/v1/endpoints/llm.py#L223-L300) and [`POST /api/v1/models/load`](../../../backend/app/api/v1/endpoints/llm.py#L140-L220) `await provider.load_model(target)` inside the HTTP handler before returning `ModelStatusResponse`.
-4. **What happens if `llama-server.exe` takes longer than the HTTP timeout to start and load model weights?**
-   - At $t = 5.0\text{s}$, Flutter's `_requestWithoutRedirects` throws `TimeoutException after 0:00:05.000000: Future not completed`. On the backend, Uvicorn does **not** cancel an in-flight standard endpoint coroutine when the client socket times out, so `provider.load_model()` continues spawning `llama-server.exe` and loading multi-GB GGUF weights into VRAM in the background.
-5. **Why does the UI report an error while `llama-server.exe` continues loading in the background?**
-   - In [`settings_screen.dart`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart#L1025-L1046), the `catch (e)` block immediately calls `await client.getModelStatus()` at $t = 5.0\text{s}$ (while `runtime_state` is still `SERVER_STARTING` or `MODEL_LOADING`), unconditionally sets `_modelActionMessage = 'Model selection saved, but activation failed: $e. Model is NOT active.'`, sets `_isExecutingModelAction = false`, and stops polling.
-6. **How is `runtime_state` (`SERVER_STOPPED`, `SERVER_STARTING`, `MODEL_LOADING`, `MODEL_READY`, `MODEL_UNLOADED`, `MODEL_ERROR`, etc.) updated and polled?**
-   - `LlamaCppProvider` updates `self._runtime_state` during `load_model()` (`SERVER_STARTING` at line 589, `MODEL_LOADING` at line 456/637, `MODEL_READY` at line 461/485). However, **neither `SettingsScreen` nor `DesktopChatController` polls `/api/v1/models/status` while `runtime_state` is `SERVER_STARTING` or `MODEL_LOADING`**, and `LlamaCppProvider.get_status()` (`#L792-L859`) has a bug where polling `/models` on `llama-server` without holding `self._lock` while `load_model()` is mid-flight overwrites `self._active_model_name = None` (line 830) or `self._server_is_active = False` (line 845)!
-7. **Why does Chat still believe no model is ready after `llama-server.exe` finishes loading?**
-   - Two reasons: (a) [`SettingsScreen._selectModel()`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart#L998-L1047) **never notifies `widget.chatController`** when a model is selected or loaded (unlike `_unloadModel()` at line 1082), so `DesktopChatController._modelStatus` remains stale; and (b) when `selectModel` timed out at 5s in Settings, nothing ever re-fetched `/api/v1/models/status` once `llama-server.exe` finished loading at $t \approx 8\text{–}25\text{s}$.
-8. **Why does clicking `Load Model` a second time appear to succeed immediately?**
-   - By the time the user clicks **Load Model** a second time, the background `load_model()` from the first click has already finished loading the model in `llama-server.exe`. The second request enters `LlamaCppProvider.load_model()`, hits either the active-model reuse fast path (`#L425-L442`: `"Requested model matches active model; reusing without reload"`) or `Mode 0` (`#L466-L480`, where `_router_load_model` gets HTTP 400 `"already running"` at `#L254-L256` and returns `True`), completing in $< 10\text{ms}$ (well under the 5s client timeout).
-9. **Can clicking `Load Model` a second time race with the first load or spawn duplicate router processes?**
-   - `load_model()` acquires `async with self._lock:` (line 378), which serializes `load_model()` calls so two `subprocess.Popen` calls cannot run simultaneously. **However**, because `get_status()` (lines 792–859) runs **without** `self._lock` and mutates `self._server_is_active = False` / `self._active_model_name = None` when probed during startup, a concurrent `get_status()` call during the first load can corrupt provider state right before the queued second `load_model()` enters `self._lock`!
-10. **How does model loading interact with single-resident model replacement, model unload, and `Exit Companion` shutdown?**
-    - Single-resident replacement (`#L444-L454`) unloads the previous model via `_router_unload_model` inside `self._lock` before loading the new model. If `Exit Companion` (`shutdown()`) is requested while `load_model()` is in flight (`SERVER_STARTING` or `MODEL_LOADING`), `shutdown()` must set `self._closing = True`, cancel any in-flight load/poll wait, and terminate `self._server_process` via `stop_managed_router()`.
-11. **Does this belong under `PC-HOST-005`, an existing M2 model/runtime WBS item (`PC-CLIENT-010`, `PC-MODEL-006`, etc.), or a bounded reliability extension?**
-    - It maps to `PC-CLIENT-010` / `PC-CLIENT-004` / `PC-MODEL-006` and should be delivered as a **bounded reliability extension** in this branch because it touches the exact same provider lifecycle (`llama_cpp.py`), client transport (`companion_client.dart`), and Settings screen (`settings_screen.dart`) files as `PC-HOST-005`.
-12. **What is the smallest clean architecture that makes model loading reliable without redesigning the entire model management subsystem?**
-    - (1) Operation-specific HTTP timeouts in `CompanionClient` (`90s` for `selectModel(loadImmediately: true)` and `loadModel()`, `20s` for `unloadModel()`, `5s` default for status/control calls); (2) Lock/transition protection and canonical model ID normalization in `LlamaCppProvider.get_status()` + `_closing` abort check inside `load_model()`; (3) Bounded status-polling reconciliation with monotonic action tokens in `SettingsScreen` whenever a load returns `SERVER_STARTING` / `MODEL_LOADING` or experiences a transport timeout; and (4) Immediate `widget.chatController?.updateModelStatus(...)` synchronization on every Settings model state transition.
+### 4.2 Exact API Contracts for Model Operations (`Correction C4`)
+All model management and reconciliation flows preserve the exact existing backend routes and payload schemas in [`backend/app/api/v1/endpoints/llm.py`](../../../backend/app/api/v1/endpoints/llm.py) and [`companion_client.dart`](../../../frontend/flutter/packages/companion_api/lib/client/companion_client.dart):
 
-### 4.2 End-to-End Bounded Architecture for Track B (Model-Loading Reliability)
+| Operation | HTTP Method & Route | Auth Dependency | Request Payload Schema | Response Schema | Client Timeout Budget (Initial Tunable Candidate) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Get Model Status** | `GET /api/v1/models` | `Depends(verify_telemetry)` (`Authorization: Bearer psk_...` or `companion_sec_...`) | None | `ModelStatusResponse` | `5.0s` |
+| **Get Model Registry** | `GET /api/v1/models/registry` | `Depends(verify_telemetry)` | None | `List[ModelRegistryEntry]` | `5.0s` |
+| **Select Model** | `POST /api/v1/models/select` | `Depends(require_host_admin)` (`X-Host-Admin-Secret`) | `ModelSelectRequest`: `{"model_name": str, "load_immediately": bool, "profile": Optional[str]}` | `ModelStatusResponse` | `90.0s` when `load_immediately == true`; `10.0s` when `load_immediately == false` |
+| **Load Model** | `POST /api/v1/models/load` | `Depends(require_host_admin)` (`X-Host-Admin-Secret`) | `ModelLoadRequest`: `{"model_name": Optional[str], "profile": Optional[str]}` | `ModelStatusResponse` | `90.0s` |
+| **Unload Model** | `POST /api/v1/models/unload` | `Depends(require_host_admin)` (`X-Host-Admin-Secret`) | None | `ModelStatusResponse` | `20.0s` |
+
+### 4.3 Four-State Truthful Model-Load Reconciliation (`Correction C5`)
 
 ```mermaid
 sequenceDiagram
@@ -144,473 +131,496 @@ sequenceDiagram
     participant Settings as SettingsScreen
     participant Chat as DesktopChatController
     participant Client as CompanionClient
-    participant API as FastAPI (/api/v1/models/select)
-    participant Prov as LlamaCppProvider (self._lock)
+    participant API as FastAPI (llm.py)
+    participant Prov as LlamaCppProvider
     participant Router as llama-server.exe
 
-    User->>Settings: Clicks "Select & Load" (modelId)
+    User->>Settings: Clicks "Select & Load" (modelName)
     Settings->>Settings: Increment _modelActionToken, set _isExecutingModelAction = true
-    Settings->>Client: selectModel(modelId, loadImmediately: true) [timeout: 90s]
-    Client->>API: POST /api/v1/models/select (X-Host-Admin-Secret)
-    API->>Prov: load_model(target) [acquires self._lock]
-    Prov->>Prov: Set runtime_state = SERVER_STARTING / MODEL_LOADING
+    Settings->>Client: selectModel(modelName, loadImmediately: true) [timeout: 90s]
+    Client->>API: POST /api/v1/models/select {"model_name": modelName, "load_immediately": true}
+    API->>Prov: load_model(model_name=modelName) [acquires self._lock]
+    Prov->>Prov: Set _loading_target_model = modelName, runtime_state = SERVER_STARTING / MODEL_LOADING
     Prov->>Router: Spawn (if needed) & POST /models/load
-    alt Normal completion within 90s
+    alt Completed within 90s HTTP window
         Router-->>Prov: Model status == "loaded"
         Prov->>Prov: Normalize active_model ID, set runtime_state = MODEL_READY
         API-->>Client: 200 OK (ModelStatusResponse: MODEL_READY)
-        Client-->>Settings: updatedStatus (MODEL_READY)
-    else Client timeout or mid-transition response (SERVER_STARTING / MODEL_LOADING)
-        Settings->>Settings: Show "Model is still loading in background..." (do NOT declare false failure)
+        Client-->>Settings: updatedStatus -> CONFIRMED_READY
+    else HTTP timeout (90s) or mid-transition response (SERVER_STARTING / MODEL_LOADING)
+        Settings->>Settings: Enter STILL_LOADING state (never declare false failure)
         loop Bounded Poll (every 1s up to 60s while SERVER_STARTING / MODEL_LOADING)
-            Settings->>Client: getModelStatus() [timeout: 5s]
-            Client->>API: GET /api/v1/models/status
-            API->>Prov: get_status() [preserves in-flight state while _lock held]
+            Settings->>Client: getModelStatus() -> GET /api/v1/models [timeout: 5s]
+            Client->>API: GET /api/v1/models
+            API->>Prov: get_status() [read-only snapshot while _lock held]
             API-->>Settings: refreshedStatus
         end
     end
-    Settings->>Settings: Verify _isModelActivated(status, modelId) via id / runtimeModelId / primaryFile
-    Settings->>Chat: updateModelStatus(status) (Immediate cross-screen Chat readiness sync)
+    Settings->>Settings: Classify outcome: CONFIRMED_READY | CONFIRMED_FAILED | STILL_LOADING | STATUS_UNKNOWN_TIMED_OUT
+    Settings->>Chat: updateModelStatus(latestStatus) (Immediate cross-screen sync + background poll if STILL_LOADING)
 ```
 
-#### Specific Code Corrections for Track B:
-1. **`CompanionClient` Operation-Specific Timeouts (`companion_client.dart`):**
-   - Add `Duration timeout = const Duration(seconds: 5)` to `_requestWithoutRedirects()` and `_adminRequest()`.
-   - `selectModel(modelId, {bool loadImmediately = true})`: pass `timeout: loadImmediately ? const Duration(seconds: 90) : const Duration(seconds: 10)`.
-   - `loadModel(...)`: pass `timeout: const Duration(seconds: 90)`.
-   - `unloadModel()`: pass `timeout: const Duration(seconds: 20)`.
-   - `getModelStatus()` and `getModelRegistry()`: add `.timeout(const Duration(seconds: 5))` so status polling cannot hang indefinitely.
-2. **`LlamaCppProvider.get_status()` & `load_model()` Hardening (`backend/app/services/llm/llama_cpp.py`):**
-   - **Prevent Lockless State Clobbering in `get_status()`:** When `self._lock.locked()` and `self._runtime_state in (LLMRuntimeState.SERVER_STARTING, LLMRuntimeState.MODEL_LOADING, LLMRuntimeState.MODEL_UNLOADING)`, `get_status()` must **not** overwrite `self._active_model_name`, `self._server_is_active`, or `self._runtime_state` with transient empty `/models` responses while `llama-server.exe` is still booting or loading weights; instead, it returns the authoritative in-progress `self._runtime_state` and target model metadata cleanly.
-   - **Canonical Model ID Normalization in `get_status()`:** When `get_status()` reads `loaded_model_id` from `http://127.0.0.1:8080/models` (lines 808–822), resolve `entry = find_model_registry_entry(loaded_model_id)` and set `self._active_model_name = entry.runtime_model_id or entry.manifest.id` (falling back to `loaded_model_id` if unmanaged), ensuring `active_model` always matches the canonical registry identifier expected by Flutter.
-   - **Shutdown Abort Inside `load_model()` Polling Loops:** In `load_model()`'s router startup poll (`#L610-L631`) and `_router_load_model()`'s load poll (`#L259-L276`), check `if self._closing: return False` on each iteration so an `Exit Companion` request during a 45-second model load aborts the poll within `0.5s` and proceeds to `stop_managed_router()`.
-3. **`SettingsScreen` Truthful Reconciliation & Identity Matching (`settings_screen.dart`):**
-   - Add `_isTargetModelActive(ModelStatusDto status, String requestedModelId)` that checks `status.runtimeState == 'MODEL_READY'` and matches `status.activeModel` against `requestedModelId`, `entry.id`, `entry.runtimeModelId`, `entry.primaryFile`, or normalized filename stem.
-   - Add a monotonic `int _modelActionToken = 0` to fence concurrent/rapid clicks and ignore stale responses if the widget is disposed or a newer model action starts.
-   - If `selectModel(..., loadImmediately: true)` returns while `runtimeState` is `'SERVER_STARTING'` or `'MODEL_LOADING'`, or throws `TimeoutException`, enter `_pollUntilModelTransitionCompletes(client, modelId, actionToken, deadline: Duration(seconds: 60))` instead of immediately displaying `"Model is NOT active"`.
-   - While polling, keep `_isExecutingModelAction = true` and display truthful progress (`'Loading model weights in Local AI Runtime (${status.runtimeState})...'`).
-   - On every model status update in `_selectModel`, `_unloadModel`, and `_loadModelData`, invoke `widget.chatController?.updateModelStatus(updatedStatus)` so the Chat screen header and readiness state synchronize immediately without requiring a second click or screen reload.
+To ensure timeout expiration is **never** misrepresented as a permanent model-loading failure, `SettingsScreen` and `DesktopChatController` classify model activation into four explicit states:
+
+| Outcome State | Authoritative Condition (`GET /api/v1/models`) | UI Presentation & User Actions in `SettingsScreen` | `DesktopChatController` Synchronization |
+| :--- | :--- | :--- | :--- |
+| **1. `CONFIRMED_READY`** | `runtime_state == "MODEL_READY"` (or `"MODEL_SLEEPING"`) AND `_isTargetModelActive(status, modelName)` matches via `id`, `runtimeModelId`, `primaryFile`, or filename stem. | Success message: `'Model selected and ready: <activeModel>'`. Action spinner stops; model card shows `Active / Ready`. | `chatController.updateModelStatus(status)` immediately marks Chat model ready for turns. |
+| **2. `CONFIRMED_FAILED`** | Deterministic `4xx`/`5xx` HTTP error response from `/api/v1/models/select` or `/load`, OR `GET /api/v1/models` reports `runtime_state in ("MODEL_ERROR", "SERVER_ERROR", "SERVER_STOPPED", "MODEL_UNLOADED")` after the load operation exited. | Error message: `'Model activation failed: <errorDetail>.'` Action spinner stops; user can click **Retry Load**. | `chatController.updateModelStatus(status)` updates Chat with the error/unloaded state. |
+| **3. `STILL_LOADING`** | `GET /api/v1/models` reports `runtime_state in ("SERVER_STARTING", "MODEL_LOADING")` (either during the `60s` automatic poll window or when the `60s` window expires while the backend is still actively loading). | **Never claims the load failed.**<br>- During active 60s poll: shows spinner + `'Loading model weights in Local AI Runtime (<runtimeState>)...'`.<br>- If 60s poll window expires while still `SERVER_STARTING` / `MODEL_LOADING`: shows informational banner `'Model is still loading in the background (<runtimeState>). No reload is needed.'` with a **`Refresh Model Status` / `Continue Waiting`** button that calls `GET /api/v1/models` (and resumes bounded polling) **without** sending a redundant `POST /api/v1/models/load` or `/select`. Duplicate load buttons for the loading model remain disabled. | `chatController.updateModelStatus(status)` updates Chat to show `Loading model...` and starts a lightweight `2.0s` background status poll on `GET /api/v1/models` inside `DesktopChatController` so even if the user navigates away from Settings to Chat, Chat automatically transitions to `MODEL_READY` as soon as the backend finishes! |
+| **4. `STATUS_UNKNOWN_TIMED_OUT`** | Both the initial HTTP request and follow-up `GET /api/v1/models` probes failed with `TimeoutException` or transient socket error, so current backend state cannot be read. | Warning banner: `'Model load status could not be confirmed (status check timed out). The model may still be loading in the background.'` Displays a primary **`Refresh Model Status`** button (`GET /api/v1/models`) before offering a full reload. | Preserves non-destructive pending status until `Refresh Model Status` succeeds. |
 
 ---
 
-## 5. Corrected Windows Server Shutdown Mechanism (`Correction C1`)
+## 5. Reliable Uvicorn Lifecycle Ownership (`Correction C1`)
 
-### 5.1 Why `os.kill(os.getpid(), signal.SIGINT)` Is Rejected on Windows
-Independent review noted that the initial plan proposed signaling Uvicorn via `signal.raise_signal(signal.SIGINT)` or `os.kill(os.getpid(), signal.SIGINT)`. Direct inspection of Python's Windows signal implementation and `backend/.venv/Lib/site-packages/uvicorn/server.py` confirms why that approach is unsafe on Windows:
-1. On Windows (`win32`), `os.kill(pid, signal.SIGINT)` calls Win32 `TerminateProcess` (for arbitrary signals) or `GenerateConsoleCtrlEvent`. Because [`WindowsRuntimeProcessSupervisor`](../../../frontend/flutter/apps/desktop/lib/platform/windows_runtime_process_supervisor.dart#L294-L303) launches `pythonw.exe` with `ProcessStartMode.detached` (no attached console window), console control events can fail with `OSError`/`SystemError` or terminate the process abruptly without unwinding Python's `asyncio` loop.
-2. In `uvicorn/server.py` lines 326–340 (`capture_signals()`), any signal captured by Uvicorn's signal handler is appended to `self._captured_signals` and **re-raised via `signal.raise_signal(captured_signal)` after `serve()` exits**, causing the process to terminate with a non-zero/aborted signal exit status on Windows.
+### 5.1 Why Introspection (`gc.get_objects()` / Task Stack) Is Rejected
+Relying on `gc.get_objects()` or walking `asyncio` stack frames to discover a `uvicorn.Server` instance is fragile, sensitive to Python/Uvicorn internal frame changes, and could bind the wrong server object in multi-server test harnesses. For a Level C security-sensitive host lifecycle boundary, server ownership must be **explicit and deterministic**.
 
-### 5.2 Supported Deterministic Uvicorn Shutdown (`uvicorn.Server.should_exit = True`)
-Inspection of `uvicorn/server.py` (lines 67, 96–101, 233–264) proves that Uvicorn natively supports programmatic, signal-free shutdown via `server.should_exit = True`:
-- `Server.main_loop(self)` executes `while not await self.on_tick(counter): await asyncio.sleep(0.1)`.
-- `Server.on_tick()` checks `if self.should_exit: return True`.
-- When `server.should_exit = True` is set in-process (with zero OS signals):
-  1. `main_loop()` exits cleanly within $\le 100\text{ms}$.
-  2. `_serve()` invokes `await self.shutdown(sockets=sockets)`, which closes all listening TCP sockets (`server.close()`), shuts down active HTTP protocol connections, awaits in-flight task completion (`_wait_tasks_to_complete()`), and executes `await self.lifespan.shutdown()`.
-  3. `self.lifespan.shutdown()` runs the FastAPI `lifespan` `finally` block in [`backend/app/main.py`](../../../backend/app/main.py#L178-L186) (`await llm_manager.get_provider().shutdown()` and `await dispose_database_runtime()`).
-  4. Because `self._captured_signals` is empty, `serve()` returns normally and Python exits with return code `0`.
+### 5.2 Explicit Programmatic Runtime Entry Point (`backend/app/runtime_server.py`)
+We introduce a dedicated programmatic runtime launcher module at [`backend/app/runtime_server.py`](../../../backend/app/runtime_server.py) that owns `uvicorn.Config` and `uvicorn.Server` creation explicitly:
 
-### 5.3 How FastAPI Binds and Controls the Active `uvicorn.Server` Instance
-We introduce [`backend/app/core/runtime_lifecycle.py`](../../../backend/app/core/runtime_lifecycle.py) containing a singleton `RuntimeLifecycleCoordinator`:
-1. **Binding the Live `uvicorn.Server` at Lifespan Startup:**
-   - During `lifespan(app: FastAPI)` startup in [`backend/app/main.py`](../../../backend/app/main.py#L140), `runtime_lifecycle.bind_running_uvicorn_server()` locates the active `uvicorn.Server` instance (either registered explicitly or resolved once at startup from the running `asyncio` stack / `gc.get_objects()` where `isinstance(obj, uvicorn.Server)`), stores a reference to it, and configures `server.config.timeout_graceful_shutdown = 8`.
-   - This works seamlessly with the existing supervisor launch command (`pythonw.exe -m uvicorn app.main:app --host 127.0.0.1 --port <port>`) without breaking [`WindowsRuntimeProcessSupervisor._looksLikeCompanionUvicornCommand`](../../../frontend/flutter/apps/desktop/lib/platform/windows_runtime_process_supervisor.dart#L459-L473), while also allowing an explicit `runtime_lifecycle.set_server(server)` injection in tests.
-2. **Exact Ordered Execution of `POST /api/v1/system/shutdown`:**
-   - **Step 1 (Auth & Idempotency):** `require_host_admin` verifies `X-Host-Admin-Secret`, loopback IP/Host, and absence of `Origin`/`Sec-Fetch-Site`. `runtime_lifecycle.initiate_shutdown(reason, drain_timeout_seconds)` transitions state to `SHUTTING_DOWN` (or returns `already_shutting_down=True` if already in progress).
-   - **Step 2 (Admission Control Activated Immediately):** The admission-control middleware immediately rejects any *new* mutating HTTP requests (`POST`, `PUT`, `PATCH`, `DELETE`, except `/api/v1/system/shutdown`) with `503 Service Unavailable` (`RUNTIME_SHUTTING_DOWN`).
-   - **Step 3 (`202 Accepted` Flush):** The endpoint returns `202 Accepted` (`SystemShutdownResponse`) and schedules `_orchestrate_shutdown_sequence(drain_timeout_seconds)` on the event loop.
-   - **Step 4 (Async Shutdown Sequence after `50ms` response flush yield):**
-     1. Calls `await llm_manager.get_provider().shutdown(drain_timeout=drain_timeout_seconds)` — cancelling active Route A HTTP generation streams, signaling Route B chunk loops via `_closing = True`, waiting up to `drain_timeout_seconds` (`5.0s` default) for active turns to record `status="cancelled"` in SQLite, and **unconditionally stopping any Core-managed `llama-server.exe`** via `stop_managed_router()`.
-     2. Waits up to a bounded quiescence window (`5.0s`) on `runtime_lifecycle.wait_for_in_flight_mutations()` so any already-admitted CRUD transactions finish committing/rolling back their SQLite sessions.
-     3. Sets `uvicorn_server.should_exit = True`.
-     4. Uvicorn closes the listening socket on the next `100ms` tick and runs `lifespan` `finally` (`await llm_manager.get_provider().shutdown()` [idempotent no-op] and `await dispose_database_runtime()`), exiting cleanly with code `0`.
+```python
+"""Deterministic Uvicorn runtime entrypoint with explicit server lifecycle registration."""
 
----
+import argparse
+import asyncio
+import uvicorn
+from app.core.runtime_lifecycle import runtime_lifecycle
 
-## 6. Identity-Safe OS Termination Design (`Correction C2`)
 
-### 6.1 Eliminating the TOCTOU PID-Reuse Race via Handle-Bound Verification & Termination
-In the initial plan, `WindowsRuntimeProcessSupervisor` queried WMI `Win32_Process` and then invoked `Stop-Process -Id <pid>`. As the Independent Reviewer identified, if the target process exited right after the WMI query and Windows recycled that numeric PID for an unrelated process before `Stop-Process -Id <pid>` executed, `Stop-Process` would terminate the wrong process.
+def build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="AI Companion Local Runtime Server")
+    parser.add_argument("--app", default="app.main:app", help="ASGI application import string")
+    parser.add_argument("--host", default="127.0.0.1", help="Bind host")
+    parser.add_argument("--port", type=int, default=8000, help="Bind port")
+    parser.add_argument("--no-use-colors", action="store_true", help="Disable ANSI color codes")
+    parser.add_argument("--log-level", default="info", help="Uvicorn log level")
+    return parser
 
-**Windows Kernel Guarantee:** On Windows, the OS kernel (`EPROCESS`) **cannot recycle a numeric `ProcessId` while any open process `HANDLE` to that process object exists**. Furthermore, `System.Diagnostics.Process.GetProcessById(int pid)` opens a Win32 process handle (`SafeProcessHandle`) and `$proc.Kill()` invokes Win32 `TerminateProcess($proc.SafeProcessHandle, -1)` **directly on that held handle**, without ever re-resolving the numeric PID!
 
-### 6.2 Single Handle-Bound PowerShell Verification & Termination Protocol
-In [`WindowsRuntimeProcessSupervisor.terminateVerifiedRuntimeProcess()`](../../../frontend/flutter/apps/desktop/lib/platform/windows_runtime_process_supervisor.dart), we execute a **single handle-bound PowerShell script** that opens the process handle *first*, verifies all 4 provenance invariants while holding that open handle, and calls `.Kill()` on the exact held `$proc` object:
+async def serve_runtime(args: argparse.Namespace) -> int:
+    config = uvicorn.Config(
+        app=args.app,
+        host=args.host,
+        port=args.port,
+        use_colors=not args.no_use_colors,
+        log_level=args.log_level,
+        timeout_graceful_shutdown=8,
+    )
+    server = uvicorn.Server(config=config)
+    runtime_lifecycle.register_uvicorn_server(server, host=args.host, port=args.port)
+    try:
+        await server.serve()
+    finally:
+        runtime_lifecycle.clear_uvicorn_server(server)
+    return 0
 
-```powershell
-# Conceptual Handle-Bound Verification & Termination Flow (No PID re-resolution)
-$proc = $null
-try {
-  # 1. Open and hold the OS process HANDLE first.
-  # While $proc is undisposed, Windows CANNOT recycle $targetPid even if the process exits.
-  $proc = [System.Diagnostics.Process]::GetProcessById($targetPid)
-  $ _ = $proc.Handle # Force SafeProcessHandle acquisition
 
-  if ($proc.HasExited) { return @{ status = 'alreadyExited' } | ConvertTo-Json -Compress }
+def main() -> int:
+    parser = build_arg_parser()
+    args = parser.parse_args()
+    return asyncio.run(serve_runtime(args))
 
-  # 2. Query StartTime and MainModule directly from the held process handle + WMI CommandLine
-  $startTimeUtc = $proc.StartTime.ToUniversalTime().ToString('o')
-  $wmi = Get-CimInstance Win32_Process -Filter "ProcessId = $targetPid" -ErrorAction Stop
-  if ($proc.HasExited -or $null -eq $wmi) { return @{ status = 'alreadyExited' } | ConvertTo-Json -Compress }
 
-  # 3. Verify all 4 provenance invariants BEFORE any termination:
-  #    (a) PID matches expectedDescriptor.pid
-  #    (b) ExecutablePath matches python.exe / pythonw.exe and expectedDescriptor.executablePath
-  #    (c) CommandLine contains 'uvicorn', 'app.main:app', and '--port <expectedPort>'
-  #    (d) |startTimeUtc - expectedStartedAtUtc| <= 15 seconds
-  if (-not $provenanceMatched) {
-    return @{ status = 'provenanceMismatch'; reason = $mismatchReason } | ConvertTo-Json -Compress
-  }
-
-  # 4. Terminate directly via the held SafeProcessHandle ($proc.Kill()), NEVER by re-querying PID!
-  $proc.Kill()
-  $exited = $proc.WaitForExit($timeoutMs)
-  return @{ status = if ($exited) { 'terminated' } else { 'timeout' } } | ConvertTo-Json -Compress
-} finally {
-  if ($null -ne $proc) { $proc.Dispose() }
-}
+if __name__ == "__main__":
+    raise SystemExit(main())
 ```
 
-**Why This Eliminates TOCTOU Completely:**
-- **Scenario 1 (Runtime exited *before* `GetProcessById` and PID was reused by a foreign process):** `GetProcessById` opens a handle to the foreign process. Its `$proc.StartTime`, `ExecutablePath`, and `CommandLine` are inspected while the handle is pinned, deterministically failing the 4-factor check (`provenanceMismatch`), and `$proc.Kill()` is **never** called.
-- **Scenario 2 (Runtime is alive when `GetProcessById` opens `$proc.Handle`, and exits *during* verification):** Because `$proc.Handle` is open, the Windows kernel **cannot** assign `$targetPid` to any new process while `$proc` is held. Calling `$proc.Kill()` on the already-exited handle safely traps `InvalidOperationException` / `Win32Exception` and reports `alreadyExited` without touching any other process.
+### 5.3 Impact on Dependent Contracts & Supervisor Provenance
+Changing the supervised launch entrypoint from `-m uvicorn app.main:app` to `-m app.runtime_server --app app.main:app` is synchronized across every dependent component:
 
-### 6.3 Handle-Bound Verification of Core-Managed Child `llama-server.exe`
-When emergency OS fallback termination runs because the local runtime is unresponsive:
-- The supervisor **never** kills `llama-server.exe` by image name (`taskkill /IM llama-server.exe`) or by parent PID alone.
-- `GET /api/v1/system/status` and `POST /api/v1/system/shutdown` expose `managed_llm_pid: int | None` and `managed_by_core: bool` (only populated when `LlamaCppProvider._managed_by_core == True`).
-- For any candidate child `llama-server.exe` (discovered either via `ProcessId == managedLlmPid` or `ParentProcessId == verifiedRuntimePid` while the parent runtime handle `$proc` is still held open):
-  1. Open and hold `$childProc = [System.Diagnostics.Process]::GetProcessById($childPid)` first.
-  2. While holding `$childProc.Handle`, verify:
-     - `ExecutablePath` basename is `llama-server.exe`.
-     - `CommandLine` contains `--models-dir` and `--port`.
-     - `$childProc.StartTime.ToUniversalTime() >= $verifiedRuntimeStartTimeUtc` (proving the child process was spawned *after* the verified runtime instance started, not before!).
-     - `wmiChild.ParentProcessId == $verifiedRuntimePid` (or `ProcessId == $reportedManagedLlmPid` when `managed_by_core == true`).
-  3. Only if all child provenance checks pass, invoke `$childProc.Kill()` and `$childProc.WaitForExit($timeoutMs)` on the held `$childProc` handle.
-  4. **Fail-Closed Rule:** If `managed_by_core == False` (externally managed router) or any provenance field is missing or ambiguous, the supervisor **refuses to terminate** the `llama-server.exe` process.
-
----
-
-## 7. Route A and Route B Resource Safety (`Correction C3`)
-
-Inspection of [`backend/app/services/llm/llama_cpp.py`](../../../backend/app/services/llm/llama_cpp.py#L191-L233) and [`backend/app/services/assistant/orchestrator.py`](../../../backend/app/services/assistant/orchestrator.py#L195-L220) reveals fundamentally different execution models for Route A and Route B that must be handled explicitly during shutdown:
-
-| Dimension | Route A: Standalone `llama-server.exe` Router (HTTP) | Route B: In-Process `llama-cpp-python` (`asyncio.to_thread` Native C++) |
+| Dependent Component | File Path | Exact Contract Update |
 | :--- | :--- | :--- |
-| **How Inference Executes** | Async HTTP POST (`httpx.AsyncClient`) to `http://127.0.0.1:8080/v1/chat/completions` (`#L969-L985`, `#L1031-L1043`). | Worker thread spawned via `_start_owned_worker` (`asyncio.to_thread(owned_worker)`) calling C++ `self._llm.create_chat_completion(...)` (`#L988-L1004`, `#L1046-L1084`). |
-| **Effect of `asyncio.Task.cancel()`** | **Immediately aborts** the awaiting `httpx` coroutine/stream and closes the client socket. | Cancels only the Python awaiting wrapper future; the underlying OS `ThreadPoolExecutor` thread continues executing inside native C++ until the current C++ call or token chunk yields! |
-| **How `shutdown()` Stops Generation** | 1. Cancels all tracked active generation `asyncio.Task`s (`self._active_generation_tasks`).<br>2. Calls `stop_managed_router()`, terminating `llama-server.exe` and immediately halting GPU kernel execution in the child process. | 1. Sets `self._closing = True` and cancels the awaiting consumer task.<br>2. In `_worker` streaming loop (`for chunk in stream:` at `#L1058`), checks `if self._closing: break` on every token chunk, exiting the worker thread at the very next token boundary (typically $< 50\text{–}200\text{ms}$). |
-| **Native Memory Safety Invariant (`self._llm`)** | Weights reside in child process memory (`llama-server.exe`), reclaimed by the OS when the child process exits. | **CRITICAL SAFETY RULE:** If `self._active_work_drained.wait()` times out during `shutdown()` and a Route B native thread is still active (`self.has_active_generation == True`), `shutdown()` **MUST NOT** execute `del self._llm` or `gc.collect()` while the C++ thread is still running (which would cause a native C++ use-after-free segfault). `self._llm` is freed only when `_active_work_drained.is_set()` is `True`. |
-| **SQLite Turn Status Integrity (`orchestrator.py`)** | **Guaranteed:** Cancelling the consumer stream raises `asyncio.CancelledError` in `orchestrate_chat_stream` (`#L518`), rolling back the turn session and running `await asyncio.shield(_persist_terminal_assistant_status(..., status="cancelled"))` (`#L529-L538`) **before** `dispose_database_runtime()` is called. | **Guaranteed:** Even if a Route B non-streaming C++ call takes $> 5\text{s}$ to finish on its background thread, cancelling the awaiting request coroutine immediately triggers `orchestrate_chat_stream`'s shielded `status="cancelled"` DB commit before `dispose_database_runtime()` runs. |
+| **1. Supervisor Spawn Arguments** | [`desktop_runtime_coordinator.dart`](../../../frontend/flutter/apps/desktop/lib/coordinator/desktop_runtime_coordinator.dart#L789-L795) | Spawn `pythonw.exe` with `args: ['-m', 'app.runtime_server', '--app', 'app.main:app', '--host', targetHost, '--port', '$targetPort', '--no-use-colors']`. |
+| **2. Process Provenance Check** | [`windows_runtime_process_supervisor.dart`](../../../frontend/flutter/apps/desktop/lib/platform/windows_runtime_process_supervisor.dart#L458-L465) | Extract `static bool isCompanionRuntimeCommandLine(String commandLine, {required int expectedPort})` checking:<br>1. `matchesExactPort(commandLine, expectedPort)` (`--port <expectedPort>`)<br>2. `commandLine.contains('app.main:app')`<br>3. `commandLine.contains('app.runtime_server') || commandLine.contains('uvicorn')` *(accepts canonical `app.runtime_server` and preserves backward-compatible recognition of an already-running `uvicorn app.main:app` process)*. |
+| **3. FastAPI Lifespan & `RuntimeLifecycleCoordinator`** | [`backend/app/core/runtime_lifecycle.py`](../../../backend/app/core/runtime_lifecycle.py) & [`backend/app/main.py`](../../../backend/app/main.py#L131-L184) | `runtime_lifecycle.register_uvicorn_server(server)` stores the exact `uvicorn.Server` reference before `server.serve()` starts. `clear_uvicorn_server(server)` checks `if self._uvicorn_server is server:` so test servers never clobber an unrelated server reference. |
+| **4. Supervisor Unit & Acceptance Tests** | [`windows_runtime_process_supervisor_test.dart`](../../../frontend/flutter/apps/desktop/test/windows_runtime_process_supervisor_test.dart) & [`windows_runtime_supervision_acceptance_test.dart`](../../../frontend/flutter/apps/desktop/test/windows_runtime_supervision_acceptance_test.dart) | Update test command-line fixtures to test `-m app.runtime_server --app app.main:app --port 8000` (plus a backward-compatibility test for `-m uvicorn app.main:app --port 8000`). |
+
+### 5.4 Verification Tier for Uvicorn Ownership & Shutdown
+- **Supported by Source Inspection (`backend/.venv/Lib/site-packages/uvicorn/server.py` lines 67, 96–101, 233–264):**
+  - `server.serve()` enters `_serve()`, starts `lifespan.startup()`, opens listening sockets, and runs `await self.main_loop()`.
+  - `main_loop()` polls `self.on_tick()` every `0.1s` (`100ms`); when `server.should_exit = True` is set on the registered `server` instance, `main_loop()` returns cleanly, `_serve()` calls `await self.shutdown(sockets=sockets)` (closing listening TCP sockets, shutting down active HTTP connections, awaiting `_wait_tasks_to_complete()` bounded by `timeout_graceful_shutdown=8`, and calling `await self.lifespan.shutdown()`).
+- **Requires Phase 2 Isolated Windows Acceptance Evidence:**
+  - Confirming end-to-end process exit (`exitCode == 0`) and TCP port release under `ProcessStartMode.detached` with `pythonw.exe -m app.runtime_server` in `windows_runtime_supervision_acceptance_test.dart`.
 
 ---
 
-## 8. Host Admin Credential Wiring (`Correction C4`)
+## 6. Non-Deadlocking Shutdown During Active Model Loading & Route A/B Inference (`Correction C2`)
 
-### 8.1 Verified Wiring Defect in Current Code
-Inspection of [`frontend/flutter/apps/desktop/lib/main.dart`](../../../frontend/flutter/apps/desktop/lib/main.dart#L162-L195), [`desktop_runtime_coordinator.dart`](../../../frontend/flutter/apps/desktop/lib/coordinator/desktop_runtime_coordinator.dart#L37-L106), and [`settings_screen.dart`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart#L941-L954) confirmed:
-1. In `main.dart` line 165, `DesktopChatController`'s `CompanionClient` receives `hostAdminStore: HostAdminSecretStore()`.
-2. However, in `main.dart` lines 191–194, `DesktopRuntimeCoordinator` is constructed with only `baseUrl` and `credentialStore`, and inside [`DesktopRuntimeCoordinator`](../../../frontend/flutter/apps/desktop/lib/coordinator/desktop_runtime_coordinator.dart#L52-L56) (and `updateConfiguration` at lines 102–105), it instantiates `CompanionClient(baseUrl: baseUrl, credentialStore: credentialStore)` **without `hostAdminStore`**.
-3. Similarly, in [`SettingsScreen._resolveClient()`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart#L950-L953), the fallback `CompanionClient` when `widget.chatController == null` also omits `hostAdminStore`.
-4. Consequently, whenever `DesktopRuntimeCoordinator` calls `_client.getSystemStatus()` (line 368) or the new `_client.shutdownSystem()`, `CompanionClient._adminRequest` throws `StateError('Host admin secret provider is not configured for this client.')` (which `_probeHealth` previously swallowed inside `catch (_) {}` at line 373!).
+### 6.1 Why `shutdown()` Must Signal Cancellation Before Acquiring `self._lock`
+In [`backend/app/services/llm/llama_cpp.py`](../../../backend/app/services/llm/llama_cpp.py#L378), `load_model()` acquires `async with self._lock:` and holds it across router process creation (`#L575`), up to `45s` of `/health` polling (`#L610-L631`), `45s` of `POST /models/load` (`#L247`), and `30s` of `/models` polling (`#L259-L276`). If `shutdown()` waited to acquire `self._lock` before setting `self._closing = True` or aborting the in-flight load, `shutdown()` would block behind `load_model()` for up to `120s`.
 
-### 8.2 Complete End-to-End Host Admin Credential Flow
-1. **Backend Secret Provisioning (`backend/app/core/host_admin.py`):**
-   - During FastAPI `lifespan` startup, `initialize_host_admin_secret()` creates `%LOCALAPPDATA%\AICompanion\secrets\desktop_admin.secret` (or `COMPANION_HOST_ADMIN_SECRET_FILE` override in isolated tests) with Windows DACL `O:<user_sid>D:P(A;;FA;;;<user_sid>)(A;;FA;;;SY)` and non-reparse verification.
-2. **Flutter `HostAdminSecretStore` (`host_admin_secret_store.dart`):**
-   - Verifies via PowerShell that no directory component is a reparse point and that the file ACL grants access solely to the current Windows user SID and `NT AUTHORITY\SYSTEM` before reading the `hsk_...` secret.
-   - Supports an optional `String? secretFilePathOverride` (or `COMPANION_HOST_ADMIN_SECRET_FILE` environment variable) so isolated Windows acceptance tests can test real ACL-verified secret reading without touching the developer's global `%LOCALAPPDATA%`.
-3. **Wiring `hostAdminStore` Across All Desktop Clients:**
-   - Add `CredentialStore? hostAdminStore` to `DesktopRuntimeCoordinator` (defaulting to `HostAdminSecretStore()` on Windows when not explicitly passed, and preserved across `updateConfiguration()`).
-   - Pass the shared `HostAdminSecretStore` instance in [`main.dart`](../../../frontend/flutter/apps/desktop/lib/main.dart#L191-L194) and [`SettingsScreen._resolveClient()`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart#L950-L953).
-   - `CompanionClient._adminRequest` automatically clears and re-reads `hostAdminStore` once on `401`/`403` (lines 72–90 of `companion_client.dart`), handling secret rotation seamlessly when a runtime restarts.
+### 6.2 Lock-Free Cancellation Protocol & Lock Ordering Matrix
+We separate **lock-free immediate shutdown signaling** from **lock-serialized state cleanup**:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Coord as RuntimeLifecycleCoordinator
+    participant Prov as LlamaCppProvider
+    participant Load as Active load_model() Task (Holds self._lock)
+    participant Router as Core-Managed llama-server.exe
+
+    Coord->>Prov: shutdown(drain_timeout=5.0)
+    Note over Prov: PHASE A: Lock-Free Immediate Signal (Does NOT acquire self._lock)
+    Prov->>Prov: self._closing = True; self._shutdown_event.set()
+    Prov->>Prov: Cancel _idle_check_task & all _active_generation_tasks (Route A)
+    Prov->>Prov: Close all _active_router_http_clients & cancel _active_load_task
+    Prov-->>Load: _shutdown_event fires / CancelledError raised inside poll or httpx POST
+    Note over Load: Exception handler inside load_model() (while holding self._lock):
+    Load->>Router: If _managed_by_core: _stop_managed_router_unlocked() terminates partial router
+    Load->>Load: Set _runtime_state = SERVER_STOPPED, release self._lock, return False
+    Note over Prov: PHASE B: Post-Signal Drain & Teardown
+    Prov->>Prov: Wait up to drain_timeout for _active_work_drained
+    Prov->>Prov: Acquire self._lock (bounded 3.0s timeout)
+    Prov->>Router: Unconditionally call _stop_managed_router_unlocked() (idempotent if already stopped)
+    Prov->>Prov: If not has_active_generation: free self._llm (Route B guard)
+```
+
+#### Explicit Lock Ownership & Concurrency Rules in `LlamaCppProvider`:
+
+| Provider Operation / Field | Requires `self._lock`? | Concurrency & Cancellation Rule |
+| :--- | :--- | :--- |
+| **`signal_shutdown_immediately()` (Phase A of `shutdown()`)** | **NO (Lock-Free)** | Synchronously sets `self._closing = True` and `self._shutdown_event.set()`; cancels `self._idle_check_task`, all tasks in `self._active_generation_tasks`, and `self._active_load_task`; closes any `httpx.AsyncClient` registered in `self._active_router_http_clients`. Safe to call multiple times (idempotent). |
+| **`get_status()` (`GET /api/v1/models`)** | **NO (Lock-Free Snapshot when Locked or Closing)** | If `self._closing` is `True`: immediately returns `ModelStatusResponse(runtime_state=SERVER_STOPPED, model_loaded=False, ...)`.<br>If `self._lock.locked()` or `self._runtime_state in (SERVER_STARTING, MODEL_LOADING, MODEL_UNLOADING)`: returns a read-only in-memory snapshot (`runtime_state=self._runtime_state`, `active_model=self._active_model_name`) **without** awaiting `self._lock`, **without** querying `http://127.0.0.1:8080/models`, and **without** mutating `self._active_model_name` or `self._server_is_active`. |
+| **`load_model()` / `unload_model()` / `set_profile()` Entry Check** | **Fast-Fail Before `self._lock`, Then Acquires `self._lock`** | Checks `if self._closing or self._shutdown_event.is_set(): return False` *before* `async with self._lock:` and again immediately *after* entering `async with self._lock:`. |
+| **Wait Loops & Router HTTP Calls Inside `load_model()`** | **Runs Under `self._lock`, Interrupted by `_shutdown_event`** | 1. Registers `self._active_load_task = asyncio.current_task()` on entry and clears it in `finally:`.<br>2. Registers temporary `httpx.AsyncClient` instances in `self._active_router_http_clients` so `signal_shutdown_immediately()` can close the socket mid-request.<br>3. Replaces `await asyncio.sleep(0.5)` in router startup (`#L612`) and model-load polling (`#L259`) with `await self._sleep_or_abort(0.5)` (waiting on `self._shutdown_event.wait()`).<br>4. If aborted during startup/loading (`CancelledError` or ` self._closing`), `load_model()`'s `except/finally` block calls `await self._stop_managed_router_unlocked()` (terminating any partially started Core-managed `llama-server.exe` while leaving `_managed_by_core == False` external routers untouched) and releases `self._lock` immediately. |
+| **Final Cleanup in `shutdown()` (Phase B)** | **Bounded `self._lock` Acquisition + Unconditional Router Stop** | After `signal_shutdown_immediately()` and waiting up to `drain_timeout` for `_active_work_drained.wait()`, `shutdown()` attempts `await asyncio.wait_for(self._lock.acquire(), timeout=3.0)`. **Even if acquiring `self._lock` times out**, `shutdown()` unconditionally executes `await self._stop_managed_router_unlocked()` so a Core-managed `llama-server.exe` can never survive shutdown. |
+
+### 6.3 Route A vs. Route B Inference Cancellation & Native Memory Safety (`Correction C3`)
+
+| Inference Path | Mechanism During `shutdown(drain_timeout=5.0)` | Native Memory & Subprocess Safety Guarantee |
+| :--- | :--- | :--- |
+| **Route A (`llama-server.exe` HTTP)** | `signal_shutdown_immediately()` cancels all `self._active_generation_tasks` and closes active `httpx` streams; `_stop_managed_router_unlocked()` terminates Core-managed `llama-server.exe` (`terminate()` $\rightarrow$ `wait(5s)` $\rightarrow$ `kill()` + `wait(2s)`). | Weights live in the child `llama-server.exe` address space and are reclaimed by the OS on process exit. External routers (`_managed_by_core == False`) have their HTTP streams cancelled and client closed, but their OS process is never killed. |
+| **Route B (`llama-cpp-python` in-process thread via `asyncio.to_thread`)** | `signal_shutdown_immediately()` sets `self._closing = True` and cancels the awaiting consumer task. Inside `_worker` (`llama_cpp.py` line 1058 `for chunk in stream:`), `if self._closing: break` exits the C++ token loop at the next token boundary. | **Mandatory Use-After-Free Guard:** Because Python cannot forcibly kill a running C++ thread mid-call, if `_active_work_drained` has **not** fired when `drain_timeout` expires (`self.has_active_generation == True`), `shutdown()` **MUST NOT** execute `del self._llm` or `gc.collect()`. `self._llm` is deleted only when `not self.has_active_generation`. |
 
 ---
 
-## 9. Actual Routes, File Paths and Contracts (`Correction C5`)
+## 7. Database Quiescence and Cancellation Persistence (`Correction C3`)
 
-To prevent any contract or path drift, all components in Phase 2 will adhere to the exact routes and file paths verified in the repository:
+### 7.1 Why Route-Return Counters and Bare `asyncio.shield()` Are Insufficient
+1. **`StreamingResponse` Outlives the Route Function:** In [`conversations.py`](../../../backend/app/api/v1/endpoints/conversations.py#L662-L672) (`POST /api/v1/conversations/{id}/messages`) and [`llm.py`](../../../backend/app/api/v1/endpoints/llm.py#L281-L289) (`POST /api/v1/chat/completions`), the endpoint function returns a `StreamingResponse` object *before* Starlette iterates the async generator (`orchestrate_chat_stream`). Counting only route-handler execution would mark the request finished while the SSE stream and its `db: AsyncSession` are still active.
+2. **Bare `asyncio.shield(coro)` Does Not Track Detached Completion:** In [`orchestrator.py`](../../../backend/app/services/assistant/orchestrator.py#L529-L538), `await asyncio.shield(_persist_terminal_assistant_status(...))` wraps a coroutine. If the outer task awaiting `asyncio.shield(...)` receives a second `CancelledError` while the shielded task is mid-commit on SQLite, `asyncio.shield` raises `CancelledError` to the caller while the inner persistence task continues running untracked in the background. If `dispose_database_runtime()` is called immediately thereafter, it can dispose the SQLAlchemy engine while `_persist_terminal_assistant_status` is mid-transaction.
 
-### 9.1 Verified HTTP Endpoints (`backend/app/api/v1/endpoints/health.py`)
+### 7.2 Explicit Runtime Quiescence & Persistence Registry (`RuntimeLifecycleCoordinator`)
+[`backend/app/core/runtime_lifecycle.py`](../../../backend/app/core/runtime_lifecycle.py) tracks all four categories of in-flight runtime work and enforces strict ordering before `dispose_database_runtime()`:
+
+```mermaid
+flowchart TD
+    A["POST /api/v1/system/shutdown (202 Accepted)"] --> B["1. Admission Gate Closed (is_shutting_down = True)<br/>Reject new POST/PUT/PATCH/DELETE with 503 RUNTIME_SHUTTING_DOWN"]
+    B --> C["2. Signal LLM Provider & Active Stream Turns<br/>provider.signal_shutdown_immediately() + cancel _active_stream_turns"]
+    C --> D["3. Stream Catch Block Spawns Tracked Persistence Task<br/>runtime_lifecycle.spawn_terminal_persistence_task(_persist_terminal_assistant_status)"]
+    D --> E["4. Await Database Quiescence (bounded 5.0s)<br/>Wait for BOTH _active_asgi_mutations == 0 AND all _pending_persistence_tasks"]
+    E --> F{"Did all persistence tasks &<br/>mutations finish cleanly?"}
+    F -- "Yes" --> G["QuiescenceOutcome.CLEAN_QUIESCENCE<br/>All cancelled turns committed status='cancelled'"]
+    F -- "No (Timeout / Error)" --> H["QuiescenceOutcome.PERSISTENCE_INCOMPLETE or DRAIN_TIMED_OUT<br/>Cancel lingering persistence tasks & await 1.0s unwind before DB dispose"]
+    G --> I["5. Stop Core-Managed Router (provider.shutdown())"]
+    H --> I
+    I --> J["6. Set uvicorn_server.should_exit = True<br/>Lifespan finally calls dispose_database_runtime() ONLY after step 4/H"]
+```
+
+#### Ten-Point Quiescence Specification:
+1. **New Request Admission:** An ASGI middleware in [`backend/app/main.py`](../../../backend/app/main.py) checks `runtime_lifecycle.is_shutting_down` before routing. When `True`, all new `POST`, `PUT`, `PATCH`, and `DELETE` requests (except `POST /api/v1/system/shutdown`) are rejected with `503 Service Unavailable` (`code="RUNTIME_SHUTTING_DOWN"`) before `get_db()` opens a session.
+2. **Already Accepted Requests & Streaming Response Lifetimes:** The ASGI middleware tracks admitted mutating requests across the **entire ASGI `app(scope, receive, send)` invocation** (only decrementing `_active_asgi_mutations` in a `finally:` block after the final `http.response.body` chunk with `more_body=False` has been sent or the stream has closed and `get_db()` has exited its `async with factory() as session:` block).
+3. **Active Streaming Turn Registration:** `orchestrate_chat_stream` ([`orchestrator.py`](../../../backend/app/services/assistant/orchestrator.py#L356)) and streaming `create_chat_completion` ([`llm.py`](../../../backend/app/api/v1/endpoints/llm.py#L218)) register the currently executing stream task via `runtime_lifecycle.register_stream_task(task)` so shutdown cancels active streams deterministically.
+4. **Tracked Terminal Persistence Tasks (`_pending_persistence_tasks`):**
+   - `_persist_terminal_assistant_status(...) -> bool` in [`orchestrator.py`](../../../backend/app/services/assistant/orchestrator.py#L317-L354) is updated to return `True` **only** after `await session.commit()` succeeds, and `False` if the commit fails or the message row is absent.
+   - Instead of `await asyncio.shield(_persist_terminal_assistant_status(...))`, `orchestrate_chat_stream` calls:
+     ```python
+     persistence_task = runtime_lifecycle.spawn_terminal_persistence_task(
+         _persist_terminal_assistant_status(
+             assistant_msg_id=asst_msg_id,
+             status="cancelled",
+             content=full_response_text if full_response_text else None,
+             engine=db.bind,
+             profile_session=profile_session,
+             conversation_id=conversation_id,
+         )
+     )
+     await asyncio.shield(persistence_task)
+     ```
+   - `spawn_terminal_persistence_task` creates an `asyncio.Task[bool]`, adds it to `runtime_lifecycle._pending_persistence_tasks`, and removes it only when the task itself completes. Thus, even if the outer `orchestrate_chat_stream` generator is cancelled a second time while awaiting `asyncio.shield(persistence_task)`, `RuntimeLifecycleCoordinator` still holds `persistence_task` and awaits its actual completion before touching the database engine!
+5. **Database Engine Disposal Ordering & Timeout Rules:**
+   - During shutdown, `await runtime_lifecycle.wait_for_database_quiescence(timeout=drain_timeout_seconds)` waits for:
+     - All registered `_active_stream_tasks` to exit,
+     - All `_pending_persistence_tasks` to finish and return their `bool` commit result, and
+     - `_active_asgi_mutations` to reach `0`.
+   - **If all complete within the deadline:** `quiescence_outcome` is recorded as `CLEAN_QUIESCENCE`.
+   - **If the deadline expires while a persistence task or mutation is still running:**
+     - `quiescence_outcome` is recorded as `PERSISTENCE_INCOMPLETE` (or `DRAIN_TIMED_OUT`).
+     - The runtime **never** claims that cancellation persistence succeeded when `_persist_terminal_assistant_status` returned `False` or timed out.
+     - Before `dispose_database_runtime()` is called, any still-pending task in `_pending_persistence_tasks` is explicitly cancelled (`task.cancel()`) and awaited for up to `1.0s` (`asyncio.gather(..., return_exceptions=True)`) so no coroutine is mid-flight inside `aiosqlite` when `_engine.dispose()` runs.
+
+---
+
+## 8. Host Admin Secret Store & Authentication Accuracy (`Correction C6`)
+
+### 8.1 Accurate Description of Existing vs. Planned Client Behavior
+Direct inspection of [`companion_client.dart`](../../../frontend/flutter/packages/companion_api/lib/client/companion_client.dart#L57-L108) and [`host_admin_secret_store.dart`](../../../frontend/flutter/apps/desktop/lib/platform/host_admin_secret_store.dart#L10-L73) confirms:
+1. **What Exists Today (Verified Source):**
+   - `HostAdminSecretStore.readToken()` does **not** cache the secret in memory. On every call, it executes a PowerShell script that validates non-reparse attributes on every path segment and verifies that the Windows DACL on `%LOCALAPPDATA%\AICompanion\secrets` and `desktop_admin.secret` grants access solely to the current Windows user SID and `NT AUTHORITY\SYSTEM` (`S-1-5-18`), then reads the `hsk_...` token from disk.
+   - `CompanionClient._buildHeaders(admin: true)` calls `await hostAdminStore?.readToken()` on each request and attaches `X-Host-Admin-Secret`. Because `HostAdminSecretStore` reads from disk on every call without caching, if the backend rotates `desktop_admin.secret` on restart, the next `_adminRequest` automatically reads the newly provisioned secret from disk.
+   - `CompanionClient._adminRequest` does **not** implement an automatic retry loop on `401`/`403` (and none is needed because `HostAdminSecretStore` does not cache stale secrets in memory).
+2. **What Was Missing and Will Be Fixed in Phase 2 (`Correction C4` from Round 1):**
+   - [`DesktopRuntimeCoordinator`](../../../frontend/flutter/apps/desktop/lib/coordinator/desktop_runtime_coordinator.dart#L52-L56) (and `updateConfiguration` at `#L102-L105`), [`main.dart`](../../../frontend/flutter/apps/desktop/lib/main.dart#L191-L194), and [`SettingsScreen._resolveClient()`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart#L950-L953) constructed `CompanionClient` without passing `hostAdminStore`. Phase 2 wires `hostAdminStore` into all three locations and adds an optional `secretFilePathOverride` / `COMPANION_HOST_ADMIN_SECRET_FILE` to `HostAdminSecretStore` and `backend/app/core/host_admin.py` for isolated Windows acceptance tests.
+
+### 8.2 Exact Credential Classes & Security Enforcement Matrix
+
+| Actor / Credential Class | Actual Wire Header Format | Permitted Authority | Shutdown Authority (`POST /api/v1/system/shutdown`) | Enforcement Mechanism |
+| :--- | :--- | :--- | :--- | :--- |
+| **1. Local Host Administrator (`hsk_`)** | `X-Host-Admin-Secret: hsk_<token>` | Host supervision (`/system/status`), Host shutdown (`/system/shutdown`), model management (`/models/load`, `/select`, `/unload`, `/profile`), Profile list & bootstrap ticket issuance. | **ALLOWED (`202 Accepted`)** | `Depends(require_host_admin)`: loopback client IP (`127.0.0.1`/`::1`), loopback `Host` header (`127.0.0.1`, `localhost`, `[::1]`), **no** `Origin` or `Sec-Fetch-Site` headers, and `secrets.compare_digest` match of ACL-protected `desktop_admin.secret`. |
+| **2. Profile Session (`psk_`)** | `Authorization: Bearer psk_<token>` | Profile-scoped conversations, messages, memories, tasks, attachments, characters, session self-inspection/revocation (`Depends(get_current_profile_session)`). | **DENIED (`403 Forbidden`)** | `require_host_admin` does not accept `Authorization: Bearer psk_...` and rejects any request lacking a valid `X-Host-Admin-Secret`. |
+| **3. Paired Device / Telemetry (`companion_sec_`)** | `Authorization: Bearer companion_sec_<token>` or `X-API-Key: companion_sec_<token>` | Telemetry / model status read (`Depends(verify_telemetry)`). | **DENIED (`403 Forbidden`)** | Rejected by `require_host_admin` (and rejected by loopback IP check if originating from a remote LAN IP). |
+| **4. Browser Context (Web Harness / CSRF)** | Any request carrying `Origin` or `Sec-Fetch-Site` headers | Profile-scoped web harness flows after bootstrap ticket exchange. | **DENIED (`403 Forbidden`)** | `require_host_admin` rejects any request with `Origin` or `Sec-Fetch-Site` headers even if `X-Host-Admin-Secret` is present. |
+| **5. Malformed / Spoofed Headers** | `X-Profile-Session: psk_...`, empty `X-Host-Admin-Secret`, whitespace-padded secret, or non-loopback `Host: evil.example` | None. | **DENIED (`403 Forbidden`)** | Explicitly tested as negative cases in `test_host_shutdown.py`. |
+
+---
+
+## 9. Exact Routes, File Paths and Contracts
+
+### 9.1 System & Health Endpoints (`backend/app/api/v1/endpoints/health.py`)
 
 | Endpoint | Auth Dependency | Current Status | Phase 2 Contract Behavior |
 | :--- | :--- | :--- | :--- |
-| `GET /api/v1/health` | Public (`health_router`) | Exists (`#L20-L26`) | Returns `200 OK` (`status="healthy"`) when running; returns `503 Service Unavailable` (`status="shutting_down"`) once `RuntimeLifecycleCoordinator.is_shutting_down` is `True`. *(Note: There is no `/api/v1/health/ready` endpoint in the repository; all references to `/health/ready` are removed.)* |
-| `GET /api/v1/system/status` | `Depends(require_host_admin)` (`system_router`) | Exists (`#L44-L78`) | Extended with optional telemetry fields: `shutting_down: bool = False`, `managed_llm_pid: int | None = None`, and `managed_by_core: bool = False`. |
-| `POST /api/v1/system/shutdown` | `Depends(require_host_admin)` (`system_router`) | **New in Phase 2** | Accepts optional `SystemShutdownRequest(reason="user_exit_companion", drain_timeout_seconds=5.0)`. Returns `202 Accepted` with `SystemShutdownResponse(status="shutting_down", pid=os.getpid(), managed_llm_pid=..., managed_by_core=..., already_shutting_down=...)`. |
+| `GET /api/v1/health` | Public (`health_router`) | Exists (`#L20-L26`) | Returns `200 OK` (`HealthResponse(status="healthy")`) when running; returns `503 Service Unavailable` (`status="shutting_down"`) once `runtime_lifecycle.is_shutting_down` is `True`. |
+| `GET /api/v1/system/status` | `Depends(require_host_admin)` (`system_router`) | Exists (`#L44-L78`) | Extended with optional non-breaking fields: `shutting_down: bool = False`, `shutdown_quiescence_status: Optional[str] = None`, `managed_llm_pid: Optional[int] = None`, `managed_by_core: bool = False`. |
+| `POST /api/v1/system/shutdown` | `Depends(require_host_admin)` (`system_router`) | **New in Phase 2** | Accepts optional `SystemShutdownRequest(reason="user_exit_companion", drain_timeout_seconds=5.0)`. Returns `202 Accepted` (`SystemShutdownResponse(status="shutting_down", pid=os.getpid(), managed_llm_pid=..., managed_by_core=..., already_shutting_down=..., message=...)`). *(Note: `202 Accepted` means cooperative shutdown has been initiated, NOT that the OS process has already exited.)* |
 
-### 9.2 Verified Windows File Paths & Lock Semantics
+### 9.2 Windows File Paths & Lock Semantics
 
 | Artifact | Canonical Default Path | Environment Override | Locking & Cleanup Semantics |
 | :--- | :--- | :--- | :--- |
-| **Runtime Lockfile** | `%LOCALAPPDATA%\AI Companion\runtime.lock` *(Note space in `AI Companion`, defined in [`desktop_runtime_coordinator.dart`](../../../frontend/flutter/apps/desktop/lib/coordinator/desktop_runtime_coordinator.dart#L155))* | `COMPANION_LOCK_FILE` | Locked **directly** via `lockFile.open(mode: FileMode.append)` + `handle.lock(FileLock.exclusive)` in [`WindowsRuntimeProcessSupervisor.acquireStartupLock`](../../../frontend/flutter/apps/desktop/lib/platform/windows_runtime_process_supervisor.dart#L68-L90). *(There is no `.guard` file.)* Because Windows forbids deleting a file while a handle is open, cleanup truncates the file to `0` bytes through the exclusive `RandomAccessFile` handle (`setPosition(0)` + `truncate(0)` + `flush()`)—which `readDescriptorThroughHandle` (`#L120`) and `readDescriptorDirect` (`#L137`) already treat as empty/absent—then unlocks/closes the handle and performs a best-effort `lockFile.delete()`. |
-| **Runtime Logfile** | `%LOCALAPPDATA%\AI Companion\Logs\runtime.log` (`#L169`) | `COMPANION_LOG_FILE` | Append-only runtime stdout/stderr log. Preserved across shutdown for diagnostics. |
-| **Host Admin Secret** | `%LOCALAPPDATA%\AICompanion\secrets\desktop_admin.secret` *(Note no space in `AICompanion`, defined in [`host_admin.py`](../../../backend/app/core/host_admin.py#L33) & [`host_admin_secret_store.dart`](../../../frontend/flutter/apps/desktop/lib/platform/host_admin_secret_store.dart#L20))* | `COMPANION_HOST_ADMIN_SECRET_FILE` *(Added in Phase 2 for hermetic tests)* | Protected by Windows DACL (`current user SID + SYSTEM`) and non-reparse check. Rotated on each runtime startup. |
-
-### 9.3 Dynamic Port Handling
-- Neither the backend nor the Flutter supervisor/coordinator may hardcode port `8000` during shutdown or provenance verification.
-- `DesktopRuntimeCoordinator` uses its configured `_port` (and `expectedDescriptor.port` from `runtime.lock`), and `LlamaCppProvider` uses `settings.LLAMA_ROUTER_PORT`.
+| **Runtime Lockfile** | `%LOCALAPPDATA%\AI Companion\runtime.lock` *(With space in `AI Companion`, [`desktop_runtime_coordinator.dart`](../../../frontend/flutter/apps/desktop/lib/coordinator/desktop_runtime_coordinator.dart#L155))* | `COMPANION_LOCK_FILE` | Locked **directly** via `lockFile.open(mode: FileMode.append)` + `handle.lock(FileLock.exclusive)` in [`WindowsRuntimeProcessSupervisor.acquireStartupLock`](../../../frontend/flutter/apps/desktop/lib/platform/windows_runtime_process_supervisor.dart#L68-L90). Cleared safely on confirmed shutdown by acquiring the exclusive lock handle, truncating to `0` bytes through the handle (`setPosition(0)` + `truncate(0)` + `flush()`), releasing/closing the handle, and performing a best-effort `lockFile.delete()`. |
+| **Runtime Logfile** | `%LOCALAPPDATA%\AI Companion\Logs\runtime.log` (`#L169`) | `COMPANION_LOG_FILE` | Append-only runtime log; preserved across shutdown. |
+| **Host Admin Secret** | `%LOCALAPPDATA%\AICompanion\secrets\desktop_admin.secret` *(No space in `AICompanion`, [`host_admin.py`](../../../backend/app/core/host_admin.py#L33) & [`host_admin_secret_store.dart`](../../../frontend/flutter/apps/desktop/lib/platform/host_admin_secret_store.dart#L20))* | `COMPANION_HOST_ADMIN_SECRET_FILE` *(Added in Phase 2)* | Protected by Windows DACL (`current user SID + SYSTEM`) and non-reparse check. |
 
 ---
 
-## 10. Runtime Admission Control and Whole-Runtime Quiescence (`Correction C6`)
+## 10. Process Termination Safety (`§9` — Handle-Bound Design & Verification Propositions)
 
-### 10.1 Inventory of State-Changing Routes Across the Runtime
-Inspection of [`backend/app/api/v1/router.py`](../../../backend/app/api/v1/router.py) and all endpoint modules identifies every route that mutates SQLite state or host files:
+### 10.1 Handle-Bound Process Verification & Termination Design
+When cooperative HTTP shutdown (`POST /api/v1/system/shutdown`) fails or the local runtime process remains alive after the `8.0s` cooperative exit poll, [`WindowsRuntimeProcessSupervisor.terminateVerifiedRuntimeProcess()`](../../../frontend/flutter/apps/desktop/lib/platform/windows_runtime_process_supervisor.dart) executes a single PowerShell script that binds the OS process object **before** verifying provenance and terminating:
 
-| Domain | Mutating Endpoints (`POST`, `PUT`, `PATCH`, `DELETE`) | Underlying Persistence / Resource |
-| :--- | :--- | :--- |
-| **Models & Host Config** | `POST /api/v1/models/load`, `POST /api/v1/models/select`, `POST /api/v1/models/unload`, `PATCH /api/v1/models/profile` | `host_config.json` + `LlamaCppProvider` subprocess/VRAM |
-| **Conversations & Chat** | `POST /api/v1/conversations`, `PATCH /api/v1/conversations/{id}`, `DELETE /api/v1/conversations/{id}`, `POST /api/v1/conversations/{id}/generate-title`, `POST /api/v1/conversations/{id}/messages`, `POST /api/v1/chat/completions` | SQLite `conversations`, `messages`, `chat_requests` (`prepare_turn`, `orchestrate_chat_stream`, `_persist_terminal_assistant_status`) |
-| **Attachments** | `POST /api/v1/conversations/{id}/attachments`, `DELETE /api/v1/conversations/{id}/attachments/{att_id}` | Files in `ATTACHMENT_DIR` + SQLite `attachments` |
-| **Memories** | `POST /api/v1/memories`, `PATCH /api/v1/memories/{id}`, `DELETE /api/v1/memories/{id}` | SQLite `memories` + FTS5 index triggers |
-| **Tasks** | `POST /api/v1/tasks`, `PATCH /api/v1/tasks/{id}`, `DELETE /api/v1/tasks/{id}`, `POST /api/v1/tasks/{id}/restore`, `DELETE /api/v1/tasks/{id}/permanent` | SQLite `tasks` |
-| **Characters** | `PUT /api/v1/characters/active`, `POST /api/v1/characters/active/reset-neutral`, `POST /api/v1/characters/instances`, `PATCH /api/v1/characters/instances/{id}`, `DELETE /api/v1/characters/instances/{id}` | SQLite `character_instances`, `profiles` |
-| **Profiles & Auth** | `POST /api/v1/profiles`, `PATCH /api/v1/profiles/{id}`, `POST /api/v1/auth/bootstrap/request`, `POST /api/v1/auth/bootstrap/ticket`, `POST /api/v1/auth/session/exchange`, `POST /api/v1/auth/session/revoke` | SQLite `profiles`, `profile_sessions`, `device_pairings` |
+1. **Step 1 — Acquire Process Object & Kernel Handle First:**
+   - Calls `$proc = [System.Diagnostics.Process]::GetProcessById($expectedPid)` and forces handle creation via `$_ = $proc.Handle`.
+   - If `GetProcessById` throws `ArgumentException` (process does not exist) or `$proc.HasExited` is `true`, returns `alreadyExited`.
+2. **Step 2 — Verify 4-Factor Runtime Provenance Against `expectedDescriptor` (`RuntimeLockfileData`):**
+   - Queries `$startTimeUtc = $proc.StartTime.ToUniversalTime()` from the held process handle and queries `Get-CimInstance Win32_Process -Filter "ProcessId = $expectedPid"` for `ExecutablePath` and `CommandLine`, then re-verifies `$proc.HasExited -eq $false`.
+   - Verifies all four conditions:
+     1. `ProcessId == expectedDescriptor.pid`.
+     2. `ExecutablePath` matches `expectedDescriptor.executablePath` under `isExecutablePathMatch` (`python.exe` / `pythonw.exe` in the expected environment directory).
+     3. `CommandLine` matches `isCompanionRuntimeCommandLine(cmdLine, expectedPort: expectedDescriptor.port)` (`--port <expectedPort>`, `app.main:app`, and `app.runtime_server` or `uvicorn`).
+     4. `|$startTimeUtc - expectedDescriptor.startedAt|` $\le 15\text{ seconds}$.
+   - **Fail-Closed Rule:** If WMI/CIM is unavailable, any field is missing, or any of the 4 checks fails, the script **does not call `$proc.Kill()`** and returns `provenanceMismatch` or `inspectionUnavailable`.
+3. **Step 3 — Independent Handle-Bound Verification of Core-Owned Child `llama-server.exe`:**
+   - Queries candidate child processes where `ParentProcessId == $expectedPid` (or `ProcessId == $managedLlmPid` when `managedByCore == true`).
+   - If `managedByCore == false` (externally started router), skips child termination completely.
+   - For each candidate child PID, opens `$childProc = [System.Diagnostics.Process]::GetProcessById($childPid)` (`$_ = $childProc.Handle`) and verifies while held:
+     1. `ExecutablePath` basename is `llama-server.exe`.
+     2. `CommandLine` contains `--models-dir` and `--port`.
+     3. `$childProc.StartTime.ToUniversalTime() >= $startTimeUtc` (child was spawned at or after the verified runtime started).
+     4. `ParentProcessId == $expectedPid` (or `ProcessId == $managedLlmPid` when `managedByCore == true`).
+   - Only if all child checks pass, calls `$childProc.Kill()` and `$childProc.WaitForExit($timeoutMs)` on the held `$childProc` instance. If any child check is ambiguous, refuses to kill the child process (fail-closed).
+4. **Step 4 — Terminate Verified Runtime via the Held `$proc` Object:**
+   - Calls `$proc.Kill()` and `$proc.WaitForExit($timeoutMs)` on the exact `$proc` instance acquired in Step 1 (which invokes Win32 `TerminateProcess` on `$proc.SafeProcessHandle` rather than resolving the numeric PID a second time).
+   - Disposes `$childProc` and `$proc` handles in `finally` blocks and reports truthful status (`terminated`, `alreadyExited`, `provenanceMismatch`, `inspectionUnavailable`, or `timeout`).
 
-### 10.2 Proportionate Whole-Runtime Quiescence Middleware & Drain Order
-Instead of scattering manual `if is_shutting_down:` checks into dozens of route handlers, `RuntimeLifecycleCoordinator` integrates cleanly via a lightweight ASGI/HTTP middleware in [`backend/app/main.py`](../../../backend/app/main.py):
-1. **Admission Gate:**
-   - Once `runtime_lifecycle.is_shutting_down` is `True`, any incoming mutating HTTP request (`request.method in {"POST", "PUT", "PATCH", "DELETE"}`) whose path is **not** `/api/v1/system/shutdown` is rejected **before** entering routing or opening a `get_db()` SQLite session, returning `503 Service Unavailable`:
-     ```json
-     {
-       "detail": {
-         "code": "RUNTIME_SHUTTING_DOWN",
-         "message": "Local AI Runtime is shutting down and cannot accept new state-changing requests."
-       }
-     }
-     ```
-   - Read-only `GET /api/v1/system/status` and `POST /api/v1/system/shutdown` remain permitted so the supervisor can poll status or retry shutdown idempotently.
-2. **In-Flight Mutation Accounting (`_in_flight_mutations` & `_mutations_drained` Event):**
-   - Every admitted mutating request increments `runtime_lifecycle._in_flight_mutations` upon admission and decrements it in a `finally:` block *after* the route handler and its `get_db()` dependency (`session.commit()` / `session.rollback()` / `session.close()`) have completely finished.
-   - When `_in_flight_mutations` reaches `0`, `_mutations_drained.set()` fires.
-3. **Strict Teardown Ordering Before `dispose_database_runtime()`:**
-   - During `_orchestrate_shutdown_sequence()`:
-     1. `is_shutting_down = True` blocks any new mutations from starting.
-     2. `await llm_manager.get_provider().shutdown(drain_timeout=5.0)` cancels active streaming chat turns (triggering `orchestrate_chat_stream`'s shielded `_persist_terminal_assistant_status(..., status="cancelled")` SQLite write) and terminates `llama-server.exe`.
-     3. `await runtime_lifecycle.wait_for_in_flight_mutations(timeout=5.0)` waits for all already-admitted CRUD transactions and the shielded cancellation write to complete and close their SQLite sessions.
-     4. `uvicorn_server.should_exit = True` closes listening sockets and triggers FastAPI `lifespan` `finally` $\rightarrow$ `await dispose_database_runtime()`.
+### 10.2 Propositions Requiring Phase 2 Implementation & Isolated Windows Verification
+In accordance with engineering rigor, the following properties are treated as **design propositions in Phase 1** that will be proven empirically by automated unit and isolated Windows process tests in Phase 2 (Tasks 4 & 7):
+- **Proposition P1 (Foreign Process Rejection):** Given a valid live PID belonging to an unrelated process (e.g., a dummy `powershell.exe` or `python.exe` without `app.main:app` / `--port <port>`), `terminateVerifiedRuntimeProcess()` returns `provenanceMismatch` and leaves the process running.
+- **Proposition P2 (Creation-Time / PID-Reuse Rejection):** Given a descriptor whose `startedAt` differs from the target process's actual `StartTime` by $> 15\text{s}$, `terminateVerifiedRuntimeProcess()` returns `provenanceMismatch` and leaves the process running.
+- **Proposition P3 (Process Exit During Verification):** If the target process exits while verification is running, `terminateVerifiedRuntimeProcess()` returns `alreadyExited` cleanly without throwing an unhandled exception or killing any other process.
+- **Proposition P4 (External vs. Core-Managed `llama-server.exe` Discrimination):** A `llama-server.exe` process with `managedByCore == false` or mismatched `StartTime` / CLI flags is never terminated during fallback.
 
 ---
 
-## 11. Timeout and Readiness Semantics
+## 11. End-to-End Workflow Consistency Trace (`§10`)
 
-We enforce a strict architectural distinction between **transport timeouts**, **in-progress backend work**, and **authoritative terminal states**:
+### 11.1 Workflow A — Full Host Shutdown End-to-End Trace
+1. **Confirmation:** User clicks **Exit Companion** in System Tray or Settings $\rightarrow$ mandatory confirmation dialog warns that PC-hosted reminders, alarms, background tasks, and connected sessions will stop.
+2. **Coordinator Fence & Host Admin Auth:** On confirm, `DesktopRuntimeCoordinator.shutdownLocalRuntime()` sets `_intentionalShutdown = true`, cancels `_healthTimer` (preventing false crash recovery), transitions to `RuntimeStatus.shuttingDown`, reads `desktop_admin.secret` via `HostAdminSecretStore`, and sends `POST /api/v1/system/shutdown` with `X-Host-Admin-Secret`.
+3. **Shutdown State Transition & Admission Gate:** `require_host_admin` validates loopback + no browser headers + secret match; `RuntimeLifecycleCoordinator` sets `is_shutting_down = True` (causing middleware to reject any new `POST`/`PUT`/`PATCH`/`DELETE` with `503 RUNTIME_SHUTTING_DOWN` and `GET /api/v1/health` to return `503`) and returns `202 Accepted`.
+4. **Interrupt Active Model Loading (Lock-Free):** `_orchestrate_shutdown_sequence()` calls `provider.signal_shutdown_immediately()`, which sets `_closing = True` and `_shutdown_event.set()`, cancels `_active_load_task`, and closes `_active_router_http_clients`. Any in-flight `load_model()` immediately aborts its wait/HTTP call, terminates any partial Core-managed router, and releases `self._lock`.
+5. **Cancel/Drain Inference Safely:** Active Route A HTTP streams are cancelled; active Route B streaming loops break on `if self._closing: break`; registered `_active_stream_turns` are cancelled.
+6. **Persist Required Terminal States & Complete Admitted Mutations:** Cancelled chat streams spawn tracked `persistence_task`s in `_pending_persistence_tasks` via `runtime_lifecycle.spawn_terminal_persistence_task(_persist_terminal_assistant_status(..., status="cancelled"))`. `wait_for_database_quiescence(timeout=5.0)` awaits completion of all `_pending_persistence_tasks` and all `_active_asgi_mutations`.
+7. **Stop Core-Owned Router:** `await provider.shutdown()` unconditionally calls `stop_managed_router()`, terminating Core-managed `llama-server.exe` while preserving external routers (`_managed_by_core == False`) and guarding Route B `del self._llm` if a native C++ thread is still active.
+8. **Terminate Uvicorn Gracefully & Dispose Database Safely:** `runtime_lifecycle` sets `uvicorn_server.should_exit = True` on the explicitly registered `uvicorn.Server`. Uvicorn stops accepting connections, closes sockets, and runs FastAPI `lifespan` `finally` $\rightarrow$ `await dispose_database_runtime()` **only after** Step 6 completed (or cancelled lingering tasks on timeout).
+9. **Verify Process Exit (or Handle-Bound Fallback):** `DesktopRuntimeCoordinator` polls every `250ms` up to `8.0s` for the runtime PID and port to close; if unresponsive, invokes `terminateVerifiedRuntimeProcess()`.
+10. **Clean Runtime Descriptor & Close Flutter UI:** Once OS process exit is verified, `DesktopRuntimeCoordinator` truncates and deletes `%LOCALAPPDATA%\AI Companion\runtime.lock` under the exclusive lock handle, transitions to `RuntimeStatus.stopped`, and `DesktopLifecycleCoordinator.handleExitRequested()` closes the Flutter UI (`exit(0)`). If shutdown failed, stays open and shows the **Shutdown Failed Dialog** (`Retry Shutdown`, `Quit Desktop UI Only`, `Cancel`).
 
-| Lifecycle Flow | Transport / HTTP Request Timeout | In-Progress Backend State | Authoritative Completion Condition |
-| :--- | :--- | :--- | :--- |
-| **Model Selection / Load (`Track B`)** | `90s` on `POST /api/v1/models/select` (`loadImmediately: true`) and `POST /api/v1/models/load`; `5s` on `GET /api/v1/models/status`. A client timeout means only *"the HTTP call did not finish within the window"*, **not** *"the model failed to load"*. | `runtime_state` is `SERVER_STARTING` or `MODEL_LOADING`. UI displays progress and polls `GET /api/v1/models/status` every `1.0s` (up to `60s` post-timeout deadline). | **Success:** `GET /api/v1/models/status` returns `runtime_state == "MODEL_READY"` and normalized `active_model` matches target model.<br>**Failure:** `runtime_state` enters `MODEL_ERROR` / `SERVER_ERROR`, or the bounded poll deadline expires without reaching `MODEL_READY`. |
-| **Full Host Shutdown (`Track A`)** | `5s` on `POST /api/v1/system/shutdown`. Receiving `202 Accepted` means *"cooperative shutdown initiated"*, **not** *"runtime has exited"*. | `RuntimeStatus.shuttingDown`. Coordinator polls OS process liveness and port closure every `250ms` for up to `8.0s` before invoking handle-bound OS fallback (`8.0s` timeout). | **Success (`RuntimeStatus.stopped`):** Verified runtime PID and any Core-managed child `llama-server.exe` PID have exited the OS process table, and `runtime.lock` is cleared.<br>**Failure (`RuntimeStatus.shutdownFailed`):** Process remains alive or provenance mismatch prevents safe termination. |
-
----
-
-## 12. Failure Recovery and State Reconciliation
-
-### 12.1 Host Shutdown Failure Recovery (`RuntimeStatus.shutdownFailed`)
-If cooperative `POST /api/v1/system/shutdown` fails/times out **and** handle-bound OS fallback termination returns `timeout`, `failure`, or `provenanceMismatch` while the process remains alive:
-1. `DesktopRuntimeCoordinator` transitions to `RuntimeStatus.shutdownFailed` with a specific, human-readable `errorMessage`.
-2. The Flutter Desktop UI **does NOT silently exit**.
-3. `DesktopShell` displays a structured **Shutdown Failed Dialog** with three explicit actions:
-   - **`Retry Shutdown`** — Re-invokes `coordinator.shutdownLocalRuntime()`.
-   - **`Quit Desktop UI Only (Leave Runtime State As-Is)`** — Explicitly warns that the background process could not be stopped and exits only the Flutter UI (`handleExitRequested()`).
-   - **`Cancel`** — Keeps the Desktop UI open so the user can inspect Settings / diagnostics.
-
-### 12.2 Model-Loading Failure & Interrupted Transition Recovery
-1. **Mid-Load User Retry / Model Switch:**
-   - In `SettingsScreen`, `_isExecutingModelAction` disables duplicate clicks on the same load button while a load or reconciliation poll is active.
-   - If a new action is triggered after an earlier one, incrementing `_modelActionToken` ensures any late-arriving response or poll iteration from the superseded action is ignored.
-2. **Router Crash or Port Conflict During Model Load:**
-   - If `llama-server.exe` exits prematurely during startup (`self._server_process.poll() is not None` at `llama_cpp.py` line 614) or `/models/load` returns an error, `LlamaCppProvider` calls `await self.stop_managed_router()` to clean up any half-started process, transitions to `LLMRuntimeState.MODEL_ERROR` / `SERVER_ERROR` with a diagnostic `_last_error_message`, and surfaces that exact error in Settings and Chat.
+### 11.2 Workflow B — Model Loading End-to-End Trace
+1. **Model Selection:** User clicks **Select & Load** in Settings for `modelName`. `SettingsScreen` increments `_modelActionToken` and sets `_isExecutingModelAction = true`.
+2. **Authenticated API Request:** `CompanionClient.selectModel(modelName, loadImmediately: true)` sends `POST /api/v1/models/select` with `{"model_name": modelName, "load_immediately": true}` and `X-Host-Admin-Secret` using the `90.0s` model-load timeout budget.
+3. **Load/Reuse Decision & Router Startup:** `LlamaCppProvider.load_model(model_name=modelName)` acquires `self._lock`. If the requested model is already loaded, it reuses it immediately; if another model is loaded, it unloads the previous model on the existing router; if no router is running, it spawns `llama-server.exe` (`_managed_by_core = True`, `SERVER_STARTING`) and polls `/health` using interruptible `_sleep_or_abort(0.5)`.
+4. **Model Loading & Backend Readiness State:** Provider transitions to `MODEL_LOADING`, posts `/models/load`, polls `/models` until `"loaded"`, normalizes `active_model` through `find_model_registry_entry`, and transitions to `MODEL_READY`. Concurrent `GET /api/v1/models` calls during this window receive a lock-free snapshot (`SERVER_STARTING` / `MODEL_LOADING`) without clobbering provider fields.
+5. **Operation Timeout Handling & Status Reconciliation:** If the load completes within `90s`, `POST /api/v1/models/select` returns `ModelStatusResponse` (`MODEL_READY`). If the load takes longer than the HTTP timeout or returns while still in `SERVER_STARTING` / `MODEL_LOADING`, `SettingsScreen` enters `STILL_LOADING` and polls `GET /api/v1/models` every `1.0s` for up to `60.0s`. If still loading after `60.0s`, it remains in `STILL_LOADING` and offers **`Refresh Model Status`** (never falsely reporting failure or triggering a redundant load POST).
+6. **Settings State Update, Chat Sync & Inference:** Once `CONFIRMED_READY` is observed (matched across `id`, `runtimeModelId`, `primaryFile`, or stem), `SettingsScreen` updates its UI and calls `widget.chatController?.updateModelStatus(status)` so Chat is immediately ready for inference without a second click.
 
 ---
 
-## 13. Security Threat Scenarios & Privilege Boundaries
+## 12. Security Threat Scenarios & Privilege Boundaries
 
 | Threat Scenario | Attack Vector | Defense-in-Depth Mitigation | Expected Result |
 | :--- | :--- | :--- | :--- |
-| **T1: Browser / CSRF / Local Web App Shutdown** | Malicious website or local web page sends `POST http://127.0.0.1:8000/api/v1/system/shutdown`. | `require_host_admin` rejects any request carrying `Origin` or `Sec-Fetch-Site` headers (`403 Forbidden`) and requires `X-Host-Admin-Secret`. | **Blocked (`403 Forbidden`)** |
-| **T2: DNS Rebinding Attack** | Browser rebinds external domain to `127.0.0.1` and sends request with `Host: attacker.com`. | `require_host_admin` validates `Host` header hostname is strictly `127.0.0.1`, `localhost`, or `[::1]`. | **Blocked (`403 Forbidden`)** |
-| **T3: Normal Profile Session Escalation** | Compromised or non-admin Profile session sends `X-Profile-Session: psk_...` to `/api/v1/system/shutdown`. | `require_host_admin` ignores `X-Profile-Session` and requires constant-time match of `X-Host-Admin-Secret` (`hsk_...`). | **Blocked (`403 Forbidden`)** |
-| **T4: Paired Mobile / Remote Device Shutdown** | Paired Android/remote client sends `Authorization: Bearer companion_sec_...` over LAN or loopback. | Rejected by `require_host_admin` (non-loopback IP rejected; missing `X-Host-Admin-Secret` rejected). | **Blocked (`403 Forbidden`)** |
-| **T5: Symlink / Reparse Point Secret Hijack** | Local attacker replaces `%LOCALAPPDATA%\AICompanion\secrets` with a junction/symlink. | Both backend (`windows_security.py`) and Flutter (`HostAdminSecretStore`) check `FILE_ATTRIBUTE_REPARSE_POINT` on every ancestor directory and validate DACL (`user SID + SYSTEM` only). | **Blocked (Secret rejected)** |
-| **T6: Stale Lockfile / PID Reuse Collateral Kill** | `runtime.lock` contains PID `4321` from an old session; Windows assigns PID `4321` to user's IDE or browser. | Handle-bound verification opens `GetProcessById(4321)` first, checks `StartTime`, `ExecutablePath`, and `CommandLine` while holding the handle, detects mismatch, and aborts without calling `.Kill()`. | **Blocked (`provenanceMismatch`, zero processes killed)** |
-| **T7: Developer's External `llama-server.exe` Killed** | Developer runs a separate `llama-server.exe` outside AI Companion. | Provider tracks `_managed_by_core`; supervisor checks `managed_by_core`, `ParentProcessId`, `StartTime >= runtimeStartTime`, and CLI flags before any child kill. | **Preserved (External process untouched)** |
+| **T1: Browser / CSRF / Local Web App Shutdown** | Web page sends `POST http://127.0.0.1:8000/api/v1/system/shutdown`. | `require_host_admin` rejects any request carrying `Origin` or `Sec-Fetch-Site` headers (`403 Forbidden`) and requires `X-Host-Admin-Secret`. | **Blocked (`403 Forbidden`)** |
+| **T2: DNS Rebinding Attack** | Browser rebinds domain to `127.0.0.1` and sends `Host: attacker.com`. | `require_host_admin` validates `Host` header hostname is strictly `127.0.0.1`, `localhost`, or `[::1]`. | **Blocked (`403 Forbidden`)** |
+| **T3: Normal Profile Session Escalation** | Client sends `Authorization: Bearer psk_<token>` to `/api/v1/system/shutdown`. | `require_host_admin` ignores `Authorization: Bearer psk_...` and requires `X-Host-Admin-Secret: hsk_...`. | **Blocked (`403 Forbidden`)** |
+| **T4: Paired Device Escalation** | Client sends `Authorization: Bearer companion_sec_<token>` or `X-API-Key: companion_sec_<token>`. | Rejected by `require_host_admin` (`403 Forbidden`). | **Blocked (`403 Forbidden`)** |
+| **T5: Symlink / Reparse Point Secret Hijack** | Attacker replaces `%LOCALAPPDATA%\AICompanion\secrets` with a junction/symlink. | Both backend (`windows_security.py`) and Flutter (`HostAdminSecretStore`) reject `FILE_ATTRIBUTE_REPARSE_POINT` on every ancestor directory and enforce protected DACL (`user SID + SYSTEM`). | **Blocked (Secret rejected)** |
+| **T6: Stale Lockfile / PID Reuse Collateral Kill** | `runtime.lock` references a PID now used by an unrelated process. | Handle-bound `terminateVerifiedRuntimeProcess()` opens `GetProcessById` first, checks `StartTime`, `ExecutablePath`, and `CommandLine` while holding the handle, detects mismatch, and aborts without calling `.Kill()`. | **Blocked (`provenanceMismatch`, zero processes killed)** |
+| **T7: Developer's External `llama-server.exe` Killed** | Developer runs an external `llama-server.exe` outside AI Companion. | Provider tracks `_managed_by_core == False`; supervisor checks `managed_by_core`, `ParentProcessId`, `StartTime >= runtimeStartTime`, and CLI flags before any child kill. | **Preserved (External process untouched)** |
 
 ---
 
-## 14. Alternatives and Tradeoffs
+## 13. Alternatives and Tradeoffs
 
-### 14.1 Track A — Host Shutdown Architecture Alternatives
-
-| Option | Mechanism | Pros | Cons / Why Accepted or Rejected | Verdict |
-| :--- | :--- | :--- | :--- | :--- |
-| **Option A1 (Selected): Cooperative Host-Admin HTTP (`uvicorn.Server.should_exit = True`) + Handle-Bound OS Fallback** | Primary: `POST /api/v1/system/shutdown` drains mutations, cancels LLM streams, stops managed `llama-server.exe`, and sets `server.should_exit = True`. Fallback: Handle-bound 4-factor OS termination. | Signal-free clean Windows Uvicorn exit; preserves SQLite integrity and `status="cancelled"`; zero TOCTOU PID-reuse risk on fallback. | Requires coordinating HTTP + bounded poll + handle-bound PowerShell script. | **SELECTED** |
-| **Option A2: `os.kill(os.getpid(), signal.SIGINT)` Self-Signal** | Backend sends `SIGINT` to itself after HTTP response. | Short code snippet. | Unsafe on Windows under detached `pythonw.exe`; re-raises captured signal in Uvicorn (`uvicorn/server.py` line 340) or aborts lifespan teardown. | **Rejected (`C1`)** |
-| **Option A3: WMI Query Followed by Separate `Stop-Process -Id <pid>`** | Inspect `Win32_Process`, then spawn `Stop-Process -Id`. | Simple PowerShell syntax. | Vulnerable to TOCTOU PID-reuse race if process exits between WMI check and `Stop-Process`. | **Rejected (`C2`)** |
-
-### 14.2 Track B — Model-Loading Reliability Alternatives
-
-| Option | Mechanism | Pros | Cons / Why Accepted or Rejected | Verdict |
-| :--- | :--- | :--- | :--- | :--- |
-| **Option B1 (Selected): Extended Operation Timeout (`90s`) + Lock-Safe `get_status()` + Bounded Timeout-to-Polling Reconciliation** | Increases client model-load timeout from `5s` to `90s`, protects `get_status()` during in-flight loads, normalizes model IDs, and falls back to bounded `1s` status polling if a load is still in `SERVER_STARTING` / `MODEL_LOADING`. | Fixes all 5 root causes with zero breaking OpenAPI schema changes; works for both fast (`< 5s`) and cold (`10–90s`) model loads; keeps Chat & Settings in sync. | Keeps `POST /api/v1/models/select` synchronous for the duration of the load (up to 90s). | **SELECTED** |
-| **Option B2: Full Asynchronous Background Job Queue (`202 Accepted` + Job ID Table)** | Redesign `/api/v1/models/select` and `/load` into async background job endpoints with job IDs and WebSocket/SSE events. | Pure async HTTP pattern. | Breaks existing OpenAPI contracts and React/Flutter callers; high complexity and scope expansion for a single-user local runtime. | **Rejected (Over-engineering)** |
+| Decision Area | Selected Option | Rejected Alternative | Why Rejected |
+| :--- | :--- | :--- | :--- |
+| **Uvicorn Server Control (`C1`)** | Programmatic `backend/app/runtime_server.py` explicitly constructing `uvicorn.Config` & `uvicorn.Server` and registering `server` with `RuntimeLifecycleCoordinator`. | `gc.get_objects()` / stack introspection or `os.kill(os.getpid(), signal.SIGINT)`. | `gc.get_objects()` is fragile and non-deterministic; `os.kill(SIGINT)` is unsafe on Windows under detached `pythonw.exe` and re-raises captured signals in Uvicorn. |
+| **Shutdown vs. Model Load Lock (`C2`)** | Lock-free `signal_shutdown_immediately()` (`_closing = True`, `_shutdown_event.set()`, cancel `_active_load_task` & close router `httpx` clients) before acquiring `self._lock`. | Acquiring `self._lock` at the start of `shutdown()`. | Acquiring `self._lock` first deadlocks `shutdown()` for up to `120s` behind an in-progress `load_model()`. |
+| **DB Quiescence & Cancellation Write (`C3`)** | Full ASGI stream-completion accounting + explicit `spawn_terminal_persistence_task` (`_pending_persistence_tasks`) awaited before `dispose_database_runtime()`. | Route-handler counter + bare `await asyncio.shield(_persist_terminal_assistant_status(...))`. | `StreamingResponse` outlives the route function, and a bare `asyncio.shield` coroutine can remain running untracked if the outer stream task receives a second cancellation. |
+| **Model-Load Timeout UX (`C5`)** | `90s` load timeout + `60s` poll on `GET /api/v1/models` + 4 truthful states (`CONFIRMED_READY`, `CONFIRMED_FAILED`, `STILL_LOADING` with `Refresh Model Status`, `STATUS_UNKNOWN_TIMED_OUT`). | Treating poll timeout as `"Model is NOT active"` failure, or building a multi-job async DB queue. | Declaring failure when the backend is still `MODEL_LOADING` misleads the user into redundant reloads; a persistent job queue breaks existing OpenAPI contracts and over-engineers a single-resident local runtime. |
 
 ---
 
-## 15. Complete Safety Closure Analysis & Implementation Components
-
-### 15.1 Workflow A (Secure Host Shutdown) — Boundary-by-Boundary Closure Table
-
-| Boundary Step | Component / File | Failure / Race Mode Analyzed | Planned Mitigation | Classification |
-| :--- | :--- | :--- | :--- | :--- |
-| **A.1 Tray / Settings Trigger** | [`desktop_shell.dart`](../../../frontend/flutter/apps/desktop/lib/shell/desktop_shell.dart), [`settings_screen.dart`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart) | Settings **Exit Companion** bypassed confirmation and left runtime alive (`Issue A2`); Tray `exit_full` was disabled. | Both entry points route to `requestFullExitCompanion()`, restoring window from tray if hidden and presenting the mandatory confirmation dialog. | `REQUIRED IN-SCOPE CORRECTION` |
-| **A.2 Coordinator Credential & State Fence** | [`desktop_runtime_coordinator.dart`](../../../frontend/flutter/apps/desktop/lib/coordinator/desktop_runtime_coordinator.dart) | Missing `hostAdminStore` caused `StateError` on admin calls (`Correction C4`); health timer could trigger crash recovery during shutdown. | Wire `HostAdminSecretStore` into `DesktopRuntimeCoordinator`; set `_intentionalShutdown = true`, cancel `_healthTimer`, and coalesce repeat `shutdownLocalRuntime()` calls. | `BLOCKING DESIGN DEFECT` (Fixed in Plan) |
-| **A.3 Loopback Host Admin Gate** | [`backend/app/core/host_admin.py`](../../../backend/app/core/host_admin.py), [`health.py`](../../../backend/app/api/v1/endpoints/health.py) | Unauthorized Profile, paired device, or browser origin attempts shutdown. | `Depends(require_host_admin)` enforces loopback peer IP, loopback `Host`, no `Origin`/`Sec-Fetch-Site`, and `X-Host-Admin-Secret`. | `REQUIRED IN-SCOPE CORRECTION` |
-| **A.4 Whole-Runtime Admission & Quiescence** | [`backend/app/core/runtime_lifecycle.py`](../../../backend/app/core/runtime_lifecycle.py), [`main.py`](../../../backend/app/main.py) | New CRUD writes arrive during shutdown or in-flight DB commits are cut off by `dispose_database_runtime()` (`Correction C6`). | Middleware rejects new `POST`/`PUT`/`PATCH`/`DELETE` with `503 RUNTIME_SHUTTING_DOWN` and drains in-flight admitted mutations before DB disposal. | `BLOCKING DESIGN DEFECT` (Fixed in Plan) |
-| **A.5 Route A & Route B LLM Drain & Router Stop** | [`backend/app/services/llm/llama_cpp.py`](../../../backend/app/services/llm/llama_cpp.py) | `unload_model()` returned early leaving `llama-server.exe` alive (`Issue A1`); Route B `del self._llm` during active C++ thread risks segfault (`Correction C3`). | Separate `stop_managed_router()`; cancel Route A tasks; check `_closing` in Route B stream loop; guard `del self._llm` behind `not self.has_active_generation`. | `BLOCKING DESIGN DEFECT` (Fixed in Plan) |
-| **A.6 Uvicorn Lifespan & DB Teardown** | [`backend/app/core/runtime_lifecycle.py`](../../../backend/app/core/runtime_lifecycle.py), [`main.py`](../../../backend/app/main.py) | `os.kill(SIGINT)` unsafe on Windows (`Correction C1`). | Set `uvicorn_server.should_exit = True`; Uvicorn closes sockets and runs `lifespan` `finally` $\rightarrow$ `dispose_database_runtime()`. | `BLOCKING DESIGN DEFECT` (Fixed in Plan) |
-| **A.7 Handle-Bound OS Fallback & Lock Cleanup** | [`windows_runtime_process_supervisor.dart`](../../../frontend/flutter/apps/desktop/lib/platform/windows_runtime_process_supervisor.dart) | WMI-then-`Stop-Process` TOCTOU race (`Correction C2`); `runtime.lock` open handle prevents file deletion on Windows (`Correction C5`). | Single handle-bound `GetProcessById` $\rightarrow$ verify $\rightarrow$ `$proc.Kill()` script; truncate `runtime.lock` through exclusive handle before closing/deleting. | `BLOCKING DESIGN DEFECT` (Fixed in Plan) |
-
-### 15.2 Workflow B (Model Selection & Loading) — Boundary-by-Boundary Closure Table
-
-| Boundary Step | Component / File | Failure / Race Mode Analyzed | Planned Mitigation | Classification |
-| :--- | :--- | :--- | :--- | :--- |
-| **B.1 User Click & Action Fencing** | [`settings_screen.dart`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart) | Rapid double-clicks or screen disposal during slow load can apply stale state. | Monotonic `_modelActionToken` and `_isExecutingModelAction` guard. | `REQUIRED IN-SCOPE CORRECTION` |
-| **B.2 HTTP Client Timeout** | [`companion_client.dart`](../../../frontend/flutter/packages/companion_api/lib/client/companion_client.dart#L106) | Hardcoded `5s` timeout in `_requestWithoutRedirects` aborts client call while backend takes up to `45s + 30s` (`Issue B1-RC1`). | Operation-specific timeout parameter (`90s` for `selectModel(loadImmediately: true)` and `loadModel()`, `20s` for `unloadModel()`, `5s` default). | `BLOCKING DESIGN DEFECT` (Fixed in Plan) |
-| **B.3 Backend Provider Lock & `get_status()` Concurrency** | [`backend/app/services/llm/llama_cpp.py`](../../../backend/app/services/llm/llama_cpp.py#L792-L859) | Concurrent `get_status()` without `_lock` clobbers `_active_model_name = None` and `_server_is_active = False` during `SERVER_STARTING` / `MODEL_LOADING` (`Issue B1-RC3`). | Guard `get_status()` so it never overwrites in-flight state while `_lock` is held in a transitional state; normalize `loaded_model_id` via `find_model_registry_entry`. | `BLOCKING DESIGN DEFECT` (Fixed in Plan) |
-| **B.4 Timeout / Mid-Transition Polling Reconciliation** | [`settings_screen.dart`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart#L1014-L1046) | Immediate `catch` block declared `"Model is NOT active"` while backend continued loading (`Issue B1-RC2`). | Bounded polling loop (`1s` interval up to `60s`) while `runtimeState` is `SERVER_STARTING` or `MODEL_LOADING`; normalized `_isTargetModelActive` matcher. | `REQUIRED IN-SCOPE CORRECTION` |
-| **B.5 Cross-Screen Chat Readiness Sync** | [`settings_screen.dart`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart), [`desktop_chat_controller.dart`](../../../frontend/flutter/apps/desktop/lib/features/chat/desktop_chat_controller.dart) | `_selectModel()` never updated `DesktopChatController._modelStatus` (`Issue B1-RC4`). | Add `DesktopChatController.updateModelStatus(ModelStatusDto)` and invoke it whenever Settings updates model status. | `REQUIRED IN-SCOPE CORRECTION` |
-| **B.6 Real-Time Streaming Progress Bar for GGUF Load** | `llama-server.exe` stdout / SSE | `llama-server.exe` does not emit percentage-complete HTTP events during `/models/load`. | Indeterminate loading spinner + state label (`SERVER_STARTING` / `MODEL_LOADING`) is sufficient; byte-level progress streaming is out of scope. | `OUT OF SCOPE` |
-
-### 15.3 Affected Files Inventory (Phase 2)
+## 14. Affected Files Inventory (Phase 2)
 
 | File Path | Change Type | Planned Responsibility in Phase 2 |
 | :--- | :--- | :--- |
-| [`backend/app/core/runtime_lifecycle.py`](../../../backend/app/core/runtime_lifecycle.py) | **Create** | `RuntimeLifecycleCoordinator` managing `is_shutting_down`, in-flight mutation counter/drain event, bound `uvicorn.Server` reference, and `should_exit = True` shutdown orchestration. |
+| [`backend/app/runtime_server.py`](../../../backend/app/runtime_server.py) | **Create** | Programmatic Uvicorn entrypoint (`pythonw.exe -m app.runtime_server --app app.main:app --host ... --port ... --no-use-colors`) that constructs `uvicorn.Server` and registers it with `RuntimeLifecycleCoordinator`. |
+| [`backend/app/core/runtime_lifecycle.py`](../../../backend/app/core/runtime_lifecycle.py) | **Create** | `RuntimeLifecycleCoordinator` managing registered `uvicorn.Server`, `is_shutting_down`, full-ASGI `_active_asgi_mutations`, `_active_stream_tasks`, `_pending_persistence_tasks`, `wait_for_database_quiescence()`, and `should_exit = True` orchestration. |
 | [`backend/app/core/host_admin.py`](../../../backend/app/core/host_admin.py) | Modify | Support optional `COMPANION_HOST_ADMIN_SECRET_FILE` override while preserving strict Windows DACL and non-reparse verification. |
-| [`backend/app/schemas/health.py`](../../../backend/app/schemas/health.py) | Modify | Add `SystemShutdownRequest`, `SystemShutdownResponse`, and `shutting_down` / `managed_llm_pid` / `managed_by_core` fields on `SystemStatusResponse`. |
+| [`backend/app/schemas/health.py`](../../../backend/app/schemas/health.py) | Modify | Add `SystemShutdownRequest`, `SystemShutdownResponse`, and `shutting_down` / `shutdown_quiescence_status` / `managed_llm_pid` / `managed_by_core` fields on `SystemStatusResponse`. |
 | [`backend/app/api/v1/endpoints/health.py`](../../../backend/app/api/v1/endpoints/health.py) | Modify | Add `POST /api/v1/system/shutdown` on `system_router` (`Depends(require_host_admin)`), update `GET /api/v1/health` (`503` when shutting down) and `GET /api/v1/system/status`. |
-| [`backend/app/main.py`](../../../backend/app/main.py) | Modify | Register admission-control & mutation-drain middleware; bind `uvicorn.Server` in `lifespan`. |
-| [`backend/app/services/llm/base.py`](../../../backend/app/services/llm/base.py) & [`llama_cpp.py`](../../../backend/app/services/llm/llama_cpp.py) | Modify | Separate `unload_model()`, `stop_managed_router()`, and `shutdown()`; cancel active Route A tasks; add `_closing` checks to Route B stream loop and `load_model()` polls; guard `del self._llm` when native worker active; fix `get_status()` lock/state clobber and normalize `active_model` ID. |
+| [`backend/app/main.py`](../../../backend/app/main.py) | Modify | Register ASGI mutation-admission & stream-lifetime accounting middleware; integrate `runtime_lifecycle` in `lifespan` teardown before `dispose_database_runtime()`. |
+| [`backend/app/services/assistant/orchestrator.py`](../../../backend/app/services/assistant/orchestrator.py) & [`backend/app/api/v1/endpoints/llm.py`](../../../backend/app/api/v1/endpoints/llm.py) | Modify | Register active stream tasks with `runtime_lifecycle`; update `_persist_terminal_assistant_status() -> bool` to return commit confirmation and run via `runtime_lifecycle.spawn_terminal_persistence_task()`. |
+| [`backend/app/services/llm/base.py`](../../../backend/app/services/llm/base.py) & [`backend/app/services/llm/llama_cpp.py`](../../../backend/app/services/llm/llama_cpp.py) | Modify | Implement lock-free `signal_shutdown_immediately()` (`_shutdown_event`, `_active_load_task`, `_active_router_http_clients`), interruptible `_sleep_or_abort()` in `load_model()`, partial router cleanup on load abort, separate `unload_model()` / `stop_managed_router()` / `shutdown()`, Route B `_closing` break & `del self._llm` active-worker guard, lock-free snapshot `get_status()`, and canonical `active_model` ID normalization. |
 | [`contracts/openapi/openapi.json`](../../../contracts/openapi/openapi.json) | Regenerate | Sync OpenAPI specification with `POST /api/v1/system/shutdown` and updated `SystemStatusResponse`. |
 | [`frontend/flutter/packages/companion_core/lib/platform/runtime_process_state.dart`](../../../frontend/flutter/packages/companion_core/lib/platform/runtime_process_state.dart) | Modify | Add `shuttingDown`, `stopped`, and `shutdownFailed` to `RuntimeStatus`. |
-| [`frontend/flutter/packages/companion_api/lib/dto/system_status_dto.dart`](../../../frontend/flutter/packages/companion_api/lib/dto/system_status_dto.dart) & [`companion_client.dart`](../../../frontend/flutter/packages/companion_api/lib/client/companion_client.dart) | Modify | Add `SystemShutdownDto`, `CompanionClient.shutdownSystem()`, and operation-specific `timeout` parameter (`90s` for model load/select, `20s` for unload, `5s` default). |
+| [`frontend/flutter/packages/companion_api/lib/dto/system_status_dto.dart`](../../../frontend/flutter/packages/companion_api/lib/dto/system_status_dto.dart) & [`companion_client.dart`](../../../frontend/flutter/packages/companion_api/lib/client/companion_client.dart) | Modify | Add `SystemShutdownDto`, `CompanionClient.shutdownSystem()`, and operation-specific `timeout` parameter (`90s` for `selectModel(loadImmediately: true)` and `loadModel()`, `20s` for `unloadModel()`, `5s` default, `5s` on `getModelStatus()` / `GET /api/v1/models`). |
 | [`frontend/flutter/apps/desktop/lib/platform/host_admin_secret_store.dart`](../../../frontend/flutter/apps/desktop/lib/platform/host_admin_secret_store.dart) | Modify | Support optional `secretFilePathOverride` / `COMPANION_HOST_ADMIN_SECRET_FILE` for isolated Windows acceptance tests. |
-| [`frontend/flutter/apps/desktop/lib/platform/windows_runtime_process_supervisor.dart`](../../../frontend/flutter/apps/desktop/lib/platform/windows_runtime_process_supervisor.dart) | Modify | Add handle-bound `terminateVerifiedRuntimeProcess()` (`GetProcessById` $\rightarrow$ 4-factor verify $\rightarrow$ `$proc.Kill()`) and `clearRuntimeLockfileThroughHandle()`. |
-| [`frontend/flutter/apps/desktop/lib/coordinator/desktop_runtime_coordinator.dart`](../../../frontend/flutter/apps/desktop/lib/coordinator/desktop_runtime_coordinator.dart) & [`main.dart`](../../../frontend/flutter/apps/desktop/lib/main.dart) | Modify | Wire `hostAdminStore` into `DesktopRuntimeCoordinator`; implement `shutdownLocalRuntime()` with cooperative HTTP shutdown, exit polling, handle-bound OS fallback, and recovery suppression. |
-| [`frontend/flutter/apps/desktop/lib/lifecycle/desktop_lifecycle_coordinator.dart`](../../../frontend/flutter/apps/desktop/lib/lifecycle/desktop_lifecycle_coordinator.dart), [`shell/desktop_shell.dart`](../../../frontend/flutter/apps/desktop/lib/shell/desktop_shell.dart), [`screens/settings_screen.dart`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart), [`features/chat/desktop_chat_controller.dart`](../../../frontend/flutter/apps/desktop/lib/features/chat/desktop_chat_controller.dart) | Modify | Enable Tray `Exit Companion`; route Tray & Settings `Exit Companion` through mandatory confirmation and failure recovery dialogs; add bounded model-loading polling reconciliation, normalized model ID check, and immediate `chatController.updateModelStatus()` sync. |
+| [`frontend/flutter/apps/desktop/lib/platform/windows_runtime_process_supervisor.dart`](../../../frontend/flutter/apps/desktop/lib/platform/windows_runtime_process_supervisor.dart) | Modify | Update `isCompanionRuntimeCommandLine()` to accept `app.runtime_server` (and `uvicorn`) + `app.main:app` + `--port <port>`; add handle-bound `terminateVerifiedRuntimeProcess()` and `clearRuntimeLockfileThroughHandle()`. |
+| [`frontend/flutter/apps/desktop/lib/coordinator/desktop_runtime_coordinator.dart`](../../../frontend/flutter/apps/desktop/lib/coordinator/desktop_runtime_coordinator.dart) & [`main.dart`](../../../frontend/flutter/apps/desktop/lib/main.dart) | Modify | Launch via `-m app.runtime_server --app app.main:app`; wire `hostAdminStore`; implement `shutdownLocalRuntime()` with cooperative HTTP shutdown, exit polling, handle-bound OS fallback, and recovery suppression. |
+| [`frontend/flutter/apps/desktop/lib/lifecycle/desktop_lifecycle_coordinator.dart`](../../../frontend/flutter/apps/desktop/lib/lifecycle/desktop_lifecycle_coordinator.dart), [`shell/desktop_shell.dart`](../../../frontend/flutter/apps/desktop/lib/shell/desktop_shell.dart), [`screens/settings_screen.dart`](../../../frontend/flutter/apps/desktop/lib/screens/settings_screen.dart), [`features/chat/desktop_chat_controller.dart`](../../../frontend/flutter/apps/desktop/lib/features/chat/desktop_chat_controller.dart) | Modify | Enable Tray `Exit Companion`; route Tray & Settings `Exit Companion` through mandatory confirmation and failure recovery dialogs; implement 4-state truthful model-load reconciliation (`CONFIRMED_READY`, `CONFIRMED_FAILED`, `STILL_LOADING` with `Refresh Model Status`, `STATUS_UNKNOWN_TIMED_OUT`), normalized model ID matching, and immediate + background `DesktopChatController` sync on `GET /api/v1/models`. |
+
+---
+
+## 15. Risk Classification and Acceptance Criteria
+
+### 15.1 Risk Classification
+- **Classification:** **Level C — Sensitive Design**
+- **Rationale:** Modifies the privileged Host Administration boundary (`require_host_admin`), adds `POST /api/v1/system/shutdown`, introduces programmatic Uvicorn server lifecycle control (`app.runtime_server`), coordinates database quiescence across streaming turns, alters subprocess termination in `LlamaCppProvider`, and implements handle-bound OS process fallback termination in `WindowsRuntimeProcessSupervisor`.
+
+### 15.2 Acceptance Criteria
+1. **Host Admin Exclusivity (`D15`):** `POST /api/v1/system/shutdown` succeeds (`202 Accepted`) **only** for loopback requests with no `Origin`/`Sec-Fetch-Site` headers and a valid `X-Host-Admin-Secret`. Requests using `Authorization: Bearer psk_...`, `Authorization: Bearer companion_sec_...`, `X-API-Key: companion_sec_...`, malformed custom headers, browser headers, or non-loopback peers/hosts are deterministically rejected (`403 Forbidden`).
+2. **Deterministic Uvicorn Ownership & Ordered Quiescence (`C1`, `C3`):** The runtime launches via `pythonw.exe -m app.runtime_server --app app.main:app --host <host> --port <port> --no-use-colors` with explicit `uvicorn.Server` registration (zero `gc.get_objects()` introspection). Initiating shutdown immediately rejects new mutations (`503 RUNTIME_SHUTTING_DOWN`), cancels active streams, awaits tracked `_pending_persistence_tasks` (`status="cancelled"`) and active ASGI mutations before `dispose_database_runtime()`, and exits Uvicorn cleanly via `server.should_exit = True`.
+3. **Non-Deadlocking Shutdown During Model Load (`C2`, `Issue A1`):** Initiating shutdown while `load_model()` holds `self._lock` immediately triggers lock-free `_shutdown_event`, aborts the in-flight router startup or `/models/load` wait, terminates any Core-managed `llama-server.exe` (`_managed_by_core == True`), leaves external routers (`_managed_by_core == False`) untouched, and never deletes Route B `self._llm` while a native C++ worker thread is still running.
+4. **Handle-Bound OS Fallback Safety (`§9`):** If cooperative shutdown times out, `WindowsRuntimeProcessSupervisor.terminateVerifiedRuntimeProcess()` acquires the OS process handle first (`GetProcessById`), verifies all 4 provenance factors (`ProcessId`, `ExecutablePath`, `CommandLine`, `StartTime` within $\pm 15\text{s}$) before calling `$proc.Kill()` on that same handle object, independently verifies Core-managed child `llama-server.exe` handles, and fails closed on any mismatch or ambiguity.
+5. **Distinct Lifecycle Actions & Mandatory Confirmation (`Issue A2`):** Both System Tray and Settings **Exit Companion** show the mandatory confirmation dialog, suppress crash-recovery relaunch, clean up `runtime.lock`, and show the **Shutdown Failed Dialog** (`Retry Shutdown`, `Quit Desktop UI Only`, `Cancel`) if shutdown fails.
+6. **Truthful Model-Loading Reliability (`Issue B1`, `C4`, `C5`):** Selecting/loading a model via `POST /api/v1/models/select` (`model_name`) uses a `90s` timeout, polls `GET /api/v1/models` when in `SERVER_STARTING` / `MODEL_LOADING`, normalizes model IDs, distinguishes `CONFIRMED_READY`, `CONFIRMED_FAILED`, `STILL_LOADING` (with `Refresh Model Status`), and `STATUS_UNKNOWN_TIMED_OUT`, and immediately synchronizes `DesktopChatController`.
 
 ---
 
 ## 16. Proposed Automated Test Matrix
 
-### 16.1 Host Admin & Shutdown Lifecycle Tests (`pytest` & `flutter test`)
+### 16.1 Host Admin, Quiescence & Shutdown Lifecycle Tests (`pytest` & `flutter test`)
 
 | # | Test Scenario | Target Suite | Verification Assertion |
 | :--- | :--- | :--- | :--- |
-| **S1** | Valid local Host Admin shutdown request | `backend/tests/unit/test_host_shutdown.py` | Loopback `POST /api/v1/system/shutdown` with valid `X-Host-Admin-Secret` returns `202 Accepted` (`status="shutting_down"`, `pid`, `already_shutting_down=False`). |
-| **S2** | Missing `X-Host-Admin-Secret` | `test_host_shutdown.py` | Returns `403 Forbidden` (`HOST_ADMIN_FORBIDDEN`). |
-| **S3** | Invalid `X-Host-Admin-Secret` | `test_host_shutdown.py` | Returns `403 Forbidden`. |
-| **S4** | Normal Profile Session token (`X-Profile-Session: psk_...`) | `test_host_shutdown.py` | Rejected with `403 Forbidden` when `X-Host-Admin-Secret` is absent. |
-| **S5** | Paired Device bearer token (`Authorization: Bearer companion_sec_...`) | `test_host_shutdown.py` | Rejected with `403 Forbidden`. |
-| **S6** | Browser `Origin` or `Sec-Fetch-Site` headers | `test_host_shutdown.py` | Rejected with `403 Forbidden` even if valid `X-Host-Admin-Secret` is supplied. |
-| **S7** | Non-loopback client host or non-loopback `Host` header | `test_host_shutdown.py` | Rejected with `403 Forbidden`. |
-| **S8** | Repeat / concurrent shutdown requests | `test_host_shutdown.py` & `desktop_runtime_coordinator_test.dart` | Second `POST /api/v1/system/shutdown` returns `202 Accepted` (`already_shutting_down=True`); concurrent Flutter calls coalesce onto one future. |
-| **S9** | Shutdown admission control & in-flight mutation drain | `test_host_shutdown.py` | Once `is_shutting_down` is `True`, new `POST`/`PUT`/`PATCH`/`DELETE` requests across conversations, memories, tasks, models, and characters return `503 RUNTIME_SHUTTING_DOWN`, while an already-admitted mutation completes before DB disposal. |
-| **S10** | Shutdown during active Route A chat stream | `test_llama_cpp_provider.py` & `test_host_shutdown.py` | Active Route A stream task is cancelled immediately; orchestrator persists `status="cancelled"` under `asyncio.shield()`. |
-| **S11** | Shutdown during Route B native generation | `test_llama_cpp_provider.py` | `_closing = True` breaks streaming worker loop; if a native worker is still active after drain timeout, `self._llm` is **not** deleted prematurely (preventing use-after-free). |
-| **S12** | Core-managed `llama-server.exe` cleanup vs. ordinary `unload_model()` | `test_llama_cpp_provider.py` | `unload_model()` keeps router alive on HTTP 200; `shutdown()` **always** calls `stop_managed_router()` and terminates `_server_process` even after HTTP unload or drain timeout. |
-| **S13** | Externally managed `llama-server.exe` preservation | `test_llama_cpp_provider.py` & `windows_runtime_process_supervisor_test.dart` | When `_managed_by_core == False`, neither `stop_managed_router()` nor supervisor fallback terminates the external `llama-server.exe`. |
-| **S14** | Handle-bound OS fallback & PID-reuse mismatch refusal | `windows_runtime_process_supervisor_test.dart` | `terminateVerifiedRuntimeProcess()` refuses to kill (`provenanceMismatch`) if PID executable, command line (`uvicorn`, `app.main:app`, `--port`), or `StartTime` ($\pm 15\text{s}$) mismatches `runtime.lock`. |
-| **S15** | Intentional shutdown suppresses crash recovery | `desktop_runtime_coordinator_test.dart` | After `shutdownLocalRuntime()`, `_healthTimer` is cancelled and zero recovery attempts occur when the runtime process exits. |
-| **S16** | Shutdown failure recovery UX | `desktop_shell_test.dart` / `settings_screen_test.dart` | When coordinator returns `RuntimeStatus.shutdownFailed`, UI stays open and presents `Retry Shutdown`, `Quit Desktop UI Only`, and `Cancel`. |
-| **S17** | Settings `Exit Companion` vs. `Close Window` vs. `Quit UI Only` | `desktop_lifecycle_coordinator_test.dart` & `settings_screen_test.dart` | Both Tray and Settings `Exit Companion` open the mandatory confirmation dialog; canceling leaves UI and runtime running; `Close Window` hides to tray; `Quit UI Only` exits UI only. |
+| **S1** | Valid local Host Admin shutdown request | `backend/tests/unit/test_host_shutdown.py` | Loopback `POST /api/v1/system/shutdown` with valid `X-Host-Admin-Secret: hsk_...` returns `202 Accepted` (`status="shutting_down"`, `pid`, `already_shutting_down=False`). |
+| **S2** | Missing or invalid `X-Host-Admin-Secret` | `test_host_shutdown.py` | Missing, empty, whitespace-padded, or wrong `X-Host-Admin-Secret` returns `403 Forbidden`. |
+| **S3** | Actual Profile Session bearer credential (`Authorization: Bearer psk_...`) | `test_host_shutdown.py` | Valid active Profile Session token sent as `Authorization: Bearer psk_<token>` without `X-Host-Admin-Secret` is rejected with `403 Forbidden`. |
+| **S4** | Paired Device credentials (`Authorization: Bearer companion_sec_...` and `X-API-Key`) | `test_host_shutdown.py` | Both bearer and `X-API-Key` paired-device credentials are rejected with `403 Forbidden`. |
+| **S5** | Malformed custom headers & browser headers (`Origin`, `Sec-Fetch-Site`, `X-Profile-Session`) | `test_host_shutdown.py` | Spoofed `X-Profile-Session`, `Origin: http://localhost:3000`, or `Sec-Fetch-Site: same-site` are rejected with `403 Forbidden` even when `X-Host-Admin-Secret` is supplied. |
+| **S6** | Non-loopback client IP or non-loopback `Host` header | `test_host_shutdown.py` | Rejected with `403 Forbidden`. |
+| **S7** | Programmatic `runtime_server.py` ownership & `should_exit = True` | `test_host_shutdown.py` | `serve_runtime()` registers the exact `uvicorn.Server` on `runtime_lifecycle`; shutdown sets `server.should_exit = True` and cleans up reference on exit without `gc.get_objects()`. |
+| **S8** | Repeat / concurrent shutdown requests | `test_host_shutdown.py` & `desktop_runtime_coordinator_test.dart` | Second `POST /api/v1/system/shutdown` returns `202 Accepted` (`already_shutting_down=True`); concurrent Flutter `shutdownLocalRuntime()` calls coalesce onto one future. |
+| **S9** | Whole-runtime admission control & active ASGI stream/mutation drain (`C3`) | `test_host_shutdown.py` | Once `is_shutting_down` is `True`, new `POST`/`PUT`/`PATCH`/`DELETE` requests across conversations, memories, tasks, models, and characters return `503 RUNTIME_SHUTTING_DOWN`, while an already-admitted mutation completes before `dispose_database_runtime()`. |
+| **S10** | Tracked cancellation persistence under secondary cancellation & DB contention (`C3`) | `test_host_shutdown.py` | Cancelling an active `orchestrate_chat_stream` registers `persistence_task` in `_pending_persistence_tasks`; even if the stream task receives a second `CancelledError` or SQLite commit is delayed, `wait_for_database_quiescence()` awaits the commit (`status="cancelled"`) before `dispose_database_runtime()`. If persistence fails or times out, reports `PERSISTENCE_INCOMPLETE` / `DRAIN_TIMED_OUT` truthfully. |
+| **S11** | Shutdown during router startup & during model-weight loading (`C2`) | `backend/tests/unit/test_llama_cpp_provider.py` | Calling `shutdown()` while `load_model()` holds `self._lock` in router startup (`SERVER_STARTING`) or weight loading (`MODEL_LOADING`) immediately triggers `_shutdown_event`, aborts `load_model()` in $< 0.2\text{s}$ without deadlocking, terminates the partial Core-managed `llama-server.exe`, and rejects any subsequent `load_model()` call. |
+| **S12** | Shutdown during Route A stream vs. Route B native inference (`C2`, `C3`) | `test_llama_cpp_provider.py` | Route A task is cancelled and router stopped; Route B streaming loop breaks on `_closing == True`; if a Route B native thread is still running after drain timeout, `self._llm` is **not** deleted prematurely. |
+| **S13** | Ordinary `unload_model()` vs. `stop_managed_router()` vs. external router (`Issue A1`) | `test_llama_cpp_provider.py` | `unload_model()` keeps Core-managed router alive on HTTP 200; `shutdown()` always terminates Core-managed `_server_process`; when `_managed_by_core == False`, external `llama-server.exe` is never killed. |
+| **S14** | Handle-bound OS fallback & PID-reuse / child-ambiguity refusal (`§9`) | `windows_runtime_process_supervisor_test.dart` | `terminateVerifiedRuntimeProcess()` verifies `app.runtime_server` / `uvicorn` + `app.main:app` + `--port` + `ExecutablePath` + `StartTime` ($\pm 15\text{s}$) on the held process handle, refuses to kill on any mismatch or child ownership ambiguity, and leaves external `llama-server.exe` untouched. |
+| **S15** | Intentional shutdown suppresses crash recovery & cleans `runtime.lock` | `desktop_runtime_coordinator_test.dart` | `shutdownLocalRuntime()` wires `hostAdminStore`, transitions `shuttingDown` $\rightarrow$ `stopped`, truncates/deletes `runtime.lock`, and suppresses crash-recovery restarts. |
+| **S16** | Shutdown failure recovery UX & Tray/Settings confirmation (`Issue A2`) | `desktop_lifecycle_coordinator_test.dart` & `settings_screen_test.dart` | Both Tray and Settings `Exit Companion` open the mandatory confirmation dialog; canceling keeps runtime alive; `RuntimeStatus.shutdownFailed` keeps UI open and shows `Retry Shutdown`, `Quit Desktop UI Only`, and `Cancel`. |
 
 ### 16.2 Model-Loading Reliability Tests (`pytest` & `flutter test`)
 
 | # | Test Scenario | Target Suite | Verification Assertion |
 | :--- | :--- | :--- | :--- |
-| **M1** | Fast model load completing within client timeout | `settings_screen_test.dart` | `selectModel(loadImmediately: true)` returns `MODEL_READY`; UI immediately marks model active and notifies `DesktopChatController`. |
-| **M2** | Slow model load ($> 5\text{s}$) exceeding old timeout or triggering reconciliation poll | `companion_client_test.dart` & `settings_screen_test.dart` | `CompanionClient.selectModel(loadImmediately: true)` uses `90s` timeout; if `TimeoutException` or `MODEL_LOADING` occurs, `SettingsScreen` polls `getModelStatus()` until `MODEL_READY` without showing false `"Model is NOT active"` error. |
-| **M3** | Backend `get_status()` called concurrently while `load_model()` is in `SERVER_STARTING` / `MODEL_LOADING` | `backend/tests/unit/test_llama_cpp_provider.py` | `get_status()` does **not** clobber `_active_model_name` or `_server_is_active` while `_lock` is held in a loading state; returns `SERVER_STARTING` / `MODEL_LOADING` truthfully. |
-| **M4** | Model ID normalization (`loaded_model_id` filename/path vs. registry `id`) | `test_llama_cpp_provider.py` & `settings_screen_test.dart` | `get_status()` normalizes `loaded_model_id` via `find_model_registry_entry`, and `SettingsScreen._isTargetModelActive` matches `id`, `runtimeModelId`, and `primaryFile`. |
-| **M5** | Real model load failure (`llama-server.exe` crash or invalid GGUF) | `test_llama_cpp_provider.py` & `settings_screen_test.dart` | Provider cleans up dead router process, transitions to `MODEL_ERROR` / `SERVER_ERROR`, and UI displays the truthful failure message. |
-| **M6** | Clicking `Load Model` twice while first load is still in progress | `test_llama_cpp_provider.py` & `settings_screen_test.dart` | UI disables button while `_isExecutingModelAction` is true; backend serializes via `_lock` and reuses the loaded model without spawning a second `llama-server.exe`. |
-| **M7** | Selecting a second model while a first model is already loaded (single-resident swap) | `test_llama_cpp_provider.py` | Unloads first model on existing router and loads second model cleanly into `MODEL_READY`. |
-| **M8** | Unloading a model (`unload_model()`) vs. stopping managed router | `test_llama_cpp_provider.py` | `unload_model()` transitions to `MODEL_UNLOADED` while keeping Core-managed `llama-server.exe` alive. |
-| **M9** | Cross-screen Chat readiness synchronization after Settings model load | `settings_screen_test.dart` & `desktop_chat_controller_test.dart` | Completing model selection/load in Settings immediately calls `chatController.updateModelStatus(status)`, transitioning Chat out of `No Model Selected` / `Unloaded` without a second click. |
-| **M10** | Full `Exit Companion` requested while model load is in progress (`SERVER_STARTING` / `MODEL_LOADING`) | `test_llama_cpp_provider.py` | `shutdown()` sets `_closing = True`, aborts the `load_model()` poll loop within `0.5s`, and terminates `llama-server.exe`. |
+| **M1** | Fast model load completing within client timeout (`CONFIRMED_READY`) | `settings_screen_test.dart` | `selectModel(modelName, loadImmediately: true)` (`POST /api/v1/models/select` with `model_name`) returns `MODEL_READY`; UI marks model ready and syncs `DesktopChatController`. |
+| **M2** | Cold model load ($> 5\text{s}$) exceeding old timeout & reconciling via `GET /api/v1/models` | `companion_client_test.dart` & `settings_screen_test.dart` | `selectModel(loadImmediately: true)` uses `90s` timeout; if `TimeoutException` or `MODEL_LOADING` occurs, `SettingsScreen` enters `STILL_LOADING` and polls `GET /api/v1/models` until `MODEL_READY` (`CONFIRMED_READY`) without showing a false failure error. |
+| **M3** | Observation window expires while backend is still `MODEL_LOADING` (`STILL_LOADING` vs. `CONFIRMED_FAILED`) (`C5`) | `settings_screen_test.dart` | If the `60s` poll deadline expires while `GET /api/v1/models` still reports `MODEL_LOADING` / `SERVER_STARTING`, UI stays in `STILL_LOADING` (`'Model is still loading in the background...'`) and shows **`Refresh Model Status`** (calling `GET /api/v1/models`, NOT a duplicate `POST /api/v1/models/load`). |
+| **M4** | Status check itself times out (`STATUS_UNKNOWN_TIMED_OUT`) (`C5`) | `settings_screen_test.dart` | When both load and `GET /api/v1/models` time out, UI shows `'Model load status could not be confirmed...'` with **`Refresh Model Status`**. |
+| **M5** | Concurrent `get_status()` (`GET /api/v1/models`) during `SERVER_STARTING` / `MODEL_LOADING` (`C2`, `C5`) | `test_llama_cpp_provider.py` | `get_status()` returns a lock-free snapshot (`SERVER_STARTING` / `MODEL_LOADING`) without blocking on `self._lock` and without overwriting `_active_model_name` or `_server_is_active`. |
+| **M6** | Model ID normalization (`loaded_model_id` filename/path vs. registry `id`) | `test_llama_cpp_provider.py` & `settings_screen_test.dart` | `get_status()` normalizes `loaded_model_id` via `find_model_registry_entry`, and `SettingsScreen._isTargetModelActive` matches `id`, `runtimeModelId`, and `primaryFile`. |
+| **M7** | Real model load failure (`CONFIRMED_FAILED`) | `test_llama_cpp_provider.py` & `settings_screen_test.dart` | Router crash or invalid GGUF cleans up partial router process, sets `MODEL_ERROR` / `SERVER_ERROR`, and surfaces `CONFIRMED_FAILED` in UI. |
+| **M8** | Clicking `Load Model` twice / single-resident model swap | `test_llama_cpp_provider.py` & `settings_screen_test.dart` | Duplicate button clicks are disabled during `STILL_LOADING`; backend serializes via `self._lock`, reuses already-loaded identical model without duplicate router spawn, and cleanly swaps models when a different `model_name` is selected. |
+| **M9** | Screen navigation & `DesktopChatController` background status poll (`C5`) | `desktop_chat_controller_test.dart` | When `DesktopChatController.updateModelStatus()` receives `SERVER_STARTING` or `MODEL_LOADING`, it polls `GET /api/v1/models` every `2.0s` until `MODEL_READY` even if `SettingsScreen` was closed/disposed. |
 
 ---
 
 ## 17. Physical Windows Acceptance Strategy
 
 1. **Automated Isolated Windows Process Acceptance Suite (`windows_runtime_supervision_acceptance_test.dart` & [`scripts/verify_windows_runtime_supervision.ps1`](../../../scripts/verify_windows_runtime_supervision.ps1)):**
-   - Runs in an isolated temporary directory (`COMPANION_LOCK_FILE`, `COMPANION_LOG_FILE`, `COMPANION_HOST_ADMIN_SECRET_FILE`) on an ephemeral high loopback port (`18080+`) so any developer-running AI Companion instance on port `8000` is completely untouched.
-   - Launches a real detached local FastAPI runtime via `DesktopRuntimeCoordinator.ensureLocalRuntimeRunning()`, verifies `runtime.lock` and ACL-protected `desktop_admin.secret` creation, invokes `coordinator.shutdownLocalRuntime()`, and asserts:
-     - `POST /api/v1/system/shutdown` succeeds (`202 Accepted`) using the wired `HostAdminSecretStore`.
-     - Uvicorn exits cleanly via `should_exit = True` within the bounded timeout.
-     - `runtime.lock` is truncated and removed.
-     - `DesktopRuntimeCoordinator` reaches `RuntimeStatus.stopped` with zero automatic restart attempts.
+   - Runs in an isolated disposable directory (`COMPANION_LOCK_FILE`, `COMPANION_LOG_FILE`, `COMPANION_HOST_ADMIN_SECRET_FILE`, `COMPANION_DATA_ROOT`) on an ephemeral loopback port so the Human Owner's active AI Companion runtime and `%LOCALAPPDATA%` are completely untouched.
+   - Verifies:
+     - Detached launch via `pythonw.exe -m app.runtime_server --app app.main:app --host 127.0.0.1 --port <testPort> --no-use-colors`.
+     - Cooperative `POST /api/v1/system/shutdown` via `DesktopRuntimeCoordinator.shutdownLocalRuntime()` using the wired `HostAdminSecretStore`.
+     - Clean Uvicorn exit (`should_exit = True`), `runtime.lock` truncation/deletion, `RuntimeStatus.stopped` state, and zero crash-recovery restarts.
+     - Isolated handle-bound fallback tests: refusing to terminate a foreign process or mismatched `startedAt` timestamp (`provenanceMismatch`), and cleanly handling a process that exits during verification (`alreadyExited`).
 2. **Interactive Windows Desktop Verification Checklist (Phase 3 / Human Acceptance):**
-   - Select & load a GGUF model in Settings whose cold load takes $> 5\text{s}$ $\rightarrow$ verify UI shows loading state, transitions directly to `MODEL_READY` on the first click, and Chat screen immediately shows the model ready.
-   - Click `Close Window (×)` $\rightarrow$ verify window hides to system tray and runtime stays alive.
-   - Click `Exit Companion` in Settings or System Tray $\rightarrow$ verify confirmation dialog appears; click `Cancel` and confirm nothing stops.
-   - Confirm `Exit Companion` $\rightarrow$ verify UI closes and neither `pythonw.exe` nor Core-managed `llama-server.exe` remains in Windows Task Manager.
+   - Select & load a GGUF model in Settings taking $> 5\text{s}$ $\rightarrow$ verify UI shows `STILL_LOADING` progress, transitions directly to `CONFIRMED_READY` on the first click, and Chat screen immediately shows the model ready.
+   - Verify `Close Window (×)` hides to system tray and keeps runtime alive.
+   - Verify `Exit Companion` in Settings and System Tray opens the mandatory confirmation dialog, cancels cleanly when dismissed, and stops both `pythonw.exe` and Core-managed `llama-server.exe` when confirmed.
 
 ---
 
-## 18. Dependencies and Explicit Non-Goals
+## 18. Required Git Permissions & Genuine Stop Conditions
 
-- **Dependencies:** Completed `PC-HOST-001` (PR #24) and `PC-IDENTITY-002` (PR #27/#28).
-- **Explicit Non-Goals (Out of Scope for `PC-HOST-005`):**
-  1. Windows login startup registration (`HKCU\...\Run` or Task Scheduler) — owned by **`PC-HOST-002`**.
-  2. Background proactive notification dispatcher and WinRT toast activation — owned by **`PC-HOST-003`** and **`PC-CLIENT-012`**.
-  3. Full **"Pause Companion"** scheduler pause mode.
-  4. Windows installer / MSIX packaging — owned by **`PC-HOST-006`**.
-  5. Redesigning model management into a persistent database job queue or modifying database schemas (zero Alembic migrations in this delivery).
+- **Phase 1 (Current — Explicitly Authorized):**
+  - Revise, stage, commit, and push [`docs/02_Planning/01_Plans/plan-m2-secure-host-lifecycle.md`](plan-m2-secure-host-lifecycle.md) and [`docs/01_Tracking/active/task-feature-m2-secure-host-lifecycle.md`](../../01_Tracking/active/task-feature-m2-secure-host-lifecycle.md) on `feature/m2-secure-host-lifecycle`.
+  - Do **not** modify production code, tests, migrations, generated contracts, `AGENTS.md`, or `DELIVERY_WORKFLOW.md`, and do **not** open a PR in Phase 1.
+- **Phases 2–3 (Upon Final Plan Approval):**
+  - Autonomous implementation, verification, in-scope defect fixes, canonical documentation reconciliation, commits, pushes, and draft PR creation on `feature/m2-secure-host-lifecycle`.
+- **Genuine Stop Conditions:**
+  1. Mandatory **Phase 1 Plan Approval Gate** (active now).
+  2. Any requirement to weaken `require_host_admin` or terminate unverified OS processes.
+  3. Unresolvable test or contract failures outside approved scope.
 
 ---
 
 ## 19. Proposed Implementation Sequence (Phase 2 — TDD Tasks)
 
-Once approved by the Human Owner and Independent Reviewer, Phase 2 will execute on `feature/m2-secure-host-lifecycle` in the following TDD sequence:
+Once Phase 1 is approved, Phase 2 will execute autonomously on `feature/m2-secure-host-lifecycle` in the following TDD sequence:
 
-1. **Task 1 — Backend `LlamaCppProvider` Lifecycle Separation, Route A/B Safety & Model-Load Concurrency (`test_llama_cpp_provider.py` $\rightarrow$ `llama_cpp.py`):**
-   - Write failing tests for `stop_managed_router()` vs. `unload_model()`, external router preservation (`_managed_by_core == False`), Route A task cancellation, Route B `_closing` loop break and `del self._llm` active-worker guard, `get_status()` lock/state preservation during `SERVER_STARTING`/`MODEL_LOADING`, and canonical `active_model` ID normalization.
-   - Implement the fixes in `backend/app/services/llm/base.py` and `backend/app/services/llm/llama_cpp.py`.
-2. **Task 2 — Backend `RuntimeLifecycleCoordinator`, Whole-Runtime Quiescence Middleware & `POST /api/v1/system/shutdown` (`test_host_shutdown.py` $\rightarrow$ `runtime_lifecycle.py`, `health.py`, `main.py`, `host_admin.py`):**
-   - Write failing tests for all 7 security rejections (`403`), idempotent `202 Accepted`, mutation admission control (`503 RUNTIME_SHUTTING_DOWN`), in-flight mutation drain before DB disposal, and `uvicorn.Server.should_exit = True` signaling.
-   - Implement `runtime_lifecycle.py`, `POST /api/v1/system/shutdown`, middleware in `main.py`, and `COMPANION_HOST_ADMIN_SECRET_FILE` override in `host_admin.py`.
+1. **Task 1 — Backend `LlamaCppProvider` Lock-Free Shutdown Signal, Lifecycle Separation & Model-Load Concurrency (`test_llama_cpp_provider.py` $\rightarrow$ `base.py`, `llama_cpp.py`):**
+   - Write failing tests for `signal_shutdown_immediately()` aborting an in-flight `load_model()` holding `self._lock` (`S11`), `unload_model()` vs. `stop_managed_router()` vs. `shutdown()` (`S13`), external router preservation (`_managed_by_core == False`), Route A task cancellation & Route B `del self._llm` guard (`S12`), lock-free snapshot `get_status()` during `SERVER_STARTING`/`MODEL_LOADING` (`M5`), and canonical `active_model` ID normalization (`M6`).
+   - Implement in [`backend/app/services/llm/base.py`](../../../backend/app/services/llm/base.py) and [`backend/app/services/llm/llama_cpp.py`](../../../backend/app/services/llm/llama_cpp.py).
+2. **Task 2 — Backend `runtime_server.py`, `RuntimeLifecycleCoordinator`, Quiescence Middleware & `POST /api/v1/system/shutdown` (`test_host_shutdown.py` $\rightarrow$ `runtime_server.py`, `runtime_lifecycle.py`, `health.py`, `main.py`, `orchestrator.py`, `llm.py`, `host_admin.py`):**
+   - Write failing tests for `S1`–`S10` (Host Admin `202 Accepted`; `403` rejections for `Authorization: Bearer psk_...`, `Authorization: Bearer companion_sec_...`, `X-API-Key`, `Origin`, `Sec-Fetch-Site`, malformed headers, non-loopback; programmatic `uvicorn.Server` registration; ASGI mutation admission gate `503 RUNTIME_SHUTTING_DOWN`; tracked `_pending_persistence_tasks` committing `status="cancelled"` before `dispose_database_runtime()`).
+   - Implement [`backend/app/runtime_server.py`](../../../backend/app/runtime_server.py), [`backend/app/core/runtime_lifecycle.py`](../../../backend/app/core/runtime_lifecycle.py), `POST /api/v1/system/shutdown` in [`health.py`](../../../backend/app/api/v1/endpoints/health.py), middleware in [`main.py`](../../../backend/app/main.py), tracked persistence in [`orchestrator.py`](../../../backend/app/services/assistant/orchestrator.py), and `COMPANION_HOST_ADMIN_SECRET_FILE` override in [`host_admin.py`](../../../backend/app/core/host_admin.py).
 3. **Task 3 — OpenAPI Contract Sync & `CompanionClient` Shutdown + Operation Timeouts (`companion_client_test.dart` $\rightarrow$ `openapi.json`, `companion_client.dart`):**
-   - Regenerate `contracts/openapi/openapi.json` and verify with `python scripts/check_openapi_contract.py --check`.
-   - Write failing tests in `companion_client_test.dart` for `shutdownSystem()` and operation-specific timeouts (`90s` for `selectModel(loadImmediately: true)` and `loadModel()`, `20s` for `unloadModel()`, `5s` default), then implement in `companion_api`.
-4. **Task 4 — Flutter `WindowsRuntimeProcessSupervisor` Handle-Bound Termination & Lockfile Cleanup (`windows_runtime_process_supervisor_test.dart` $\rightarrow$ `windows_runtime_process_supervisor.dart`, `host_admin_secret_store.dart`):**
-   - Write failing tests for handle-bound 4-factor provenance verification, PID-reuse mismatch rejection, verified child `llama-server.exe` termination, external router preservation, and `clearRuntimeLockfileThroughHandle()`.
-   - Implement in `windows_runtime_process_supervisor.dart` and `host_admin_secret_store.dart`.
-5. **Task 5 — Flutter `DesktopRuntimeCoordinator` Credential Wiring & `shutdownLocalRuntime()` (`desktop_runtime_coordinator_test.dart` $\rightarrow$ `desktop_runtime_coordinator.dart`, `main.dart`):**
-   - Write failing tests verifying `hostAdminStore` wiring, cooperative HTTP shutdown $\rightarrow$ exit poll $\rightarrow$ `RuntimeStatus.stopped`, handle-bound OS fallback on unresponsive runtime, crash-recovery suppression, and `RuntimeStatus.shutdownFailed`.
-   - Implement in `desktop_runtime_coordinator.dart` and `main.dart`.
-6. **Task 6 — Desktop Tray/Settings Confirmation UX & Model-Loading Reconciliation (`desktop_lifecycle_coordinator_test.dart`, `settings_screen_test.dart` $\rightarrow$ `desktop_lifecycle_coordinator.dart`, `desktop_shell.dart`, `settings_screen.dart`, `desktop_chat_controller.dart`):**
-   - Write failing widget/controller tests for Tray & Settings `Exit Companion` confirmation/cancel/failure dialogs, bounded model-loading status polling on slow loads, normalized model ID matching, and immediate `DesktopChatController.updateModelStatus()` sync.
+   - Regenerate [`contracts/openapi/openapi.json`](../../../contracts/openapi/openapi.json) and verify with `python scripts/check_openapi_contract.py --check`.
+   - Write failing tests in `companion_client_test.dart` for `shutdownSystem()` and operation-specific timeouts (`90s` for `selectModel(loadImmediately: true)` and `loadModel()`, `20s` for `unloadModel()`, `5s` default including `getModelStatus()` on `GET /api/v1/models`), then implement in `companion_api`.
+4. **Task 4 — Flutter `WindowsRuntimeProcessSupervisor` Handle-Bound Termination, Entrypoint Provenance & Lockfile Cleanup (`windows_runtime_process_supervisor_test.dart` $\rightarrow$ `windows_runtime_process_supervisor.dart`, `host_admin_secret_store.dart`):**
+   - Write failing tests (`S14`, Propositions `P1`–`P4`) for `isCompanionRuntimeCommandLine()` (`app.runtime_server` and `uvicorn`), handle-bound 4-factor provenance verification, foreign/PID-reuse mismatch refusal, child `llama-server.exe` handle verification, external router preservation, and `clearRuntimeLockfileThroughHandle()`.
+   - Implement in [`windows_runtime_process_supervisor.dart`](../../../frontend/flutter/apps/desktop/lib/platform/windows_runtime_process_supervisor.dart) and [`host_admin_secret_store.dart`](../../../frontend/flutter/apps/desktop/lib/platform/host_admin_secret_store.dart).
+5. **Task 5 — Flutter `DesktopRuntimeCoordinator` Credential Wiring, `app.runtime_server` Launch & `shutdownLocalRuntime()` (`desktop_runtime_coordinator_test.dart` $\rightarrow$ `desktop_runtime_coordinator.dart`, `main.dart`):**
+   - Write failing tests (`S8`, `S15`) verifying `hostAdminStore` wiring, `-m app.runtime_server --app app.main:app` launch args, cooperative HTTP shutdown $\rightarrow$ exit poll $\rightarrow$ `RuntimeStatus.stopped`, handle-bound OS fallback on unresponsive runtime, crash-recovery suppression, and `RuntimeStatus.shutdownFailed`.
+   - Implement in [`desktop_runtime_coordinator.dart`](../../../frontend/flutter/apps/desktop/lib/coordinator/desktop_runtime_coordinator.dart) and [`main.dart`](../../../frontend/flutter/apps/desktop/lib/main.dart).
+6. **Task 6 — Desktop Tray/Settings Confirmation UX & 4-State Model-Loading Reconciliation (`desktop_lifecycle_coordinator_test.dart`, `settings_screen_test.dart`, `desktop_chat_controller_test.dart` $\rightarrow$ `desktop_lifecycle_coordinator.dart`, `desktop_shell.dart`, `settings_screen.dart`, `desktop_chat_controller.dart`):**
+   - Write failing widget/controller tests (`S16`, `M1`–`M4`, `M6`–`M9`) for Tray & Settings `Exit Companion` confirmation/cancel/failure dialogs, 4-state model-loading reconciliation (`CONFIRMED_READY`, `CONFIRMED_FAILED`, `STILL_LOADING` with `Refresh Model Status`, `STATUS_UNKNOWN_TIMED_OUT`), normalized model ID matching, and `DesktopChatController` immediate + background `GET /api/v1/models` sync.
    - Implement across `desktop_lifecycle_coordinator.dart`, `desktop_shell.dart`, `settings_screen.dart`, and `desktop_chat_controller.dart`.
 7. **Task 7 — Full Verification & Isolated Windows Process Acceptance Suite:**
-   - Extend `windows_runtime_supervision_acceptance_test.dart` and `scripts/verify_windows_runtime_supervision.ps1`.
-   - Run full `pytest`, `flutter test`, `dart analyze`, React web tests, and `check_openapi_contract.py --check` before entering Phase 3 documentation and closure.
+   - Extend [`windows_runtime_supervision_acceptance_test.dart`](../../../frontend/flutter/apps/desktop/test/windows_runtime_supervision_acceptance_test.dart) and [`scripts/verify_windows_runtime_supervision.ps1`](../../../scripts/verify_windows_runtime_supervision.ps1) to verify end-to-end launch and shutdown with `app.runtime_server` and isolated handle-bound fallback checks.
+   - Run full backend `pytest`, Flutter package/app tests, `dart analyze`, React web tests, and `check_openapi_contract.py --check` before proceeding to Phase 3 documentation and closure.
 
 ---
 
-## 20. Explicit Design Decisions & Remaining Uncertainties Requiring Human Owner Approval
+## 20. Outstanding Design Questions Requiring Final Plan Approval
 
-Before Phase 2 implementation begins, the Human Owner is asked to review and confirm the following design decisions:
+With the Human Owner's approval of the 7 architectural directions in §1.1 and the resolution of `C1`–`C6` in this revision, **no unresolved product scope questions remain**. The single technical confirmation requested from the Human Owner and Independent Reviewer to authorize Phase 2 is:
 
-1. **Decision 1 — Approval of Combined Two-Track Scope (`Track A: PC-HOST-005` + `Track B: Bounded Model-Loading Reliability`):**
-   - *Proposal:* Deliver both the `PC-HOST-005` secure host shutdown/cleanup work and the bounded `PC-CLIENT-010`/`PC-CLIENT-004`/`PC-MODEL-006` model-loading reliability fix (`90s` load timeout, lock-safe `get_status()` with normalized model IDs, bounded timeout-to-polling reconciliation, and immediate Chat controller sync) in this single coherent delivery on `feature/m2-secure-host-lifecycle`.
-2. **Decision 2 — Cooperative Uvicorn Shutdown (`uvicorn.Server.should_exit = True`) + Handle-Bound 4-Factor OS Fallback:**
-   - *Proposal:* Use `POST /api/v1/system/shutdown` (with whole-runtime mutation admission control, active stream cancellation, `stop_managed_router()`, in-flight DB drain, and signal-free `uvicorn_server.should_exit = True`) as the primary shutdown mechanism, backed by a single handle-bound PowerShell verification and `$proc.Kill()` fallback in `WindowsRuntimeProcessSupervisor` if the local runtime is unresponsive.
-3. **Decision 3 — Bounded Timeouts (`5.0s` Explicit Shutdown Drain; `90s` Client Model Load + `60s` Reconciliation Poll):**
-   - *Proposal:* Apply a `5.0s` drain timeout for active LLM/DB work during explicit **Exit Companion** shutdown (followed by `8.0s` cooperative exit poll and `8.0s` handle-bound fallback), and apply a `90s` HTTP timeout for `selectModel(loadImmediately: true)` / `loadModel()` backed by up to `60s` of `1.0s` status polling if the backend is still in `SERVER_STARTING` or `MODEL_LOADING`.
-4. **Decision 4 — Remote Host Mode Behavior (`isRemoteHost == true`):**
-   - *Proposal:* When connected to a remote host URL, clicking **Exit Companion** never calls `/api/v1/system/shutdown` over the network; it informs the user that the remote host will remain running and closes only the local Desktop UI upon confirmation.
-5. **Remaining Uncertainty (`UNCERTAINTY REQUIRING EVIDENCE` during Phase 2 Acceptance):**
-   - *Observation:* While `uvicorn.Server.should_exit = True` is verified in `uvicorn/server.py` source code, its exact wall-clock teardown latency under an activedetached `pythonw.exe` process on Windows 11 will be measured empirically during Task 7's isolated Windows acceptance test (`windows_runtime_supervision_acceptance_test.dart`) and recorded in the Phase 3 walkthrough.
+1. **Final Technical Design Confirmation (`C1`–`C6` & `§9`):**
+   - Confirm that the programmatic Uvicorn entrypoint (`pythonw.exe -m app.runtime_server --app app.main:app ...` with backward-compatible supervisor provenance recognition for `app.runtime_server` and `uvicorn`), the lock-free `_shutdown_event` model-load cancellation protocol, the tracked `_pending_persistence_tasks` database quiescence barrier, and the 4-state truthful model-load reconciliation (`CONFIRMED_READY`, `CONFIRMED_FAILED`, `STILL_LOADING`, `STATUS_UNKNOWN_TIMED_OUT` over `GET /api/v1/models` and `POST /api/v1/models/select` with `model_name`) satisfy the Phase 1 Level C design gate for Phase 2 implementation.
