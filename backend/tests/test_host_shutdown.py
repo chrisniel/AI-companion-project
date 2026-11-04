@@ -1,0 +1,220 @@
+"""Tests for Host Admin shutdown lifecycle, security barriers, quiescence, and admission control."""
+
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+from app.core.runtime_lifecycle import RuntimeLifecycleCoordinator, runtime_lifecycle
+from app.main import app
+from app.schemas.health import SystemShutdownRequest, SystemShutdownResponse
+
+
+@pytest.fixture(autouse=True)
+def reset_lifecycle():
+    """Reset runtime_lifecycle singleton before and after each test."""
+    runtime_lifecycle.reset()
+    yield
+    runtime_lifecycle.reset()
+
+
+@pytest.mark.asyncio
+async def test_s1_valid_host_admin_shutdown(client: AsyncClient, host_admin_headers: dict):
+    """S1: Valid loopback request with X-Host-Admin-Secret returns 202 Accepted."""
+    response = await client.post(
+        "/api/v1/system/shutdown",
+        headers=host_admin_headers,
+        json={"reason": "test_shutdown", "drain_timeout_seconds": 2.0},
+    )
+    assert response.status_code == 202
+    data = response.json()
+    assert data["status"] == "shutting_down"
+    assert "pid" in data
+    assert data["already_shutting_down"] is False
+
+
+@pytest.mark.asyncio
+async def test_s2_missing_or_invalid_secret(client: AsyncClient, host_admin_headers: dict):
+    """S2: Missing, empty, or wrong X-Host-Admin-Secret returns 401/403."""
+    # Missing secret
+    res1 = await client.post("/api/v1/system/shutdown")
+    assert res1.status_code in (401, 403)
+
+    # Empty secret
+    res2 = await client.post("/api/v1/system/shutdown", headers={"X-Host-Admin-Secret": ""})
+    assert res2.status_code in (401, 403)
+
+    # Invalid secret
+    res3 = await client.post("/api/v1/system/shutdown", headers={"X-Host-Admin-Secret": "invalid_secret_token_1234567890"})
+    assert res3.status_code in (401, 403)
+
+
+@pytest.mark.asyncio
+async def test_s3_profile_session_bearer_rejected(client: AsyncClient, auth_headers: dict):
+    """S3: Profile Session bearer credential cannot elevate to Host Admin shutdown."""
+    response = await client.post("/api/v1/system/shutdown", headers=auth_headers)
+    assert response.status_code in (401, 403)
+
+
+@pytest.mark.asyncio
+async def test_s4_paired_device_credentials_rejected(client: AsyncClient, pairing_headers: dict, api_key_headers: dict):
+    """S4: Paired device credentials (Bearer companion_sec_ or X-API-Key) cannot elevate to shutdown."""
+    res1 = await client.post("/api/v1/system/shutdown", headers=pairing_headers)
+    assert res1.status_code in (401, 403)
+
+    res2 = await client.post("/api/v1/system/shutdown", headers=api_key_headers)
+    assert res2.status_code in (401, 403)
+
+
+@pytest.mark.asyncio
+async def test_s5_browser_headers_rejected(client: AsyncClient, host_admin_headers: dict):
+    """S5: Requests with Origin or Sec-Fetch-Site are rejected even with valid secret."""
+    # Origin header present
+    headers_origin = {**host_admin_headers, "Origin": "http://localhost:3000"}
+    res1 = await client.post("/api/v1/system/shutdown", headers=headers_origin)
+    assert res1.status_code == 403
+
+    # Sec-Fetch-Site header present
+    headers_fetch = {**host_admin_headers, "Sec-Fetch-Site": "cross-site"}
+    res2 = await client.post("/api/v1/system/shutdown", headers=headers_fetch)
+    assert res2.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_s6_non_loopback_rejected(host_admin_headers: dict):
+    """S6: Non-loopback transport or hostname is rejected."""
+    # Non-loopback client IP
+    transport = ASGITransport(app=app, client=("192.168.1.100", 54321))
+    async with AsyncClient(transport=transport, base_url="http://127.0.0.1:8000") as remote_client:
+        res = await remote_client.post("/api/v1/system/shutdown", headers=host_admin_headers)
+        assert res.status_code == 403
+
+    # Non-loopback Host header
+    transport2 = ASGITransport(app=app, client=("127.0.0.1", 54321))
+    async with AsyncClient(transport=transport2, base_url="http://evil.example.com") as evil_client:
+        res2 = await evil_client.post("/api/v1/system/shutdown", headers=host_admin_headers)
+        assert res2.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_s7_programmatic_server_registration_and_exit():
+    """S7: Programmatic runtime_server registers uvicorn.Server and clean shutdown signals should_exit."""
+    mock_server = MagicMock()
+    mock_server.should_exit = False
+
+    coord = RuntimeLifecycleCoordinator()
+    coord.register_server(mock_server)
+    assert coord._server is mock_server
+
+    # Trigger clean shutdown sequence
+    with patch("app.core.runtime_lifecycle.get_llm_provider") as mock_get_provider:
+        mock_provider = MagicMock()
+        mock_provider.signal_shutdown_immediately = MagicMock()
+        mock_res = MagicMock()
+        mock_res.completed_cleanly = True
+        mock_res.lock_acquired = True
+        mock_res.managed_llm_pid = None
+        mock_res.managed_by_core = False
+        mock_provider.shutdown = AsyncMock(return_value=mock_res)
+        mock_get_provider.return_value = mock_provider
+
+        await coord.initiate_shutdown(drain_timeout_seconds=0.5)
+        # Await the background sequence
+        if coord._shutdown_task:
+            await coord._shutdown_task
+
+        assert coord.shutdown_quiescence_status == "clean"
+        assert mock_server.should_exit is True
+
+
+@pytest.mark.asyncio
+async def test_s8_repeat_shutdown_idempotent(client: AsyncClient, host_admin_headers: dict):
+    """S8: Repeated / concurrent shutdown requests return 202 with already_shutting_down=True."""
+    res1 = await client.post("/api/v1/system/shutdown", headers=host_admin_headers)
+    assert res1.status_code == 202
+    assert res1.json()["already_shutting_down"] is False
+
+    res2 = await client.post("/api/v1/system/shutdown", headers=host_admin_headers)
+    assert res2.status_code == 202
+    assert res2.json()["already_shutting_down"] is True
+
+
+@pytest.mark.asyncio
+async def test_s9_asgi_mutation_admission_control(client: AsyncClient, host_admin_headers: dict, auth_headers: dict):
+    """S9: Once is_shutting_down is True, mutating requests receive 503 RUNTIME_SHUTTING_DOWN."""
+    # Initiate shutdown to put runtime in shutting_down mode
+    await client.post("/api/v1/system/shutdown", headers=host_admin_headers)
+    assert runtime_lifecycle.is_shutting_down is True
+
+    # Mutating POST request should be rejected with 503
+    resp = await client.post("/api/v1/conversations", headers=auth_headers, json={"title": "test"})
+    assert resp.status_code == 503
+    data = resp.json()
+    assert data["error"]["code"] == "RUNTIME_SHUTTING_DOWN"
+
+    # Public health check should also reflect 503
+    health_resp = await client.get("/api/v1/health")
+    assert health_resp.status_code == 503
+
+    # System status check should remain accessible and report shutting_down
+    status_resp = await client.get("/api/v1/system/status", headers=host_admin_headers)
+    assert status_resp.status_code == 200
+    status_data = status_resp.json()
+    assert status_data["shutting_down"] is True
+
+
+@pytest.mark.asyncio
+async def test_s10_tracked_persistence_barrier():
+    """S10: Tracked persistence task in _pending_persistence_tasks is awaited during quiescence."""
+    coord = RuntimeLifecycleCoordinator()
+    finished = False
+
+    async def simulated_persistence():
+        nonlocal finished
+        await asyncio.sleep(0.1)
+        finished = True
+
+    task = coord.spawn_terminal_persistence_task(simulated_persistence())
+    assert coord.has_active_database_work is True
+    assert task in coord._pending_persistence_tasks
+
+    quiescent = await coord.wait_for_database_quiescence(timeout=1.0)
+    assert quiescent is True
+    assert finished is True
+    assert coord.has_active_database_work is False
+
+
+@pytest.mark.asyncio
+async def test_s11_persistence_drain_timeout_prevents_db_disposal():
+    """S11: Incomplete persistence past deadline reports incomplete status and halts server exit."""
+    coord = RuntimeLifecycleCoordinator()
+    mock_server = MagicMock()
+    mock_server.should_exit = False
+    coord.register_server(mock_server)
+
+    # Simulate task that never finishes within timeout
+    async def infinite_persistence():
+        await asyncio.sleep(10.0)
+
+    task = coord.spawn_terminal_persistence_task(infinite_persistence())
+    try:
+        assert coord.has_active_database_work is True
+
+        with patch("app.core.runtime_lifecycle.get_llm_provider") as mock_get_provider:
+            mock_provider = MagicMock()
+            mock_provider.signal_shutdown_immediately = MagicMock()
+            mock_provider.shutdown = AsyncMock()
+            mock_get_provider.return_value = mock_provider
+
+            await coord.initiate_shutdown(drain_timeout_seconds=0.2)
+            if coord._shutdown_task:
+                await coord._shutdown_task
+
+            # Status must be incomplete_db_quiescence_timeout
+            assert coord.shutdown_quiescence_status == "incomplete_db_quiescence_timeout"
+            # Server must NOT be signaled to exit
+            assert mock_server.should_exit is False
+            # Provider shutdown must NOT have been called while DB work remains
+            mock_provider.shutdown.assert_not_called()
+    finally:
+        task.cancel()

@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import settings
 from app.core.profile_sessions import validate_profile_session
+from app.core.runtime_lifecycle import runtime_lifecycle
 from app.models.profile_session import ProfileSession
 from app.db.session import get_session_factory
 from app.models.attachment import Attachment
@@ -322,11 +323,12 @@ async def _persist_terminal_assistant_status(
     *,
     profile_session: ProfileSession,
     conversation_id: str,
-) -> None:
+) -> bool:
     """
     Safely persist assistant terminal status (cancelled / failed) in an isolated session.
     Using a dedicated session prevents cancellation of the request stream or disconnection
     from corrupting the request-scoped session or leaving unhandled connection pool errors.
+    Returns True if committed successfully, False otherwise.
     """
     try:
         if engine is not None:
@@ -347,10 +349,13 @@ async def _persist_terminal_assistant_status(
                     msg.content = content
                 await _require_conversation(session, profile_session, conversation_id)
                 await session.commit()
+                return True
+            return False
     except Exception as exc:
         logger.warning(
             f"Failed to persist terminal status '{status}' for assistant message {assistant_msg_id}: {exc}"
         )
+        return False
 
 
 async def orchestrate_chat_stream(
@@ -526,7 +531,8 @@ async def orchestrate_chat_stream(
                 pass
 
         # 2. Persist terminal status unconditionally via dedicated, shielded session
-        await asyncio.shield(
+        # Tracked in runtime_lifecycle._pending_persistence_tasks for DB quiescence
+        cancel_task = runtime_lifecycle.spawn_terminal_persistence_task(
             _persist_terminal_assistant_status(
                 assistant_msg_id=asst_msg_id,
                 status="cancelled",
@@ -536,6 +542,7 @@ async def orchestrate_chat_stream(
                 conversation_id=conversation_id,
             )
         )
+        await asyncio.shield(cancel_task)
         raise
     except HTTPException as exc:
         await db.rollback()
@@ -552,7 +559,7 @@ async def orchestrate_chat_stream(
             except BaseException:
                 pass
 
-        await asyncio.shield(
+        fail_task = runtime_lifecycle.spawn_terminal_persistence_task(
             _persist_terminal_assistant_status(
                 assistant_msg_id=asst_msg_id,
                 status="failed",
@@ -562,6 +569,7 @@ async def orchestrate_chat_stream(
                 conversation_id=conversation_id,
             )
         )
+        await asyncio.shield(fail_task)
         try:
             await _require_conversation(db, profile_session, conversation_id)
         except HTTPException:

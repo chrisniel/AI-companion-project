@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added — M2: Secure Host Lifecycle & Bounded Model-Loading Reliability (PC-HOST-005)
+
+- **Track A — Authenticated Host Administration & Graceful Runtime Shutdown**:
+  - Implemented loopback-only `POST /api/v1/system/shutdown` protected by `require_host_admin` and host secret verification, returning synchronous accepted status with shutdown correlation ID.
+  - Implemented programmatic Uvicorn entrypoint in `backend/app/runtime_server.py` registering `uvicorn.Server` instance with `RuntimeLifecycleCoordinator`.
+  - Implemented ASGI admission control returning `503 RUNTIME_SHUTTING_DOWN` immediately upon shutdown initiation while draining in-flight requests.
+  - Enforced real database quiescence barrier awaiting `_pending_persistence_tasks` before engine disposal (`app.db.session.close_db()`).
+  - Enforced strict provider lock ownership in `LlamaCppProvider` during inference drain and router shutdown (`_stop_managed_router_locked()`), preserving externally owned router processes and reporting truthful lock-timeout outcomes without concurrent unlocked mutations.
+  - Implemented handle-bound Windows OS termination fallback in `WindowsRuntimeProcessSupervisor` using Win32 Job Object and entrypoint provenance verification to prevent PID reuse hazards.
+  - Integrated cooperative 25-second shutdown window and 4 distinct outcome handlers (`CLEAN_SHUTDOWN`, `INCOMPLETE_CLEANUP_FALLBACK_TERMINATED`, `RECOVERY_FAILED_PID_UNKNOWN`, `SHUTDOWN_TIMEOUT_FORCE_TERMINATED`) in `DesktopRuntimeCoordinator`.
+  - Added desktop tray and settings "Exit Companion" confirmation dialogs and incomplete-cleanup failure recovery dialogs with remote-host protection (`isRemoteHost == true`).
+- **Track B — Bounded Model-Loading Reliability & Truthful Status Sync**:
+  - Implemented bounded `90s` operation timeout on model load operations in `CompanionClient` and `DesktopChatController`.
+  - Implemented lock-free snapshot `get_status()` in `LlamaCppProvider` during loading and transitional states, preventing client polling deadlocks.
+  - Standardized canonical model ID normalization across backend endpoints and Flutter client.
+  - Implemented 4-state truthful status reconciliation (`CONFIRMED_READY`, `CONFIRMED_FAILED`, `STILL_LOADING`, `STATUS_UNKNOWN_TIMED_OUT`) with manual "Refresh Model Status" recovery.
+
 ### Changed — Autonomous Delivery Workflow Reform (S1 Governance Revision)
 
 - Replaced the mandatory ten-stage engineering delivery lifecycle with four cohesive phases (**Phase 1: Plan and Authorization**, **Phase 2: Autonomous Implementation and Verification**, **Phase 3: Documentation, Closure, and Draft PR**, and **Phase 4: Combined Independent Review and Human Merge**) in [`AGENTS.md`](AGENTS.md) and [`docs/06_Guides/DELIVERY_WORKFLOW.md`](docs/06_Guides/DELIVERY_WORKFLOW.md).

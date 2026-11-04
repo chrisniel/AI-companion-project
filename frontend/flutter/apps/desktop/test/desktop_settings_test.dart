@@ -329,6 +329,118 @@ void main() {
       final button = tester.widget<OutlinedButton>(unloadButtons.first);
       expect(button.onPressed, isNull);
     });
+
+    testWidgets('handles STILL_LOADING when selectModel returns MODEL_LOADING and shows Refresh Model Status button', (tester) async {
+      setupDesktopViewport(tester);
+
+      final tempDir = Directory.systemTemp.createTempSync('settings_still_loading_test_');
+      final tempSettingsFile = File('${tempDir.path}${Platform.pathSeparator}client_settings.json');
+      final isolatedSettings = DesktopClientSettings(customFilePath: tempSettingsFile.path);
+      final isolatedCredentials = InMemoryCredentialStore('test-token');
+      addTearDown(() {
+        if (tempDir.existsSync()) {
+          try {
+            tempDir.deleteSync(recursive: true);
+          } catch (_) {}
+        }
+      });
+
+      final fakeClient = FakeModelSelectionClient();
+      fakeClient.getModelStatusResponseOverride = const ModelStatusResponse(
+        provider: 'llama.cpp',
+        runtimeState: 'MODEL_UNLOADED',
+        activeModel: null,
+        selectedModel: 'qwen3-vl-2b-instruct',
+        modelLoaded: false,
+        modelResident: false,
+      );
+      fakeClient.selectModelResponseOverride = const ModelStatusResponse(
+        provider: 'llama.cpp',
+        runtimeState: 'MODEL_LOADING',
+        activeModel: null,
+        selectedModel: 'qwen3-vl-2b-instruct',
+        modelLoaded: false,
+      );
+
+      final controller = DesktopSettingsController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: SettingsScreen(
+              controller: controller,
+              client: fakeClient,
+              clientSettings: isolatedSettings,
+              credentialStore: isolatedCredentials,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      final loadButtons = find.widgetWithText(FilledButton, 'Load Model');
+      expect(loadButtons, findsWidgets);
+
+      await tester.ensureVisible(loadButtons.first);
+      await tester.pumpAndSettle();
+
+      await tester.tap(loadButtons.first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(fakeClient.selectedModelCalls, equals(1));
+      expect(find.textContaining('Model is still loading in the background'), findsOneWidget);
+      expect(find.text('Refresh Model Status'), findsOneWidget);
+
+      // Now switch status to MODEL_READY and tap Refresh
+      fakeClient.getModelStatusResponseOverride = const ModelStatusResponse(
+        provider: 'llama.cpp',
+        runtimeState: 'MODEL_READY',
+        activeModel: 'qwen3-vl-2b-instruct',
+        selectedModel: 'qwen3-vl-2b-instruct',
+        modelLoaded: true,
+      );
+
+      await tester.tap(find.text('Refresh Model Status'));
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Model is ready: qwen3-vl-2b-instruct'), findsOneWidget);
+    });
+
+    testWidgets('Exit Companion button opens exit confirmation dialog and respects Cancel', (tester) async {
+      setupDesktopViewport(tester);
+
+      final controller = DesktopSettingsController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: SettingsScreen(controller: controller),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      final exitButtons = find.widgetWithText(FilledButton, 'Exit Companion');
+      expect(exitButtons, findsOneWidget);
+
+      await tester.ensureVisible(exitButtons);
+      await tester.tap(exitButtons);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Exit AI Companion?'), findsOneWidget);
+      expect(find.text('Cancel'), findsOneWidget);
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Exit AI Companion?'), findsNothing);
+    });
   });
 }
 
@@ -342,7 +454,10 @@ class FakeGeneratingChatController extends DesktopChatController {
 class FakeModelSelectionClient extends CompanionClient {
   int selectedModelCalls = 0;
   int unloadModelCalls = 0;
+  int getModelStatusCalls = 0;
   String? lastSelectedModel;
+  ModelStatusResponse? getModelStatusResponseOverride;
+  ModelStatusResponse? selectModelResponseOverride;
 
   FakeModelSelectionClient()
       : super(credentialStore: InMemoryCredentialStore('test-token'));
@@ -372,7 +487,11 @@ class FakeModelSelectionClient extends CompanionClient {
   }
 
   @override
-  Future<ModelStatusResponse> getModelStatus() async {
+  Future<ModelStatusResponse> getModelStatus({Duration timeout = const Duration(seconds: 5)}) async {
+    getModelStatusCalls++;
+    if (getModelStatusResponseOverride != null) {
+      return getModelStatusResponseOverride!;
+    }
     return const ModelStatusResponse(
       provider: 'llama.cpp',
       runtimeState: 'MODEL_READY',
@@ -388,9 +507,13 @@ class FakeModelSelectionClient extends CompanionClient {
     String modelName, {
     bool loadImmediately = false,
     String? profile,
+    Duration? timeout,
   }) async {
     selectedModelCalls++;
     lastSelectedModel = modelName;
+    if (selectModelResponseOverride != null) {
+      return selectModelResponseOverride!;
+    }
     return ModelStatusResponse(
       provider: 'llama.cpp',
       runtimeState: 'MODEL_READY',
@@ -401,7 +524,11 @@ class FakeModelSelectionClient extends CompanionClient {
   }
 
   @override
-  Future<ModelStatusResponse> loadModel({String? modelName, String? profile}) async {
+  Future<ModelStatusResponse> loadModel({
+    String? modelName,
+    String? profile,
+    Duration timeout = const Duration(seconds: 90),
+  }) async {
     return ModelStatusResponse(
       provider: 'llama.cpp',
       runtimeState: 'MODEL_READY',
@@ -415,7 +542,9 @@ class FakeModelSelectionClient extends CompanionClient {
   Exception? unloadModelException;
 
   @override
-  Future<ModelStatusResponse> unloadModel() async {
+  Future<ModelStatusResponse> unloadModel({
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
     unloadModelCalls++;
     if (unloadModelException != null) {
       throw unloadModelException!;

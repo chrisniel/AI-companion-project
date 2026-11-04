@@ -19,6 +19,7 @@ from app.core.errors import (
     format_error_response,
 )
 from app.core.logging import logger, setup_logging
+from app.core.runtime_lifecycle import runtime_lifecycle
 from app.db.session import dispose_database_runtime, initialize_database_runtime
 
 REQUEST_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
@@ -127,6 +128,31 @@ class PayloadLimitMiddleware(BaseHTTPMiddleware):
             )
 
 
+class RuntimeAdmissionMiddleware(BaseHTTPMiddleware):
+    """Whole-runtime admission gate and mutation tracking during graceful shutdown."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        is_mutation = request.method in ("POST", "PUT", "PATCH", "DELETE")
+        is_shutdown_endpoint = request.url.path.rstrip("/").endswith("/system/shutdown")
+
+        if is_mutation and not is_shutdown_endpoint:
+            if not runtime_lifecycle.acquire_mutation_admission():
+                request_id = getattr(request.state, "request_id", None) or f"req_{uuid.uuid4().hex[:12]}"
+                return format_error_response(
+                    code="RUNTIME_SHUTTING_DOWN",
+                    message="Runtime is currently shutting down. Mutations are rejected.",
+                    details=None,
+                    request_id=request_id,
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+            try:
+                return await call_next(request)
+            finally:
+                runtime_lifecycle.release_mutation_admission()
+
+        return await call_next(request)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Lifespan context manager for startup and shutdown routines."""
@@ -179,7 +205,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await llm_manager.get_provider().shutdown()
     except Exception as exc:
         logger.warning(f"Error during LLM provider shutdown: {exc}")
-    await dispose_database_runtime()
+
+    if not runtime_lifecycle.has_active_database_work:
+        await dispose_database_runtime()
+    else:
+        logger.error(
+            "Active database work remains at lifespan exit; database engine NOT disposed "
+            "to prevent corruption of active transactions."
+        )
 
 
 def create_app() -> FastAPI:
@@ -194,6 +227,9 @@ def create_app() -> FastAPI:
         redoc_url=None,
         openapi_url="/openapi.json" if is_dev else None,
     )
+
+    # Admission control middleware for graceful shutdown
+    app.add_middleware(RuntimeAdmissionMiddleware)
 
     # Security: Request payload limit middleware (OWASP API4)
     app.add_middleware(PayloadLimitMiddleware)

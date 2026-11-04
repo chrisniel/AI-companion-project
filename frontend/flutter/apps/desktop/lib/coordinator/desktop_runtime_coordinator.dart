@@ -2,7 +2,23 @@ import 'dart:async';
 import 'dart:io';
 import 'package:companion_api/companion_api.dart';
 import 'package:companion_core/companion_core.dart';
+import '../platform/host_admin_secret_store.dart';
 import '../platform/windows_runtime_process_supervisor.dart';
+
+/// Four-outcome classification for runtime shutdown.
+enum ShutdownOutcome {
+  /// Clean exit within cooperative window, lock cleared, runtime stopped.
+  gracefulSuccess,
+
+  /// In-flight persistence or provider cleanup did not complete; runtime kept alive.
+  incompleteCleanup,
+
+  /// Runtime was completely unresponsive and fallback termination was unavailable or unverified.
+  unresponsiveRuntime,
+
+  /// Handle-bound OS fallback verified and terminated the runtime (emergency stop).
+  emergencyTerminated,
+}
 
 /// Coordinates the lifecycle, single-instance startup, and connection state
 /// of the Local AI Runtime on Windows.
@@ -13,6 +29,7 @@ import '../platform/windows_runtime_process_supervisor.dart';
 class DesktopRuntimeCoordinator {
   String baseUrl;
   final WindowsRuntimeProcessSupervisor _supervisor;
+  final CredentialStore _hostAdminStore;
   CompanionClient _client;
   final File? _customLockFile;
   final String? _customExecutablePath;
@@ -40,6 +57,7 @@ class DesktopRuntimeCoordinator {
     CompanionClient? client,
     CompanionClient Function(String baseUrl, CredentialStore? credentialStore)? clientFactory,
     CredentialStore? credentialStore,
+    CredentialStore? hostAdminStore,
     File? customLockFile,
     String? customExecutablePath,
     String? customLogFilePath,
@@ -47,12 +65,14 @@ class DesktopRuntimeCoordinator {
     Map<String, String>? customEnvironment,
   })  : _supervisor = supervisor ?? WindowsRuntimeProcessSupervisor(),
         _clientFactory = clientFactory ?? (client != null ? ((url, store) => client) : null),
+        _hostAdminStore = hostAdminStore ?? HostAdminSecretStore(),
         _client = client ??
             (clientFactory != null
                 ? clientFactory(baseUrl, credentialStore)
                 : CompanionClient(
                     baseUrl: baseUrl,
                     credentialStore: credentialStore,
+                    hostAdminStore: hostAdminStore ?? HostAdminSecretStore(),
                   )),
         _customLockFile = customLockFile,
         _customExecutablePath = customExecutablePath,
@@ -102,6 +122,7 @@ class DesktopRuntimeCoordinator {
       _client = CompanionClient(
         baseUrl: newBaseUrl,
         credentialStore: credentialStore,
+        hostAdminStore: _hostAdminStore,
       );
     }
     _updateState(
@@ -788,7 +809,7 @@ class DesktopRuntimeCoordinator {
 
         final spawnedPid = await _supervisor.spawnDetachedRuntime(
           executable: exe.path,
-          args: ['-m', 'uvicorn', 'app.main:app', '--host', targetHost, '--port', '$targetPort', '--no-use-colors'],
+          args: ['-m', 'app.runtime_server', '--app', 'app.main:app', '--host', targetHost, '--port', '$targetPort', '--no-use-colors'],
           workingDirectory: targetWorkingDirectory,
           logFilePath: targetLogFilePath,
           environment: _customEnvironment,
@@ -888,6 +909,291 @@ class DesktopRuntimeCoordinator {
         port: targetPort,
         diagnosticMessage: 'Runtime failed to become ready within ${timeout.inSeconds} seconds',
       ),
+      generation: generation,
+    );
+  }
+
+  /// Gracefully terminates the local runtime within a cooperative [timeout] window (default 25s).
+  ///
+  /// Never terminates remote hosts over the network.
+  /// If the runtime completes cleanup cleanly, returns [ShutdownOutcome.gracefulSuccess].
+  /// If in-flight work or provider lock times out, keeps runtime alive and returns [ShutdownOutcome.incompleteCleanup].
+  /// If runtime is completely unresponsive, attempts handle-bound fallback termination.
+  Future<ShutdownOutcome> shutdownLocalRuntime({
+    Duration timeout = const Duration(seconds: 25),
+  }) async {
+    _activeGeneration++;
+    final generation = _activeGeneration;
+
+    // Remote host protection: never send /system/shutdown over the network
+    if (_supervisionMode == SupervisionMode.remoteHost) {
+      _updateState(
+        _currentState.copyWith(status: RuntimeStatus.stopped),
+        generation: generation,
+      );
+      return ShutdownOutcome.gracefulSuccess;
+    }
+
+    _updateState(
+      _currentState.copyWith(status: RuntimeStatus.shuttingDown),
+      generation: generation,
+    );
+
+    final targetHost = _host;
+    final targetPort = _port;
+    final targetLockFile = _lockFile;
+
+    // 1. Initial check: is port listening?
+    final initialListening = await _supervisor.isPortListening(
+      targetHost,
+      targetPort,
+      timeout: const Duration(milliseconds: 500),
+    );
+    if (generation != _activeGeneration || _isDisposed) return ShutdownOutcome.gracefulSuccess;
+
+    if (!initialListening) {
+      // Process is not listening; check if lockfile exists and clear it
+      await _supervisor.clearRuntimeLockfileThroughHandle(targetLockFile);
+      _activeRuntimeInfo = null;
+      _updateState(
+        _currentState.copyWith(status: RuntimeStatus.stopped),
+        generation: generation,
+      );
+      return ShutdownOutcome.gracefulSuccess;
+    }
+
+    // 2. Request cooperative shutdown via POST /api/v1/system/shutdown
+    int? managedLlmPid;
+    bool managedByCore = false;
+
+    try {
+      final response = await _client.shutdownSystem(
+        reason: 'Desktop Exit Companion',
+        drainTimeoutSeconds: 6.0,
+        timeout: const Duration(seconds: 5),
+      );
+      managedLlmPid = response.managedLlmPid;
+      managedByCore = response.managedByCore;
+    } catch (e) {
+      // Shutdown request failed or timed out. Check if process is still alive.
+      final isStillListening = await _supervisor.isPortListening(
+        targetHost,
+        targetPort,
+        timeout: const Duration(milliseconds: 500),
+      );
+      if (!isStillListening) {
+        await _supervisor.clearRuntimeLockfileThroughHandle(targetLockFile);
+        _activeRuntimeInfo = null;
+        _updateState(
+          _currentState.copyWith(status: RuntimeStatus.stopped),
+          generation: generation,
+        );
+        return ShutdownOutcome.gracefulSuccess;
+      }
+
+      // Process is alive but failed/rejected shutdown. Treat as unresponsive runtime.
+      return _fallbackEmergencyTermination(
+        managedLlmPid: managedLlmPid,
+        managedByCore: managedByCore,
+        generation: generation,
+      );
+    }
+
+    // 3. Cooperative observation loop (up to timeout)
+    final stopwatch = Stopwatch()..start();
+    var delayMs = 100;
+
+    while (stopwatch.elapsed < timeout) {
+      if (generation != _activeGeneration || _isDisposed) {
+        return ShutdownOutcome.gracefulSuccess;
+      }
+
+      // Check if port stopped listening
+      final isListening = await _supervisor.isPortListening(
+        targetHost,
+        targetPort,
+        timeout: const Duration(milliseconds: 300),
+      );
+
+      if (!isListening) {
+        // Port closed! Verify descriptor/process table
+        final descriptor = _activeRuntimeInfo ?? await _supervisor.readDescriptorDirect(targetLockFile);
+        if (descriptor != null) {
+          final isAlive = await _supervisor.isProcessActiveAndMatching(
+            descriptor.pid,
+            expectedExecutable: descriptor.executablePath,
+          );
+          if (isAlive) {
+            // Process still exiting, wait brief moment
+            await Future<void>.delayed(const Duration(milliseconds: 150));
+            continue;
+          }
+        }
+
+        // Process has completely exited. Clean lockfile and complete graceful shutdown.
+        await _supervisor.clearRuntimeLockfileThroughHandle(targetLockFile);
+        _activeRuntimeInfo = null;
+        _updateState(
+          _currentState.copyWith(status: RuntimeStatus.stopped),
+          generation: generation,
+        );
+        return ShutdownOutcome.gracefulSuccess;
+      }
+
+      // Port is still listening: query system status to inspect quiescence status
+      try {
+        final status = await _client.getSystemStatus(
+          timeout: const Duration(milliseconds: 500),
+        );
+        if (status.managedLlmPid != null) managedLlmPid = status.managedLlmPid;
+        if (status.managedByCore) managedByCore = status.managedByCore;
+
+        final quiescence = status.shutdownQuiescenceStatus;
+        if (quiescence == 'incomplete_db_quiescence_timeout' ||
+            quiescence == 'incomplete_provider_lock_timeout') {
+          // Runtime encountered incomplete cleanup! DO NOT AUTO-KILL.
+          _updateState(
+            _currentState.copyWith(
+              status: RuntimeStatus.shutdownFailed,
+              shutdownFailureReason: ShutdownFailureReason.incompleteCleanup,
+              diagnosticMessage: 'Runtime reported $quiescence; runtime and database kept alive to prevent data loss.',
+            ),
+            generation: generation,
+          );
+          return ShutdownOutcome.incompleteCleanup;
+        }
+      } catch (_) {
+        // Status query may fail or 503 while runtime is shutting down; this is normal
+      }
+
+      await Future<void>.delayed(Duration(milliseconds: delayMs));
+      if (delayMs < 500) {
+        delayMs = (delayMs * 1.5).round();
+      }
+    }
+
+    // 4. Observation window expired!
+    if (generation != _activeGeneration || _isDisposed) {
+      return ShutdownOutcome.gracefulSuccess;
+    }
+
+    // Double-check if still listening
+    final stillListeningAtExpiry = await _supervisor.isPortListening(
+      targetHost,
+      targetPort,
+      timeout: const Duration(milliseconds: 300),
+    );
+
+    if (!stillListeningAtExpiry) {
+      await _supervisor.clearRuntimeLockfileThroughHandle(targetLockFile);
+      _activeRuntimeInfo = null;
+      _updateState(
+        _currentState.copyWith(status: RuntimeStatus.stopped),
+        generation: generation,
+      );
+      return ShutdownOutcome.gracefulSuccess;
+    }
+
+    // Still listening: try querying status one final time
+    try {
+      final status = await _client.getSystemStatus(
+        timeout: const Duration(milliseconds: 500),
+      );
+      if (status.shuttingDown) {
+        // Still actively cleaning up: do not kill, surface incompleteCleanup
+        _updateState(
+          _currentState.copyWith(
+            status: RuntimeStatus.shutdownFailed,
+            shutdownFailureReason: ShutdownFailureReason.incompleteCleanup,
+            diagnosticMessage: 'Shutdown observation window expired while runtime was still performing cleanup.',
+          ),
+          generation: generation,
+        );
+        return ShutdownOutcome.incompleteCleanup;
+      }
+    } catch (_) {}
+
+    // Runtime is unresponsive: attempt fallback termination
+    return _fallbackEmergencyTermination(
+      managedLlmPid: managedLlmPid,
+      managedByCore: managedByCore,
+      generation: generation,
+    );
+  }
+
+  Future<ShutdownOutcome> _fallbackEmergencyTermination({
+    int? managedLlmPid,
+    bool managedByCore = false,
+    required int generation,
+  }) async {
+    RuntimeLockfileData? descriptor = _activeRuntimeInfo ?? await _supervisor.readDescriptorDirect(_lockFile);
+    if (descriptor == null) {
+      final activePid = await _supervisor.findActiveRuntimeProcess(
+        port: _port,
+        expectedExecutable: _resolveExecutablePath(),
+      );
+      if (activePid != null) {
+        descriptor = RuntimeLockfileData(
+          schemaVersion: 1,
+          instanceId: UuidUtils.generateV4(),
+          pid: activePid,
+          port: _port,
+          startedAt: DateTime.now().toUtc(),
+          executablePath: _resolveExecutablePath(),
+        );
+      }
+    }
+
+    if (descriptor == null) {
+      _updateState(
+        _currentState.copyWith(
+          status: RuntimeStatus.shutdownFailed,
+          shutdownFailureReason: ShutdownFailureReason.unresponsiveRuntime,
+          diagnosticMessage: 'Cannot perform emergency termination: no runtime descriptor found.',
+        ),
+        generation: generation,
+      );
+      return ShutdownOutcome.unresponsiveRuntime;
+    }
+
+    final result = await _supervisor.terminateVerifiedRuntimeProcess(
+      expectedDescriptor: descriptor,
+      managedLlmPid: managedLlmPid,
+      managedByCore: managedByCore,
+    );
+
+    if (result.status == TerminationResultStatus.terminated ||
+        result.status == TerminationResultStatus.alreadyExited) {
+      await _supervisor.clearRuntimeLockfileThroughHandle(_lockFile);
+      _activeRuntimeInfo = null;
+      _updateState(
+        _currentState.copyWith(status: RuntimeStatus.stopped),
+        generation: generation,
+      );
+      return ShutdownOutcome.emergencyTerminated;
+    }
+
+    _updateState(
+      _currentState.copyWith(
+        status: RuntimeStatus.shutdownFailed,
+        shutdownFailureReason: ShutdownFailureReason.unresponsiveRuntime,
+        diagnosticMessage: 'Handle-bound emergency termination failed: ${result.diagnostic ?? result.status.name}',
+      ),
+      generation: generation,
+    );
+    return ShutdownOutcome.unresponsiveRuntime;
+  }
+
+  /// Explicit user-confirmed force termination of the local runtime.
+  ///
+  /// Invoked when the user chooses "Force Stop Local Runtime" from the
+  /// Incomplete Shutdown Dialog.
+  Future<ShutdownOutcome> forceEmergencyStopLocalRuntime() async {
+    _activeGeneration++;
+    final generation = _activeGeneration;
+
+    return _fallbackEmergencyTermination(
+      managedByCore: true,
       generation: generation,
     );
   }

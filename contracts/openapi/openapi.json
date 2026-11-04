@@ -12,7 +12,7 @@
           "Health"
         ],
         "summary": "Public Health Check",
-        "description": "Public liveness and readiness probe.\nAndroid uses this to detect if the Windows host PC is online on the local network.\nDoes not require pairing credentials or expose internal versions or database metrics.",
+        "description": "Public liveness and readiness probe.\nAndroid uses this to detect if the Windows host PC is online on the local network.\nReturns 503 when the runtime is shutting down.",
         "operationId": "health_check_api_v1_health_get",
         "responses": {
           "200": {
@@ -1781,7 +1781,7 @@
           "System Status"
         ],
         "summary": "Host System Status (Protected)",
-        "description": "Detailed Windows host machine telemetry and database diagnostics.\nRequires valid pairing token.",
+        "description": "Detailed Windows host machine telemetry and database diagnostics.\nRequires valid pairing token or host admin secret.",
         "operationId": "system_status_api_v1_system_status_get",
         "parameters": [
           {
@@ -1808,6 +1808,73 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SystemStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/shutdown": {
+      "post": {
+        "tags": [
+          "System Status"
+        ],
+        "summary": "Request Cooperative System Shutdown",
+        "description": "Cooperative local runtime termination endpoint (Host Admin only).",
+        "operationId": "system_shutdown_api_v1_system_shutdown_post",
+        "parameters": [
+          {
+            "name": "x-host-admin-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Host-Admin-Secret"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SystemShutdownRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemShutdownResponse"
                 }
               }
             }
@@ -5147,6 +5214,90 @@
         ],
         "title": "SessionResponse"
       },
+      "SystemShutdownRequest": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "description": "Reason for shutdown request.",
+            "default": "user_exit_companion"
+          },
+          "drain_timeout_seconds": {
+            "type": "number",
+            "title": "Drain Timeout Seconds",
+            "description": "Maximum duration to wait for persistence quiescence.",
+            "default": 6.0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SystemShutdownRequest",
+        "description": "Parameters for cooperative system shutdown."
+      },
+      "SystemShutdownResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Status transition indicator.",
+            "default": "shutting_down"
+          },
+          "pid": {
+            "type": "integer",
+            "title": "Pid",
+            "description": "Process ID of the shutting-down runtime."
+          },
+          "managed_llm_pid": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Managed Llm Pid",
+            "description": "PID of managed child LLM router if running."
+          },
+          "managed_by_core": {
+            "type": "boolean",
+            "title": "Managed By Core",
+            "description": "Whether the child LLM router was spawned by Core.",
+            "default": false
+          },
+          "already_shutting_down": {
+            "type": "boolean",
+            "title": "Already Shutting Down",
+            "description": "Whether shutdown was already in progress.",
+            "default": false
+          },
+          "shutdown_phase": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shutdown Phase",
+            "description": "Current phase of shutdown lifecycle."
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Informational message.",
+            "default": "Cooperative shutdown initiated."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "pid"
+        ],
+        "title": "SystemShutdownResponse",
+        "description": "Acknowledgement of accepted cooperative shutdown request."
+      },
       "SystemStatusResponse": {
         "properties": {
           "status": {
@@ -5196,6 +5347,54 @@
             "format": "date-time",
             "title": "Timestamp",
             "description": "UTC server timestamp."
+          },
+          "shutting_down": {
+            "type": "boolean",
+            "title": "Shutting Down",
+            "description": "Whether system shutdown has been initiated.",
+            "default": false
+          },
+          "shutdown_phase": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shutdown Phase",
+            "description": "Current phase of shutdown sequence."
+          },
+          "shutdown_quiescence_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shutdown Quiescence Status",
+            "description": "Quiescence barrier completion status."
+          },
+          "managed_llm_pid": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Managed Llm Pid",
+            "description": "PID of Core-managed LLM router if active."
+          },
+          "managed_by_core": {
+            "type": "boolean",
+            "title": "Managed By Core",
+            "description": "Whether active LLM router is Core-managed.",
+            "default": false
           }
         },
         "additionalProperties": false,

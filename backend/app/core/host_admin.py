@@ -12,6 +12,9 @@ from app.core.windows_security import reject_reparse_path, secure_private_path, 
 
 
 def host_admin_secret_path() -> Path:
+    override = os.environ.get("COMPANION_HOST_ADMIN_SECRET_FILE")
+    if override:
+        return Path(override)
     root = os.environ.get("LOCALAPPDATA")
     if not root:
         raise RuntimeError("LOCALAPPDATA is required for the Host Admin credential")

@@ -227,7 +227,7 @@ void main() {
       expect(items.any((item) => item.key == 'status' && item.disabled), isTrue);
       expect(items.any((item) => item.key == 'hide_to_tray'), isTrue);
       expect(items.any((item) => item.key == 'quit_ui_dev'), isTrue);
-      expect(items.any((item) => item.key == 'exit_full' && item.disabled), isTrue);
+      expect(items.any((item) => item.key == 'exit_full' && !item.disabled), isTrue);
 
     });
 

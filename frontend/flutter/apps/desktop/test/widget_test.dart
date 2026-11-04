@@ -69,7 +69,16 @@ void main() {
     // Tap "Exit Companion"
     await tester.ensureVisible(find.text('Exit Companion'));
     await tester.tap(find.text('Exit Companion'));
-    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(find.text('Exit AI Companion?'), findsOneWidget);
+
+    // Confirm in dialog
+    await tester.tap(find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.text('Exit Companion'),
+    ));
+    await tester.pumpAndSettle();
+
     expect(exitHandled, isTrue);
     expect(windowAdapter.isDestroyed, isTrue);
   });
@@ -115,7 +124,16 @@ void main() {
     // Tap Exit Companion (should remain enabled)
     await tester.ensureVisible(find.text('Exit Companion'));
     await tester.tap(find.text('Exit Companion'));
-    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(find.text('Exit AI Companion?'), findsOneWidget);
+
+    // Confirm in dialog
+    await tester.tap(find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.text('Exit Companion'),
+    ));
+    await tester.pumpAndSettle();
+
     expect(exitHandled, isTrue);
   });
 }

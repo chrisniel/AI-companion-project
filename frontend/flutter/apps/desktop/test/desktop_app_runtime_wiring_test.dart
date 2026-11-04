@@ -97,7 +97,7 @@ class FakeChatClient extends CompanionClient {
   Future<Map<String, dynamic>> getOwnSession() async => {'id':'test-profile', 'expires_at':'2099-01-01T00:00:00Z'};
 
   @override
-  Future<ModelStatusResponse> getModelStatus() async {
+  Future<ModelStatusResponse> getModelStatus({Duration timeout = const Duration(seconds: 5)}) async {
     return const ModelStatusResponse(
       provider: 'llama.cpp',
       activeModel: 'qwen2.5-7b',
@@ -119,6 +119,7 @@ class FakeChatClient extends CompanionClient {
     String modelName, {
     bool loadImmediately = false,
     String? profile,
+    Duration? timeout,
   }) async {
     return const ModelStatusResponse(
       provider: 'llama.cpp',
@@ -128,7 +129,11 @@ class FakeChatClient extends CompanionClient {
   }
 
   @override
-  Future<ModelStatusResponse> loadModel({String? modelName, String? profile}) async {
+  Future<ModelStatusResponse> loadModel({
+    String? modelName,
+    String? profile,
+    Duration timeout = const Duration(seconds: 90),
+  }) async {
     return const ModelStatusResponse(
       provider: 'llama.cpp',
       activeModel: 'qwen3-vl-2b-instruct',

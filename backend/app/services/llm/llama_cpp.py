@@ -23,7 +23,12 @@ from app.services.host_config import (
     resolve_effective_model,
     save_model_selection,
 )
-from app.services.llm.base import BaseLLMProvider, GeneratedText, GenerationStream
+from app.services.llm.base import (
+    BaseLLMProvider,
+    GeneratedText,
+    GenerationStream,
+    ProviderShutdownResult,
+)
 from app.services.llm.runtime_state import LLMRuntimeState
 from app.services.model_registry import (
     build_model_list,
@@ -177,6 +182,9 @@ class LlamaCppProvider(BaseLLMProvider):
         self._active_work_drained.set()
         self._worker_tasks: set[asyncio.Task] = set()
         self._closing = False
+        self._shutdown_event = asyncio.Event()
+        self._active_load_task: Optional[asyncio.Task] = None
+        self._active_router_clients: set[httpx.AsyncClient] = set()
         self._shutdown_drain_timeout = 120.0
         self._custom_engine_version: Optional[str] = None
 
@@ -242,6 +250,70 @@ class LlamaCppProvider(BaseLLMProvider):
     @property
     def provider_name(self) -> str:
         return "llama_cpp"
+
+    def signal_shutdown_immediately(self) -> None:
+        """Cooperative lock-free signal to abort in-flight load and generation.
+
+        CRITICAL SAFEGUARD (Correction 1): Strictly lock-free. Sets cancellation
+        flags and signals in-flight tasks/clients, but NEVER mutates shared
+        provider state (_server_process, _server_client, _runtime_state) without
+        holding self._lock.
+        """
+        self._closing = True
+        self._shutdown_event.set()
+        if self._active_load_task and not self._active_load_task.done():
+            self._active_load_task.cancel()
+        for client in list(self._active_router_clients):
+            try:
+                asyncio.create_task(client.aclose())
+            except Exception:
+                pass
+
+    async def _sleep_or_abort(self, seconds: float) -> bool:
+        """Interruptible sleep that aborts immediately if shutdown is signaled.
+
+        Returns True if the sleep completed without interruption, False if aborted.
+        """
+        if self._shutdown_event.is_set():
+            return False
+        try:
+            await asyncio.wait_for(self._shutdown_event.wait(), timeout=seconds)
+            return False
+        except asyncio.TimeoutError:
+            return True
+
+    def _stop_managed_router_locked(self) -> bool:
+        """Stop Core-managed llama-server.exe process under self._lock.
+
+        MUST only be called while holding self._lock.
+        Returns True if a Core-managed process was stopped, False otherwise.
+        Never touches external routers (_managed_by_core == False).
+        """
+        if not self._managed_by_core or not self._server_process:
+            return False
+
+        logger.info(f"Terminating Core-owned router PID={self._server_pid}")
+        try:
+            self._server_process.terminate()
+            try:
+                self._server_process.wait(timeout=3.0)
+            except subprocess.TimeoutExpired:
+                self._server_process.kill()
+                self._server_process.wait(timeout=1.0)
+        except Exception as exc:
+            logger.error(f"PID termination failed: {exc}")
+
+        self._server_process = None
+        self._server_pid = None
+        self._managed_by_core = False
+        self._server_is_active = False
+        self._active_model_name = None
+        self._applied_profile = None
+        self._applied_context_size = None
+        self._applied_gpu_layers = None
+        self._applied_mmproj_offload = None
+        self._runtime_state = LLMRuntimeState.SERVER_STOPPED
+        return True
 
     async def _router_load_model(self, model_name: str) -> bool:
         """Load model into VRAM via router API — LLAMA_CPP_RUNTIME_ARCHITECTURE.md §5."""
@@ -377,7 +449,7 @@ class LlamaCppProvider(BaseLLMProvider):
     async def load_model(self, model_name: Optional[str] = None, profile: Optional[str] = None) -> bool:
         async with self._lock:
             self._last_error = None
-            if self._closing or self.has_active_generation:
+            if self._closing or self._shutdown_event.is_set() or self.has_active_generation:
                 self._last_error = (
                     "CANNOT_CHANGE_PROFILE_DURING_GENERATION"
                     if profile and profile.lower() != self._active_profile and self.has_active_generation
@@ -605,11 +677,17 @@ class LlamaCppProvider(BaseLLMProvider):
                 self._applied_context_size = None
                 self._applied_gpu_layers = None
                 self._applied_mmproj_offload = None
+                self._runtime_state = LLMRuntimeState.SERVER_STOPPED
 
             # Poll for readiness up to 45 seconds
             healthy = False
             for _ in range(90):
-                await asyncio.sleep(0.5)
+                if not await self._sleep_or_abort(0.5):
+                    logger.info("load_model aborted by shutdown event during router startup")
+                    self._last_error = "LOAD_ABORTED_BY_SHUTDOWN"
+                    self._runtime_state = LLMRuntimeState.SERVER_STOPPED
+                    _cleanup_failed_proc(proc)
+                    return False
                 poll_res = self._server_process.poll()
                 if poll_res is not None:
                     err_snippet = ""
@@ -636,9 +714,21 @@ class LlamaCppProvider(BaseLLMProvider):
                 _cleanup_failed_proc(proc)
                 return False
 
+            if self._shutdown_event.is_set():
+                logger.info("load_model aborted by shutdown event before router load")
+                self._last_error = "LOAD_ABORTED_BY_SHUTDOWN"
+                self._runtime_state = LLMRuntimeState.SERVER_STOPPED
+                _cleanup_failed_proc(proc)
+                return False
+
             # Load model into VRAM via router API
             self._runtime_state = LLMRuntimeState.MODEL_LOADING
             if await self._router_load_model(target_model_name):
+                if self._shutdown_event.is_set():
+                    logger.info("load_model completed router load but shutdown is signaled; cleaning up under lock")
+                    self._runtime_state = LLMRuntimeState.SERVER_STOPPED
+                    _cleanup_failed_proc(proc)
+                    return False
                 self._runtime_state = LLMRuntimeState.MODEL_READY
                 self._active_model_name = target_model_name
                 self._last_active_at = datetime.now(timezone.utc)
@@ -748,6 +838,7 @@ class LlamaCppProvider(BaseLLMProvider):
                 self._applied_gpu_layers = None
                 self._applied_mmproj_offload = None
                 self._runtime_state = LLMRuntimeState.SERVER_STOPPED
+                self._runtime_state = LLMRuntimeState.SERVER_STOPPED
                 if self._server_client:
                     await self._server_client.aclose()
                     self._server_client = None
@@ -790,6 +881,48 @@ class LlamaCppProvider(BaseLLMProvider):
                     break
 
     async def get_status(self) -> ModelStatusResponse:
+        # M5: Lock-free snapshot during transitional states (SERVER_STARTING, MODEL_LOADING, MODEL_UNLOADING)
+        if self._runtime_state in (
+            LLMRuntimeState.SERVER_STARTING,
+            LLMRuntimeState.MODEL_LOADING,
+            LLMRuntimeState.MODEL_UNLOADING,
+        ):
+            req_params = self._get_profile_params(self._active_profile)
+            effective_router_running = (
+                (self._server_process is not None and self._server_process.poll() is None)
+                or self._server_is_active
+            )
+            return ModelStatusResponse(
+                provider=self.provider_name,
+                engine_version=self._engine_version,
+                router_running=effective_router_running,
+                managed_by_core=self._managed_by_core and effective_router_running,
+                runtime_state=self._runtime_state,
+                active_model=self._active_model_name,
+                selected_model=get_saved_model_selection(),
+                model_resident=False,
+                model_loaded=False,
+                model_awake=False,
+                requested_profile=self._active_profile,
+                applied_profile=self._applied_profile,
+                applied_context_size=self._applied_context_size,
+                applied_gpu_layers=self._applied_gpu_layers,
+                requested_mmproj_offload=req_params.get("mmproj_offload", True),
+                applied_mmproj_offload=self._applied_mmproj_offload,
+                mmproj_offload=self._applied_mmproj_offload if self._applied_mmproj_offload is not None else req_params.get("mmproj_offload", True),
+                generation_active=self.has_active_generation,
+                last_runtime_error=self._last_error,
+                is_loaded=False,
+                active_profile=self._active_profile,
+                context_size=self._applied_context_size or req_params["n_ctx"],
+                gpu_layers=self._applied_gpu_layers or req_params["n_gpu_layers"],
+                idle_timeout_seconds=settings.LLAMA_ROUTER_IDLE_TIMEOUT,
+                seconds_until_idle=None,
+                seconds_until_unload=None,
+                available_models=[],
+                available_registry=[],
+            )
+
         router_running = False
         loaded_model_id = None
         model_status_val = None
@@ -819,7 +952,13 @@ class LlamaCppProvider(BaseLLMProvider):
                     pass
 
                 if loaded_model_id:
-                    self._active_model_name = loaded_model_id
+                    matched_entry = find_model_registry_entry(loaded_model_id)
+                    canonical_id = (
+                        (matched_entry.manifest.id or matched_entry.runtime_model_id)
+                        if matched_entry
+                        else loaded_model_id
+                    )
+                    self._active_model_name = canonical_id
                     if model_status_val == "sleeping":
                         self._runtime_state = LLMRuntimeState.MODEL_SLEEPING
                     else:
@@ -1089,17 +1228,97 @@ class LlamaCppProvider(BaseLLMProvider):
 
         return GenerationStream(_stream_generator(), meta=stream_meta)
 
-    async def shutdown(self) -> None:
-        """Drain in-flight generation, unload model, stop router."""
-        async with self._lock:
-            self._closing = True
+    async def shutdown(
+        self,
+        drain_timeout: Optional[float] = None,
+        lock_timeout: float = 2.0,
+    ) -> ProviderShutdownResult:
+        """Drain in-flight generation, acquire lock, unload model, and stop Core router.
+
+        CRITICAL SAFEGUARD (Correction 1 & Safeguard A):
+        1. Emits lock-free signal_shutdown_immediately().
+        2. Drains active generation up to drain_timeout.
+        3. Attempts to acquire self._lock up to lock_timeout.
+        4. If lock acquisition fails, DOES NOT touch shared state unlocked; returns
+           ProviderShutdownResult(completed_cleanly=False, lock_acquired=False, reason="PROVIDER_LOCK_TIMEOUT").
+        5. Inside acquired lock, unloads model, calls _stop_managed_router_locked(),
+           and guards against freeing native Route B model while generation lease is held (Safeguard D).
+        """
+        effective_drain = drain_timeout if drain_timeout is not None else getattr(self, "_shutdown_drain_timeout", 4.0)
+        self.signal_shutdown_immediately()
+
         if self.has_active_generation:
             try:
-                # Match the existing HTTP generation timeout; native work cannot
-                # be forcibly stopped. A deadline preserves ownership and model.
-                await asyncio.wait_for(self._active_work_drained.wait(), self._shutdown_drain_timeout)
+                await asyncio.wait_for(self._active_work_drained.wait(), timeout=effective_drain)
             except asyncio.TimeoutError:
-                self._last_error = "SHUTDOWN_BUSY"
-                logger.warning("Shutdown drain deadline reached; active model retained")
-                return
-        await self.unload_model()
+                self._last_error = "DRAIN_TIMEOUT"
+                logger.warning(f"Shutdown drain deadline ({effective_drain}s) reached with active generation")
+
+        # Strict lock acquisition with timeout
+        managed_pid = self._server_pid
+        managed_core = self._managed_by_core
+        try:
+            await asyncio.wait_for(self._lock.acquire(), timeout=lock_timeout)
+        except asyncio.TimeoutError:
+            logger.error(f"Provider shutdown lock acquisition timed out after {lock_timeout}s")
+            self._last_error = "PROVIDER_LOCK_TIMEOUT"
+            return ProviderShutdownResult(
+                completed_cleanly=False,
+                lock_acquired=False,
+                reason="PROVIDER_LOCK_TIMEOUT",
+                managed_llm_pid=managed_pid,
+                managed_by_core=managed_core,
+            )
+
+        try:
+            if self._idle_check_task and not self._idle_check_task.done():
+                self._idle_check_task.cancel()
+
+            # Safeguards: Route B native model and Route A router must NOT be freed/stopped while generation active
+            if not self.has_active_generation:
+                if self._llm is not None:
+                    logger.info("Unloading in-process native model on clean shutdown")
+                    del self._llm
+                    self._llm = None
+                    gc.collect()
+
+                # Route A: Core router vs external router
+                if self._managed_by_core:
+                    self._stop_managed_router_locked()
+                else:
+                    # External router: unload model weights via router API if active, but DO NOT terminate router!
+                    if self._active_model_name and self._server_is_active:
+                        try:
+                            runtime_id = resolve_runtime_model_id(self._active_model_name)
+                            await self._router_unload_model(runtime_id)
+                        except Exception:
+                            pass
+                    self._active_model_name = None
+                    self._runtime_state = LLMRuntimeState.MODEL_UNLOADED
+
+                if self._server_client:
+                    try:
+                        await self._server_client.aclose()
+                    except Exception:
+                        pass
+                    self._server_client = None
+            else:
+                logger.warning("Active generation remains; retaining model weights, router, and client leases")
+
+            if self.has_active_generation:
+                return ProviderShutdownResult(
+                    completed_cleanly=False,
+                    lock_acquired=True,
+                    reason="DRAIN_TIMEOUT",
+                    managed_llm_pid=managed_pid,
+                    managed_by_core=managed_core,
+                )
+
+            return ProviderShutdownResult(
+                completed_cleanly=True,
+                lock_acquired=True,
+                managed_llm_pid=managed_pid,
+                managed_by_core=managed_core,
+            )
+        finally:
+            self._lock.release()

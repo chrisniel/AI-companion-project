@@ -4,13 +4,22 @@ import os
 import platform
 import socket
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends
+from typing import Optional
+from fastapi import APIRouter, Depends, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, verify_token
 from app.core.config import settings
-from app.schemas.health import HealthResponse, SystemStatusResponse
+from app.core.host_admin import require_host_admin
+from app.core.runtime_lifecycle import runtime_lifecycle
+from app.schemas.health import (
+    HealthResponse,
+    SystemShutdownRequest,
+    SystemShutdownResponse,
+    SystemStatusResponse,
+)
 
 public_health_router = APIRouter(tags=["Health"])
 system_router = APIRouter(tags=["System Status"])
@@ -18,12 +27,17 @@ router = public_health_router  # Backwards compatibility
 
 
 @public_health_router.get("/health", response_model=HealthResponse, summary="Public Health Check")
-async def health_check() -> HealthResponse:
+async def health_check() -> HealthResponse | JSONResponse:
     """
     Public liveness and readiness probe.
     Android uses this to detect if the Windows host PC is online on the local network.
-    Does not require pairing credentials or expose internal versions or database metrics.
+    Returns 503 when the runtime is shutting down.
     """
+    if runtime_lifecycle.is_shutting_down:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"status": "shutting_down"},
+        )
     return HealthResponse(status="healthy")
 
 
@@ -35,7 +49,7 @@ async def health_check() -> HealthResponse:
 async def system_status(db: AsyncSession = Depends(get_db)) -> SystemStatusResponse:
     """
     Detailed Windows host machine telemetry and database diagnostics.
-    Requires valid pairing token.
+    Requires valid pairing token or host admin secret.
     """
     db_connected = False
     try:
@@ -53,4 +67,39 @@ async def system_status(db: AsyncSession = Depends(get_db)) -> SystemStatusRespo
         version=settings.VERSION,
         database_connected=db_connected,
         timestamp=datetime.now(timezone.utc),
+        shutting_down=runtime_lifecycle.is_shutting_down,
+        shutdown_phase=runtime_lifecycle.shutdown_phase,
+        shutdown_quiescence_status=runtime_lifecycle.shutdown_quiescence_status,
+        managed_llm_pid=runtime_lifecycle.managed_llm_pid,
+        managed_by_core=runtime_lifecycle.managed_by_core,
+    )
+
+
+@system_router.post(
+    "/system/shutdown",
+    response_model=SystemShutdownResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Request Cooperative System Shutdown",
+)
+async def system_shutdown(
+    request: Optional[SystemShutdownRequest] = None,
+    _: str = Depends(require_host_admin),
+) -> SystemShutdownResponse:
+    """
+    Cooperative local runtime termination endpoint (Host Admin only).
+    """
+    reason = request.reason if request else "user_exit_companion"
+    drain_timeout = request.drain_timeout_seconds if request else 6.0
+    already_shutting_down, msg = await runtime_lifecycle.initiate_shutdown(
+        reason=reason,
+        drain_timeout_seconds=drain_timeout,
+    )
+    return SystemShutdownResponse(
+        status="shutting_down",
+        pid=os.getpid(),
+        managed_llm_pid=runtime_lifecycle.managed_llm_pid,
+        managed_by_core=runtime_lifecycle.managed_by_core,
+        already_shutting_down=already_shutting_down,
+        shutdown_phase=runtime_lifecycle.shutdown_phase,
+        message=f"Cooperative shutdown {'already in progress' if already_shutting_down else 'initiated'}.",
     )

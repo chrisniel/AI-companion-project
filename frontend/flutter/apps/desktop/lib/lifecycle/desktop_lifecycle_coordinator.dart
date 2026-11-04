@@ -37,6 +37,7 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
   final String trayIconPath;
   final String trayToolTip;
   final Future<void> Function()? onExitRequested;
+  Future<void> Function()? onExitMenuTriggered;
 
   bool _isInitialized = false;
   bool _isWindowVisible = false;
@@ -151,6 +152,15 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
         case RuntimeStatus.dormant:
           statusLabel = 'Runtime: Dormant';
           break;
+        case RuntimeStatus.shuttingDown:
+          statusLabel = 'Runtime: Shutting Down...';
+          break;
+        case RuntimeStatus.stopped:
+          statusLabel = 'Runtime: Stopped';
+          break;
+        case RuntimeStatus.shutdownFailed:
+          statusLabel = 'Runtime: Shutdown Failed';
+          break;
       }
     }
 
@@ -183,8 +193,8 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
       MenuItem.separator(),
       MenuItem(
         key: 'exit_full',
-        label: 'Exit Companion (Full Shutdown - Planned PC-HOST-005)',
-        disabled: true,
+        label: 'Exit Companion',
+        disabled: false,
       ),
     ]);
 
@@ -300,8 +310,15 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
       restoreAndFocusWindow();
     } else if (menuItem.key == 'hide_to_tray') {
       hideToTray();
-    } else if (menuItem.key == 'quit_ui_dev' || menuItem.key == 'exit') {
+    } else if (menuItem.key == 'quit_ui_dev') {
       handleExitRequested();
+    } else if (menuItem.key == 'exit_full' || menuItem.key == 'exit') {
+      if (onExitMenuTriggered != null) {
+        restoreAndFocusWindow();
+        onExitMenuTriggered!();
+      } else {
+        handleExitRequested();
+      }
     }
   }
 

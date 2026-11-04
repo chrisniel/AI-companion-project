@@ -97,6 +97,33 @@ class WindowsRuntimeProcessSupervisor {
     } catch (_) {}
   }
 
+  /// Acquires an exclusive kernel lock on [lockFile], truncates it to 0 bytes,
+  /// flushes, releases the lock, and deletes the file.
+  Future<bool> clearRuntimeLockfileThroughHandle(
+    File lockFile, {
+    Duration timeout = const Duration(seconds: 2),
+  }) async {
+    final handle = await acquireStartupLock(lockFile, timeout: timeout);
+    if (handle == null) {
+      return false;
+    }
+    try {
+      await handle.setPosition(0);
+      await handle.truncate(0);
+      await handle.flush();
+    } catch (_) {
+      // Best-effort truncation before release
+    } finally {
+      await releaseStartupLock(handle);
+    }
+    try {
+      if (await lockFile.exists()) {
+        await lockFile.delete();
+      }
+    } catch (_) {}
+    return true;
+  }
+
   /// Atomically writes [data] descriptor through the currently held [lockHandle].
   ///
   /// Resets position to 0, truncates to 0, writes JSON string, and flushes to disk.
@@ -244,6 +271,24 @@ class WindowsRuntimeProcessSupervisor {
       }
     }
     return false;
+  }
+
+  /// Evaluates whether [commandLine] matches a companion runtime entrypoint.
+  ///
+  /// Verifies module (`app.runtime_server` or `uvicorn`) and target (`app.main:app`).
+  /// When [expectedPort] is provided, verifies that `--port <port>` matches exactly.
+  static bool isCompanionRuntimeCommandLine(
+    String commandLine, {
+    int? expectedPort,
+  }) {
+    if (commandLine.isEmpty) return false;
+    final hasModule = (commandLine.contains('app.runtime_server') || commandLine.contains('uvicorn')) &&
+        commandLine.contains('app.main:app');
+    if (!hasModule) return false;
+    if (expectedPort != null) {
+      return matchesExactPort(commandLine, expectedPort);
+    }
+    return true;
   }
 
   /// Verifies whether [actualPath] matches [expectedPath] on Windows filesystem.
@@ -456,7 +501,7 @@ class WindowsRuntimeProcessSupervisor {
       }
 
       // 2. Command line must contain companion application module
-      if (!candidate.commandLine.contains('uvicorn') || !candidate.commandLine.contains('app.main:app')) {
+      if (!isCompanionRuntimeCommandLine(candidate.commandLine, expectedPort: port)) {
         return ProcessDiscoveryResult(
           status: ProcessDiscoveryStatus.unverifiedCandidate,
           candidates: candidates,
@@ -502,6 +547,215 @@ class WindowsRuntimeProcessSupervisor {
       timeout: timeout,
     );
     return result.status == ProcessDiscoveryStatus.verified ? result.verifiedProcess?.pid : null;
+  }
+
+  /// Performs handle-bound, provenance-verified termination of a local runtime process.
+  ///
+  /// Fails closed if process identity, executable provenance, start time, or command line
+  /// cannot be verified via the held process handle and Windows process table.
+  /// When [managedByCore] is true and [managedLlmPid] is provided, also terminates
+  /// the child inference server process if verified as a llama-server instance.
+  Future<TerminationResult> terminateVerifiedRuntimeProcess({
+    required RuntimeLockfileData expectedDescriptor,
+    int? managedLlmPid,
+    bool managedByCore = false,
+    Duration timeout = const Duration(seconds: 8),
+  }) async {
+    final escapedExe = expectedDescriptor.executablePath.replaceAll("'", "''");
+    final startedAtStr = expectedDescriptor.startedAt.toUtc().toIso8601String();
+    final targetPid = expectedDescriptor.pid;
+    final targetPort = expectedDescriptor.port;
+    final managedPid = managedLlmPid ?? 0;
+    final coreManaged = managedByCore ? '\$true' : '\$false';
+
+    final script = '''
+\$ErrorActionPreference = 'Stop'
+\$targetPid = $targetPid
+\$expectedExe = '$escapedExe'
+\$expectedPort = $targetPort
+\$startedAtStr = '$startedAtStr'
+\$managedLlmPid = $managedPid
+\$managedByCore = $coreManaged
+
+try {
+  \$proc = [System.Diagnostics.Process]::GetProcessById(\$targetPid)
+} catch {
+  [PSCustomObject]@{ status = 'alreadyExited'; childTerminated = \$false } | ConvertTo-Json -Compress
+  exit 0
+}
+
+try {
+  \$null = \$proc.Handle
+  \$procStartTimeUtc = \$proc.StartTime.ToUniversalTime()
+  \$expectedStartTimeUtc = [DateTime]::Parse(\$startedAtStr).ToUniversalTime()
+  \$diffSec = [Math]::Abs((\$procStartTimeUtc - \$expectedStartTimeUtc).TotalSeconds)
+  if (\$diffSec -gt 15) {
+    [PSCustomObject]@{ status = 'provenanceMismatch'; childTerminated = \$false; diagnostic = "Process start time drift (\$diffSec s) exceeds 15s" } | ConvertTo-Json -Compress
+    exit 0
+  }
+
+  \$cim = Get-CimInstance Win32_Process -Filter "ProcessId = \$targetPid" -ErrorAction Stop
+  if (\$null -eq \$cim) {
+    [PSCustomObject]@{ status = 'provenanceMismatch'; childTerminated = \$false; diagnostic = 'WMI query returned no process for targetPid' } | ConvertTo-Json -Compress
+    exit 0
+  }
+
+  \$cmdLine = if (\$cim.CommandLine) { \$cim.CommandLine } else { '' }
+  \$actualExe = if (\$cim.ExecutablePath) { \$cim.ExecutablePath } else { '' }
+
+  \$normExpectedExe = [IO.Path]::GetFullPath(\$expectedExe).ToLowerInvariant()
+  \$normActualExe = if (\$actualExe) { [IO.Path]::GetFullPath(\$actualExe).ToLowerInvariant() } else { '' }
+
+  \$exeMatches = \$false
+  if (\$normActualExe -eq \$normExpectedExe) {
+    \$exeMatches = \$true
+  } else {
+    \$actBase = [IO.Path]::GetFileName(\$normActualExe)
+    \$expBase = [IO.Path]::GetFileName(\$normExpectedExe)
+    if ((\$actBase -in @('python.exe', 'pythonw.exe', 'python3.exe')) -and (\$expBase -in @('python.exe', 'pythonw.exe', 'python3.exe'))) {
+      if ([IO.Path]::GetDirectoryName(\$normActualExe) -eq [IO.Path]::GetDirectoryName(\$normExpectedExe)) {
+        \$exeMatches = \$true
+      }
+    }
+  }
+
+  if (-not \$exeMatches) {
+    [PSCustomObject]@{ status = 'provenanceMismatch'; childTerminated = \$false; diagnostic = "Executable path mismatch: actual '\$actualExe' vs expected '\$expectedExe'" } | ConvertTo-Json -Compress
+    exit 0
+  }
+
+  \$isCompanion = (\$cmdLine -match 'app\\.runtime_server' -or \$cmdLine -match 'uvicorn') -and (\$cmdLine -match 'app\\.main:app')
+  \$portPattern = "(?:^|\\s)--port(?:\\s+|=)[`"']?" + \$expectedPort + "[`"']?(?:\\s|`"|'|\$)"
+  \$portMatches = (\$cmdLine -match \$portPattern)
+
+  if (-not \$isCompanion -or -not \$portMatches) {
+    [PSCustomObject]@{ status = 'provenanceMismatch'; childTerminated = \$false; diagnostic = "CommandLine did not match companion runtime or port \$expectedPort: \$cmdLine" } | ConvertTo-Json -Compress
+    exit 0
+  }
+
+  \$childKilled = \$false
+  if (\$managedByCore -and \$managedLlmPid -gt 0) {
+    try {
+      \$childProc = [System.Diagnostics.Process]::GetProcessById(\$managedLlmPid)
+      \$childName = \$childProc.ProcessName.ToLowerInvariant()
+      if (\$childName -match 'llama') {
+        \$childProc.Kill()
+        \$childProc.WaitForExit(3000)
+        \$childKilled = \$true
+      }
+    } catch {}
+  }
+
+  \$proc.Kill()
+  \$proc.WaitForExit(5000)
+  [PSCustomObject]@{ status = 'terminated'; childTerminated = \$childKilled } | ConvertTo-Json -Compress
+} catch {
+  [PSCustomObject]@{ status = 'inspectionUnavailable'; childTerminated = \$false; diagnostic = \$_.Exception.Message } | ConvertTo-Json -Compress
+}
+''';
+
+    try {
+      final process = await _launcher.start(
+        'powershell',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          script,
+        ],
+        runInShell: false,
+      );
+
+      final stdoutFuture = utf8.decoder.bind(process.stdout).join().catchError((_) => '');
+      final stderrFuture = utf8.decoder.bind(process.stderr).join().catchError((_) => '');
+
+      int exitCode;
+      String stdoutStr = '';
+      String stderrStr = '';
+      try {
+        final results = await Future.wait([
+          process.exitCode,
+          stdoutFuture,
+          stderrFuture,
+        ]).timeout(timeout);
+        exitCode = results[0] as int;
+        stdoutStr = results[1] as String;
+        stderrStr = results[2] as String;
+      } on TimeoutException {
+        try {
+          process.kill();
+        } catch (_) {}
+        return const TerminationResult(
+          status: TerminationResultStatus.timeout,
+          diagnostic: 'Termination timed out while waiting for PowerShell script',
+        );
+      }
+
+      if (exitCode != 0) {
+        return TerminationResult(
+          status: TerminationResultStatus.inspectionUnavailable,
+          diagnostic: 'Termination script failed with exit code $exitCode: $stderrStr',
+        );
+      }
+
+      final jsonStr = stdoutStr.trim();
+      if (jsonStr.isEmpty) {
+        return const TerminationResult(
+          status: TerminationResultStatus.inspectionUnavailable,
+          diagnostic: 'Empty output from termination script',
+        );
+      }
+
+      final decoded = jsonDecode(jsonStr);
+      if (decoded is! Map<String, dynamic>) {
+        return TerminationResult(
+          status: TerminationResultStatus.inspectionUnavailable,
+          diagnostic: 'Unexpected JSON output structure: $decoded',
+        );
+      }
+
+      final statusStr = decoded['status'] as String? ?? '';
+      final childTerminated = decoded['childTerminated'] as bool? ?? false;
+      final diagnostic = decoded['diagnostic'] as String?;
+
+      switch (statusStr) {
+        case 'terminated':
+          return TerminationResult(
+            status: TerminationResultStatus.terminated,
+            childTerminated: childTerminated,
+            diagnostic: diagnostic,
+          );
+        case 'alreadyExited':
+          return TerminationResult(
+            status: TerminationResultStatus.alreadyExited,
+            childTerminated: childTerminated,
+            diagnostic: diagnostic,
+          );
+        case 'provenanceMismatch':
+          return TerminationResult(
+            status: TerminationResultStatus.provenanceMismatch,
+            childTerminated: childTerminated,
+            diagnostic: diagnostic,
+          );
+        case 'timeout':
+          return TerminationResult(
+            status: TerminationResultStatus.timeout,
+            childTerminated: childTerminated,
+            diagnostic: diagnostic,
+          );
+        default:
+          return TerminationResult(
+            status: TerminationResultStatus.inspectionUnavailable,
+            childTerminated: childTerminated,
+            diagnostic: diagnostic ?? 'Unknown termination status: $statusStr',
+          );
+      }
+    } catch (e) {
+      return TerminationResult(
+        status: TerminationResultStatus.inspectionUnavailable,
+        diagnostic: 'Exception during process termination: $e',
+      );
+    }
   }
 }
 
@@ -555,5 +809,36 @@ class ProcessDiscoveryResult {
     this.verifiedProcess,
     this.candidates = const [],
     this.diagnostic,
+  });
+}
+
+/// Status of process termination attempt.
+enum TerminationResultStatus {
+  /// The process was verified and successfully terminated.
+  terminated,
+
+  /// The process was already dead / not found.
+  alreadyExited,
+
+  /// Process failed provenance verification (different executable, PID reuse, start time drift, etc.).
+  provenanceMismatch,
+
+  /// Process inspection or OS command failed / threw an exception.
+  inspectionUnavailable,
+
+  /// The termination attempt timed out.
+  timeout,
+}
+
+/// Result of handle-bound process termination.
+class TerminationResult {
+  final TerminationResultStatus status;
+  final String? diagnostic;
+  final bool childTerminated;
+
+  const TerminationResult({
+    required this.status,
+    this.diagnostic,
+    this.childTerminated = false,
   });
 }

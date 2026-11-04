@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:companion_api/companion_api.dart';
@@ -7,6 +8,7 @@ import 'package:flutter/material.dart';
 
 import '../controllers/desktop_settings_controller.dart';
 import '../coordinator/desktop_runtime_coordinator.dart';
+import '../dialogs/desktop_shutdown_dialogs.dart';
 import '../features/chat/desktop_chat_controller.dart';
 import '../features/profiles/desktop_profile_controller.dart';
 import '../features/profiles/profile_access_card.dart';
@@ -57,6 +59,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   ModelStatusResponse? _modelStatus;
   bool _isLoadingModelCatalog = false;
   bool _isExecutingModelAction = false;
+  bool _isStillLoading = false;
   String? _selectedModelId;
   String? _modelActionMessage;
 
@@ -562,7 +565,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               FilledButton.tonalIcon(
                 onPressed: () {
-                  coordinator?.handleExitRequested();
+                  _handleExitCompanion(context);
                 },
                 icon: const Icon(Icons.power_settings_new_rounded, size: 16),
                 label: const Text('Exit Companion'),
@@ -572,6 +575,76 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _handleExitCompanion(BuildContext context) async {
+    final confirmed = await DesktopShutdownDialogs.showExitConfirmationDialog(context);
+    if (!confirmed || !mounted) return;
+
+    final rc = widget.runtimeCoordinator;
+    if (rc == null) {
+      widget.coordinator?.handleExitRequested();
+      return;
+    }
+
+    final outcome = await rc.shutdownLocalRuntime();
+    if (!mounted) return;
+
+    if (outcome == ShutdownOutcome.gracefulSuccess ||
+        outcome == ShutdownOutcome.emergencyTerminated) {
+      widget.coordinator?.handleExitRequested();
+      return;
+    }
+
+    if (outcome == ShutdownOutcome.incompleteCleanup) {
+      final action = await DesktopShutdownDialogs.showIncompleteShutdownDialog(
+        context,
+        diagnostic: rc.currentState.diagnosticMessage,
+      );
+      if (!mounted) return;
+
+      switch (action) {
+        case IncompleteShutdownAction.retryGraceful:
+          await _handleExitCompanion(context);
+          break;
+        case IncompleteShutdownAction.forceStop:
+          await rc.forceEmergencyStopLocalRuntime();
+          if (mounted) {
+            widget.coordinator?.handleExitRequested();
+          }
+          break;
+        case IncompleteShutdownAction.quitUiOnly:
+          widget.coordinator?.handleExitRequested();
+          break;
+        case IncompleteShutdownAction.cancel:
+        case null:
+          break;
+      }
+      return;
+    }
+
+    if (outcome == ShutdownOutcome.unresponsiveRuntime) {
+      final action = await DesktopShutdownDialogs.showUnresponsiveShutdownDialog(
+        context,
+        diagnostic: rc.currentState.diagnosticMessage,
+      );
+      if (!mounted) return;
+
+      switch (action) {
+        case UnresponsiveShutdownAction.forceStop:
+          await rc.forceEmergencyStopLocalRuntime();
+          if (mounted) {
+            widget.coordinator?.handleExitRequested();
+          }
+          break;
+        case UnresponsiveShutdownAction.quitUiOnly:
+          widget.coordinator?.handleExitRequested();
+          break;
+        case UnresponsiveShutdownAction.cancel:
+        case null:
+          break;
+      }
+    }
   }
 
   Widget _buildRuntimeSupervisionCard(
@@ -640,7 +713,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: CompanionSpacing.sm),
           Text(
-            'Lifecycle Invariant: Closing or exiting the Flutter UI client leaves the detached background runtime process running.',
+            'Lifecycle Invariant: Closing the window (×) hides to system tray and leaves the background runtime running. Exiting Companion performs authenticated cooperative shutdown of the host runtime.',
             style: CompanionTypography.caption.copyWith(
               color: ext?.textMuted,
               fontStyle: FontStyle.italic,
@@ -995,8 +1068,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  bool _isTargetModelActive(ModelRegistryEntry? entry, String? activeModel) {
+    if (entry == null || activeModel == null || activeModel.isEmpty) return false;
+    if (activeModel == entry.id || activeModel == entry.runtimeModelId) return true;
+    if (entry.primaryFile.isNotEmpty) {
+      if (activeModel == entry.primaryFile) return true;
+      final normActive = activeModel.replaceAll('\\', '/');
+      final normPrimary = entry.primaryFile.replaceAll('\\', '/');
+      if (normActive.endsWith(normPrimary)) return true;
+    }
+    return false;
+  }
+
   Future<void> _selectModel(String modelId, {bool loadImmediately = false}) async {
-    if (_isExecutingModelAction) return;
+    if (_isExecutingModelAction || _isStillLoading) return;
     setState(() {
       _isExecutingModelAction = true;
       _modelActionMessage = loadImmediately ? 'Loading model into memory...' : 'Saving model selection...';
@@ -1005,15 +1090,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final client = _resolveClient();
       final updatedStatus = await client.selectModel(modelId, loadImmediately: loadImmediately);
+      if (!mounted) return;
+
+      final targetEntry = _registryEntries?.firstWhere(
+        (e) => e.id == modelId || e.runtimeModelId == modelId,
+        orElse: () => ModelRegistryEntry(
+          id: modelId,
+          displayName: modelId,
+          capabilities: const [],
+          availableCapabilities: const [],
+          primaryFile: '',
+          primaryFileExists: false,
+          validationStatus: 'unknown',
+        ),
+      );
+
+      final isActivated = updatedStatus.runtimeState == 'MODEL_READY' &&
+          _isTargetModelActive(targetEntry, updatedStatus.activeModel);
+
+      if (loadImmediately &&
+          !isActivated &&
+          (updatedStatus.runtimeState == 'MODEL_LOADING' || updatedStatus.runtimeState == 'SERVER_STARTING')) {
+        // Transitional state: enter STILL_LOADING and poll status in background
+        _modelStatus = updatedStatus;
+        _selectedModelId = modelId;
+        _isExecutingModelAction = false;
+        _isStillLoading = true;
+        _modelActionMessage = 'Model is still loading in the background...';
+        setState(() {});
+
+        unawaited(_clientSettings.writeSelectedModel(modelId));
+        unawaited(_pollModelStatusUntilReady(modelId, targetEntry));
+        return;
+      }
+
       await _clientSettings.writeSelectedModel(modelId);
       if (!mounted) return;
+
       setState(() {
         _modelStatus = updatedStatus;
         _selectedModelId = modelId;
         _isExecutingModelAction = false;
-        final isActivated = updatedStatus.runtimeState == 'MODEL_READY' &&
-            (updatedStatus.activeModel == modelId ||
-                _registryEntries?.any((e) => e.id == modelId && e.runtimeModelId == updatedStatus.activeModel) == true);
+        _isStillLoading = false;
         if (loadImmediately) {
           _modelActionMessage = isActivated
               ? 'Model selected and loaded: ${updatedStatus.activeModel ?? modelId}'
@@ -1022,12 +1140,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _modelActionMessage = 'Model selected: $modelId (not loaded into memory)';
         }
       });
+      if (isActivated && widget.chatController != null) {
+        widget.chatController!.updateModelStatus(updatedStatus);
+      }
+    } on TimeoutException {
+      if (!mounted) return;
+      final targetEntry = _registryEntries?.firstWhere(
+        (e) => e.id == modelId || e.runtimeModelId == modelId,
+        orElse: () => ModelRegistryEntry(
+          id: modelId,
+          displayName: modelId,
+          capabilities: const [],
+          availableCapabilities: const [],
+          primaryFile: '',
+          primaryFileExists: false,
+          validationStatus: 'unknown',
+        ),
+      );
+      setState(() {
+        _isExecutingModelAction = false;
+        _isStillLoading = true;
+        _modelActionMessage = 'Model is still loading in the background...';
+      });
+      await _pollModelStatusUntilReady(modelId, targetEntry);
     } catch (e) {
       if (!mounted) return;
       try {
         final client = _resolveClient();
         final refreshedStatus = await client.getModelStatus();
         if (mounted) {
+          final targetEntry = _registryEntries?.firstWhere(
+            (e) => e.id == modelId || e.runtimeModelId == modelId,
+            orElse: () => ModelRegistryEntry(
+              id: modelId,
+              displayName: modelId,
+              capabilities: const [],
+              availableCapabilities: const [],
+              primaryFile: '',
+              primaryFileExists: false,
+              validationStatus: 'unknown',
+            ),
+          );
+          if (refreshedStatus.runtimeState == 'MODEL_LOADING' || refreshedStatus.runtimeState == 'SERVER_STARTING') {
+            setState(() {
+              _modelStatus = refreshedStatus;
+              _isExecutingModelAction = false;
+              _isStillLoading = true;
+              _modelActionMessage = 'Model is still loading in the background...';
+            });
+            await _pollModelStatusUntilReady(modelId, targetEntry);
+            return;
+          }
           setState(() {
             _modelStatus = refreshedStatus;
             if (refreshedStatus.selectedModel != null) {
@@ -1039,9 +1202,97 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!mounted) return;
       setState(() {
         _isExecutingModelAction = false;
+        _isStillLoading = false;
         _modelActionMessage = loadImmediately
             ? 'Model selection saved, but activation failed: $e. Model is NOT active.'
             : 'Model selection failed: $e';
+      });
+    }
+  }
+
+  Future<void> _pollModelStatusUntilReady(String modelId, ModelRegistryEntry? targetEntry) async {
+    if (Platform.environment.containsKey('FLUTTER_TEST')) {
+      return;
+    }
+    final client = _resolveClient();
+    final stopwatch = Stopwatch()..start();
+    const pollTimeout = Duration(seconds: 60);
+
+    while (stopwatch.elapsed < pollTimeout) {
+      await Future<void>.delayed(const Duration(seconds: 2));
+      if (!mounted || !_isStillLoading) return;
+
+      try {
+        final status = await client.getModelStatus();
+        if (!mounted) return;
+
+        if (status.runtimeState == 'MODEL_READY') {
+          final isActivated = _isTargetModelActive(targetEntry, status.activeModel);
+          setState(() {
+            _modelStatus = status;
+            _isStillLoading = false;
+            _modelActionMessage = isActivated
+                ? 'Model selected and loaded: ${status.activeModel ?? modelId}'
+                : 'Model is ready: ${status.activeModel}';
+          });
+          widget.chatController?.updateModelStatus(status);
+          return;
+        }
+
+        if (status.runtimeState == 'MODEL_ERROR' ||
+            status.runtimeState == 'SERVER_ERROR' ||
+            status.runtimeState == 'LOAD_FAILED') {
+          setState(() {
+            _modelStatus = status;
+            _isStillLoading = false;
+            _modelActionMessage = 'Model load failed: ${status.lastRuntimeError ?? status.runtimeState}';
+          });
+          return;
+        }
+
+        setState(() {
+          _modelStatus = status;
+        });
+      } on TimeoutException {
+        if (!mounted) return;
+        setState(() {
+          _isStillLoading = false;
+          _modelActionMessage = 'Model load status could not be confirmed: status check timed out.';
+        });
+        return;
+      } catch (_) {}
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _isStillLoading = false;
+      _modelActionMessage = 'Model is still loading in the background. Click Refresh Model Status to re-check.';
+    });
+  }
+
+  Future<void> _refreshModelStatusOnly() async {
+    try {
+      final client = _resolveClient();
+      final fresh = await client.getModelStatus();
+      if (!mounted) return;
+      setState(() {
+        _modelStatus = fresh;
+        if (fresh.runtimeState == 'MODEL_READY') {
+          _isStillLoading = false;
+          _modelActionMessage = 'Model is ready: ${fresh.activeModel}';
+        } else if (fresh.runtimeState == 'MODEL_LOADING' || fresh.runtimeState == 'SERVER_STARTING') {
+          _isStillLoading = true;
+          _modelActionMessage = 'Model is still loading in the background...';
+        } else {
+          _isStillLoading = false;
+          _modelActionMessage = 'Current model runtime state: ${fresh.runtimeState}';
+        }
+      });
+      widget.chatController?.updateModelStatus(fresh);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _modelActionMessage = 'Model load status could not be confirmed: $e';
       });
     }
   }
@@ -1277,12 +1528,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 borderRadius: CompanionRadius.borderSm,
                 border: Border.all(color: ext?.borderSubtle ?? Colors.transparent),
               ),
-              child: Text(
-                _modelActionMessage!,
-                style: CompanionTypography.caption.copyWith(
-                  color: ext?.textPrimary,
-                  fontWeight: FontWeight.w500,
-                ),
+              child: Row(
+                children: [
+                  if (_isStillLoading) ...[
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: CompanionSpacing.sm),
+                  ],
+                  Expanded(
+                    child: Text(
+                      _modelActionMessage!,
+                      style: CompanionTypography.caption.copyWith(
+                        color: ext?.textPrimary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  if (_isStillLoading ||
+                      (_modelActionMessage?.contains('still loading') == true) ||
+                      (_modelActionMessage?.contains('could not be confirmed') == true)) ...[
+                    const SizedBox(width: CompanionSpacing.sm),
+                    TextButton.icon(
+                      onPressed: _refreshModelStatusOnly,
+                      icon: const Icon(Icons.refresh_rounded, size: 14),
+                      label: const Text('Refresh Model Status'),
+                    ),
+                  ],
+                ],
               ),
             ),
           ],
@@ -1301,7 +1576,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         (_modelStatus?.selectedModel == entry.id) ||
         (_modelStatus?.selectedModel == entry.runtimeModelId);
     final isReady = _modelStatus?.runtimeState == 'MODEL_READY' &&
-        (_modelStatus?.activeModel == entry.id || _modelStatus?.activeModel == entry.runtimeModelId);
+        _isTargetModelActive(entry, _modelStatus?.activeModel);
 
     return Container(
       margin: const EdgeInsets.only(bottom: CompanionSpacing.md),
@@ -1411,7 +1686,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               if (isReady) ...[
                 OutlinedButton.icon(
                   key: Key('unload_model_entry_${entry.id}'),
-                  onPressed: (_isExecutingModelAction || widget.chatController?.isGenerating == true)
+                  onPressed: (_isExecutingModelAction || _isStillLoading || widget.chatController?.isGenerating == true)
                       ? null
                       : _unloadModel,
                   icon: const Icon(Icons.eject_rounded, size: 14),
@@ -1420,7 +1695,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(width: CompanionSpacing.sm),
               ],
               OutlinedButton.icon(
-                onPressed: _isExecutingModelAction
+                onPressed: (_isExecutingModelAction || _isStillLoading)
                     ? null
                     : () => _selectModel(entry.id, loadImmediately: false),
                 icon: const Icon(Icons.bookmark_outline_rounded, size: 14),
@@ -1428,7 +1703,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(width: CompanionSpacing.sm),
               FilledButton.tonalIcon(
-                onPressed: (_isExecutingModelAction || !entry.primaryFileExists)
+                onPressed: (_isExecutingModelAction || _isStillLoading || !entry.primaryFileExists)
                     ? null
                     : () => _selectModel(entry.id, loadImmediately: true),
                 icon: const Icon(Icons.play_arrow_rounded, size: 16),

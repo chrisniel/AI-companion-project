@@ -108,7 +108,7 @@ void main() {
       expect(exitInvoked, isTrue);
     });
 
-    test('buildTrayMenuItems keeps exit_full disabled with PC-HOST-005 planned label', () {
+    test('buildTrayMenuItems enables exit_full with Exit Companion label', () {
       final window = MockWindowAdapter();
       final tray = MockTrayAdapter();
       final coordinator = DesktopLifecycleCoordinator(
@@ -126,8 +126,8 @@ void main() {
       );
 
       final exitFullItem = items.firstWhere((i) => i.key == 'exit_full');
-      expect(exitFullItem.disabled, isTrue);
-      expect(exitFullItem.label, contains('PC-HOST-005'));
+      expect(exitFullItem.disabled, isFalse);
+      expect(exitFullItem.label, equals('Exit Companion'));
     });
 
     test('buildTrayMenuItems updates status label dynamically across runtime states', () {

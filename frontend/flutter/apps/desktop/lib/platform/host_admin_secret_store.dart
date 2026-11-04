@@ -14,11 +14,17 @@ class HostAdminSecretStore implements CredentialStore {
   static const _script = r'''
 $ErrorActionPreference = 'Stop'
 try {
-  if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) { throw 'No local host root' }
-  $root = [IO.Path]::GetFullPath($env:LOCALAPPDATA)
-  if (-not [IO.Path]::IsPathRooted($root) -or $root.StartsWith('\\')) { throw 'Invalid local host root' }
-  $directory = Join-Path $root 'AICompanion\secrets'
-  $secretPath = Join-Path $directory 'desktop_admin.secret'
+  if (-not [string]::IsNullOrWhiteSpace($env:COMPANION_HOST_ADMIN_SECRET_FILE)) {
+    $secretPath = [IO.Path]::GetFullPath($env:COMPANION_HOST_ADMIN_SECRET_FILE)
+    if (-not [IO.Path]::IsPathRooted($secretPath) -or $secretPath.StartsWith('\\')) { throw 'Invalid secret file path' }
+    $directory = [IO.Path]::GetDirectoryName($secretPath)
+  } else {
+    if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) { throw 'No local host root' }
+    $root = [IO.Path]::GetFullPath($env:LOCALAPPDATA)
+    if (-not [IO.Path]::IsPathRooted($root) -or $root.StartsWith('\\')) { throw 'Invalid local host root' }
+    $directory = Join-Path $root 'AICompanion\secrets'
+    $secretPath = Join-Path $directory 'desktop_admin.secret'
+  }
   $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
   $allowed = @($currentSid, 'S-1-5-18')
   $node = Get-Item -LiteralPath $secretPath -Force

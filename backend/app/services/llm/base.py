@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, AsyncGenerator, Dict, List, Optional
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Dict, List, Optional
 
 if TYPE_CHECKING:
     from app.schemas.llm import ChatMessage, ModelStatusResponse
@@ -47,6 +48,16 @@ class GeneratedText(str):
         obj = super().__new__(cls, content)
         obj.finish_reason = finish_reason
         return obj
+
+
+@dataclass
+class ProviderShutdownResult:
+    """Outcome of provider shutdown operation."""
+    completed_cleanly: bool
+    lock_acquired: bool
+    reason: Optional[str] = None
+    managed_llm_pid: Optional[int] = None
+    managed_by_core: bool = False
 
 
 class BaseLLMProvider(ABC):
@@ -114,6 +125,15 @@ class BaseLLMProvider(ABC):
         """Generate a streaming sequence of tokens for Server-Sent Events."""
         pass
 
-    async def shutdown(self) -> None:
+    def signal_shutdown_immediately(self) -> None:
+        """Cooperative lock-free signal to abort in-flight load and generation."""
+        pass
+
+    async def shutdown(
+        self,
+        drain_timeout: float = 4.0,
+        lock_timeout: float = 2.0,
+    ) -> ProviderShutdownResult:
         """Gracefully shutdown provider and free resources."""
         await self.unload_model()
+        return ProviderShutdownResult(completed_cleanly=True, lock_acquired=True)

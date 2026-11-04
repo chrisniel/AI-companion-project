@@ -37,6 +37,24 @@ enum RuntimeStatus {
 
   /// The configured Python or runtime executable does not exist on disk.
   executableNotFound,
+
+  /// Runtime is actively shutting down.
+  shuttingDown,
+
+  /// Runtime has cleanly stopped and is dormant.
+  stopped,
+
+  /// Runtime shutdown failed or timed out.
+  shutdownFailed,
+}
+
+/// Reason for shutdown failure when status is [RuntimeStatus.shutdownFailed].
+enum ShutdownFailureReason {
+  /// In-flight persistence tasks or model operations did not complete within quiescence timeout.
+  incompleteCleanup,
+
+  /// Runtime became unresponsive during shutdown and OS fallback was unverified or refused.
+  unresponsiveRuntime,
 }
 
 /// Immutable snapshot representing the runtime process supervision state.
@@ -47,6 +65,7 @@ class RuntimeProcessState {
   final int? pid;
   final int port;
   final String? diagnosticMessage;
+  final ShutdownFailureReason? shutdownFailureReason;
 
   const RuntimeProcessState({
     required this.supervisionMode,
@@ -54,6 +73,7 @@ class RuntimeProcessState {
     this.pid,
     this.port = 8000,
     this.diagnosticMessage,
+    this.shutdownFailureReason,
   });
 
   /// Factory for default initial dormant state on loopback.
@@ -80,6 +100,7 @@ class RuntimeProcessState {
     int? pid,
     int? port,
     String? diagnosticMessage,
+    ShutdownFailureReason? shutdownFailureReason,
   }) {
     return RuntimeProcessState(
       supervisionMode: supervisionMode ?? this.supervisionMode,
@@ -87,6 +108,7 @@ class RuntimeProcessState {
       pid: pid ?? this.pid,
       port: port ?? this.port,
       diagnosticMessage: diagnosticMessage ?? this.diagnosticMessage,
+      shutdownFailureReason: shutdownFailureReason ?? this.shutdownFailureReason,
     );
   }
 
@@ -99,7 +121,8 @@ class RuntimeProcessState {
           status == other.status &&
           pid == other.pid &&
           port == other.port &&
-          diagnosticMessage == other.diagnosticMessage;
+          diagnosticMessage == other.diagnosticMessage &&
+          shutdownFailureReason == other.shutdownFailureReason;
 
   @override
   int get hashCode => Object.hash(
@@ -108,10 +131,11 @@ class RuntimeProcessState {
         pid,
         port,
         diagnosticMessage,
+        shutdownFailureReason,
       );
 
   @override
   String toString() {
-    return 'RuntimeProcessState(mode: $supervisionMode, status: $status, pid: $pid, port: $port, diag: $diagnosticMessage)';
+    return 'RuntimeProcessState(mode: $supervisionMode, status: $status, pid: $pid, port: $port, diag: $diagnosticMessage, reason: $shutdownFailureReason)';
   }
 }
