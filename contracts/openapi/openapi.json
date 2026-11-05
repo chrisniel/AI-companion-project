@@ -1781,7 +1781,7 @@
           "System Status"
         ],
         "summary": "Host System Status (Protected)",
-        "description": "Detailed Windows host machine telemetry and database diagnostics.\nRequires valid pairing token or host admin secret.",
+        "description": "Detailed Windows host machine telemetry and database diagnostics.\nRequires valid pairing token or host admin secret.\nDoes not query database during runtime shutdown to prevent races with database disposal.",
         "operationId": "system_status_api_v1_system_status_get",
         "parameters": [
           {

@@ -70,15 +70,24 @@
 - [x] **E. Provider Cleanup Truthfulness:** In `_stop_managed_router_locked()`, verifies `self._server_process.poll()` is not None before clearing state; if process remains alive, retains reference/ownership, returns `False`, and reports `ROUTER_TERMINATION_FAILED`.
 - [x] **F. Model-Load Cancellation:** Registered and tracked active loading tasks (`_active_load_task`) and router HTTP clients (`_active_router_clients`). Made router startup, HTTP load operations, and polling cancellation-aware (`_sleep_or_abort`). Ensured synchronized cleanup under lock on `CancelledError`.
 - [x] **G. Shutdown Completion Detection:** Verified expected process identity and dead state before reporting `gracefulSuccess` or clearing lockfile descriptor.
+- [x] **H. Provider Lifecycle Synchronization:** Restored exclusive lock synchronization for `load_model()` in `backend/app/services/llm/llama_cpp.py`; wrapped both critical section and `asyncio.CancelledError` recovery under `async with self._lock:`.
+- [x] **I. Handle-Bound Child Verification & Partial Termination:** Bound child process verification to terminated handle in `WindowsRuntimeProcessSupervisor` (`$null = $childProc.Handle`, CIM start-time $\le 3\text{s}$ check, command-line inspection). Added `partialTermination` status when parent exits but child survives.
+- [x] **J. Shutdown Call Coalescing & State Guards:** Coalesced concurrent shutdown invocations in `DesktopRuntimeCoordinator` onto `_activeShutdownFuture`. Prevented spurious `gracefulSuccess` on generation changes or disposed state while shutdown is active.
+- [x] **K. Failed Persistence Retention Across Retries:** Preserved `_persistence_failures` across retried shutdowns in `RuntimeLifecycleCoordinator` so failed writes remain visible until resolved.
+- [x] **L. Fail-Closed Emergency Fallback:** Distinguished `CompanionApiException` (401/403); returned `ShutdownOutcome.unresponsiveRuntime` at observation window expiry instead of auto-killing.
+- [x] **M. Owned Router Tracking:** Tracked `_lastKnownManagedLlmPid` and `_lastKnownManagedByCore` across telemetry cycles and passed them to `forceEmergencyStopLocalRuntime()`.
+- [x] **N. Database Read Safety During Shutdown:** Removed `db: AsyncSession` dependency from `/system/status` in `health.py`; eliminated SQLite queries during `is_shutting_down == True`.
+- [x] **O. Extended Windows Acceptance Suite:** Added Scenarios G, H, and I verifying loopback shutdown, foreign child preservation, and partial termination reporting on live Windows processes.
 - [x] **Verification Evidence:**
-  - Backend Pytest: 665/665 passed in ~208s (0 failures)
+  - Backend Pytest: 669/669 passed, 1 warning in ~201s (0 failures)
   - Flutter companion_core: 23/23 passed
   - Flutter companion_api: 81/81 passed
-  - Flutter desktop: 301/301 passed
+  - Flutter desktop: 307/307 passed
   - Dart analyze: 0 issues across all packages
   - React web tests: 16 test files passed, 248/248 passed
+  - OpenAPI Drift Check: clean (0 differences)
   - OpenAPI Parity: 40 routes, 24/24 DTOs, 30/19 covered routes
-  - Windows supervision acceptance: 6/6 scenarios passed
+  - Windows supervision acceptance: 9/9 scenarios passed (Scenarios A through I)
 
 ### Merge Readiness:
 - [ ] Independent Reviewer final evaluation of corrected delivery package.

@@ -47,6 +47,9 @@ class DesktopRuntimeCoordinator {
 
   int _activeGeneration = 0;
   bool _isDisposed = false;
+  Future<ShutdownOutcome>? _activeShutdownFuture;
+  int? _lastKnownManagedLlmPid;
+  bool _lastKnownManagedByCore = false;
 
   RuntimeProcessState _currentState;
   RuntimeLockfileData? _activeRuntimeInfo;
@@ -918,8 +921,23 @@ class DesktopRuntimeCoordinator {
   /// Never terminates remote hosts over the network.
   /// If the runtime completes cleanup cleanly, returns [ShutdownOutcome.gracefulSuccess].
   /// If in-flight work or provider lock times out, keeps runtime alive and returns [ShutdownOutcome.incompleteCleanup].
-  /// If runtime is completely unresponsive, attempts handle-bound fallback termination.
+  /// If runtime is completely unresponsive, returns [ShutdownOutcome.unresponsiveRuntime].
   Future<ShutdownOutcome> shutdownLocalRuntime({
+    Duration timeout = const Duration(seconds: 25),
+  }) {
+    if (_activeShutdownFuture != null) {
+      return _activeShutdownFuture!;
+    }
+    final future = _executeShutdownLocalRuntime(timeout: timeout);
+    _activeShutdownFuture = future;
+    return future.whenComplete(() {
+      if (_activeShutdownFuture == future) {
+        _activeShutdownFuture = null;
+      }
+    });
+  }
+
+  Future<ShutdownOutcome> _executeShutdownLocalRuntime({
     Duration timeout = const Duration(seconds: 25),
   }) async {
     _activeGeneration++;
@@ -949,7 +967,9 @@ class DesktopRuntimeCoordinator {
       targetPort,
       timeout: const Duration(milliseconds: 500),
     );
-    if (generation != _activeGeneration || _isDisposed) return ShutdownOutcome.gracefulSuccess;
+    if (generation != _activeGeneration || _isDisposed) {
+      return ShutdownOutcome.incompleteCleanup;
+    }
 
     if (!initialListening) {
       // Check if process is still active despite closed/inactive port
@@ -982,24 +1002,22 @@ class DesktopRuntimeCoordinator {
     }
 
     // 2. Request cooperative shutdown via POST /api/v1/system/shutdown
-    int? managedLlmPid;
-    bool managedByCore = false;
-
     try {
       final response = await _client.shutdownSystem(
         reason: 'Desktop Exit Companion',
         drainTimeoutSeconds: 6.0,
         timeout: const Duration(seconds: 5),
       );
-      managedLlmPid = response.managedLlmPid;
-      managedByCore = response.managedByCore;
+      if (response.managedLlmPid != null) {
+        _lastKnownManagedLlmPid = response.managedLlmPid;
+      }
+      _lastKnownManagedByCore = response.managedByCore;
     } catch (e) {
-      final errStr = e.toString().toLowerCase();
-      // Check for authentication / authorization failure
-      if (errStr.contains('401') ||
-          errStr.contains('403') ||
-          errStr.contains('unauthorized') ||
-          errStr.contains('forbidden')) {
+      if ((e is CompanionApiException && (e.statusCode == 401 || e.statusCode == 403)) ||
+          e.toString().toLowerCase().contains('401') ||
+          e.toString().toLowerCase().contains('403') ||
+          e.toString().toLowerCase().contains('unauthorized') ||
+          e.toString().toLowerCase().contains('forbidden')) {
         // DO NOT silently kill runtime on auth error!
         _updateState(
           _currentState.copyWith(
@@ -1017,10 +1035,10 @@ class DesktopRuntimeCoordinator {
         final status = await _client.getSystemStatus(
           timeout: const Duration(milliseconds: 500),
         );
-        if (status.shuttingDown) {
-          managedLlmPid = status.managedLlmPid;
-          managedByCore = status.managedByCore;
+        if (status.managedLlmPid != null) {
+          _lastKnownManagedLlmPid = status.managedLlmPid;
         }
+        _lastKnownManagedByCore = status.managedByCore;
       } catch (_) {
         // Status failed too: check if port stopped listening
         final isStillListening = await _supervisor.isPortListening(
@@ -1055,7 +1073,7 @@ class DesktopRuntimeCoordinator {
 
     while (stopwatch.elapsed < timeout) {
       if (generation != _activeGeneration || _isDisposed) {
-        return ShutdownOutcome.gracefulSuccess;
+        return ShutdownOutcome.incompleteCleanup;
       }
 
       // Check if port stopped listening
@@ -1095,8 +1113,10 @@ class DesktopRuntimeCoordinator {
         final status = await _client.getSystemStatus(
           timeout: const Duration(milliseconds: 500),
         );
-        if (status.managedLlmPid != null) managedLlmPid = status.managedLlmPid;
-        if (status.managedByCore) managedByCore = status.managedByCore;
+        if (status.managedLlmPid != null) {
+          _lastKnownManagedLlmPid = status.managedLlmPid;
+        }
+        _lastKnownManagedByCore = status.managedByCore;
 
         final quiescence = status.shutdownQuiescenceStatus;
         if (quiescence != null && quiescence.startsWith('incomplete_')) {
@@ -1122,7 +1142,7 @@ class DesktopRuntimeCoordinator {
 
     // 4. Observation window expired!
     if (generation != _activeGeneration || _isDisposed) {
-      return ShutdownOutcome.gracefulSuccess;
+      return ShutdownOutcome.incompleteCleanup;
     }
 
     // Check if process is still active at window expiry
@@ -1153,11 +1173,16 @@ class DesktopRuntimeCoordinator {
           );
           return ShutdownOutcome.incompleteCleanup;
         } else {
-          return _fallbackEmergencyTermination(
-            managedLlmPid: managedLlmPid,
-            managedByCore: managedByCore,
+          // Runtime is unresponsive: do NOT silently OS-kill; let user confirm via the Unresponsive Recovery Dialog.
+          _updateState(
+            _currentState.copyWith(
+              status: RuntimeStatus.shutdownFailed,
+              shutdownFailureReason: ShutdownFailureReason.unresponsiveRuntime,
+              diagnosticMessage: 'Shutdown observation window expired while runtime was unresponsive.',
+            ),
             generation: generation,
           );
+          return ShutdownOutcome.unresponsiveRuntime;
         }
       }
     }
@@ -1179,11 +1204,15 @@ class DesktopRuntimeCoordinator {
       return ShutdownOutcome.gracefulSuccess;
     }
 
-    return _fallbackEmergencyTermination(
-      managedLlmPid: managedLlmPid,
-      managedByCore: managedByCore,
+    _updateState(
+      _currentState.copyWith(
+        status: RuntimeStatus.shutdownFailed,
+        shutdownFailureReason: ShutdownFailureReason.unresponsiveRuntime,
+        diagnosticMessage: 'Runtime port remains open and process did not exit within observation window.',
+      ),
       generation: generation,
     );
+    return ShutdownOutcome.unresponsiveRuntime;
   }
 
   Future<ShutdownOutcome> _fallbackEmergencyTermination({
@@ -1227,8 +1256,37 @@ class DesktopRuntimeCoordinator {
       managedByCore: managedByCore,
     );
 
+    if (result.status == TerminationResultStatus.partialTermination) {
+      _updateState(
+        _currentState.copyWith(
+          status: RuntimeStatus.shutdownFailed,
+          shutdownFailureReason: ShutdownFailureReason.incompleteCleanup,
+          diagnosticMessage: 'Handle-bound emergency termination partial: ${result.diagnostic ?? 'child router not terminated'}',
+        ),
+        generation: generation,
+      );
+      return ShutdownOutcome.incompleteCleanup;
+    }
+
     if (result.status == TerminationResultStatus.terminated ||
         result.status == TerminationResultStatus.alreadyExited) {
+      if (managedByCore && managedLlmPid != null && managedLlmPid > 0 && !result.childTerminated) {
+        final childAlive = await _supervisor.isProcessActiveAndMatching(
+          managedLlmPid,
+          expectedExecutable: 'llama-server.exe',
+        );
+        if (childAlive) {
+          _updateState(
+            _currentState.copyWith(
+              status: RuntimeStatus.shutdownFailed,
+              shutdownFailureReason: ShutdownFailureReason.incompleteCleanup,
+              diagnosticMessage: 'Runtime terminated, but owned router PID $managedLlmPid remains active.',
+            ),
+            generation: generation,
+          );
+          return ShutdownOutcome.incompleteCleanup;
+        }
+      }
       await _supervisor.clearRuntimeLockfileThroughHandle(_lockFile);
       _activeRuntimeInfo = null;
       _updateState(
@@ -1258,7 +1316,8 @@ class DesktopRuntimeCoordinator {
     final generation = _activeGeneration;
 
     return _fallbackEmergencyTermination(
-      managedByCore: true,
+      managedLlmPid: _lastKnownManagedLlmPid,
+      managedByCore: _lastKnownManagedByCore,
       generation: generation,
     );
   }

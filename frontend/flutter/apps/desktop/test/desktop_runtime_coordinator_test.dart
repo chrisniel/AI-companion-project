@@ -495,7 +495,7 @@ void main() {
       expect(coordinator.currentState.shutdownFailureReason, equals(ShutdownFailureReason.incompleteCleanup));
     });
 
-    test('shutdownLocalRuntime falls back to terminateVerifiedRuntimeProcess on unresponsive runtime and returns emergencyTerminated', () async {
+    test('shutdownLocalRuntime returns unresponsiveRuntime on timeout without auto-killing', () async {
       final fakeSupervisor = FakeSupervisor()
         ..portListening = true
         ..processActive = true;
@@ -517,10 +517,51 @@ void main() {
       await coordinator.ensureRuntimeReady();
 
       final outcome = await coordinator.shutdownLocalRuntime(timeout: const Duration(milliseconds: 500));
-      expect(outcome, equals(ShutdownOutcome.emergencyTerminated));
-      expect(fakeSupervisor.lastTerminatedDescriptor?.pid, equals(4680));
-      expect(fakeSupervisor.clearedLockfile, isTrue);
-      expect(coordinator.currentState.status, equals(RuntimeStatus.stopped));
+      expect(outcome, equals(ShutdownOutcome.unresponsiveRuntime));
+      expect(fakeSupervisor.lastTerminatedDescriptor, isNull); // ZERO auto-kills!
+      expect(coordinator.currentState.status, equals(RuntimeStatus.shutdownFailed));
+      expect(coordinator.currentState.shutdownFailureReason, equals(ShutdownFailureReason.unresponsiveRuntime));
+    });
+
+    test('shutdownLocalRuntime coalesces concurrent calls onto single authoritative future', () async {
+      final fakeSupervisor = FakeSupervisor()
+        ..portListening = true
+        ..processActive = true;
+      fakeSupervisor.storedDescriptor = RuntimeLockfileData(
+        schemaVersion: 1,
+        instanceId: 'coalesce-inst',
+        pid: 4681,
+        port: 8000,
+        startedAt: DateTime.now().toUtc(),
+        executablePath: r'C:\Python\pythonw.exe',
+      );
+      int shutdownCalls = 0;
+      final mockClient = TestMockCompanionClient(
+        onShutdownCalled: () {
+          shutdownCalls++;
+          // Simulate clean exit
+          fakeSupervisor.portListening = false;
+          fakeSupervisor.processActive = false;
+        },
+      );
+      final coordinator = DesktopRuntimeCoordinator(
+        baseUrl: 'http://127.0.0.1:8000',
+        supervisor: fakeSupervisor,
+        client: mockClient,
+      );
+
+      await coordinator.ensureRuntimeReady();
+
+      // Fire 3 concurrent shutdown calls
+      final f1 = coordinator.shutdownLocalRuntime(timeout: const Duration(seconds: 2));
+      final f2 = coordinator.shutdownLocalRuntime(timeout: const Duration(seconds: 2));
+      final f3 = coordinator.shutdownLocalRuntime(timeout: const Duration(seconds: 2));
+
+      final results = await Future.wait([f1, f2, f3]);
+      expect(results[0], equals(ShutdownOutcome.gracefulSuccess));
+      expect(results[1], equals(ShutdownOutcome.gracefulSuccess));
+      expect(results[2], equals(ShutdownOutcome.gracefulSuccess));
+      expect(shutdownCalls, equals(1)); // Coalesced into one HTTP shutdown request
     });
 
     test('shutdownLocalRuntime on HTTP authorization failure (401/403) returns incompleteCleanup and does NOT trigger OS fallback', () async {
@@ -618,6 +659,38 @@ void main() {
       expect(fakeSupervisor.lastTerminatedDescriptor?.pid, equals(5791));
       expect(fakeSupervisor.clearedLockfile, isTrue);
       expect(coordinator.currentState.status, equals(RuntimeStatus.stopped));
+    });
+
+    test('forceEmergencyStopLocalRuntime reports incompleteCleanup on partial child termination', () async {
+      final fakeSupervisor = FakeSupervisor()
+        ..portListening = true
+        ..processActive = true;
+      fakeSupervisor.storedDescriptor = RuntimeLockfileData(
+        schemaVersion: 1,
+        instanceId: 'partial-inst',
+        pid: 5792,
+        port: 8000,
+        startedAt: DateTime.now().toUtc(),
+        executablePath: r'C:\Python\pythonw.exe',
+      );
+      fakeSupervisor.fakeTerminationResult = const TerminationResult(
+        status: TerminationResultStatus.partialTermination,
+        childTerminated: false,
+        diagnostic: 'Child router failed to terminate',
+      );
+      final mockClient = TestMockCompanionClient();
+      final coordinator = DesktopRuntimeCoordinator(
+        baseUrl: 'http://127.0.0.1:8000',
+        supervisor: fakeSupervisor,
+        client: mockClient,
+      );
+
+      await coordinator.ensureRuntimeReady();
+
+      final outcome = await coordinator.forceEmergencyStopLocalRuntime();
+      expect(outcome, equals(ShutdownOutcome.incompleteCleanup));
+      expect(coordinator.currentState.status, equals(RuntimeStatus.shutdownFailed));
+      expect(coordinator.currentState.shutdownFailureReason, equals(ShutdownFailureReason.incompleteCleanup));
     });
   });
 }

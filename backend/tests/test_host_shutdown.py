@@ -347,3 +347,80 @@ async def test_retry_resumes_incomplete_shutdown():
         assert mock_server.should_exit is True
         mock_provider.shutdown.assert_called_once()
 
+
+@pytest.mark.anyio
+async def test_failed_persistence_preserved_across_shutdown_retries():
+    """Verify that failed persistence records are preserved across retries and halt retried shutdowns."""
+    coord = RuntimeLifecycleCoordinator()
+    mock_server = MagicMock()
+    mock_server.should_exit = False
+    coord.register_server(mock_server)
+
+    async def failing_persistence():
+        await asyncio.sleep(0.01)
+        return False  # Failed commit
+
+    task = coord.spawn_terminal_persistence_task(failing_persistence(), context_info="test_failure")
+    await task
+
+    assert coord.has_persistence_failures is True
+    assert len(coord._persistence_failures) == 1
+    assert coord._persistence_failures[0]["status"] == "failed_commit"
+
+    with patch("app.core.runtime_lifecycle.get_llm_provider") as mock_get_provider:
+        mock_provider = MagicMock()
+        mock_provider.signal_shutdown_immediately = MagicMock()
+        mock_provider.shutdown = AsyncMock()
+        mock_get_provider.return_value = mock_provider
+
+        # Attempt 1: Should halt at incomplete_persistence_failure
+        already_shutting_down, msg = await coord.initiate_shutdown(drain_timeout_seconds=0.5)
+        assert already_shutting_down is False
+        assert msg == "shutdown_initiated"
+        await coord._shutdown_task
+
+        assert coord.shutdown_quiescence_status == "incomplete_persistence_failure"
+        assert mock_server.should_exit is False
+        mock_provider.shutdown.assert_not_called()
+
+        # Attempt 2 (Retry): Must NOT clear failures; must halt again at incomplete_persistence_failure
+        already_shutting_down, msg = await coord.initiate_shutdown(drain_timeout_seconds=0.5)
+        assert already_shutting_down is False
+        assert msg == "shutdown_retried"
+        await coord._shutdown_task
+
+        assert coord.has_persistence_failures is True
+        assert coord.shutdown_quiescence_status == "incomplete_persistence_failure"
+        assert mock_server.should_exit is False
+        mock_provider.shutdown.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_system_status_polling_during_and_after_db_disposal(client: AsyncClient, host_admin_headers: dict):
+    """Verify /system/status polls successfully during shutdown and after DB disposal without database dependency."""
+    import app.db.session as session_module
+
+    saved_engine = session_module._engine
+    saved_factory = session_module._session_factory
+
+    try:
+        # Simulate database engine and factory disposal
+        session_module._engine = None
+        session_module._session_factory = None
+
+        # Mark runtime as shutting down
+        runtime_lifecycle._is_shutting_down = True
+        runtime_lifecycle._shutdown_phase = "draining_work"
+
+        resp = await client.get("/api/v1/system/status", headers=host_admin_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["shutting_down"] is True
+        assert data["database_connected"] is False
+        assert data["shutdown_phase"] == "draining_work"
+        assert data["status"] == "degraded"
+    finally:
+        session_module._engine = saved_engine
+        session_module._session_factory = saved_factory
+
+

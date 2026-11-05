@@ -4,8 +4,8 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - **Purpose:** Document the architectural mechanisms, implementation components, data models, client controls, process supervision boundaries, and verification evidence for AI Companion's Secure Host Lifecycle, Provider Cleanup, and Bounded Model-Loading Reliability (`PC-HOST-005`, with bounded `PC-CLIENT-010` / `PC-CLIENT-004` / `PC-MODEL-006` reliability).
 - **Audience:** Core developers, client application engineers (Flutter Desktop & React Web), host infrastructure maintainers, and independent reviewers.
-- **Status:** Implemented & Verified (Level C delivery: approved implementation plan commit `7902782413e5b2b74841ff73628cb7526b4a7e74`; all 7 implementation and automated verification tasks completed green; Phase 3 documentation and closure package prepared on branch `feature/m2-secure-host-lifecycle`).
-- **Last Updated:** 2026-11-04
+- **Status:** Implemented & Verified (Level C delivery: approved implementation plan commit `7902782413e5b2b74841ff73628cb7526b4a7e74`; all implementation and automated verification tasks completed green; Phase 4 final review safety corrections applied and verified on branch `feature/m2-secure-host-lifecycle`).
+- **Last Updated:** 2026-11-05
 
 ---
 
@@ -24,11 +24,14 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
    - Emits structured synchronous `202 ACCEPTED` response with `correlation_id`, `drain_timeout_seconds`, and `status = "shutting_down"` before launching the asynchronous shutdown sequence in the background.
 
 3. **Admission Control & Real Database Quiescence Barrier:**
-   - Implemented ASGI admission control in `RuntimeLifecycleCoordinator`: once shutdown is initiated, all new non-health incoming requests receive `503 SERVICE_UNAVAILABLE (RUNTIME_SHUTTING_DOWN)`.
-   - Request draining phase permits active in-flight requests up to a 5-second deadline.
-   - Real database quiescence barrier: coordinates with `_pending_persistence_tasks` in `backend/app/db/session.py`. Shutdown strictly awaits in-flight persistence tasks before invoking `engine.dispose()`, eliminating race conditions and connection aborts.
+   - Implemented pure ASGI admission control in `RuntimeAdmissionASGIMiddleware` (`backend/app/core/runtime_lifecycle.py`): once shutdown is initiated, all new non-health incoming requests receive `503 SERVICE_UNAVAILABLE (RUNTIME_SHUTTING_DOWN)`.
+   - Request and stream draining: tracks active mutation requests, active assistant stream tasks, and persistence tasks (`_pending_persistence_tasks` in `backend/app/db/session.py`). Shutdown strictly awaits in-flight persistence tasks and drains active streams before invoking `engine.dispose()`.
+   - Failed persistence evidence retention: if any persistence task fails, the failure record is preserved in `_persistence_failures` across retries, preventing premature or deceptive clean shutdown claims (`incomplete_persistence_failure`).
+   - SQLite isolation during shutdown: removed database dependency from `GET /api/v1/system/status`. When `runtime_lifecycle.is_shutting_down == True`, SQLite is never queried or touched, completely eliminating connection contention or pool-disposal race conditions during polling.
 
-4. **Strict Provider Lock Ownership & External Router Preservation (`backend/app/services/llm/llama_cpp.py`):**
+4. **Strict Provider Lock Ownership & Exclusive Lifecycle Synchronization (`backend/app/services/llm/llama_cpp.py`):**
+   - Restored complete exclusive provider lifecycle synchronization: model loading (`load_model()`), unloading, router process startup/shutdown, profile switching, and Route A/B memory management execute entirely within `async with self._lock:`.
+   - Synchronized cancellation handling: `except asyncio.CancelledError` inside `load_model()` executes its router cleanup and state reset under the already-held `self._lock`, preventing concurrent lifecycle mutations during aborted loads.
    - During `shutdown()`, sets `_cancel_requested = True` to unblock any pending model load or generation.
    - Enforces strict provider lock ownership (`self._lock`): only cleans up shared provider resources if the lock is successfully acquired. If lock acquisition times out, reports a truthful lock timeout failure without executing concurrent unlocked cleanup routines.
    - Inference drain: checks `self.has_active_generation`. If drain times out while inference is active, cleanly retains model weights and router state rather than corrupting in-flight streams.
@@ -38,18 +41,26 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 5. **Handle-Bound Windows OS Process Supervision (`WindowsRuntimeProcessSupervisor`):**
    - Process supervision uses PowerShell CIM `Win32_Process` parentage/provenance verification and kernel file locking (`RandomAccessFile.lock(FileLock.blockingExclusive)`).
    - Process entrypoint provenance verification: inspects executable path, creation timestamp, and command-line arguments before issuing any process termination fallback, eliminating PID reuse / recycling hazards.
-   - Child process provenance verification: checks `$childCim.ParentProcessId -eq $targetPid`, creation time (`$childCreated -ge $parentCreated`), executable name (`llama`), and command-line arguments to ensure child process ownership before termination, never terminating unrelated or externally managed `llama-server.exe` processes.
+   - Handle-bound child process verification: opens and retains a real process handle (`$null = $childProc.Handle`) immediately upon identifying the child candidate, cross-checks handle `StartTime` against CIM `CreationDate` ($\le 3\text{s}$ tolerance), verifies parentage (`$childCim.ParentProcessId -eq $targetPid`), creation time relationship (`$childCreated -ge $parentCreated`), exact binary name (`llama-server.exe` / `llama-server`), and launch arguments (`--port`, `--models-dir` / `--model`).
+   - Discards method return pipeline pollution (`$null = $proc.WaitForExit(...)`) preventing JSON output corruption in Dart.
+   - Partial termination reporting: if the parent runtime process is terminated but its owned child process fails to terminate, reports structured status `partialTermination`.
    - Cleans up stale runtime lockfiles through locked handle truncation and deletion upon confirmed process termination.
 
 6. **Coordinated Shutdown Orchestration (`DesktopRuntimeCoordinator`):**
+   - Coalesces concurrent shutdown requests onto a single authoritative `Future<ShutdownOutcome>? _activeShutdownFuture`.
+   - Tracks owned router process state (`_lastKnownManagedLlmPid` and `_lastKnownManagedByCore`) across telemetry and shutdown cycles, passing them to emergency termination routines.
    - Coordinates the 25-second cooperative shutdown window:
      1. Primary loopback authenticated `POST /api/v1/system/shutdown` invocation.
      2. Polls runtime exit state up to cooperative deadline.
-     3. If cooperative shutdown fails or times out, safely falls back to handle-bound OS termination.
-   - Handles 4 distinct exit outcomes:
+     3. Never returns `gracefulSuccess` on generation changes or disposed state while shutdown is active.
+     4. Distinguishes typed authentication errors (`CompanionApiException` 401/403) from transport errors.
+     5. At observation window expiry, returns `ShutdownOutcome.unresponsiveRuntime` (fails closed without auto-killing), prompting the user via the Incomplete Shutdown Recovery Dialog.
+   - In `forceEmergencyStopLocalRuntime()`, if the supervisor reports `partialTermination` or the owned child remains active, reports `ShutdownOutcome.incompleteCleanup`.
+   - Handles distinct exit outcomes:
      - `CLEAN_SHUTDOWN`: Cooperative shutdown succeeded cleanly.
      - `INCOMPLETE_CLEANUP_FALLBACK_TERMINATED`: Loopback shutdown reported incomplete cleanup; handle-bound process supervisor terminated remaining processes.
      - `SHUTDOWN_TIMEOUT_FORCE_TERMINATED`: Loopback shutdown timed out; process supervisor forced termination.
+     - `UNRESPONSIVE_RUNTIME`: Observation window expired; user prompted for emergency stop.
      - `RECOVERY_FAILED_PID_UNKNOWN`: Termination failed due to unknown PID or permissions; triggers user recovery dialog.
 
 7. **Desktop UI Controls & Recovery Dialogs:**
@@ -101,8 +112,8 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | **Backend LLM** | `backend/app/services/llm/llama_cpp.py` | MODIFY | Strict lock ownership, Route B `del self._llm`, lock-free `get_status()` snapshot, managed router termination. |
 | **Backend Service** | `backend/app/services/assistant/orchestrator.py` | MODIFY | Integrated admission control and generation drain awareness. |
 | **Backend Main** | `backend/app/main.py` | MODIFY | Wired `RuntimeLifecycleCoordinator` middleware and startup/shutdown hooks. |
-| **Backend Tests** | `backend/tests/test_host_shutdown.py` | ADD | 8 tests verifying loopback shutdown, auth, admission control, and quiescence. |
-| **Backend Tests** | `backend/tests/test_llama_cpp_provider.py` | ADD | 11 tests verifying lock timeouts, cancellation, external router preservation, and drain behavior. |
+| **Backend Tests** | `backend/tests/test_host_shutdown.py` | ADD | 16 tests verifying loopback shutdown, auth, admission control, quiescence, retry persistence retention, and DB-safe `/system/status` polling. |
+| **Backend Tests** | `backend/tests/test_llama_cpp_provider.py` | ADD | 12 tests verifying serialized lock ownership, cancellation under lock, external router preservation, and drain behavior. |
 | **Contracts** | `contracts/openapi/openapi.json` | MODIFY | Hardened OpenAPI contract with `POST /api/v1/system/shutdown` and response schemas. |
 | **Contracts Script** | `scripts/check_dart_openapi_parity.py` | MODIFY | Validated 40 routes and 24 DTOs including shutdown schemas. |
 | **Companion Core** | `frontend/flutter/packages/companion_core/lib/platform/runtime_process_state.dart` | MODIFY | Added exit outcome and process state enums. |
@@ -110,8 +121,8 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | **Companion API** | `frontend/flutter/packages/companion_api/lib/client/companion_client.dart` | MODIFY | Added `shutdownRuntime()`, 90s model load timeouts, 20s unload timeouts. |
 | **Companion API** | `frontend/flutter/packages/companion_api/lib/dto/system_status_dto.dart` | MODIFY | Added `SystemShutdownResponseDto` and status deserializers. |
 | **Companion API** | `frontend/flutter/packages/companion_api/test/companion_client_test.dart` | MODIFY | Unit tests for client shutdown and timeout configurations. |
-| **Flutter Desktop** | `frontend/flutter/apps/desktop/lib/platform/windows_runtime_process_supervisor.dart` | MODIFY | Handle-bound CIM Win32_Process supervision and child provenance verification. |
-| **Flutter Desktop** | `frontend/flutter/apps/desktop/lib/coordinator/desktop_runtime_coordinator.dart` | MODIFY | Coordinated 25s shutdown window and 4-outcome handling. |
+| **Flutter Desktop** | `frontend/flutter/apps/desktop/lib/platform/windows_runtime_process_supervisor.dart` | MODIFY | Handle-bound CIM Win32_Process supervision, child provenance verification, and partial termination reporting. |
+| **Flutter Desktop** | `frontend/flutter/apps/desktop/lib/coordinator/desktop_runtime_coordinator.dart` | MODIFY | Coordinated 25s shutdown window, shutdown future coalescing, child tracking, and fail-closed unresponsive runtime fallback. |
 | **Flutter Desktop** | `frontend/flutter/apps/desktop/lib/dialogs/exit_confirmation_dialog.dart` | ADD | User confirmation dialog for Exit Companion action. |
 | **Flutter Desktop** | `frontend/flutter/apps/desktop/lib/dialogs/incomplete_shutdown_recovery_dialog.dart` | ADD | Recovery dialog presenting options when cleanup is incomplete. |
 | **Flutter Desktop** | `frontend/flutter/apps/desktop/lib/screens/settings_screen.dart` | MODIFY | Integrated Exit Companion button, 4-state model loading reconciliation, and manual refresh. |
@@ -119,8 +130,9 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | **Flutter Desktop** | `frontend/flutter/apps/desktop/lib/features/chat/desktop_chat_controller.dart` | MODIFY | Added 90s model select timeout and background status sync. |
 | **Flutter Desktop Tests** | `frontend/flutter/apps/desktop/test/desktop_shutdown_dialogs_test.dart` | ADD | Widget tests for exit confirmation and recovery dialogs. |
 | **Flutter Desktop Tests** | `frontend/flutter/apps/desktop/test/desktop_settings_test.dart` | MODIFY | Widget tests for 4-state model loading, STILL_LOADING, and manual refresh. |
-| **Flutter Desktop Tests** | `frontend/flutter/apps/desktop/test/desktop_runtime_coordinator_test.dart` | MODIFY | Unit tests for coordinated shutdown and timeout fallbacks. |
-| **Flutter Desktop Tests** | `frontend/flutter/apps/desktop/test/windows_runtime_process_supervisor_test.dart` | MODIFY | Unit tests for handle-bound termination and provenance. |
+| **Flutter Desktop Tests** | `frontend/flutter/apps/desktop/test/desktop_runtime_coordinator_test.dart` | MODIFY | 16 unit tests for coordinated shutdown, future coalescing, child tracking, and fail-closed timeout fallbacks. |
+| **Flutter Desktop Tests** | `frontend/flutter/apps/desktop/test/windows_runtime_process_supervisor_test.dart` | MODIFY | 25 unit tests for handle-bound termination, provenance, pipeline cleanliness, and partial termination. |
+| **Flutter Desktop Tests** | `frontend/flutter/apps/desktop/test/windows_runtime_supervision_acceptance_test.dart` | MODIFY | 9 end-to-end Windows acceptance scenarios (A through I) testing live process handles, loopback shutdown, foreign child preservation, and partial termination. |
 | **Documentation** | `docs/04_Architecture/04_Infrastructure/windows-host-and-notifications.md` | MODIFY | Documented PC-HOST-005 architecture, shutdown endpoints, and supervisor. |
 | **Documentation** | `docs/04_Architecture/02_Data_and_Security/authentication-and-secrets.md` | MODIFY | Documented host admin security model and loopback secret store. |
 | **Documentation** | `docs/04_Architecture/04_Infrastructure/runtime-and-models.md` | MODIFY | Documented strict lock ownership, router cleanup, and model status sync. |
@@ -138,15 +150,15 @@ All verification was executed and confirmed 100% green across all tiers:
 
 | Verification Suite | Target Directory / Script | Command Executed | Result / Output |
 | :--- | :--- | :--- | :--- |
-| **Backend Pytest** | `backend/tests/` | `backend\.venv\Scripts\python.exe -m pytest backend\tests -v` | **665 passed** (0 failures, 0 errors) |
+| **Backend Pytest** | `backend/tests/` | `backend\.venv\Scripts\python.exe -m pytest backend\tests -v` | **669 passed**, 1 warning (0 failures, 0 errors) in ~201s |
 | **Flutter Core** | `frontend/flutter/packages/companion_core` | `flutter test` | **23 passed** (0 failures) |
 | **Flutter API** | `frontend/flutter/packages/companion_api` | `flutter test` | **81 passed** (0 failures) |
-| **Flutter Desktop App** | `frontend/flutter/apps/desktop` | `flutter test` | **301 passed** (0 failures) |
+| **Flutter Desktop App** | `frontend/flutter/apps/desktop` | `flutter test` | **307 passed** (0 failures) |
 | **Dart Analyzer** | Entire Flutter workspace | `flutter analyze` | **0 issues found** across all packages |
 | **OpenAPI Drift Check** | Backend routes vs schema | `python scripts/check_openapi_contract.py --check` | **Clean** (0 differences) |
 | **OpenAPI Parity Check** | Dart DTOs vs OpenAPI spec | `python scripts/check_dart_openapi_parity.py` | **40 routes, 24/24 DTOs, 30/19 covered routes** |
-| **Web Client Vitest** | `frontend/web/` | `npm test` | **16 test files passed, 248 passed** |
-| **Windows Supervision Acceptance** | `frontend/flutter/apps/desktop` | `flutter test test/windows_runtime_supervision_acceptance_test.dart` | **6/6 scenarios passed** |
+| **Web Client Vitest** | `frontend/web/` | `npx vitest run --fileParallelism=false` | **16 test files passed, 248 passed** |
+| **Windows Supervision Acceptance** | `frontend/flutter/apps/desktop` | `flutter test test/windows_runtime_supervision_acceptance_test.dart` | **9/9 scenarios passed** (Scenarios A through I) |
 
 ---
 

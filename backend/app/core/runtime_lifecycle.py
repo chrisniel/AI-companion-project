@@ -217,7 +217,6 @@ class RuntimeLifecycleCoordinator:
                     f"(reason={reason}, drain_timeout={drain_timeout_seconds}s)"
                 )
                 self._shutdown_quiescence_status = None
-                self._persistence_failures.clear()
             else:
                 logger.info(f"Initiated runtime shutdown (reason={reason}, drain_timeout={drain_timeout_seconds}s)")
 

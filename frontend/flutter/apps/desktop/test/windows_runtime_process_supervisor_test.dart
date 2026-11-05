@@ -591,6 +591,38 @@ void main() {
       expect(result.diagnostic, contains('parent PID mismatch'));
     });
 
+    test('terminateVerifiedRuntimeProcess reports partialTermination when parent terminated but child fails', () async {
+      final fakeLauncher = FakeProcessLauncher();
+      fakeLauncher.processToStart = FakeProcess(
+        stdout: Stream.value(utf8.encode(jsonEncode({
+          'status': 'partialTermination',
+          'childTerminated': false,
+          'diagnostic': 'Parent terminated, but owned child router PID 5555 could not be verified or terminated: child did not exit',
+        }))),
+        exitCode: Future.value(0),
+      );
+      final supervisor = WindowsRuntimeProcessSupervisor(launcher: fakeLauncher);
+
+      final desc = RuntimeLockfileData(
+        schemaVersion: 1,
+        instanceId: 'test-inst',
+        pid: 9999,
+        port: 8000,
+        startedAt: DateTime.now().toUtc(),
+        executablePath: r'C:\venv\Scripts\python.exe',
+      );
+
+      final result = await supervisor.terminateVerifiedRuntimeProcess(
+        expectedDescriptor: desc,
+        managedLlmPid: 5555,
+        managedByCore: true,
+      );
+
+      expect(result.status, equals(TerminationResultStatus.partialTermination));
+      expect(result.childTerminated, isFalse);
+      expect(result.diagnostic, contains('Parent terminated, but owned child router'));
+    });
+
     test('terminateVerifiedRuntimeProcess reports timeout on hanging execution', () async {
       final fakeLauncher = FakeProcessLauncher();
       fakeLauncher.processToStart = FakeProcess(

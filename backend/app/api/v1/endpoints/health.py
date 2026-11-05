@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db, verify_token
+from app.api.deps import verify_token
 from app.core.config import settings
 from app.core.host_admin import require_host_admin
 from app.core.runtime_lifecycle import runtime_lifecycle
@@ -46,17 +46,22 @@ async def health_check() -> HealthResponse | JSONResponse:
     response_model=SystemStatusResponse,
     summary="Host System Status (Protected)",
 )
-async def system_status(db: AsyncSession = Depends(get_db)) -> SystemStatusResponse:
+async def system_status() -> SystemStatusResponse:
     """
     Detailed Windows host machine telemetry and database diagnostics.
     Requires valid pairing token or host admin secret.
+    Does not query database during runtime shutdown to prevent races with database disposal.
     """
     db_connected = False
-    try:
-        await db.execute(text("SELECT 1"))
-        db_connected = True
-    except Exception:
-        db_connected = False
+    if not runtime_lifecycle.is_shutting_down:
+        try:
+            from app.db.session import _session_factory
+            if _session_factory is not None:
+                async with _session_factory() as session:
+                    await session.execute(text("SELECT 1"))
+                    db_connected = True
+        except Exception:
+            db_connected = False
 
     return SystemStatusResponse(
         status="online" if db_connected else "degraded",

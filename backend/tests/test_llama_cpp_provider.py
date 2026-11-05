@@ -352,3 +352,124 @@ async def test_router_termination_failure_reported_honestly():
     assert provider._server_pid == 9999
     assert provider._managed_by_core is True
 
+
+@pytest.mark.anyio
+async def test_concurrent_load_model_serialized_by_lock():
+    """Verify concurrent load_model calls are strictly serialized by provider lock."""
+    provider = LlamaCppProvider()
+    execution_order = []
+    task1_in_critical_section = asyncio.Event()
+    task1_release = asyncio.Event()
+
+    async def mock_router_load_1(name):
+        execution_order.append("task1_start")
+        task1_in_critical_section.set()
+        await task1_release.wait()
+        execution_order.append("task1_finish")
+        return True
+
+    async def mock_router_load_2(name):
+        execution_order.append("task2_start")
+        return True
+
+    mock_entry1 = MagicMock()
+    mock_entry1.library_state.primary_file_exists = True
+    mock_entry1.runtime_model_id = "model_1"
+    mock_entry1.manifest.id = "model_1"
+
+    mock_entry2 = MagicMock()
+    mock_entry2.library_state.primary_file_exists = True
+    mock_entry2.runtime_model_id = "model_2"
+    mock_entry2.manifest.id = "model_2"
+
+    def mock_find_entry(name):
+        if name == "model_1":
+            return mock_entry1
+        if name == "model_2":
+            return mock_entry2
+        return None
+
+    with patch("app.services.llm.llama_cpp.find_model_registry_entry", side_effect=mock_find_entry), \
+         patch.object(provider, "_resolve_model_path", return_value=MagicMock(exists=lambda: True)), \
+         patch.object(provider, "_check_port_listening", return_value=True), \
+         patch.object(provider, "_check_external_server", AsyncMock(return_value=True)):
+
+        provider._router_load_model = AsyncMock(side_effect=mock_router_load_1)
+        task1 = asyncio.create_task(provider.load_model("model_1"))
+
+        await task1_in_critical_section.wait()
+        assert provider._lock.locked() is True
+
+        # Launch second concurrent load while task1 is in critical section
+        provider._router_load_model = AsyncMock(side_effect=mock_router_load_2)
+        task2 = asyncio.create_task(provider.load_model("model_2"))
+
+        await asyncio.sleep(0.05)
+        # Task 2 must NOT have started yet because task1 holds self._lock
+        assert "task2_start" not in execution_order
+
+        # Release task1
+        task1_release.set()
+        res1 = await task1
+        assert res1 is True
+
+        res2 = await task2
+        assert res2 is True
+
+        # Verify strict sequential order
+        assert execution_order == ["task1_start", "task1_finish", "task2_start"]
+
+
+@pytest.mark.anyio
+async def test_load_model_cancelled_executes_cleanup_under_lock():
+    """Verify that when load_model is cancelled, cleanup executes while strictly holding provider lock."""
+    provider = LlamaCppProvider()
+    lock_held_during_cleanup = None
+    stop_called = asyncio.Event()
+
+    original_stop = provider._stop_managed_router_locked
+
+    def mock_stop_locked():
+        nonlocal lock_held_during_cleanup
+        lock_held_during_cleanup = provider._lock.locked()
+        original_stop()
+        stop_called.set()
+
+    provider._stop_managed_router_locked = mock_stop_locked
+    provider._managed_by_core = True
+    mock_proc = MagicMock()
+    mock_proc.poll.side_effect = [None, 0]
+    mock_proc.terminate = MagicMock()
+    mock_proc.wait = MagicMock()
+    provider._server_process = mock_proc
+
+    load_hanging = asyncio.Event()
+
+    async def hanging_load(name):
+        await load_hanging.wait()
+        return True
+
+    mock_entry = MagicMock()
+    mock_entry.library_state.primary_file_exists = True
+    mock_entry.runtime_model_id = "test_model"
+    mock_entry.manifest.id = "test_model"
+
+    with patch("app.services.llm.llama_cpp.find_model_registry_entry", return_value=mock_entry), \
+         patch.object(provider, "_resolve_model_path", return_value=MagicMock(exists=lambda: True)), \
+         patch.object(provider, "_check_port_listening", return_value=True), \
+         patch.object(provider, "_check_external_server", AsyncMock(return_value=True)), \
+         patch.object(provider, "_router_load_model", side_effect=hanging_load):
+
+        load_task = asyncio.create_task(provider.load_model("test_model"))
+        await asyncio.sleep(0.05)
+
+        # Cancel the in-flight load task
+        load_task.cancel()
+        res = await load_task
+
+        assert res is False
+        assert stop_called.is_set() is True
+        assert lock_held_during_cleanup is True
+        assert provider._last_error == "LOAD_ABORTED_BY_SHUTDOWN"
+
+
