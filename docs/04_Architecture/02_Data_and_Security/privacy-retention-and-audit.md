@@ -8,7 +8,7 @@
 
 ## 1. Purpose & Scope
 
-- **Deletion Invariant:** Known tombstones prevent silent resurrection. Exact tombstone storage mechanism remains implementation-open.
+- **Backup Restoration & Deletion Invariant:** Deleting or permanently purging live records or Profiles removes them from the active operational database and target live storage directories. Restoring a backup restores the snapshot as it existed when that backup was created (including any Profile or records present in that snapshot that were deleted afterward), and restores only the data and assets actually contained in the selected backup. This supersedes prior requirements that deletion tombstones prevent resurrection from older database backups. Note: This backup restore semantic is strictly distinct from multi-device and mobile synchronization tombstones (`mobile-offline-and-sync.md`), which remain active for delta synchronization and conflict resolution across live connected clients.
 
 
 This specification defines the privacy preservation principles, data retention lifecycles, and security auditing requirements for the AI Companion:
@@ -26,7 +26,11 @@ This specification defines the privacy preservation principles, data retention l
 
 - **Data Minimization:** The companion collects, retains, and transmits only the minimal data necessary to fulfill conversational and functional duties.
 - **Explicit User Deletion Authority:** Users must have appropriate inspect, correct, delete, and forget controls over Profile-owned personal data across all domain models (conversations, memories, tasks, attachments). Deletion operations do not promise immediate permanent hard deletion across every domain, cache, and backup snapshot; exact soft-delete vs. hard-purge lifecycles remain governed by explicit retention and privacy policy.
-- **Owner Isolation Invariant:** Deletion/purge initiated for one Profile must never affect another Profile's private records.
+- **Owner Isolation Invariant:** Deletion/purge initiated for one Profile must never affect another Profile's private records or shared host resources.
+- **Profile Deletion & 30-Day Recovery Lifecycle (`PC-IDENTITY-005`):** Deleting a Profile moves it into **Recently Deleted**, immediately revoking its active sessions, invalidating pending session tickets, and stopping in-flight generation for that Profile once revocation is observed. A soft-deleted Profile remains recoverable for **30 days** (`purge_after = deleted_at + 30 days`). Expired Profiles are permanently purged by Runtime maintenance; local Account administrators may also trigger **Permanently Delete** immediately with explicit confirmation. The default Profile and the last remaining active Profile cannot be deleted.
+- **Recovery Authority & Ownership Separation:** Local Account Admin authority can recover deleted Profiles during the 30-day recovery window, limited strictly to the Profile deletion lifecycle. Restoring a Profile restores its Profile-level state, but must not undo individual content deletions (such as soft-deleted conversations, messages, memories, tasks, or attachments) that occurred before the Profile was deleted. Individual messages, attachments, and other user-owned files are governed by their owning user's lifecycle rather than the administrative Profile recovery interface.
+- **Permanent Profile Purge & Attachment Cleanup Ordering:** Permanent Profile deletion validates that every attachment `storage_path` belongs strictly to the target Profile's storage directory (`ATTACHMENT_DIR/<profile_id>/...`) **before** modifying Profile state. Once paths are validated, the service transitions the Profile to a non-restorable state (`status = "purging"`), revalidates containment immediately before unlinking each file, deletes physical files first (treating already-missing files as cleaned, and halting on `OSError` with database records retained for retry without a separate ledger), and finally deletes the Profile's database records in foreign-key dependency order within an atomic transaction.
+- **Backup & Asset Consistency Limitation:** Coordinated database-and-asset packaging remains the intended architecture. However, current SQLite backups (`app.db.backup`) snapshot only `companion.db` without bundling external files under `ATTACHMENT_DIR`. If an old backup snapshot is restored after permanent Profile deletion, attachment database rows will return while physical files remain deleted.
 - **Host Maintenance:** Account-wide host maintenance may operate across Profiles only when explicitly designed as host maintenance, while preserving strict Profile privacy and never exposing one Profile's private content to another companion session. 
 ### 2.2 Privacy-Safe Auditing Invariants
 
@@ -82,7 +86,8 @@ When implemented for target milestones:
 
 1. **User Deletion & Forget Controls:** Users have appropriate inspect, correct, delete, and forget controls over Profile-owned personal data.
 2. **Auditable Action Governance (Principle P1):** Deterministic, auditable action governance for security-relevant and state-changing actions. The exact audit persistence mechanism remains open design.
-3. **Data Retention & Lifecycle Policies:** Explicit retention policy definitions governing personal records across domains.
+3. **Data Retention & Lifecycle Policies:** Explicit retention policy definitions governing personal records across domains, including the 30-day Profile recovery lifecycle (`PC-IDENTITY-005`).
+4. **Entity Identifier Allocation Direction:** Stable random identities use **UUIDv4** (`Account`, `Profile`, `Character`), while time-oriented records are approved to adopt **UUIDv7** (`Conversation`, `Message`, `Attachment`, `Memory` records, `Emotion` records) in dedicated follow-on work without mass-migrating existing identifiers.
 
 ---
 
@@ -90,10 +95,9 @@ When implemented for target milestones:
 
 The following technical mechanisms remain open design for future technical specification:
 
-- **Soft Delete vs. Hard Purge Timing:** Granular default retention windows and auto-trash policies for conversations vs. tasks vs. memories vs. attachments.
+- **Soft Delete vs. Hard Purge Timing (Individual Content):** Granular default retention windows and user-facing recycle bin policies for individual conversations, messages, memories, and attachments (distinct from the 30-day Profile deletion lifecycle).
 - **Audit Coverage, Schema & Storage:** Specific audit ledger design, including whether audit logs are persisted in a dedicated SQLite table, file append log, or structured event stream, and exact criteria for audit coverage.
-- **Physical Asset Cleanup Design:** Architecture and scheduling for attachment physical file garbage collection sweeps following record deletion.
-- **Backup Interaction with Deletion:** Handling of deleted records across existing database backup snapshots, including tombstones and restore/deletion reconciliation (ensuring restored backups respect subsequent "forget" requests).
+- **Physical Asset Cleanup Design (Individual Content):** Architecture and scheduling for individual soft-deleted attachment physical file garbage collection sweeps outside full Profile purge.
 - **Unified Retention Scheduling:** Whether retention cleanup runs via a unified scheduled service or domain-specific maintenance hooks.
 - **Data Export & Portability:** Design for single-click user data export (e.g., structured JSON/ZIP archive of conversations, memories, and attachments).
 

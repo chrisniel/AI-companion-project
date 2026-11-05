@@ -2,21 +2,24 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- **Status:** Awaiting Approval (Phase 1 Planning Complete)
+- **Status:** Revised Phase 1 Plan — Published for Human Owner Review
 - **Delivery Level:** Level C — Sensitive Design (Special Boundary: Irreversible physical deletion of real user data requires explicit human authorization under Level D operational governance)
-- **Scope Mode:** New Feature — Recoverable 7-day Profile deletion, restoration service, and safe hard purge
+- **Scope Mode:** New Feature — 30-day recoverable Profile deletion ("Move to Recently Deleted"), Profile-level administrative restoration, and physical-first permanent Profile purge ("Permanently Delete")
 - **Work Breakdown Structure ID:** `PC-IDENTITY-005`
 - **Target Files:**
-  - `backend/app/models/profile.py` (verify/reuse existing lifecycle columns)
-  - `backend/app/services/profile_purge_service.py` (new surgical purge and maintenance service)
-  - `backend/app/api/v1/endpoints/profiles.py` (soft-delete, restore, deleted catalog, and purge endpoints)
-  - `backend/app/api/v1/endpoints/system.py` (maintenance purge endpoint)
-  - `backend/app/main.py` (startup background maintenance purge hook)
+  - `backend/app/models/profile.py` (verify/reuse existing `status`, `is_deleted`, `deleted_at`, `purge_after` columns)
+  - `backend/app/api/v1/endpoints/attachments.py` (add Profile-scoped path validator `resolve_and_verify_profile_attachment_path`)
+  - `backend/app/services/profile_purge_service.py` (new soft-delete, restore, and physical-first atomic purge service)
+  - `backend/app/api/v1/endpoints/profiles.py` (soft-delete, restore, deleted catalog, and immediate permanent purge endpoints)
+  - `backend/app/api/v1/endpoints/system.py` (Host Admin maintenance purge endpoint)
+  - `backend/app/main.py` (startup lifespan maintenance purge hook)
   - `contracts/openapi/openapi.json` (OpenAPI contract update)
   - `frontend/flutter/packages/companion_api/` (DTOs and client methods)
-  - `frontend/flutter/apps/desktop/lib/features/profiles/` (desktop controllers, dialogs, Recently Deleted view)
-  - `backend/tests/test_profile_deletion.py` (new comprehensive backend test suite)
-  - `frontend/flutter/apps/desktop/test/desktop_profile_deletion_test.dart` (new comprehensive desktop UI test suite)
+  - `frontend/flutter/apps/desktop/lib/features/profiles/` (desktop controllers, "Move to Recently Deleted" vs. "Permanently Delete" dialogs, Recently Deleted recovery view)
+  - `backend/tests/test_profile_deletion.py` (comprehensive backend verification suite `DEL-01`–`DEL-15`)
+  - `frontend/flutter/apps/desktop/test/desktop_profile_deletion_test.dart` (comprehensive desktop UI verification suite `DEL-16`–`DEL-17`)
+  - `docs/04_Architecture/02_Data_and_Security/privacy-retention-and-audit.md` (reconciled in Phase 1 per §2.C)
+  - `docs/04_Architecture/04_Infrastructure/backup-recovery-and-diagnostics.md` (reconciled in Phase 1 per §2.C)
 - **Branch:** `feature/m2-profile-deletion-recovery-d`
 - **Active Branch Tracker:** `docs/01_Tracking/active/task-feature-m2-profile-deletion-recovery-d.md`
 
@@ -24,373 +27,441 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 ---
 
-## 1. Request Understanding & Goals
+## 1. Request Understanding, Approved Product Decisions & Scope Boundaries
 
-### Primary Objective
-Deliver the complete, robust, recoverable Profile deletion lifecycle for the AI Companion PC V1 installation:
-1. Provide a local administrative operation to soft-delete an existing secondary Profile with a 7-day recovery holding period.
-2. Immediately terminate and revoke all active sessions, pending tokens, and ongoing personal generation for the soft-deleted Profile.
-3. Automatically exclude soft-deleted Profiles from normal active Profile catalogs and selectors.
-4. Allow local administrators to restore a soft-deleted Profile within 7 days, fully restoring its UUID, conversations, character instances, memories, tasks, and attachments without reviving expired credentials.
-5. Provide a safe, bounded hard-purge mechanism that permanently deletes expired Profile records and physical files in strict foreign-key dependency order without touching shared host AI models, templates, or other Profiles.
-6. Provide an immediate administrative "Permanently Purge Now" operation with strict confirmation safeguards.
-7. Deliver the corresponding Flutter Desktop management UI with typed name confirmation and a "Recently Deleted" recovery panel.
+### 1.1 Approved Product Decisions (Human Owner)
 
-### Relevant Canonical Requirements
-- [`docs/04_Architecture/SYSTEM_BASELINE.md`](../SYSTEM_BASELINE.md) (§3 Cross-Cutting Invariants, Decisions D4, ADR-0018)
-- [`docs/04_Architecture/02_Data_and_Security/profiles-and-devices.md`](../02_Data_and_Security/profiles-and-devices.md) (§2 Frozen Identity Constraints, §3.1 Multi-Profile PC V1 Ownership Model, §4 Verified Baseline)
-- [`docs/04_Architecture/02_Data_and_Security/privacy-retention-and-audit.md`](../02_Data_and_Security/privacy-retention-and-audit.md) (§2 Data Retention Principles, §3 Deletion Lifecycle)
-- [`docs/04_Architecture/02_Data_and_Security/authentication-and-secrets.md`](../02_Data_and_Security/authentication-and-secrets.md) (§3.1 Host Admin boundary and Profile Session Lifecycle)
-- [`docs/05_Design/02_Profile_Selector_and_Privacy.md`](../../05_Design/02_Profile_Selector_and_Privacy.md) (Profile Management, Delete confirmation, and Recently Deleted recovery UX)
-- [`docs/04_Architecture/04_Infrastructure/storage-and-assets.md`](../04_Infrastructure/storage-and-assets.md) (Attachment storage paths and boundary validation)
-- [`docs/02_Planning/00_Master/WBS.md`](../00_Master/WBS.md) (`PC-IDENTITY-005` 7-Day Recoverable Profile Deletion Lifecycle & Hard Purge Maintenance)
+#### A. Profile Deletion and 30-Day Recovery
+1. **Move to Recently Deleted:** Deleting an active secondary Profile moves it into **Recently Deleted** (`status = "deleted"`, `is_deleted = True`, `deleted_at = now`).
+2. **30-Day Recovery Window:** The Profile remains recoverable for **30 days** measured from its `deleted_at` timestamp, with expiry calculated as:
+   $$\text{purge\_after} = \text{deleted\_at} + 30\text{ days}$$
+3. **Desktop UI Presentation:** The Desktop UI displays the remaining recovery time and clearly distinguishes **Move to Recently Deleted** (recoverable for 30 days) from **Permanently Delete** (immediate, irreversible removal).
+4. **Automatic & Immediate Purge:** Expired Profiles (`purge_after <= now`) and interrupted purges (`status == "purging"`) are automatically permanently purged through Runtime maintenance. Local Account administrators may also trigger **Permanently Delete** immediately with explicit UI confirmation.
+5. **Default & Last-Active Protection:** Deleting the default Profile (`is_default == True`) or the last remaining active Profile on the host is strictly prohibited.
 
-### Concrete Deliverables
-1. **Backend Soft-Deletion Service & Endpoints:** Host Admin-protected `DELETE /api/v1/profiles/{profile_id}` setting 7-day retention (`purge_after`), revoking sessions, invalidating tickets, and excluding from active catalogs.
-2. **Backend Restoration Service & Endpoints:** Host Admin-protected `POST /api/v1/profiles/{profile_id}/restore` resetting deletion flags within the 7-day window.
-3. **Recoverable Catalog Endpoint:** Host Admin-protected `GET /api/v1/profiles/deleted` returning deleted metadata, deletion timestamp, and days remaining.
-4. **Hard-Purge Service & Maintenance Endpoints:**
-   - Dedicated `ProfilePurgeService` executing strict 13-step cascade deletion across child entities, FTS5 sync, and physical attachments.
-   - `POST /api/v1/profiles/{profile_id}/purge` for immediate administrative purge of soft-deleted profiles.
-   - `POST /api/v1/system/maintenance/purge-profiles` for batch cleanup of expired profiles (`purge_after <= now`).
-   - Lifespan startup maintenance pass in `backend/app/main.py`.
-5. **OpenAPI & Dart Contract Parity:** Updated schemas and client methods in `companion_api` with verified 100% route/schema parity.
-6. **Flutter Desktop Profile Management UI:**
-   - Delete Profile button with typed confirmation dialog (`Type '<Profile Name>' to confirm`).
-   - Recently Deleted Profiles section in Settings with remaining recovery days counter.
-   - 1-click Restore button.
-   - Confirmation dialog for Immediate Permanent Purge (`Type 'PURGE' to confirm`).
-   - Active Profile deletion transition in `DesktopProfileController` and `DesktopChatController` clearing active caches and gracefully selecting an available Profile or prompting selection.
-7. **Comprehensive Test Suites:**
-   - Pytest integration suite (`backend/tests/test_profile_deletion.py`) covering all 20 required verification scenarios.
-   - Flutter desktop widget and controller test suite (`frontend/flutter/apps/desktop/test/desktop_profile_deletion_test.dart`).
+#### B. Recovery Authority & Ownership Separation
+1. **Profile-Level Admin Authority:** Local Account Admin (`require_host_admin`) can recover deleted Profiles during the 30-day window.
+2. **No Cross-Layer Content Resurrection:** Admin recovery is limited strictly to the Profile deletion lifecycle (`Profile` row state). Moving a Profile to Recently Deleted or restoring it **must not** modify `is_deleted` or `deleted_at` on individual `Conversation`, `Message`, `Attachment`, `Memory`, `Task`, or `CharacterInstance` records. Restoring a Profile restores its Profile-level state without undoing individual content deletions that occurred before the Profile was deleted.
+3. **Scope Boundary:** Individual messages, attachments, and user-owned files are governed by their owning user's lifecycle, not the administrative Profile recovery interface. Separate user-facing recycle bins for messages, attachments, or files are out of scope for `PC-IDENTITY-005`.
 
-### Explicit Out-of-Scope
-- Profile PIN implementation, PIN hashing, PIN prompts, security questions, and Windows Hello.
-- Satellite device enrollment and mobile profile switching (`PC-IDENTITY-003`).
-- Account deletion or full Factory Reset (`PC-IDENTITY-006` / M5).
-- Re-architecting backup infrastructure (`app.db.backup`) or rewriting past backup archive files.
-- Redesigning the entire `SchedulerService` or introducing heavy external job brokers.
-- Global attachment pruning unrelated to the target Profile.
-- Redesigning unrelated Desktop UI screens (Chat, Character Studio, Models).
+#### C. Backup Restoration Semantics & Attachment Consistency Limitation
+1. **Point-in-Time Snapshot Restoration:** Restoring a backup restores the snapshot as it existed when that backup was created. If a backup is created while a Profile exists, the Profile is deleted afterward, and an administrator later restores that earlier backup, the Profile returns because it was present in that snapshot.
+2. **Supersedes Tombstone Anti-Resurrection Rule for Backups:** This explicitly supersedes prior requirements that deletion tombstones prevent resurrection from older database backups. Note: This backup restoration semantic is strictly distinct from multi-device and mobile synchronization tombstones (`mobile-offline-and-sync.md`), which continue to track deletions across live connected devices.
+3. **Coordinated Backup Architecture vs. Current Implementation Limitation:**
+   - **Target Architecture:** Coordinated database-and-asset backup packaging (`companion.db` bundled with external files in `settings.ATTACHMENT_DIR`) is the intended PC V1 design to ensure complete referential coherence across data and media.
+   - **Current Implementation Reality & Limitation:** The current backup implementation (`backend/app/db/backup.py`: `create_pre_migration_backup` / `restore_database_from_backup`) snapshots only the SQLite database file (`companion.db`) and does **not** package external attachment files in `settings.ATTACHMENT_DIR`.
+   - **Consequence:** If an older database snapshot is restored after a permanent Profile purge, the attachment database records will return with the Profile, but their physical image files on disk remain deleted. Requesting a preview or download for such an attachment will return HTTP 404 (Attachment file not found), while metadata queries succeed. `DEL-07` validates this exact current database-only boundary without falsely asserting physical asset restoration.
+
+#### D. Purge Ordering & Robust Failure Handling (Without a Separate Ledger)
+The Human Owner approved a streamlined physical-first approach without a separate deletion ledger or cleanup manifest. To avoid prematurely locking out restoration before file deletion even begins, the purge sequence enforces strict ordering:
+1. **Pre-Validate All Attachment Paths Before State Transition:**
+   - Query all `Attachment.storage_path` rows for `profile_id`.
+   - Validate each path via `resolve_and_verify_profile_attachment_path(storage_path, profile_id)`.
+   - **Failure Behavior:** If any path fails validation (e.g., cross-profile path or directory traversal attempt), the purge aborts immediately with `SecurityException` **before** the Profile's status is changed. The Profile remains in `status == "deleted"` and **remains restorable** by an administrator (`DEL-08`).
+2. **Atomic Non-Restorable State Transition:**
+   - Only after all attachment paths are verified valid does the Profile conditionally transition to `status = "purging"` (with `is_deleted = True` and `purge_after = min(purge_after, now)`).
+   - Once `status == "purging"` is committed, the Profile is permanently non-restorable, preventing restore-versus-purge races and ensuring a crash after partial file deletion never leaves a Profile restorable with missing attachments (`DEL-11`).
+3. **Physical Files Deleted Before Database Rows:**
+   - Revalidate containment immediately before unlinking each file.
+   - Delete physical files with `file_path.unlink(missing_ok=True)`.
+   - Already-missing files (`missing_ok=True`) are treated as successfully cleaned.
+   - **Failure Behavior (Interruption):** If an `OSError` occurs during unlinking (e.g. file locked by another process after 2 of 5 files are unlinked), the purge halts immediately. The Profile remains in `status == "purging"`, and all database records (`Attachment` rows and child rows) are retained in SQLite (`DEL-09`).
+4. **Retry Succeeds Without a Separate Ledger:**
+   - When a subsequent maintenance sweep or manual purge retries the Profile in `status == "purging"`, it pre-validates paths, treats the already-deleted files as cleaned (`missing_ok=True`), deletes the remaining physical files, and completes the purge (`DEL-10`).
+5. **Atomic Relational Database Deletion in Strict FK Order:**
+   - Only after all physical attachment files for the Profile are confirmed absent does the service delete the Profile's relational rows in strict foreign-key order and remove the `Profile` record in an atomic transaction.
+
+#### E. UUID Allocation Direction & Python 3.11 Investigation
+1. **Approved Target Allocation:**
+
+| Entity | Approved UUID Version | Current Repository Implementation Fact | Batch D Action |
+| :--- | :--- | :--- | :--- |
+| **Account** | UUIDv4 | No `accounts` table; installation-scoped | Keep UUIDv4 |
+| **Profile** | UUIDv4 | `str(uuid.uuid4())` in `profiles.py:92`, `profile.py:98`, `007_...py:57` | Already UUIDv4 — preserve |
+| **Character** (`CharacterInstance`) | UUIDv4 | `str(uuid.uuid4())` in `character_service.py:596` | Already UUIDv4 — preserve |
+| **Conversation** | UUIDv7 | `str(uuid.uuid4())` in `conversations.py:117` | Record direction; no migration in Batch D |
+| **Message** | UUIDv7 | `str(uuid.uuid4())` in `orchestrator.py:261, 271` | Record direction; no migration in Batch D |
+| **Attachment** | UUIDv7 | `generate_uuid()` (`uuid.uuid4().hex`) in `attachments.py:89, 203` | Record direction; no migration in Batch D |
+| **Memory records** | UUIDv7 | `str(uuid.uuid4())` in `memories.py:66` | Record direction; no migration in Batch D |
+| **Emotion records** | UUIDv7 | Not yet implemented (`PC-CHAR` follow-on) | Adopt UUIDv7 when implemented |
+
+2. **Python 3.11 UUIDv7 Investigation:**
+   - **Standard Library Fact:** Python's built-in `uuid` module only introduces `uuid.uuid7()` in Python 3.14 (PEP 716). On the project's canonical target runtime (**Python 3.11**) and current local venv, `hasattr(uuid, "uuid7")` is `False`.
+   - **Recommended Implementation for Follow-On UUIDv7 Adoption:** Use the battle-tested, pure-Python [`uuid6`](https://pypi.org/project/uuid6/) package (`uuid6.uuid7()`, RFC 9562 compliant, returns standard `uuid.UUID` instances, zero native C/Rust compilation dependencies across Windows/Linux CI) rather than writing a custom bit-packing generator.
+   - **Scope Guardrail:** Per instructions, Batch D (`PC-IDENTITY-005`) does **not** mass-migrate existing identifiers, alter `backend/requirements.txt`, or expand into a cross-codebase UUID refactor.
+
+### 1.2 Explicit Out-of-Scope
+- Profile PIN creation, verification, security questions, and Windows Hello.
+- Separate user-facing recycle bins or recovery interfaces for individual messages, attachments, conversations, or user files.
+- Cross-codebase UUIDv7 migration or adding new third-party dependencies in Batch D.
+- Satellite device enrollment (`PC-IDENTITY-003`).
+- Account deletion or full Factory Reset (`PC-IDENTITY-006`).
+- Bundling external attachment files into SQLite `.db` migration backups.
+- Introducing deletion ledgers, cleanup manifests, or external job brokers.
 
 ---
 
-## 2. Architecture & Technical Approach
+## 2. Source-Verified Technical Findings & Lifecycle Architecture
 
-### Technical Findings & Source Baseline
-Investigation of the current codebase reveals the following ground reality:
+### 2.1 Existing Implementation Facts Verified in Source
 
-| Component / File | Current Implemented Reality | Implication for Batch D |
+| Source File | Verified Implementation Fact | Engineering Consequence for Batch D |
 | :--- | :--- | :--- |
-| `backend/app/models/profile.py` | Columns `status`, `is_deleted`, `deleted_at`, and `purge_after` **already exist** in `profiles` table (via Migration 007). `is_default` partial unique index `uq_profiles_single_default` enforces exactly one default profile. | **No database migration required.** Schema already has all necessary columns to represent active, recoverable, and purged states. |
-| `backend/app/core/profile_sessions.py` | `validate_profile_session()` freshly joins `profiles` and checks `record[3] != "active" or record[4] or record[5] is not None`. `guarded_tokens()` polls this check every 250ms during token streaming. | Soft deletion (`is_deleted=True`, `status="deleted"`) **immediately breaks in-flight generation** and invalidates any subsequent personal API requests with HTTP 401. |
-| `backend/app/models/conversation.py` | `character_instance_id` has `ForeignKey("character_instances.id", ondelete="RESTRICT")`. | **Direct cascade delete fails** if character instances are deleted before conversations. Hard purge must delete `conversations` before `character_instances`. |
-| `backend/app/models/profile.py` | `active_character_instance_id` has `ForeignKey("character_instances.id", ondelete="SET NULL")`. | Circular dependency: `Profile` points to `character_instances`, while `character_instances` points to `profiles`. Purge must nullify `active_character_instance_id` first. |
-| `backend/app/models/attachment.py` | Stores metadata in DB (`storage_path`) and physical files in `settings.ATTACHMENT_DIR`. | Physical files must be deleted from disk only after database transaction commits, and paths must be validated using `resolve_and_verify_attachment_path()` to prevent directory traversal. |
-| `backend/migrations/.../003_...py` | SQLite triggers `memories_fts_delete` and `memories_fts_update` maintain `memories_fts` virtual table. | Deleting `memories` rows automatically triggers `memories_fts_delete`, removing entries from FTS5 without orphaned index records. |
-| `backend/app/db/backup.py` | `backup_database_wal_safe()` writes point-in-time binary SQLite backups to `backups/`. | Historical backups are immutable point-in-time archives. Live purge cannot alter existing backups. Documented as explicit architectural limitation. |
+| [`backend/app/models/profile.py`](../../../backend/app/models/profile.py) & [`007_profiles_and_owner_id_migration.py`](../../../backend/migrations/versions/007_profiles_and_owner_id_migration.py) | `profiles` already defines `status` (`String(16)`, no `CHECK` constraint), `is_deleted` (`Boolean`), `deleted_at` (`DateTime(timezone=True)`), `purge_after` (`DateTime(timezone=True)`), and `active_character_instance_id` (`ForeignKey("character_instances.id", ondelete="SET NULL")`). Partial unique index `uq_profiles_single_default` enforces `is_default = 1`. | **Zero schema migrations required.** `status` natively accommodates `"active"`, `"deleted"`, and `"purging"`. |
+| [`backend/app/models/conversation.py`](../../../backend/app/models/conversation.py) | `Conversation.character_instance_id` defines `ForeignKey("character_instances.id", ondelete="RESTRICT")`. | Deleting `character_instances` before `conversations` (or relying on unspecified SQLite `ON DELETE CASCADE` table visitation order from `profiles`) fails with `IntegrityError`. Explicit ordered `DELETE` statements are mandatory. |
+| [`backend/app/models/attachment.py`](../../../backend/app/models/attachment.py) & [`backend/app/api/v1/endpoints/attachments.py`](../../../backend/app/api/v1/endpoints/attachments.py) | Uploads write to `settings.ATTACHMENT_DIR / session.profile_id / conversation_id` and store relative `storage_path = f"attachments/{session.profile_id}/{conversation_id}/{filename}"`. `resolve_and_verify_attachment_path()` only checks containment within global `settings.ATTACHMENT_DIR`. | Purge must use a stricter `resolve_and_verify_profile_attachment_path(storage_path, profile_id)` checking containment within `(settings.ATTACHMENT_DIR / profile_id).resolve()`. |
+| [`backend/app/core/profile_sessions.py`](../../../backend/app/core/profile_sessions.py) & [`backend/app/services/assistant/orchestrator.py`](../../../backend/app/services/assistant/orchestrator.py) | `validate_profile_session()` queries SQLite on every call (`with db.no_autoflush`) and raises `HTTPException(401)` whenever `revoked_at is not None or state != "active" or deleted or deleted_at is not None`. `_authorized_tokens()` and `guarded_tokens()` re-validate before each token and poll `asyncio.wait(..., timeout=0.25)` while waiting on provider output; `orchestrate_chat_stream()` re-validates before committing final assistant output (`orchestrator.py:497, 507`) and rolls back on `401` (`orchestrator.py:551`). | The `0.25s` timeout is a cooperative polling interval while awaiting provider output, **not** a guaranteed hard real-time maximum cancellation latency (actual wall-clock stop time includes event-loop scheduling, SQLite query time, any non-token preflight step, and stream teardown). What is strictly guaranteed is that **no further SSE tokens are emitted and no completed assistant turn is committed after revocation is observed**. |
+| [`backend/app/db/backup.py`](../../../backend/app/db/backup.py) | `create_pre_migration_backup()` and `restore_database_from_backup()` use `sqlite3.Connection.backup()` on the SQLite database file (`companion.db`). | Restoring an earlier SQLite snapshot restores the exact database rows (including Profiles) present when that snapshot was created, and does not touch external files in `ATTACHMENT_DIR`. |
+| [`007_profiles_and_owner_id_migration.py`](../../../backend/migrations/versions/007_profiles_and_owner_id_migration.py) | SQLite trigger `memories_fts_delete` (`AFTER DELETE ON memories`) executes `INSERT INTO memories_fts(memories_fts, rowid, id, content, category) VALUES('delete', OLD.rowid, OLD.id, OLD.content, OLD.category)`. | Executing `DELETE FROM memories WHERE profile_id = :id` automatically removes all FTS5 index entries for that Profile. |
 
-### Complete Profile Ownership Graph & Deletion Sequence
+---
+
+### 2.2 Profile Deletion & Restoration State Machine
 
 ```mermaid
-flowchart TD
-    P[Profile: profiles] --> PS[profile_sessions]
-    P --> ST[session_tickets]
-    P --> C[conversations]
-    P --> CI[character_instances]
-    P --> M[memories]
-    P --> T[tasks]
-    P --> A[attachments]
-    
-    C --> MSG[messages]
-    C --> A
-    MSG --> A
-    M --> FTS[memories_fts]
-    A --> FILE[Physical Disk File: storage_path]
-    
-    CI -.->|RESTRICT| C
-    CI -.->|SET NULL| P
+stateDiagram-v2
+    [*] --> active: Profile Created
+    active --> deleted: DELETE /api/v1/profiles/{id}\n(Move to Recently Deleted:\nis_deleted=True, status='deleted',\npurge_after = deleted_at + 30d,\nrevoke sessions & delete tickets)
+    deleted --> active: POST /api/v1/profiles/{id}/restore\n(Requires status=='deleted' AND purge_after > now;\npreserves child content deleted_at flags;\ndoes NOT revive revoked sessions)
+    deleted --> deleted: Purge pre-validation fails\n(Invalid/escaped path; no status change;\nProfile remains restorable)
+    deleted --> purging: All paths validated ->\nAtomic claim: status='purging'\n(Non-restorable; purge_after <= now)
+    purging --> purging: Physical file unlink failure / crash\n(DB rows retained; retried on next purge)
+    purging --> [*]: Physical files confirmed removed ->\nAtomic DB transaction deletes child rows & Profile
 ```
 
-### Deterministic 13-Step Hard-Purge Execution Order
-To guarantee zero foreign-key constraint violations (`RESTRICT`), clean FTS5 synchronization, and secure disk cleanup:
-1. **Query Physical Assets:** Query all `storage_path` values for `attachments` owned by `profile_id`.
-2. **Break Circular FK:** Set `Profile.active_character_instance_id = None` on the target profile row.
-3. **Delete Attachments DB Rows:** `DELETE FROM attachments WHERE profile_id = :id`.
-4. **Delete Messages:** `DELETE FROM messages WHERE profile_id = :id`.
-5. **Delete Conversations:** `DELETE FROM conversations WHERE profile_id = :id` (eliminating `RESTRICT` dependency on `character_instances`).
-6. **Delete Character Instances:** `DELETE FROM character_instances WHERE profile_id = :id`.
-7. **Delete Memories:** `DELETE FROM memories WHERE profile_id = :id` (SQLite trigger `memories_fts_delete` automatically purges `memories_fts`).
-8. **Delete Tasks:** `DELETE FROM tasks WHERE profile_id = :id`.
-9. **Delete Session Tickets:** `DELETE FROM session_tickets WHERE profile_id = :id`.
-10. **Delete Profile Sessions:** `DELETE FROM profile_sessions WHERE profile_id = :id`.
-11. **Delete Profile Record:** `DELETE FROM profiles WHERE id = :id`.
-12. **Commit Transaction:** Atomically commit all relational deletions in SQLite.
-13. **Unlink Physical Files:** Safely unlink physical attachment files from `settings.ATTACHMENT_DIR` using `resolve_and_verify_attachment_path()`, ignoring already-missing files.
+#### Consistent State Invariants Across Existing Fields (`profiles` table)
+
+| Lifecycle State | `status` | `is_deleted` | `deleted_at` | `purge_after` | Restorable? | Accessible by Session? |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Active** | `"active"` | `False` | `None` | `None` | N/A | Yes |
+| **Recently Deleted (Recoverable)** | `"deleted"` | `True` | `<UTC timestamp>` | `deleted_at + 30 days` (`> now`) | **Yes** | No (`401`) |
+| **Recently Deleted (Expired)** | `"deleted"` | `True` | `<UTC timestamp>` | `deleted_at + 30 days` (`<= now`) | **No** (`410 Gone`) | No (`401`) |
+| **Purging (Non-Restorable)** | `"purging"` | `True` | `<UTC timestamp>` | `<= now` | **No** (`409 Conflict`) | No (`401`) |
+| **Purged (Removed)** | *(row deleted)* | *(row deleted)* | *(row deleted)* | *(row deleted)* | **No** (`404 Not Found`) | No (`401`) |
+
+#### Name Uniqueness Across Lifecycle States
+- Look at `backend/app/api/v1/endpoints/profiles.py:60-65`: `_validate_and_normalize_name()` currently checks uniqueness only against active profiles (`Profile.is_deleted.is_(False), Profile.deleted_at.is_(None), Profile.status == "active"`).
+- **Restoration Name Collision Prevention:** Enforce case-insensitive name uniqueness in `_validate_and_normalize_name()` across all non-purged Profiles (`Profile.id != exclude_profile_id`) **and** re-verify in `restore_profile()`. Preventing duplicate names with Profiles still in Recently Deleted avoids confusing identical names in Settings and guarantees a deleted Profile can always be restored without a name collision!
 
 ---
 
-## 3. Critical Design Decisions & Material Choices
+### 2.3 Detailed 4-Phase Permanent Purge Sequence
 
-### Decision A — Default & Last-Active Profile Protection
-- **Policy:** **Strictly prohibit deleting the default Profile (`is_default == True`) and strictly prohibit deleting the last remaining active Profile in the installation.**
-- **Rationale:**
-  - The default Profile (`is_default == True`) anchors initial installation identity and is governed by partial unique index `uq_profiles_single_default`. Allowing deletion would require arbitrary automatic default reassignment or complex restore re-arbitration.
-  - Allowing deletion of the last remaining active Profile leaves the PC Companion client completely unauthenticated with no profile to switch to.
-- **Enforcement:** If a request targets the default profile, return HTTP 400 Bad Request (`{"error": {"code": "CANNOT_DELETE_DEFAULT_PROFILE", "message": "The Default Personal Profile cannot be deleted."}}`). If the target is the only remaining active profile, return HTTP 400 Bad Request (`{"error": {"code": "CANNOT_DELETE_LAST_PROFILE", "message": "Cannot delete the last remaining active Profile."}}`).
+Permanent deletion (`ProfilePurgeService.purge_profile(db, profile_id, now, *, allow_unexpired: bool)`) enforces strict ordering across four distinct phases:
 
-### Decision B — Lifecycle State Representation & Reusing Existing Schema
-- **Policy:** **Reuse the existing `profiles` table columns without schema migration.**
-- **State Definitions:**
-  - **Active:** `status == "active"`, `is_deleted == False`, `deleted_at == None`, `purge_after == None`.
-  - **Recoverable (Soft-Deleted):** `status == "deleted"`, `is_deleted == True`, `deleted_at == <timestamp>`, `purge_after == <timestamp + 7 days>`.
-  - **Purged:** The `profiles` row and all related personal records are deleted from the database.
-- **Rationale:** No migrations are needed; Migration 007 already defined these exact columns. Reusing them eliminates migration risk.
+#### Phase A — Pre-Validation of All Attachment Paths (Preflight Read)
+1. **Inspect Preconditions:**
+   - Load `Profile` by `profile_id`.
+   - If not found -> raise `404 Not Found`.
+   - If `profile.is_default` -> raise `400 Bad Request` (`CANNOT_DELETE_DEFAULT_PROFILE`).
+   - If `not profile.is_deleted or profile.status == "active"` -> raise `409 Conflict` (`PROFILE_MUST_BE_SOFT_DELETED_FIRST`).
+   - If `not allow_unexpired and profile.status == "deleted" and (profile.purge_after is None or profile.purge_after > now)` -> raise `409 Conflict` (`PROFILE_RETENTION_NOT_EXPIRED`).
+2. **Validate Every Attachment Path BEFORE Any State Change:**
+   - Query `select(Attachment.id, Attachment.storage_path).where(Attachment.profile_id == profile_id)`.
+   - For each row, call `resolve_and_verify_profile_attachment_path(storage_path, profile_id)`:
+     - Verifies `profile_root = (settings.ATTACHMENT_DIR / profile_id).resolve()` is inside `ATTACHMENT_DIR`.
+     - Verifies `candidate = (settings.COMPANION_DATA_ROOT / storage_path).resolve()` is strictly inside `profile_root` and `!= profile_root`.
+   - **Pre-Validation Failure Guard:** If ANY path fails validation (e.g. cross-profile path or directory traversal), raise `SecurityException` **immediately**.
+   - **Crucial Invariant:** Because no state transition has occurred, `Profile.status` remains `"deleted"` and the Profile **remains restorable** (`DEL-08`). No physical files are touched.
 
-### Decision C — Maintenance & Expiration Strategy
-- **Policy:** **Decoupled maintenance service executed at runtime startup and via Host Admin maintenance endpoint.**
-- **Implementation:**
-  - `ProfilePurgeService.execute_maintenance_purge(db, now)` queries all profiles where `is_deleted == True` and `status == "deleted"` and `purge_after <= now`.
-  - Iterates through eligible profiles, executing the atomic 13-step purge per profile in an isolated sub-transaction.
-  - Triggered at runtime startup in `backend/app/main.py` lifespan (non-blocking task) and exposed via `POST /api/v1/system/maintenance/purge-profiles`.
-  - **Offline PC Handling:** If the computer was turned off past the 7-day deadline, the startup maintenance pass immediately identifies the overdue Profile on boot and executes hard purge safely.
-  - **Failure Handling:** If an error occurs purging Profile X, that Profile's transaction rolls back and an error is logged; other profiles continue. Profile X remains soft-deleted and will be retried on the next maintenance run.
+#### Phase B — Atomic Non-Restorable State Transition (Transaction 1)
+3. **Atomic Conditional Claim (`status -> "purging"`):**
+   - Execute conditional `UPDATE`:
+     ```python
+     stmt = (
+         update(Profile)
+         .where(
+             Profile.id == profile_id,
+             Profile.is_default.is_(False),
+             Profile.is_deleted.is_(True),
+             Profile.status.in_(("deleted", "purging")),
+         )
+         .values(
+             status="purging",
+             purge_after=now if (profile.purge_after is None or profile.purge_after > now) else profile.purge_after,
+             updated_at=now,
+         )
+     )
+     ```
+   - If `result.rowcount != 1`: roll back and raise `409 Conflict` (concurrent restore won the race before purge started).
+   - Defensively revoke any unrevoked `profile_sessions` and delete any `session_tickets` for `profile_id`.
+   - `await db.commit()`
+   - **Postcondition of Phase B:** `Profile.status == "purging"` is durably committed. Any concurrent or subsequent `POST /restore` fails closed with `409 Conflict` (`DEL-11`).
 
-### Decision D — Immediate Permanent Purge ("Permanently Purge Now")
-- **Policy:** **Supported for soft-deleted profiles via dedicated Host Admin endpoint `POST /api/v1/profiles/{profile_id}/purge`.**
-- **Safeguards:**
-  - Requires Host Admin credentials.
-  - Profile must already be in soft-deleted state (`is_deleted == True`).
-  - Desktop UI requires explicit confirmation by typing `PURGE` before enabling the button.
-  - In automated tests, only temporary disposable databases (`tmp_path`) are used. Real human production data is never touched during CI/testing.
+#### Phase C — Physical File Deletion with Pre-Unlink Revalidation (Disk I/O)
+4. **Revalidate Containment Immediately Before Unlinking:**
+   - For each validated attachment path, re-verify containment immediately prior to calling `unlink`.
+5. **Delete Physical Files First:**
+   - Unlink via `await asyncio.to_thread(file_path.unlink, missing_ok=True)`.
+   - Already-missing files (`missing_ok=True`) are treated as successfully cleaned.
+   - **Interruption Guard:** If an `OSError` occurs (e.g., file locked by another process after 2 of 5 files are deleted), **stop file deletion immediately** and raise/report the error.
+   - Because database records have not been touched, all `Attachment` rows remain in SQLite with `Profile.status == "purging"` for a subsequent retry (`DEL-09`).
+6. **Directory Cleanup:** After all attachment files are unlinked, attempt non-recursive `rmdir()` on empty conversation subdirectories and the Profile attachment directory (ignoring `OSError` if non-empty or absent; never calling recursive `rmtree`).
 
-### Decision E — Interaction with Backup Archives
-- **Policy:** **Live hard purge guarantees deletion from the live database and live file storage. Historical backup archives are immutable point-in-time snapshots and are not rewritten.**
-- **Truthful Documentation:** Deleting a live Profile does not reach into historical `.db` backup archives created prior to deletion. If an administrator manually restores an old backup using `restore_database_from_backup()`, the database will be restored to the state at the time of the backup. Future cross-backup tombstone synchronization is tracked in `DECISION_DEBT.md` (`DEBT-V1-014`).
+#### Phase D — Atomic Relational Database Purge in Strict FK Order (Transaction 2)
+7. Once all physical files are confirmed absent, execute relational deletions in a single atomic transaction:
+   1. `UPDATE profiles SET active_character_instance_id = NULL WHERE id = :profile_id` (breaks circular FK `fk_profiles_active_character_instance_id`).
+   2. `DELETE FROM attachments WHERE profile_id = :profile_id`
+   3. `DELETE FROM messages WHERE profile_id = :profile_id`
+   4. `DELETE FROM conversations WHERE profile_id = :profile_id` (precedes `character_instances` because `conversations.character_instance_id` specifies `ON DELETE RESTRICT`).
+   5. `DELETE FROM character_instances WHERE profile_id = :profile_id`
+   6. `DELETE FROM memories WHERE profile_id = :profile_id` (fires `memories_fts_delete` trigger).
+   7. `DELETE FROM tasks WHERE profile_id = :profile_id`
+   8. `DELETE FROM session_tickets WHERE profile_id = :profile_id`
+   9. `DELETE FROM profile_sessions WHERE profile_id = :profile_id`
+   10. `DELETE FROM profiles WHERE id = :profile_id AND is_default = 0 AND is_deleted = 1 AND status = 'purging'`
+   11. `await db.commit()`
 
 ---
 
-## 4. API Request & Response Contracts
+### 2.4 Restore-vs-Purge Concurrency Guarantees
 
-### 1. `DELETE /api/v1/profiles/{profile_id}`
-- **Security:** `require_host_admin` (loopback only, `X-Host-Admin-Secret`).
-- **Preconditions:** Profile exists, `is_deleted == False`, `status == "active"`, `is_default == False`, active profiles count > 1.
-- **Response:** `200 OK`
+- **Case 1: Restore commits while Profile is `"deleted"` (`purge_after > now`), before Purge Phase B:**
+  - `restore_profile` executes:
+    ```python
+    stmt = (
+        update(Profile)
+        .where(
+            Profile.id == profile_id,
+            Profile.is_deleted.is_(True),
+            Profile.status == "deleted",
+            Profile.purge_after > now,
+        )
+        .values(
+            status="active",
+            is_deleted=False,
+            deleted_at=None,
+            purge_after=None,
+            updated_at=now,
+        )
+    )
+    ```
+  - Once committed, `Profile.status == "active"`. A concurrent `purge_profile` attempting Phase B (`WHERE is_deleted = 1 AND status IN ('deleted', 'purging')`) updates `0` rows and fails closed with `409 Conflict` before deleting any files.
+- **Case 2: Purge commits Phase B (`status -> "purging"`) before Restore commits:**
+  - Once Phase B commits `status = "purging"`, a concurrent `restore_profile` (`WHERE status = 'deleted' AND purge_after > :now`) updates `0` rows and fails closed with `409 Conflict`.
+- **SQLite Serialization:** Within SQLite WAL mode, concurrent `UPDATE profiles ... WHERE id = :profile_id` statements are serialized at the database write lock, guaranteeing that exactly one conditional state transition (`deleted -> active` or `deleted -> purging`) can succeed.
+
+---
+
+## 3. Security, Authorization & Confirmation Boundaries
+
+### 3.1 Backend API Authorization Boundary vs. UI Confirmation Safeguard
+- **Backend API Enforcement:**
+  - All Profile deletion, restoration, deleted-catalog enumeration, immediate purge, and maintenance purge endpoints require **Host Admin authority** (`Depends(require_host_admin)`: loopback client IP + valid `X-Host-Admin-Secret` header).
+  - Ordinary `ProfileSession` bearer tokens (`psk_...`), pairing tokens, and remote clients have **zero** access to these endpoints.
+  - `POST /api/v1/profiles/{profile_id}/purge` enforces lifecycle preconditions in the backend (`is_default == False`, `is_deleted == True`, `status in ("deleted", "purging")`), refusing to permanently purge an active Profile that has not first been moved to Recently Deleted.
+- **Desktop UI Confirmation Safeguard (Client-Side UX Only):**
+  - In Flutter Desktop (`profile_dialogs.dart`), the **Move to Recently Deleted** dialog requires typing the target Profile's display name to enable the confirm button, and the **Permanently Delete** dialog requires typing the target Profile's display name (or `DELETE`) to enable the permanent delete button.
+  - **Truthful Boundary Statement:** These typed confirmations are **UI safeguards against accidental user clicks** in the Desktop client. They are not claimed as backend security controls, because any local process possessing `X-Host-Admin-Secret` already holds full Host Admin authority.
+
+### 3.2 API Request & Response Contracts
+
+#### 1. `DELETE /api/v1/profiles/{profile_id}` — Move Profile to Recently Deleted
+- **Security:** `require_host_admin`
+- **Preconditions:**
+  - Profile exists (`404` if not found).
+  - `profile.is_default == False` (`400 Bad Request`: `"The Default Personal Profile cannot be deleted"`).
+  - `profile.is_deleted == False` and `profile.status == "active"` (`409 Conflict` if already deleted/purging).
+  - Active profiles count `> 1` (`400 Bad Request`: `"Cannot delete the last remaining active Profile"`).
+- **Effects:**
+  - Sets `status = "deleted"`, `is_deleted = True`, `deleted_at = now`, `purge_after = now + timedelta(days=30)`.
+  - Revokes all active `profile_sessions` for `profile_id` (`revoked_at = now`) and deletes all `session_tickets` for `profile_id`.
+  - Preserves child entity `is_deleted` / `deleted_at` values untouched.
+- **Response (`200 OK` — `ProfileMetadata`):**
   ```json
   {
-    "id": "uuid-here",
+    "id": "b4a1e8f0-9c3d-4e2a-8b1c-0d1e2f3a4b5c",
     "name": "Work",
     "is_default": false,
     "status": "deleted",
+    "pin_protected": false,
     "is_deleted": true,
     "deleted_at": "2026-11-05T20:00:00Z",
-    "purge_after": "2026-11-12T20:00:00Z",
-    "pin_protected": false
+    "purge_after": "2026-12-05T20:00:00Z"
   }
   ```
 
-### 2. `POST /api/v1/profiles/{profile_id}/restore`
-- **Security:** `require_host_admin`.
-- **Preconditions:** Profile exists, `is_deleted == True`, `status == "deleted"`, `purge_after > now_utc()`.
-- **Effects:** Clears `is_deleted`, `deleted_at`, `purge_after`, sets `status = "active"`. Stale revoked sessions remain revoked.
-- **Response:** `200 OK`
+#### 2. `GET /api/v1/profiles/deleted` — List Recently Deleted Profiles
+- **Security:** `require_host_admin`
+- **Behavior:** Returns Profiles where `Profile.is_deleted.is_(True)` and `Profile.status.in_(("deleted", "purging"))`, ordered by `Profile.deleted_at.desc(), Profile.id.asc()`.
+- **Response (`200 OK` — `list[ProfileMetadata]`):** Includes `is_deleted`, `deleted_at`, `purge_after`, and `status` (`"deleted"` vs. `"purging"`).
+
+#### 3. `POST /api/v1/profiles/{profile_id}/restore` — Restore Recently Deleted Profile
+- **Security:** `require_host_admin`
+- **Preconditions:**
+  - Profile exists (`404` if not found).
+  - `profile.status == "purging"` -> `409 Conflict` (`"Profile is being permanently deleted and can no longer be restored"`).
+  - `not profile.is_deleted or profile.status != "deleted"` -> `409 Conflict` (`"Profile is not in a restorable deleted state"`).
+  - `profile.purge_after is None or profile.purge_after <= now_utc()` -> `410 Gone` (`"Profile recovery window has expired"`).
+  - No other active Profile has the same case-insensitive name (`409 Conflict`).
+- **Effects:**
+  - Atomically updates `status = "active"`, `is_deleted = False`, `deleted_at = None`, `purge_after = None`, `updated_at = now` where `status == "deleted"` and `purge_after > now`.
+  - Does **not** revive previously revoked `profile_sessions` and does **not** alter `is_deleted` / `deleted_at` on child conversations, messages, memories, tasks, or attachments.
+- **Response (`200 OK` — `ProfileMetadata`):** Restored Profile metadata with `status = "active"`, `is_deleted = false`, `deleted_at = null`, `purge_after = null`.
+
+#### 4. `POST /api/v1/profiles/{profile_id}/purge` — Immediate Permanent Delete
+- **Security:** `require_host_admin`
+- **Preconditions:**
+  - Profile exists (`404` if not found).
+  - `profile.is_default == False` (`400 Bad Request`).
+  - `profile.is_deleted == True` and `profile.status in ("deleted", "purging")` (`409 Conflict` if Profile is still active).
+- **Effects:** Executes Phase A (Pre-validation), Phase B (`status = "purging"`), Phase C (revalidation + physical file deletion), and Phase D (atomic relational deletion in FK order).
+- **Response (`200 OK` — `ProfilePurgeResponse`):**
   ```json
   {
-    "id": "uuid-here",
-    "name": "Work",
-    "is_default": false,
-    "status": "active",
-    "is_deleted": false,
-    "deleted_at": null,
-    "purge_after": null,
-    "pin_protected": false
-  }
-  ```
-
-### 3. `GET /api/v1/profiles/deleted`
-- **Security:** `require_host_admin`.
-- **Response:** `200 OK`
-  ```json
-  [
-    {
-      "id": "uuid-here",
-      "name": "Work",
-      "is_default": false,
-      "status": "deleted",
-      "is_deleted": true,
-      "deleted_at": "2026-11-05T20:00:00Z",
-      "purge_after": "2026-11-12T20:00:00Z",
-      "pin_protected": false
-    }
-  ]
-  ```
-
-### 4. `POST /api/v1/profiles/{profile_id}/purge`
-- **Security:** `require_host_admin`.
-- **Preconditions:** Profile exists, `is_deleted == True`, `is_default == False`.
-- **Response:** `200 OK`
-  ```json
-  {
-    "purged_profile_id": "uuid-here",
+    "purged_profile_id": "b4a1e8f0-9c3d-4e2a-8b1c-0d1e2f3a4b5c",
     "status": "purged"
   }
   ```
 
-### 5. `POST /api/v1/system/maintenance/purge-profiles`
-- **Security:** `require_host_admin`.
-- **Response:** `200 OK`
+#### 5. `POST /api/v1/system/maintenance/purge-profiles` — Runtime Maintenance Purge
+- **Security:** `require_host_admin`
+- **Behavior:** Selects all non-default Profiles where `Profile.is_deleted.is_(True)` and (`(Profile.status == "deleted" and Profile.purge_after <= now)` or `Profile.status == "purging"`), and runs `purge_profile(..., allow_unexpired=False)` for each candidate in an isolated per-Profile transaction scope so a failure on one Profile does not block others.
+- **Startup Integration:** Also invoked during application startup in [`backend/app/main.py`](../../../backend/app/main.py) lifespan after `initialize_database_runtime()`.
+- **Response (`200 OK` — `MaintenancePurgeResponse`):**
   ```json
   {
-    "purged_profile_ids": ["uuid-1"],
+    "purged_profile_ids": ["b4a1e8f0-9c3d-4e2a-8b1c-0d1e2f3a4b5c"],
     "purged_count": 1,
-    "errors": []
+    "failed_profile_ids": []
   }
   ```
 
 ---
 
-## 5. Proposed File Changes & In-Place Logic
+## 4. Canonical Documentation Reconciliation Inventory
 
-### A. Backend Services & Endpoints
-- **Create `backend/app/services/profile_purge_service.py`:**
-  - Implements `ProfilePurgeService.soft_delete_profile(db, profile_id, now)`.
-  - Implements `ProfilePurgeService.restore_profile(db, profile_id, now)`.
-  - Implements `ProfilePurgeService.purge_profile(db, profile_id)`.
-  - Implements `ProfilePurgeService.execute_maintenance_purge(db, now)`.
-- **Modify `backend/app/api/v1/endpoints/profiles.py`:**
-  - Update `ProfileMetadata` to include `is_deleted: bool = False`, `deleted_at: Optional[datetime] = None`, `purge_after: Optional[datetime] = None`.
-  - Add `DELETE /{profile_id}` (soft-delete).
-  - Add `POST /{profile_id}/restore` (restore).
-  - Add `GET /deleted` (list recoverable profiles).
-  - Add `POST /{profile_id}/purge` (immediate purge).
-- **Modify `backend/app/api/v1/endpoints/system.py`:**
-  - Add `POST /system/maintenance/purge-profiles` calling `ProfilePurgeService.execute_maintenance_purge()`.
-- **Modify `backend/app/main.py`:**
-  - Add non-blocking maintenance call in startup lifespan.
+### 4.1 Reconciled in Phase 1 (Explicitly Authorized in Handoff §2.C)
+1. [`docs/04_Architecture/02_Data_and_Security/privacy-retention-and-audit.md`](../../04_Architecture/02_Data_and_Security/privacy-retention-and-audit.md)
+   - Replaced superseded tombstone anti-resurrection invariant in §1 with point-in-time backup snapshot restoration semantics and exact backup asset scope.
+   - Added explicit note that backup restoration semantics are strictly distinct from mobile synchronization tombstones (`mobile-offline-and-sync.md`), which remain active for delta synchronization.
+   - Added 30-day Profile recovery lifecycle (`PC-IDENTITY-005`), Profile-level recovery authority boundary (preserving prior individual content deletions), pre-validation before `status="purging"` transition, physical-first attachment cleanup ordering, backup-attachment consistency limitation, and UUIDv4/UUIDv7 entity allocation direction in §2.1 & §4.
+   - Removed superseded backup tombstone open-design item from §5.
+2. [`docs/04_Architecture/04_Infrastructure/backup-recovery-and-diagnostics.md`](../../04_Infrastructure/backup-recovery-and-diagnostics.md)
+   - Replaced `- **Tombstones:** Known deletion tombstones prevent known resurrection from older restore material` in §2.3 with `- **Point-in-Time Snapshot Semantics:** Restoring a backup restores the snapshot as it existed when that backup was created... Note: This backup restoration semantic is strictly distinct from mobile synchronization tombstones (mobile-offline-and-sync.md), which remain active for delta synchronization...`
+   - Added explicit subsection on **Backup & Asset Consistency Limitation** documenting that current SQLite backups snapshot only `companion.db` without `ATTACHMENT_DIR`, causing restored attachment records to reference missing files if restored after a purge.
 
-### B. OpenAPI & Dart Client Parity
-- **Modify `contracts/openapi/openapi.json`:**
-  - Regenerate OpenAPI spec containing new routes and schemas.
-- **Modify `frontend/flutter/packages/companion_api/lib/dto/profile_dto.dart`:**
-  - Extend `ProfileMetadata` with `is_deleted`, `deleted_at`, `purge_after`.
-  - Add `ProfilePurgeResponse` and `MaintenancePurgeResponse`.
-- **Modify `frontend/flutter/packages/companion_api/lib/client/companion_client.dart`:**
-  - Add `deleteProfile(String profileId)`.
-  - Add `restoreProfile(String profileId)`.
-  - Add `listDeletedProfiles()`.
-  - Add `purgeProfile(String profileId)`.
-  - Add `runPurgeMaintenance()`.
-- **Update Parity Checkers:**
-  - Update `scripts/check_dart_openapi_parity.py` and `scripts/tests/test_check_dart_openapi_parity.py` to cover all 36 routes and 29 schemas.
+### 4.2 Additional Canonical & Planning Documents Requiring Reconciliation (Phase 3 Closure or Upon Authorization)
+The following repository documents contain legacy `7-day` Profile recovery wording or restore-tombstone references and are queued for reconciliation during Phase 3 documentation sync (or immediately if authorized):
 
-### C. Flutter Desktop UI & State Management
-- **Modify `frontend/flutter/apps/desktop/lib/features/profiles/desktop_profile_controller.dart`:**
-  - Add `deletedProfiles` list state and getter `hasDeletedProfiles`.
-  - Add `deleteProfile(String profileId)` handling active profile deletion, updating local catalogs, and clearing credentials if active.
-  - Add `restoreProfile(String profileId)`.
-  - Add `purgeProfileImmediately(String profileId)`.
-  - Handle active profile deletion gracefully: if active profile is deleted, `activeProfileId` is reset to null, `DesktopChatController.invalidateProfileSession()` is invoked, and `clientSettings` persists the update.
-- **Modify `frontend/flutter/apps/desktop/lib/features/profiles/profile_dialogs.dart`:**
-  - Add `showDeleteProfileDialog(context, controller, profile)`.
-  - Add `showPurgeConfirmationDialog(context, controller, profile)`.
-- **Modify `frontend/flutter/apps/desktop/lib/features/profiles/profile_access_card.dart`:**
-  - Add Delete button with confirmation dialog.
-  - Add expandable "Recently Deleted Profiles" card with remaining days badge, Restore button, and Permanent Purge button.
-- **Modify `frontend/flutter/apps/desktop/lib/features/profiles/profile_selector_header.dart`:**
-  - Ensure deleted profiles never show in selector popup.
+| Document | Location | Conflicting Text | Required Reconciliation |
+| :--- | :--- | :--- | :--- |
+| [`docs/04_Architecture/02_Data_and_Security/profiles-and-devices.md`](../../04_Architecture/02_Data_and_Security/profiles-and-devices.md) | §2 line 47, §4 line 112, §6 line 133 | `7-day recovery window` / `7-day recoverable deletion` | Update to `30-day recovery window` (`purge_after = deleted_at + 30 days`) and record implemented Batch D reality in §4. |
+| [`docs/05_Design/02_Profile_Selector_and_Privacy.md`](../../05_Design/02_Profile_Selector_and_Privacy.md) | §4.1–§4.2 lines 47–57 | `7-Day Soft-Delete Warning`, `7-day soft-delete holding state`, `Permanently Purge Now` | Update to `30-Day` recovery window (`Recently Deleted`), clearly distinguishing **Move to Recently Deleted** from **Permanently Delete**. |
+| [`docs/05_Design/README.md`](../../05_Design/README.md) | Line 55 | `7-day soft-delete warning` | Update summary to `30-day soft-delete warning`. |
+| [`docs/04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md`](../../04_Architecture/decisions/ADR-0018-multi-profile-pc-v1-ownership-model.md) & [`decisions/README.md`](../../04_Architecture/decisions/README.md) | Lines 26–28 / Line 24 | `7-day recoverable soft-delete window` / `After 7 days, a hard purge...` | Reconcile recovery window to `30 days`. |
+| [`docs/02_Planning/00_Master/WBS.md`](../00_Master/WBS.md) & [`DECISION_REGISTER.md`](../00_Master/DECISION_REGISTER.md) | `WBS.md` line 76, `DECISION_REGISTER.md` line 31 | `PC-IDENTITY-005: 7-Day Recoverable Profile Deletion...` / `7-day recoverable delete window` | Reconcile to `30-Day Recoverable Profile Deletion Lifecycle & Hard Purge Maintenance`. |
+| [`docs/04_Architecture/01_Domains/memory-and-personalization.md`](../../04_Architecture/01_Domains/memory-and-personalization.md) | §2.2 line 58 | `Tombstones prevent known resurrection from restore.` | Reconcile with point-in-time backup snapshot restoration (while preserving mobile delta-sync tombstones). |
+| [`docs/04_Architecture/04_Infrastructure/mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) & [`MOBILE_WBS.md`](../00_Master/MOBILE_WBS.md) | Lines 204–208, 337 / Line 105 | `7-day recovery window` / `PROFILE_INACTIVE (7-day recovery)` | Reconcile `PROFILE_INACTIVE` recovery window description to `30-day recovery window` (preserving mobile delta-sync tombstones for live sync). |
 
 ---
 
-## 6. Step-by-Step Implementation Sequence (TDD)
+## 5. Desktop UI Interaction Design (`frontend/flutter/apps/desktop/`)
 
-### Step 1: Backend Deletion, Restore & Hard-Purge Logic (RED -> GREEN)
-1. Write comprehensive tests in `backend/tests/test_profile_deletion.py`:
-   - Soft-delete non-default profile: sets `is_deleted=True`, `status="deleted"`, `purge_after = now + 7 days`.
-   - Prohibit deleting default profile (`400 Bad Request`).
-   - Prohibit deleting last active profile (`400 Bad Request`).
-   - Revoke active sessions and invalidate tickets on soft deletion.
-   - Immediate in-flight turn failure and 401 on guarded token check after soft deletion.
-   - Restore soft-deleted profile within 7 days: sets `status="active"`, `is_deleted=False`.
-   - Restore does not revive revoked tokens.
-   - Restore rejects expired profile (`410 Gone` / `400 Bad Request`).
-   - Hard purge removes data in strict 13-step order (attachments, messages, conversations, instances, memories, tasks, sessions, profile).
-   - Hard purge unlinks physical attachment files within `ATTACHMENT_DIR`.
-   - Hard purge triggers FTS5 cleanup (`memories_fts` empty for target profile).
-   - Maintenance purge cleans only profiles with `purge_after <= now`.
-   - Other profiles remain completely untouched.
-2. Implement `ProfilePurgeService` in `backend/app/services/profile_purge_service.py`.
-3. Implement endpoints in `backend/app/api/v1/endpoints/profiles.py` and `system.py`.
-4. Verify all backend tests pass (`pytest backend/tests/test_profile_deletion.py`).
-
-### Step 2: OpenAPI Contract & Dart Client Parity
-1. Regenerate `contracts/openapi/openapi.json`.
-2. Update `companion_api` DTOs and `CompanionClient`.
-3. Add tests in `companion_api/test/profile_deletion_client_test.dart`.
-4. Run `python scripts/check_dart_openapi_parity.py --check` and verify 36/36 routes pass.
-
-### Step 3: Desktop Profile Controller & UI
-1. Extend `DesktopProfileController` with delete, restore, listDeleted, and purge.
-2. Implement `showDeleteProfileDialog` and `showPurgeConfirmationDialog`.
-3. Update `ProfileAccessCard` with Delete Profile button and Recently Deleted Profiles card.
-4. Add comprehensive widget and integration tests in `frontend/flutter/apps/desktop/test/desktop_profile_deletion_test.dart`.
-
-### Step 4: Full Local Regression Verification Gate
-1. `pytest backend/tests -q` (all 700+ tests pass).
-2. `python scripts/check_dart_openapi_parity.py --check`.
-3. `flutter analyze` in `companion_api` and `apps/desktop` (0 errors, 0 warnings).
-4. `flutter test` in `companion_api` and `apps/desktop` (all tests pass).
+1. **Clear Action Distinction:**
+   - Active non-default Profile cards in `ProfileAccessCard` (Settings -> Profile Access) provide a **Move to Recently Deleted** action (disabled/hidden on the Default Profile and when only 1 active Profile exists).
+   - Selecting **Move to Recently Deleted** opens `showMoveToRecentlyDeletedDialog`:
+     - Explains that the Profile will be moved to **Recently Deleted** for **30 days**, active sessions will be immediately disconnected, and shared AI models will remain untouched.
+     - Requires typing the exact Profile display name to enable the **Move to Recently Deleted** confirmation button.
+2. **Recently Deleted Section:**
+   - Displayed in `ProfileAccessCard` whenever `deletedProfiles` is non-empty.
+   - Each entry shows:
+     - Profile display name.
+     - Remaining recovery time badge: e.g., `30 days remaining` (calculated from `purgeAfter.difference(now)` in days/hours; or `Purge pending` / `Purging...` if `purgeAfter <= now` or `status == "purging"`).
+     - **Restore** button (enabled when `status == "deleted"` and `purgeAfter > now`).
+     - **Permanently Delete** button.
+3. **Permanently Delete Confirmation Dialog:**
+   - Selecting **Permanently Delete** on a Recently Deleted Profile opens `showPermanentDeleteProfileDialog`:
+     - States clearly that this action **permanently and irreversibly deletes** the Profile and its conversations, character customisations, memories, tasks, and attachments before the 30-day recovery period ends.
+     - Requires typing the exact Profile display name to enable the destructive **Permanently Delete** button.
+4. **Active Profile Deletion Transition:**
+   - If the currently active Profile on the Desktop client is moved to Recently Deleted:
+     - `DesktopProfileController` clears the active session token, invokes `DesktopChatController.invalidateProfileSession()` to stop any active stream and clear in-memory conversation/message state, and switches cleanly to the Default Profile (or prompts selection if the Default Profile requires unlock).
 
 ---
 
-## 7. Acceptance Criteria & Verification Strategy
+## 6. Step-by-Step Implementation Tasks (Phase 2 — After Approval)
 
-### Automated Repository Verification Matrix
-- [ ] `backend\.venv\Scripts\python.exe -m pytest backend/tests/test_profile_deletion.py -v` (all new tests pass)
-- [ ] `backend\.venv\Scripts\python.exe -m pytest backend/tests -q` (zero regressions across entire test suite)
-- [ ] `backend\.venv\Scripts\python.exe scripts/check_dart_openapi_parity.py --check` (36/36 routes, 29/29 schemas verified)
-- [ ] `cd frontend/flutter/packages/companion_api && flutter test` (all tests pass)
-- [ ] `cd frontend/flutter/apps/desktop && flutter test test/desktop_profile_deletion_test.dart` (all deletion UI tests pass)
-- [ ] `cd frontend/flutter/apps/desktop && flutter test` (all 330+ desktop tests pass)
-- [ ] `cd frontend/flutter/apps/desktop && flutter analyze` (zero issues)
+### Task 1: Backend Profile-Scoped Attachment Validator & `ProfilePurgeService`
+- **Files:**
+  - Modify: `backend/app/api/v1/endpoints/attachments.py` (add `resolve_and_verify_profile_attachment_path(storage_path: str, profile_id: str) -> Path`)
+  - Create: `backend/app/services/profile_purge_service.py`
+  - Modify: `backend/app/api/v1/endpoints/profiles.py`, `backend/app/api/v1/endpoints/system.py`, `backend/app/main.py`
+  - Create Test: `backend/tests/test_profile_deletion.py`
+- **Steps (TDD):**
+  - [ ] Write failing backend tests in `backend/tests/test_profile_deletion.py` covering Scenarios `DEL-01` through `DEL-15`.
+  - [ ] Run `backend\.venv\Scripts\python.exe -m pytest backend/tests/test_profile_deletion.py -v` to confirm RED failure.
+  - [ ] Implement `resolve_and_verify_profile_attachment_path(storage_path, profile_id)` in `attachments.py`.
+  - [ ] Implement `ProfilePurgeService` (`soft_delete_profile`, `list_deleted_profiles`, `restore_profile`, `purge_profile`, `execute_maintenance_purge`) enforcing:
+    1. Pre-validation of all attachment paths *before* changing state (`DEL-08`).
+    2. Atomic transition to `status = "purging"`.
+    3. Pre-unlink containment revalidation and physical file unlinking first (halting on `OSError` with DB rows retained; treating missing files as cleaned) (`DEL-09`).
+    4. Safe retry without a separate ledger (`DEL-10`).
+    5. Atomic 10-step relational deletion in strict FK order.
+  - [ ] Wire routes in `profiles.py` (`DELETE /{profile_id}`, `GET /deleted`, `POST /{profile_id}/restore`, `POST /{profile_id}/purge`), `system.py` (`POST /system/maintenance/purge-profiles`), and startup maintenance in `main.py`.
+  - [ ] Run `backend\.venv\Scripts\python.exe -m pytest backend/tests/test_profile_deletion.py -v` to confirm GREEN pass.
 
-### Windows Manual Acceptance Checklist
-1. Launch Flutter Desktop connected to Local AI Runtime.
-2. Create a secondary profile named "Work & Testing".
-3. Switch to "Work & Testing", create a test conversation with a message and assign a character.
-4. Navigate to Settings -> Profile access.
-5. Verify "Default Profile" cannot be deleted (Delete button disabled or hidden).
-6. Click "Delete Profile" on "Work & Testing".
-7. Verify warning displays: "This profile and its data will be moved to Recently Deleted for 7 days."
-8. Verify "Delete Profile" button is disabled until typing exact name "Work & Testing".
-9. Confirm deletion:
-   - Profile disappears from active selector and Navigation Rail.
-   - Active profile gracefully transitions to Default Profile.
-   - "Work & Testing" appears in "Recently Deleted Profiles" with "Purge in 7 days".
-10. Click "Restore" on "Work & Testing":
-    - Profile restores to active catalog immediately.
-    - Switch to "Work & Testing" and confirm conversation, message, and character remain intact.
-11. Verify Default Profile was never modified or disrupted.
+### Task 2: OpenAPI Contract & Dart `companion_api` Parity
+- **Files:**
+  - Modify: `contracts/openapi/openapi.json`
+  - Modify: `frontend/flutter/packages/companion_api/lib/src/models/profile_models.dart` (or DTO file), `companion_client.dart`
+  - Modify: `scripts/check_dart_openapi_parity.py`, `scripts/tests/test_check_dart_openapi_parity.py`
+  - Test: `frontend/flutter/packages/companion_api/test/`
+- **Steps (TDD):**
+  - [ ] Write failing Dart client serialization and endpoint tests for `deleteProfile`, `listDeletedProfiles`, `restoreProfile`, `purgeProfile`, and `runPurgeMaintenance`.
+  - [ ] Regenerate `contracts/openapi/openapi.json` and update `companion_api` models/client and parity script.
+  - [ ] Verify `backend\.venv\Scripts\python.exe scripts/check_dart_openapi_parity.py --check` and `flutter test` in `packages/companion_api`.
+
+### Task 3: Flutter Desktop Profile Deletion & Recovery UI
+- **Files:**
+  - Modify: `frontend/flutter/apps/desktop/lib/features/profiles/desktop_profile_controller.dart`
+  - Modify: `frontend/flutter/apps/desktop/lib/features/profiles/profile_dialogs.dart`
+  - Modify: `frontend/flutter/apps/desktop/lib/features/profiles/profile_access_card.dart`
+  - Modify: `frontend/flutter/apps/desktop/lib/features/profiles/profile_selector_header.dart`
+  - Create Test: `frontend/flutter/apps/desktop/test/desktop_profile_deletion_test.dart`
+- **Steps (TDD):**
+  - [ ] Write failing widget/controller tests in `desktop_profile_deletion_test.dart` covering Scenarios `DEL-16` and `DEL-17`.
+  - [ ] Implement controller state (`deletedProfiles`, `deleteProfile`, `restoreProfile`, `purgeProfileImmediately`) and dialogs (`showMoveToRecentlyDeletedDialog`, `showPermanentDeleteProfileDialog`) plus Recently Deleted UI in `ProfileAccessCard`.
+  - [ ] Run `flutter test test/desktop_profile_deletion_test.dart` and `flutter analyze` to verify GREEN pass.
 
 ---
 
-## 8. Level C vs Level D Boundaries & Operational Safeguards
+## 7. Updated Verification Matrix (Scenario IDs & Expected Outcomes)
 
-- **Level C (Planned Autonomous Implementation):**
-  - Coding soft-delete, restore, and hard-purge services.
-  - Adding automated tests against temporary SQLite test databases and synthetic directories.
-  - Building Desktop UI confirmation dialogs.
-  - Publishing documentation and opening Draft PR.
+| Scenario ID | Category | Test Description | Verification Layer | Expected Outcome |
+| :--- | :--- | :--- | :--- | :--- |
+| **`DEL-01`** | Soft Deletion & 30-Day Window | Move an active secondary Profile to Recently Deleted (`DELETE /api/v1/profiles/{id}`) | Backend (`test_profile_deletion.py`) | Returns `200 OK`; sets `status="deleted"`, `is_deleted=True`, `deleted_at=now`, `purge_after = deleted_at + 30 days`; excludes Profile from `GET /api/v1/profiles` and lists it in `GET /api/v1/profiles/deleted`. |
+| **`DEL-02`** | Countdown & Exact Expiry Boundary | Verify recovery eligibility at `now < purge_after`, exact boundary `now == purge_after`, and `now > purge_after` | Backend (`test_profile_deletion.py`) | Restore succeeds when `now < purge_after`; at `now == purge_after` and `now > purge_after`, `POST /restore` fails closed with `410 Gone` and maintenance purge treats the Profile as expired. |
+| **`DEL-03`** | Profile Restoration & Prior Content Deletion Preservation | Soft-delete one message/conversation/attachment/memory/task inside Profile A, keep another active, then soft-delete Profile A and restore Profile A (`POST /api/v1/profiles/{id}/restore`) | Backend (`test_profile_deletion.py`) | Profile A returns to `status="active"`, `is_deleted=False`, `deleted_at=None`, `purge_after=None` with original UUID; active records remain active; **previously soft-deleted child content remains soft-deleted** (`is_deleted=True`, original `deleted_at` preserved); revoked sessions remain revoked. |
+| **`DEL-04`** | Default & Last-Active Protection | Attempt `DELETE /api/v1/profiles/{default_id}`, `POST /api/v1/profiles/{default_id}/purge`, or deleting the only remaining active Profile | Backend (`test_profile_deletion.py`) | Rejects with `400 Bad Request`; Default Profile and last active Profile remain `"active"` and untouched. |
+| **`DEL-05`** | Automatic Maintenance Purge of Expired Profiles | Run `execute_maintenance_purge` / `POST /api/v1/system/maintenance/purge-profiles` (and startup lifespan hook) with an expired Profile (`purge_after <= now`) and an unexpired deleted Profile (`purge_after > now`) | Backend (`test_profile_deletion.py`) | Expired Profile and all its child rows (`attachments`, `messages`, `conversations`, `character_instances`, `memories`, `memories_fts`, `tasks`, `session_tickets`, `profile_sessions`) and physical files are permanently removed; unexpired deleted Profile remains intact in Recently Deleted. |
+| **`DEL-06`** | Immediate Permanent Purge | Soft-delete a Profile, then invoke `POST /api/v1/profiles/{id}/purge` before 30 days elapse; also test calling `/purge` on an active Profile | Backend (`test_profile_deletion.py`) | Calling `/purge` on an active Profile fails closed (`409 Conflict`); calling `/purge` on a soft-deleted Profile immediately removes its physical files and all database rows. |
+| **`DEL-07`** | Backup Restoration Database Snapshot Semantics & Asset Limitation | Create a SQLite backup via `create_pre_migration_backup()` while Profile B exists with active messages and an attachment file -> permanently purge Profile B (deleting its database rows and unlinking its physical attachment file) -> restore the backup via `restore_database_from_backup()` | Backend (`test_profile_deletion.py`) | Restoring the earlier SQLite snapshot restores Profile B and its relational SQLite records (conversations, messages, attachments, memories, tasks) exactly as they existed when the backup was created (no tombstone suppression). However, because the current backup implementation snapshots only SQLite without packaging `ATTACHMENT_DIR`, physical attachment files remain deleted on disk, and querying/previewing the restored attachment file returns HTTP 404 (file not found), verifying the exact current database-only backup boundary without claiming physical asset recovery. |
+| **`DEL-08`** | Path-Validation Failure Before State Transition & Restorability Preservation | Tamper with an `Attachment.storage_path` for Profile B to point outside `ATTACHMENT_DIR/<profile_id>` (e.g. `attachments/<other_profile_id>/...` or directory traversal `../../root.png`), then trigger permanent purge of Profile B | Backend (`test_profile_deletion.py`) | Pre-validation raises `SecurityException` **before** the Profile's status is changed; Profile B remains in `status == "deleted"` and **remains restorable** (verified by `POST /restore` succeeding afterward); no physical files are unlinked; all database rows are retained. |
+| **`DEL-09`** | Interruption After Partial Physical File Deletion & State Retention | Create Profile B with multiple attachment files (e.g. 5 files), initiate permanent purge, and simulate an `OSError` (e.g. filesystem permission error or file lock) after some, but not all, files have been deleted (e.g. 2 of 5 files unlinked) | Backend (`test_profile_deletion.py`) | The purge halts immediately; Profile B remains in `status == "purging"` (non-restorable); all database records (`Attachment` rows and child rows) are retained in SQLite; the remaining 3 physical files remain on disk. |
+| **`DEL-10`** | Subsequent Retry Succeeds Without a Separate Cleanup Ledger | Resolve the simulated `OSError` on the partially-purged Profile B from `DEL-09` and re-run purge / maintenance | Backend (`test_profile_deletion.py`) | The retry pre-validates paths, treats the 2 already-missing files as cleaned (`missing_ok=True`), unlinks the remaining 3 physical files, and atomically deletes all relational records and the `Profile` in SQLite. All files and records are cleanly removed with zero orphaned state, and no separate cleanup ledger was required. |
+| **`DEL-11`** | Restore-vs-Purge Concurrency & Non-Restorable `purging` State | Attempt `restore_profile` after Purge has completed pre-validation and entered `status == "purging"`, and run concurrent `restore_profile` vs. `purge_profile` tasks | Backend (`test_profile_deletion.py`) | Once `status == "purging"`, `restore_profile` is rejected with `409 Conflict`. Concurrent restore and purge never both succeed; final state is deterministically either fully active (with all files intact) or fully purged. |
+| **`DEL-12`** | Session Revocation & In-Flight Generation Cancellation | Start an active streaming turn (`orchestrate_chat_stream`) for Profile B, soft-delete Profile B mid-stream, and attempt subsequent API calls with Profile B's token | Backend (`test_profile_deletion.py`) | Active `ProfileSession` is immediately revoked (`401`); in-flight stream stops emitting further tokens once revocation is observed by `_authorized_tokens` and rolls back without committing completed assistant output. |
+| **`DEL-13`** | FK Ordering (`CharacterInstance` RESTRICT & `active_character_instance_id`) | Populate Profile B with `CharacterInstance` set as `Profile.active_character_instance_id` and referenced by a `Conversation` (`ondelete="RESTRICT"`), `Message`, `Attachment`, `Memory` (FTS5), and `Task`, then permanently purge Profile B | Backend (`test_profile_deletion.py`) | Purge succeeds with `PRAGMA foreign_keys=ON` and zero `IntegrityError`; `PRAGMA foreign_key_check` is clean; `memories_fts` has zero entries for Profile B. |
+| **`DEL-14`** | Cross-Profile & Host Resource Isolation | Populate Default Profile, Active Profile C, and shared `character_templates` alongside Profile B, then soft-delete and permanently purge Profile B | Backend (`test_profile_deletion.py`) | Default Profile, Profile C (all conversations, messages, attachments on disk, memories, tasks, character instances, active sessions), and shared `character_templates` remain 100% untouched. |
+| **`DEL-15`** | Non-Purged Profile Name Conflict on Create/Restore | Attempt to create or restore a Profile with a name matching an existing active Profile or a Profile in Recently Deleted | Backend (`test_profile_deletion.py`) | Fails with `409 Conflict`, guaranteeing that Profiles in Recently Deleted do not cause confusing duplicate names and can always be restored cleanly without name collisions. |
+| **`DEL-16`** | Desktop UI — Move to Recently Deleted & Active Session Switch | In Flutter Desktop widget test, open Settings -> Profile Access, verify Default Profile cannot be deleted, click **Move to Recently Deleted** on secondary Profile, verify typed name gate, confirm deletion | Flutter Desktop (`desktop_profile_deletion_test.dart`) | Confirm button stays disabled until exact Profile name is typed; on confirm, Profile moves to **Recently Deleted** showing `30 days remaining`, disappears from `ProfileSelectorHeader`, and if active, switches cleanly to Default Profile and clears chat state. |
+| **`DEL-17`** | Desktop UI — Restore & Permanently Delete Flows | In Flutter Desktop widget test, test clicking **Restore** on a Recently Deleted Profile, and test clicking **Permanently Delete** with typed confirmation modal | Flutter Desktop (`desktop_profile_deletion_test.dart`) | **Restore** moves Profile back to active list; **Permanently Delete** requires typed confirmation before calling `purgeProfile` and removes the Profile from Recently Deleted. |
+
+---
+
+## 8. Level C vs. Level D Operational Safeguards
+
+- **Level C (Planned Autonomous Implementation after Plan Approval):**
+  - Implementing backend services, endpoints, OpenAPI contracts, Dart client methods, Flutter Desktop UI, and automated test suites operating strictly on disposable temporary SQLite databases (`tmp_path`) and temporary attachment directories.
 - **Level D (Human-Controlled Destructive Operations):**
-  - **Executing permanent hard purge on live, real human production user data.**
-  - Under Level D governance, AI autonomy NEVER executes irreversible data deletion on production databases outside synthetic test fixtures. All automated testing strictly operates on temporary directories (`tmp_path`, `Directory.systemTemp`).
+  - Executing irreversible deletion on real human user data in a live production environment remains exclusively under Human Owner control. Automated verification never touches live user data roots.
 
 ---
 
-## 9. Material Decisions Summary for Human Owner Approval
+## 9. Remaining Blockers or Decisions Requiring Human Owner Input
 
-1. **Default & Last-Active Protection:** Prohibit deleting the default Profile and the last active Profile.
-2. **Schema Reuse:** Reuse existing `status`, `is_deleted`, `deleted_at`, `purge_after` without migrations.
-3. **Decoupled Maintenance:** Run maintenance purge at startup and via loopback Host Admin endpoint without depending on unbuilt `SchedulerService`.
-4. **Immediate Purge:** Allow immediate permanent purge of already-deleted profiles with typed confirmation.
-5. **Backup Archive Immutability:** Live purge deletes live data; past historical `.db` backup files remain immutable point-in-time snapshots.
+- **Blockers:** None.
+- **Decisions / Approvals Requested Before Phase 2 Implementation:**
+  1. **Approve the revised Phase 1 plan** ([`plan-m2-profile-deletion-recovery-d.md`](file:///d:/OtherProjects/AI-companion-project/docs/02_Planning/01_Plans/plan-m2-profile-deletion-recovery-d.md)).
+  2. **Authorize Phase 2 & Phase 3 execution** (including whether to reconcile the remaining 7-day / tombstone references listed in Section 4.2 during Phase 3 documentation closure).

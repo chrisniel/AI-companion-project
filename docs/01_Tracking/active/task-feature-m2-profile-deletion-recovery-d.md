@@ -3,45 +3,44 @@
 - **Branch:** `feature/m2-profile-deletion-recovery-d`
 - **Base Integration Branch:** `develop` (`2104d5c05ad1a7b47d2b008d4e74ca5cb88595e6`)
 - **Delivery Level:** Level C — Sensitive Design (Special Boundary: Irreversible physical deletion of real user data requires explicit human authorization under Level D operational governance)
-- **Work Breakdown Structure ID:** `PC-IDENTITY-005` (7-Day Recoverable Profile Deletion Lifecycle & Hard Purge Maintenance)
+- **Work Breakdown Structure ID:** `PC-IDENTITY-005` (30-Day Recoverable Profile Deletion Lifecycle & Hard Purge Maintenance)
 - **Implementation Plan:** [`docs/02_Planning/01_Plans/plan-m2-profile-deletion-recovery-d.md`](../../02_Planning/01_Plans/plan-m2-profile-deletion-recovery-d.md)
-- **Current Lifecycle Phase:** **PHASE 1 — PLAN PUBLISHED (AWAITING HUMAN OWNER & INDEPENDENT REVIEWER APPROVAL)**
+- **Current Lifecycle Phase:** **PHASE 1 — REVISED PLAN READY FOR HUMAN OWNER APPROVAL**
 
 ---
 
-## Phase 1: Planning & Design Authorization (COMPLETED / VERIFIED)
+## Phase 1: Planning & Design Authorization (REVISED / AWAITING APPROVAL)
 
 - [x] Verify clean `develop` baseline at `2104d5c05ad1a7b47d2b008d4e74ca5cb88595e6` and passing post-merge GitHub Actions CI (`Run 42024505569`).
 - [x] Create and switch to dedicated delivery branch `feature/m2-profile-deletion-recovery-d`.
 - [x] Map Profile ownership graph, foreign-key cascade dependencies (`ondelete="RESTRICT"` on `conversations.character_instance_id`, `ondelete="SET NULL"` on `Profile.active_character_instance_id`), and FTS5 triggers (`memories_fts_delete`).
-- [x] Resolve critical design decisions:
-  - Prohibit deleting default Profile (`is_default == True`) and last remaining active Profile.
-  - Reuse existing `status`, `is_deleted`, `deleted_at`, `purge_after` schema without database migrations.
-  - Implement decoupled startup and Host Admin maintenance purge without waiting for `SchedulerService`.
-  - Provide immediate permanent purge with typed confirmation for soft-deleted profiles.
-  - Document backup archive immutability boundary.
-- [x] Formulate 13-step deterministic hard-purge execution sequence preventing foreign-key violations.
-- [x] Author comprehensive implementation plan in `docs/02_Planning/01_Plans/plan-m2-profile-deletion-recovery-d.md`.
-- [x] Commit and push planning artifacts to `origin/feature/m2-profile-deletion-recovery-d` and halt at Phase 1 approval gate.
+- [x] Revise Phase 1 plan to incorporate Human Owner product decisions and technical corrections:
+  - **30-day recovery period:** `purge_after = deleted_at + 30 days`; distinguish **Move to Recently Deleted** from **Permanently Delete**.
+  - **Recovery authority boundary:** Local Account Admin recovery applies strictly to Profile-level state and preserves prior user-initiated content deletions (`is_deleted` / `deleted_at` on child conversations, messages, memories, tasks, and attachments remain untouched).
+  - **Backup restoration semantics & asset consistency:** Restoring a backup restores the snapshot as it existed when created (superseding tombstone anti-resurrection rules for backups, while preserving mobile delta-sync tombstones) and restores only data/assets contained in the backup. Reconciled in `privacy-retention-and-audit.md` and `backup-recovery-and-diagnostics.md`, noting that current SQLite backups do not bundle `ATTACHMENT_DIR`.
+  - **Attachment cleanup & purge ordering:** Pre-validate all attachment paths before modifying state; atomic transition to `status = "purging"` (non-restorable) only after validation passes; revalidate containment before unlinking each file; delete physical files before database records; treat missing files as cleaned (`missing_ok=True`); retain DB records on file-delete failure for retry without a separate ledger; delete DB rows in strict FK order within an atomic transaction.
+  - **Accurate cancellation & confirmation boundaries:** Document cooperative 250ms polling + pre-commit validation without claiming a hard 250ms real-time latency cap; separate Host Admin API enforcement from Desktop UI typed confirmation safeguards.
+  - **UUIDv4 / UUIDv7 direction:** Record approved entity UUID allocation and Python 3.11 `uuid6` recommendation without expanding Batch D into an identifier migration.
+- [ ] Present revised Phase 1 package and await Human Owner approval before Phase 2 implementation.
 
 ---
 
-## Phase 2: Autonomous Implementation & Verification (PENDING PLAN APPROVAL)
+## Phase 2: Autonomous Implementation & Verification (PENDING REVISED PLAN APPROVAL)
 
-- [ ] **Step 1 — Backend Deletion, Restore & Hard-Purge Logic (`backend/app/services/profile_purge_service.py` & endpoints):**
-  - [ ] Write failing integration tests in `backend/tests/test_profile_deletion.py`.
-  - [ ] Implement `ProfilePurgeService` with atomic 13-step cascade purge and FTS5/asset cleanup.
-  - [ ] Implement `DELETE /api/v1/profiles/{id}`, `POST /api/v1/profiles/{id}/restore`, `GET /api/v1/profiles/deleted`, and `POST /api/v1/profiles/{id}/purge`.
-  - [ ] Implement `POST /api/v1/system/maintenance/purge-profiles` and startup lifespan hook.
+- [ ] **Step 1 — Backend Deletion, Restore & Physical-First Hard-Purge Logic:**
+  - [ ] Write failing integration tests (`DEL-01`–`DEL-15`) in `backend/tests/test_profile_deletion.py`.
+  - [ ] Implement `resolve_and_verify_profile_attachment_path(storage_path, profile_id)` in `backend/app/api/v1/endpoints/attachments.py`.
+  - [ ] Implement `ProfilePurgeService` in `backend/app/services/profile_purge_service.py` (30-day soft delete, Profile-level restore, pre-validation before `status = "purging"`, physical-first file cleanup with pre-unlink containment revalidation, failure retention without a separate ledger, and 10-step relational deletion transaction).
+  - [ ] Implement `DELETE /api/v1/profiles/{id}`, `GET /api/v1/profiles/deleted`, `POST /api/v1/profiles/{id}/restore`, `POST /api/v1/profiles/{id}/purge`, `POST /api/v1/system/maintenance/purge-profiles`, and startup lifespan hook in `backend/app/main.py`.
 - [ ] **Step 2 — OpenAPI Contract & Dart Client Parity (`companion_api`):**
   - [ ] Export updated `contracts/openapi/openapi.json`.
   - [ ] Update `companion_api` DTOs and `CompanionClient`.
-  - [ ] Update `scripts/check_dart_openapi_parity.py` (36 verified routes) and add client tests.
+  - [ ] Update `scripts/check_dart_openapi_parity.py` and add client unit tests.
 - [ ] **Step 3 — Desktop Profile Controller & UI:**
-  - [ ] Extend `DesktopProfileController` with delete, restore, listDeleted, and purge methods.
-  - [ ] Implement `showDeleteProfileDialog` and `showPurgeConfirmationDialog`.
-  - [ ] Update `ProfileAccessCard` with Delete Profile button and Recently Deleted Profiles card.
-  - [ ] Add widget and integration tests in `frontend/flutter/apps/desktop/test/desktop_profile_deletion_test.dart`.
+  - [ ] Extend `DesktopProfileController` with `deletedProfiles`, `deleteProfile`, `restoreProfile`, and `purgeProfileImmediately`.
+  - [ ] Implement `showMoveToRecentlyDeletedDialog` and `showPermanentDeleteProfileDialog`.
+  - [ ] Update `ProfileAccessCard` with **Move to Recently Deleted** action and **Recently Deleted** section showing remaining recovery time, **Restore**, and **Permanently Delete**.
+  - [ ] Add widget and controller tests (`DEL-16`–`DEL-17`) in `frontend/flutter/apps/desktop/test/desktop_profile_deletion_test.dart`.
 - [ ] **Step 4 — Full Local Verification Gate:**
   - [ ] Verify `pytest`, `check_dart_openapi_parity.py`, `flutter analyze`, and `flutter test` across all packages.
 
@@ -49,12 +48,5 @@
 
 ## Phase 3: Documentation, Closure & Draft PR (PENDING PHASE 2 COMPLETION)
 
-- [ ] Reconcile canonical documentation (`profiles-and-devices.md`, `privacy-retention-and-audit.md`, `WBS.md`, `DELIVERY_INDEX.md`, `SPRINT_ROADMAP.md`, `MASTER_CHECKLIST.md`, `task.md`, `CHANGELOG.md`).
-- [ ] Archive this tracker to `docs/01_Tracking/archive/task-feature-m2-profile-deletion-recovery-d.md`.
-- [ ] Push implementation + closure commits to `origin/feature/m2-profile-deletion-recovery-d` and open Draft PR against `develop`.
-
----
-
-## Phase 4: Combined Independent Review & Human Merge (PENDING PHASE 3)
-
-- [ ] Present complete delivery package, test evidence, and CI status for Independent Review and Human Owner squash-merge approval.
+- [ ] Reconcile remaining canonical docs (`profiles-and-devices.md`, `02_Profile_Selector_and_Privacy.md`, `ADR-0018`, `WBS.md`, `DECISION_REGISTER.md`, etc.) with 30-day recovery window and implemented Batch D behavior.
+- [ ] Update `CHANGELOG.md` and `docs/01_Tracking/task.md`, archive active branch tracker, and open Draft PR.
