@@ -639,162 +639,130 @@ try {
   \$childProc = \$null
   \$unverifiedChildDetected = \$false
 
-  \$runtimePids = @(\$targetPid)
-  \$pythonWorkers = @()
-  try {
-    \$directChildren = Get-CimInstance Win32_Process -Filter "ParentProcessId = \$targetPid" -ErrorAction SilentlyContinue
-    if (\$null -ne \$directChildren) {
-      \$dirArr = if (\$directChildren -is [System.Array]) { \$directChildren } else { @(\$directChildren) }
-      foreach (\$dc in \$dirArr) {
-        \$dcExeName = if (\$dc.Name) { [IO.Path]::GetFileName(\$dc.Name).ToLowerInvariant() } else { '' }
-        if (\$dcExeName -in @('python.exe', 'pythonw.exe', 'python3.exe')) {
-          \$pythonWorkers += \$dc
-          \$runtimePids += [int]\$dc.ProcessId
+  if (\$managedByCore) {
+    if (\$managedLlmPid -gt 0) {
+      # 1. Authoritative or telemetry-discovered child PID provided
+      try {
+        \$childProc = [System.Diagnostics.Process]::GetProcessById(\$managedLlmPid)
+        \$null = \$childProc.Handle
+        \$childWasAlive = \$true
+      } catch {
+        \$childWasAlive = \$false
+        \$childDiagnostic = "Child PID \$managedLlmPid already exited or not found"
+      }
+
+      if (\$childWasAlive -and (\$null -ne \$childProc)) {
+        try {
+          \$childProcStartTimeUtc = \$childProc.StartTime.ToUniversalTime()
+          \$childCim = Get-CimInstance Win32_Process -Filter "ProcessId = \$managedLlmPid" -ErrorAction SilentlyContinue
+
+          if (\$null -eq \$childCim) {
+            \$childDiagnostic = "Child PID \${managedLlmPid}: CIM query returned no process"
+          } else {
+            \$childCimCreationUtc = if (\$childCim.CreationDate) { [DateTime]\$childCim.CreationDate } else { [DateTime]::MinValue }
+            \$childTimeDiff = [Math]::Abs((\$childProcStartTimeUtc - \$childCimCreationUtc.ToUniversalTime()).TotalSeconds)
+            \$handleMatchesCim = (\$childTimeDiff -le 3)
+
+            # Authoritative Parentage check: ParentProcessId must be targetPid
+            \$isChildOfRuntime = (\$childCim.ParentProcessId -eq \$targetPid)
+
+            # Executable provenance: exact executable name (llama-server.exe or llama-server)
+            \$childExeName = if (\$childCim.Name) { [IO.Path]::GetFileName(\$childCim.Name).ToLowerInvariant() } else { '' }
+            \$childExePath = if (\$childCim.ExecutablePath) { [IO.Path]::GetFileName(\$childCim.ExecutablePath).ToLowerInvariant() } else { '' }
+            \$exeMatches = (\$childExeName -in @('llama-server.exe', 'llama-server')) -or (\$childExePath -in @('llama-server.exe', 'llama-server'))
+
+            # Creation time relationship: child must not predate parent runtime
+            \$timeMatches = (\$childProcStartTimeUtc -ge \$procStartTimeUtc.AddSeconds(-2))
+
+            # Command-line inspection: must contain --port and (--models-dir or --model)
+            \$childCmdLine = if (\$childCim.CommandLine) { \$childCim.CommandLine.ToLowerInvariant() } else { '' }
+            \$cmdMatches = (\$childCmdLine -match '--port') -and ((\$childCmdLine -match '--models-dir') -or (\$childCmdLine -match '--model'))
+
+            if (\$handleMatchesCim -and \$isChildOfRuntime -and \$exeMatches -and \$timeMatches -and \$cmdMatches) {
+              \$childProc.Kill()
+              \$cWait = \$childProc.WaitForExit(3000)
+              \$childKilled = \$childProc.HasExited -or \$cWait
+              if (-not \$childKilled) {
+                \$childDiagnostic = "Child PID \$managedLlmPid failed to exit within 3000ms after kill"
+              }
+            } else {
+              \$childDiagnostic = "Child PID \$managedLlmPid failed provenance verification: HandleMatch=\$handleMatchesCim, ParentMatch=\$isChildOfRuntime, ExeMatch=\$exeMatches, TimeMatch=\$timeMatches, CmdMatch=\$cmdMatches"
+            }
+          }
+        } catch {
+          \$childDiagnostic = "Child verification error: \$(\$_.Exception.Message)"
         }
       }
-    }
-  } catch {}
-
-  if (\$managedLlmPid -gt 0) {
-    # 1. Authoritative or telemetry-discovered child PID provided
-    try {
-      \$childProc = [System.Diagnostics.Process]::GetProcessById(\$managedLlmPid)
-      \$null = \$childProc.Handle
-      \$childWasAlive = \$true
-    } catch {
-      \$childWasAlive = \$false
-      \$childDiagnostic = "Child PID \$managedLlmPid already exited or not found"
-    }
-
-    if (\$childWasAlive -and (\$null -ne \$childProc)) {
+    } else {
+      # 2. No authoritative child PID provided, but managedByCore is true: discover direct children spawned by parent process
       try {
-        \$childProcStartTimeUtc = \$childProc.StartTime.ToUniversalTime()
-        \$childCim = Get-CimInstance Win32_Process -Filter "ProcessId = \$managedLlmPid" -ErrorAction SilentlyContinue
+        \$cimChildren = Get-CimInstance Win32_Process -Filter "ParentProcessId = \$targetPid" -ErrorAction SilentlyContinue
+        if (\$null -ne \$cimChildren) {
+          \$foundCandidates = if (\$cimChildren -is [System.Array]) { \$cimChildren } else { @(\$cimChildren) }
 
-        if (\$null -eq \$childCim) {
-          \$childDiagnostic = "Child PID \${managedLlmPid}: CIM query returned no process"
-        } else {
-          \$childCimCreationUtc = if (\$childCim.CreationDate) { [DateTime]\$childCim.CreationDate } else { [DateTime]::MinValue }
-          \$childTimeDiff = [Math]::Abs((\$childProcStartTimeUtc - \$childCimCreationUtc.ToUniversalTime()).TotalSeconds)
-          \$handleMatchesCim = (\$childTimeDiff -le 3)
+          foreach (\$cand in \$foundCandidates) {
+            \$candPid = [int]\$cand.ProcessId
+            \$candExeName = if (\$cand.Name) { [IO.Path]::GetFileName(\$cand.Name).ToLowerInvariant() } else { '' }
+            \$candExePath = if (\$cand.ExecutablePath) { [IO.Path]::GetFileName(\$cand.ExecutablePath).ToLowerInvariant() } else { '' }
 
-          # Authoritative Parentage check: ParentProcessId must be targetPid or a verified Python worker child of targetPid
-          \$isChildOfRuntime = (\$childCim.ParentProcessId -in \$runtimePids)
-
-          # Executable provenance: exact executable name (llama-server.exe or llama-server)
-          \$childExeName = if (\$childCim.Name) { [IO.Path]::GetFileName(\$childCim.Name).ToLowerInvariant() } else { '' }
-          \$childExePath = if (\$childCim.ExecutablePath) { [IO.Path]::GetFileName(\$childCim.ExecutablePath).ToLowerInvariant() } else { '' }
-          \$exeMatches = (\$childExeName -in @('llama-server.exe', 'llama-server')) -or (\$childExePath -in @('llama-server.exe', 'llama-server'))
-
-          # Creation time relationship: child must not predate parent runtime
-          \$timeMatches = (\$childProcStartTimeUtc -ge \$procStartTimeUtc.AddSeconds(-2))
-
-          # Command-line inspection: must contain --port and (--models-dir or --model)
-          \$childCmdLine = if (\$childCim.CommandLine) { \$childCim.CommandLine.ToLowerInvariant() } else { '' }
-          \$cmdMatches = (\$childCmdLine -match '--port') -and ((\$childCmdLine -match '--models-dir') -or (\$childCmdLine -match '--model'))
-
-          if (\$handleMatchesCim -and \$isChildOfRuntime -and \$exeMatches -and \$timeMatches -and \$cmdMatches) {
-            \$childProc.Kill()
-            \$cWait = \$childProc.WaitForExit(3000)
-            \$childKilled = \$childProc.HasExited -or \$cWait
-            if (-not \$childKilled) {
-              \$childDiagnostic = "Child PID \$managedLlmPid failed to exit within 3000ms after kill"
+            # Windows console processes may have an attached OS Console Window Host (conhost.exe).
+            # This is an OS subsystem component that exits automatically with the console session, not a child service.
+            if (\$candExeName -in @('conhost.exe')) {
+              continue
             }
-          } else {
-            \$childDiagnostic = "Child PID \$managedLlmPid failed provenance verification: HandleMatch=\$handleMatchesCim, ParentMatch=\$isChildOfRuntime, ExeMatch=\$exeMatches, TimeMatch=\$timeMatches, CmdMatch=\$cmdMatches"
+
+            \$isLlamaCandidate = (\$candExeName -in @('llama-server.exe', 'llama-server')) -or (\$candExePath -in @('llama-server.exe', 'llama-server'))
+
+            if (\$isLlamaCandidate) {
+              \$candProc = \$null
+              try {
+                \$candProc = [System.Diagnostics.Process]::GetProcessById(\$candPid)
+                \$null = \$candProc.Handle
+                \$candProcStartTimeUtc = \$candProc.StartTime.ToUniversalTime()
+                \$candCimCreationUtc = if (\$cand.CreationDate) { [DateTime]\$cand.CreationDate } else { [DateTime]::MinValue }
+                \$candTimeDiff = [Math]::Abs((\$candProcStartTimeUtc - \$candCimCreationUtc.ToUniversalTime()).TotalSeconds)
+                \$candHandleMatchesCim = (\$candTimeDiff -le 3)
+                \$candIsChildOfRuntime = (\$cand.ParentProcessId -eq \$targetPid)
+                \$candTimeMatches = (\$candProcStartTimeUtc -ge \$procStartTimeUtc.AddSeconds(-2))
+                \$candCmdLine = if (\$cand.CommandLine) { \$cand.CommandLine.ToLowerInvariant() } else { '' }
+                \$candCmdMatches = (\$candCmdLine -match '--port') -and ((\$candCmdLine -match '--models-dir') -or (\$candCmdLine -match '--model'))
+
+                if (\$candHandleMatchesCim -and \$candIsChildOfRuntime -and \$candTimeMatches -and \$candCmdMatches) {
+                  \$childWasAlive = \$true
+                  \$candProc.Kill()
+                  \$cWait = \$candProc.WaitForExit(3000)
+                  \$thisKilled = \$candProc.HasExited -or \$cWait
+                  if (\$thisKilled) {
+                    \$childKilled = \$true
+                  } else {
+                    \$unverifiedChildDetected = \$true
+                    \$childDiagnostic = "Discovered child PID \${candPid} failed to exit within 3000ms after kill"
+                  }
+                } else {
+                  \$unverifiedChildDetected = \$true
+                  \$childDiagnostic = "Discovered child PID \${candPid} failed provenance verification: HandleMatch=\$candHandleMatchesCim, ParentMatch=\$candIsChildOfRuntime, TimeMatch=\$candTimeMatches, CmdMatch=\$candCmdMatches"
+                }
+              } catch {
+                \$unverifiedChildDetected = \$true
+                \$childDiagnostic = "Error inspecting discovered child PID \${candPid}: \$(\$_.Exception.Message)"
+              }
+            } else {
+              # Direct child is NOT a verified llama-server (e.g. child python worker, shell, or foreign child).
+              # Conservative fail-closed: do NOT kill unverified child; preserve it untouched and report incomplete/partial termination.
+              \$unverifiedChildDetected = \$true
+              \$childDiagnostic = "Discovered unverified child process PID \${candPid} (\$candExeName) is preserved untouched"
+            }
           }
         }
       } catch {
-        \$childDiagnostic = "Child verification error: \$(\$_.Exception.Message)"
+        \$childDiagnostic = "Error querying child processes: \$(\$_.Exception.Message)"
       }
     }
   } else {
-    # 2. Directive 3: No authoritative child PID provided; discover candidate children spawned by parent process
-    try {
-      \$candidatesToInspect = @()
-      if (\$null -ne \$directChildren) {
-        \$dirArr = if (\$directChildren -is [System.Array]) { \$directChildren } else { @(\$directChildren) }
-        foreach (\$dc in \$dirArr) {
-          \$dcExeName = if (\$dc.Name) { [IO.Path]::GetFileName(\$dc.Name).ToLowerInvariant() } else { '' }
-          if (\$dcExeName -notin @('python.exe', 'pythonw.exe', 'python3.exe')) {
-            \$candidatesToInspect += \$dc
-          }
-        }
-      }
-
-      foreach (\$pw in \$pythonWorkers) {
-        \$pwPid = [int]\$pw.ProcessId
-        \$pwChildren = Get-CimInstance Win32_Process -Filter "ParentProcessId = \$pwPid" -ErrorAction SilentlyContinue
-        if (\$null -ne \$pwChildren) {
-          \$pwArr = if (\$pwChildren -is [System.Array]) { \$pwChildren } else { @(\$pwChildren) }
-          foreach (\$sc in \$pwArr) {
-            \$scExeName = if (\$sc.Name) { [IO.Path]::GetFileName(\$sc.Name).ToLowerInvariant() } else { '' }
-            if (\$scExeName -in @('python.exe', 'pythonw.exe', 'python3.exe')) {
-              \$pythonWorkers += \$sc
-              \$runtimePids += [int]\$sc.ProcessId
-            } else {
-              \$candidatesToInspect += \$sc
-            }
-          }
-        }
-      }
-
-      foreach (\$cand in \$candidatesToInspect) {
-        \$candPid = [int]\$cand.ProcessId
-        \$candExeName = if (\$cand.Name) { [IO.Path]::GetFileName(\$cand.Name).ToLowerInvariant() } else { '' }
-        \$candExePath = if (\$cand.ExecutablePath) { [IO.Path]::GetFileName(\$cand.ExecutablePath).ToLowerInvariant() } else { '' }
-        \$isLlamaCandidate = (\$candExeName -in @('llama-server.exe', 'llama-server')) -or (\$candExePath -in @('llama-server.exe', 'llama-server'))
-
-        if (\$isLlamaCandidate) {
-          \$candProc = \$null
-          try {
-            \$candProc = [System.Diagnostics.Process]::GetProcessById(\$candPid)
-            \$null = \$candProc.Handle
-            \$candProcStartTimeUtc = \$candProc.StartTime.ToUniversalTime()
-            \$candCimCreationUtc = if (\$cand.CreationDate) { [DateTime]\$cand.CreationDate } else { [DateTime]::MinValue }
-            \$candTimeDiff = [Math]::Abs((\$candProcStartTimeUtc - \$candCimCreationUtc.ToUniversalTime()).TotalSeconds)
-            \$candHandleMatchesCim = (\$candTimeDiff -le 3)
-            \$candIsChildOfRuntime = (\$cand.ParentProcessId -in \$runtimePids)
-            \$candTimeMatches = (\$candProcStartTimeUtc -ge \$procStartTimeUtc.AddSeconds(-2))
-            \$candCmdLine = if (\$cand.CommandLine) { \$cand.CommandLine.ToLowerInvariant() } else { '' }
-            \$candCmdMatches = (\$candCmdLine -match '--port') -and ((\$candCmdLine -match '--models-dir') -or (\$candCmdLine -match '--model'))
-
-            if (\$candHandleMatchesCim -and \$candIsChildOfRuntime -and \$candTimeMatches -and \$candCmdMatches) {
-              \$childWasAlive = \$true
-              \$candProc.Kill()
-              \$cWait = \$candProc.WaitForExit(3000)
-              \$thisKilled = \$candProc.HasExited -or \$cWait
-              if (\$thisKilled) {
-                \$childKilled = \$true
-              } else {
-                \$unverifiedChildDetected = \$true
-                \$childDiagnostic = "Discovered child PID \${candPid} failed to exit within 3000ms after kill"
-              }
-            } else {
-              \$unverifiedChildDetected = \$true
-              \$childDiagnostic = "Discovered child PID \${candPid} failed provenance verification: HandleMatch=\$candHandleMatchesCim, ParentMatch=\$candIsChildOfRuntime, TimeMatch=\$candTimeMatches, CmdMatch=\$candCmdMatches"
-            }
-          } catch {
-            \$unverifiedChildDetected = \$true
-            \$childDiagnostic = "Error inspecting discovered child PID \${candPid}: \$(\$_.Exception.Message)"
-          }
-        } else {
-          \$unverifiedChildDetected = \$true
-          \$childDiagnostic = "Discovered non-llama child process PID \${candPid} (\$candExeName)"
-        }
-      }
-    } catch {
-      \$childDiagnostic = "Error querying child processes: \$(\$_.Exception.Message)"
+    # managedByCore is false: Core does not own child router. Never terminate external or unknown children.
+    if (\$managedLlmPid -gt 0) {
+      \$childDiagnostic = "Child PID \$managedLlmPid is not Core-managed (managedByCore is false); preserved untouched"
     }
-  }
-
-  foreach (\$pw in \$pythonWorkers) {
-    try {
-      \$pwProc = [System.Diagnostics.Process]::GetProcessById([int]\$pw.ProcessId)
-      \$null = \$pwProc.Handle
-      \$pwProc.Kill()
-      \$null = \$pwProc.WaitForExit(3000)
-    } catch {}
   }
 
   \$proc.Kill()

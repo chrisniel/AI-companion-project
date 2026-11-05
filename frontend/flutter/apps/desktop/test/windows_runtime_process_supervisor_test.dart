@@ -673,6 +673,37 @@ void main() {
       expect(result.status, equals(TerminationResultStatus.inspectionUnavailable));
       expect(result.diagnostic, contains('PowerShell fatal error'));
     });
+
+    test('terminateVerifiedRuntimeProcess passes managedByCore flag and parses partialTermination status', () async {
+      final fakeLauncher = FakeProcessLauncher();
+      fakeLauncher.processToStart = FakeProcess(
+        stdout: Stream.value(utf8.encode('{"status":"partialTermination","childTerminated":false,"diagnostic":"Discovered unverified child process PID 1234 (python.exe) is preserved untouched"}')),
+        exitCode: Future.value(0),
+      );
+      final supervisor = WindowsRuntimeProcessSupervisor(launcher: fakeLauncher);
+
+      final desc = RuntimeLockfileData(
+        schemaVersion: 1,
+        instanceId: 'test-inst',
+        pid: 9999,
+        port: 8000,
+        startedAt: DateTime.now().toUtc(),
+        executablePath: r'C:\venv\Scripts\python.exe',
+      );
+
+      final result = await supervisor.terminateVerifiedRuntimeProcess(
+        expectedDescriptor: desc,
+        managedByCore: false,
+      );
+
+      expect(result.status, equals(TerminationResultStatus.partialTermination));
+      expect(result.childTerminated, isFalse);
+      expect(result.diagnostic, contains('is preserved untouched'));
+
+      // Check command arguments passed to launcher contain managedByCore = $false
+      final scriptArg = fakeLauncher.startedArgs?.last ?? '';
+      expect(scriptArg, contains(r'$managedByCore = $false'));
+    });
   });
 }
 

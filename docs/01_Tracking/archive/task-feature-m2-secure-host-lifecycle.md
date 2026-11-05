@@ -81,17 +81,19 @@
 - [x] **P. Router Ownership Preservation Across Termination Failures (Directive 1):** Unified all Core-managed router termination cleanup paths (`load_model` profile switch, startup failure, `unload_model`, and `set_profile`) to `_stop_managed_router_locked()`. Verifies `poll() is not None`; never clears `_server_process`, `_server_pid`, or `_managed_by_core` on termination failure, setting `_last_error = "ROUTER_TERMINATION_FAILED"` and `_runtime_state = SERVER_ERROR`.
 - [x] **Q. Actual Windows Process Exit Verification (Directive 2):** In `WindowsRuntimeProcessSupervisor.terminateVerifiedRuntimeProcess()`, inspects `$proc.WaitForExit(5000)` and `$proc.HasExited` on the held handle before declaring termination; preserves `timeout` status if process survives. Added acceptance Scenario J.
 - [x] **R. Unknown Managed-Child Provenance & Discovery (Directive 3):** When emergency termination is requested without managed-child identity (`managedLlmPid == 0`), queries candidate child processes across parent and intermediate Python worker subprocesses. Enforces handle start time, parentage, executable name, launch arguments (`--port` and `--models-dir`/`--model`), and creation time. Preserves foreign child processes, sets `unverifiedChildDetected = true`, and reports `partialTermination`. Added acceptance Scenarios K and L.
-- [x] **S. Read-Only Database Activity Accounting During Teardown (Directive 4):** In `RuntimeLifecycleCoordinator`, tracked in-flight ASGI reads (`_active_asgi_reads`) in `has_active_database_work`, preventing engine disposal during active reads. `RuntimeAdmissionASGIMiddleware` rejects new read requests during shutdown with 503 `RUNTIME_SHUTTING_DOWN`, while exempting polling paths (`/health`, `/system/status`, `/models`). Decoupled `verify_telemetry` database dependency with `get_telemetry_db`, ensuring loopback polling succeeds without database engine access.
+- [x] **S. Read-Only Database Activity Accounting During Teardown (Directive 4):** In `RuntimeLifecycleCoordinator`, tracked in-flight ASGI reads (`_active_asgi_reads`) in `has_active_database_work`, preventing engine disposal during active reads. `RuntimeAdmissionASGIMiddleware` rejects new read requests during shutdown with 503 `RUNTIME_SHUTTING_DOWN`, while exempting database-free polling paths (`/health`, `/system/status`). Decoupled `verify_telemetry` database dependency with `get_telemetry_db`, ensuring loopback polling succeeds without database engine access.
+- [x] **T. Simplified Emergency Process Termination (Release Correction 1):** In `windows_runtime_process_supervisor.dart`, removed unconditional termination of intermediate Python worker processes. Wrapped child process discovery and termination inside strict `if ($managedByCore)`. Restricted unknown-child discovery to direct children of `$targetPid`. If direct child is not a verified llama-server (e.g. child Python worker, foreign process), preserves it untouched, sets `unverifiedChildDetected = true`, and reports `partialTermination`. Skipped OS Console Window Host (`conhost.exe`). Added unit tests and Windows acceptance Scenarios M and N.
+- [x] **U. Closed Model-Status Database Quiescence Gap (Release Correction 2):** In `backend/app/main.py`, removed `"/api/v1/models"` from `NON_DB_PATHS`. In-flight authenticated model-status requests using `psk_` sessions increment `_active_asgi_reads` and hold database quiescence before `engine.dispose()`. New requests arriving after the admission gate closes are rejected with 503 `RUNTIME_SHUTTING_DOWN`, while database-free health and system status polling remain exempt. Added 2 regression tests in `test_host_shutdown.py`.
 - [x] **Verification Evidence:**
-  - Backend Pytest: 674/674 passed, 1 warning (0 failures) in ~187s
+  - Backend Pytest: 676/676 passed, 1 warning (0 failures) in ~176s
   - Flutter companion_core: 23/23 passed
   - Flutter companion_api: 81/81 passed
-  - Flutter desktop: 310/310 passed
+  - Flutter desktop: 313/313 passed
   - Dart analyze: 0 issues across all packages
   - React web tests: 16 test files passed, 248/248 passed
   - OpenAPI Drift Check: clean (40 routes up to date)
   - OpenAPI Parity: 40 routes, 24/24 DTOs, 30/19 covered routes
-  - Windows supervision acceptance: 12/12 scenarios passed (Scenarios A through L)
+  - Windows supervision acceptance: 14/14 scenarios passed (Scenarios A through N)
 
 ### Merge Readiness:
 - [ ] Independent Reviewer final evaluation of corrected delivery package.

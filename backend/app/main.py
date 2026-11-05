@@ -144,7 +144,6 @@ class RuntimeAdmissionASGIMiddleware:
         "/health",
         "/api/v1/system/status",
         "/api/v1/system/shutdown",
-        "/api/v1/models",
         "/docs",
         "/redoc",
         "/openapi.json",

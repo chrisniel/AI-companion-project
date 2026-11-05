@@ -507,4 +507,125 @@ async def test_delayed_readonly_database_request_overlapping_shutdown(
             assert mock_server.should_exit is True
 
 
+@pytest.mark.asyncio
+async def test_inflight_authenticated_model_status_request_overlapping_shutdown(
+    client: AsyncClient,
+    auth_headers: dict,
+    host_admin_headers: dict,
+):
+    """Correction 2: In-flight authenticated GET /api/v1/models holding psk_ session is tracked in
+
+    read quiescence and does not race with database engine disposal.
+    """
+    runtime_lifecycle.reset()
+    model_req_started = asyncio.Event()
+    model_req_can_finish = asyncio.Event()
+
+    from app.services.llm.manager import llm_manager
+    provider = llm_manager.get_provider()
+    real_get_status = provider.get_status
+
+    async def slow_get_status():
+        model_req_started.set()
+        await model_req_can_finish.wait()
+        return await real_get_status()
+
+    with patch.object(provider, "get_status", side_effect=slow_get_status):
+        # 1. Start authenticated model status request before shutdown
+        model_task = asyncio.create_task(client.get("/api/v1/models", headers=auth_headers))
+        await model_req_started.wait()
+
+        # In-flight read must be actively tracked in coordinator
+        assert runtime_lifecycle._active_asgi_reads == 1
+        assert runtime_lifecycle.has_active_database_work is True
+
+        # 2. Initiate shutdown while model status request is in flight
+        mock_server = MagicMock()
+        mock_server.should_exit = False
+        runtime_lifecycle.register_server(mock_server)
+
+        with patch("app.core.runtime_lifecycle.get_llm_provider") as mock_get_provider:
+            mock_provider = MagicMock()
+            mock_provider.signal_shutdown_immediately = MagicMock()
+            mock_provider.shutdown = AsyncMock(
+                return_value=ProviderShutdownResult(
+                    completed_cleanly=True,
+                    lock_acquired=True,
+                    managed_llm_pid=None,
+                    managed_by_core=False,
+                )
+            )
+            mock_get_provider.return_value = mock_provider
+
+            already, msg = await runtime_lifecycle.initiate_shutdown(drain_timeout_seconds=2.0)
+            assert already is False
+            assert runtime_lifecycle.is_shutting_down is True
+
+            # 3. New request after gate closed is rejected
+            resp_rejected = await client.get("/api/v1/models", headers=auth_headers)
+            assert resp_rejected.status_code == 503
+            assert resp_rejected.json()["error"]["code"] == "RUNTIME_SHUTTING_DOWN"
+
+            # 4. Release in-flight model request
+            model_req_can_finish.set()
+            resp_model = await model_task
+            assert resp_model.status_code == 200
+            assert runtime_lifecycle._active_asgi_reads == 0
+
+            # 5. Shutdown completes cleanly
+            await runtime_lifecycle._shutdown_task
+            assert runtime_lifecycle.shutdown_quiescence_status == "clean"
+            assert mock_server.should_exit is True
+
+
+@pytest.mark.asyncio
+async def test_new_model_status_request_rejected_after_admission_gate_closes(
+    client: AsyncClient,
+    auth_headers: dict,
+    host_admin_headers: dict,
+):
+    """Correction 2: Model status requests arriving after admission gate closes are rejected with 503
+
+    while database-free health and system status polling remain functional.
+    """
+    runtime_lifecycle.reset()
+    mock_server = MagicMock()
+    mock_server.should_exit = False
+    runtime_lifecycle.register_server(mock_server)
+
+    with patch("app.core.runtime_lifecycle.get_llm_provider") as mock_get_provider:
+        mock_provider = MagicMock()
+        mock_provider.signal_shutdown_immediately = MagicMock()
+        mock_provider.shutdown = AsyncMock(
+            return_value=ProviderShutdownResult(
+                completed_cleanly=True,
+                lock_acquired=True,
+                managed_llm_pid=None,
+                managed_by_core=False,
+            )
+        )
+        mock_get_provider.return_value = mock_provider
+
+        already, msg = await runtime_lifecycle.initiate_shutdown(drain_timeout_seconds=1.0)
+        assert already is False
+        assert runtime_lifecycle.is_shutting_down is True
+
+        # Model status request arrives AFTER admission gate closed -> 503 RUNTIME_SHUTTING_DOWN
+        resp_models = await client.get("/api/v1/models", headers=auth_headers)
+        assert resp_models.status_code == 503
+        assert resp_models.json()["error"]["code"] == "RUNTIME_SHUTTING_DOWN"
+
+        # Database-free health/status polling remains functional
+        resp_health = await client.get("/api/v1/health")
+        assert resp_health.status_code == 503
+        assert resp_health.json()["status"] == "shutting_down"
+
+        resp_status = await client.get("/api/v1/system/status", headers=host_admin_headers)
+        assert resp_status.status_code == 200
+        assert resp_status.json()["shutting_down"] is True
+
+        await runtime_lifecycle._shutdown_task
+        assert runtime_lifecycle.shutdown_quiescence_status == "clean"
+
+
 
