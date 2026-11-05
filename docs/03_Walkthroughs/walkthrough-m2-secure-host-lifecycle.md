@@ -25,6 +25,9 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 3. **Admission Control & Real Database Quiescence Barrier:**
    - Implemented pure ASGI admission control in `RuntimeAdmissionASGIMiddleware` (`backend/app/core/runtime_lifecycle.py`): once shutdown is initiated, all new non-health incoming requests receive `503 SERVICE_UNAVAILABLE (RUNTIME_SHUTTING_DOWN)`.
+   - Read-only database activity accounting during shutdown: tracks in-flight ASGI read requests (`_active_asgi_reads`) in `has_active_database_work`. Database engine disposal (`engine.dispose()`) is strictly blocked until all admitted read operations complete.
+   - Admission gating for read operations: `RuntimeAdmissionASGIMiddleware` rejects new database-dependent reads during teardown with 503 `RUNTIME_SHUTTING_DOWN`, while preserving loopback polling routes (`/health`, `/system/status`, `/models`).
+   - Telemetry database dependency decoupling: `verify_telemetry` dynamically resolves DB sessions only when verifying database-backed profile session tokens (`psk_`), eliminating unnecessary database transactions and engine contention during shutdown polling.
    - Request and stream draining: tracks active mutation requests, active assistant stream tasks, and persistence tasks (`_pending_persistence_tasks` in `backend/app/db/session.py`). Shutdown strictly awaits in-flight persistence tasks and drains active streams before invoking `engine.dispose()`.
    - Failed persistence evidence retention: if any persistence task fails, the failure record is preserved in `_persistence_failures` across retries, preventing premature or deceptive clean shutdown claims (`incomplete_persistence_failure`).
    - SQLite isolation during shutdown: removed database dependency from `GET /api/v1/system/status`. When `runtime_lifecycle.is_shutting_down == True`, SQLite is never queried or touched, completely eliminating connection contention or pool-disposal race conditions during polling.
@@ -32,6 +35,8 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 4. **Strict Provider Lock Ownership & Exclusive Lifecycle Synchronization (`backend/app/services/llm/llama_cpp.py`):**
    - Restored complete exclusive provider lifecycle synchronization: model loading (`load_model()`), unloading, router process startup/shutdown, profile switching, and Route A/B memory management execute entirely within `async with self._lock:`.
    - Synchronized cancellation handling: `except asyncio.CancelledError` inside `load_model()` executes its router cleanup and state reset under the already-held `self._lock`, preventing concurrent lifecycle mutations during aborted loads.
+   - Router ownership preservation across all cleanup paths: on any failed or unverified router termination (including hardware profile switching, startup timeout, or explicit unload), `_stop_managed_router_locked()` preserves `_server_process`, `_server_pid`, and `_managed_by_core`, setting `_last_error = "ROUTER_TERMINATION_FAILED"` and `_runtime_state = SERVER_ERROR` rather than deceptively clearing state.
+   - Verified process exit: checks `self._server_process.poll() is not None` after termination wait before clearing ownership references.
    - During `shutdown()`, sets `_cancel_requested = True` to unblock any pending model load or generation.
    - Enforces strict provider lock ownership (`self._lock`): only cleans up shared provider resources if the lock is successfully acquired. If lock acquisition times out, reports a truthful lock timeout failure without executing concurrent unlocked cleanup routines.
    - Inference drain: checks `self.has_active_generation`. If drain times out while inference is active, cleanly retains model weights and router state rather than corrupting in-flight streams.
@@ -40,8 +45,12 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 5. **Handle-Bound Windows OS Process Supervision (`WindowsRuntimeProcessSupervisor`):**
    - Process supervision uses PowerShell CIM `Win32_Process` parentage/provenance verification and kernel file locking (`RandomAccessFile.lock(FileLock.blockingExclusive)`).
+   - Confirmed exit verification: checks the boolean return of `$proc.WaitForExit(5000)` and `$proc.HasExited` on the retained process handle. Never reports `terminated` unless the process has actually exited; preserves `timeout` status if the process survives.
+   - Unknown managed-child identity discovery & provenance verification: when emergency termination is invoked without an authoritative child PID (`managedLlmPid == 0`), queries candidate child processes spawned under the runtime tree (including across intermediate Python worker subprocesses created by venv launchers).
+   - Strict candidate provenance checking: verifies candidate process handle creation time against CIM table ($\le 3\text{s}$ tolerance), verified runtime parentage, creation time $\ge$ parent start time, executable name (`llama-server.exe` / `llama-server`), and launch arguments (`--port` and `--models-dir` / `--model`).
+   - Foreign process preservation: non-llama or foreign child processes (such as child shell or worker instances) are strictly preserved and never killed. Sets `unverifiedChildDetected = true` and reports `partialTermination`.
    - Process entrypoint provenance verification: inspects executable path, creation timestamp, and command-line arguments before issuing any process termination fallback, eliminating PID reuse / recycling hazards.
-   - Handle-bound child process verification: opens and retains a real process handle (`$null = $childProc.Handle`) immediately upon identifying the child candidate, cross-checks handle `StartTime` against CIM `CreationDate` ($\le 3\text{s}$ tolerance), verifies parentage (`$childCim.ParentProcessId -eq $targetPid`), creation time relationship (`$childCreated -ge $parentCreated`), exact binary name (`llama-server.exe` / `llama-server`), and launch arguments (`--port`, `--models-dir` / `--model`).
+   - Handle-bound child process verification: opens and retains a real process handle (`$null = $childProc.Handle`) immediately upon identifying the child candidate.
    - Discards method return pipeline pollution (`$null = $proc.WaitForExit(...)`) preventing JSON output corruption in Dart.
    - Partial termination reporting: if the parent runtime process is terminated but its owned child process fails to terminate, reports structured status `partialTermination`.
    - Cleans up stale runtime lockfiles through locked handle truncation and deletion upon confirmed process termination.
@@ -150,15 +159,15 @@ All verification was executed and confirmed 100% green across all tiers:
 
 | Verification Suite | Target Directory / Script | Command Executed | Result / Output |
 | :--- | :--- | :--- | :--- |
-| **Backend Pytest** | `backend/tests/` | `backend\.venv\Scripts\python.exe -m pytest backend\tests -v` | **669 passed**, 1 warning (0 failures, 0 errors) in ~201s |
+| **Backend Pytest** | `backend/tests/` | `backend\.venv\Scripts\python.exe -m pytest backend\tests` | **674 passed**, 1 warning (0 failures, 0 errors) in ~187s |
 | **Flutter Core** | `frontend/flutter/packages/companion_core` | `flutter test` | **23 passed** (0 failures) |
 | **Flutter API** | `frontend/flutter/packages/companion_api` | `flutter test` | **81 passed** (0 failures) |
-| **Flutter Desktop App** | `frontend/flutter/apps/desktop` | `flutter test` | **307 passed** (0 failures) |
+| **Flutter Desktop App** | `frontend/flutter/apps/desktop` | `flutter test` | **310 passed** (0 failures) |
 | **Dart Analyzer** | Entire Flutter workspace | `flutter analyze` | **0 issues found** across all packages |
-| **OpenAPI Drift Check** | Backend routes vs schema | `python scripts/check_openapi_contract.py --check` | **Clean** (0 differences) |
+| **OpenAPI Drift Check** | Backend routes vs schema | `python scripts/check_openapi_contract.py --check` | **Clean** (40 routes up to date) |
 | **OpenAPI Parity Check** | Dart DTOs vs OpenAPI spec | `python scripts/check_dart_openapi_parity.py` | **40 routes, 24/24 DTOs, 30/19 covered routes** |
 | **Web Client Vitest** | `frontend/web/` | `npx vitest run --fileParallelism=false` | **16 test files passed, 248 passed** |
-| **Windows Supervision Acceptance** | `frontend/flutter/apps/desktop` | `flutter test test/windows_runtime_supervision_acceptance_test.dart` | **9/9 scenarios passed** (Scenarios A through I) |
+| **Windows Supervision Acceptance** | `frontend/flutter/apps/desktop` | `flutter test test/windows_runtime_supervision_acceptance_test.dart` | **12/12 scenarios passed** (Scenarios A through L) |
 
 ---
 

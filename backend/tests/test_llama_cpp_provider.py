@@ -432,8 +432,9 @@ async def test_load_model_cancelled_executes_cleanup_under_lock():
     def mock_stop_locked():
         nonlocal lock_held_during_cleanup
         lock_held_during_cleanup = provider._lock.locked()
-        original_stop()
+        res = original_stop()
         stop_called.set()
+        return res
 
     provider._stop_managed_router_locked = mock_stop_locked
     provider._managed_by_core = True
@@ -471,5 +472,105 @@ async def test_load_model_cancelled_executes_cleanup_under_lock():
         assert stop_called.is_set() is True
         assert lock_held_during_cleanup is True
         assert provider._last_error == "LOAD_ABORTED_BY_SHUTDOWN"
+
+
+@pytest.mark.asyncio
+async def test_router_termination_failure_preserves_ownership():
+    """Directive 1: When router process refuses to exit, ownership is strictly preserved."""
+    provider = LlamaCppProvider()
+    mock_proc = MagicMock()
+    mock_proc.poll.return_value = None  # Process remains alive
+    mock_proc.pid = 9988
+    mock_proc.terminate = MagicMock()
+    mock_proc.wait = MagicMock()
+    mock_proc.kill = MagicMock()
+
+    provider._managed_by_core = True
+    provider._server_process = mock_proc
+    provider._server_pid = 9988
+    provider._runtime_state = LLMRuntimeState.MODEL_READY
+
+    async with provider._lock:
+        stopped = provider._stop_managed_router_locked()
+
+    assert stopped is False
+    assert provider._server_process is mock_proc
+    assert provider._server_pid == 9988
+    assert provider._managed_by_core is True
+    assert provider._last_error == "ROUTER_TERMINATION_FAILED"
+    assert provider._runtime_state == LLMRuntimeState.SERVER_ERROR
+
+
+@pytest.mark.asyncio
+async def test_router_termination_exception_preserves_ownership():
+    """Directive 1: When terminate() or kill() raises exception, ownership is preserved."""
+    provider = LlamaCppProvider()
+    mock_proc = MagicMock()
+    mock_proc.poll.return_value = None
+    mock_proc.pid = 9989
+    mock_proc.terminate.side_effect = PermissionError("Access denied")
+    mock_proc.kill.side_effect = OSError("Operation failed")
+
+    provider._managed_by_core = True
+    provider._server_process = mock_proc
+    provider._server_pid = 9989
+
+    async with provider._lock:
+        stopped = provider._stop_managed_router_locked()
+
+    assert stopped is False
+    assert provider._server_process is mock_proc
+    assert provider._server_pid == 9989
+    assert provider._managed_by_core is True
+    assert provider._last_error == "ROUTER_TERMINATION_FAILED"
+    assert provider._runtime_state == LLMRuntimeState.SERVER_ERROR
+
+
+@pytest.mark.asyncio
+async def test_set_profile_termination_failure_preserves_ownership():
+    """Directive 1: Hardware-profile change with unkillable router preserves ownership and fails."""
+    provider = LlamaCppProvider()
+    mock_proc = MagicMock()
+    mock_proc.poll.return_value = None
+    mock_proc.pid = 7711
+
+    provider._managed_by_core = True
+    provider._server_process = mock_proc
+    provider._server_pid = 7711
+    provider._active_profile = "eco"
+
+    res = await provider.set_profile("maximum")
+    assert res is False
+    assert provider._server_process is mock_proc
+    assert provider._server_pid == 7711
+    assert provider._managed_by_core is True
+    assert provider._last_error == "ROUTER_TERMINATION_FAILED"
+    assert provider._runtime_state == LLMRuntimeState.SERVER_ERROR
+
+
+@pytest.mark.asyncio
+async def test_unload_model_termination_failure_preserves_ownership():
+    """Directive 1: Router unload with unkillable router preserves ownership and returns False."""
+    provider = LlamaCppProvider()
+    mock_proc = MagicMock()
+    mock_proc.poll.return_value = None
+    mock_proc.pid = 7722
+
+    provider._managed_by_core = True
+    provider._server_process = mock_proc
+    provider._server_pid = 7722
+    provider._server_is_active = True
+    provider._active_model_name = "test_model"
+
+    with patch.object(provider, "_router_unload_model", AsyncMock(return_value=False)):
+        res = await provider.unload_model()
+
+    assert res is False
+    assert provider._server_process is mock_proc
+    assert provider._server_pid == 7722
+    assert provider._managed_by_core is True
+    assert provider._last_error == "ROUTER_TERMINATION_FAILED"
+    assert provider._runtime_state == LLMRuntimeState.SERVER_ERROR
+
 
 

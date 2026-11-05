@@ -78,16 +78,20 @@
 - [x] **M. Owned Router Tracking:** Tracked `_lastKnownManagedLlmPid` and `_lastKnownManagedByCore` across telemetry cycles and passed them to `forceEmergencyStopLocalRuntime()`.
 - [x] **N. Database Read Safety During Shutdown:** Removed `db: AsyncSession` dependency from `/system/status` in `health.py`; eliminated SQLite queries during `is_shutting_down == True`.
 - [x] **O. Extended Windows Acceptance Suite:** Added Scenarios G, H, and I verifying loopback shutdown, foreign child preservation, and partial termination reporting on live Windows processes.
+- [x] **P. Router Ownership Preservation Across Termination Failures (Directive 1):** Unified all Core-managed router termination cleanup paths (`load_model` profile switch, startup failure, `unload_model`, and `set_profile`) to `_stop_managed_router_locked()`. Verifies `poll() is not None`; never clears `_server_process`, `_server_pid`, or `_managed_by_core` on termination failure, setting `_last_error = "ROUTER_TERMINATION_FAILED"` and `_runtime_state = SERVER_ERROR`.
+- [x] **Q. Actual Windows Process Exit Verification (Directive 2):** In `WindowsRuntimeProcessSupervisor.terminateVerifiedRuntimeProcess()`, inspects `$proc.WaitForExit(5000)` and `$proc.HasExited` on the held handle before declaring termination; preserves `timeout` status if process survives. Added acceptance Scenario J.
+- [x] **R. Unknown Managed-Child Provenance & Discovery (Directive 3):** When emergency termination is requested without managed-child identity (`managedLlmPid == 0`), queries candidate child processes across parent and intermediate Python worker subprocesses. Enforces handle start time, parentage, executable name, launch arguments (`--port` and `--models-dir`/`--model`), and creation time. Preserves foreign child processes, sets `unverifiedChildDetected = true`, and reports `partialTermination`. Added acceptance Scenarios K and L.
+- [x] **S. Read-Only Database Activity Accounting During Teardown (Directive 4):** In `RuntimeLifecycleCoordinator`, tracked in-flight ASGI reads (`_active_asgi_reads`) in `has_active_database_work`, preventing engine disposal during active reads. `RuntimeAdmissionASGIMiddleware` rejects new read requests during shutdown with 503 `RUNTIME_SHUTTING_DOWN`, while exempting polling paths (`/health`, `/system/status`, `/models`). Decoupled `verify_telemetry` database dependency with `get_telemetry_db`, ensuring loopback polling succeeds without database engine access.
 - [x] **Verification Evidence:**
-  - Backend Pytest: 669/669 passed, 1 warning in ~201s (0 failures)
+  - Backend Pytest: 674/674 passed, 1 warning (0 failures) in ~187s
   - Flutter companion_core: 23/23 passed
   - Flutter companion_api: 81/81 passed
-  - Flutter desktop: 307/307 passed
+  - Flutter desktop: 310/310 passed
   - Dart analyze: 0 issues across all packages
   - React web tests: 16 test files passed, 248/248 passed
-  - OpenAPI Drift Check: clean (0 differences)
+  - OpenAPI Drift Check: clean (40 routes up to date)
   - OpenAPI Parity: 40 routes, 24/24 DTOs, 30/19 covered routes
-  - Windows supervision acceptance: 9/9 scenarios passed (Scenarios A through I)
+  - Windows supervision acceptance: 12/12 scenarios passed (Scenarios A through L)
 
 ### Merge Readiness:
 - [ ] Independent Reviewer final evaluation of corrected delivery package.

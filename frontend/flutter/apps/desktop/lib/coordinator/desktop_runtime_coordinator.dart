@@ -1296,6 +1296,18 @@ class DesktopRuntimeCoordinator {
       return ShutdownOutcome.emergencyTerminated;
     }
 
+    if (result.status == TerminationResultStatus.partialTermination) {
+      _updateState(
+        _currentState.copyWith(
+          status: RuntimeStatus.shutdownFailed,
+          shutdownFailureReason: ShutdownFailureReason.incompleteCleanup,
+          diagnosticMessage: 'Handle-bound emergency termination partial: ${result.diagnostic ?? 'child process cleanup failed'}',
+        ),
+        generation: generation,
+      );
+      return ShutdownOutcome.incompleteCleanup;
+    }
+
     _updateState(
       _currentState.copyWith(
         status: RuntimeStatus.shutdownFailed,

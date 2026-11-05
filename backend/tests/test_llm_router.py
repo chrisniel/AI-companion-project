@@ -118,6 +118,8 @@ async def test_failed_startup_terminates_child_process(llama_provider):
     mock_child_proc = MagicMock()
     mock_child_proc.poll.return_value = None  # Still alive during startup
     mock_child_proc.pid = 12345
+    mock_child_proc.terminate.side_effect = lambda: setattr(mock_child_proc.poll, "return_value", 0)
+    mock_child_proc.kill.side_effect = lambda: setattr(mock_child_proc.poll, "return_value", 0)
 
     with patch("subprocess.Popen", return_value=mock_child_proc), \
          patch.object(llama_provider, "_check_external_server", new_callable=AsyncMock) as mock_check, \
@@ -259,6 +261,8 @@ async def test_set_profile_terminates_core_managed_router_for_respawn(llama_prov
     mock_proc = MagicMock()
     mock_proc.poll.return_value = None
     mock_proc.pid = 5555
+    mock_proc.terminate.side_effect = lambda: setattr(mock_proc.poll, "return_value", 0)
+    mock_proc.kill.side_effect = lambda: setattr(mock_proc.poll, "return_value", 0)
 
     llama_provider._server_process = mock_proc
     llama_provider._server_pid = 5555
@@ -560,6 +564,8 @@ async def test_status_contract_profile_changed_before_activation(llama_provider)
     mock_proc = MagicMock()
     mock_proc.poll.return_value = None
     mock_proc.pid = 9999
+    mock_proc.terminate.side_effect = lambda: setattr(mock_proc.poll, "return_value", 0)
+    mock_proc.kill.side_effect = lambda: setattr(mock_proc.poll, "return_value", 0)
 
     llama_provider._server_process = mock_proc
     llama_provider._server_pid = 9999

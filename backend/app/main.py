@@ -129,7 +129,26 @@ class PayloadLimitMiddleware(BaseHTTPMiddleware):
 
 
 class RuntimeAdmissionASGIMiddleware:
-    """Full-ASGI lifecycle admission gate and mutation tracking during graceful shutdown."""
+    """Full-ASGI lifecycle admission gate and request tracking during graceful shutdown.
+
+    Directives:
+    - Rejects new mutating requests (POST/PUT/PATCH/DELETE) and database-dependent read requests (GET)
+      during shutdown with 503 RUNTIME_SHUTTING_DOWN.
+    - Tracks active in-flight mutations and read-only database operations so that shutdown quiescence
+      awaits their completion before database engine disposal.
+    - Permits essential health, system status, model status, and shutdown endpoints without unsafe DB access.
+    """
+
+    NON_DB_PATHS = {
+        "/api/v1/health",
+        "/health",
+        "/api/v1/system/status",
+        "/api/v1/system/shutdown",
+        "/api/v1/models",
+        "/docs",
+        "/redoc",
+        "/openapi.json",
+    }
 
     def __init__(self, app) -> None:
         self.app = app
@@ -140,11 +159,16 @@ class RuntimeAdmissionASGIMiddleware:
             return
 
         method = scope.get("method", "GET")
-        path = scope.get("path", "")
-        is_mutation = method in ("POST", "PUT", "PATCH", "DELETE")
-        is_shutdown_endpoint = path.rstrip("/").endswith("/system/shutdown")
+        path = scope.get("path", "").rstrip("/")
+        is_exempt = path in self.NON_DB_PATHS or path.startswith("/docs") or path.startswith("/openapi")
 
-        if is_mutation and not is_shutdown_endpoint:
+        if is_exempt:
+            await self.app(scope, receive, send)
+            return
+
+        is_mutation = method in ("POST", "PUT", "PATCH", "DELETE")
+
+        if is_mutation:
             if not runtime_lifecycle.acquire_mutation_admission():
                 state = scope.get("state", {})
                 req_id = state.get("request_id") if isinstance(state, dict) else None
@@ -164,7 +188,24 @@ class RuntimeAdmissionASGIMiddleware:
             finally:
                 runtime_lifecycle.release_mutation_admission()
         else:
-            await self.app(scope, receive, send)
+            if not runtime_lifecycle.acquire_read_admission():
+                state = scope.get("state", {})
+                req_id = state.get("request_id") if isinstance(state, dict) else None
+                request_id = req_id or f"req_{uuid.uuid4().hex[:12]}"
+                response = format_error_response(
+                    code="RUNTIME_SHUTTING_DOWN",
+                    message="Runtime is currently shutting down. Database operations are rejected.",
+                    details=None,
+                    request_id=request_id,
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+                await response(scope, receive, send)
+                return
+
+            try:
+                await self.app(scope, receive, send)
+            finally:
+                runtime_lifecycle.release_read_admission()
 
 
 @asynccontextmanager

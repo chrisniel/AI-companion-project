@@ -424,3 +424,87 @@ async def test_system_status_polling_during_and_after_db_disposal(client: AsyncC
         session_module._session_factory = saved_factory
 
 
+@pytest.mark.asyncio
+async def test_delayed_readonly_database_request_overlapping_shutdown(
+    client: AsyncClient,
+    auth_headers: dict,
+    host_admin_headers: dict,
+):
+    """Directive 4: Delayed read-only DB request admitted before shutdown does not race with disposal,
+
+    and new read-only DB requests arriving during shutdown are rejected with 503.
+    """
+    runtime_lifecycle.reset()
+    read_started = asyncio.Event()
+    read_can_finish = asyncio.Event()
+
+    original_acquire = runtime_lifecycle.acquire_read_admission
+
+    def delayed_acquire():
+        res = original_acquire()
+        read_started.set()
+        return res
+
+    # 1. Admit read-only request before shutdown
+    with patch.object(runtime_lifecycle, "acquire_read_admission", side_effect=delayed_acquire):
+        async def slow_read():
+            await read_started.wait()
+            # Wait until shutdown has started before letting read complete
+            await read_can_finish.wait()
+
+        slow_task = asyncio.create_task(slow_read())
+        # Simulate active read in coordinator
+        assert runtime_lifecycle.acquire_read_admission() is True
+        assert runtime_lifecycle._active_asgi_reads == 1
+        assert runtime_lifecycle.has_active_database_work is True
+
+        # 2. Initiate shutdown while read is active
+        mock_server = MagicMock()
+        mock_server.should_exit = False
+        runtime_lifecycle.register_server(mock_server)
+
+        with patch("app.core.runtime_lifecycle.get_llm_provider") as mock_get_provider:
+            mock_provider = MagicMock()
+            mock_provider.signal_shutdown_immediately = MagicMock()
+            mock_provider.shutdown = AsyncMock(
+                return_value=ProviderShutdownResult(
+                    completed_cleanly=True,
+                    lock_acquired=True,
+                    managed_llm_pid=None,
+                    managed_by_core=False,
+                )
+            )
+            mock_get_provider.return_value = mock_provider
+
+            already, msg = await runtime_lifecycle.initiate_shutdown(drain_timeout_seconds=2.0)
+            assert already is False
+            assert runtime_lifecycle.is_shutting_down is True
+
+            # 3. New read request arriving AFTER shutdown must be rejected
+            resp_after = await client.get("/api/v1/conversations", headers=auth_headers)
+            assert resp_after.status_code == 503
+            assert resp_after.json()["error"]["code"] == "RUNTIME_SHUTTING_DOWN"
+
+            # 4. Polling health and status endpoints during shutdown must succeed
+            resp_health = await client.get("/api/v1/health")
+            # health probe returns 503 during shutdown per spec, but does NOT touch DB
+            assert resp_health.status_code == 503
+            assert resp_health.json()["status"] == "shutting_down"
+
+            resp_status = await client.get("/api/v1/system/status", headers=host_admin_headers)
+            assert resp_status.status_code == 200
+            assert resp_status.json()["shutting_down"] is True
+
+            # 5. Let the in-flight read finish
+            read_can_finish.set()
+            await slow_task
+            runtime_lifecycle.release_read_admission()
+            assert runtime_lifecycle._active_asgi_reads == 0
+
+            # 6. Shutdown completes cleanly
+            await runtime_lifecycle._shutdown_task
+            assert runtime_lifecycle.shutdown_quiescence_status == "clean"
+            assert mock_server.should_exit is True
+
+
+

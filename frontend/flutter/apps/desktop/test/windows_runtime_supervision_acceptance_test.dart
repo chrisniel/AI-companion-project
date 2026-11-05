@@ -784,6 +784,149 @@ void main() {
         await fakeChildProcess.exitCode;
       }
     });
+
+    test('Scenario J: Confirmed Exit Verification: Supervisor verifies actual process termination via WaitForExit and HasExited (Directive 2)', () async {
+      final parentProcess = await Process.start(
+        runtimeExecutable,
+        ['-m', 'app.runtime_server', '--app', 'app.main:app', '--port', '49153'],
+        workingDirectory: runtimeWorkingDir,
+        environment: testEnv,
+        mode: ProcessStartMode.normal,
+      );
+      final parentPid = parentProcess.pid;
+
+      try {
+        final supervisor = WindowsRuntimeProcessSupervisor();
+        final descriptor = RuntimeLockfileData(
+          schemaVersion: 1,
+          instanceId: 'scenario-j',
+          pid: parentPid,
+          port: 49153,
+          startedAt: DateTime.now().toUtc(),
+          executablePath: runtimeExecutable,
+        );
+
+        final result = await supervisor.terminateVerifiedRuntimeProcess(
+          expectedDescriptor: descriptor,
+        );
+
+        // ignore: avoid_print
+        print('SCENARIO J RESULT: ${result.status} DIAGNOSTIC: ${result.diagnostic}');
+        expect(result.status, equals(TerminationResultStatus.terminated));
+        expect(result.childTerminated, isFalse);
+
+        final isParentAlive = await supervisor.isProcessActiveAndMatching(
+          parentPid,
+          expectedExecutable: 'python.exe',
+        );
+        expect(isParentAlive, isFalse);
+      } finally {
+        parentProcess.kill();
+        await parentProcess.exitCode;
+      }
+    });
+
+    test('Scenario K: Positive Child Provenance & Automatic Discovery: Unknown child identity discovers genuinely owned disposable child, terminates both, and reports success (Directive 3)', () async {
+      final disposableLlamaExe = File('${tempRoot.path}\\llama-server.exe');
+      await File(r'C:\Windows\System32\cmd.exe').copy(disposableLlamaExe.path);
+
+      const pySnippet = 'import subprocess, time, sys; '
+          'p = subprocess.Popen([sys.argv[1], "/c", "ping 127.0.0.1 -n 30 > nul & rem --port 8080 --model dummy.gguf"]); '
+          'time.sleep(30); '
+          '# app.runtime_server app.main:app --port 49154';
+
+      final parentProcess = await Process.start(
+        runtimeExecutable,
+        ['-c', pySnippet, disposableLlamaExe.path],
+        workingDirectory: runtimeWorkingDir,
+        environment: testEnv,
+        mode: ProcessStartMode.normal,
+      );
+      final parentPid = parentProcess.pid;
+      await Future<void>.delayed(const Duration(milliseconds: 1500));
+
+      try {
+        final supervisor = WindowsRuntimeProcessSupervisor();
+        final descriptor = RuntimeLockfileData(
+          schemaVersion: 1,
+          instanceId: 'scenario-k',
+          pid: parentPid,
+          port: 49154,
+          startedAt: DateTime.now().toUtc(),
+          executablePath: runtimeExecutable,
+        );
+
+        // Emergency termination without passing managed child PID (managedLlmPid = 0)
+        final result = await supervisor.terminateVerifiedRuntimeProcess(
+          expectedDescriptor: descriptor,
+        );
+
+        // ignore: avoid_print
+        print('SCENARIO K RESULT: ${result.status} DIAGNOSTIC: ${result.diagnostic}');
+        expect(result.status, equals(TerminationResultStatus.terminated));
+        expect(result.childTerminated, isTrue);
+
+        final isParentAlive = await supervisor.isProcessActiveAndMatching(
+          parentPid,
+          expectedExecutable: 'python.exe',
+        );
+        expect(isParentAlive, isFalse);
+      } finally {
+        parentProcess.kill();
+        await parentProcess.exitCode;
+        try {
+          if (await disposableLlamaExe.exists()) {
+            await disposableLlamaExe.delete();
+          }
+        } catch (_) {}
+      }
+    });
+
+    test('Scenario L: Negative Child Provenance: Discovered foreign child of parent is preserved and reports partialTermination (Directive 3)', () async {
+      const pySnippet = 'import subprocess, time, sys; '
+          'p = subprocess.Popen(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "Start-Sleep -Seconds 30"]); '
+          'time.sleep(30); '
+          '# app.runtime_server app.main:app --port 49155';
+
+      final parentProcess = await Process.start(
+        runtimeExecutable,
+        ['-c', pySnippet],
+        workingDirectory: runtimeWorkingDir,
+        environment: testEnv,
+        mode: ProcessStartMode.normal,
+      );
+      final parentPid = parentProcess.pid;
+      await Future<void>.delayed(const Duration(milliseconds: 1500));
+
+      try {
+        final supervisor = WindowsRuntimeProcessSupervisor();
+        final descriptor = RuntimeLockfileData(
+          schemaVersion: 1,
+          instanceId: 'scenario-l',
+          pid: parentPid,
+          port: 49155,
+          startedAt: DateTime.now().toUtc(),
+          executablePath: runtimeExecutable,
+        );
+
+        // Emergency termination without passing managed child PID (managedLlmPid = 0)
+        final result = await supervisor.terminateVerifiedRuntimeProcess(
+          expectedDescriptor: descriptor,
+        );
+
+        expect(result.status, equals(TerminationResultStatus.partialTermination));
+        expect(result.childTerminated, isFalse);
+
+        final isParentAlive = await supervisor.isProcessActiveAndMatching(
+          parentPid,
+          expectedExecutable: 'python.exe',
+        );
+        expect(isParentAlive, isFalse);
+      } finally {
+        parentProcess.kill();
+        await parentProcess.exitCode;
+      }
+    });
   });
 }
 

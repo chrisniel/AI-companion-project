@@ -29,6 +29,7 @@ class RuntimeLifecycleCoordinator:
         self._shutdown_phase: Optional[str] = None
         self._shutdown_quiescence_status: Optional[str] = None
         self._active_asgi_mutations: int = 0
+        self._active_asgi_reads: int = 0
         self._active_stream_tasks: Set[asyncio.Task] = set()
         self._pending_persistence_tasks: Set[asyncio.Task] = set()
         self._persistence_failures: list[dict[str, Any]] = []
@@ -45,6 +46,7 @@ class RuntimeLifecycleCoordinator:
         self._shutdown_phase = None
         self._shutdown_quiescence_status = None
         self._active_asgi_mutations = 0
+        self._active_asgi_reads = 0
         self._active_stream_tasks.clear()
         self._pending_persistence_tasks.clear()
         self._persistence_failures.clear()
@@ -77,9 +79,9 @@ class RuntimeLifecycleCoordinator:
 
     @property
     def has_active_database_work(self) -> bool:
-        """Truthful indicator of active DB work: in-flight mutations or incomplete persistence tasks."""
+        """Truthful indicator of active DB work: in-flight mutations, in-flight DB reads, or incomplete persistence tasks."""
         active_tasks = any(not t.done() for t in self._pending_persistence_tasks)
-        return self._active_asgi_mutations > 0 or active_tasks
+        return self._active_asgi_mutations > 0 or self._active_asgi_reads > 0 or active_tasks
 
     @property
     def has_persistence_failures(self) -> bool:
@@ -111,6 +113,20 @@ class RuntimeLifecycleCoordinator:
     def release_mutation_admission(self) -> None:
         """Release admission for a mutating ASGI request."""
         self._active_asgi_mutations = max(0, self._active_asgi_mutations - 1)
+
+    def acquire_read_admission(self) -> bool:
+        """Acquire admission for a read-only database-dependent ASGI request (GET).
+
+        Returns False if runtime is shutting down (503 RUNTIME_SHUTTING_DOWN).
+        """
+        if self._is_shutting_down:
+            return False
+        self._active_asgi_reads += 1
+        return True
+
+    def release_read_admission(self) -> None:
+        """Release admission for a read-only database-dependent ASGI request."""
+        self._active_asgi_reads = max(0, self._active_asgi_reads - 1)
 
     def register_stream_task(self, task: asyncio.Task) -> None:
         """Track active SSE / inference streaming tasks."""

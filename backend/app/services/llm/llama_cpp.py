@@ -321,7 +321,14 @@ class LlamaCppProvider(BaseLLMProvider):
             logger.error(f"PID termination failed: {exc}")
 
         # TRUTHFUL VERIFICATION: verify process is actually dead
-        if self._server_process.poll() is None:
+        is_dead = False
+        try:
+            is_dead = (self._server_process.poll() is not None)
+        except Exception as exc:
+            logger.error(f"Error checking router process exit: {exc}")
+            is_dead = False
+
+        if not is_dead:
             logger.error(
                 f"Failed to terminate Core-owned router PID={self._server_pid}; process still running. "
                 "Retaining process and ownership reference."
@@ -518,20 +525,10 @@ class LlamaCppProvider(BaseLLMProvider):
                                         await self._router_unload_model(runtime_id_old)
                                     except Exception:
                                         pass
-                                try:
-                                    self._server_process.terminate()
-                                    try:
-                                        self._server_process.wait(timeout=3.0)
-                                    except subprocess.TimeoutExpired:
-                                        self._server_process.kill()
-                                except Exception:
-                                    pass
-                                self._server_process = None
-                                self._server_pid = None
-                                self._managed_by_core = False
-                                self._server_is_active = False
-                                self._active_model_name = None
-                                self._runtime_state = LLMRuntimeState.SERVER_STOPPED
+                                stopped = self._stop_managed_router_locked()
+                                if not stopped:
+                                    logger.error(f"Failed to terminate router PID={self._server_pid} during profile switch; retaining ownership")
+                                    return False
                                 if self._server_client:
                                     await self._server_client.aclose()
                                     self._server_client = None
@@ -718,25 +715,13 @@ class LlamaCppProvider(BaseLLMProvider):
                         self._runtime_state = LLMRuntimeState.SERVER_ERROR
                         return False
 
-                    def _cleanup_failed_proc(child_proc: subprocess.Popen):
-                        try:
-                            child_proc.terminate()
-                            try:
-                                child_proc.wait(timeout=2.0)
-                            except subprocess.TimeoutExpired:
-                                child_proc.kill()
-                                child_proc.wait(timeout=1.0)
-                        except Exception:
-                            pass
-                        self._server_process = None
-                        self._server_pid = None
-                        self._managed_by_core = False
-                        self._server_is_active = False
-                        self._applied_profile = None
-                        self._applied_context_size = None
-                        self._applied_gpu_layers = None
-                        self._applied_mmproj_offload = None
-                        self._runtime_state = LLMRuntimeState.SERVER_STOPPED
+                    def _cleanup_failed_proc(child_proc: subprocess.Popen) -> bool:
+                        stopped = self._stop_managed_router_locked()
+                        if not stopped:
+                            logger.error(f"Failed to terminate router PID={self._server_pid} during startup failure; retaining ownership")
+                            self._last_error = "ROUTER_TERMINATION_FAILED"
+                            self._runtime_state = LLMRuntimeState.SERVER_ERROR
+                        return stopped
 
                     # Poll for readiness up to 45 seconds
                     healthy = False
@@ -804,10 +789,14 @@ class LlamaCppProvider(BaseLLMProvider):
                         return False
                 except asyncio.CancelledError:
                     logger.info("load_model cancelled by shutdown event; performing synchronized cleanup")
-                    self._last_error = "LOAD_ABORTED_BY_SHUTDOWN"
                     was_managed = self._managed_by_core
                     if was_managed and self._server_process:
-                        self._stop_managed_router_locked()
+                        stopped = self._stop_managed_router_locked()
+                        if not stopped:
+                            self._last_error = "ROUTER_TERMINATION_FAILED"
+                            self._runtime_state = LLMRuntimeState.SERVER_ERROR
+                            return False
+                    self._last_error = "LOAD_ABORTED_BY_SHUTDOWN"
                     self._runtime_state = LLMRuntimeState.SERVER_STOPPED if was_managed else LLMRuntimeState.MODEL_UNLOADED
                     return False
         finally:
@@ -843,30 +832,18 @@ class LlamaCppProvider(BaseLLMProvider):
 
             # 3. Fallback: scoped PID termination — runtime arch §5 invariant: NEVER taskkill /IM
             if self._managed_by_core and self._server_process:
-                logger.info(f"Terminating Core-owned router PID={self._server_pid}")
-                try:
-                    self._server_process.terminate()
-                    try:
-                        self._server_process.wait(timeout=5.0)
-                    except subprocess.TimeoutExpired:
-                        self._server_process.kill()
-                except Exception as exc:
-                    logger.error(f"PID termination failed: {exc}")
+                stopped = self._stop_managed_router_locked()
+                if not stopped:
+                    logger.error(f"Failed to terminate router PID={self._server_pid} during unload fallback; retaining ownership")
+                    return False
+                if self._server_client:
+                    await self._server_client.aclose()
+                    self._server_client = None
+                logger.info("Model unloaded successfully. Scoped termination complete.")
+                return True
 
-            self._server_process = None
-            self._server_pid = None
-            self._managed_by_core = False
-            self._server_is_active = False
+            self._runtime_state = LLMRuntimeState.MODEL_UNLOADED
             self._active_model_name = None
-            self._applied_profile = None
-            self._applied_context_size = None
-            self._applied_gpu_layers = None
-            self._applied_mmproj_offload = None
-            self._runtime_state = LLMRuntimeState.SERVER_STOPPED
-            if self._server_client:
-                await self._server_client.aclose()
-                self._server_client = None
-            logger.info("Model unloaded successfully. Scoped termination complete.")
             return True
 
     async def set_profile(self, profile: str) -> bool:
@@ -893,26 +870,12 @@ class LlamaCppProvider(BaseLLMProvider):
                         await self._router_unload_model(runtime_id)
                     except Exception:
                         pass
-                try:
-                    self._server_process.terminate()
-                    try:
-                        self._server_process.wait(timeout=3.0)
-                    except subprocess.TimeoutExpired:
-                        self._server_process.kill()
-                except Exception as exc:
-                    logger.error(f"Error terminating router during profile change: {exc}")
-
-                self._server_process = None
-                self._server_pid = None
-                self._managed_by_core = False
-                self._server_is_active = False
-                self._active_model_name = None
-                self._applied_profile = None
-                self._applied_context_size = None
-                self._applied_gpu_layers = None
-                self._applied_mmproj_offload = None
-                self._runtime_state = LLMRuntimeState.SERVER_STOPPED
-                self._runtime_state = LLMRuntimeState.SERVER_STOPPED
+                stopped = self._stop_managed_router_locked()
+                if not stopped:
+                    logger.error(f"Failed to terminate router PID={self._server_pid} during profile change; retaining ownership")
+                    self._last_error = "ROUTER_TERMINATION_FAILED"
+                    self._runtime_state = LLMRuntimeState.SERVER_ERROR
+                    return False
                 if self._server_client:
                     await self._server_client.aclose()
                     self._server_client = None
