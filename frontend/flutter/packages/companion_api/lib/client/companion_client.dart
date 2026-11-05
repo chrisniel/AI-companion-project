@@ -11,6 +11,7 @@ import '../dto/health_dto.dart';
 import '../dto/message_dto.dart';
 import '../dto/model_registry_dto.dart';
 import '../dto/model_status_dto.dart';
+import '../dto/profile_dto.dart';
 import '../dto/sse_event_dto.dart';
 import '../dto/system_status_dto.dart';
 import '../transport/sse_parser.dart';
@@ -84,12 +85,20 @@ class CompanionClient {
     return headers;
   }
 
-  Future<dynamic> _sessionRequest(String path, {bool admin = false, Map<String, dynamic>? body, bool post = false, bool public = false}) async {
+  Future<dynamic> _sessionRequest(
+    String path, {
+    bool admin = false,
+    Map<String, dynamic>? body,
+    bool post = false,
+    String? method,
+    bool public = false,
+  }) async {
+    final effectiveMethod = method ?? (post ? 'POST' : 'GET');
     final uri = baseUri.replace(path: '${baseUri.path}/api/v1/$path');
     final headers = admin ? null : await _buildHeaders(requiresAuth: !public);
     final response = admin
-        ? await _adminRequest(post ? 'POST' : 'GET', uri, body:body == null ? null : jsonEncode(body))
-        : await _requestWithoutRedirects(post ? 'POST' : 'GET',uri,headers:headers!,body:body == null ? null : jsonEncode(body));
+        ? await _adminRequest(effectiveMethod, uri, body: body == null ? null : jsonEncode(body))
+        : await _requestWithoutRedirects(effectiveMethod, uri, headers: headers!, body: body == null ? null : jsonEncode(body));
     if (response.statusCode < 200 || response.statusCode >= 300) _handleErrorResponse(response);
     return response.statusCode == 204 ? null : jsonDecode(response.body);
   }
@@ -125,27 +134,69 @@ class CompanionClient {
   }
 
   Future<List<Map<String, dynamic>>> listProfiles() async =>
-      (await _sessionRequest('profiles', admin:true) as List).map((e) => Map<String,dynamic>.from(e as Map)).toList();
+      (await _sessionRequest('profiles', admin: true) as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
 
-  Future<List<Map<String, dynamic>>> pendingBrowserRequests() async =>
-      (await _sessionRequest('auth/bootstrap/requests', admin:true) as List).map((e) => Map<String,dynamic>.from(e as Map)).toList();
-
-  Future<void> approveBrowserRequest(String requestId, String profileId) async {
-    await _sessionRequest('auth/bootstrap/ticket', admin:true, post:true, body:{'profile_id':profileId, 'request_id':requestId});
+  Future<ProfileMetadata> createProfile(ProfileCreateRequest request) async {
+    final dynamic json = await _sessionRequest(
+      'profiles',
+      admin: true,
+      method: 'POST',
+      body: request.toJson(),
+    );
+    return ProfileMetadata.fromJson(Map<String, dynamic>.from(json as Map));
   }
 
-  Future<Map<String, dynamic>> establishProfileSession(String profileId) async {
-    final ticket = await _sessionRequest('auth/bootstrap/ticket', admin:true, post:true, body:{'profile_id':profileId});
-    final session = Map<String,dynamic>.from(await _sessionRequest('auth/session/exchange', public:true, post:true, body:{'ticket':ticket['ticket']}) as Map);
-    await sessionStore.writeToken(session['token'] as String);
+  Future<ProfileMetadata> renameProfile(String profileId, ProfileUpdateRequest request) async {
+    final dynamic json = await _sessionRequest(
+      'profiles/$profileId',
+      admin: true,
+      method: 'PATCH',
+      body: request.toJson(),
+    );
+    return ProfileMetadata.fromJson(Map<String, dynamic>.from(json as Map));
+  }
+
+  Future<List<Map<String, dynamic>>> pendingBrowserRequests() async =>
+      (await _sessionRequest('auth/bootstrap/requests', admin: true) as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+
+  Future<void> approveBrowserRequest(String requestId, String profileId) async {
+    await _sessionRequest('auth/bootstrap/ticket', admin: true, post: true, body: {'profile_id': profileId, 'request_id': requestId});
+  }
+
+  Future<Map<String, dynamic>> establishProfileSession(String profileId, {bool writeToStore = true}) async {
+    final ticket = await _sessionRequest('auth/bootstrap/ticket', admin: true, post: true, body: {'profile_id': profileId});
+    final session = Map<String, dynamic>.from(await _sessionRequest('auth/session/exchange', public: true, post: true, body: {'ticket': ticket['ticket']}) as Map);
+    if (writeToStore) {
+      await sessionStore.writeToken(session['token'] as String);
+    }
     return session;
   }
 
-  Future<Map<String, dynamic>> getOwnSession() async => Map<String,dynamic>.from(await _sessionRequest('auth/session/me') as Map);
+  Future<Map<String, dynamic>> mintAndExchangeProfileSession(String profileId) async {
+    return establishProfileSession(profileId, writeToStore: false);
+  }
+
+  Future<Map<String, dynamic>> getOwnSession() async => Map<String, dynamic>.from(await _sessionRequest('auth/session/me') as Map);
 
   Future<void> revokeProfileSession() async {
-    try { await _sessionRequest('auth/session/revoke', post:true); }
-    finally { await sessionStore.deleteToken(); }
+    try {
+      await _sessionRequest('auth/session/revoke', post: true);
+    } finally {
+      await sessionStore.deleteToken();
+    }
+  }
+
+  Future<void> revokeSessionToken(String token) async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/auth/session/revoke');
+    final headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Authorization': 'Bearer $token',
+    };
+    final response = await _requestWithoutRedirects('POST', uri, headers: headers);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _handleErrorResponse(response);
+    }
   }
 
   Never _handleErrorResponse(http.Response response) {

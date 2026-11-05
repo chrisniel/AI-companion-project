@@ -303,11 +303,11 @@ void main() {
     expect(chat.getDraft('profile-b-conversation'), isEmpty);
     final mutations = runtime.sessionMutations.toList();
     expect(mutations.map((r) => r.url.path), [
-      '/api/v1/auth/session/revoke',
       '/api/v1/auth/bootstrap/ticket',
       '/api/v1/auth/session/exchange',
+      '/api/v1/auth/session/revoke',
     ]);
-    expect(mutations.first.headers['Authorization'], 'Bearer psk_saved');
+    expect(mutations.last.headers['Authorization'], 'Bearer psk_saved');
   });
 
   for (final rejected in [false, true]) {

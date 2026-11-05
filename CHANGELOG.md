@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added — M2: Local Profile Administration & Persistent Selection (PC-IDENTITY-004, PC-CLIENT-005)
+
+- **Backend Local Profile Creation & Renaming (`PC-IDENTITY-004`)**:
+  - Implemented loopback-only `POST /api/v1/profiles` (201 Created) and `PATCH /api/v1/profiles/{profile_id}` (200 OK) requiring Host Admin authority.
+  - Enforced strict name validation: whitespace trimming, 1..32 character length, control character rejection, and case-insensitive uniqueness check (`409 Conflict`).
+  - Guaranteed in-place renaming without UUID migration or session loss, preserving all owned conversations, messages, memories, tasks, and instances.
+  - Maintained fail-closed rejection (`403 Profile unlock challenge is not available`) on any pre-existing PIN-protected Profiles while deferring PIN creation.
+  - Implemented deterministic catalog ordering: `Profile.is_default.desc(), Profile.created_at.asc(), Profile.id.asc()`.
+- **OpenAPI & Dart Client Parity**:
+  - Added `ProfileMetadata`, `ProfileCreateRequest`, and `ProfileUpdateRequest` DTOs with `ConfigDict(extra="forbid")` parity.
+  - Added `createProfile`, `renameProfile`, and acquire-before-teardown session exchange methods to `CompanionClient`.
+- **Desktop Persistent Profile Selection & Acquire-Before-Teardown Switching (`PC-CLIENT-005`)**:
+  - Implemented non-secret persistence in `%LOCALAPPDATA%\AI Companion\client_settings.json` (`selectedProfileId`, `selectedProfileSessionExpiry`, `profileExplicitlyLocked`).
+  - Implemented acquire-before-teardown switching order (`ticket -> exchange -> revoke`) ensuring the active Profile remains intact if destination authorization fails.
+  - Added explicit "Sign out" support revoking active credentials, setting `profileExplicitlyLocked = true`, and stopping automatic startup restoration.
+  - Implemented `ProfileSelectorHeader` quick-switch popup in Desktop Navigation Rail, Create & Rename Profile dialogs, and `ProfileAccessCard` in Settings.
+
 ### Added — M2: Secure Host Lifecycle & Bounded Model-Loading Reliability (PC-HOST-005)
 
 - **Track A — Authenticated Host Administration & Graceful Runtime Shutdown**:

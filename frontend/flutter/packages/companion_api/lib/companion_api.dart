@@ -11,6 +11,7 @@ export 'dto/health_dto.dart';
 export 'dto/message_dto.dart';
 export 'dto/model_registry_dto.dart';
 export 'dto/model_status_dto.dart';
+export 'dto/profile_dto.dart';
 export 'dto/sse_event_dto.dart';
 export 'dto/system_status_dto.dart';
 export 'transport/sse_parser.dart';

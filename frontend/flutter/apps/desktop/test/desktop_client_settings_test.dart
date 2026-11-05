@@ -59,5 +59,39 @@ void main() {
       await settings.writeChatZoomLevel(2.5);
       expect(await settings.readChatZoomLevel(), equals(1.6));
     });
+
+    test('readSelectedProfileId returns null when absent and persists cleanly', () async {
+      expect(await settings.readSelectedProfileId(), isNull);
+
+      await settings.writeSelectedProfileId('profile-uuid-123');
+      expect(await settings.readSelectedProfileId(), 'profile-uuid-123');
+
+      await settings.writeSelectedProfileId(null);
+      expect(await settings.readSelectedProfileId(), isNull);
+    });
+
+    test('readSelectedProfileSessionExpiry returns null when absent and parses UTC ISO', () async {
+      expect(await settings.readSelectedProfileSessionExpiry(), isNull);
+
+      final expiry = DateTime.utc(2026, 12, 31, 23, 59, 59);
+      await settings.writeSelectedProfileSessionExpiry(expiry);
+      final read = await settings.readSelectedProfileSessionExpiry();
+      expect(read, isNotNull);
+      expect(read!.isUtc, isTrue);
+      expect(read.toIso8601String(), expiry.toIso8601String());
+
+      await settings.writeSelectedProfileSessionExpiry(null);
+      expect(await settings.readSelectedProfileSessionExpiry(), isNull);
+    });
+
+    test('readProfileExplicitlyLocked returns false by default and persists toggle', () async {
+      expect(await settings.readProfileExplicitlyLocked(), isFalse);
+
+      await settings.writeProfileExplicitlyLocked(true);
+      expect(await settings.readProfileExplicitlyLocked(), isTrue);
+
+      await settings.writeProfileExplicitlyLocked(false);
+      expect(await settings.readProfileExplicitlyLocked(), isFalse);
+    });
   });
 }

@@ -540,6 +540,43 @@ class _ChatScreenState extends State<ChatScreen> {
                       color: ext?.textSecondary,
                     ),
                   ),
+                  if (chatCtrl.authenticatedProfileName != null)
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 220),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.04),
+                          borderRadius: CompanionRadius.borderSm,
+                          border: Border.all(
+                            color: ext?.borderSubtle ?? Colors.transparent,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.person_outline_rounded,
+                              size: 12,
+                              color: ext?.textSecondary,
+                            ),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                'Profile: ${chatCtrl.authenticatedProfileName}',
+                                style: CompanionTypography.caption.copyWith(
+                                  color: ext?.textSecondary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 240),
                     child: Container(

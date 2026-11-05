@@ -110,4 +110,90 @@ void main() {
     await client.establishProfileSession('p1');
     expect(await store.readToken(), 'psk_new');
   });
+
+  test('createProfile sends POST to /profiles with Host Admin authority', () async {
+    final client = CompanionClient(
+      hostAdminStore: InMemoryCredentialStore('admin_secret'),
+      httpClient: MockClient((r) async {
+        expect(r.method, 'POST');
+        expect(r.url.path, '/api/v1/profiles');
+        expect(r.headers['X-Host-Admin-Secret'], 'admin_secret');
+        expect(jsonDecode(r.body), {'name': 'Work'});
+        return http.Response(
+          jsonEncode({
+            'id': 'p2',
+            'name': 'Work',
+            'is_default': false,
+            'status': 'active',
+            'pin_protected': false,
+          }),
+          201,
+        );
+      }),
+    );
+    final created = await client.createProfile(const ProfileCreateRequest(name: 'Work'));
+    expect(created.id, 'p2');
+    expect(created.name, 'Work');
+    expect(created.isDefault, isFalse);
+    expect(created.status, 'active');
+    expect(created.pinProtected, isFalse);
+  });
+
+  test('renameProfile sends PATCH to /profiles/{id} with Host Admin authority', () async {
+    final client = CompanionClient(
+      hostAdminStore: InMemoryCredentialStore('admin_secret'),
+      httpClient: MockClient((r) async {
+        expect(r.method, 'PATCH');
+        expect(r.url.path, '/api/v1/profiles/p1');
+        expect(r.headers['X-Host-Admin-Secret'], 'admin_secret');
+        expect(jsonDecode(r.body), {'name': 'Personal'});
+        return http.Response(
+          jsonEncode({
+            'id': 'p1',
+            'name': 'Personal',
+            'is_default': true,
+            'status': 'active',
+            'pin_protected': false,
+          }),
+          200,
+        );
+      }),
+    );
+    final updated = await client.renameProfile('p1', const ProfileUpdateRequest(name: 'Personal'));
+    expect(updated.id, 'p1');
+    expect(updated.name, 'Personal');
+    expect(updated.isDefault, isTrue);
+  });
+
+  test('mintAndExchangeProfileSession exchanges session without writing to store', () async {
+    final store = InMemoryCredentialStore('psk_old');
+    final client = CompanionClient(
+      hostAdminStore: InMemoryCredentialStore('admin_secret'),
+      sessionStore: store,
+      httpClient: MockClient((r) async {
+        if (r.url.path.endsWith('/ticket')) {
+          return http.Response('{"ticket":"ptk_mint"}', 200);
+        }
+        return http.Response(
+          '{"token":"psk_minted","profile_id":"p2","expires_at":"2099-01-01T00:00:00Z","client_type":"desktop"}',
+          200,
+        );
+      }),
+    );
+    final session = await client.mintAndExchangeProfileSession('p2');
+    expect(session['token'], 'psk_minted');
+    expect(await store.readToken(), 'psk_old');
+  });
+
+  test('revokeSessionToken sends POST to /auth/session/revoke with specific token', () async {
+    final client = CompanionClient(
+      httpClient: MockClient((r) async {
+        expect(r.method, 'POST');
+        expect(r.url.path, '/api/v1/auth/session/revoke');
+        expect(r.headers['Authorization'], 'Bearer psk_custom');
+        return http.Response('', 204);
+      }),
+    );
+    await client.revokeSessionToken('psk_custom');
+  });
 }
