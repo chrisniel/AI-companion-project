@@ -70,8 +70,22 @@ def initialize_database_runtime(
 
 
 async def dispose_database_runtime() -> None:
-    """Dispose the active database engine and reset session factory."""
+    """Dispose the active database engine and reset session factory.
+
+    Guarded: never disposes engine while active database work remains.
+    """
     global _engine, _session_factory
+    try:
+        from app.core.runtime_lifecycle import runtime_lifecycle
+        if runtime_lifecycle.has_active_database_work:
+            import logging
+            logging.getLogger("app.db.session").warning(
+                "dispose_database_runtime called while active database work remains; skipping engine disposal."
+            )
+            return
+    except ImportError:
+        pass
+
     if _engine is not None:
         await _engine.dispose()
         _engine = None

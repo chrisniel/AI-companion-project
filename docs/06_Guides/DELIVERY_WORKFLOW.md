@@ -65,7 +65,16 @@ Every plan must contain:
 #### Phase 1 Gate Rules
 - **Substantial / Sensitive Work (Levels B & C):** Requires explicit **Human Plan Approval** before implementation begins. Unapproved plans must not be implemented.
 - **Routine Low-Risk Tasks (Level A):** May proceed under an explicitly authorized prompt scope without a separate formal plan ceremony.
-- **Autonomous Continuation:** Once the plan gate is satisfied, the Implementing Agent is authorized to continue automatically through subsequent phases within the approved scope. The Human Owner does not need to approve each implementation substep.
+- **Phase 1 Planning Git Authorization:** When the Human Owner authorizes Phase 1 planning for a named delivery, the Implementing Agent may—without requesting repetitive command-by-command Git approval:
+  1. Inspect the repository and verify a clean integration baseline.
+  2. Create and switch to one dedicated feature branch from that baseline.
+  3. Create or edit the feature implementation plan using [`docs/02_Planning/02_Templates/implementation-plan-template.md`](../02_Planning/02_Templates/implementation-plan-template.md).
+  4. Create or update the branch-specific planning tracker (`docs/01_Tracking/active/task-[branch-slug].md`) when appropriate.
+  5. Stage only authorized planning files (and any explicitly authorized governance or documentation files in that scope).
+  6. Commit those files using Conventional Commits and push the planning commit to the remote feature branch.
+  7. Verify the remote branch HEAD SHA and submit the published plan for Human Owner and Independent Reviewer examination.
+- **Phase 1 Approval Boundary:** A published planning commit is a review candidate, not implementation approval. Phase 1 planning Git authorization does **not** authorize implementing production features, modifying unrelated code/tests/migrations, bypassing the Level B/C Plan Approval Gate, opening a Pull Request during Phase 1, merging branches, force-pushing or rewriting history, writing to `develop`/`master`, or self-approving the plan.
+- **Autonomous Continuation:** Once the plan gate is satisfied, the Implementing Agent is authorized to continue automatically through subsequent phases within the approved scope on the **same** dedicated feature branch. The Human Owner does not need to approve each implementation substep.
 
 ---
 
@@ -173,14 +182,14 @@ Review effort scales proportionally with change risk. The project adopts four po
 
 ### 4.1 Scope-Based Git Permissions
 Git authorization belongs to the **human-approved delivery scope**, not to an AI vendor or model. For a named delivery, the Human Owner may grant the Implementing Agent permission to:
-- Create and switch to the dedicated task branch from a verified clean baseline.
-- Stage authorized changes.
+- Create and switch to the dedicated task branch from a verified clean baseline (including during Phase 1 planning publication).
+- Stage authorized changes (limited in Phase 1 to the implementation plan, optional branch tracker, and any explicitly authorized governance/documentation files; expanded in Phases 2–3 after required plan approval to the approved implementation and closure scope).
 - Create Conventional Commits.
 - Push commits to the authorized feature branch.
-- Create or update one draft PR against `develop`.
+- Create or update one draft PR against `develop` in Phase 3 after implementation and automated verification pass (never open a PR in Phase 1 merely to publish a plan).
 - Perform normal in-scope defect fixes without requesting repeated command-by-command approval.
 
-Any authorized AI agent may perform these actions when its current tools and connection permissions support them. Never assume the presence of a specific connector, IDE, command-line environment, or automation platform.
+Any authorized AI agent may perform these actions when its current tools and connection permissions support them. Never assume the presence of a specific connector, IDE, command-line environment, or automation platform. One coherent feature branch owns the entire delivery lifecycle from Phase 1 planning publication through Phase 4 pre-merge review.
 
 ### 4.2 Prohibited Git Operations
 The following remain strictly prohibited for AI agents without separate explicit authorization:

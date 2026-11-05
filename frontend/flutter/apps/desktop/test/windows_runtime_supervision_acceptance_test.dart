@@ -38,6 +38,23 @@ class AcceptanceProcessSupervisor extends WindowsRuntimeProcessSupervisor {
   );
 }
 
+class AcceptanceAdminSecretStore implements CredentialStore {
+  final File file;
+  AcceptanceAdminSecretStore(this.file);
+  @override
+  Future<String?> readToken() async {
+    if (await file.exists()) {
+      final content = (await file.readAsString()).trim();
+      if (content.isNotEmpty) return content;
+    }
+    return null;
+  }
+  @override
+  Future<void> writeToken(String token) async {}
+  @override
+  Future<void> deleteToken() async {}
+}
+
 class AcceptanceTrackingSupervisor extends AcceptanceProcessSupervisor {
   final List<AcceptanceSpawnRecord> spawnedRecords;
 
@@ -613,6 +630,413 @@ void main() {
       await helper.exitCode;
       await tempDir.delete(recursive: true);
     });
+
+    test('Scenario G: Isolated Windows Shutdown Acceptance (PC-HOST-005)', () async {
+      final socket = await ServerSocket.bind('127.0.0.1', 0);
+      final testPortG = socket.port;
+      await socket.close();
+
+      final tempDirG = await Directory.systemTemp.createTemp('isolated_shutdown_g_');
+      final dataDirG = Directory('${tempDirG.path}/Data');
+      await dataDirG.create(recursive: true);
+      final envFileG = File('${tempDirG.path}/runtime.env');
+      await envFileG.writeAsString('COMPANION_API_KEY=$testToken\nPORT=$testPortG\n', flush: true);
+      final lockFileG = File('${tempDirG.path}/runtime.lock');
+      final logFileG = File('${tempDirG.path}/companion.log');
+
+      final testEnvG = {
+        'COMPANION_API_KEY': testToken,
+        'COMPANION_DATA_ROOT': dataDirG.path,
+        'COMPANION_ENV_FILE': envFileG.path,
+        'COMPANION_LOCK_FILE': lockFileG.path,
+        'COMPANION_LOG_FILE': logFileG.path,
+        'COMPANION_CLIENT_SETTINGS_FILE': settingsFile.path,
+        'COMPANION_RUNTIME_EXE': runtimeExecutable,
+        'COMPANION_RUNTIME_DIR': runtimeWorkingDir,
+        'LOCALAPPDATA': tempRoot.path,
+        'PYTHONUNBUFFERED': '1',
+      };
+
+      final supervisorG = AcceptanceTrackingSupervisor(spawnedRecords: trackedSpawnRecords);
+      final adminSecretFile = File('${tempRoot.path}/AICompanion/secrets/desktop_admin.secret');
+
+      final coordinatorG = DesktopRuntimeCoordinator(
+        baseUrl: 'http://127.0.0.1:$testPortG',
+        supervisor: supervisorG,
+        credentialStore: InMemoryCredentialStore(testToken),
+        hostAdminStore: AcceptanceAdminSecretStore(adminSecretFile),
+        customEnvironment: testEnvG,
+        customExecutablePath: runtimeExecutable,
+        customWorkingDirectory: runtimeWorkingDir,
+        customLockFile: lockFileG,
+        customLogFilePath: logFileG.path,
+      );
+
+      final state = await coordinatorG.ensureRuntimeReady(timeout: const Duration(seconds: 30));
+      expect(state.status, equals(RuntimeStatus.readyAndAuthenticated));
+      expect(state.pid, isNotNull);
+
+      final outcome = await coordinatorG.shutdownLocalRuntime(timeout: const Duration(seconds: 25));
+      expect(outcome, equals(ShutdownOutcome.gracefulSuccess));
+      expect(coordinatorG.currentState.status, equals(RuntimeStatus.stopped));
+      expect(await lockFileG.exists(), isFalse);
+
+      final isStillAlive = await supervisorG.isProcessActiveAndMatching(
+        state.pid!,
+        expectedExecutable: 'python.exe',
+      );
+      expect(isStillAlive, isFalse);
+
+      coordinatorG.dispose();
+      await tempDirG.delete(recursive: true);
+    }, timeout: const Timeout(Duration(seconds: 60)));
+
+    test('Scenario H: Child Process Provenance: Foreign/unrelated child process is NOT killed during handle-bound fallback', () async {
+      final foreignProcess = await Process.start(
+        'powershell',
+        ['-NoProfile', '-NonInteractive', '-Command', 'Start-Sleep -Seconds 30'],
+        mode: ProcessStartMode.normal,
+      );
+      final foreignPid = foreignProcess.pid;
+
+      try {
+        final supervisor = WindowsRuntimeProcessSupervisor();
+        final dummyDescriptor = RuntimeLockfileData(
+          schemaVersion: 1,
+          instanceId: 'dummy-h',
+          pid: 9999999,
+          port: 9999,
+          startedAt: DateTime.now().toUtc(),
+          executablePath: r'C:\Python\pythonw.exe',
+        );
+
+        final result = await supervisor.terminateVerifiedRuntimeProcess(
+          expectedDescriptor: dummyDescriptor,
+          managedLlmPid: foreignPid,
+          managedByCore: true,
+        );
+
+        expect(result.childTerminated, isFalse);
+        final isForeignAlive = await supervisor.isProcessActiveAndMatching(
+          foreignPid,
+          expectedExecutable: 'powershell.exe',
+        );
+        expect(isForeignAlive, isTrue);
+      } finally {
+        foreignProcess.kill();
+        await foreignProcess.exitCode;
+      }
+    });
+
+    test('Scenario I: Partial Termination Reporting: Parent terminated while owned child remains active reports partial failure', () async {
+      final parentProcess = await Process.start(
+        runtimeExecutable,
+        ['-m', 'app.runtime_server', '--app', 'app.main:app', '--port', '49152'],
+        workingDirectory: runtimeWorkingDir,
+        environment: testEnv,
+        mode: ProcessStartMode.normal,
+      );
+      final parentPid = parentProcess.pid;
+
+      final fakeChildProcess = await Process.start(
+        'powershell',
+        ['-NoProfile', '-NonInteractive', '-Command', 'Start-Sleep -Seconds 30'],
+        mode: ProcessStartMode.normal,
+      );
+      final fakeChildPid = fakeChildProcess.pid;
+
+      try {
+        final supervisor = WindowsRuntimeProcessSupervisor();
+        final descriptor = RuntimeLockfileData(
+          schemaVersion: 1,
+          instanceId: 'scenario-i',
+          pid: parentPid,
+          port: 49152,
+          startedAt: DateTime.now().toUtc(),
+          executablePath: runtimeExecutable,
+        );
+
+        final result = await supervisor.terminateVerifiedRuntimeProcess(
+          expectedDescriptor: descriptor,
+          managedLlmPid: fakeChildPid,
+          managedByCore: true,
+        );
+
+        expect(result.status, equals(TerminationResultStatus.partialTermination));
+        expect(result.childTerminated, isFalse);
+        expect(result.diagnostic, contains('could not be verified or terminated'));
+
+        final isParentAlive = await supervisor.isProcessActiveAndMatching(
+          parentPid,
+          expectedExecutable: 'python.exe',
+        );
+        expect(isParentAlive, isFalse);
+
+        final isChildAlive = await supervisor.isProcessActiveAndMatching(
+          fakeChildPid,
+          expectedExecutable: 'powershell.exe',
+        );
+        expect(isChildAlive, isTrue);
+      } finally {
+        parentProcess.kill();
+        fakeChildProcess.kill();
+        await parentProcess.exitCode;
+        await fakeChildProcess.exitCode;
+      }
+    });
+
+    test('Scenario J: Confirmed Exit Verification: Supervisor verifies actual process termination via WaitForExit and HasExited (Directive 2)', () async {
+      final parentProcess = await Process.start(
+        runtimeExecutable,
+        ['-m', 'app.runtime_server', '--app', 'app.main:app', '--port', '49153'],
+        workingDirectory: runtimeWorkingDir,
+        environment: testEnv,
+        mode: ProcessStartMode.normal,
+      );
+      final parentPid = parentProcess.pid;
+
+      try {
+        final supervisor = WindowsRuntimeProcessSupervisor();
+        final descriptor = RuntimeLockfileData(
+          schemaVersion: 1,
+          instanceId: 'scenario-j',
+          pid: parentPid,
+          port: 49153,
+          startedAt: DateTime.now().toUtc(),
+          executablePath: runtimeExecutable,
+        );
+
+        final result = await supervisor.terminateVerifiedRuntimeProcess(
+          expectedDescriptor: descriptor,
+        );
+
+        // ignore: avoid_print
+        print('SCENARIO J RESULT: ${result.status} DIAGNOSTIC: ${result.diagnostic}');
+        expect(result.status, equals(TerminationResultStatus.terminated));
+        expect(result.childTerminated, isFalse);
+
+        final isParentAlive = await supervisor.isProcessActiveAndMatching(
+          parentPid,
+          expectedExecutable: 'python.exe',
+        );
+        expect(isParentAlive, isFalse);
+      } finally {
+        parentProcess.kill();
+        await parentProcess.exitCode;
+      }
+    });
+
+    test('Scenario K: Positive Child Provenance & Automatic Discovery: Unknown child identity discovers genuinely owned disposable child, terminates both, and reports success (Directive 3)', () async {
+      final disposableLlamaExe = File('${tempRoot.path}\\llama-server.exe');
+      await File(r'C:\Windows\System32\cmd.exe').copy(disposableLlamaExe.path);
+      final directPythonExe = _resolveDirectPythonExecutable(runtimeExecutable);
+
+      const pySnippet = 'import subprocess, time, sys; '
+          'p = subprocess.Popen([sys.argv[1], "/c", "ping 127.0.0.1 -n 30 > nul & rem --port 8080 --model dummy.gguf"]); '
+          'time.sleep(30); '
+          '# app.runtime_server app.main:app --port 49154';
+
+      final parentProcess = await Process.start(
+        directPythonExe,
+        ['-c', pySnippet, disposableLlamaExe.path],
+        workingDirectory: runtimeWorkingDir,
+        environment: testEnv,
+        mode: ProcessStartMode.normal,
+      );
+      final parentPid = parentProcess.pid;
+      await Future<void>.delayed(const Duration(milliseconds: 1500));
+
+      try {
+        final supervisor = WindowsRuntimeProcessSupervisor();
+        final descriptor = RuntimeLockfileData(
+          schemaVersion: 1,
+          instanceId: 'scenario-k',
+          pid: parentPid,
+          port: 49154,
+          startedAt: DateTime.now().toUtc(),
+          executablePath: directPythonExe,
+        );
+
+        // Emergency termination with managedByCore: true but without passing child PID (managedLlmPid = 0)
+        final result = await supervisor.terminateVerifiedRuntimeProcess(
+          expectedDescriptor: descriptor,
+          managedByCore: true,
+        );
+
+        // ignore: avoid_print
+        print('SCENARIO K RESULT: ${result.status} DIAGNOSTIC: ${result.diagnostic}');
+        expect(result.status, equals(TerminationResultStatus.terminated));
+        expect(result.childTerminated, isTrue);
+
+        final isParentAlive = await supervisor.isProcessActiveAndMatching(
+          parentPid,
+          expectedExecutable: 'python.exe',
+        );
+        expect(isParentAlive, isFalse);
+      } finally {
+        parentProcess.kill();
+        await parentProcess.exitCode;
+        try {
+          if (await disposableLlamaExe.exists()) {
+            await disposableLlamaExe.delete();
+          }
+        } catch (_) {}
+      }
+    });
+
+    test('Scenario L: Negative Child Provenance: Discovered foreign child of parent is preserved and reports partialTermination (Directive 3)', () async {
+      final directPythonExe = _resolveDirectPythonExecutable(runtimeExecutable);
+      const pySnippet = 'import subprocess, time, sys; '
+          'p = subprocess.Popen(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "Start-Sleep -Seconds 30"]); '
+          'time.sleep(30); '
+          '# app.runtime_server app.main:app --port 49155';
+
+      final parentProcess = await Process.start(
+        directPythonExe,
+        ['-c', pySnippet],
+        workingDirectory: runtimeWorkingDir,
+        environment: testEnv,
+        mode: ProcessStartMode.normal,
+      );
+      final parentPid = parentProcess.pid;
+      await Future<void>.delayed(const Duration(milliseconds: 1500));
+
+      try {
+        final supervisor = WindowsRuntimeProcessSupervisor();
+        final descriptor = RuntimeLockfileData(
+          schemaVersion: 1,
+          instanceId: 'scenario-l',
+          pid: parentPid,
+          port: 49155,
+          startedAt: DateTime.now().toUtc(),
+          executablePath: directPythonExe,
+        );
+
+        // Emergency termination with managedByCore: true but without passing child PID (managedLlmPid = 0)
+        final result = await supervisor.terminateVerifiedRuntimeProcess(
+          expectedDescriptor: descriptor,
+          managedByCore: true,
+        );
+
+        expect(result.status, equals(TerminationResultStatus.partialTermination));
+        expect(result.childTerminated, isFalse);
+        expect(result.diagnostic, contains('is preserved untouched'));
+
+        final isParentAlive = await supervisor.isProcessActiveAndMatching(
+          parentPid,
+          expectedExecutable: 'python.exe',
+        );
+        expect(isParentAlive, isFalse);
+      } finally {
+        parentProcess.kill();
+        await parentProcess.exitCode;
+      }
+    });
+
+    test('Scenario M: Unverified Child Python Process: Discovered child Python process is NOT killed and reports partialTermination (Correction 1)', () async {
+      final directPythonExe = _resolveDirectPythonExecutable(runtimeExecutable);
+      const pySnippet = 'import subprocess, time, sys; '
+          'p = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"]); '
+          'time.sleep(30); '
+          '# app.runtime_server app.main:app --port 49156';
+
+      final parentProcess = await Process.start(
+        directPythonExe,
+        ['-c', pySnippet],
+        workingDirectory: runtimeWorkingDir,
+        environment: testEnv,
+        mode: ProcessStartMode.normal,
+      );
+      final parentPid = parentProcess.pid;
+      await Future<void>.delayed(const Duration(milliseconds: 1500));
+
+      try {
+        final supervisor = WindowsRuntimeProcessSupervisor();
+        final descriptor = RuntimeLockfileData(
+          schemaVersion: 1,
+          instanceId: 'scenario-m',
+          pid: parentPid,
+          port: 49156,
+          startedAt: DateTime.now().toUtc(),
+          executablePath: directPythonExe,
+        );
+
+        // Emergency termination with managedByCore: true
+        final result = await supervisor.terminateVerifiedRuntimeProcess(
+          expectedDescriptor: descriptor,
+          managedByCore: true,
+        );
+
+        expect(result.status, equals(TerminationResultStatus.partialTermination));
+        expect(result.childTerminated, isFalse);
+        expect(result.diagnostic, contains('is preserved untouched'));
+
+        final isParentAlive = await supervisor.isProcessActiveAndMatching(
+          parentPid,
+          expectedExecutable: 'python.exe',
+        );
+        expect(isParentAlive, isFalse);
+      } finally {
+        parentProcess.kill();
+        await parentProcess.exitCode;
+      }
+    });
+
+    test('Scenario N: ManagedByCore False Child Preservation: Unknown child discovery does not terminate processes when managedByCore is false (Correction 1)', () async {
+      final disposableLlamaExe = File('${tempRoot.path}\\llama-server-n.exe');
+      await File(r'C:\Windows\System32\cmd.exe').copy(disposableLlamaExe.path);
+      final directPythonExe = _resolveDirectPythonExecutable(runtimeExecutable);
+
+      const pySnippet = 'import subprocess, time, sys; '
+          'p = subprocess.Popen([sys.argv[1], "/c", "ping 127.0.0.1 -n 30 > nul & rem --port 8080 --model dummy.gguf"]); '
+          'time.sleep(30); '
+          '# app.runtime_server app.main:app --port 49157';
+
+      final parentProcess = await Process.start(
+        directPythonExe,
+        ['-c', pySnippet, disposableLlamaExe.path],
+        workingDirectory: runtimeWorkingDir,
+        environment: testEnv,
+        mode: ProcessStartMode.normal,
+      );
+      final parentPid = parentProcess.pid;
+      await Future<void>.delayed(const Duration(milliseconds: 1500));
+
+      try {
+        final supervisor = WindowsRuntimeProcessSupervisor();
+        final descriptor = RuntimeLockfileData(
+          schemaVersion: 1,
+          instanceId: 'scenario-n',
+          pid: parentPid,
+          port: 49157,
+          startedAt: DateTime.now().toUtc(),
+          executablePath: directPythonExe,
+        );
+
+        // Emergency termination with managedByCore: false (default)
+        final result = await supervisor.terminateVerifiedRuntimeProcess(
+          expectedDescriptor: descriptor,
+          managedByCore: false,
+        );
+
+        expect(result.status, equals(TerminationResultStatus.terminated));
+        expect(result.childTerminated, isFalse);
+
+        final isParentAlive = await supervisor.isProcessActiveAndMatching(
+          parentPid,
+          expectedExecutable: 'python.exe',
+        );
+        expect(isParentAlive, isFalse);
+      } finally {
+        parentProcess.kill();
+        await parentProcess.exitCode;
+        try {
+          if (await disposableLlamaExe.exists()) {
+            await disposableLlamaExe.delete();
+          }
+        } catch (_) {}
+      }
+    });
   });
 }
 
@@ -643,4 +1067,25 @@ String _resolveLockHelperPath() {
     dir = parent;
   }
   throw StateError('Could not resolve lock_holder_helper.dart path from ${Directory.current.path}');
+}
+
+String _resolveDirectPythonExecutable(String runtimeExe) {
+  if (Platform.isWindows) {
+    final venvRoot = File(runtimeExe).parent.parent;
+    final cfgFile = File('${venvRoot.path}${Platform.pathSeparator}pyvenv.cfg');
+    if (cfgFile.existsSync()) {
+      for (final line in cfgFile.readAsLinesSync()) {
+        if (line.trim().startsWith('executable')) {
+          final parts = line.split('=');
+          if (parts.length >= 2) {
+            final baseExe = parts.sublist(1).join('=').trim();
+            if (File(baseExe).existsSync()) {
+              return baseExe;
+            }
+          }
+        }
+      }
+    }
+  }
+  return runtimeExe;
 }

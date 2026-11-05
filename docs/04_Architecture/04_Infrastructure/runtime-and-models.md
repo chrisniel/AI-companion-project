@@ -171,9 +171,16 @@ Verified in `backend/app/services/llm/`:
   - `async get_status() -> ModelStatusResponse`
   - `async generate(messages: List[ChatMessage], temperature: float = 0.7, max_tokens: int = 1024, **kwargs) -> str`
   - `async generate_stream(messages: List[ChatMessage], temperature: float = 0.7, max_tokens: int = 1024, **kwargs) -> AsyncGenerator[str, None]`
-  - `async shutdown() -> None`
+  - `def signal_shutdown_immediately() -> None`
+  - `async shutdown(drain_timeout: Optional[float] = None, lock_timeout: float = 2.0) -> ProviderShutdownResult`
 - **Concrete Providers:**
   - `LlamaCppProvider` (`llama_cpp.py`): Connects to a local router or launches standalone `llama-server.exe`, tracks Core-managed process state, loads/unloads models via router API, applies profiles, and manages idle sleep/unload lifecycles.
+    - *Strict Lock Ownership & Cancellation-Aware Loading (`PC-HOST-005`):* `load_model()` checks `_shutdown_signaled` and uses `_sleep_or_abort()` to abort cooperatively during polling; `shutdown()` acquires `self._lock` with bounded timeout (`2.0s`), returning a structured `ProviderShutdownResult` and strictly avoiding unlocked mutations.
+    - *Inference Draining & Crash Isolation:* `shutdown()` drains active streams up to `drain_timeout` (`4.0s` default). If generation remains active after timeout, Route B `self._llm` and router state are safely retained to prevent native crashes.
+    - *Core-Managed vs. External Router Separation:* Core-managed `llama-server.exe` processes are terminated via `_stop_managed_router_locked()`; externally owned routers have model weights evicted via router API without terminating the foreign server process.
+    - *Lock-Free Snapshot Status (`M5`):* `get_status()` returns a lock-free snapshot during `SERVER_STARTING`, `MODEL_LOADING`, and `MODEL_UNLOADING` without blocking on `self._lock` or overwriting active model state.
+    - *Model ID Normalization (`M6`):* `loaded_model_id` is normalized through `find_model_registry_entry`, aligning primary file paths with canonical manifest IDs.
+    - *4-State Truthful Status Reconciliation (`PC-CLIENT-010` / Track B):* `CompanionClient` enforces `90s` operation timeouts on model load; transitional states enter `STILL_LOADING` and reconcile via `GET /api/v1/models` without false failures, exposing a manual `Refresh Model Status` button; `DesktopChatController` executes immediate and background status polling until ready.
     - *Windowless Subprocess Execution:* Launches `llama-server.exe` with `creationflags=subprocess.CREATE_NO_WINDOW` on Windows, preserving direct process invocation, exact PID ownership, single-resident model policy, model load/unload lifecycle, and crash isolation without popping up an interactive console window.
     - *Request-Scoped Finish Reasons:* Preserves upstream chunk completion reasons (`"stop"`, `"length"`) via `GenerationStream` metadata, preventing concurrency races across interleaved turns.
     - *Truthful Model Unload (`POST /api/v1/models/unload`):* Returns `409 Conflict` if generation is active, `500 Internal Server Error` if unload fails or the model remains loaded in memory; verifies that `status.model_loaded == False` before returning success; preserves saved model selection in `host_config.json`.

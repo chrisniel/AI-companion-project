@@ -42,6 +42,7 @@ CLIENT_PATH = REPO_ROOT / "frontend" / "flutter" / "packages" / "companion_api" 
 M1_COVERED_ROUTES: Set[Tuple[str, str]] = {
     ("GET", "/api/v1/health"),
     ("GET", "/api/v1/system/status"),
+    ("POST", "/api/v1/system/shutdown"),
     ("POST", "/api/v1/auth/verify"),
     ("GET", "/api/v1/models"),
     ("POST", "/api/v1/conversations"),
@@ -58,6 +59,7 @@ M1_COVERED_ROUTES: Set[Tuple[str, str]] = {
 M1_ROUTE_DART_METHODS: Dict[Tuple[str, str], Tuple[str, str]] = {
     ("GET", "/api/v1/health"): ("getHealth", "/api/v1/health"),
     ("GET", "/api/v1/system/status"): ("getSystemStatus", "/api/v1/system/status"),
+    ("POST", "/api/v1/system/shutdown"): ("shutdownSystem", "/api/v1/system/shutdown"),
     ("POST", "/api/v1/auth/verify"): ("verifyAuth", "/api/v1/auth/verify"),
     ("GET", "/api/v1/models"): ("getModelStatus", "/api/v1/models"),
     ("POST", "/api/v1/conversations"): ("createConversation", "/api/v1/conversations"),
@@ -128,6 +130,8 @@ SCHEMA_TO_DART_CLASS: Dict[str, Tuple[str, str]] = {
     "HealthResponse": ("health_dto.dart", "HealthResponse"),
     "AuthVerifyResponse": ("auth_dto.dart", "AuthVerifyResponse"),
     "SystemStatusResponse": ("system_status_dto.dart", "SystemStatusResponse"),
+    "SystemShutdownResponse": ("system_status_dto.dart", "SystemShutdownResponse"),
+    "SystemShutdownRequest": ("system_status_dto.dart", "SystemShutdownRequest"),
     "ModelStatusResponse": ("model_status_dto.dart", "ModelStatusResponse"),
     "ConversationCreate": ("conversation_dto.dart", "ConversationCreate"),
     "ConversationUpdate": ("conversation_dto.dart", "ConversationUpdate"),

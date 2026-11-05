@@ -212,6 +212,62 @@ class DesktopChatController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Timer? _modelLoadingPollTimer;
+
+  /// Updates the model status and initiates background polling if model is loading.
+  void updateModelStatus(ModelStatusResponse status) {
+    _modelStatus = status;
+    if (status.runtimeState == 'MODEL_SELECTION_REQUIRED') {
+      _activeModelName = null;
+    } else {
+      _activeModelName = status.activeModel ?? status.selectedModel;
+    }
+    notifyListeners();
+
+    if (status.runtimeState == 'MODEL_LOADING' || status.runtimeState == 'SERVER_STARTING') {
+      _startModelLoadingPollTimer();
+    } else {
+      _stopModelLoadingPollTimer();
+    }
+  }
+
+  void _stopModelLoadingPollTimer() {
+    _modelLoadingPollTimer?.cancel();
+    _modelLoadingPollTimer = null;
+  }
+
+  void _startModelLoadingPollTimer() {
+    _stopModelLoadingPollTimer();
+    _modelLoadingPollTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
+      if (_isDisposed) {
+        timer.cancel();
+        return;
+      }
+      try {
+        final freshStatus = await _client.getModelStatus();
+        if (_isDisposed) {
+          timer.cancel();
+          return;
+        }
+        _modelStatus = freshStatus;
+        if (freshStatus.runtimeState != 'MODEL_SELECTION_REQUIRED') {
+          _activeModelName = freshStatus.activeModel ?? freshStatus.selectedModel;
+        }
+        notifyListeners();
+
+        if (freshStatus.runtimeState == 'MODEL_READY' ||
+            freshStatus.runtimeState == 'MODEL_ERROR' ||
+            freshStatus.runtimeState == 'SERVER_ERROR' ||
+            freshStatus.runtimeState == 'LOAD_FAILED') {
+          timer.cancel();
+          _modelLoadingPollTimer = null;
+        }
+      } catch (_) {
+        // Continue polling or retry
+      }
+    });
+  }
+
   /// Caches an authoritative instance definition in memory.
   void cacheCharacterInstance(CharacterInstanceOut instance) {
     _characterCache[instance.id] = instance;
@@ -1250,6 +1306,7 @@ class DesktopChatController extends ChangeNotifier {
   @override
   void dispose() {
     _sessionExpiryTimer?.cancel();
+    _modelLoadingPollTimer?.cancel();
     _isDisposed = true;
     _cancelProfileSubscriptions();
     super.dispose();

@@ -559,5 +559,61 @@ void main() {
       expect(status.runtimeState, 'MODEL_UNLOADED');
       expect(status.modelLoaded, isFalse);
     });
+    test('shutdownSystem sends POST to /system/shutdown with Host Admin secret', () async {
+      final mock = MockClient((request) async {
+        expect(request.url.path, '/api/v1/system/shutdown');
+        expect(request.method, 'POST');
+        expect(request.headers['x-host-admin-secret'], 'admin-test');
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['reason'], 'user_exit_companion');
+        expect(body['drain_timeout_seconds'], 6.0);
+        return http.Response(
+          jsonEncode({
+            'status': 'shutting_down',
+            'pid': 1234,
+            'managed_llm_pid': 5678,
+            'managed_by_core': true,
+            'already_shutting_down': false,
+            'shutdown_phase': 'closing_admission',
+            'message': 'Cooperative shutdown initiated.',
+          }),
+          202,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      final client = CompanionClient(httpClient: mock, hostAdminStore: InMemoryCredentialStore('admin-test'));
+      final response = await client.shutdownSystem(reason: 'user_exit_companion', drainTimeoutSeconds: 6.0);
+      expect(response.status, 'shutting_down');
+      expect(response.pid, 1234);
+      expect(response.managedLlmPid, 5678);
+      expect(response.managedByCore, isTrue);
+      expect(response.alreadyShuttingDown, isFalse);
+      expect(response.shutdownPhase, 'closing_admission');
+    });
+
+    test('model load operations support 90s timeout', () async {
+      final mock = MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'provider': 'llama_cpp',
+            'runtime_state': 'MODEL_READY',
+            'selected_model': 'qwen3-vl-2b-instruct',
+            'active_model': 'qwen3-vl-2b-instruct',
+            'model_loaded': true,
+            'model_awake': true,
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      final client = CompanionClient(httpClient: mock, hostAdminStore: InMemoryCredentialStore('admin-test'));
+      final status = await client.selectModel('qwen3-vl-2b-instruct', loadImmediately: true);
+      expect(status.runtimeState, 'MODEL_READY');
+
+      final loadStatus = await client.loadModel();
+      expect(loadStatus.runtimeState, 'MODEL_READY');
+    });
   });
 }

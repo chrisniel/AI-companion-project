@@ -95,16 +95,33 @@ class CompanionClient {
   }
 
   /// Administrator authority never follows redirects, even to another loopback port.
-  Future<http.Response> _adminRequest(String method, Uri uri, {String? body}) async {
-    return _requestWithoutRedirects(method,uri,headers:await _buildHeaders(admin:true),body:body);
+  Future<http.Response> _adminRequest(
+    String method,
+    Uri uri, {
+    String? body,
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
+    return _requestWithoutRedirects(
+      method,
+      uri,
+      headers: await _buildHeaders(admin: true),
+      body: body,
+      timeout: timeout,
+    );
   }
 
-  Future<http.Response> _requestWithoutRedirects(String method, Uri uri, {required Map<String,String> headers, String? body}) async {
+  Future<http.Response> _requestWithoutRedirects(
+    String method,
+    Uri uri, {
+    required Map<String, String> headers,
+    String? body,
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
     final request = http.Request(method, uri)..followRedirects = false;
     request.headers.addAll(headers);
     if (body != null) request.body = body;
-    final response = await _httpClient.send(request).timeout(const Duration(seconds:5));
-    return http.Response.fromStream(response).timeout(const Duration(seconds:5));
+    final response = await _httpClient.send(request).timeout(timeout);
+    return http.Response.fromStream(response).timeout(timeout);
   }
 
   Future<List<Map<String, dynamic>>> listProfiles() async =>
@@ -195,9 +212,9 @@ class CompanionClient {
   }
 
   /// Retrieves host machine hardware profile and runtime status via GET /api/v1/system/status.
-  Future<SystemStatusResponse> getSystemStatus() async {
+  Future<SystemStatusResponse> getSystemStatus({Duration timeout = const Duration(seconds: 5)}) async {
     final uri = baseUri.replace(path: '${baseUri.path}/api/v1/system/status');
-    final response = await _adminRequest('GET',uri);
+    final response = await _adminRequest('GET', uri, timeout: timeout);
     if (response.statusCode == 200) {
       final dynamic json = jsonDecode(response.body);
       return SystemStatusResponse.fromJson(Map<String, dynamic>.from(json as Map));
@@ -205,11 +222,30 @@ class CompanionClient {
     _handleErrorResponse(response);
   }
 
+  /// Requests cooperative runtime shutdown via POST /api/v1/system/shutdown.
+  Future<SystemShutdownResponse> shutdownSystem({
+    String reason = 'user_exit_companion',
+    double drainTimeoutSeconds = 6.0,
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/system/shutdown');
+    final body = jsonEncode({
+      'reason': reason,
+      'drain_timeout_seconds': drainTimeoutSeconds,
+    });
+    final response = await _adminRequest('POST', uri, body: body, timeout: timeout);
+    if (response.statusCode == 202) {
+      final dynamic json = jsonDecode(response.body);
+      return SystemShutdownResponse.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
   /// Retrieves model status and runtime state via GET /api/v1/models.
-  Future<ModelStatusResponse> getModelStatus() async {
+  Future<ModelStatusResponse> getModelStatus({Duration timeout = const Duration(seconds: 5)}) async {
     final uri = baseUri.replace(path: '${baseUri.path}/api/v1/models');
     final headers = await _buildHeaders(telemetry: true);
-    final response = await _httpClient.get(uri, headers: headers);
+    final response = await _httpClient.get(uri, headers: headers).timeout(timeout);
     if (response.statusCode == 200) {
       final dynamic json = jsonDecode(response.body);
       return ModelStatusResponse.fromJson(Map<String, dynamic>.from(json as Map));
@@ -239,6 +275,7 @@ class CompanionClient {
     String modelName, {
     bool loadImmediately = false,
     String? profile,
+    Duration? timeout,
   }) async {
     final uri = baseUri.replace(path: '${baseUri.path}/api/v1/models/select');
     final body = jsonEncode({
@@ -246,7 +283,9 @@ class CompanionClient {
       'load_immediately': loadImmediately,
       if (profile != null) 'profile': profile,
     });
-    final response = await _adminRequest('POST',uri,body:body);
+    final effectiveTimeout = timeout ??
+        (loadImmediately ? const Duration(seconds: 90) : const Duration(seconds: 10));
+    final response = await _adminRequest('POST', uri, body: body, timeout: effectiveTimeout);
     if (response.statusCode == 200) {
       final dynamic json = jsonDecode(response.body);
       return ModelStatusResponse.fromJson(Map<String, dynamic>.from(json as Map));
@@ -255,13 +294,17 @@ class CompanionClient {
   }
 
   /// Explicitly loads model weights into VRAM via POST /api/v1/models/load.
-  Future<ModelStatusResponse> loadModel({String? modelName, String? profile}) async {
+  Future<ModelStatusResponse> loadModel({
+    String? modelName,
+    String? profile,
+    Duration timeout = const Duration(seconds: 90),
+  }) async {
     final uri = baseUri.replace(path: '${baseUri.path}/api/v1/models/load');
     final body = jsonEncode({
       if (modelName != null) 'model_name': modelName,
       if (profile != null) 'profile': profile,
     });
-    final response = await _adminRequest('POST',uri,body:body);
+    final response = await _adminRequest('POST', uri, body: body, timeout: timeout);
     if (response.statusCode == 200) {
       final dynamic json = jsonDecode(response.body);
       return ModelStatusResponse.fromJson(Map<String, dynamic>.from(json as Map));
@@ -270,9 +313,9 @@ class CompanionClient {
   }
 
   /// Explicitly unloads model weights and releases VRAM via POST /api/v1/models/unload.
-  Future<ModelStatusResponse> unloadModel() async {
+  Future<ModelStatusResponse> unloadModel({Duration timeout = const Duration(seconds: 20)}) async {
     final uri = baseUri.replace(path: '${baseUri.path}/api/v1/models/unload');
-    final response = await _adminRequest('POST',uri);
+    final response = await _adminRequest('POST', uri, timeout: timeout);
     if (response.statusCode == 200) {
       final dynamic json = jsonDecode(response.body);
       return ModelStatusResponse.fromJson(Map<String, dynamic>.from(json as Map));

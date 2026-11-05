@@ -38,7 +38,7 @@ class _SessionClient extends CompanionClient {
       };
 
   @override
-  Future<ModelStatusResponse> getModelStatus() async =>
+  Future<ModelStatusResponse> getModelStatus({Duration timeout = const Duration(seconds: 5)}) async =>
       const ModelStatusResponse(
           provider: 'synthetic',
           runtimeState: 'MODEL_READY',

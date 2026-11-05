@@ -19,6 +19,7 @@ from app.core.errors import (
     format_error_response,
 )
 from app.core.logging import logger, setup_logging
+from app.core.runtime_lifecycle import runtime_lifecycle
 from app.db.session import dispose_database_runtime, initialize_database_runtime
 
 REQUEST_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
@@ -127,6 +128,85 @@ class PayloadLimitMiddleware(BaseHTTPMiddleware):
             )
 
 
+class RuntimeAdmissionASGIMiddleware:
+    """Full-ASGI lifecycle admission gate and request tracking during graceful shutdown.
+
+    Directives:
+    - Rejects new mutating requests (POST/PUT/PATCH/DELETE) and database-dependent read requests (GET)
+      during shutdown with 503 RUNTIME_SHUTTING_DOWN.
+    - Tracks active in-flight mutations and read-only database operations so that shutdown quiescence
+      awaits their completion before database engine disposal.
+    - Permits essential health, system status, model status, and shutdown endpoints without unsafe DB access.
+    """
+
+    NON_DB_PATHS = {
+        "/api/v1/health",
+        "/health",
+        "/api/v1/system/status",
+        "/api/v1/system/shutdown",
+        "/docs",
+        "/redoc",
+        "/openapi.json",
+    }
+
+    def __init__(self, app) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        method = scope.get("method", "GET")
+        path = scope.get("path", "").rstrip("/")
+        is_exempt = path in self.NON_DB_PATHS or path.startswith("/docs") or path.startswith("/openapi")
+
+        if is_exempt:
+            await self.app(scope, receive, send)
+            return
+
+        is_mutation = method in ("POST", "PUT", "PATCH", "DELETE")
+
+        if is_mutation:
+            if not runtime_lifecycle.acquire_mutation_admission():
+                state = scope.get("state", {})
+                req_id = state.get("request_id") if isinstance(state, dict) else None
+                request_id = req_id or f"req_{uuid.uuid4().hex[:12]}"
+                response = format_error_response(
+                    code="RUNTIME_SHUTTING_DOWN",
+                    message="Runtime is currently shutting down. Mutations are rejected.",
+                    details=None,
+                    request_id=request_id,
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+                await response(scope, receive, send)
+                return
+
+            try:
+                await self.app(scope, receive, send)
+            finally:
+                runtime_lifecycle.release_mutation_admission()
+        else:
+            if not runtime_lifecycle.acquire_read_admission():
+                state = scope.get("state", {})
+                req_id = state.get("request_id") if isinstance(state, dict) else None
+                request_id = req_id or f"req_{uuid.uuid4().hex[:12]}"
+                response = format_error_response(
+                    code="RUNTIME_SHUTTING_DOWN",
+                    message="Runtime is currently shutting down. Database operations are rejected.",
+                    details=None,
+                    request_id=request_id,
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+                await response(scope, receive, send)
+                return
+
+            try:
+                await self.app(scope, receive, send)
+            finally:
+                runtime_lifecycle.release_read_admission()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Lifespan context manager for startup and shutdown routines."""
@@ -179,7 +259,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await llm_manager.get_provider().shutdown()
     except Exception as exc:
         logger.warning(f"Error during LLM provider shutdown: {exc}")
-    await dispose_database_runtime()
+
+    if not runtime_lifecycle.has_active_database_work:
+        await dispose_database_runtime()
+    else:
+        logger.error(
+            "Active database work remains at lifespan exit; database engine NOT disposed "
+            "to prevent corruption of active transactions."
+        )
 
 
 def create_app() -> FastAPI:
@@ -194,6 +281,9 @@ def create_app() -> FastAPI:
         redoc_url=None,
         openapi_url="/openapi.json" if is_dev else None,
     )
+
+    # Admission control middleware for graceful shutdown
+    app.add_middleware(RuntimeAdmissionASGIMiddleware)
 
     # Security: Request payload limit middleware (OWASP API4)
     app.add_middleware(PayloadLimitMiddleware)

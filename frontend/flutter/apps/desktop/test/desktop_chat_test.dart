@@ -104,7 +104,7 @@ class MockCompanionClient extends CompanionClient {
   ];
 
   @override
-  Future<ModelStatusResponse> getModelStatus() async {
+  Future<ModelStatusResponse> getModelStatus({Duration timeout = const Duration(seconds: 5)}) async {
     modelStatusCalled = true;
     if (!shouldModelSucceed) {
       throw const CompanionApiException(statusCode: 503, message: 'Model unavailable.');
@@ -2859,6 +2859,37 @@ void main() {
       // Welcome stage card displays both bound character and profile active character:
       expect(find.text('Character: Aria'), findsOneWidget);
       expect(find.text('Profile active Character for new chats: Neutral Assistant'), findsOneWidget);
+
+      controller.dispose();
+    });
+
+    test('updateModelStatus initiates background poll on MODEL_LOADING and updates to MODEL_READY', () async {
+      final mockClient = MockCompanionClient();
+      mockClient.customModelStatus = const ModelStatusResponse(
+        provider: 'llama.cpp',
+        runtimeState: 'MODEL_READY',
+        activeModel: 'qwen3-vl-2b-instruct',
+        modelLoaded: true,
+      );
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+
+      controller.updateModelStatus(const ModelStatusResponse(
+        provider: 'llama.cpp',
+        runtimeState: 'MODEL_LOADING',
+        activeModel: null,
+        selectedModel: 'qwen3-vl-2b-instruct',
+        modelLoaded: false,
+      ));
+
+      expect(controller.modelStateCategory, equals(ModelRuntimeStateCategory.modelLoading));
+      expect(controller.activeModelName, equals('qwen3-vl-2b-instruct'));
+
+      await Future<void>.delayed(const Duration(milliseconds: 2100));
+
+      expect(controller.modelStateCategory, equals(ModelRuntimeStateCategory.modelReady));
+      expect(controller.activeModelName, equals('qwen3-vl-2b-instruct'));
 
       controller.dispose();
     });

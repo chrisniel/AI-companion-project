@@ -1,0 +1,576 @@
+"""Tests for LlamaCppProvider strict lock ownership, cancellation-aware lifecycle, and shutdown."""
+
+import asyncio
+from dataclasses import is_dataclass
+from unittest.mock import AsyncMock, MagicMock, patch
+import pytest
+
+from app.schemas.llm import ChatMessage, ModelStatusResponse
+from app.services.llm.base import BaseLLMProvider, ProviderShutdownResult
+from app.services.llm.llama_cpp import LlamaCppProvider, ProviderGenerationError
+from app.services.llm.runtime_state import LLMRuntimeState
+
+
+def test_provider_shutdown_result_contract():
+    """Verify ProviderShutdownResult dataclass exists and has required fields."""
+    res = ProviderShutdownResult(
+        completed_cleanly=True,
+        lock_acquired=True,
+        reason=None,
+        managed_llm_pid=1234,
+        managed_by_core=True,
+    )
+    assert is_dataclass(res)
+    assert res.completed_cleanly is True
+    assert res.lock_acquired is True
+    assert res.reason is None
+    assert res.managed_llm_pid == 1234
+    assert res.managed_by_core is True
+
+
+@pytest.mark.anyio
+async def test_signal_shutdown_immediately_no_unlocked_mutation():
+    """Verify signal_shutdown_immediately sets flags/events without mutating shared provider state."""
+    provider = LlamaCppProvider()
+    mock_proc = MagicMock()
+    mock_client = AsyncMock()
+    provider._server_process = mock_proc
+    provider._server_pid = 9999
+    provider._managed_by_core = True
+    provider._server_client = mock_client
+    provider._runtime_state = LLMRuntimeState.MODEL_READY
+
+    provider.signal_shutdown_immediately()
+
+    # Shared state must NOT be cleared or mutated by signal_shutdown_immediately
+    assert provider._closing is True
+    assert provider._shutdown_event.is_set() is True
+    assert provider._server_process is mock_proc
+    assert provider._server_pid == 9999
+    assert provider._managed_by_core is True
+    assert provider._server_client is mock_client
+    assert provider._runtime_state == LLMRuntimeState.MODEL_READY
+    # Neither process nor client should be closed/terminated without the lock
+    mock_proc.terminate.assert_not_called()
+    mock_proc.kill.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_s12_cooperative_abort_during_load_model():
+    """S12: Calling signal_shutdown_immediately() while load_model is waiting aborts load under lock."""
+    provider = LlamaCppProvider()
+
+    # Simulate load_model in progress: sleeping in _sleep_or_abort
+    async def run_load():
+        # Will run load_model which should check shutdown_event or sleep_or_abort
+        return await provider.load_model("test_model")
+
+    # Mock engine binary exists and models dir exists, but sleep during readiness polling
+    mock_registry_entry = MagicMock()
+    mock_registry_entry.library_state.primary_file_exists = True
+    mock_registry_entry.runtime_model_id = "test_model"
+    mock_registry_entry.manifest.id = "test_model"
+
+    with patch("app.services.llm.llama_cpp.find_model_registry_entry", return_value=mock_registry_entry), \
+         patch("app.services.llm.llama_cpp.settings") as mock_settings, \
+         patch("app.services.llm.llama_cpp.subprocess.Popen") as mock_popen, \
+         patch("app.services.llm.llama_cpp.resolve_effective_model", return_value=("test_model.gguf", "explicit")):
+        mock_settings.LLAMA_CPP_BIN_DIR.resolve.return_value = "bin"
+        mock_settings.LLAMA_MODELS_DIR.resolve.return_value = "models"
+        mock_settings.MODELS_DIR.resolve.return_value = "models"
+        mock_settings.DATA_DIR.mkdir.return_value = None
+        mock_settings.DATA_DIR.__truediv__.return_value.resolve.return_value = "data/llama.log"
+        mock_settings.LLAMA_ROUTER_HOST = "127.0.0.1"
+        mock_settings.LLAMA_ROUTER_PORT = 8080
+        mock_settings.LLAMA_ROUTER_IDLE_TIMEOUT = 0
+        mock_settings.LLAMA_ROUTER_MODELS_MAX = 1
+        mock_settings.PROFILE_BALANCED_CTX = 2048
+        mock_settings.PROFILE_BALANCED_GPU_LAYERS = 20
+        mock_settings.PROFILE_BALANCED_THREADS = 4
+        mock_settings.PROFILE_BALANCED_MMPROJ_OFFLOAD = True
+        mock_settings.LLM_PROFILE = "balanced"
+
+        mock_server_exe = MagicMock()
+        mock_server_exe.exists.return_value = True
+        mock_settings.LLAMA_CPP_BIN_DIR.__truediv__.return_value = mock_server_exe
+        mock_settings.LLAMA_MODELS_DIR.exists.return_value = True
+
+        fake_proc = MagicMock()
+        fake_proc.pid = 4321
+        fake_proc.poll.return_value = None
+        def _on_terminate():
+            fake_proc.poll.return_value = 0
+        fake_proc.terminate.side_effect = _on_terminate
+        mock_popen.return_value = fake_proc
+
+        load_task = asyncio.create_task(provider.load_model("test_model"))
+        # Allow load_model to enter readiness loop
+        await asyncio.sleep(0.05)
+        assert provider._runtime_state == LLMRuntimeState.SERVER_STARTING
+
+        # Now signal shutdown
+        provider.signal_shutdown_immediately()
+
+        result = await load_task
+        assert result is False
+        # Child process cleaned up under lock
+        fake_proc.terminate.assert_called()
+        assert provider._server_process is None
+        assert provider._managed_by_core is False
+        assert provider._runtime_state == LLMRuntimeState.SERVER_STOPPED
+
+
+@pytest.mark.anyio
+async def test_s13_provider_lock_acquisition_timeout_preserves_state():
+    """S13: When self._lock cannot be acquired within lock_timeout, shutdown returns failure without unlocked cleanup."""
+    provider = LlamaCppProvider()
+    mock_proc = MagicMock()
+    mock_proc.pid = 5555
+    provider._server_process = mock_proc
+    provider._server_pid = 5555
+    provider._managed_by_core = True
+    provider._runtime_state = LLMRuntimeState.MODEL_READY
+
+    # Hold the lock externally to simulate a cancellation-resistant operation
+    await provider._lock.acquire()
+    try:
+        res = await provider.shutdown(drain_timeout=0.1, lock_timeout=0.2)
+        assert res.completed_cleanly is False
+        assert res.lock_acquired is False
+        assert res.reason == "PROVIDER_LOCK_TIMEOUT"
+        assert res.managed_llm_pid == 5555
+        assert res.managed_by_core is True
+
+        # Invariant: NO unlocked cleanup must have been called!
+        assert provider._server_process is mock_proc
+        assert provider._server_pid == 5555
+        assert provider._managed_by_core is True
+        mock_proc.terminate.assert_not_called()
+        mock_proc.kill.assert_not_called()
+    finally:
+        provider._lock.release()
+
+
+@pytest.mark.anyio
+async def test_s15_unload_model_vs_stop_managed_router_locked_vs_external():
+    """S15: unload_model keeps router alive on router API success; shutdown stops Core router; external router preserved."""
+    provider = LlamaCppProvider()
+    mock_proc = MagicMock()
+    mock_proc.pid = 6666
+    mock_proc.poll.return_value = None
+    provider._server_process = mock_proc
+    provider._server_pid = 6666
+    provider._managed_by_core = True
+    provider._server_is_active = True
+    provider._active_model_name = "test_model"
+    provider._runtime_state = LLMRuntimeState.MODEL_READY
+
+    # Case 1: unload_model() with successful router API unload keeps router alive
+    with patch.object(provider, "_router_unload_model", AsyncMock(return_value=True)):
+        unload_res = await provider.unload_model()
+        assert unload_res is True
+        # Router process should still be alive
+        assert provider._server_process is mock_proc
+        assert provider._server_pid == 6666
+        assert provider._managed_by_core is True
+        assert provider._runtime_state == LLMRuntimeState.MODEL_UNLOADED
+        mock_proc.terminate.assert_not_called()
+
+    # Case 2: shutdown() terminates Core-managed router under lock
+    def _simulate_exit():
+        mock_proc.poll.return_value = 0
+    mock_proc.terminate.side_effect = _simulate_exit
+
+    shutdown_res = await provider.shutdown(drain_timeout=0.1, lock_timeout=1.0)
+    assert shutdown_res.completed_cleanly is True
+    assert shutdown_res.lock_acquired is True
+    assert provider._server_process is None
+    assert provider._server_pid is None
+    assert provider._managed_by_core is False
+    assert provider._runtime_state == LLMRuntimeState.SERVER_STOPPED
+    mock_proc.terminate.assert_called()
+
+    # Case 3: External router (_managed_by_core == False) is NEVER terminated by shutdown()
+    ext_provider = LlamaCppProvider()
+    ext_provider._managed_by_core = False
+    ext_provider._server_is_active = True
+    ext_provider._active_model_name = "ext_model"
+    ext_provider._server_process = None
+
+    with patch.object(ext_provider, "_router_unload_model", AsyncMock(return_value=True)):
+        ext_res = await ext_provider.shutdown(drain_timeout=0.1, lock_timeout=1.0)
+        assert ext_res.completed_cleanly is True
+        assert ext_res.managed_by_core is False
+        assert ext_provider._server_process is None
+
+
+@pytest.mark.anyio
+async def test_s14_route_b_native_worker_active_guard():
+    """S14: If native inference worker is still running past drain timeout, self._llm is NOT freed."""
+    provider = LlamaCppProvider()
+    fake_native_llm = MagicMock()
+    provider._llm = fake_native_llm
+    lease = await provider._acquire_generation()
+
+    try:
+        # Drain timeout expires while active generation is held
+        res = await provider.shutdown(drain_timeout=0.1, lock_timeout=1.0)
+        assert res.completed_cleanly is False
+        assert res.reason == "DRAIN_TIMEOUT"
+        # Crucial safeguard: fake_native_llm must NOT be deleted while worker holds generation lease
+        assert provider._llm is fake_native_llm
+    finally:
+        provider._release_generation(lease)
+
+    # After lease released, clean shutdown unloads model
+    clean_res = await provider.shutdown(drain_timeout=0.1, lock_timeout=1.0)
+    assert clean_res.completed_cleanly is True
+    assert provider._llm is None
+
+
+@pytest.mark.anyio
+async def test_m5_lock_free_snapshot_get_status_during_transitional_state():
+    """M5: get_status returns immediate snapshot without acquiring lock during SERVER_STARTING or MODEL_LOADING."""
+    provider = LlamaCppProvider()
+    provider._runtime_state = LLMRuntimeState.SERVER_STARTING
+    provider._active_model_name = "loading_model"
+
+    # Hold the lock to prove get_status does not block on it
+    await provider._lock.acquire()
+    try:
+        status: ModelStatusResponse = await provider.get_status()
+        assert status.runtime_state == LLMRuntimeState.SERVER_STARTING
+    finally:
+        provider._lock.release()
+
+
+@pytest.mark.anyio
+async def test_m6_model_id_normalization():
+    """M6: get_status normalizes loaded_model_id via find_model_registry_entry."""
+    provider = LlamaCppProvider()
+    provider._server_is_active = True
+    provider._llm = None
+
+    with patch("app.services.llm.llama_cpp.httpx.AsyncClient") as mock_client_cls, \
+         patch.object(provider, "_check_external_server", AsyncMock(return_value=True)), \
+         patch("app.services.llm.llama_cpp.find_model_registry_entry") as mock_registry:
+
+        # Mock router /models returning a raw filename
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "data": [{"id": "meta-llama-3-8b-instruct.Q4_K_M.gguf", "status": {"value": "loaded"}}]
+        }
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_resp
+        mock_client_cls.return_value.__aenter__.return_value = mock_client
+
+        # Mock registry mapping filename to canonical manifest id
+        mock_entry = MagicMock()
+        mock_entry.manifest.id = "llama-3-8b-instruct"
+        mock_registry.return_value = mock_entry
+
+        status = await provider.get_status()
+        assert status.active_model == "llama-3-8b-instruct"
+        assert provider._active_model_name == "llama-3-8b-instruct"
+
+
+@pytest.mark.anyio
+async def test_shutdown_interrupts_in_progress_model_load_http_post():
+    """Verify that signal_shutdown_immediately aborts an active in-flight HTTP load operation."""
+    provider = LlamaCppProvider()
+
+    # Block inside httpx.AsyncClient.post to simulate long network weight transfer
+    post_unblocked = asyncio.Event()
+
+    async def hanging_post(*args, **kwargs):
+        try:
+            await post_unblocked.wait()
+            return MagicMock(status_code=200)
+        except asyncio.CancelledError:
+            raise
+
+    mock_client = AsyncMock()
+    mock_client.post.side_effect = hanging_post
+    mock_client.aclose = AsyncMock()
+
+    mock_registry_entry = MagicMock()
+    mock_registry_entry.library_state.primary_file_exists = True
+    mock_registry_entry.runtime_model_id = "heavy_model"
+    mock_registry_entry.manifest.id = "heavy_model"
+
+    with patch("app.services.llm.llama_cpp.find_model_registry_entry", return_value=mock_registry_entry), \
+         patch("app.services.llm.llama_cpp.httpx.AsyncClient", return_value=mock_client), \
+         patch.object(provider, "_resolve_model_path", return_value=MagicMock(exists=lambda: True)), \
+         patch.object(provider, "_check_port_listening", return_value=True), \
+         patch.object(provider, "_check_external_server", AsyncMock(return_value=True)):
+
+        load_task = asyncio.create_task(provider.load_model("heavy_model"))
+        await asyncio.sleep(0.05)
+
+        # Active load task and client must be registered
+        assert provider._active_load_task is not None
+        assert mock_client in provider._active_router_clients
+
+        # Signal shutdown immediately!
+        provider.signal_shutdown_immediately()
+
+        # Load task should abort promptly and return False
+        res = await asyncio.wait_for(load_task, timeout=1.0)
+        assert res is False
+        assert provider._last_error == "LOAD_ABORTED_BY_SHUTDOWN"
+        assert provider._active_load_task is None
+        assert mock_client not in provider._active_router_clients
+
+
+@pytest.mark.anyio
+async def test_router_termination_failure_reported_honestly():
+    """Verify that if Core-managed router fails to die, shutdown reports failure and retains process reference."""
+    provider = LlamaCppProvider()
+    mock_proc = MagicMock()
+    mock_proc.pid = 9999
+    # poll() always returns None -> process refused to die
+    mock_proc.poll.return_value = None
+    mock_proc.terminate = MagicMock()
+    mock_proc.kill = MagicMock()
+
+    provider._server_process = mock_proc
+    provider._server_pid = 9999
+    provider._managed_by_core = True
+
+    res = await provider.shutdown(drain_timeout=0.1, lock_timeout=1.0)
+
+    # Must report failure honestly
+    assert res.completed_cleanly is False
+    assert res.lock_acquired is True
+    assert res.reason == "ROUTER_TERMINATION_FAILED"
+    assert res.managed_llm_pid == 9999
+    assert res.managed_by_core is True
+
+    # Process and ownership references MUST be retained for recovery
+    assert provider._server_process is mock_proc
+    assert provider._server_pid == 9999
+    assert provider._managed_by_core is True
+
+
+@pytest.mark.anyio
+async def test_concurrent_load_model_serialized_by_lock():
+    """Verify concurrent load_model calls are strictly serialized by provider lock."""
+    provider = LlamaCppProvider()
+    execution_order = []
+    task1_in_critical_section = asyncio.Event()
+    task1_release = asyncio.Event()
+
+    async def mock_router_load_1(name):
+        execution_order.append("task1_start")
+        task1_in_critical_section.set()
+        await task1_release.wait()
+        execution_order.append("task1_finish")
+        return True
+
+    async def mock_router_load_2(name):
+        execution_order.append("task2_start")
+        return True
+
+    mock_entry1 = MagicMock()
+    mock_entry1.library_state.primary_file_exists = True
+    mock_entry1.runtime_model_id = "model_1"
+    mock_entry1.manifest.id = "model_1"
+
+    mock_entry2 = MagicMock()
+    mock_entry2.library_state.primary_file_exists = True
+    mock_entry2.runtime_model_id = "model_2"
+    mock_entry2.manifest.id = "model_2"
+
+    def mock_find_entry(name):
+        if name == "model_1":
+            return mock_entry1
+        if name == "model_2":
+            return mock_entry2
+        return None
+
+    with patch("app.services.llm.llama_cpp.find_model_registry_entry", side_effect=mock_find_entry), \
+         patch.object(provider, "_resolve_model_path", return_value=MagicMock(exists=lambda: True)), \
+         patch.object(provider, "_check_port_listening", return_value=True), \
+         patch.object(provider, "_check_external_server", AsyncMock(return_value=True)):
+
+        provider._router_load_model = AsyncMock(side_effect=mock_router_load_1)
+        task1 = asyncio.create_task(provider.load_model("model_1"))
+
+        await task1_in_critical_section.wait()
+        assert provider._lock.locked() is True
+
+        # Launch second concurrent load while task1 is in critical section
+        provider._router_load_model = AsyncMock(side_effect=mock_router_load_2)
+        task2 = asyncio.create_task(provider.load_model("model_2"))
+
+        await asyncio.sleep(0.05)
+        # Task 2 must NOT have started yet because task1 holds self._lock
+        assert "task2_start" not in execution_order
+
+        # Release task1
+        task1_release.set()
+        res1 = await task1
+        assert res1 is True
+
+        res2 = await task2
+        assert res2 is True
+
+        # Verify strict sequential order
+        assert execution_order == ["task1_start", "task1_finish", "task2_start"]
+
+
+@pytest.mark.anyio
+async def test_load_model_cancelled_executes_cleanup_under_lock():
+    """Verify that when load_model is cancelled, cleanup executes while strictly holding provider lock."""
+    provider = LlamaCppProvider()
+    lock_held_during_cleanup = None
+    stop_called = asyncio.Event()
+
+    original_stop = provider._stop_managed_router_locked
+
+    def mock_stop_locked():
+        nonlocal lock_held_during_cleanup
+        lock_held_during_cleanup = provider._lock.locked()
+        res = original_stop()
+        stop_called.set()
+        return res
+
+    provider._stop_managed_router_locked = mock_stop_locked
+    provider._managed_by_core = True
+    mock_proc = MagicMock()
+    mock_proc.poll.side_effect = [None, 0]
+    mock_proc.terminate = MagicMock()
+    mock_proc.wait = MagicMock()
+    provider._server_process = mock_proc
+
+    load_hanging = asyncio.Event()
+
+    async def hanging_load(name):
+        await load_hanging.wait()
+        return True
+
+    mock_entry = MagicMock()
+    mock_entry.library_state.primary_file_exists = True
+    mock_entry.runtime_model_id = "test_model"
+    mock_entry.manifest.id = "test_model"
+
+    with patch("app.services.llm.llama_cpp.find_model_registry_entry", return_value=mock_entry), \
+         patch.object(provider, "_resolve_model_path", return_value=MagicMock(exists=lambda: True)), \
+         patch.object(provider, "_check_port_listening", return_value=True), \
+         patch.object(provider, "_check_external_server", AsyncMock(return_value=True)), \
+         patch.object(provider, "_router_load_model", side_effect=hanging_load):
+
+        load_task = asyncio.create_task(provider.load_model("test_model"))
+        await asyncio.sleep(0.05)
+
+        # Cancel the in-flight load task
+        load_task.cancel()
+        res = await load_task
+
+        assert res is False
+        assert stop_called.is_set() is True
+        assert lock_held_during_cleanup is True
+        assert provider._last_error == "LOAD_ABORTED_BY_SHUTDOWN"
+
+
+@pytest.mark.asyncio
+async def test_router_termination_failure_preserves_ownership():
+    """Directive 1: When router process refuses to exit, ownership is strictly preserved."""
+    provider = LlamaCppProvider()
+    mock_proc = MagicMock()
+    mock_proc.poll.return_value = None  # Process remains alive
+    mock_proc.pid = 9988
+    mock_proc.terminate = MagicMock()
+    mock_proc.wait = MagicMock()
+    mock_proc.kill = MagicMock()
+
+    provider._managed_by_core = True
+    provider._server_process = mock_proc
+    provider._server_pid = 9988
+    provider._runtime_state = LLMRuntimeState.MODEL_READY
+
+    async with provider._lock:
+        stopped = provider._stop_managed_router_locked()
+
+    assert stopped is False
+    assert provider._server_process is mock_proc
+    assert provider._server_pid == 9988
+    assert provider._managed_by_core is True
+    assert provider._last_error == "ROUTER_TERMINATION_FAILED"
+    assert provider._runtime_state == LLMRuntimeState.SERVER_ERROR
+
+
+@pytest.mark.asyncio
+async def test_router_termination_exception_preserves_ownership():
+    """Directive 1: When terminate() or kill() raises exception, ownership is preserved."""
+    provider = LlamaCppProvider()
+    mock_proc = MagicMock()
+    mock_proc.poll.return_value = None
+    mock_proc.pid = 9989
+    mock_proc.terminate.side_effect = PermissionError("Access denied")
+    mock_proc.kill.side_effect = OSError("Operation failed")
+
+    provider._managed_by_core = True
+    provider._server_process = mock_proc
+    provider._server_pid = 9989
+
+    async with provider._lock:
+        stopped = provider._stop_managed_router_locked()
+
+    assert stopped is False
+    assert provider._server_process is mock_proc
+    assert provider._server_pid == 9989
+    assert provider._managed_by_core is True
+    assert provider._last_error == "ROUTER_TERMINATION_FAILED"
+    assert provider._runtime_state == LLMRuntimeState.SERVER_ERROR
+
+
+@pytest.mark.asyncio
+async def test_set_profile_termination_failure_preserves_ownership():
+    """Directive 1: Hardware-profile change with unkillable router preserves ownership and fails."""
+    provider = LlamaCppProvider()
+    mock_proc = MagicMock()
+    mock_proc.poll.return_value = None
+    mock_proc.pid = 7711
+
+    provider._managed_by_core = True
+    provider._server_process = mock_proc
+    provider._server_pid = 7711
+    provider._active_profile = "eco"
+
+    res = await provider.set_profile("maximum")
+    assert res is False
+    assert provider._server_process is mock_proc
+    assert provider._server_pid == 7711
+    assert provider._managed_by_core is True
+    assert provider._last_error == "ROUTER_TERMINATION_FAILED"
+    assert provider._runtime_state == LLMRuntimeState.SERVER_ERROR
+
+
+@pytest.mark.asyncio
+async def test_unload_model_termination_failure_preserves_ownership():
+    """Directive 1: Router unload with unkillable router preserves ownership and returns False."""
+    provider = LlamaCppProvider()
+    mock_proc = MagicMock()
+    mock_proc.poll.return_value = None
+    mock_proc.pid = 7722
+
+    provider._managed_by_core = True
+    provider._server_process = mock_proc
+    provider._server_pid = 7722
+    provider._server_is_active = True
+    provider._active_model_name = "test_model"
+
+    with patch.object(provider, "_router_unload_model", AsyncMock(return_value=False)):
+        res = await provider.unload_model()
+
+    assert res is False
+    assert provider._server_process is mock_proc
+    assert provider._server_pid == 7722
+    assert provider._managed_by_core is True
+    assert provider._last_error == "ROUTER_TERMINATION_FAILED"
+    assert provider._runtime_state == LLMRuntimeState.SERVER_ERROR
+
+
+

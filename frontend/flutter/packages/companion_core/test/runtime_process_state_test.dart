@@ -70,5 +70,40 @@ void main() {
       expect(updated.port, equals(8000));
       expect(updated.supervisionMode, equals(SupervisionMode.localLoopback));
     });
+
+    test('supports shuttingDown, stopped, and shutdownFailed with reasons', () {
+      const shuttingDown = RuntimeProcessState(
+        supervisionMode: SupervisionMode.localLoopback,
+        status: RuntimeStatus.shuttingDown,
+        port: 8000,
+      );
+      expect(shuttingDown.isOperational, isFalse);
+      expect(shuttingDown.status, equals(RuntimeStatus.shuttingDown));
+
+      const stopped = RuntimeProcessState(
+        supervisionMode: SupervisionMode.localLoopback,
+        status: RuntimeStatus.stopped,
+        port: 8000,
+      );
+      expect(stopped.isOperational, isFalse);
+      expect(stopped.status, equals(RuntimeStatus.stopped));
+
+      const incomplete = RuntimeProcessState(
+        supervisionMode: SupervisionMode.localLoopback,
+        status: RuntimeStatus.shutdownFailed,
+        shutdownFailureReason: ShutdownFailureReason.incompleteCleanup,
+        port: 8000,
+      );
+      expect(incomplete.isOperational, isFalse);
+      expect(incomplete.shutdownFailureReason, equals(ShutdownFailureReason.incompleteCleanup));
+
+      const unresponsive = RuntimeProcessState(
+        supervisionMode: SupervisionMode.localLoopback,
+        status: RuntimeStatus.shutdownFailed,
+        shutdownFailureReason: ShutdownFailureReason.unresponsiveRuntime,
+        port: 8000,
+      );
+      expect(unresponsive.shutdownFailureReason, equals(ShutdownFailureReason.unresponsiveRuntime));
+    });
   });
 }

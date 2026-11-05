@@ -430,6 +430,280 @@ void main() {
       expect(fakeLauncher.startedCommand, equals('powershell'));
       expect(fakeLauncher.startedArgs?.join(' '), contains("Name LIKE 'python%'"));
     });
+
+    test('isCompanionRuntimeCommandLine matches app.runtime_server and uvicorn with app.main:app', () {
+      expect(
+        WindowsRuntimeProcessSupervisor.isCompanionRuntimeCommandLine(
+          r'python.exe -m app.runtime_server --app app.main:app --port 8000',
+          expectedPort: 8000,
+        ),
+        isTrue,
+      );
+      expect(
+        WindowsRuntimeProcessSupervisor.isCompanionRuntimeCommandLine(
+          r'python.exe -m uvicorn app.main:app --port 8000',
+          expectedPort: 8000,
+        ),
+        isTrue,
+      );
+      expect(
+        WindowsRuntimeProcessSupervisor.isCompanionRuntimeCommandLine(
+          r'python.exe -m app.runtime_server --app app.main:app --port 8001',
+          expectedPort: 8000,
+        ),
+        isFalse,
+      );
+      expect(
+        WindowsRuntimeProcessSupervisor.isCompanionRuntimeCommandLine(
+          r'python.exe -m other_server --port 8000',
+          expectedPort: 8000,
+        ),
+        isFalse,
+      );
+    });
+
+    test('clearRuntimeLockfileThroughHandle truncates to 0 bytes before deleting', () async {
+      final tempDir = await Directory.systemTemp.createTemp('lock_clear_test_');
+      final lockFile = File('${tempDir.path}\\runtime.lock');
+      await lockFile.writeAsString('test-lock-data-to-be-cleared');
+
+      final supervisor = WindowsRuntimeProcessSupervisor();
+      final cleared = await supervisor.clearRuntimeLockfileThroughHandle(lockFile);
+      expect(cleared, isTrue);
+      expect(await lockFile.exists(), isFalse);
+    });
+
+    test('terminateVerifiedRuntimeProcess reports provenanceMismatch on script mismatch output', () async {
+      final fakeLauncher = FakeProcessLauncher();
+      fakeLauncher.processToStart = FakeProcess(
+        stdout: Stream.value(utf8.encode(jsonEncode({
+          'status': 'provenanceMismatch',
+          'childTerminated': false,
+          'diagnostic': 'CommandLine did not match companion runtime',
+        }))),
+        exitCode: Future.value(0),
+      );
+      final supervisor = WindowsRuntimeProcessSupervisor(launcher: fakeLauncher);
+
+      final desc = RuntimeLockfileData(
+        schemaVersion: 1,
+        instanceId: 'test-inst',
+        pid: 9999,
+        port: 8000,
+        startedAt: DateTime.now().toUtc(),
+        executablePath: r'C:\venv\Scripts\python.exe',
+      );
+
+      final result = await supervisor.terminateVerifiedRuntimeProcess(
+        expectedDescriptor: desc,
+      );
+
+      expect(result.status, equals(TerminationResultStatus.provenanceMismatch));
+      expect(result.childTerminated, isFalse);
+    });
+
+    test('terminateVerifiedRuntimeProcess reports alreadyExited when process is dead', () async {
+      final fakeLauncher = FakeProcessLauncher();
+      fakeLauncher.processToStart = FakeProcess(
+        stdout: Stream.value(utf8.encode(jsonEncode({
+          'status': 'alreadyExited',
+          'childTerminated': false,
+        }))),
+        exitCode: Future.value(0),
+      );
+      final supervisor = WindowsRuntimeProcessSupervisor(launcher: fakeLauncher);
+
+      final desc = RuntimeLockfileData(
+        schemaVersion: 1,
+        instanceId: 'test-inst',
+        pid: 9999,
+        port: 8000,
+        startedAt: DateTime.now().toUtc(),
+        executablePath: r'C:\venv\Scripts\python.exe',
+      );
+
+      final result = await supervisor.terminateVerifiedRuntimeProcess(
+        expectedDescriptor: desc,
+      );
+
+      expect(result.status, equals(TerminationResultStatus.alreadyExited));
+    });
+
+    test('terminateVerifiedRuntimeProcess reports terminated and childTerminated on success', () async {
+      final fakeLauncher = FakeProcessLauncher();
+      fakeLauncher.processToStart = FakeProcess(
+        stdout: Stream.value(utf8.encode(jsonEncode({
+          'status': 'terminated',
+          'childTerminated': true,
+        }))),
+        exitCode: Future.value(0),
+      );
+      final supervisor = WindowsRuntimeProcessSupervisor(launcher: fakeLauncher);
+
+      final desc = RuntimeLockfileData(
+        schemaVersion: 1,
+        instanceId: 'test-inst',
+        pid: 9999,
+        port: 8000,
+        startedAt: DateTime.now().toUtc(),
+        executablePath: r'C:\venv\Scripts\python.exe',
+      );
+
+      final result = await supervisor.terminateVerifiedRuntimeProcess(
+        expectedDescriptor: desc,
+        managedLlmPid: 5555,
+        managedByCore: true,
+      );
+
+      expect(result.status, equals(TerminationResultStatus.terminated));
+      expect(result.childTerminated, isTrue);
+    });
+
+    test('terminateVerifiedRuntimeProcess with unrelated child process leaves child untouched and records diagnostic', () async {
+      final fakeLauncher = FakeProcessLauncher();
+      fakeLauncher.processToStart = FakeProcess(
+        stdout: Stream.value(utf8.encode(jsonEncode({
+          'status': 'terminated',
+          'childTerminated': false,
+          'diagnostic': 'Managed LLM child PID 5555 ownership check failed: parent PID mismatch',
+        }))),
+        exitCode: Future.value(0),
+      );
+      final supervisor = WindowsRuntimeProcessSupervisor(launcher: fakeLauncher);
+
+      final desc = RuntimeLockfileData(
+        schemaVersion: 1,
+        instanceId: 'test-inst',
+        pid: 9999,
+        port: 8000,
+        startedAt: DateTime.now().toUtc(),
+        executablePath: r'C:\venv\Scripts\python.exe',
+      );
+
+      final result = await supervisor.terminateVerifiedRuntimeProcess(
+        expectedDescriptor: desc,
+        managedLlmPid: 5555,
+        managedByCore: true,
+      );
+
+      expect(result.status, equals(TerminationResultStatus.terminated));
+      expect(result.childTerminated, isFalse);
+      expect(result.diagnostic, contains('parent PID mismatch'));
+    });
+
+    test('terminateVerifiedRuntimeProcess reports partialTermination when parent terminated but child fails', () async {
+      final fakeLauncher = FakeProcessLauncher();
+      fakeLauncher.processToStart = FakeProcess(
+        stdout: Stream.value(utf8.encode(jsonEncode({
+          'status': 'partialTermination',
+          'childTerminated': false,
+          'diagnostic': 'Parent terminated, but owned child router PID 5555 could not be verified or terminated: child did not exit',
+        }))),
+        exitCode: Future.value(0),
+      );
+      final supervisor = WindowsRuntimeProcessSupervisor(launcher: fakeLauncher);
+
+      final desc = RuntimeLockfileData(
+        schemaVersion: 1,
+        instanceId: 'test-inst',
+        pid: 9999,
+        port: 8000,
+        startedAt: DateTime.now().toUtc(),
+        executablePath: r'C:\venv\Scripts\python.exe',
+      );
+
+      final result = await supervisor.terminateVerifiedRuntimeProcess(
+        expectedDescriptor: desc,
+        managedLlmPid: 5555,
+        managedByCore: true,
+      );
+
+      expect(result.status, equals(TerminationResultStatus.partialTermination));
+      expect(result.childTerminated, isFalse);
+      expect(result.diagnostic, contains('Parent terminated, but owned child router'));
+    });
+
+    test('terminateVerifiedRuntimeProcess reports timeout on hanging execution', () async {
+      final fakeLauncher = FakeProcessLauncher();
+      fakeLauncher.processToStart = FakeProcess(
+        stdout: const Stream.empty(),
+        exitCode: Completer<int>().future, // Never completes
+      );
+      final supervisor = WindowsRuntimeProcessSupervisor(launcher: fakeLauncher);
+
+      final desc = RuntimeLockfileData(
+        schemaVersion: 1,
+        instanceId: 'test-inst',
+        pid: 9999,
+        port: 8000,
+        startedAt: DateTime.now().toUtc(),
+        executablePath: r'C:\venv\Scripts\python.exe',
+      );
+
+      final result = await supervisor.terminateVerifiedRuntimeProcess(
+        expectedDescriptor: desc,
+        timeout: const Duration(milliseconds: 100),
+      );
+
+      expect(result.status, equals(TerminationResultStatus.timeout));
+    });
+
+    test('terminateVerifiedRuntimeProcess reports inspectionUnavailable on exit code failure', () async {
+      final fakeLauncher = FakeProcessLauncher();
+      fakeLauncher.processToStart = FakeProcess(
+        stdout: const Stream.empty(),
+        stderr: Stream.value(utf8.encode('PowerShell fatal error')),
+        exitCode: Future.value(1),
+      );
+      final supervisor = WindowsRuntimeProcessSupervisor(launcher: fakeLauncher);
+
+      final desc = RuntimeLockfileData(
+        schemaVersion: 1,
+        instanceId: 'test-inst',
+        pid: 9999,
+        port: 8000,
+        startedAt: DateTime.now().toUtc(),
+        executablePath: r'C:\venv\Scripts\python.exe',
+      );
+
+      final result = await supervisor.terminateVerifiedRuntimeProcess(
+        expectedDescriptor: desc,
+      );
+
+      expect(result.status, equals(TerminationResultStatus.inspectionUnavailable));
+      expect(result.diagnostic, contains('PowerShell fatal error'));
+    });
+
+    test('terminateVerifiedRuntimeProcess passes managedByCore flag and parses partialTermination status', () async {
+      final fakeLauncher = FakeProcessLauncher();
+      fakeLauncher.processToStart = FakeProcess(
+        stdout: Stream.value(utf8.encode('{"status":"partialTermination","childTerminated":false,"diagnostic":"Discovered unverified child process PID 1234 (python.exe) is preserved untouched"}')),
+        exitCode: Future.value(0),
+      );
+      final supervisor = WindowsRuntimeProcessSupervisor(launcher: fakeLauncher);
+
+      final desc = RuntimeLockfileData(
+        schemaVersion: 1,
+        instanceId: 'test-inst',
+        pid: 9999,
+        port: 8000,
+        startedAt: DateTime.now().toUtc(),
+        executablePath: r'C:\venv\Scripts\python.exe',
+      );
+
+      final result = await supervisor.terminateVerifiedRuntimeProcess(
+        expectedDescriptor: desc,
+        managedByCore: false,
+      );
+
+      expect(result.status, equals(TerminationResultStatus.partialTermination));
+      expect(result.childTerminated, isFalse);
+      expect(result.diagnostic, contains('is preserved untouched'));
+
+      // Check command arguments passed to launcher contain managedByCore = $false
+      final scriptArg = fakeLauncher.startedArgs?.last ?? '';
+      expect(scriptArg, contains(r'$managedByCore = $false'));
+    });
   });
 }
 

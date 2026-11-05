@@ -191,6 +191,7 @@ class _AiCompanionDesktopAppState extends State<AiCompanionDesktopApp> {
         _runtimeCoordinator = DesktopRuntimeCoordinator(
           baseUrl: host,
           credentialStore: store,
+          hostAdminStore: HostAdminSecretStore(),
         );
         _wireRuntimeCoordinator();
       });
