@@ -101,5 +101,5 @@ async def system_shutdown(
         managed_by_core=runtime_lifecycle.managed_by_core,
         already_shutting_down=already_shutting_down,
         shutdown_phase=runtime_lifecycle.shutdown_phase,
-        message=f"Cooperative shutdown {'already in progress' if already_shutting_down else 'initiated'}.",
+        message=f"Cooperative shutdown {'resumed' if msg == 'shutdown_retried' else ('already in progress' if already_shutting_down else 'initiated')}.",
     )

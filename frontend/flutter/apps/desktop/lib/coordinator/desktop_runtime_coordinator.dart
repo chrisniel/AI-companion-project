@@ -952,7 +952,26 @@ class DesktopRuntimeCoordinator {
     if (generation != _activeGeneration || _isDisposed) return ShutdownOutcome.gracefulSuccess;
 
     if (!initialListening) {
-      // Process is not listening; check if lockfile exists and clear it
+      // Check if process is still active despite closed/inactive port
+      final descriptor = _activeRuntimeInfo ?? await _supervisor.readDescriptorDirect(targetLockFile);
+      if (descriptor != null) {
+        final isAlive = await _supervisor.isProcessActiveAndMatching(
+          descriptor.pid,
+          expectedExecutable: descriptor.executablePath,
+        );
+        if (isAlive) {
+          // Process is still alive; do not clear lockfile or claim graceful success
+          _updateState(
+            _currentState.copyWith(
+              status: RuntimeStatus.shutdownFailed,
+              shutdownFailureReason: ShutdownFailureReason.incompleteCleanup,
+              diagnosticMessage: 'Runtime port $targetPort is closed, but process PID ${descriptor.pid} remains active.',
+            ),
+            generation: generation,
+          );
+          return ShutdownOutcome.incompleteCleanup;
+        }
+      }
       await _supervisor.clearRuntimeLockfileThroughHandle(targetLockFile);
       _activeRuntimeInfo = null;
       _updateState(
@@ -975,28 +994,59 @@ class DesktopRuntimeCoordinator {
       managedLlmPid = response.managedLlmPid;
       managedByCore = response.managedByCore;
     } catch (e) {
-      // Shutdown request failed or timed out. Check if process is still alive.
-      final isStillListening = await _supervisor.isPortListening(
-        targetHost,
-        targetPort,
-        timeout: const Duration(milliseconds: 500),
-      );
-      if (!isStillListening) {
-        await _supervisor.clearRuntimeLockfileThroughHandle(targetLockFile);
-        _activeRuntimeInfo = null;
+      final errStr = e.toString().toLowerCase();
+      // Check for authentication / authorization failure
+      if (errStr.contains('401') ||
+          errStr.contains('403') ||
+          errStr.contains('unauthorized') ||
+          errStr.contains('forbidden')) {
+        // DO NOT silently kill runtime on auth error!
         _updateState(
-          _currentState.copyWith(status: RuntimeStatus.stopped),
+          _currentState.copyWith(
+            status: RuntimeStatus.shutdownFailed,
+            shutdownFailureReason: ShutdownFailureReason.incompleteCleanup,
+            diagnosticMessage: 'Shutdown rejected by host admin authorization: $e',
+          ),
           generation: generation,
         );
-        return ShutdownOutcome.gracefulSuccess;
+        return ShutdownOutcome.incompleteCleanup;
       }
 
-      // Process is alive but failed/rejected shutdown. Treat as unresponsive runtime.
-      return _fallbackEmergencyTermination(
-        managedLlmPid: managedLlmPid,
-        managedByCore: managedByCore,
-        generation: generation,
-      );
+      // Check if runtime is responsive to status
+      try {
+        final status = await _client.getSystemStatus(
+          timeout: const Duration(milliseconds: 500),
+        );
+        if (status.shuttingDown) {
+          managedLlmPid = status.managedLlmPid;
+          managedByCore = status.managedByCore;
+        }
+      } catch (_) {
+        // Status failed too: check if port stopped listening
+        final isStillListening = await _supervisor.isPortListening(
+          targetHost,
+          targetPort,
+          timeout: const Duration(milliseconds: 500),
+        );
+        if (!isStillListening) {
+          final descriptor = _activeRuntimeInfo ?? await _supervisor.readDescriptorDirect(targetLockFile);
+          if (descriptor != null) {
+            final isAlive = await _supervisor.isProcessActiveAndMatching(
+              descriptor.pid,
+              expectedExecutable: descriptor.executablePath,
+            );
+            if (!isAlive) {
+              await _supervisor.clearRuntimeLockfileThroughHandle(targetLockFile);
+              _activeRuntimeInfo = null;
+              _updateState(
+                _currentState.copyWith(status: RuntimeStatus.stopped),
+                generation: generation,
+              );
+              return ShutdownOutcome.gracefulSuccess;
+            }
+          }
+        }
+      }
     }
 
     // 3. Cooperative observation loop (up to timeout)
@@ -1024,7 +1074,7 @@ class DesktopRuntimeCoordinator {
             expectedExecutable: descriptor.executablePath,
           );
           if (isAlive) {
-            // Process still exiting, wait brief moment
+            // Process still exiting, wait and continue observation loop
             await Future<void>.delayed(const Duration(milliseconds: 150));
             continue;
           }
@@ -1049,9 +1099,7 @@ class DesktopRuntimeCoordinator {
         if (status.managedByCore) managedByCore = status.managedByCore;
 
         final quiescence = status.shutdownQuiescenceStatus;
-        if (quiescence == 'incomplete_db_quiescence_timeout' ||
-            quiescence == 'incomplete_provider_lock_timeout') {
-          // Runtime encountered incomplete cleanup! DO NOT AUTO-KILL.
+        if (quiescence != null && quiescence.startsWith('incomplete_')) {
           _updateState(
             _currentState.copyWith(
               status: RuntimeStatus.shutdownFailed,
@@ -1077,6 +1125,43 @@ class DesktopRuntimeCoordinator {
       return ShutdownOutcome.gracefulSuccess;
     }
 
+    // Check if process is still active at window expiry
+    final descriptorAtExpiry = _activeRuntimeInfo ?? await _supervisor.readDescriptorDirect(targetLockFile);
+    if (descriptorAtExpiry != null) {
+      final isAlive = await _supervisor.isProcessActiveAndMatching(
+        descriptorAtExpiry.pid,
+        expectedExecutable: descriptorAtExpiry.executablePath,
+      );
+      if (isAlive) {
+        // Process still alive after timeout! Do NOT claim graceful success!
+        bool isResponsive = false;
+        try {
+          final status = await _client.getSystemStatus(timeout: const Duration(milliseconds: 500));
+          if (status.shuttingDown) {
+            isResponsive = true;
+          }
+        } catch (_) {}
+
+        if (isResponsive) {
+          _updateState(
+            _currentState.copyWith(
+              status: RuntimeStatus.shutdownFailed,
+              shutdownFailureReason: ShutdownFailureReason.incompleteCleanup,
+              diagnosticMessage: 'Shutdown observation window expired while runtime was still performing cleanup.',
+            ),
+            generation: generation,
+          );
+          return ShutdownOutcome.incompleteCleanup;
+        } else {
+          return _fallbackEmergencyTermination(
+            managedLlmPid: managedLlmPid,
+            managedByCore: managedByCore,
+            generation: generation,
+          );
+        }
+      }
+    }
+
     // Double-check if still listening
     final stillListeningAtExpiry = await _supervisor.isPortListening(
       targetHost,
@@ -1094,26 +1179,6 @@ class DesktopRuntimeCoordinator {
       return ShutdownOutcome.gracefulSuccess;
     }
 
-    // Still listening: try querying status one final time
-    try {
-      final status = await _client.getSystemStatus(
-        timeout: const Duration(milliseconds: 500),
-      );
-      if (status.shuttingDown) {
-        // Still actively cleaning up: do not kill, surface incompleteCleanup
-        _updateState(
-          _currentState.copyWith(
-            status: RuntimeStatus.shutdownFailed,
-            shutdownFailureReason: ShutdownFailureReason.incompleteCleanup,
-            diagnosticMessage: 'Shutdown observation window expired while runtime was still performing cleanup.',
-          ),
-          generation: generation,
-        );
-        return ShutdownOutcome.incompleteCleanup;
-      }
-    } catch (_) {}
-
-    // Runtime is unresponsive: attempt fallback termination
     return _fallbackEmergencyTermination(
       managedLlmPid: managedLlmPid,
       managedByCore: managedByCore,

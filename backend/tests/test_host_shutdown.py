@@ -8,6 +8,7 @@ from httpx import ASGITransport, AsyncClient
 from app.core.runtime_lifecycle import RuntimeLifecycleCoordinator, runtime_lifecycle
 from app.main import app
 from app.schemas.health import SystemShutdownRequest, SystemShutdownResponse
+from app.services.llm.base import ProviderShutdownResult
 
 
 @pytest.fixture(autouse=True)
@@ -218,3 +219,131 @@ async def test_s11_persistence_drain_timeout_prevents_db_disposal():
             mock_provider.shutdown.assert_not_called()
     finally:
         task.cancel()
+
+
+@pytest.mark.anyio
+async def test_streaming_response_maintains_admission_until_completion():
+    """Verify that pure ASGI middleware maintains admission count for the full duration of a stream."""
+    from app.main import RuntimeAdmissionASGIMiddleware
+    from fastapi import FastAPI
+    from fastapi.responses import StreamingResponse
+    from app.core.runtime_lifecycle import runtime_lifecycle
+    from httpx import AsyncClient, ASGITransport
+
+    runtime_lifecycle.reset()
+    stream_running = asyncio.Event()
+    finish_stream = asyncio.Event()
+
+    test_app = FastAPI()
+    test_app.add_middleware(RuntimeAdmissionASGIMiddleware)
+
+    @test_app.post("/test-stream")
+    async def stream_endpoint():
+        async def gen():
+            stream_running.set()
+            yield b"data: chunk\n\n"
+            await finish_stream.wait()
+            yield b"data: end\n\n"
+        return StreamingResponse(gen(), media_type="text/event-stream")
+
+    async with AsyncClient(transport=ASGITransport(app=test_app), base_url="http://test") as client:
+        assert runtime_lifecycle._active_asgi_mutations == 0
+
+        # Start request in background
+        stream_task = asyncio.create_task(client.post("/test-stream"))
+
+        # Wait until generator has started inside ASGI pipeline
+        await asyncio.wait_for(stream_running.wait(), timeout=2.0)
+
+        # While stream is running, admission MUST be active
+        assert runtime_lifecycle._active_asgi_mutations == 1
+        assert runtime_lifecycle.has_active_database_work is True
+
+        # Signal stream to finish
+        finish_stream.set()
+        resp = await asyncio.wait_for(stream_task, timeout=2.0)
+        assert resp.status_code == 200
+
+        # Now admission is released
+        assert runtime_lifecycle._active_asgi_mutations == 0
+
+
+@pytest.mark.anyio
+async def test_failed_terminal_persistence_prevents_clean_shutdown():
+    """Verify that a failed SQLite terminal persistence commit prevents claiming clean shutdown."""
+    coord = RuntimeLifecycleCoordinator()
+    mock_server = MagicMock()
+    mock_server.should_exit = False
+    coord.register_server(mock_server)
+
+    async def failing_persistence():
+        await asyncio.sleep(0.05)
+        return False  # Failed commit
+
+    coord.spawn_terminal_persistence_task(failing_persistence(), context_info="test_failed_commit")
+
+    with patch("app.core.runtime_lifecycle.get_llm_provider") as mock_get_provider:
+        mock_provider = MagicMock()
+        mock_provider.signal_shutdown_immediately = MagicMock()
+        mock_provider.shutdown = AsyncMock()
+        mock_get_provider.return_value = mock_provider
+
+        await coord.initiate_shutdown(drain_timeout_seconds=0.5)
+        if coord._shutdown_task:
+            await coord._shutdown_task
+
+        assert coord.has_persistence_failures is True
+        assert coord.shutdown_quiescence_status == "incomplete_persistence_failure"
+        assert mock_server.should_exit is False
+        mock_provider.shutdown.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_retry_resumes_incomplete_shutdown():
+    """Verify that after an incomplete shutdown, a retry safely resumes and completes shutdown."""
+    coord = RuntimeLifecycleCoordinator()
+    mock_server = MagicMock()
+    mock_server.should_exit = False
+    coord.register_server(mock_server)
+
+    # 1. First attempt: persistence task blocks past 0.1s deadline
+    blocker_event = asyncio.Event()
+
+    async def blocking_persistence():
+        await blocker_event.wait()
+        return True
+
+    task = coord.spawn_terminal_persistence_task(blocking_persistence(), context_info="retry_test_blocker")
+
+    with patch("app.core.runtime_lifecycle.get_llm_provider") as mock_get_provider:
+        mock_provider = MagicMock()
+        mock_provider.signal_shutdown_immediately = MagicMock()
+        mock_provider.shutdown = AsyncMock(return_value=ProviderShutdownResult(completed_cleanly=True, lock_acquired=True))
+        mock_get_provider.return_value = mock_provider
+
+        # Attempt 1
+        already_shutting_down, msg = await coord.initiate_shutdown(drain_timeout_seconds=0.1)
+        assert already_shutting_down is False
+        assert msg == "shutdown_initiated"
+        await coord._shutdown_task
+
+        # Halts at incomplete_db_quiescence_timeout
+        assert coord.shutdown_quiescence_status == "incomplete_db_quiescence_timeout"
+        assert mock_server.should_exit is False
+
+        # 2. Unblock the persistence task so it completes cleanly
+        blocker_event.set()
+        await task
+        assert coord.has_active_database_work is False
+
+        # 3. Retry shutdown!
+        already_shutting_down, msg = await coord.initiate_shutdown(drain_timeout_seconds=0.5)
+        assert already_shutting_down is False
+        assert msg == "shutdown_retried"
+        await coord._shutdown_task
+
+        # Now achieves clean shutdown!
+        assert coord.shutdown_quiescence_status == "clean"
+        assert mock_server.should_exit is True
+        mock_provider.shutdown.assert_called_once()
+

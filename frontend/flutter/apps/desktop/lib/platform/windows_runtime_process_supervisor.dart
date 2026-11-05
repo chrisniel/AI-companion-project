@@ -634,21 +634,45 @@ try {
   }
 
   \$childKilled = \$false
+  \$childDiagnostic = ''
   if (\$managedByCore -and \$managedLlmPid -gt 0) {
     try {
-      \$childProc = [System.Diagnostics.Process]::GetProcessById(\$managedLlmPid)
-      \$childName = \$childProc.ProcessName.ToLowerInvariant()
-      if (\$childName -match 'llama') {
-        \$childProc.Kill()
-        \$childProc.WaitForExit(3000)
-        \$childKilled = \$true
+      \$childCim = Get-CimInstance Win32_Process -Filter "ProcessId = \$managedLlmPid" -ErrorAction SilentlyContinue
+      if (\$null -ne \$childCim) {
+        # 1. Authoritative Parentage check: ParentProcessId must equal \$targetPid
+        \$isChildOfRuntime = (\$childCim.ParentProcessId -eq \$targetPid)
+
+        # 2. Executable provenance: must match llama binary
+        \$childExeName = if (\$childCim.Name) { \$childCim.Name.ToLowerInvariant() } else { '' }
+        \$childExePath = if (\$childCim.ExecutablePath) { \$childCim.ExecutablePath.ToLowerInvariant() } else { '' }
+        \$exeMatches = (\$childExeName -match 'llama') -or (\$childExePath -match 'llama-server')
+
+        # 3. Creation time: child must not predate parent runtime
+        \$childCreated = if (\$childCim.CreationDate) { [DateTime]\$childCim.CreationDate } else { [DateTime]::MinValue }
+        \$parentCreated = if (\$cim.CreationDate) { [DateTime]\$cim.CreationDate } else { [DateTime]::MinValue }
+        \$timeMatches = (\$childCreated -ge \$parentCreated.AddSeconds(-5))
+
+        # 4. Command-line inspection: must contain router or model arguments
+        \$childCmdLine = if (\$childCim.CommandLine) { \$childCim.CommandLine.ToLowerInvariant() } else { '' }
+        \$cmdMatches = (\$childCmdLine -match '--port' -or \$childCmdLine -match '--model' -or \$childCmdLine -match 'llama-server')
+
+        if (\$isChildOfRuntime -and \$exeMatches -and \$timeMatches -and \$cmdMatches) {
+          \$childProc = [System.Diagnostics.Process]::GetProcessById(\$managedLlmPid)
+          \$childProc.Kill()
+          \$childProc.WaitForExit(3000)
+          \$childKilled = \$true
+        } else {
+          \$childDiagnostic = "Child PID \$managedLlmPid failed provenance verification: ParentMatch=\$isChildOfRuntime, ExeMatch=\$exeMatches, TimeMatch=\$timeMatches, CmdMatch=\$cmdMatches"
+        }
       }
-    } catch {}
+    } catch {
+      \$childDiagnostic = "Child verification error: \$(\$_.Exception.Message)"
+    }
   }
 
   \$proc.Kill()
   \$proc.WaitForExit(5000)
-  [PSCustomObject]@{ status = 'terminated'; childTerminated = \$childKilled } | ConvertTo-Json -Compress
+  [PSCustomObject]@{ status = 'terminated'; childTerminated = \$childKilled; diagnostic = \$childDiagnostic } | ConvertTo-Json -Compress
 } catch {
   [PSCustomObject]@{ status = 'inspectionUnavailable'; childTerminated = \$false; diagnostic = \$_.Exception.Message } | ConvertTo-Json -Compress
 }

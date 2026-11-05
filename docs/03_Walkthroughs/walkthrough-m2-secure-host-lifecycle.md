@@ -36,9 +36,10 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
    - Route B `del self._llm` guard: explicitly releases native `llama_cpp.Llama` memory before setting state to `SERVER_STOPPED`.
 
 5. **Handle-Bound Windows OS Process Supervision (`WindowsRuntimeProcessSupervisor`):**
-   - Uses native Win32 process handles via Windows Job Object (`JobObjectAssociateCompletionPortInformation`, `SetInformationJobObject`) to maintain unbreakable process tree ownership.
-   - Process entrypoint provenance verification: inspects executable path and command-line arguments before issuing any process termination fallback, eliminating PID reuse / recycling hazards.
-   - Cleans up stale runtime lockfiles upon confirmed process termination.
+   - Process supervision uses PowerShell CIM `Win32_Process` parentage/provenance verification and kernel file locking (`RandomAccessFile.lock(FileLock.blockingExclusive)`).
+   - Process entrypoint provenance verification: inspects executable path, creation timestamp, and command-line arguments before issuing any process termination fallback, eliminating PID reuse / recycling hazards.
+   - Child process provenance verification: checks `$childCim.ParentProcessId -eq $targetPid`, creation time (`$childCreated -ge $parentCreated`), executable name (`llama`), and command-line arguments to ensure child process ownership before termination, never terminating unrelated or externally managed `llama-server.exe` processes.
+   - Cleans up stale runtime lockfiles through locked handle truncation and deletion upon confirmed process termination.
 
 6. **Coordinated Shutdown Orchestration (`DesktopRuntimeCoordinator`):**
    - Coordinates the 25-second cooperative shutdown window:
@@ -109,7 +110,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 | **Companion API** | `frontend/flutter/packages/companion_api/lib/client/companion_client.dart` | MODIFY | Added `shutdownRuntime()`, 90s model load timeouts, 20s unload timeouts. |
 | **Companion API** | `frontend/flutter/packages/companion_api/lib/dto/system_status_dto.dart` | MODIFY | Added `SystemShutdownResponseDto` and status deserializers. |
 | **Companion API** | `frontend/flutter/packages/companion_api/test/companion_client_test.dart` | MODIFY | Unit tests for client shutdown and timeout configurations. |
-| **Flutter Desktop** | `frontend/flutter/apps/desktop/lib/platform/windows_runtime_process_supervisor.dart` | MODIFY | Handle-bound Windows Job Object supervision and provenance verification. |
+| **Flutter Desktop** | `frontend/flutter/apps/desktop/lib/platform/windows_runtime_process_supervisor.dart` | MODIFY | Handle-bound CIM Win32_Process supervision and child provenance verification. |
 | **Flutter Desktop** | `frontend/flutter/apps/desktop/lib/coordinator/desktop_runtime_coordinator.dart` | MODIFY | Coordinated 25s shutdown window and 4-outcome handling. |
 | **Flutter Desktop** | `frontend/flutter/apps/desktop/lib/dialogs/exit_confirmation_dialog.dart` | ADD | User confirmation dialog for Exit Companion action. |
 | **Flutter Desktop** | `frontend/flutter/apps/desktop/lib/dialogs/incomplete_shutdown_recovery_dialog.dart` | ADD | Recovery dialog presenting options when cleanup is incomplete. |
@@ -137,10 +138,10 @@ All verification was executed and confirmed 100% green across all tiers:
 
 | Verification Suite | Target Directory / Script | Command Executed | Result / Output |
 | :--- | :--- | :--- | :--- |
-| **Backend Pytest** | `backend/tests/` | `backend\.venv\Scripts\python.exe -m pytest backend\tests -v` | **660 passed** in 78.42s (0 failures, 0 errors) |
+| **Backend Pytest** | `backend/tests/` | `backend\.venv\Scripts\python.exe -m pytest backend\tests -v` | **665 passed** (0 failures, 0 errors) |
 | **Flutter Core** | `frontend/flutter/packages/companion_core` | `flutter test` | **23 passed** (0 failures) |
 | **Flutter API** | `frontend/flutter/packages/companion_api` | `flutter test` | **81 passed** (0 failures) |
-| **Flutter Desktop App** | `frontend/flutter/apps/desktop` | `flutter test` | **297 passed** (0 failures) |
+| **Flutter Desktop App** | `frontend/flutter/apps/desktop` | `flutter test` | **301 passed** (0 failures) |
 | **Dart Analyzer** | Entire Flutter workspace | `flutter analyze` | **0 issues found** across all packages |
 | **OpenAPI Drift Check** | Backend routes vs schema | `python scripts/check_openapi_contract.py --check` | **Clean** (0 differences) |
 | **OpenAPI Parity Check** | Dart DTOs vs OpenAPI spec | `python scripts/check_dart_openapi_parity.py` | **40 routes, 24/24 DTOs, 30/19 covered routes** |

@@ -559,6 +559,38 @@ void main() {
       expect(result.childTerminated, isTrue);
     });
 
+    test('terminateVerifiedRuntimeProcess with unrelated child process leaves child untouched and records diagnostic', () async {
+      final fakeLauncher = FakeProcessLauncher();
+      fakeLauncher.processToStart = FakeProcess(
+        stdout: Stream.value(utf8.encode(jsonEncode({
+          'status': 'terminated',
+          'childTerminated': false,
+          'diagnostic': 'Managed LLM child PID 5555 ownership check failed: parent PID mismatch',
+        }))),
+        exitCode: Future.value(0),
+      );
+      final supervisor = WindowsRuntimeProcessSupervisor(launcher: fakeLauncher);
+
+      final desc = RuntimeLockfileData(
+        schemaVersion: 1,
+        instanceId: 'test-inst',
+        pid: 9999,
+        port: 8000,
+        startedAt: DateTime.now().toUtc(),
+        executablePath: r'C:\venv\Scripts\python.exe',
+      );
+
+      final result = await supervisor.terminateVerifiedRuntimeProcess(
+        expectedDescriptor: desc,
+        managedLlmPid: 5555,
+        managedByCore: true,
+      );
+
+      expect(result.status, equals(TerminationResultStatus.terminated));
+      expect(result.childTerminated, isFalse);
+      expect(result.diagnostic, contains('parent PID mismatch'));
+    });
+
     test('terminateVerifiedRuntimeProcess reports timeout on hanging execution', () async {
       final fakeLauncher = FakeProcessLauncher();
       fakeLauncher.processToStart = FakeProcess(

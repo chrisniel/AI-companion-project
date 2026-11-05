@@ -1,14 +1,22 @@
 import 'dart:io';
 
 import 'package:ai_companion_desktop/controllers/desktop_settings_controller.dart';
+import 'package:ai_companion_desktop/coordinator/desktop_runtime_coordinator.dart';
 import 'package:ai_companion_desktop/diagnostics/windows_storage_diagnostic_reader.dart';
 import 'package:ai_companion_desktop/features/chat/desktop_chat_controller.dart';
+import 'package:ai_companion_desktop/lifecycle/desktop_lifecycle_coordinator.dart';
+import 'package:ai_companion_desktop/lifecycle/desktop_tray_adapter.dart';
+import 'package:ai_companion_desktop/lifecycle/desktop_window_adapter.dart';
 import 'package:ai_companion_desktop/platform/desktop_client_settings.dart';
+import 'package:ai_companion_desktop/platform/windows_runtime_process_supervisor.dart';
 import 'package:ai_companion_desktop/screens/settings_screen.dart';
 import 'package:companion_api/companion_api.dart';
+import 'package:companion_core/companion_core.dart';
 import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tray_manager/tray_manager.dart';
+import 'package:window_manager/window_manager.dart';
 
 void main() {
   void setupDesktopViewport(WidgetTester tester) {
@@ -441,6 +449,80 @@ void main() {
 
       expect(find.text('Exit AI Companion?'), findsNothing);
     });
+
+    testWidgets('failed forceEmergencyStopLocalRuntime preserves SettingsScreen UI and shows error SnackBar', (tester) async {
+      setupDesktopViewport(tester);
+
+      final controller = DesktopSettingsController();
+      final supervisor = FakeEmergencyFailingSupervisor();
+      supervisor.storedDescriptor = RuntimeLockfileData(
+        schemaVersion: 1,
+        instanceId: 'fail-inst',
+        pid: 7788,
+        port: 8000,
+        startedAt: DateTime.now().toUtc(),
+        executablePath: r'C:\Python\pythonw.exe',
+      );
+      final client = FakeEmergencyMockClient();
+      final runtimeCoordinator = DesktopRuntimeCoordinator(
+        baseUrl: 'http://127.0.0.1:8000',
+        supervisor: supervisor,
+        client: client,
+      );
+      await runtimeCoordinator.ensureRuntimeReady();
+
+      bool exitRequestedCalled = false;
+      final lifecycleCoordinator = DesktopLifecycleCoordinator(
+        windowAdapter: MockSettingsWindowAdapter(),
+        trayAdapter: MockSettingsTrayAdapter(),
+        onExitRequested: () async {
+          exitRequestedCalled = true;
+        },
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: SettingsScreen(
+              controller: controller,
+              runtimeCoordinator: runtimeCoordinator,
+              coordinator: lifecycleCoordinator,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      final exitButtons = find.widgetWithText(FilledButton, 'Exit Companion');
+      await tester.ensureVisible(exitButtons);
+      await tester.tap(exitButtons);
+      await tester.pumpAndSettle();
+
+      // Confirm exit
+      expect(find.text('Exit AI Companion?'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Exit Companion').last);
+      await tester.pumpAndSettle();
+
+      // Incomplete shutdown dialog appears due to incomplete_db_quiescence_timeout
+      expect(find.text('Incomplete Shutdown'), findsOneWidget);
+
+      // Tap 'Force Stop Local Runtime'
+      await tester.tap(find.text('Force Stop Local Runtime'));
+      await tester.pumpAndSettle();
+
+      // Emergency termination failed:
+      // 1. handleExitRequested must NOT be called
+      expect(exitRequestedCalled, isFalse);
+
+      // 2. Error SnackBar must be displayed
+      expect(find.textContaining('Emergency stop failed'), findsOneWidget);
+      expect(find.textContaining('PowerShell access denied'), findsOneWidget);
+
+      // 3. Settings UI remains rendered
+      expect(find.text('Settings'), findsWidgets);
+    });
   });
 }
 
@@ -559,6 +641,111 @@ class FakeModelSelectionClient extends CompanionClient {
       selectedModel: 'qwen3-vl-2b-instruct',
       modelLoaded: false,
       modelResident: false,
+    );
+  }
+}
+
+class MockSettingsWindowAdapter implements DesktopWindowAdapter {
+  bool isDestroyed = false;
+  final List<WindowListener> listeners = [];
+  @override
+  Future<void> ensureInitialized() async {}
+  @override
+  Future<void> setSize(Size newSize) async {}
+  @override
+  Future<void> setMinimumSize(Size newMinimumSize) async {}
+  @override
+  Future<void> center() async {}
+  @override
+  Future<void> setTitle(String newTitle) async {}
+  @override
+  Future<void> waitUntilReadyToShow([WindowOptions? options, VoidCallback? callback]) async {
+    callback?.call();
+  }
+  @override
+  Future<void> setPreventClose(bool isPrevent) async {}
+  @override
+  Future<bool> isPreventClose() async => true;
+  @override
+  Future<bool> isVisible() async => true;
+  @override
+  Future<void> show() async {}
+  @override
+  Future<void> hide() async {}
+  @override
+  Future<void> focus() async {}
+  @override
+  Future<void> destroy() async { isDestroyed = true; }
+  @override
+  void addListener(WindowListener listener) { listeners.add(listener); }
+  @override
+  void removeListener(WindowListener listener) { listeners.remove(listener); }
+}
+
+class MockSettingsTrayAdapter implements DesktopTrayAdapter {
+  bool isDestroyed = false;
+  final List<TrayListener> listeners = [];
+  @override
+  Future<void> setIcon(String path) async {}
+  @override
+  Future<void> setToolTip(String tip) async {}
+  @override
+  Future<void> setContextMenu(Menu menu) async {}
+  @override
+  Future<void> destroy() async { isDestroyed = true; }
+  @override
+  void addListener(TrayListener listener) { listeners.add(listener); }
+  @override
+  void removeListener(TrayListener listener) { listeners.remove(listener); }
+}
+
+class FakeEmergencyFailingSupervisor extends WindowsRuntimeProcessSupervisor {
+  RuntimeLockfileData? storedDescriptor;
+  @override
+  Future<bool> isPortListening(String host, int port, {Duration timeout = const Duration(milliseconds: 500)}) async => true;
+  @override
+  Future<RuntimeLockfileData?> readDescriptorDirect(File lockFile) async => storedDescriptor;
+  @override
+  Future<RandomAccessFile?> acquireStartupLock(File lockFile, {Duration timeout = const Duration(seconds: 5)}) async => null;
+  @override
+  Future<bool> isProcessActiveAndMatching(int pid, {required String expectedExecutable}) async => true;
+  @override
+  Future<TerminationResult> terminateVerifiedRuntimeProcess({
+    required RuntimeLockfileData expectedDescriptor,
+    int? managedLlmPid,
+    bool managedByCore = false,
+    Duration timeout = const Duration(seconds: 8),
+  }) async {
+    return const TerminationResult(
+      status: TerminationResultStatus.inspectionUnavailable,
+      diagnostic: 'PowerShell access denied',
+    );
+  }
+}
+
+class FakeEmergencyMockClient extends CompanionClient {
+  FakeEmergencyMockClient() : super(credentialStore: InMemoryCredentialStore('token'));
+  @override
+  Future<HealthResponse> getHealth({Duration timeout = const Duration(seconds: 3)}) async => const HealthResponse(status: 'healthy');
+  @override
+  Future<AuthVerifyResponse> verifyAuth({Duration timeout = const Duration(seconds: 5)}) async => const AuthVerifyResponse(authenticated: true, tokenType: 'Bearer', message: 'ok');
+  @override
+  Future<SystemShutdownResponse> shutdownSystem({String reason = 'user_exit_companion', double drainTimeoutSeconds = 6.0, Duration timeout = const Duration(seconds: 5)}) async {
+    return const SystemShutdownResponse(status: 'shutting_down', pid: 1234, message: 'shutting down');
+  }
+  @override
+  Future<SystemStatusResponse> getSystemStatus({Duration timeout = const Duration(seconds: 5)}) async {
+    return SystemStatusResponse(
+      status: 'online',
+      platform: 'windows',
+      pythonVersion: '3.11.9',
+      hostname: 'test-host',
+      version: '0.1.0',
+      databaseConnected: true,
+      timestamp: DateTime.now().toUtc().toIso8601String(),
+      shuttingDown: true,
+      shutdownPhase: 'drain_persistence',
+      shutdownQuiescenceStatus: 'incomplete_db_quiescence_timeout',
     );
   }
 }

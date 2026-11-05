@@ -382,6 +382,9 @@ async def orchestrate_chat_stream(
     provider = get_llm_provider()
 
     try:
+        current_stream_task = asyncio.current_task()
+        if current_stream_task is not None:
+            runtime_lifecycle.register_stream_task(current_stream_task)
         await _require_prepared_turn(db, profile_session, conversation_id, prepared_turn)
         # Retrieve relevant memories via FTS5
         memories = await search_relevant_memories(
@@ -540,7 +543,8 @@ async def orchestrate_chat_stream(
                 engine=db.bind,
                 profile_session=profile_session,
                 conversation_id=conversation_id,
-            )
+            ),
+            context_info=f"chat_cancelled:{conversation_id}:{asst_msg_id}",
         )
         await asyncio.shield(cancel_task)
         raise
@@ -567,7 +571,8 @@ async def orchestrate_chat_stream(
                 engine=db.bind,
                 profile_session=profile_session,
                 conversation_id=conversation_id,
-            )
+            ),
+            context_info=f"chat_failed:{conversation_id}:{asst_msg_id}",
         )
         await asyncio.shield(fail_task)
         try:

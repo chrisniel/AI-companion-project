@@ -60,6 +60,26 @@
 
 ---
 
-## Phase 4: Combined Independent Review and Human Merge (Next Steps)
-- [ ] Independent Reviewer evaluation and verification against published delivery package.
+## Phase 4: Combined Independent Review and Human Merge
+
+### Independent Review Corrections (Implemented & Verified):
+- [x] **A. Whole-Runtime Quiescence:** Replaced `BaseHTTPMiddleware` with pure ASGI `RuntimeAdmissionASGIMiddleware` holding mutation admission for full request/streaming response lifecycle. Registered assistant stream tasks with drain. Added persistence task result tracking (success/failure/cancelled), preventing clean shutdown if any persistence fails (`incomplete_persistence_failure`).
+- [x] **B. Incomplete-Shutdown Retry:** Made `initiate_shutdown()` bounded and idempotent, allowing retries after `incomplete_*` states without creating duplicate concurrent shutdown tasks.
+- [x] **C. Emergency Stop Authorization & Outcome Handling:** In `DesktopRuntimeCoordinator.shutdownLocalRuntime()`, isolated auth errors (401/403) from transport errors and prohibited silent OS termination fallback. In `DesktopShell` and `SettingsScreen`, inspected `forceEmergencyStopLocalRuntime()` return value; if termination fails, keeps UI open and displays error SnackBar.
+- [x] **D. Child Process Provenance:** Implemented handle-bound child verification in PowerShell fallback checking parentage (`$childCim.ParentProcessId -eq $targetPid`), creation time (`$childCreated -ge $parentCreated`), executable name (`llama`), and command-line arguments. Fails closed on ambiguous ownership and never kills unrelated or externally managed `llama-server.exe`.
+- [x] **E. Provider Cleanup Truthfulness:** In `_stop_managed_router_locked()`, verifies `self._server_process.poll()` is not None before clearing state; if process remains alive, retains reference/ownership, returns `False`, and reports `ROUTER_TERMINATION_FAILED`.
+- [x] **F. Model-Load Cancellation:** Registered and tracked active loading tasks (`_active_load_task`) and router HTTP clients (`_active_router_clients`). Made router startup, HTTP load operations, and polling cancellation-aware (`_sleep_or_abort`). Ensured synchronized cleanup under lock on `CancelledError`.
+- [x] **G. Shutdown Completion Detection:** Verified expected process identity and dead state before reporting `gracefulSuccess` or clearing lockfile descriptor.
+- [x] **Verification Evidence:**
+  - Backend Pytest: 665/665 passed in ~208s (0 failures)
+  - Flutter companion_core: 23/23 passed
+  - Flutter companion_api: 81/81 passed
+  - Flutter desktop: 301/301 passed
+  - Dart analyze: 0 issues across all packages
+  - React web tests: 16 test files passed, 248/248 passed
+  - OpenAPI Parity: 40 routes, 24/24 DTOs, 30/19 covered routes
+  - Windows supervision acceptance: 6/6 scenarios passed
+
+### Merge Readiness:
+- [ ] Independent Reviewer final evaluation of corrected delivery package.
 - [ ] Human Owner squash-merge into `develop` and read-only post-merge verification.

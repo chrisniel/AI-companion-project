@@ -128,29 +128,43 @@ class PayloadLimitMiddleware(BaseHTTPMiddleware):
             )
 
 
-class RuntimeAdmissionMiddleware(BaseHTTPMiddleware):
-    """Whole-runtime admission gate and mutation tracking during graceful shutdown."""
+class RuntimeAdmissionASGIMiddleware:
+    """Full-ASGI lifecycle admission gate and mutation tracking during graceful shutdown."""
 
-    async def dispatch(self, request: Request, call_next) -> Response:
-        is_mutation = request.method in ("POST", "PUT", "PATCH", "DELETE")
-        is_shutdown_endpoint = request.url.path.rstrip("/").endswith("/system/shutdown")
+    def __init__(self, app) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        method = scope.get("method", "GET")
+        path = scope.get("path", "")
+        is_mutation = method in ("POST", "PUT", "PATCH", "DELETE")
+        is_shutdown_endpoint = path.rstrip("/").endswith("/system/shutdown")
 
         if is_mutation and not is_shutdown_endpoint:
             if not runtime_lifecycle.acquire_mutation_admission():
-                request_id = getattr(request.state, "request_id", None) or f"req_{uuid.uuid4().hex[:12]}"
-                return format_error_response(
+                state = scope.get("state", {})
+                req_id = state.get("request_id") if isinstance(state, dict) else None
+                request_id = req_id or f"req_{uuid.uuid4().hex[:12]}"
+                response = format_error_response(
                     code="RUNTIME_SHUTTING_DOWN",
                     message="Runtime is currently shutting down. Mutations are rejected.",
                     details=None,
                     request_id=request_id,
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 )
+                await response(scope, receive, send)
+                return
+
             try:
-                return await call_next(request)
+                await self.app(scope, receive, send)
             finally:
                 runtime_lifecycle.release_mutation_admission()
-
-        return await call_next(request)
+        else:
+            await self.app(scope, receive, send)
 
 
 @asynccontextmanager
@@ -229,7 +243,7 @@ def create_app() -> FastAPI:
     )
 
     # Admission control middleware for graceful shutdown
-    app.add_middleware(RuntimeAdmissionMiddleware)
+    app.add_middleware(RuntimeAdmissionASGIMiddleware)
 
     # Security: Request payload limit middleware (OWASP API4)
     app.add_middleware(PayloadLimitMiddleware)

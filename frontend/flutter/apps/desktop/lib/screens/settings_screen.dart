@@ -608,9 +608,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
           await _handleExitCompanion(context);
           break;
         case IncompleteShutdownAction.forceStop:
-          await rc.forceEmergencyStopLocalRuntime();
+          final forceOutcome = await rc.forceEmergencyStopLocalRuntime();
           if (mounted) {
-            widget.coordinator?.handleExitRequested();
+            if (forceOutcome == ShutdownOutcome.emergencyTerminated ||
+                forceOutcome == ShutdownOutcome.gracefulSuccess) {
+              widget.coordinator?.handleExitRequested();
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Emergency stop failed: ${rc.currentState.diagnosticMessage ?? "Unable to terminate runtime process"}'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
           }
           break;
         case IncompleteShutdownAction.quitUiOnly:
@@ -632,9 +642,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       switch (action) {
         case UnresponsiveShutdownAction.forceStop:
-          await rc.forceEmergencyStopLocalRuntime();
+          final forceOutcome = await rc.forceEmergencyStopLocalRuntime();
           if (mounted) {
-            widget.coordinator?.handleExitRequested();
+            if (forceOutcome == ShutdownOutcome.emergencyTerminated ||
+                forceOutcome == ShutdownOutcome.gracefulSuccess) {
+              widget.coordinator?.handleExitRequested();
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Emergency stop failed: ${rc.currentState.diagnosticMessage ?? "Unable to terminate runtime process"}'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
           }
           break;
         case UnresponsiveShutdownAction.quitUiOnly:

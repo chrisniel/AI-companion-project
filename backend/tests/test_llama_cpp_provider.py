@@ -98,6 +98,9 @@ async def test_s12_cooperative_abort_during_load_model():
         fake_proc = MagicMock()
         fake_proc.pid = 4321
         fake_proc.poll.return_value = None
+        def _on_terminate():
+            fake_proc.poll.return_value = 0
+        fake_proc.terminate.side_effect = _on_terminate
         mock_popen.return_value = fake_proc
 
         load_task = asyncio.create_task(provider.load_model("test_model"))
@@ -174,6 +177,10 @@ async def test_s15_unload_model_vs_stop_managed_router_locked_vs_external():
         mock_proc.terminate.assert_not_called()
 
     # Case 2: shutdown() terminates Core-managed router under lock
+    def _simulate_exit():
+        mock_proc.poll.return_value = 0
+    mock_proc.terminate.side_effect = _simulate_exit
+
     shutdown_res = await provider.shutdown(drain_timeout=0.1, lock_timeout=1.0)
     assert shutdown_res.completed_cleanly is True
     assert shutdown_res.lock_acquired is True
@@ -266,3 +273,82 @@ async def test_m6_model_id_normalization():
         status = await provider.get_status()
         assert status.active_model == "llama-3-8b-instruct"
         assert provider._active_model_name == "llama-3-8b-instruct"
+
+
+@pytest.mark.anyio
+async def test_shutdown_interrupts_in_progress_model_load_http_post():
+    """Verify that signal_shutdown_immediately aborts an active in-flight HTTP load operation."""
+    provider = LlamaCppProvider()
+
+    # Block inside httpx.AsyncClient.post to simulate long network weight transfer
+    post_unblocked = asyncio.Event()
+
+    async def hanging_post(*args, **kwargs):
+        try:
+            await post_unblocked.wait()
+            return MagicMock(status_code=200)
+        except asyncio.CancelledError:
+            raise
+
+    mock_client = AsyncMock()
+    mock_client.post.side_effect = hanging_post
+    mock_client.aclose = AsyncMock()
+
+    mock_registry_entry = MagicMock()
+    mock_registry_entry.library_state.primary_file_exists = True
+    mock_registry_entry.runtime_model_id = "heavy_model"
+    mock_registry_entry.manifest.id = "heavy_model"
+
+    with patch("app.services.llm.llama_cpp.find_model_registry_entry", return_value=mock_registry_entry), \
+         patch("app.services.llm.llama_cpp.httpx.AsyncClient", return_value=mock_client), \
+         patch.object(provider, "_resolve_model_path", return_value=MagicMock(exists=lambda: True)), \
+         patch.object(provider, "_check_port_listening", return_value=True), \
+         patch.object(provider, "_check_external_server", AsyncMock(return_value=True)):
+
+        load_task = asyncio.create_task(provider.load_model("heavy_model"))
+        await asyncio.sleep(0.05)
+
+        # Active load task and client must be registered
+        assert provider._active_load_task is not None
+        assert mock_client in provider._active_router_clients
+
+        # Signal shutdown immediately!
+        provider.signal_shutdown_immediately()
+
+        # Load task should abort promptly and return False
+        res = await asyncio.wait_for(load_task, timeout=1.0)
+        assert res is False
+        assert provider._last_error == "LOAD_ABORTED_BY_SHUTDOWN"
+        assert provider._active_load_task is None
+        assert mock_client not in provider._active_router_clients
+
+
+@pytest.mark.anyio
+async def test_router_termination_failure_reported_honestly():
+    """Verify that if Core-managed router fails to die, shutdown reports failure and retains process reference."""
+    provider = LlamaCppProvider()
+    mock_proc = MagicMock()
+    mock_proc.pid = 9999
+    # poll() always returns None -> process refused to die
+    mock_proc.poll.return_value = None
+    mock_proc.terminate = MagicMock()
+    mock_proc.kill = MagicMock()
+
+    provider._server_process = mock_proc
+    provider._server_pid = 9999
+    provider._managed_by_core = True
+
+    res = await provider.shutdown(drain_timeout=0.1, lock_timeout=1.0)
+
+    # Must report failure honestly
+    assert res.completed_cleanly is False
+    assert res.lock_acquired is True
+    assert res.reason == "ROUTER_TERMINATION_FAILED"
+    assert res.managed_llm_pid == 9999
+    assert res.managed_by_core is True
+
+    # Process and ownership references MUST be retained for recovery
+    assert provider._server_process is mock_proc
+    assert provider._server_pid == 9999
+    assert provider._managed_by_core is True
+

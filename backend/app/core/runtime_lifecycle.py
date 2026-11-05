@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Coroutine, Optional, Set
+from typing import TYPE_CHECKING, Any, Coroutine, Optional, Set
 
 from app.services.llm.base import BaseLLMProvider
 from app.services.llm.manager import llm_manager
@@ -31,6 +31,8 @@ class RuntimeLifecycleCoordinator:
         self._active_asgi_mutations: int = 0
         self._active_stream_tasks: Set[asyncio.Task] = set()
         self._pending_persistence_tasks: Set[asyncio.Task] = set()
+        self._persistence_failures: list[dict[str, Any]] = []
+        self._persistence_success_count: int = 0
         self._managed_llm_pid: Optional[int] = None
         self._managed_by_core: bool = False
         self._shutdown_task: Optional[asyncio.Task] = None
@@ -45,6 +47,8 @@ class RuntimeLifecycleCoordinator:
         self._active_asgi_mutations = 0
         self._active_stream_tasks.clear()
         self._pending_persistence_tasks.clear()
+        self._persistence_failures.clear()
+        self._persistence_success_count = 0
         self._managed_llm_pid = None
         self._managed_by_core = False
         if self._shutdown_task and not self._shutdown_task.done():
@@ -77,6 +81,15 @@ class RuntimeLifecycleCoordinator:
         active_tasks = any(not t.done() for t in self._pending_persistence_tasks)
         return self._active_asgi_mutations > 0 or active_tasks
 
+    @property
+    def has_persistence_failures(self) -> bool:
+        """Indicates whether any terminal persistence operations failed during this lifecycle."""
+        return len(self._persistence_failures) > 0
+
+    @property
+    def persistence_failures(self) -> list[dict[str, Any]]:
+        return list(self._persistence_failures)
+
     def register_server(self, server: uvicorn.Server) -> None:
         """Register the exact running uvicorn.Server instance for programmatic shutdown."""
         self._server = server
@@ -104,17 +117,52 @@ class RuntimeLifecycleCoordinator:
         self._active_stream_tasks.add(task)
         task.add_done_callback(lambda t: self._active_stream_tasks.discard(t))
 
-    def spawn_terminal_persistence_task(self, coro: Coroutine) -> asyncio.Task:
-        """Spawn and track a background persistence task that must complete before DB disposal."""
+    def spawn_terminal_persistence_task(
+        self,
+        coro: Coroutine,
+        context_info: str = "terminal_persistence",
+    ) -> asyncio.Task:
+        """Spawn and track a background persistence task that must complete before DB disposal.
+
+        Tracks completion results: successful commits, failed commits, exceptions, and cancellations.
+        """
         task = asyncio.create_task(coro)
         self._pending_persistence_tasks.add(task)
-        task.add_done_callback(lambda t: self._pending_persistence_tasks.discard(t))
+
+        def _on_done(t: asyncio.Task) -> None:
+            self._pending_persistence_tasks.discard(t)
+            if t.cancelled():
+                self._persistence_failures.append({
+                    "status": "cancelled",
+                    "context": context_info,
+                })
+                logger.error(f"Required persistence task was cancelled: {context_info}")
+            elif t.exception() is not None:
+                exc = t.exception()
+                self._persistence_failures.append({
+                    "status": "exception",
+                    "error": str(exc),
+                    "context": context_info,
+                })
+                logger.error(f"Required persistence task failed with exception: {exc} [{context_info}]")
+            else:
+                result = t.result()
+                if result is False:
+                    self._persistence_failures.append({
+                        "status": "failed_commit",
+                        "context": context_info,
+                    })
+                    logger.error(f"Required persistence task returned False (failed commit): {context_info}")
+                else:
+                    self._persistence_success_count += 1
+
+        task.add_done_callback(_on_done)
         return task
 
     async def wait_for_database_quiescence(self, timeout: float = 6.0) -> bool:
         """Wait until all active ASGI mutations and pending persistence tasks complete.
 
-        CRITICAL SAFEGUARD (Correction 2):
+        CRITICAL SAFEGUARD:
         Clean shutdown requires confirmed completion (all(t.done()) and _active_asgi_mutations == 0).
         Returns True if quiescent before deadline, False if timeout expired with active work.
         """
@@ -129,6 +177,9 @@ class RuntimeLifecycleCoordinator:
                 )
                 return False
             await asyncio.sleep(min(0.05, remaining))
+
+        # Ensure all done callbacks for completed tasks have executed on the loop
+        await asyncio.sleep(0)
         return True
 
     async def initiate_shutdown(
@@ -136,22 +187,44 @@ class RuntimeLifecycleCoordinator:
         reason: str = "user_exit_companion",
         drain_timeout_seconds: float = 6.0,
     ) -> tuple[bool, str]:
-        """Initiate cooperative runtime shutdown sequence.
+        """Initiate or retry cooperative runtime shutdown sequence.
 
         Returns (already_shutting_down, message).
+        - If clean shutdown in progress: (True, "already_shutting_down")
+        - If previous shutdown attempt halted with incomplete cleanup:
+          safely resumes/retries shutdown without duplicate tasks: (False, "shutdown_retried")
+        - If first initiation: (False, "shutdown_initiated")
         """
         async with self._lock:
-            if self._is_shutting_down:
+            # Prevent duplicate concurrent shutdown tasks
+            if self._shutdown_task and not self._shutdown_task.done():
                 return True, "already_shutting_down"
+
+            # Check if clean shutdown already reached
+            if self._shutdown_quiescence_status == "clean":
+                return True, "already_shutting_down"
+
+            is_retry = self._is_shutting_down and (
+                self._shutdown_quiescence_status is not None and
+                self._shutdown_quiescence_status.startswith("incomplete_")
+            )
 
             self._is_shutting_down = True
             self._shutdown_phase = "closing_admission"
-            logger.info(f"Initiated runtime shutdown (reason={reason}, drain_timeout={drain_timeout_seconds}s)")
+            if is_retry:
+                logger.info(
+                    f"Retrying runtime shutdown after incomplete status '{self._shutdown_quiescence_status}' "
+                    f"(reason={reason}, drain_timeout={drain_timeout_seconds}s)"
+                )
+                self._shutdown_quiescence_status = None
+                self._persistence_failures.clear()
+            else:
+                logger.info(f"Initiated runtime shutdown (reason={reason}, drain_timeout={drain_timeout_seconds}s)")
 
             self._shutdown_task = asyncio.create_task(
                 self._execute_shutdown_sequence(drain_timeout_seconds)
             )
-            return False, "shutdown_initiated"
+            return False, "shutdown_retried" if is_retry else "shutdown_initiated"
 
     async def _execute_shutdown_sequence(self, drain_timeout: float) -> None:
         """Execute the coordinated 5-phase backend teardown sequence."""
@@ -177,6 +250,14 @@ class RuntimeLifecycleCoordinator:
                 logger.error(
                     "Database quiescence barrier timeout; halting shutdown sequence "
                     "to prevent engine disposal and data corruption while writes remain active"
+                )
+                return
+
+            if self.has_persistence_failures:
+                self._shutdown_quiescence_status = "incomplete_persistence_failure"
+                logger.error(
+                    f"Required database persistence tasks failed ({len(self._persistence_failures)} failures); "
+                    "halting shutdown to keep runtime observable and avoid claiming clean shutdown"
                 )
                 return
 

@@ -5,6 +5,7 @@ import base64
 from datetime import datetime, timezone
 import gc
 import importlib
+import inspect
 import json
 import logging
 import os
@@ -251,6 +252,18 @@ class LlamaCppProvider(BaseLLMProvider):
     def provider_name(self) -> str:
         return "llama_cpp"
 
+    async def _safe_aclose_client(self, client: Any) -> None:
+        if client is None:
+            return
+        aclose_fn = getattr(client, "aclose", None)
+        if callable(aclose_fn):
+            try:
+                res = aclose_fn()
+                if inspect.isawaitable(res):
+                    await res
+            except Exception:
+                pass
+
     def signal_shutdown_immediately(self) -> None:
         """Cooperative lock-free signal to abort in-flight load and generation.
 
@@ -265,7 +278,11 @@ class LlamaCppProvider(BaseLLMProvider):
             self._active_load_task.cancel()
         for client in list(self._active_router_clients):
             try:
-                asyncio.create_task(client.aclose())
+                aclose_fn = getattr(client, "aclose", None)
+                if callable(aclose_fn):
+                    res = aclose_fn()
+                    if inspect.isawaitable(res):
+                        asyncio.create_task(res)
             except Exception:
                 pass
 
@@ -286,7 +303,7 @@ class LlamaCppProvider(BaseLLMProvider):
         """Stop Core-managed llama-server.exe process under self._lock.
 
         MUST only be called while holding self._lock.
-        Returns True if a Core-managed process was stopped, False otherwise.
+        Returns True if a Core-managed process was stopped and verified dead, False otherwise.
         Never touches external routers (_managed_by_core == False).
         """
         if not self._managed_by_core or not self._server_process:
@@ -303,6 +320,16 @@ class LlamaCppProvider(BaseLLMProvider):
         except Exception as exc:
             logger.error(f"PID termination failed: {exc}")
 
+        # TRUTHFUL VERIFICATION: verify process is actually dead
+        if self._server_process.poll() is None:
+            logger.error(
+                f"Failed to terminate Core-owned router PID={self._server_pid}; process still running. "
+                "Retaining process and ownership reference."
+            )
+            self._last_error = "ROUTER_TERMINATION_FAILED"
+            self._runtime_state = LLMRuntimeState.SERVER_ERROR
+            return False
+
         self._server_process = None
         self._server_pid = None
         self._managed_by_core = False
@@ -317,67 +344,81 @@ class LlamaCppProvider(BaseLLMProvider):
 
     async def _router_load_model(self, model_name: str) -> bool:
         """Load model into VRAM via router API — LLAMA_CPP_RUNTIME_ARCHITECTURE.md §5."""
+        if self._shutdown_event.is_set():
+            return False
         runtime_id = resolve_runtime_model_id(model_name)
         url = f"http://{settings.LLAMA_ROUTER_HOST}:{settings.LLAMA_ROUTER_PORT}/models/load"
+        c = httpx.AsyncClient(timeout=45.0)
+        self._active_router_clients.add(c)
         try:
-            async with httpx.AsyncClient(timeout=45.0) as c:
-                r = await c.post(url, json={"model": runtime_id})
-                if r.status_code not in (200, 201):
-                    if r.status_code == 400 and "already running" in r.text.lower():
-                        logger.info(f"Model {runtime_id} is already running in router")
-                        return True
-                    logger.error(f"Router load rejected {r.status_code}: {r.text[:200]}")
-                    return False
-                
-                # Poll router /models to verify status.value == 'loaded'
-                models_url = f"http://{settings.LLAMA_ROUTER_HOST}:{settings.LLAMA_ROUTER_PORT}/models"
-                for _ in range(60):
-                    await asyncio.sleep(0.5)
-                    try:
-                        m_resp = await c.get(models_url)
-                        if m_resp.status_code == 200:
-                            data = m_resp.json()
-                            models = data.get("data") or data.get("models") or []
-                            for m in models:
-                                if m.get("id") == runtime_id and m.get("status", {}).get("value") == "loaded":
-                                    return True
-                    except Exception:
-                        pass
-                logger.warning(f"Router load polling timed out after 30s for {runtime_id}")
+            r = await c.post(url, json={"model": runtime_id})
+            if r.status_code not in (200, 201):
+                if r.status_code == 400 and "already running" in r.text.lower():
+                    logger.info(f"Model {runtime_id} is already running in router")
+                    return True
+                logger.error(f"Router load rejected {r.status_code}: {r.text[:200]}")
                 return False
-        except Exception as exc:
-            logger.error(f"Router load failed: {exc}")
+            
+            # Poll router /models to verify status.value == 'loaded'
+            models_url = f"http://{settings.LLAMA_ROUTER_HOST}:{settings.LLAMA_ROUTER_PORT}/models"
+            for _ in range(60):
+                if not await self._sleep_or_abort(0.5):
+                    logger.info("load_model aborted by shutdown event during router status poll")
+                    self._last_error = "LOAD_ABORTED_BY_SHUTDOWN"
+                    return False
+                try:
+                    m_resp = await c.get(models_url)
+                    if m_resp.status_code == 200:
+                        data = m_resp.json()
+                        models = data.get("data") or data.get("models") or []
+                        for m in models:
+                            if m.get("id") == runtime_id and m.get("status", {}).get("value") == "loaded":
+                                return True
+                except Exception:
+                    pass
+            logger.warning(f"Router load polling timed out after 30s for {runtime_id}")
             return False
+        except (Exception, asyncio.CancelledError) as exc:
+            logger.info(f"Router load aborted or failed: {exc}")
+            return False
+        finally:
+            self._active_router_clients.discard(c)
+            await self._safe_aclose_client(c)
 
     async def _router_unload_model(self, model_name: str) -> bool:
         """Unload model from VRAM — router stays alive (runtime arch §5 Explicit Unload)."""
         runtime_id = resolve_runtime_model_id(model_name)
         url = f"http://{settings.LLAMA_ROUTER_HOST}:{settings.LLAMA_ROUTER_PORT}/models/unload"
+        c = httpx.AsyncClient(timeout=15.0)
+        self._active_router_clients.add(c)
         try:
-            async with httpx.AsyncClient(timeout=15.0) as c:
-                r = await c.post(url, json={"model": runtime_id})
-                if r.status_code not in (200, 204):
-                    return False
-                
-                # Poll router /models to verify status.value == 'unloaded'
-                models_url = f"http://{settings.LLAMA_ROUTER_HOST}:{settings.LLAMA_ROUTER_PORT}/models"
-                for _ in range(20):
-                    await asyncio.sleep(0.25)
-                    try:
-                        m_resp = await c.get(models_url)
-                        if m_resp.status_code == 200:
-                            data = m_resp.json()
-                            models = data.get("data") or data.get("models") or []
-                            for m in models:
-                                if m.get("id") == runtime_id and m.get("status", {}).get("value") == "unloaded":
-                                    return True
-                    except Exception:
-                        pass
-                logger.warning(f"Router unload polling timed out after 5s for {runtime_id}")
+            r = await c.post(url, json={"model": runtime_id})
+            if r.status_code not in (200, 204):
                 return False
+            
+            # Poll router /models to verify status.value == 'unloaded'
+            models_url = f"http://{settings.LLAMA_ROUTER_HOST}:{settings.LLAMA_ROUTER_PORT}/models"
+            for _ in range(20):
+                if not await self._sleep_or_abort(0.25):
+                    return False
+                try:
+                    m_resp = await c.get(models_url)
+                    if m_resp.status_code == 200:
+                        data = m_resp.json()
+                        models = data.get("data") or data.get("models") or []
+                        for m in models:
+                            if m.get("id") == runtime_id and m.get("status", {}).get("value") == "unloaded":
+                                return True
+                except Exception:
+                    pass
+            logger.warning(f"Router unload polling timed out after 5s for {runtime_id}")
+            return False
         except Exception as exc:
             logger.error(f"Router unload failed: {exc}")
             return False
+        finally:
+            self._active_router_clients.discard(c)
+            await self._safe_aclose_client(c)
 
     def _resolve_model_path(self, model_name: Optional[str] = None) -> Path:
         target, _ = resolve_effective_model(model_name)
@@ -434,28 +475,36 @@ class LlamaCppProvider(BaseLLMProvider):
 
     async def _check_external_server(self) -> bool:
         """Check if a local standalone llama-server is active on router port."""
+        c = httpx.AsyncClient(timeout=2.0)
+        self._active_router_clients.add(c)
         try:
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                base_health_url = settings.LLAMA_SERVER_URL.replace("/v1", "") + "/health"
-                resp = await client.get(base_health_url)
-                if resp.status_code == 200:
-                    self._server_is_active = True
-                    return True
+            base_health_url = settings.LLAMA_SERVER_URL.replace("/v1", "") + "/health"
+            resp = await c.get(base_health_url)
+            if resp.status_code == 200:
+                self._server_is_active = True
+                return True
         except Exception:
             pass
+        finally:
+            self._active_router_clients.discard(c)
+            await self._safe_aclose_client(c)
         self._server_is_active = False
         return False
 
     async def load_model(self, model_name: Optional[str] = None, profile: Optional[str] = None) -> bool:
-        async with self._lock:
-            self._last_error = None
-            if self._closing or self._shutdown_event.is_set() or self.has_active_generation:
-                self._last_error = (
-                    "CANNOT_CHANGE_PROFILE_DURING_GENERATION"
-                    if profile and profile.lower() != self._active_profile and self.has_active_generation
-                    else "MODEL_BUSY"
-                )
-                return False
+        curr_task = asyncio.current_task()
+        if curr_task is not None:
+            self._active_load_task = curr_task
+        try:
+            async with self._lock:
+                self._last_error = None
+                if self._closing or self._shutdown_event.is_set() or self.has_active_generation:
+                    self._last_error = (
+                        "CANNOT_CHANGE_PROFILE_DURING_GENERATION"
+                        if profile and profile.lower() != self._active_profile and self.has_active_generation
+                        else "MODEL_BUSY"
+                    )
+                    return False
             if profile and profile.lower() in ("eco", "balanced", "maximum"):
                 requested_p = profile.lower()
                 if requested_p != self._active_profile:
@@ -551,8 +600,12 @@ class LlamaCppProvider(BaseLLMProvider):
                         self._start_idle_monitor()
                         return True
                     else:
-                        self._last_error = f"MODEL_LOAD_FAILED: {target_model_name}"
-                        self._runtime_state = LLMRuntimeState.MODEL_ERROR
+                        if self._shutdown_event.is_set() or self._last_error == "LOAD_ABORTED_BY_SHUTDOWN":
+                            self._last_error = "LOAD_ABORTED_BY_SHUTDOWN"
+                            self._runtime_state = LLMRuntimeState.SERVER_STOPPED if self._managed_by_core else LLMRuntimeState.MODEL_UNLOADED
+                        else:
+                            self._last_error = f"MODEL_LOAD_FAILED: {target_model_name}"
+                            self._runtime_state = LLMRuntimeState.MODEL_ERROR
                         return False
                 else:
                     self._last_error = "ROUTER_UNRESPONSIVE: existing router process is not responding to health checks"
@@ -572,8 +625,12 @@ class LlamaCppProvider(BaseLLMProvider):
                         self._start_idle_monitor()
                         return True
                     else:
-                        self._last_error = f"MODEL_LOAD_FAILED: {target_model_name}"
-                        self._runtime_state = LLMRuntimeState.MODEL_ERROR
+                        if self._shutdown_event.is_set() or self._last_error == "LOAD_ABORTED_BY_SHUTDOWN":
+                            self._last_error = "LOAD_ABORTED_BY_SHUTDOWN"
+                            self._runtime_state = LLMRuntimeState.SERVER_STOPPED if self._managed_by_core else LLMRuntimeState.MODEL_UNLOADED
+                        else:
+                            self._last_error = f"MODEL_LOAD_FAILED: {target_model_name}"
+                            self._runtime_state = LLMRuntimeState.MODEL_ERROR
                         return False
                 else:
                     self._last_error = f"PORT_CONFLICT: Port {settings.LLAMA_ROUTER_PORT} is in use by an unrecognized process"
@@ -736,9 +793,24 @@ class LlamaCppProvider(BaseLLMProvider):
                 logger.info(f"Model loaded: {target_model_name}")
                 return True
             else:
-                self._last_error = f"MODEL_LOAD_FAILED: {target_model_name}"
-                self._runtime_state = LLMRuntimeState.MODEL_ERROR
+                if self._shutdown_event.is_set() or self._last_error == "LOAD_ABORTED_BY_SHUTDOWN":
+                    self._last_error = "LOAD_ABORTED_BY_SHUTDOWN"
+                    self._runtime_state = LLMRuntimeState.SERVER_STOPPED if self._managed_by_core else LLMRuntimeState.MODEL_UNLOADED
+                else:
+                    self._last_error = f"MODEL_LOAD_FAILED: {target_model_name}"
+                    self._runtime_state = LLMRuntimeState.MODEL_ERROR
                 return False
+        except asyncio.CancelledError:
+            logger.info("load_model cancelled by shutdown event; performing synchronized cleanup")
+            self._last_error = "LOAD_ABORTED_BY_SHUTDOWN"
+            was_managed = self._managed_by_core
+            if was_managed and self._server_process:
+                self._stop_managed_router_locked()
+            self._runtime_state = LLMRuntimeState.SERVER_STOPPED if was_managed else LLMRuntimeState.MODEL_UNLOADED
+            return False
+        finally:
+            if self._active_load_task is curr_task:
+                self._active_load_task = None
 
     async def unload_model(self) -> bool:
         async with self._lock:
@@ -1284,7 +1356,16 @@ class LlamaCppProvider(BaseLLMProvider):
 
                 # Route A: Core router vs external router
                 if self._managed_by_core:
-                    self._stop_managed_router_locked()
+                    stopped = self._stop_managed_router_locked()
+                    if not stopped:
+                        logger.error("Core-managed router termination failed; reporting incomplete cleanup")
+                        return ProviderShutdownResult(
+                            completed_cleanly=False,
+                            lock_acquired=True,
+                            reason="ROUTER_TERMINATION_FAILED",
+                            managed_llm_pid=managed_pid,
+                            managed_by_core=True,
+                        )
                 else:
                     # External router: unload model weights via router API if active, but DO NOT terminate router!
                     if self._active_model_name and self._server_is_active:
