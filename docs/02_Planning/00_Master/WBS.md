@@ -44,7 +44,7 @@
 - **`PC-CLIENT-002`**: Window Management, System Tray Integration & Close-to-Tray Lifecycle.
 - **`PC-CLIENT-003`**: SoftGlass / Neumorphic Desktop Design System, Dark/Light Themes & Typography.
 - **`PC-CLIENT-004`**: API Client Layer (OpenAPI-derived Dart client, SSE token stream consumer, WebSocket duplex client).
-- **`PC-CLIENT-005`**: Multi-Profile Navigation & Local Admin Switcher UI (PIN / Windows Hello challenge).
+- **`PC-CLIENT-005`**: Multi-Profile Navigation & Local Admin Switcher UI (Navigation Rail `ProfileSelectorHeader`, Settings `ProfileAccessCard`, Create & Rename Profile dialogs, Sign out, and persistent selection across restarts; Batch C implemented and verified on `feature/m2-profile-admin-c`; PIN / Windows Hello deferred).
 - **`PC-CLIENT-006`**: Conversation View & Multimodal Attachment Composer with Lightbox.
 - **`PC-CLIENT-007`**: Character Studio & Personality Trait Editor (Immersive 2D showcase stage, 8 continuous sliders, presets, Illustrative Style Summary, sequential Save & Activate, chat dual-indicator visibility; implemented and independently approved for provisional closure on `feature/m3-character-studio-personality-b`, not yet merged into develop).
 - **`PC-CLIENT-008`**: Schedule, Reminder, Alarm & Routine Management View.
@@ -72,7 +72,7 @@
 - **`PC-IDENTITY-001`**: Account & Multi-Profile Database Schema Migration (`owner_id` → `profile_id` transition; delivered via PR #25, commit `369d787`).
 - **`PC-IDENTITY-002`**: Strict Profile Authorization Context Middleware & Isolation Enforcement (Delivered via PR #27, commit `5cb2fe6`, stabilized in PR #28, commit `0bb0894`).
 - **`PC-IDENTITY-003`**: Satellite Device Enrollment & Single-Profile Binding (Individually revocable credentials).
-- **`PC-IDENTITY-004`**: Local PC Admin Profile Management Service (Create, rename, PIN protect, delete).
+- **`PC-IDENTITY-004`**: Local PC Admin Profile Management Service (Host Admin `POST /api/v1/profiles` create, `PATCH /api/v1/profiles/{profile_id}` in-place rename, persistent selection preference, and acquire-before-teardown switching; Batch C implemented and verified on `feature/m2-profile-admin-c`; PIN protection and deletion deferred).
 - **`PC-IDENTITY-005`**: 7-Day Recoverable Profile Deletion Lifecycle & Hard Purge Maintenance.
 
 ### Stream: `PC-MODEL` — Model Library & D6 Import

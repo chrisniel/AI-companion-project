@@ -76,6 +76,8 @@ M1_ROUTE_DART_METHODS: Dict[Tuple[str, str], Tuple[str, str]] = {
 # arguments to CompanionClient._sessionRequest, which prefixes /api/v1/.
 M2_ROUTE_DART_METHODS: Dict[Tuple[str, str], Tuple[str, str]] = {
     ("GET", "/api/v1/profiles"): ("listProfiles", "'profiles'"),
+    ("POST", "/api/v1/profiles"): ("createProfile", "'profiles'"),
+    ("PATCH", "/api/v1/profiles/{profile_id}"): ("renameProfile", "'profiles/$profileId'"),
     ("GET", "/api/v1/auth/bootstrap/requests"): ("pendingBrowserRequests", "'auth/bootstrap/requests'"),
     ("POST", "/api/v1/auth/bootstrap/ticket"): ("approveBrowserRequest", "'auth/bootstrap/ticket'"),
     ("POST", "/api/v1/auth/session/exchange"): ("establishProfileSession", "'auth/session/exchange'"),
@@ -151,6 +153,9 @@ SCHEMA_TO_DART_CLASS: Dict[str, Tuple[str, str]] = {
     "CharacterInstanceOut": ("character_dto.dart", "CharacterInstanceOut"),
     "ActiveCharacterStateOut": ("character_dto.dart", "ActiveCharacterStateOut"),
     "ActiveCharacterSelectRequest": ("character_dto.dart", "ActiveCharacterSelectRequest"),
+    "ProfileMetadata": ("profile_dto.dart", "ProfileMetadata"),
+    "ProfileCreateRequest": ("profile_dto.dart", "ProfileCreateRequest"),
+    "ProfileUpdateRequest": ("profile_dto.dart", "ProfileUpdateRequest"),
 }
 
 

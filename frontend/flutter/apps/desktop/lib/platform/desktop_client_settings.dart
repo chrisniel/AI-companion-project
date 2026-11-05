@@ -147,6 +147,140 @@ class DesktopClientSettings {
     await file.writeAsString(jsonEncode(data), flush: true);
   }
 
+  /// Reads locally cached selected profile identifier.
+  Future<String?> readSelectedProfileId() async {
+    try {
+      final file = File(_filePath);
+      if (!await file.exists()) {
+        return null;
+      }
+      final content = await file.readAsString();
+      final dynamic decoded = jsonDecode(content);
+      if (decoded is Map && decoded['selectedProfileId'] is String) {
+        final id = (decoded['selectedProfileId'] as String).trim();
+        return id.isNotEmpty ? id : null;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Caches selected profile identifier into client settings file (null removes it).
+  Future<void> writeSelectedProfileId(String? profileId) async {
+    final file = File(_filePath);
+    await file.parent.create(recursive: true);
+
+    Map<String, dynamic> data = {};
+    try {
+      if (await file.exists()) {
+        final content = await file.readAsString();
+        final dynamic decoded = jsonDecode(content);
+        if (decoded is Map<String, dynamic>) {
+          data = Map<String, dynamic>.from(decoded);
+        }
+      }
+    } catch (_) {}
+
+    final trimmed = profileId?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      data.remove('selectedProfileId');
+    } else {
+      data['selectedProfileId'] = trimmed;
+    }
+    data['updatedAt'] = DateTime.now().toUtc().toIso8601String();
+
+    await file.writeAsString(jsonEncode(data), flush: true);
+  }
+
+  /// Reads locally cached selected profile session expiry.
+  Future<DateTime?> readSelectedProfileSessionExpiry() async {
+    try {
+      final file = File(_filePath);
+      if (!await file.exists()) {
+        return null;
+      }
+      final content = await file.readAsString();
+      final dynamic decoded = jsonDecode(content);
+      if (decoded is Map && decoded['selectedProfileSessionExpiry'] is String) {
+        final raw = (decoded['selectedProfileSessionExpiry'] as String).trim();
+        if (raw.isNotEmpty) {
+          final parsed = DateTime.tryParse(raw);
+          return parsed?.isUtc == true ? parsed : parsed?.toUtc();
+        }
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Caches selected profile session expiry into client settings file (null removes it).
+  Future<void> writeSelectedProfileSessionExpiry(DateTime? expiresAt) async {
+    final file = File(_filePath);
+    await file.parent.create(recursive: true);
+
+    Map<String, dynamic> data = {};
+    try {
+      if (await file.exists()) {
+        final content = await file.readAsString();
+        final dynamic decoded = jsonDecode(content);
+        if (decoded is Map<String, dynamic>) {
+          data = Map<String, dynamic>.from(decoded);
+        }
+      }
+    } catch (_) {}
+
+    if (expiresAt == null) {
+      data.remove('selectedProfileSessionExpiry');
+    } else {
+      data['selectedProfileSessionExpiry'] = expiresAt.toUtc().toIso8601String();
+    }
+    data['updatedAt'] = DateTime.now().toUtc().toIso8601String();
+
+    await file.writeAsString(jsonEncode(data), flush: true);
+  }
+
+  /// Reads whether the user explicitly signed out / locked profile access.
+  Future<bool> readProfileExplicitlyLocked() async {
+    try {
+      final file = File(_filePath);
+      if (!await file.exists()) {
+        return false;
+      }
+      final content = await file.readAsString();
+      final dynamic decoded = jsonDecode(content);
+      if (decoded is Map && decoded['profileExplicitlyLocked'] is bool) {
+        return decoded['profileExplicitlyLocked'] as bool;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Persists whether the user explicitly signed out / locked profile access.
+  Future<void> writeProfileExplicitlyLocked(bool locked) async {
+    final file = File(_filePath);
+    await file.parent.create(recursive: true);
+
+    Map<String, dynamic> data = {};
+    try {
+      if (await file.exists()) {
+        final content = await file.readAsString();
+        final dynamic decoded = jsonDecode(content);
+        if (decoded is Map<String, dynamic>) {
+          data = Map<String, dynamic>.from(decoded);
+        }
+      }
+    } catch (_) {}
+
+    data['profileExplicitlyLocked'] = locked;
+    data['updatedAt'] = DateTime.now().toUtc().toIso8601String();
+
+    await file.writeAsString(jsonEncode(data), flush: true);
+  }
+
   /// Deletes client settings file.
   Future<void> deleteSettings() async {
     try {

@@ -54,7 +54,7 @@ void main() {
     expect(chat.conversations, isEmpty);
     expect(chat.getDraft('old'), '');
     expect(paths.indexOf('/api/v1/auth/session/revoke'),
-        lessThan(paths.indexOf('/api/v1/auth/bootstrap/ticket')));
+        greaterThan(paths.indexOf('/api/v1/auth/bootstrap/ticket')));
     chat.dispose();
   });
   testWidgets(

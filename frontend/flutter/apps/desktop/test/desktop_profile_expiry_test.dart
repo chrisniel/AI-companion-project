@@ -106,11 +106,18 @@ class _SessionClient extends CompanionClient {
   }
 
   @override
-  Future<Map<String, dynamic>> establishProfileSession(String id) async {
+  Future<Map<String, dynamic>> establishProfileSession(String id, {bool writeToStore = true}) async {
     grants++;
     profileId = id;
-    await sessionStore.writeToken('psk_new');
-    return {'profile_id': id, 'expires_at': expiry};
+    if (writeToStore) {
+      await sessionStore.writeToken('psk_new');
+    }
+    return {'token': 'psk_new', 'profile_id': id, 'expires_at': expiry};
+  }
+
+  @override
+  Future<void> revokeSessionToken(String token) async {
+    revocations++;
   }
 
   @override

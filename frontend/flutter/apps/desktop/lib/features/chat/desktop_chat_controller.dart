@@ -54,6 +54,8 @@ class DesktopChatController extends ChangeNotifier {
   String _streamingText = '';
   String? _activeModelName;
   String? _authenticatedProfileId;
+  String? _authenticatedProfileName;
+  DateTime? _authenticatedSessionExpiry;
   ModelStatusResponse? _modelStatus;
   String? _errorMessage;
   bool _isLoadingConversations = false;
@@ -109,11 +111,22 @@ class DesktopChatController extends ChangeNotifier {
   int get profileEpoch => _configEpoch;
   String? get authenticatedProfileId =>
       isConnected ? _authenticatedProfileId : null;
+  String? get authenticatedProfileName =>
+      isConnected ? _authenticatedProfileName : null;
+  DateTime? get authenticatedSessionExpiry =>
+      isConnected ? _authenticatedSessionExpiry : null;
+
+  void updateAuthenticatedProfileName(String name) {
+    _authenticatedProfileName = name;
+    if (!_isDisposed) notifyListeners();
+  }
 
   void _clearPersonalState() {
     _sessionExpiryTimer?.cancel();
     _sessionExpiryTimer = null;
     _authenticatedProfileId = null;
+    _authenticatedProfileName = null;
+    _authenticatedSessionExpiry = null;
     ++_configEpoch;
     ++_loadSequenceToken;
     _conversations = [];
@@ -171,17 +184,29 @@ class DesktopChatController extends ChangeNotifier {
   }
 
   /// A Profile change invalidates every pending operation and personal cache.
+  /// Uses acquire-before-teardown to ensure Profile A remains intact if destination authorization fails.
   Future<void> selectProfile(String profileId) async {
+    final priorToken = await _client.sessionStore.readToken();
+
+    // 1. Acquire destination session before clearing state or revoking prior token.
+    final session = await _client.mintAndExchangeProfileSession(profileId);
+
+    // 2. Teardown active generation and clear Profile A's personal cache.
     _clearPersonalState();
     await cancelGeneration();
     notifyListeners();
-    if (await _client.sessionStore.readToken() != null) {
-      try { await _client.revokeProfileSession(); }
-      on CompanionApiException catch (error) {
+
+    // 3. Revoke previous session if one was active.
+    if (priorToken != null && priorToken.isNotEmpty) {
+      try {
+        await _client.revokeSessionToken(priorToken);
+      } on CompanionApiException catch (error) {
         if (error.statusCode != 401 && error.statusCode != 403) rethrow;
       }
     }
-    final session = await _client.establishProfileSession(profileId);
+
+    // 4. Store newly acquired token and schedule session expiry.
+    await _client.sessionStore.writeToken(session['token'] as String);
     final expires = DateTime.tryParse(session['expires_at']?.toString() ?? '');
     if (expires != null && expires.isUtc) {
       _scheduleSessionExpiry(expires);
@@ -542,6 +567,8 @@ class DesktopChatController extends ChangeNotifier {
     _errorMessage = null;
     if (restoreSavedSession) {
       _authenticatedProfileId = null;
+      _authenticatedProfileName = null;
+      _authenticatedSessionExpiry = null;
       _connectionStatus = RuntimeConnectionStatus.unauthorized;
     }
     notifyListeners();
@@ -561,6 +588,8 @@ class DesktopChatController extends ChangeNotifier {
     if (_isDisposed) return;
     final epoch = _configEpoch;
     _authenticatedProfileId = null;
+    _authenticatedProfileName = null;
+    _authenticatedSessionExpiry = null;
     _connectionStatus = RuntimeConnectionStatus.connecting;
     _errorMessage = null;
     notifyListeners();
@@ -594,6 +623,8 @@ class DesktopChatController extends ChangeNotifier {
               expires.isAfter(_now().toUtc())) {
             _scheduleSessionExpiry(expires);
             _authenticatedProfileId = auth['id'] as String;
+            _authenticatedProfileName = auth['name']?.toString();
+            _authenticatedSessionExpiry = expires;
             _connectionStatus = RuntimeConnectionStatus.connected;
             _errorMessage = null;
 

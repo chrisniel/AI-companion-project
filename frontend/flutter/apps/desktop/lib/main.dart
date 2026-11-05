@@ -121,6 +121,7 @@ class AiCompanionDesktopApp extends StatefulWidget {
     this.coordinator,
     this.settingsController,
     this.chatController,
+    this.profileController,
     this.runtimeCoordinator,
     this.credentialStore,
     this.clientSettings,
@@ -129,6 +130,7 @@ class AiCompanionDesktopApp extends StatefulWidget {
   final DesktopLifecycleCoordinator? coordinator;
   final DesktopSettingsController? settingsController;
   final DesktopChatController? chatController;
+  final DesktopProfileController? profileController;
   final DesktopRuntimeCoordinator? runtimeCoordinator;
   final CredentialStore? credentialStore;
   final DesktopClientSettings? clientSettings;
@@ -158,6 +160,11 @@ class _AiCompanionDesktopAppState extends State<AiCompanionDesktopApp> {
 
     if (widget.chatController != null) {
       _chatController = widget.chatController!;
+      _profileController = widget.profileController ??
+          DesktopProfileController(
+            chat: _chatController,
+            clientSettings: _effectiveClientSettings,
+          );
     } else {
       final client = CompanionClient(
         baseUrl: defaultHostUrl,
@@ -168,7 +175,11 @@ class _AiCompanionDesktopAppState extends State<AiCompanionDesktopApp> {
             : InMemoryCredentialStore(),
       );
       _chatController = DesktopChatController(client: client);
-      _profileController = DesktopProfileController(chat:_chatController);
+      _profileController = widget.profileController ??
+          DesktopProfileController(
+            chat: _chatController,
+            clientSettings: _effectiveClientSettings,
+          );
     }
 
     _studioController = DesktopStudioController(chat: _chatController);

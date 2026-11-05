@@ -285,6 +285,7 @@ class _DesktopShellState extends State<DesktopShell> {
                           DesktopNavigationRail(
                             controller: widget.controller,
                             coordinator: widget.coordinator,
+                            profileController: widget.profileController,
                           ),
                           Expanded(
                             child: Stack(

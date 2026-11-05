@@ -2,6 +2,8 @@ import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
 
 import '../controllers/desktop_settings_controller.dart';
+import '../features/profiles/desktop_profile_controller.dart';
+import '../features/profiles/profile_selector_header.dart';
 import '../lifecycle/desktop_lifecycle_coordinator.dart';
 
 class DesktopNavigationRail extends StatelessWidget {
@@ -9,10 +11,12 @@ class DesktopNavigationRail extends StatelessWidget {
     super.key,
     required this.controller,
     this.coordinator,
+    this.profileController,
   });
 
   final DesktopSettingsController controller;
   final DesktopLifecycleCoordinator? coordinator;
+  final DesktopProfileController? profileController;
 
   @override
   Widget build(BuildContext context) {
@@ -93,6 +97,16 @@ class DesktopNavigationRail extends StatelessWidget {
               ),
             ),
             const Divider(height: 1),
+
+            // Profile Selector Header
+            if (profileController != null) ...[
+              ProfileSelectorHeader(
+                controller: profileController!,
+                isCollapsed: isCollapsed,
+                onOpenSettings: () => controller.requestDestination(DesktopNavDestination.settings),
+              ),
+              const Divider(height: 1),
+            ],
 
             // Navigation Destinations
             Expanded(
