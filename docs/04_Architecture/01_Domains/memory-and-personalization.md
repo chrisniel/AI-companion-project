@@ -154,9 +154,23 @@ Verified in `app.services.memory.extractor`, `app.services.memory.reconciler`, a
 - **Post-Stream Background Orchestration:** Extraction executes in an isolated `AsyncSession` spawned via `get_session_factory()` with explicit rollback on error, guarded by a per-profile async lock (`_profile_extraction_locks`) to eliminate concurrent inference contention, with 0ms impact on user SSE streaming latency.
 - **Opt-In Configuration:** Governed by `settings.MEMORY_EXTRACTION_ENABLED = False`, remaining dormant until explicitly enabled in test fixtures or until the Desktop UI ships in Batch C3.
 
-### 3.4 Explicitly Unimplemented Capabilities
+### 3.4 Implemented Desktop Memory Control Center (M3 Batch C3 Baseline)
 
-- **Desktop Memory Control Center UI:** `NOT IMPLEMENTED / DEFERRED TO BATCH C3` (PC-CLIENT-009 Flutter UI is scoped to Batch C3).
+Verified in `frontend/flutter/apps/desktop`:
+- **Desktop Memory Control Center UI (`PC-CLIENT-009`):** Full interactive memory management interface delivered in `frontend/flutter/apps/desktop/lib/screens/memory_screen.dart` and `frontend/flutter/apps/desktop/lib/features/memory/`:
+  - `DesktopMemoryController`: Reactive state management controller interfacing with `CompanionClient` and profile scope changes, managing memory loading, filtering, auto-extraction toggling, approval, inline editing, deletion, and conflict resolution.
+  - `MemoryScreen`: Replaces placeholder screen; provides screen header with per-profile auto-extraction switch, conflict alert banner, search/filter bar, and memory item cards.
+  - `MemoryConflictBanner`: Prominent amber banner displayed when unresolved contradictory memories exist (`source_type="conflict"` and `user_verified=False`), providing diff visualization between existing memory and newly extracted statement, with 1-click resolution actions: *Keep New*, *Keep Old (Discard New)*, and *Edit & Merge*.
+  - `MemoryFilterBar`: Real-time substring query filter (`q`), scope filter chips (`all`, `profile`, `character`), category chips (`all`, `fact`, `preference`, `context`), and status chips (`all`, `verified`, `pending`, `conflicts`).
+  - `MemoryItemCard`: Individual memory cards displaying category badges, scope indicators, status badges (`VERIFIED`, `PENDING REVIEW`, `CONFLICT`), core fact pin/unpin star, and action buttons (`Approve`, `Edit`, `Delete`).
+  - `MemoryEditDialog`: Form dialog enabling creation of manual memories or editing content, category, scope, and core fact pin status.
+  - `DesktopShell` Integration: Wired into `DesktopShell` with active profile synchronization and navigation rail badge removal (Memory is now active; planned `'M3'` badge removed).
+- **Per-Profile Auto-Extraction Governance:** Added `profiles.memory_extraction_enabled` column via Alembic Migration `011_profile_memory_extraction_toggle.py`, exposed on `ProfileMetadata` and `ProfileUpdateRequest`. Runtime extraction default flipped to `MEMORY_EXTRACTION_ENABLED = True` in `config.py`, dynamically gated per profile.
+- **Conversational Conflict Clarification:** When active conflicts exist for the profile, `ChatOrchestrator` context assembly injects `<memory_conflicts>` with polite companion-toned clarification instructions.
+- **API and Dart Parity:** `GET /api/v1/memories` extended with `q`, `user_verified`, and `source_type` query filters; `PATCH /api/v1/memories/{memory_id}` supports `user_verified` and `source_type`. OpenAPI schema and Dart DTOs in `companion_api` maintain 100% parity.
+
+### 3.5 Explicitly Unimplemented Capabilities
+
 - **Semantic / Vector Memory:** `NOT IMPLEMENTED / NOT STARTED` (post-PC-V1 enhancement).
 
 ---

@@ -59,18 +59,21 @@ SECRET_PATTERNS = [
     re.compile(r"\b(?:\d{4}[ -]?){3}\d{4}\b"),  # Credit card numbers
 ]
 
-EXTRACTION_SYSTEM_PROMPT = """You are a precise, background memory extraction engine for a local AI companion.
-Your job is to analyze the user's turn and extract long-term, durable personal facts, preferences, habits, or context about the USER.
+EXTRACTION_SYSTEM_PROMPT = """You are a precise, conservative memory extraction engine for a local AI companion.
+Your job is to extract ONLY concrete, durable personal facts explicitly declared by the USER (e.g. name, location, occupation, direct dietary restrictions, or specific enduring hobbies).
 
-RULES:
-1. Extract facts strictly about the USER or the user's relationship with the companion. Never extract facts about the assistant or general world knowledge.
-2. Ignore transient states, fleeting moods, or temporary events unless they are significant.
-3. NEVER extract passwords, API keys, credentials, or private secrets.
-4. Output a JSON array of candidate objects. If no permanent user facts are present, return an empty array `[]`.
+STRICT RULES:
+1. Extract facts strictly explicitly stated by the USER. Never assume, extrapolate, or psychoanalyze.
+2. DO NOT extract conversational meta-observations (e.g. NEVER extract "User enjoys metaphors", "User is willing to ask questions", "User is collaborative", or "User appreciates responses").
+3. DO NOT extract temporary advice-seeking queries or recommendation requests as facts (e.g. asking for anime or food recommendations is NOT a permanent profile fact).
+4. Ignore transient states, fleeting banter, or temporary events.
+5. NEVER extract passwords, API keys, credentials, or private secrets.
+6. When in doubt, return an empty array `[]`. It is much better to save nothing than to save incorrect speculation.
+7. Output a JSON array of candidate objects. If no permanent user facts are present, return an empty array `[]`.
 
 CANDIDATE SCHEMA:
 Each item in the array MUST be a JSON object with:
-- "content": (string, 1-2 concise factual sentences in 3rd person, e.g. "User prefers oat milk over dairy in coffee")
+- "content": (string, 1 concise factual sentence in 3rd person, e.g. "User prefers oat milk over dairy in coffee")
 - "category": ("fact" | "preference" | "context")
 - "scope": ("profile" | "character") (use "profile" for user facts, "character" only for character-specific interactions)
 - "is_core": (boolean, true only for vital identity facts like name, severe allergies, or core identity)
@@ -127,6 +130,10 @@ def should_skip_extraction(user_text: str) -> bool:
     if normalized_lower in TRIVIAL_WORDS:
         return True
 
+    # Questions ending with '?' without explicit memory triggers are conversational queries, not fact declarations
+    if "?" in text and not is_explicit_intent(text):
+        return True
+
     # If first-person disclosure marker is present, NEVER skip (even if short)
     if DISCLOSURE_PATTERN.search(text):
         return False
@@ -134,10 +141,6 @@ def should_skip_extraction(user_text: str) -> bool:
     # Short utterances without disclosures are skipped
     words = text.split()
     if len(words) < 4:
-        return True
-
-    # Questions or prompts without self-disclosure are skipped
-    if text.endswith("?") and not DISCLOSURE_PATTERN.search(text):
         return True
 
     # If there are no self-disclosure markers and no explicit intent, skip

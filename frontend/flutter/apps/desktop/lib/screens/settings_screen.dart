@@ -62,6 +62,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isStillLoading = false;
   String? _selectedModelId;
   String? _modelActionMessage;
+  DesktopNavDestination _lastDestination = DesktopNavDestination.chat;
+
+  void _handleDestinationChange() {
+    final dest = widget.controller.currentDestination;
+    if (dest == DesktopNavDestination.settings && _lastDestination != DesktopNavDestination.settings) {
+      _loadModelData();
+    }
+    _lastDestination = dest;
+  }
 
   @override
   void initState() {
@@ -90,6 +99,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       });
     } catch (_) {}
 
+    widget.controller.addListener(_handleDestinationChange);
+
     if (widget.controller.scrollToDiagnostics) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients) {
@@ -107,6 +118,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
+    widget.controller.removeListener(_handleDestinationChange);
     _scrollController.dispose();
     _urlController.dispose();
     _tokenController.dispose();
@@ -1064,6 +1076,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
 
     try {
+      if (_tokenController.text.isEmpty) {
+        try {
+          final t = await _credentialStore.readToken();
+          if (mounted && t != null && _tokenController.text.isEmpty) {
+            _tokenController.text = t;
+          }
+        } catch (_) {}
+      }
       final client = _resolveClient();
       final results = await Future.wait([
         client.getModelRegistry().catchError((_) => <ModelRegistryEntry>[]),

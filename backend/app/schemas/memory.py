@@ -37,6 +37,8 @@ class MemoryUpdate(BaseSchema):
     importance: Optional[float] = Field(default=None, ge=0.0, le=2.0)
     is_core: Optional[bool] = None
     expires_at: Optional[datetime] = None
+    user_verified: Optional[bool] = None
+    source_type: Optional[str] = None
 
 
 class MemoryOut(BaseSchema):

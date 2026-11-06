@@ -48,7 +48,7 @@ void main() {
 
       // Verify planned milestone badges
       expect(find.text('M4'), findsOneWidget);
-      expect(find.text('M3'), findsNWidgets(3));
+      expect(find.text('M3'), findsNWidgets(2)); // Schedule and Studio (Memory is active in M3)
     });
 
     testWidgets('navigates between destinations when clicking rail items', (tester) async {

@@ -103,6 +103,7 @@ def _build_context(
     context_capacity: int,
     generation_reserve: int = 512,
     memory_budget: int = 256,
+    conflicts: Optional[List[Memory]] = None,
 ) -> List[ChatMessage]:
     """
     Construct context fitting within the token budget.
@@ -126,6 +127,18 @@ def _build_context(
         if lines
         else system_prompt
     )
+
+    if conflicts:
+        conflict_lines = [f"- {c.content}" for c in conflicts]
+        conflict_block = (
+            "\n\n<memory_conflicts>\n"
+            "The user has conflicting statements on record:\n"
+            + "\n".join(conflict_lines)
+            + "\nInstruction: If this topic naturally arises in the conversation, casually and politely clarify which is accurate in a warm companion tone. Never aggressively interrogate or accuse.\n"
+            "</memory_conflicts>"
+        )
+        final_system += conflict_block
+        mem_used += _estimate_tokens(conflict_block)
 
     used += mem_used
     budget = context_capacity - used
@@ -404,20 +417,28 @@ async def _run_post_turn_memory_extraction(
             return
 
         try:
-            candidates = await extract_memory_candidates(
-                user_text=user_text,
-                assistant_text=assistant_text,
-                provider=provider,
-            )
-            if not candidates:
-                return
-
             if engine is not None:
                 session_factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
             else:
                 session_factory = get_session_factory()
 
             async with session_factory() as extraction_db:
+                from app.models.profile import Profile
+                prof = (await extraction_db.execute(
+                    select(Profile).where(Profile.id == profile_id)
+                )).scalar_one_or_none()
+                if prof and not prof.memory_extraction_enabled:
+                    logger.debug(f"Memory extraction skipped: disabled for profile {profile_id}.")
+                    return
+
+                candidates = await extract_memory_candidates(
+                    user_text=user_text,
+                    assistant_text=assistant_text,
+                    provider=provider,
+                )
+                if not candidates:
+                    return
+
                 try:
                     is_explicit = is_explicit_intent(user_text)
                     for candidate in candidates:
@@ -505,6 +526,20 @@ async def orchestrate_chat_stream(
             additional_core = [cm for cm in core_memories if cm.id not in existing_ids]
             memories = [*additional_core, *memories]
 
+        # Query active unresolved conflicts for gentle companion conversational clarification
+        conflicts_query = (
+            select(Memory)
+            .where(
+                Memory.profile_id == profile_session.profile_id,
+                Memory.source_type == "conflict",
+                Memory.user_verified.is_(False),
+                Memory.deleted_at.is_(None),
+            )
+            .order_by(Memory.created_at.desc())
+            .limit(2)
+        )
+        conflicts = list((await db.execute(conflicts_query)).scalars().all())
+
         # Fetch recent conversation history strictly before this turn's user message
         hist_query = (
             select(Message)
@@ -538,6 +573,7 @@ async def orchestrate_chat_stream(
             context_capacity=context_capacity,
             generation_reserve=settings.GENERATION_RESERVE_TOKENS,
             memory_budget=settings.MEMORY_BUDGET_TOKENS,
+            conflicts=conflicts,
         )
 
         # Query committed attachments bound to this user turn

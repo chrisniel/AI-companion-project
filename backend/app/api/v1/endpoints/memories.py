@@ -31,6 +31,9 @@ async def list_memories(
     scope: Optional[str] = Query(None, description="Filter by scope: 'profile' or 'character'"),
     character_instance_id: Optional[str] = Query(None, description="Filter by character instance id"),
     is_core: Optional[bool] = Query(None, description="Filter by is_core flag"),
+    user_verified: Optional[bool] = Query(None, description="Filter by user verification state"),
+    source_type: Optional[str] = Query(None, description="Filter by source type: manual, extracted, conflict, etc."),
+    q: Optional[str] = Query(None, description="Search memory content"),
     include_expired: bool = Query(False, description="Whether to include expired temporary memories"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
@@ -43,6 +46,8 @@ async def list_memories(
         Memory.profile_id == session.profile_id,
         Memory.deleted_at.is_(None),
     )
+    if q and q.strip():
+        query = query.where(Memory.content.icontains(q.strip()))
     if category:
         query = query.where(Memory.category == category)
     if scope:
@@ -51,6 +56,10 @@ async def list_memories(
         query = query.where(Memory.character_instance_id == character_instance_id)
     if is_core is not None:
         query = query.where(Memory.is_core.is_(is_core))
+    if user_verified is not None:
+        query = query.where(Memory.user_verified.is_(user_verified))
+    if source_type:
+        query = query.where(Memory.source_type == source_type)
     if not include_expired:
         query = query.where(or_(Memory.expires_at.is_(None), Memory.expires_at > now))
 
@@ -165,6 +174,12 @@ async def update_memory(
         # None explicitly passed clears expiry and updates last_verified_at
         memory.expires_at = update_dict["expires_at"]
         memory.last_verified_at = datetime.now(timezone.utc)
+    if "user_verified" in update_dict and update_dict["user_verified"] is not None:
+        memory.user_verified = update_dict["user_verified"]
+        if update_dict["user_verified"] is True:
+            memory.last_verified_at = datetime.now(timezone.utc)
+    if "source_type" in update_dict and update_dict["source_type"] is not None:
+        memory.source_type = update_dict["source_type"]
 
     await validate_profile_session(db, session)
     await db.commit()

@@ -223,3 +223,29 @@ async def test_reconcile_slot_conflict(test_session, sample_profile):
     contents = [m.content for m in all_mems]
     assert "User loves dark roast coffee" in contents
     assert "User hates coffee and dislikes the taste" in contents
+
+
+@pytest.mark.asyncio
+async def test_reconcile_slot_update_healing_cessation(test_session, sample_profile):
+    cand1 = MemoryCandidate(
+        content="User is allergic to shrimp",
+        category="fact",
+        scope="profile",
+        confidence=0.9,
+    )
+    mem1 = await reconcile_candidate(db=test_session, profile_id=sample_profile.id, candidate=cand1)
+    assert mem1 is not None
+
+    cand2 = MemoryCandidate(
+        content="User previously had a shrimp allergy but is now healed and no longer allergic to it.",
+        category="fact",
+        scope="profile",
+        confidence=0.95,
+    )
+    mem2 = await reconcile_candidate(db=test_session, profile_id=sample_profile.id, candidate=cand2)
+    assert mem2 is not None
+    assert mem2.id == mem1.id  # Successfully updated existing row!
+    assert "healed and no longer allergic" in mem2.content
+    all_mems = (await test_session.scalars(select(Memory).where(Memory.profile_id == sample_profile.id))).all()
+    assert len(all_mems) == 1
+

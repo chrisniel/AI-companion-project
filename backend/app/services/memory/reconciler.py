@@ -40,7 +40,9 @@ POSITIVE_SENTIMENT_WORDS = {
 
 UPDATE_SIGNALS = {
     "moved", "now lives", "now works", "changed", "switched", "new",
-    "promoted to", "resigned",
+    "promoted to", "resigned", "healed", "no longer", "cured", "recovered",
+    "previously had", "used to be", "used to have", "stopped being",
+    "don't have", "do not have",
 }
 
 
@@ -163,7 +165,11 @@ async def reconcile_candidate(
         if not mem_tokens or not cand_tokens:
             continue
         intersection = cand_tokens & mem_tokens
-        overlap = len(intersection) / max(1, len(cand_tokens))
+        # Subject-aware overlap: normalize by the smaller token set
+        # so concise existing facts (e.g. "allergic to shrimp" - 2 tokens) match
+        # longer descriptive updates (e.g. "previously had shrimp allergy but now healed")
+        min_len = min(len(cand_tokens), len(mem_tokens))
+        overlap = len(intersection) / max(1, min_len)
         if overlap > best_overlap:
             best_overlap = overlap
             best_match = mem
@@ -195,7 +201,9 @@ async def reconcile_candidate(
     # Slot: DUPLICATE (content is identical or almost identical)
     cand_clean = candidate.content.strip().lower()
     ex_clean = best_match.content.strip().lower()
-    if cand_clean == ex_clean or best_overlap >= 0.85:
+    mem_tokens = _tokenize(best_match.content)
+    jaccard = len(cand_tokens & mem_tokens) / max(1, len(cand_tokens | mem_tokens))
+    if cand_clean == ex_clean or jaccard >= 0.80:
         best_match.last_verified_at = now
         if candidate.is_core:
             best_match.is_core = True

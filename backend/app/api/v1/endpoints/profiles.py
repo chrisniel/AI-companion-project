@@ -25,6 +25,7 @@ class ProfileMetadata(BaseModel):
     is_deleted: bool = False
     deleted_at: Optional[datetime] = None
     purge_after: Optional[datetime] = None
+    memory_extraction_enabled: bool = True
 
 
 class ProfileCreateRequest(BaseModel):
@@ -34,7 +35,8 @@ class ProfileCreateRequest(BaseModel):
 
 class ProfileUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    name: str = Field(min_length=1, max_length=64)
+    name: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    memory_extraction_enabled: Optional[bool] = None
 
 
 def profile_metadata(profile: Profile) -> ProfileMetadata:
@@ -47,6 +49,7 @@ def profile_metadata(profile: Profile) -> ProfileMetadata:
         is_deleted=profile.is_deleted,
         deleted_at=profile.deleted_at,
         purge_after=profile.purge_after,
+        memory_extraction_enabled=getattr(profile, "memory_extraction_enabled", True),
     )
 
 
@@ -116,7 +119,11 @@ async def profile_create(payload: ProfileCreateRequest, db: AsyncSession = Depen
 
 
 @router.patch("/{profile_id}", response_model=ProfileMetadata, dependencies=[Depends(require_host_admin)])
-async def profile_rename(profile_id: str, payload: ProfileUpdateRequest, db: AsyncSession = Depends(get_db)):
+async def profile_rename(
+    profile_id: str,
+    payload: ProfileUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+):
     profile = (await db.execute(select(Profile).where(
         Profile.id == profile_id,
         Profile.is_deleted.is_(False),
@@ -125,8 +132,11 @@ async def profile_rename(profile_id: str, payload: ProfileUpdateRequest, db: Asy
     ))).scalar_one_or_none()
     if profile is None:
         raise HTTPException(404, "Profile unavailable")
-    name = await _validate_and_normalize_name(payload.name, db, exclude_profile_id=profile_id)
-    profile.name = name
+    if payload.name is not None:
+        name = await _validate_and_normalize_name(payload.name, db, exclude_profile_id=profile_id)
+        profile.name = name
+    if payload.memory_extraction_enabled is not None:
+        profile.memory_extraction_enabled = payload.memory_extraction_enabled
     profile.updated_at = now_utc()
     await db.commit()
     return profile_metadata(profile)

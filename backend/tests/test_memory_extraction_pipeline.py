@@ -160,6 +160,65 @@ async def test_pipeline_auto_extracted_unverified(monkeypatch, sample_profile, t
 
 
 @pytest.mark.asyncio
+async def test_pipeline_skips_when_profile_extraction_disabled(sample_profile, test_session):
+    """Verify that background extraction skips if the profile has disabled extraction."""
+    sample_profile.memory_extraction_enabled = False
+    test_session.add(sample_profile)
+    await test_session.commit()
+
+    payload = json.dumps([
+        {
+            "content": "User lives in Tokyo",
+            "category": "fact",
+            "scope": "profile",
+            "confidence": 0.95,
+        }
+    ])
+    mock_provider = MockExtractionProvider(candidate_json=payload)
+
+    with patch("app.services.assistant.orchestrator.get_llm_provider", return_value=mock_provider):
+        await _run_post_turn_memory_extraction(
+            profile_id=sample_profile.id,
+            user_text="I live in Tokyo now",
+            assistant_text="Tokyo is wonderful!",
+            source_message_id="msg-disabled-prof",
+            engine=test_session.bind,
+        )
+
+    all_mems = (await test_session.scalars(select(Memory).where(Memory.profile_id == sample_profile.id))).all()
+    assert len(all_mems) == 0
+
+
+@pytest.mark.asyncio
+async def test_build_context_injects_memory_conflicts():
+    """Verify that _build_context injects <memory_conflicts> tag when conflicts exist."""
+    from app.services.assistant.orchestrator import _build_context
+
+    conflict = Memory(
+        id="conf-1",
+        profile_id="prof-1",
+        content="User states they hate green tea",
+        category="preference",
+        source_type="conflict",
+        user_verified=False,
+    )
+
+    msgs = _build_context(
+        history=[],
+        system_prompt="Base persona prompt.",
+        user_text="What tea should I drink?",
+        memories=[],
+        context_capacity=4096,
+        conflicts=[conflict],
+    )
+    assert len(msgs) >= 2
+    assert msgs[0].role == "system"
+    assert "<memory_conflicts>" in msgs[0].content
+    assert "User states they hate green tea" in msgs[0].content
+    assert "casually and politely clarify" in msgs[0].content
+
+
+@pytest.mark.asyncio
 async def test_pipeline_serializes_with_profile_lock(sample_profile):
     lock = _get_profile_extraction_lock(sample_profile.id)
     assert not lock.locked()
