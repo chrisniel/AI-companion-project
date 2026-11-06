@@ -4,19 +4,19 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - **Status:** Revised Phase 1 Plan — Published for Human Owner Final Review
 - **Delivery Level:** Level C — Sensitive Design (Special Boundary: Irreversible physical deletion of real user data requires explicit human authorization under Level D operational governance)
-- **Scope Mode:** New Feature — 30-day recoverable Profile deletion ("Move to Recently Deleted"), Profile-level administrative restoration, physical-first permanent Profile purge ("Permanently Delete"), in-flight upload reconciliation, and periodic Runtime maintenance purge
+- **Scope Mode:** New Feature — 30-day recoverable Profile deletion ("Move to Recently Deleted"), Profile-level administrative restoration, physical-first permanent Profile purge ("Permanently Delete"), controlled upload-race transaction ordering, crash-orphaned promoted file cleanup, and periodic Runtime maintenance purge
 - **Work Breakdown Structure ID:** `PC-IDENTITY-005`
 - **Target Files:**
   - `backend/app/models/profile.py` (verify/reuse existing `status`, `is_deleted`, `deleted_at`, `purge_after` columns)
   - `backend/app/api/v1/endpoints/attachments.py` (add Profile-scoped path validator `resolve_and_verify_profile_attachment_path`, verify upload lifecycle checks)
-  - `backend/app/services/profile_purge_service.py` (new soft-delete, restore, pre-validated atomic purge, upload reconciliation, and periodic background maintenance task `run_periodic_profile_purge`)
+  - `backend/app/services/profile_purge_service.py` (new soft-delete, restore, pre-validated atomic purge, upload reconciliation, crash-orphaned file cleanup, and periodic background maintenance task `run_periodic_profile_purge`)
   - `backend/app/api/v1/endpoints/profiles.py` (soft-delete, restore, deleted catalog, and immediate permanent purge endpoints)
   - `backend/app/api/v1/endpoints/system.py` (Host Admin maintenance purge endpoint)
   - `backend/app/main.py` (startup maintenance sweep AND periodic asyncio background maintenance task registered in lifespan context)
   - `contracts/openapi/openapi.json` (OpenAPI contract update)
   - `frontend/flutter/packages/companion_api/` (DTOs and client methods)
   - `frontend/flutter/apps/desktop/lib/features/profiles/` (desktop controllers, "Move to Recently Deleted" vs. "Permanently Delete" dialogs, Recently Deleted recovery view)
-  - `backend/tests/test_profile_deletion.py` (comprehensive backend verification suite `DEL-01`–`DEL-15`, `DEL-18`, `DEL-19`)
+  - `backend/tests/test_profile_deletion.py` (comprehensive backend verification suite `DEL-01`–`DEL-20`)
   - `frontend/flutter/apps/desktop/test/desktop_profile_deletion_test.dart` (comprehensive desktop UI verification suite `DEL-16`–`DEL-17`)
   - `docs/04_Architecture/02_Data_and_Security/privacy-retention-and-audit.md` (reconciled in Phase 1 per §2.C)
   - `docs/04_Architecture/04_Infrastructure/backup-recovery-and-diagnostics.md` (reconciled in Phase 1 per §2.C)
@@ -52,35 +52,61 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
    - **Current Implementation Reality & Limitation:** The current backup implementation (`backend/app/db/backup.py`: `create_pre_migration_backup` / `restore_database_from_backup`) snapshots only the SQLite database file (`companion.db`) and does **not** package external attachment files in `settings.ATTACHMENT_DIR`.
    - **Consequence:** If an older database snapshot is restored after a permanent Profile purge, the attachment database records will return with the Profile, but their physical image files on disk remain deleted. Requesting a preview or download for such an attachment will return HTTP 404 (Attachment file not found), while metadata queries succeed. `DEL-07` validates this exact current database-only boundary without falsely asserting physical asset recovery.
 
-#### D. Purge Ordering, Upload-Race Synchronization & Robust Failure Handling (Without a Separate Ledger)
-The Human Owner approved a streamlined physical-first approach without a separate deletion ledger or cleanup manifest. To prevent in-flight uploads from escaping deletion or creating untracked files, and to avoid prematurely locking out restoration before file deletion begins, the purge sequence enforces strict synchronization and ordering:
+#### D. Purge Ordering, Upload-Race SQLite Concurrency & Comprehensive Directory Cleanup (Without a Separate Ledger)
+The Human Owner approved a streamlined physical-first approach without a separate deletion ledger or cleanup manifest. Under the project's SQLite configuration (`PRAGMA journal_mode = WAL`, `PRAGMA busy_timeout = 5000` in `backend/app/db/session.py`), concurrent readers are supported, but SQLite enforces a strict **single-writer** model. When any transaction writes to the database, it acquires SQLite's write lock, serializing write operations.
 
-1. **Upload Lifecycle Validation (Server-Side):**
-   - In `backend/app/api/v1/endpoints/attachments.py`, `upload_attachment()` enforces that every upload requires an active, owned Profile Session (`validate_profile_session()`).
-   - `validate_profile_session()` queries `Profile.status == 'active'` and `Profile.is_deleted == False` on every check.
-   - Any upload targeting a soft-deleted or purging Profile fails closed server-side with HTTP 401 (`Inactive Profile Session`).
-2. **Phase A — Pre-Validate All Attachment Paths Before State Transition:**
-   - Query all existing `Attachment.storage_path` rows for `profile_id`.
-   - Validate each path via `resolve_and_verify_profile_attachment_path(storage_path, profile_id)`.
-   - **Failure Behavior:** If any path fails validation (e.g., cross-profile path or directory traversal attempt), the purge aborts immediately with `SecurityException` **before** the Profile's status is changed. The Profile remains in `status == "deleted"` and **remains restorable** by an administrator (`DEL-08`).
-3. **Phase B — Atomic Non-Restorable State Transition:**
-   - Only after all attachment paths pass pre-validation does the Profile conditionally transition to `status = "purging"` (with `is_deleted = True` and `purge_after = min(purge_after, now)`).
-   - Once `status == "purging"` is committed, the Profile is permanently non-restorable, preventing restore-versus-purge races (`DEL-11`).
-   - Simultaneously revokes all active `profile_sessions` and deletes all `session_tickets` for `profile_id`. Any upload in flight that has not yet committed its database transaction will fail `validate_profile_session()` prior to `db.commit()` and roll back (`DEL-19`).
-4. **Phase C — Attachment Reconciliation After Purge Transition:**
-   - To guarantee that no upload that committed just before Phase B's transaction locked the Profile can escape deletion, the purge **re-queries the authoritative attachment records** for `profile_id` after the `status = "purging"` commit.
-   - Validates every newly resolved path against `(settings.ATTACHMENT_DIR / profile_id).resolve()`.
-   - Because Phase B is durably committed, no subsequent upload can ever commit for this Profile.
-5. **Phase D — Physical File Deletion with Pre-Unlink Revalidation & Directory Sweep:**
-   - For each attachment in the reconciled set, revalidate containment immediately before unlinking each file.
-   - Delete physical files with `file_path.unlink(missing_ok=True)`. Already-missing files are treated as successfully cleaned.
-   - **Interruption Guard:** If an `OSError` occurs during unlinking (e.g. file locked by another process after 2 of 5 files are unlinked), the purge halts immediately. The Profile remains in `status == "purging"`, and all database records (`Attachment` rows and child rows) are retained in SQLite (`DEL-09`).
-   - **Temporary File Sweep:** After unlinking all registered attachment files, the purge scans the Profile's dedicated directory `settings.ATTACHMENT_DIR / profile_id` for any uncommitted `.tmp_*` files left by rejected or crashed in-flight uploads, unlinking them safely (`DEL-19`).
-   - Cleans up empty conversation subdirectories and the Profile attachment folder via non-recursive `rmdir()`.
-6. **Retry Succeeds Without a Separate Ledger:**
-   - When a subsequent maintenance sweep or manual purge retries the Profile in `status == "purging"`, it pre-validates paths, treats the already-deleted files as cleaned (`missing_ok=True`), deletes any remaining physical files, sweeps any temp files, and completes the purge (`DEL-10`).
-7. **Phase E — Atomic Relational Database Deletion in Strict FK Order:**
-   - Only after all physical attachment files for the Profile are confirmed absent does the service delete the Profile's relational rows in strict foreign-key order and remove the `Profile` record in an atomic transaction.
+The existing attachment upload flow in `backend/app/api/v1/endpoints/attachments.py` (`upload_attachment`) executes in the following sequence:
+1. Attachment ORM record is added.
+2. `await db.flush()` executes, sending the `INSERT` to SQLite and acquiring SQLite's write state *before* any physical file is written.
+3. `await validate_profile_session(db, session)` validates session and Profile status.
+4. Physical file is written as a `.tmp_*` file and promoted to the final target filename via `os.rename()` in `save_attachment_file_no_clobber()`.
+5. If the target filename changed due to collision resolution, `await db.flush()` executes.
+6. `await validate_profile_session(db, session)` is called again.
+7. Database transaction commits (`await db.commit()`).
+
+Because of this transaction structure, **the purge service cannot commit a Profile state transition while an upload transaction already holds SQLite's write lock**. Concurrency between in-flight upload and permanent purge is governed by two deterministic transaction-ordering cases:
+
+1. **Case A — Upload Transaction Wins Write Lock First:**
+   - Upload flushes its `Attachment` row into SQLite, acquiring the write lock.
+   - Upload writes and promotes its physical file to disk.
+   - Purge attempts to transition the Profile to `status = "purging"` (`UPDATE profiles SET status = 'purging' ...`).
+   - The purge transaction waits for the upload transaction to finish (guarded by SQLite's write lock and busy timeout).
+   - Upload performs its final session validation (the Profile was still valid when evaluated within the upload transaction) and successfully commits.
+   - Purge then executes its update, transitioning the Profile to `status = "purging"` and committing.
+   - Post-transition reconciliation (Phase C) re-queries authoritative Attachment records and discovers the newly committed Attachment.
+   - Physical cleanup removes the attachment file from disk.
+   - Relational deletion completes only after physical cleanup succeeds.
+   - Result: No orphaned physical file or database row remains (`DEL-19`).
+
+2. **Case B — Purge Transaction Wins Write Lock First:**
+   - Purge acquires SQLite's write lock first, transitions the Profile to `status = "purging"`, revokes active sessions, and commits.
+   - Upload begins or attempts its lifecycle validation.
+   - Upload lifecycle validation (`validate_profile_session()`) detects the inactive/purging Profile (`Profile.status == "purging"` or revoked session).
+   - Upload fails closed server-side with HTTP 401 (`Inactive Profile Session`).
+   - Upload transaction rolls back; no Attachment row or physical file is successfully created (`DEL-19`).
+
+3. **Crash-Orphaned Promoted Files & Dedicated Directory Cleanup:**
+   - In `save_attachment_file_no_clobber()`, the temporary file is promoted to the final attachment filename before the database transaction commits.
+   - If a process crash occurs between physical file promotion and `db.commit()`:
+     - No committed `Attachment` database row exists in SQLite (uncommitted transaction rolled back).
+     - The promoted final attachment file remains physically present on disk.
+   - To guarantee complete cleanup without orphaned files, after the Profile enters `status = "purging"`, the purge service executes a comprehensive cleanup of the dedicated Profile attachment directory:
+     1. Reconcile registered `Attachment` rows and delete registered physical attachment files with pre-unlink containment revalidation (`missing_ok=True`).
+     2. Inspect the entire dedicated Profile attachment directory (`settings.ATTACHMENT_DIR / profile_id`):
+        - Discovers all remaining files, including `.tmp_*` temporary files, promoted final files without corresponding `Attachment` rows, and any other abandoned upload artifacts (`DEL-20`).
+        - Verifies that all resolved paths remain strictly inside `(settings.ATTACHMENT_DIR / profile_id).resolve()`.
+        - Never follows a symlink outside the Profile directory (ensuring strict containment).
+        - Never deletes anything outside the target Profile's storage directory.
+        - Treats missing files as already cleaned (`missing_ok=True`).
+     3. If file cleanup fails (e.g. filesystem `OSError`), retains all database records and leaves the Profile in `status == "purging"` for retry (`DEL-09`, `DEL-10`).
+     4. Only performs relational database deletion after the Profile attachment directory has been verified clean.
+
+4. **5-Phase Purge Execution Summary:**
+   - **Phase A — Pre-Validate Registered Attachment Paths:** Validates all existing `Attachment.storage_path` rows before any state change. If any path fails containment, aborts immediately; Profile remains `status == "deleted"` and **remains restorable** (`DEL-08`).
+   - **Phase B — Atomic Non-Restorable State Transition:** Transitions conditionally to `status = "purging"` and revokes active sessions in SQLite. Profile is permanently non-restorable (`DEL-11`).
+   - **Phase C — Post-Transition Attachment Reconciliation:** Re-queries authoritative `Attachment` rows in SQLite to discover any newly committed attachments from Case A (`DEL-19`).
+   - **Phase D — Physical File Deletion & Dedicated Directory Cleanup:** Deletes registered physical attachment files, then inspects and sweeps the dedicated Profile directory for `.tmp_*` files, crash-orphaned promoted files without Attachment rows, and abandoned artifacts (`DEL-19`, `DEL-20`). Halts on `OSError` with DB rows retained for retry (`DEL-09`, `DEL-10`).
+   - **Phase E — Atomic Relational Database Deletion in Strict FK Order:** Deletes child rows and `Profile` in SQLite only after the directory is confirmed completely clean.
 
 #### E. Periodic Automatic Purge Scheduling While Application Is Open
 1. **Lightweight Periodic Sweep:** In addition to the startup lifespan hook and manual maintenance endpoint, the Runtime will execute a lightweight periodic background maintenance task (`run_periodic_profile_purge`) while the application remains open.
@@ -209,28 +235,38 @@ Permanent deletion (`ProfilePurgeService.purge_profile(db, profile_id, now, *, a
    - If `result.rowcount != 1`: roll back and raise `409 Conflict` (concurrent restore won the race before purge started).
    - Defensively revoke all active `profile_sessions` and delete all `session_tickets` for `profile_id`.
    - `await db.commit()`
-   - **Postcondition of Phase B:** `Profile.status == "purging"` is durably committed. Any concurrent or subsequent `POST /restore` fails closed with `409 Conflict` (`DEL-11`). Any in-flight upload will fail its subsequent session re-validation check with 401 and roll back (`DEL-19`).
+   - **Postcondition of Phase B:** `Profile.status == "purging"` is durably committed. Any concurrent or subsequent `POST /restore` fails closed with `409 Conflict` (`DEL-11`). Concurrency between upload and purge follows SQLite transaction serialization boundaries (`DEL-19`): if upload acquired the write lock first (Case A), purge waited for upload to commit, after which Phase C reconciles the newly added attachment; if purge committed Phase B first (Case B), upload lifecycle validation detects the inactive/purging Profile and fails closed with HTTP 401.
 
 #### Phase C — Post-Transition Attachment Reconciliation (Read)
 4. **Reconcile Authoritative Attachment Records:**
    - Re-query `select(Attachment.id, Attachment.storage_path).where(Attachment.profile_id == profile_id)`.
-   - This captures any upload that successfully committed its database transaction immediately before Phase B committed.
+   - This captures any upload that successfully committed its database transaction while or immediately before Phase B ran (Case A).
    - Validate any newly observed paths against `(settings.ATTACHMENT_DIR / profile_id).resolve()`.
    - Because `Profile.status == "purging"` is already committed, no new upload can ever commit after this point.
 
-#### Phase D — Physical File Deletion with Pre-Unlink Revalidation & Temp Sweep (Disk I/O)
-5. **Delete Physical Attachment Files First:**
+#### Phase D — Physical File Deletion & Dedicated Profile Directory Cleanup (Disk I/O)
+5. **Delete Registered Physical Attachment Files First:**
    - For each attachment in the reconciled set, revalidate containment immediately before unlinking.
    - Unlink via `await asyncio.to_thread(file_path.unlink, missing_ok=True)`.
    - Already-missing files (`missing_ok=True`) are treated as successfully cleaned.
    - **Interruption Guard:** If an `OSError` occurs (e.g., file locked by another process after 2 of 5 files are deleted), **stop file deletion immediately** and raise/report the error.
-   - Because database records have not been touched, all `Attachment` rows remain in SQLite with `Profile.status == "purging"` for a subsequent retry (`DEL-09`).
-6. **Temporary File & Directory Sweep:**
-   - Scan the target Profile's dedicated directory `settings.ATTACHMENT_DIR / profile_id` for any uncommitted `.tmp_*` files or orphaned binary artifacts left by aborted in-flight uploads, unlinking them safely (`DEL-19`).
+   - Because database records have not been touched, all `Attachment` rows remain in SQLite with `Profile.status == "purging"` for a subsequent retry (`DEL-09`, `DEL-10`).
+6. **Dedicated Profile Directory Inspection & Comprehensive Cleanup (`DEL-20`):**
+   - After unlinking registered attachment files, inspect the entire dedicated Profile attachment directory `settings.ATTACHMENT_DIR / profile_id` (and all subdirectories).
+   - Find all remaining files inside the directory, including:
+     - `.tmp_*` temporary files left by aborted or interrupted uploads (`DEL-19`).
+     - Promoted final attachment files (e.g. `<uuid>.png`, `<uuid>.jpg`) left behind when the process crashed after `save_attachment_file_no_clobber()` promoted the file but before `db.commit()` (`DEL-20`).
+     - Any other abandoned upload or staging artifacts.
+   - **Safety Constraints:**
+     - Ensure all resolved paths remain strictly inside `(settings.ATTACHMENT_DIR / profile_id).resolve()`.
+     - Never follow a symlink outside the Profile directory (verifying `resolve().is_relative_to(profile_root)`).
+     - Never delete anything outside the target Profile's storage directory.
+     - Treat missing files as already cleaned (`missing_ok=True`).
+   - If cleanup encounters an `OSError`, halt immediately, retain all database records, and leave the Profile in `status == "purging"` for retry (`DEL-09`, `DEL-10`).
    - Attempt non-recursive `rmdir()` on empty conversation subdirectories and on `settings.ATTACHMENT_DIR / profile_id` itself (ignoring `OSError` if non-empty or absent; never calling recursive `rmtree`).
 
 #### Phase E — Atomic Relational Database Purge in Strict FK Order (Transaction 2)
-7. Once all physical files and temp artifacts are confirmed absent, execute relational deletions in a single atomic SQLite transaction:
+7. Only after the Profile attachment directory has been verified completely clean (all registered files, temp files, and crash-orphaned promoted files absent) does the service execute relational deletions in a single atomic SQLite transaction:
    1. `UPDATE profiles SET active_character_instance_id = NULL WHERE id = :profile_id` (breaks circular FK `fk_profiles_active_character_instance_id`).
    2. `DELETE FROM attachments WHERE profile_id = :profile_id`
    3. `DELETE FROM messages WHERE profile_id = :profile_id`
@@ -420,16 +456,16 @@ The following repository documents contain legacy `7-day` Profile recovery wordi
   - Modify: `backend/app/api/v1/endpoints/profiles.py`, `backend/app/api/v1/endpoints/system.py`, `backend/app/main.py`
   - Create Test: `backend/tests/test_profile_deletion.py`
 - **Steps (TDD):**
-  - [ ] Write failing backend tests in `backend/tests/test_profile_deletion.py` covering Scenarios `DEL-01` through `DEL-15`, `DEL-18`, and `DEL-19`.
+  - [ ] Write failing backend tests in `backend/tests/test_profile_deletion.py` covering Scenarios `DEL-01` through `DEL-15`, `DEL-18`, `DEL-19` (Cases A and B), and `DEL-20`.
   - [ ] Run `backend\.venv\Scripts\python.exe -m pytest backend/tests/test_profile_deletion.py -v` to confirm RED failure.
   - [ ] Implement `resolve_and_verify_profile_attachment_path(storage_path, profile_id)` in `attachments.py`.
   - [ ] Implement `ProfilePurgeService` (`soft_delete_profile`, `list_deleted_profiles`, `restore_profile`, `purge_profile`, `execute_maintenance_purge`, `run_periodic_profile_purge`) enforcing:
     1. Pre-validation of all attachment paths *before* changing state (`DEL-08`).
     2. Atomic transition to `status = "purging"` and session revocation.
-    3. Post-transition attachment reconciliation capturing any just-committed upload (`DEL-19`).
+    3. Post-transition attachment reconciliation capturing any just-committed upload (`DEL-19` Case A).
     4. Pre-unlink containment revalidation, physical file unlinking first (halting on `OSError` with DB rows retained; treating missing files as cleaned) (`DEL-09`).
     5. Safe retry without a separate ledger (`DEL-10`).
-    6. Profile directory sweep removing any leftover `.tmp_*` files or uncommitted artifacts from aborted uploads (`DEL-19`).
+    6. Dedicated Profile directory inspection and cleanup removing any leftover `.tmp_*` files, crash-orphaned promoted files without Attachment rows, or abandoned artifacts (`DEL-19`, `DEL-20`), with strict symlink and containment checks.
     7. Atomic 10-step relational deletion in strict FK order.
     8. Periodic background maintenance sweep (`run_periodic_profile_purge`) with individual Profile failure isolation and logging (`DEL-18`).
   - [ ] Wire routes in `profiles.py` (`DELETE /{profile_id}`, `GET /deleted`, `POST /{profile_id}/restore`, `POST /{profile_id}/purge`), `system.py` (`POST /system/maintenance/purge-profiles`), and lifespan startup hook & periodic task in `main.py`.
@@ -482,14 +518,15 @@ The following repository documents contain legacy `7-day` Profile recovery wordi
 | **`DEL-16`** | Desktop UI — Move to Recently Deleted & Active Session Switch | In Flutter Desktop widget test, open Settings -> Profile Access, verify Default Profile cannot be deleted, click **Move to Recently Deleted** on secondary Profile, verify typed name gate, confirm deletion | Flutter Desktop (`desktop_profile_deletion_test.dart`) | Confirm button stays disabled until exact Profile name is typed; on confirm, Profile moves to **Recently Deleted** showing `30 days remaining`, disappears from `ProfileSelectorHeader`, and if active, switches cleanly to Default Profile and clears chat state. |
 | **`DEL-17`** | Desktop UI — Restore & Permanently Delete Flows | In Flutter Desktop widget test, test clicking **Restore** on a Recently Deleted Profile, and test clicking **Permanently Delete** with typed confirmation modal | Flutter Desktop (`desktop_profile_deletion_test.dart`) | **Restore** moves Profile back to active list; **Permanently Delete** requires typed confirmation before calling `purgeProfile` and removes the Profile from Recently Deleted. |
 | **`DEL-18`** | Periodic Automatic Maintenance Purge While Runtime Remains Running | Start the Runtime with an active periodic maintenance worker (`run_periodic_profile_purge`), seed an expired soft-deleted Profile (`purge_after <= now`) and an unexpired soft-deleted Profile (`purge_after > now`), simulate advancing the maintenance cycle without restarting the application | Backend (`test_profile_deletion.py`) | The expired Profile is permanently purged in the background while the Runtime continues running; the unexpired Profile remains untouched in Recently Deleted; when an individual purge fails (e.g. simulated filesystem error), the failure is logged and recorded in `failed_profile_ids` rather than treated as successful, and succeeds on the next maintenance cycle. |
-| **`DEL-19`** | In-Flight Attachment Upload Versus Permanent Profile Purge Race | Test a controlled race between an in-flight attachment upload and permanent Profile purge by pausing `upload_attachment` between disk write and final session re-validation/commit while triggering `purge_profile` | Backend (`test_profile_deletion.py`) | (1) The Profile transitions to `purging` safely; (2) The in-flight upload fails its post-write session re-validation check (`401 Inactive Profile Session`) and rolls back its database transaction; (3) The purge's post-transition reconciliation and temp-file sweep unlinks the aborted upload's physical file / `.tmp_*` artifacts; (4) Zero orphaned attachment rows or physical files remain in `settings.ATTACHMENT_DIR / profile_id`; (5) Existing attachments are deleted physical-first; (6) Database rows and Profile are removed only after cleanup succeeds; (7) Other Profiles and their attachments remain untouched. |
+| **`DEL-19`** | In-Flight Attachment Upload vs. Permanent Profile Purge Race (SQLite Transaction Serialization) | Test two controlled transaction-ordering cases using deterministic synchronization primitives (`asyncio.Event` / locks, without arbitrary sleeps) under SQLite WAL mode: **Case A (Upload Wins Write Lock First):** Upload flushes `Attachment` row and writes/promotes physical file before purge begins. Purge attempts to transition Profile to `purging` and waits for upload transaction to complete. Upload commits. Purge transitions Profile to `purging` and commits. Post-transition reconciliation discovers newly committed Attachment, physical cleanup unlinks it, and relational purge deletes the row. **Case B (Purge Wins Write Lock First):** Purge acquires write lock first, transitions Profile to `purging`, and commits. Upload lifecycle validation detects inactive Profile, failing closed with HTTP 401 (`Inactive Profile Session`). Upload rolls back; no row or file is created. | Backend (`test_profile_deletion.py`) | In Case A: purge discovers the newly committed attachment during Phase C reconciliation, unlinks its physical file in Phase D, and removes relational rows in Phase E; zero orphaned files or DB records remain. In Case B: upload fails closed with 401, transaction rolls back, and no Attachment row or physical file is created. In both cases, other Profiles and their files remain untouched. |
+| **`DEL-20`** | Crash-Recovery — Orphaned Promoted Attachment File After Interrupted Upload | Create a Profile with dedicated attachment directory. Simulate a promoted final attachment file on disk (and optionally a `.tmp_*` file) without a corresponding committed `Attachment` database row, representing a process crash after file promotion in `save_attachment_file_no_clobber()` but before `db.commit()`. Trigger permanent Profile purge. | Backend (`test_profile_deletion.py`) | Dedicated Profile directory cleanup inspects `settings.ATTACHMENT_DIR / profile_id`, discovers and unlinks the orphaned promoted file, registered attachment files, and `.tmp_*` artifacts with strict symlink and containment safety; no files outside the target Profile directory are touched; relational rows and Profile are deleted only after physical cleanup succeeds; zero orphaned physical files remain in the Profile's attachment directory. |
 
 ---
 
 ## 8. Level C vs. Level D Operational Safeguards
 
 - **Level C (Planned Autonomous Implementation after Plan Approval):**
-  - Implementing backend services, endpoints, OpenAPI contracts, Dart client methods, Flutter Desktop UI, periodic background maintenance worker, upload-race synchronization, and automated test suites operating strictly on disposable temporary SQLite databases (`tmp_path`) and temporary attachment directories.
+  - Implementing backend services, endpoints, OpenAPI contracts, Dart client methods, Flutter Desktop UI, periodic background maintenance worker, upload-race synchronization (`DEL-19` Cases A & B), crash-orphaned directory cleanup (`DEL-20`), and automated test suites operating strictly on disposable temporary SQLite databases (`tmp_path`) and temporary attachment directories.
 - **Level D (Human-Controlled Destructive Operations):**
   - Executing irreversible deletion on real human user data in a live production environment remains exclusively under Human Owner control. Automated verification never touches live user data roots.
 
@@ -501,9 +538,10 @@ The following repository documents contain legacy `7-day` Profile recovery wordi
   - **Phase 1 Planning Status:** Complete with all requested corrections incorporated. Awaiting final Human Owner review and explicit authorization.
   - **Outstanding Phase 1 Planning Corrections Addressed in this Revision:**
     1. Periodic automatic maintenance purge while Runtime remains open (§1.1.E, §2.4, §6 Task 1, `DEL-18`).
-    2. In-flight attachment upload versus permanent purge race reconciliation and temp-file sweep (§1.1.D, §2.3, §6 Task 1, `DEL-19`).
-    3. Concrete assertion upgrades for Scenario `DEL-14` (replacing vague "100% untouched").
-    4. Explicit inventory of Phase 3 canonical documentation closure tasks (§4.2).
+    2. Corrected in-flight upload vs. permanent purge race using actual SQLite transaction serialization behavior (Case A: Upload wins write lock; Case B: Purge wins write lock; §1.1.D, §2.3, §6 Task 1, `DEL-19`).
+    3. Comprehensive Profile attachment directory cleanup covering crash-orphaned promoted files, `.tmp_*` artifacts, and symlink safety without a separate ledger (§1.1.D, §2.3, §6 Task 1, `DEL-20`).
+    4. Concrete assertion upgrades for Scenario `DEL-14` (replacing vague "100% untouched").
+    5. Explicit inventory of Phase 3 canonical documentation closure tasks (§4.2).
   - **Outstanding Phase 3 Documentation Closure Tasks:**
     - Reconciling the 9 remaining canonical specifications and trackers identified in §4.2 (`profiles-and-devices.md`, `02_Profile_Selector_and_Privacy.md`, `ADR-0018`, `decisions/README.md`, `WBS.md`, `DECISION_REGISTER.md`, `memory-and-personalization.md`, `mobile-offline-and-sync.md`, `MOBILE_WBS.md`) during Phase 3 documentation closure alongside implementation evidence.
 - **Strict Execution Boundaries:**

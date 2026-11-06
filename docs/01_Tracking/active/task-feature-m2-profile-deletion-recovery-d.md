@@ -18,12 +18,13 @@
   - **30-day recovery period:** `purge_after = deleted_at + 30 days`; distinguish **Move to Recently Deleted** from **Permanently Delete**.
   - **Recovery authority boundary:** Local Account Admin recovery applies strictly to Profile-level state and preserves prior user-initiated content deletions (`is_deleted` / `deleted_at` on child conversations, messages, memories, tasks, and attachments remain untouched).
   - **Backup restoration semantics & asset consistency:** Restoring a backup restores the snapshot as it existed when created (superseding tombstone anti-resurrection rules for backups, while preserving mobile delta-sync tombstones) and restores only data/assets contained in the backup. Reconciled in `privacy-retention-and-audit.md` and `backup-recovery-and-diagnostics.md`, noting that current SQLite backups do not bundle `ATTACHMENT_DIR`.
-  - **Purge ordering, upload-race synchronization & 5-phase execution:**
+  - **Purge ordering, upload-race SQLite concurrency & 5-phase execution:**
+    - Controlled concurrency under SQLite single-writer WAL model (`DEL-19`): Case A (upload wins write lock first, commits, and purge Phase C reconciles newly committed row) vs. Case B (purge wins write lock first, transitions Profile, and upload lifecycle validation fails closed with 401).
     - Phase A: Pre-validate all attachment paths before modifying state; aborts before status transition if invalid, preserving restorability (`DEL-08`).
     - Phase B: Atomic transition to `status = "purging"` and active session revocation, making profile permanently non-restorable (`DEL-11`).
-    - Phase C: Post-transition attachment reconciliation re-querying attachment rows to capture any just-committed upload (`DEL-19`).
-    - Phase D: Physical file unlinking with pre-unlink containment revalidation; halt on `OSError` with DB rows retained for safe retry without a separate ledger (`DEL-09`, `DEL-10`); sweep Profile attachment directory for leftover `.tmp_*` artifacts from aborted uploads (`DEL-19`).
-    - Phase E: Atomic relational database deletion in strict FK order.
+    - Phase C: Post-transition attachment reconciliation re-querying attachment rows to capture any just-committed upload from Case A (`DEL-19`).
+    - Phase D: Physical file unlinking with pre-unlink containment revalidation; halt on `OSError` with DB rows retained for safe retry without a separate ledger (`DEL-09`, `DEL-10`); comprehensive inspection of dedicated Profile directory unlinking `.tmp_*` artifacts and crash-orphaned promoted files without Attachment rows (`DEL-20`), with strict symlink and containment safety.
+    - Phase E: Atomic relational database deletion in strict FK order only after directory is confirmed completely clean.
   - **Periodic automatic purge scheduling:** Background maintenance task `run_periodic_profile_purge(interval_seconds=3600)` running in FastAPI lifespan context while Runtime remains open (hourly sweep, default 3600s), in addition to startup lifespan sweep and manual maintenance endpoint (`DEL-18`).
   - **Concrete isolation assertions (`DEL-14`):** Explicit verification of byte-for-byte asset hash preservation, exact database row and active session retention for other profiles, and untouched shared templates.
   - **Accurate cancellation & confirmation boundaries:** Document cooperative 250ms polling + pre-commit validation without claiming a hard 250ms real-time latency cap; separate Host Admin API enforcement from Desktop UI typed confirmation safeguards.
@@ -37,9 +38,9 @@
 ## Phase 2: Autonomous Implementation & Verification (PENDING REVISED PLAN APPROVAL)
 
 - [ ] **Step 1 — Backend Deletion, Restore & Physical-First Hard-Purge Logic:**
-  - [ ] Write failing integration tests (`DEL-01`–`DEL-15`, `DEL-18`, `DEL-19`) in `backend/tests/test_profile_deletion.py`.
+  - [ ] Write failing integration tests (`DEL-01`–`DEL-15`, `DEL-18`, `DEL-19`, `DEL-20`) in `backend/tests/test_profile_deletion.py`.
   - [ ] Implement `resolve_and_verify_profile_attachment_path(storage_path, profile_id)` in `backend/app/api/v1/endpoints/attachments.py`.
-  - [ ] Implement `ProfilePurgeService` in `backend/app/services/profile_purge_service.py` (30-day soft delete, Profile-level restore, pre-validation before `status = "purging"`, post-transition reconciliation, physical-first file cleanup with pre-unlink containment revalidation, `.tmp_*` sweep, failure retention without a separate ledger, periodic background maintenance worker `run_periodic_profile_purge`, and 10-step relational deletion transaction).
+  - [ ] Implement `ProfilePurgeService` in `backend/app/services/profile_purge_service.py` (30-day soft delete, Profile-level restore, pre-validation before `status = "purging"`, post-transition reconciliation, physical-first file cleanup with pre-unlink containment revalidation, crash-orphaned file cleanup & `.tmp_*` sweep, failure retention without a separate ledger, periodic background maintenance worker `run_periodic_profile_purge`, and 10-step relational deletion transaction).
   - [ ] Implement `DELETE /api/v1/profiles/{id}`, `GET /api/v1/profiles/deleted`, `POST /api/v1/profiles/{id}/restore`, `POST /api/v1/profiles/{id}/purge`, `POST /api/v1/system/maintenance/purge-profiles`, and startup lifespan hook & periodic background task in `backend/app/main.py`.
 - [ ] **Step 2 — OpenAPI Contract & Dart Client Parity (`companion_api`):**
   - [ ] Export updated `contracts/openapi/openapi.json`.
