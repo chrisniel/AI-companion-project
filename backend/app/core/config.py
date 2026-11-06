@@ -173,6 +173,9 @@ class Settings(BaseSettings):
     MEMORY_SEARCH_LIMIT: int = 5
     GENERATION_RESERVE_TOKENS: int = 512
     MEMORY_BUDGET_TOKENS: int = 256
+    MEMORY_CORE_FACTS_ENABLED: bool = True
+    MEMORY_CORE_FACTS_LIMIT: int = 5
+    MEMORY_CORE_FACTS_BUDGET_TOKENS: int = 100
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

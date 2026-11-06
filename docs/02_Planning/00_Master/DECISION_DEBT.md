@@ -49,8 +49,8 @@
 
 - **`DEBT-V1-06`: Selective Automatic Memory Extraction Cadence & Prompts**
   - *Context:* Assistant evaluates conversation turns for clear, stable user facts.
-  - *Open Detail:* Inline prompt evaluation in conversation turn vs. asynchronous background task; prompt heuristics for distinguishing permanent facts from transient statements.
-  - *Resolution Point:* Milestone M3 implementation plan.
+  - *Open Detail:* Inline prompt evaluation in conversation turn vs. asynchronous background task; prompt heuristics for distinguishing permanent facts from transient statements; slot-based reconciliation (NEW, MERGE, UPDATE, CONFLICT).
+  - *Resolution Point:* Milestone M3 Batch C2 implementation plan.
 
 - **`DEBT-V1-07`: Low-Impact Option B Game List Storage Format**
   - *Context:* Low-Impact mode auto-activates when a configured game or heavy app is focused.
@@ -59,8 +59,9 @@
 
 - **`DEBT-V1-08`: Temporary Memory Expiration Sweep Frequency**
   - *Context:* Temporary memories have `valid_from` and `expires_at` metadata.
-  - *Open Detail:* Immediate query-time filtering vs. background periodic expiration sweeper in `SchedulerService`.
-  - *Resolution Point:* Milestone M3 implementation plan.
+  - *Status:* Query-time temporal exclusion implemented in M3 Batch C1 (`or_(expires_at.is_(None), expires_at > :now)` using bound UTC timestamp parameter in `search_relevant_memories` and `list_memories`).
+  - *Open Detail:* Background periodic soft-delete expiration sweeper in `SchedulerService` / periodic maintenance worker.
+  - *Resolution Point:* Periodic maintenance / Scheduler milestone.
 
 - **`DEBT-V1-09`: Self-Contained Windows Installer & Bundled Runtime Packaging (`PC-HOST-006`)**
   - *Context:* End-user PC V1 distribution requires a self-contained Windows installer bundling private Python runtime, application dependencies, Flutter Desktop, and native inference binaries without requiring developer setup, manual Python installation, or global PATH modifications.

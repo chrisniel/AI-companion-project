@@ -56,9 +56,9 @@ Verified in `backend/app/models/task.py`, `backend/app/core/config.py`, and `bac
 ### 3.2 Memory Deletion Reality
 
 Verified in `backend/app/models/memory.py` and `backend/app/api/v1/endpoints/memories.py`:
-- **Soft-Delete Flag:** `DELETE /api/v1/memories/{memory_id}` sets `memory.is_deleted = True` and `memory.deleted_at = now()`.
+- **Soft-Delete Flag:** `DELETE /api/v1/memories/{memory_id}` sets `memory.is_deleted = True` and `memory.deleted_at = now()`. SQLite FTS triggers immediately cycle `memories_fts` to remove it from lexical search.
 - **Search Filtering:** The FTS retrieval query joins `Memory` and defensively filters `m.deleted_at IS NULL`, immediately removing soft-deleted memories from search results.
-- **Purge Status:** Automated background hard-purging of soft-deleted memories is **NOT IMPLEMENTED**. Soft-deleted memory rows remain in the database until manual intervention.
+- **Permanent Purge Lifecycle:** During permanent Profile deletion (`ProfilePurgeService.purge_profile`), `Memory` records are permanently deleted before `CharacterInstance` records to satisfy `RESTRICT` foreign key integrity. In addition, `ProfilePurgeService.purge_expired_retention` includes soft-deleted memories older than `DATA_RETENTION_DAYS` in periodic maintenance sweeps.
 
 ### 3.3 Attachment Deletion Reality
 

@@ -103,6 +103,11 @@ M3_ROUTE_DART_METHODS: Dict[Tuple[str, str], Tuple[str, str]] = {
     ("GET", "/api/v1/characters/instances/{instance_id}"): ("getCharacterInstance", "/api/v1/characters/instances/$instanceId"),
     ("PATCH", "/api/v1/characters/instances/{instance_id}"): ("updateCharacterInstance", "/api/v1/characters/instances/$instanceId"),
     ("DELETE", "/api/v1/characters/instances/{instance_id}"): ("deleteCharacterInstance", "/api/v1/characters/instances/$instanceId"),
+    ("GET", "/api/v1/memories"): ("listMemories", "/api/v1/memories"),
+    ("POST", "/api/v1/memories"): ("createMemory", "/api/v1/memories"),
+    ("GET", "/api/v1/memories/{memory_id}"): ("getMemory", "/api/v1/memories/$memoryId"),
+    ("PATCH", "/api/v1/memories/{memory_id}"): ("updateMemory", "/api/v1/memories/$memoryId"),
+    ("DELETE", "/api/v1/memories/{memory_id}"): ("deleteMemory", "/api/v1/memories/$memoryId"),
 }
 
 # Explicitly cataloged routes outside CompanionClient to prevent silent omissions.
@@ -126,10 +131,6 @@ UNMAPPED_FUTURE_ROUTES: Dict[Tuple[str, str], str] = {
     ("POST", "/api/v1/conversations/{conversation_id}/attachments"): "M2 Attachment Ingestion",
     ("GET", "/api/v1/conversations/{conversation_id}/attachments/{attachment_id}/preview"): "M2 Attachment Preview",
     ("DELETE", "/api/v1/conversations/{conversation_id}/attachments/{attachment_id}"): "M2 Attachment Deletion",
-    ("GET", "/api/v1/memories"): "M3 Long-term Memory Search",
-    ("POST", "/api/v1/memories"): "M3 Long-term Memory Creation",
-    ("PATCH", "/api/v1/memories/{memory_id}"): "M3 Long-term Memory Update",
-    ("DELETE", "/api/v1/memories/{memory_id}"): "M3 Long-term Memory Deletion",
 }
 
 # Mapping of OpenAPI Schema Name to Dart file and Dart class name
@@ -162,6 +163,10 @@ SCHEMA_TO_DART_CLASS: Dict[str, Tuple[str, str]] = {
     "ProfileCreateRequest": ("profile_dto.dart", "ProfileCreateRequest"),
     "ProfileUpdateRequest": ("profile_dto.dart", "ProfileUpdateRequest"),
     "PurgeMaintenanceResult": ("profile_dto.dart", "PurgeMaintenanceResult"),
+    "MemoryCreate": ("memory_dto.dart", "MemoryCreate"),
+    "MemoryUpdate": ("memory_dto.dart", "MemoryUpdate"),
+    "MemoryOut": ("memory_dto.dart", "MemoryOut"),
+    "MemoryListOut": ("memory_dto.dart", "MemoryListOut"),
 }
 
 

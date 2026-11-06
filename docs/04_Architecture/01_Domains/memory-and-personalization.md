@@ -111,32 +111,46 @@ Repository source code and test suites verify the following baseline reality:
 
 ### 3.1 Implemented Data Model & Storage
 
-Memories are persisted in SQLite via SQLAlchemy ORM (`app.models.memory.Memory`) and indexed via an FTS5 virtual table:
+Memories are persisted in SQLite via SQLAlchemy ORM (`app.models.memory.Memory`), migrated via Alembic migration `010_memory_scoping_and_lifecycle.py`, and indexed via an FTS5 virtual table:
 - **Core Entity Fields:** `id` (UUIDv4), `profile_id` (explicit, non-null UUID foreign key to `profiles.id`), `owner_id` (String, retained for compatibility), `category` (String(32), default `"fact"`), `content` (Text), `importance` (Float, default `1.0`), `source_type` (String(32), default `"manual"`), `source_message_id` (String(36), optional), `user_verified` (Boolean, default `True`). `owner_id` is not authorization authority; missing `profile_id` fails closed without an implicit default.
 - **Audit & Soft-Delete Mixins:** `created_at`, `updated_at`, `is_deleted` (Boolean), `deleted_at` (DateTime, optional).
-- **Scope Fields State:** `NOT IMPLEMENTED IN SCHEMA`. The current database schema does **not** yet contain explicit `scope` or `character_id` columns; all current memories function at the profile level.
+- **Scoping & Lifecycle Fields (M3 Batch C1 Baseline):**
+  - `scope`: String(16), not null, default `"profile"`. Constrained to `('profile', 'character')`.
+  - `character_instance_id`: String(36), optional foreign key referencing `character_instances.id` with `ondelete="RESTRICT"`. Check constraint enforces that `character_instance_id` is null when `scope = 'profile'` and non-null when `scope = 'character'`.
+  - `valid_from`: DateTime(timezone=True), not null, default `func.now()`.
+  - `expires_at`: DateTime(timezone=True), optional. Check constraint enforces `expires_at IS NULL OR expires_at >= valid_from`.
+  - `last_verified_at`: DateTime(timezone=True), optional.
+  - `is_core`: Boolean, not null, default `False`.
+- **FTS5 Synchronization:** Triggers on `memories` table maintain `memories_fts` consistency, safely rebuilt and preserved during schema migrations.
 
 ### 3.2 Implemented Retrieval & Prompt Assembly
 
-Verified in `app.services.memory.retriever`:
-- **FTS5 Lexical Search:** Uses a SQLite `memories_fts` virtual table joined on `id` against non-deleted memories, filtering by the `profile_id` derived from a validated Profile Session. Retrieval accepts session authority rather than an arbitrary caller-supplied Profile identifier.
+Verified in `app.services.memory.retriever` and `app.services.assistant.orchestrator`:
+- **FTS5 Lexical Search with Scoping and Temporal Filtering:** Uses SQLite `memories_fts` joined against non-deleted memories, filtering by `profile_id` derived from the active Profile Session. When a Character Instance is active, retrieval returns Profile-scoped memories plus memories matching that specific `character_instance_id`; memories associated with other characters are excluded. When chatting with Neutral Assistant (`character_instance_id` is None), only Profile-scoped memories are retrieved. Temporary memories with `expires_at <= :now` are excluded.
+- **Core Fact Injection:** `get_core_memories` retrieves up to 5 non-temporary, Profile-scoped core facts (`is_core = True` or `importance >= 1.5`, with `expires_at IS NULL`), injected into prompt assembly under a dedicated token budget (`MEMORY_CORE_FACTS_BUDGET_TOKENS = 100`) and deduplicated against search results.
 - **Multilingual Token Sanitation:** The query sanitizer extracts safe alphanumeric, Latin-extended, CJK, and Hangul word tokens, explicitly filtering FTS5 operators (`AND`, `OR`, `NOT`).
-- **Prompt Injection Budget:** Implemented in `app.services.assistant.orchestrator`, which retrieves up to 5 matching memories constrained by the configuration constant:
+- **Prompt Injection Budget:** Implemented in `app.services.assistant.orchestrator`, which retrieves matching memories constrained by configuration constants:
   ```python
-  MEMORY_BUDGET_TOKENS: int = 256  # app.core.config.Settings (Current Implementation Constant)
+  MEMORY_BUDGET_TOKENS: int = 256  # Relevant search memory budget
+  MEMORY_CORE_FACTS_ENABLED: bool = True
+  MEMORY_CORE_FACTS_LIMIT: int = 5
+  MEMORY_CORE_FACTS_BUDGET_TOKENS: int = 100
   ```
 - **Implemented API Endpoints:** Verified in `backend/app/api/v1/endpoints/memories.py`; each requires a validated Profile Session and derives read/write ownership from `session.profile_id`, with foreign Profile records failing closed:
-  - `GET /api/v1/memories`: Lists active memories owned by the authenticated Profile, optionally filtered by category.
-  - `POST /api/v1/memories`: Creates a new manual memory record (synced automatically to FTS5).
-  - `PATCH /api/v1/memories/{memory_id}`: Updates memory content, category, or importance.
+  - `GET /api/v1/memories`: Lists active memories owned by the authenticated Profile, optionally filtered by `category`, `scope`, `character_instance_id`, `is_core`, and `include_expired`.
+  - `GET /api/v1/memories/{memory_id}`: Retrieves a single memory record by ID for the active Profile.
+  - `POST /api/v1/memories`: Creates a new manual memory record (validating character instance ownership and scoping rules).
+  - `PATCH /api/v1/memories/{memory_id}`: Updates memory content, category, importance, `is_core`, and allows clearing `expires_at` to null via `exclude_unset=True`.
   - `DELETE /api/v1/memories/{memory_id}`: Soft-deletes a memory (`is_deleted = True`, `deleted_at = now()`; triggers remove it from FTS5 index).
-  *(Note: A dedicated single-item `GET /api/v1/memories/{memory_id}` endpoint is NOT implemented in current source.)*
+- **Client Parity:** Flutter Dart client package `companion_api` provides typed models (`MemoryCreate`, `MemoryUpdate`, `MemoryOut`, `MemoryListOut`) and client methods (`listMemories`, `getMemory`, `createMemory`, `updateMemory`, `deleteMemory`) matching OpenAPI contracts.
+- **Relational Purge Ordering:** `ProfilePurgeService` permanently purges `Memory` rows before `CharacterInstance` rows to satisfy the `RESTRICT` foreign key constraint without integrity failures.
 
 ### 3.3 Explicitly Unimplemented Capabilities
 
-- **Selective Automatic Memory:** `NOT IMPLEMENTED / NOT STARTED` (all current memories originate via manual API calls or manual user input).
-- **Semantic / Vector Memory:** `NOT IMPLEMENTED / NOT STARTED`.
-- **Character-Scoped Memory Separation:** `NOT IMPLEMENTED` in schema or retrieval logic.
+- **Selective Automatic Memory Extraction:** `NOT IMPLEMENTED / DEFERRED TO BATCH C2` (all current memories originate via manual API calls or manual user input; LLM-based turn extraction pipeline is scoped to Batch C2).
+- **Memory Reconciliation Engine:** `NOT IMPLEMENTED / DEFERRED TO BATCH C2` (slot-based merge/conflict resolution is scoped to Batch C2).
+- **Desktop Memory Control Center UI:** `NOT IMPLEMENTED / DEFERRED TO BATCH C3` (PC-CLIENT-009 Flutter UI is scoped to Batch C3).
+- **Semantic / Vector Memory:** `NOT IMPLEMENTED / NOT STARTED` (post-PC-V1 enhancement).
 
 ---
 

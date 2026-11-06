@@ -258,12 +258,12 @@ class ProfilePurgeService:
             .where(Profile.id == profile_id)
             .values(active_character_instance_id=None)
         )
-        # 2. Relational deletions
+        # 2. Relational deletions (Memory before CharacterInstance to satisfy RESTRICT FK)
         await self.db.execute(delete(Attachment).where(Attachment.profile_id == profile_id))
         await self.db.execute(delete(Message).where(Message.profile_id == profile_id))
         await self.db.execute(delete(Conversation).where(Conversation.profile_id == profile_id))
-        await self.db.execute(delete(CharacterInstance).where(CharacterInstance.profile_id == profile_id))
         await self.db.execute(delete(Memory).where(Memory.profile_id == profile_id))
+        await self.db.execute(delete(CharacterInstance).where(CharacterInstance.profile_id == profile_id))
         await self.db.execute(delete(Task).where(Task.profile_id == profile_id))
         await self.db.execute(delete(SessionTicket).where(SessionTicket.profile_id == profile_id))
         await self.db.execute(delete(ProfileSession).where(ProfileSession.profile_id == profile_id))
@@ -308,6 +308,22 @@ class ProfilePurgeService:
                 await self.db.rollback()
                 logger.error("Failed to purge profile '%s': %s", pid, exc, exc_info=True)
                 failed_ids.append(pid)
+
+        # Retention cleanup: purge soft-deleted memories older than retention window
+        try:
+            from datetime import timedelta
+            from app.core.config import settings
+            cutoff_date = now - timedelta(days=settings.DATA_RETENTION_DAYS)
+            await self.db.execute(
+                delete(Memory).where(
+                    Memory.deleted_at.is_not(None),
+                    Memory.deleted_at <= cutoff_date,
+                )
+            )
+            await self.db.commit()
+        except Exception as exc:
+            await self.db.rollback()
+            logger.warning("Failed to purge expired soft-deleted memories: %s", exc)
 
         return PurgeMaintenanceResult(purged_profile_ids=purged_ids, failed_profile_ids=failed_ids)
 

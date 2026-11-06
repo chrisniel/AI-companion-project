@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added — M3: Memory Foundation, Scoping & Context Assembly (PC-MEM-001, PC-MEM-003, PC-MEM-005, PC-API-001)
+
+- **Database Migration 010 & Scoping Columns (`PC-MEM-001`)**:
+  - Added SQLite migration `010_memory_scoping_and_lifecycle.py` introducing `scope` (`profile` | `character`), `character_instance_id` (foreign key to `character_instances.id` with `RESTRICT` on delete), `valid_from` (`NOT NULL`, backfilled from `created_at`), `expires_at`, `last_verified_at`, and `is_core` (`NOT NULL DEFAULT 0`).
+  - Enforced SQLite check constraints: `ck_memories_scope`, `ck_memories_character_scope` (character instance required for character scope and forbidden for profile scope), and `ck_memories_validity` (`expires_at IS NULL OR expires_at >= valid_from`).
+  - Cycled SQLite triggers (`memories_fts_insert`, `memories_fts_update`, `memories_fts_delete`) and rebuilt FTS5 virtual table cleanly during batch table migration.
+- **Scoped Retrieval & Temporal Exclusion (`PC-MEM-003`, `PC-MEM-005`)**:
+  - Implemented character-scoped retrieval in `app.services.memory.retriever`: Profile memories are shared globally; character-specific memories are isolated to active conversation character instances; foreign character memories are excluded; Neutral Assistant conversations retrieve only profile memories.
+  - Implemented query-time temporal exclusion with bound UTC parameter `:now` (`or_(Memory.expires_at.is_(None), Memory.expires_at > :now)`).
+  - Implemented core-fact context assembly in `get_core_memories`: retrieves up to 5 non-temporary, profile-scoped permanent facts (`is_core = True` or `importance >= 1.5`, `expires_at IS NULL`), injected into orchestrator context assembly under dedicated 100-token budget and deduplicated against search hits.
+- **REST API Endpoints & Purge Order (`PC-API-001`)**:
+  - Added dedicated single-item fetch `GET /api/v1/memories/{memory_id}` with profile session ownership enforcement.
+  - Added query filtering parameters to `GET /api/v1/memories`: `scope`, `character_instance_id`, `is_core`, and `include_expired`.
+  - Added foreign character instance validation on `POST /api/v1/memories` and `PATCH /api/v1/memories/{id}`.
+  - Enabled clearing expiration date on `PATCH /api/v1/memories/{id}` via `exclude_unset=True`.
+  - Hardened `ProfilePurgeService` to delete `Memory` before `CharacterInstance` satisfying `RESTRICT` foreign key integrity, and included soft-deleted memories in 30-day retention purge.
+- **OpenAPI Contract & Dart Client Parity (`companion_api`)**:
+  - Added `MemoryCreate`, `MemoryUpdate`, `MemoryOut`, and `MemoryListOut` schemas in OpenAPI and Dart DTOs in `dto/memory_dto.dart`.
+  - Implemented client CRUD methods `listMemories`, `getMemory`, `createMemory`, `updateMemory`, and `deleteMemory` in `CompanionClient`.
+  - Updated parity scripts with 42 verified routes passing fail-closed static checks and unit tests.
+
 ### Added — M2: Recoverable Profile Deletion & Safe Purge Maintenance (PC-IDENTITY-005, PC-CLIENT-005)
 
 - **Backend Recoverable Profile Deletion & Safe Purge (`PC-IDENTITY-005`)**:

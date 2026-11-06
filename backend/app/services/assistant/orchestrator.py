@@ -386,13 +386,39 @@ async def orchestrate_chat_stream(
         if current_stream_task is not None:
             runtime_lifecycle.register_stream_task(current_stream_task)
         await _require_prepared_turn(db, profile_session, conversation_id, prepared_turn)
+
+        from app.models.conversation import Conversation
+        from app.services.character_service import resolve_turn_persona_prompt
+        from app.services.memory.retriever import get_core_memories
+
+        conv = await db.scalar(
+            select(Conversation).where(
+                Conversation.id == conversation_id,
+                Conversation.profile_id == profile_session.profile_id,
+                Conversation.deleted_at.is_(None),
+            )
+        )
+        char_inst_id = conv.character_instance_id if conv else None
+
         # Retrieve relevant memories via FTS5
         memories = await search_relevant_memories(
             db=db,
             query=user_text,
             profile_session=profile_session,
+            character_instance_id=char_inst_id,
             limit=settings.MEMORY_SEARCH_LIMIT,
         )
+
+        # Retrieve core facts if enabled
+        if settings.MEMORY_CORE_FACTS_ENABLED:
+            core_memories = await get_core_memories(
+                db=db,
+                profile_id=profile_session.profile_id,
+                limit=settings.MEMORY_CORE_FACTS_LIMIT,
+            )
+            existing_ids = {m.id for m in memories}
+            additional_core = [cm for cm in core_memories if cm.id not in existing_ids]
+            memories = [*additional_core, *memories]
 
         # Fetch recent conversation history strictly before this turn's user message
         hist_query = (
@@ -414,15 +440,6 @@ async def orchestrate_chat_stream(
         if persona:
             active_persona = persona
         else:
-            from app.models.conversation import Conversation
-            from app.services.character_service import resolve_turn_persona_prompt
-            conv = await db.scalar(
-                select(Conversation).where(
-                    Conversation.id == conversation_id,
-                    Conversation.profile_id == profile_session.profile_id,
-                    Conversation.deleted_at.is_(None),
-                )
-            )
             if conv:
                 active_persona = await resolve_turn_persona_prompt(db, profile_session, conv)
             else:
