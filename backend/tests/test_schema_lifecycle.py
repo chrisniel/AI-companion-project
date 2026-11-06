@@ -15,7 +15,7 @@ from app.db.session import (
     get_engine,
 )
 
-HEAD_REVISION = "009_character_foundation"
+HEAD_REVISION = "010_memory_scoping_and_lifecycle"
 
 
 def _create_legacy_v004_db(path: Path) -> None:
