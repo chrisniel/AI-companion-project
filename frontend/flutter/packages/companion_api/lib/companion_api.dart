@@ -8,6 +8,7 @@ export 'dto/auth_dto.dart';
 export 'dto/character_dto.dart';
 export 'dto/conversation_dto.dart';
 export 'dto/health_dto.dart';
+export 'dto/memory_dto.dart';
 export 'dto/message_dto.dart';
 export 'dto/model_registry_dto.dart';
 export 'dto/model_status_dto.dart';

@@ -48,6 +48,7 @@ docs/02_Planning/00_Master/
 ## 3. Active & Archived Implementation Plans
 
 ### Active Feature Plans (`docs/02_Planning/01_Plans/`)
+- [`plan-m3-memory-foundation-c1.md`](../01_Plans/plan-m3-memory-foundation-c1.md) — Implementation plan for Milestone M3 Batch C1: Memory Foundation, Scoping & Context Assembly (`PC-MEM-001`, `PC-MEM-003`, `PC-MEM-005`, `PC-API-001`; Phase 2 implementation & verification complete, Phase 3 closure on `feature/m3-memory-foundation-c1`).
 - [`plan-m2-profile-admin-c.md`](../01_Plans/plan-m2-profile-admin-c.md) — Implementation plan for Milestone M2 Batch C: Local Profile Administration & Persistent Selection (`PC-IDENTITY-004`, `PC-CLIENT-005`; implemented and verified on `feature/m2-profile-admin-c`).
 - [`plan-m3-character-studio-personality-b.md`](../01_Plans/plan-m3-character-studio-personality-b.md) — Implementation plan for Milestone M3 Batch B: Immersive Character Studio V1 & 8-Trait Personality Prompt Modulator (`PC-CHAR-002`, `PC-CLIENT-007`; Implementation Gate passed, human Windows acceptance passed, Stage 5 provisional closure authorized on `feature/m3-character-studio-personality-b`, not yet merged into develop).
 - [`plan-m3-character-foundation-a.md`](../01_Plans/plan-m3-character-foundation-a.md) — Delivered implementation plan for Milestone M3 Batch A: Character Templates, Profile Instances & Neutral Fallback (`PC-CHAR-001`, `PC-CHAR-005`; delivered via PR #29, commit `d22dd7e`).

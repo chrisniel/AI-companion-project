@@ -615,5 +615,174 @@ void main() {
       final loadStatus = await client.loadModel();
       expect(loadStatus.runtimeState, 'MODEL_READY');
     });
+
+    group('Memory API', () {
+      test('listMemories sends query parameters and returns MemoryListOut', () async {
+        final mock = MockClient((request) async {
+          expect(request.url.path, '/api/v1/memories');
+          expect(request.method, 'GET');
+          expect(request.url.queryParameters['scope'], 'profile');
+          expect(request.url.queryParameters['is_core'], 'true');
+          expect(request.url.queryParameters['include_expired'], 'true');
+          return http.Response(
+            jsonEncode({
+              'items': [
+                {
+                  'id': 'mem-1',
+                  'content': 'User loves coffee',
+                  'category': 'preference',
+                  'importance': 1.5,
+                  'source_type': 'manual',
+                  'user_verified': true,
+                  'created_at': '2026-11-06T12:00:00Z',
+                  'owner_id': 'owner-1',
+                  'profile_id': 'prof-1',
+                  'scope': 'profile',
+                  'is_core': true,
+                }
+              ],
+              'total': 1,
+              'page': 1,
+              'page_size': 50,
+            }),
+            200,
+          );
+        });
+
+        final client = CompanionClient(
+          httpClient: mock,
+          sessionStore: InMemoryCredentialStore('test_session'),
+        );
+        final result = await client.listMemories(
+          scope: 'profile',
+          isCore: true,
+          includeExpired: true,
+        );
+        expect(result.total, 1);
+        expect(result.items.first.content, 'User loves coffee');
+        expect(result.items.first.isCore, isTrue);
+      });
+
+      test('getMemory returns MemoryOut', () async {
+        final mock = MockClient((request) async {
+          expect(request.url.path, '/api/v1/memories/mem-123');
+          expect(request.method, 'GET');
+          return http.Response(
+            jsonEncode({
+              'id': 'mem-123',
+              'content': 'Single memory item',
+              'category': 'fact',
+              'importance': 1.0,
+              'source_type': 'manual',
+              'user_verified': true,
+              'created_at': '2026-11-06T12:00:00Z',
+              'owner_id': 'owner-1',
+              'scope': 'profile',
+              'is_core': false,
+            }),
+            200,
+          );
+        });
+
+        final client = CompanionClient(
+          httpClient: mock,
+          sessionStore: InMemoryCredentialStore('test_session'),
+        );
+        final mem = await client.getMemory('mem-123');
+        expect(mem.id, 'mem-123');
+        expect(mem.content, 'Single memory item');
+      });
+
+      test('createMemory serializes payload and returns MemoryOut', () async {
+        final mock = MockClient((request) async {
+          expect(request.url.path, '/api/v1/memories');
+          expect(request.method, 'POST');
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          expect(body['content'], 'User is allergic to peanuts');
+          expect(body['scope'], 'profile');
+          expect(body['is_core'], true);
+          return http.Response(
+            jsonEncode({
+              'id': 'mem-created',
+              'content': body['content'],
+              'category': 'fact',
+              'importance': 1.0,
+              'source_type': 'manual',
+              'user_verified': true,
+              'created_at': '2026-11-06T12:00:00Z',
+              'owner_id': 'owner-1',
+              'scope': 'profile',
+              'is_core': true,
+            }),
+            201,
+          );
+        });
+
+        final client = CompanionClient(
+          httpClient: mock,
+          sessionStore: InMemoryCredentialStore('test_session'),
+        );
+        final created = await client.createMemory(
+          const MemoryCreate(
+            content: 'User is allergic to peanuts',
+            scope: 'profile',
+            isCore: true,
+          ),
+        );
+        expect(created.id, 'mem-created');
+        expect(created.isCore, isTrue);
+      });
+
+      test('updateMemory serializes update and returns MemoryOut', () async {
+        final mock = MockClient((request) async {
+          expect(request.url.path, '/api/v1/memories/mem-123');
+          expect(request.method, 'PATCH');
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          expect(body.containsKey('expires_at'), isTrue);
+          expect(body['expires_at'], isNull);
+          return http.Response(
+            jsonEncode({
+              'id': 'mem-123',
+              'content': 'Promoted permanent fact',
+              'category': 'fact',
+              'importance': 1.5,
+              'source_type': 'manual',
+              'user_verified': true,
+              'created_at': '2026-11-06T12:00:00Z',
+              'owner_id': 'owner-1',
+              'scope': 'profile',
+              'expires_at': null,
+              'is_core': true,
+            }),
+            200,
+          );
+        });
+
+        final client = CompanionClient(
+          httpClient: mock,
+          sessionStore: InMemoryCredentialStore('test_session'),
+        );
+        final updated = await client.updateMemory(
+          'mem-123',
+          const MemoryUpdate(expiresAt: null, isCore: true),
+        );
+        expect(updated.expiresAt, isNull);
+        expect(updated.isCore, isTrue);
+      });
+
+      test('deleteMemory succeeds on 200 or 204', () async {
+        final mock = MockClient((request) async {
+          expect(request.url.path, '/api/v1/memories/mem-123');
+          expect(request.method, 'DELETE');
+          return http.Response('', 204);
+        });
+
+        final client = CompanionClient(
+          httpClient: mock,
+          sessionStore: InMemoryCredentialStore('test_session'),
+        );
+        await expectLater(client.deleteMemory('mem-123'), completes);
+      });
+    });
   });
 }

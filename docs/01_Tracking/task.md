@@ -15,6 +15,7 @@
 - **M3 Batch A Character Foundation & Immutable Neutral Assistant:** COMPLETE / SQUASH-MERGED (Delivered via PR #29 at commit `d22dd7e1dbbd0a50c9a4e6fd28ab5fbdbcce34de`; character template seed, profile instances, immutable neutral fallback, and selection API).
 - **M2 Batch C Local Profile Administration & Persistent Selection:** COMPLETE / SQUASH-MERGED (Delivered via PR #33 at commit `2104d5c05ad1a7b47d2b008d4e74ca5cb88595e6`; profile create/rename, persistent last-selected profile, acquire-before-teardown switching, and desktop UI).
 - **M2 Batch D Recoverable Profile Deletion & Safe Purge:** COMPLETE / VERIFIED (Implemented on branch `feature/m2-profile-deletion-recovery-d`; 30-day recoverable soft-delete, session revocation, administrative restore, 5-phase safe physical-first purge pipeline, automatic startup/hourly background maintenance sweeps, and Desktop UI confirmation dialogs; ready for review).
+- **M3 Batch C1 Memory Foundation, Scoping & Context Assembly:** COMPLETE / VERIFIED (Implemented on branch `feature/m3-memory-foundation-c1`; Migration 010 adding scope, character_instance_id, valid_from, expires_at, last_verified_at, is_core, scoped context assembly with bound :now temporal exclusion, 5-fact core memory injection under 100-token budget, GET /{id} and query filters, nulling PATCH, RESTRICT FK purge order, and companion_api Dart parity with 42 verified routes; ready for review).
 
 ## Next Milestone / Current Focus
 

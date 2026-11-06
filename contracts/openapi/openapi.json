@@ -1116,7 +1116,7 @@
           "Memories"
         ],
         "summary": "List Memories",
-        "description": "List active memories owned by the user, optionally filtered by category.",
+        "description": "List active memories owned by the user, optionally filtered by category, scope, and expiry.",
         "operationId": "list_memories_api_v1_memories_get",
         "security": [
           {
@@ -1141,6 +1141,72 @@
               "title": "Category"
             },
             "description": "Filter by category (fact, preference, context)"
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by scope: 'profile' or 'character'",
+              "title": "Scope"
+            },
+            "description": "Filter by scope: 'profile' or 'character'"
+          },
+          {
+            "name": "character_instance_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by character instance id",
+              "title": "Character Instance Id"
+            },
+            "description": "Filter by character instance id"
+          },
+          {
+            "name": "is_core",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by is_core flag",
+              "title": "Is Core"
+            },
+            "description": "Filter by is_core flag"
+          },
+          {
+            "name": "include_expired",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Whether to include expired temporary memories",
+              "default": false,
+              "title": "Include Expired"
+            },
+            "description": "Whether to include expired temporary memories"
           },
           {
             "name": "skip",
@@ -1236,12 +1302,58 @@
       }
     },
     "/api/v1/memories/{memory_id}": {
+      "get": {
+        "tags": [
+          "Memories"
+        ],
+        "summary": "Get Memory by ID",
+        "description": "Get a single memory record by ID for the authenticated profile.",
+        "operationId": "get_memory_api_v1_memories__memory_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "memory_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Memory Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "patch": {
         "tags": [
           "Memories"
         ],
         "summary": "Update Memory",
-        "description": "Update memory content, category, or importance.",
+        "description": "Update memory content, category, importance, expiry, or core flag.",
         "operationId": "update_memory_api_v1_memories__memory_id__patch",
         "security": [
           {
@@ -4484,6 +4596,7 @@
         "properties": {
           "content": {
             "type": "string",
+            "maxLength": 1000,
             "minLength": 1,
             "title": "Content"
           },
@@ -4503,6 +4616,55 @@
             "minimum": 0.0,
             "title": "Importance",
             "default": 1.0
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "profile",
+              "character"
+            ],
+            "title": "Scope",
+            "default": "profile"
+          },
+          "character_instance_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Character Instance Id"
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid From"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "is_core": {
+            "type": "boolean",
+            "title": "Is Core",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -4580,6 +4742,74 @@
           "owner_id": {
             "type": "string",
             "title": "Owner Id"
+          },
+          "profile_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Id"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope",
+            "default": "profile"
+          },
+          "character_instance_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Character Instance Id"
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid From"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "last_verified_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Verified At"
+          },
+          "is_core": {
+            "type": "boolean",
+            "title": "Is Core",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -4603,6 +4833,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 1000,
                 "minLength": 1
               },
               {
@@ -4639,6 +4870,29 @@
               }
             ],
             "title": "Importance"
+          },
+          "is_core": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Core"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
           }
         },
         "additionalProperties": false,

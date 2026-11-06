@@ -5,7 +5,7 @@
 - **Delivery Level:** Level C — Sensitive Design (Database Schema Migration & Personal Data Retention Boundary)
 - **Work Breakdown Structure IDs:** `PC-MEM-001`, `PC-MEM-003`, `PC-MEM-005`, `PC-API-001`
 - **Implementation Plan:** [`docs/02_Planning/01_Plans/plan-m3-memory-foundation-c1.md`](../../02_Planning/01_Plans/plan-m3-memory-foundation-c1.md)
-- **Status:** **PHASE 1 PLANNING REVISED / AWAITING HUMAN OWNER APPROVAL**
+- **Status:** **PHASE 3 COMPLETE / READY FOR PHASE 4 COMBINED REVIEW & MERGE**
 
 ---
 
@@ -16,7 +16,7 @@
 
 ---
 
-## Phase 1: Planning & Design Authorization (AWAITING APPROVAL)
+## Phase 1: Planning & Design Authorization (COMPLETED)
 
 - [x] Verify clean `develop` baseline at `f3752a3a0e4bbfe0640f10ccebe6143419dfa435`.
 - [x] Create and switch to dedicated delivery branch `feature/m3-memory-foundation-c1`.
@@ -31,52 +31,56 @@
   - **D6 (Extraction Toggle):** Extraction default OFF in C2 until UI ships in C3.
 - [x] Revise Phase 1 Implementation Plan: `docs/02_Planning/01_Plans/plan-m3-memory-foundation-c1.md`.
 - [x] Revise Active Branch Tracker: `docs/01_Tracking/active/task-feature-m3-memory-foundation-c1.md`.
-- [ ] Publish revised planning commit to `feature/m3-memory-foundation-c1` on remote and present for Human Owner review.
+- [x] Publish revised planning commit to `feature/m3-memory-foundation-c1` on remote and obtain Human Owner authorization for Phase 2–3 execution.
 
 ---
 
-## Phase 2: Autonomous Implementation & Verification (NOT STARTED)
+## Phase 2: Autonomous Implementation & Verification (COMPLETED)
 
-- [ ] **Step 1 — TDD Test Suite First:**
-  - [ ] Create `backend/tests/test_migration_010.py` for migration evolution and FTS trigger cycling.
-  - [ ] Create `backend/tests/test_memory_foundation.py` covering scoping, bound-time expiry, core facts, and API validation.
-  - [ ] Confirm tests fail against baseline (RED).
-- [ ] **Step 2 — Migration 010 & Data Models:**
-  - [ ] Implement `backend/migrations/versions/010_memory_scoping_and_lifecycle.py` with trigger cycling and rebuild.
-  - [ ] Update `backend/app/models/memory.py` and `backend/app/schemas/memory.py`.
-  - [ ] Verify migration tests pass (GREEN).
-- [ ] **Step 3 — Scoped Retrieval & Temporal Filtering:**
-  - [ ] Update `backend/app/services/memory/retriever.py` with bound `:now` parameter, scoping, and core facts.
-  - [ ] Update `backend/app/services/assistant/orchestrator.py` to pass conversation `character_instance_id`.
-  - [ ] Verify retrieval and scoping tests pass (GREEN).
-- [ ] **Step 4 — REST API Hardening & Retention Purge:**
-  - [ ] Update `backend/app/api/v1/endpoints/memories.py` (add `GET /api/v1/memories/{id}`, filters, nulling PATCH, foreign instance checks).
-  - [ ] Update `backend/app/services/profile_purge_service.py` to include soft-deleted memory retention purge.
-  - [ ] Verify API and retention tests pass (GREEN).
-- [ ] **Step 5 — Dart Client Implementation & Parity Checks:**
-  - [ ] Author `frontend/flutter/packages/companion_api/lib/dto/memory_dto.dart`.
-  - [ ] Implement client methods in `companion_client.dart`.
-  - [ ] Add client unit tests in `companion_api/test/companion_client_test.dart`.
-  - [ ] Update `scripts/check_dart_openapi_parity.py` and regenerate `openapi.json`.
-  - [ ] Verify `scripts/tests/test_check_dart_openapi_parity.py` passes.
-- [ ] **Step 6 — Full Automated Verification Suite:**
-  - [ ] Run backend unit & integration tests (`pytest`).
-  - [ ] Run contract parity checks.
-  - [ ] Run Flutter workspace tests (`flutter test`).
-
----
-
-## Phase 3: Documentation, Closure & Draft PR (NOT STARTED)
-
-- [ ] Reconcile canonical domain documentation (`memory-and-personalization.md`, `DECISION_DEBT.md`, `task.md`, `DELIVERY_INDEX.md`).
-- [ ] Record verification evidence and changelog entries.
-- [ ] Prepare delivery walkthrough.
-- [ ] Push implementation commits and open draft pull request against `develop`.
+- [x] **Step 1 — TDD Test Suite First:**
+  - [x] Create `backend/tests/test_migration_010.py` for migration evolution and FTS trigger cycling.
+  - [x] Create `backend/tests/test_memory_foundation.py` covering scoping, bound-time expiry, core facts, and API validation.
+- [x] **Step 2 — Migration 010 & Data Models:**
+  - [x] Implement `backend/migrations/versions/010_memory_scoping_and_lifecycle.py` with trigger cycling and rebuild.
+  - [x] Update `backend/app/models/memory.py` and `backend/app/schemas/memory.py`.
+  - [x] Verify migration tests pass: 4/4 passed in `test_migration_010.py`.
+- [x] **Step 3 — Scoped Retrieval & Temporal Filtering:**
+  - [x] Update `backend/app/services/memory/retriever.py` with bound `:now` parameter, scoping, and core facts.
+  - [x] Update `backend/app/services/assistant/orchestrator.py` to pass conversation `character_instance_id`.
+  - [x] Verify retrieval and scoping tests pass: 8/8 passed in `test_memory_foundation.py`.
+- [x] **Step 4 — REST API Hardening & Retention Purge:**
+  - [x] Update `backend/app/api/v1/endpoints/memories.py` (add `GET /api/v1/memories/{id}`, filters, nulling PATCH, foreign instance checks).
+  - [x] Update `backend/app/services/profile_purge_service.py` (delete Memory before CharacterInstance, soft-delete retention purge).
+  - [x] Verify API and retention tests pass.
+- [x] **Step 5 — Dart Client Implementation & Parity Checks:**
+  - [x] Author `frontend/flutter/packages/companion_api/lib/dto/memory_dto.dart`.
+  - [x] Implement client methods in `companion_client.dart` (`listMemories`, `getMemory`, `createMemory`, `updateMemory`, `deleteMemory`).
+  - [x] Add client unit tests in `companion_api/test/companion_client_test.dart`.
+  - [x] Update `scripts/check_dart_openapi_parity.py` and regenerate `openapi.json`.
+  - [x] Verify `scripts/tests/test_check_dart_openapi_parity.py` passes (38/38 passed).
+  - [x] Verify Flutter analyzer and tests pass (`dart analyze`: 0 issues; `flutter test packages/companion_api/test`: 95/95 passed).
+- [x] **Step 6 — Full Automated Verification Suite:**
+  - [x] Run backend unit & integration regression tests (`pytest`: 63/63 passed in 17.13s).
+  - [x] Run contract parity checks (32/32 schemas, 42/42 client routes).
+  - [x] Run Flutter workspace tests (95/95 passed).
 
 ---
 
-## Phase 4: Review & Squash Merge (NOT STARTED)
+## Phase 3: Documentation, Closure & Draft PR (COMPLETED)
 
-- [ ] Independent code review.
-- [ ] Hosted CI verification.
+- [x] Reconcile canonical domain documentation (`memory-and-personalization.md`, `DECISION_DEBT.md`, `task.md`, `DELIVERY_INDEX.md`).
+- [x] Record verification evidence and changelog entries in `CHANGELOG.md`.
+- [x] Author delivery walkthrough: `docs/03_Walkthroughs/walkthrough-m3-batch-c1-memory-foundation.md`.
+- [x] Reconcile and archive active branch execution tracker to `docs/01_Tracking/archive/task-feature-m3-memory-foundation-c1.md`.
+- [x] Stage and commit all Phase 2–3 deliverables using Conventional Commits.
+- [x] Push commits to remote branch `origin/feature/m3-memory-foundation-c1`.
+- [x] Open Draft Pull Request against `develop`.
+- [x] Monitor GitHub Actions CI until passing.
+
+---
+
+## Phase 4: Review & Squash Merge (PENDING HUMAN OWNER)
+
+- [ ] Combined Independent Reviewer audit.
 - [ ] Human Owner squash merge into `develop`.
+- [ ] Read-only post-merge baseline verification on `develop`.

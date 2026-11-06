@@ -8,6 +8,7 @@ import '../dto/character_dto.dart';
 import '../dto/auth_dto.dart';
 import '../dto/conversation_dto.dart';
 import '../dto/health_dto.dart';
+import '../dto/memory_dto.dart';
 import '../dto/message_dto.dart';
 import '../dto/model_registry_dto.dart';
 import '../dto/model_status_dto.dart';
@@ -837,6 +838,101 @@ class CompanionClient {
   /// Deletes/archives a character instance by ID via DELETE /api/v1/characters/instances/{instance_id}.
   Future<void> deleteCharacterInstance(String instanceId) async {
     final uri = baseUri.replace(path: '${baseUri.path}/api/v1/characters/instances/$instanceId');
+    final headers = await _buildHeaders(requiresAuth: true);
+    final response = await _httpClient.delete(uri, headers: headers);
+    if (response.statusCode == 200 || response.statusCode == 204) {
+      return;
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Lists memories via GET /api/v1/memories.
+  Future<MemoryListOut> listMemories({
+    String? category,
+    String? scope,
+    String? characterInstanceId,
+    bool? isCore,
+    bool includeExpired = false,
+    int skip = 0,
+    int limit = 50,
+  }) async {
+    final queryParams = <String, String>{
+      'skip': skip.toString(),
+      'limit': limit.toString(),
+      if (category != null) 'category': category,
+      if (scope != null) 'scope': scope,
+      if (characterInstanceId != null) 'character_instance_id': characterInstanceId,
+      if (isCore != null) 'is_core': isCore.toString(),
+      if (includeExpired) 'include_expired': 'true',
+    };
+    final uri = baseUri.replace(
+      path: '${baseUri.path}/api/v1/memories',
+      queryParameters: queryParams,
+    );
+    final headers = await _buildHeaders(requiresAuth: true);
+    final response = await _httpClient.get(uri, headers: headers);
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return MemoryListOut.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Retrieves a specific memory by ID via GET /api/v1/memories/{memory_id}.
+  Future<MemoryOut> getMemory(String memoryId) async {
+    final uri = baseUri.replace(
+      path: '${baseUri.path}/api/v1/memories/$memoryId',
+    );
+    final headers = await _buildHeaders(requiresAuth: true);
+    final response = await _httpClient.get(uri, headers: headers);
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return MemoryOut.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Creates a new memory record via POST /api/v1/memories.
+  Future<MemoryOut> createMemory(MemoryCreate payload) async {
+    final uri = baseUri.replace(
+      path: '${baseUri.path}/api/v1/memories',
+    );
+    final headers = await _buildHeaders(requiresAuth: true);
+    final response = await _httpClient.post(
+      uri,
+      headers: headers,
+      body: jsonEncode(payload.toJson()),
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final dynamic json = jsonDecode(response.body);
+      return MemoryOut.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Updates an existing memory record via PATCH /api/v1/memories/{memory_id}.
+  Future<MemoryOut> updateMemory(String memoryId, MemoryUpdate payload) async {
+    final uri = baseUri.replace(
+      path: '${baseUri.path}/api/v1/memories/$memoryId',
+    );
+    final headers = await _buildHeaders(requiresAuth: true);
+    final response = await _httpClient.patch(
+      uri,
+      headers: headers,
+      body: jsonEncode(payload.toJson()),
+    );
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return MemoryOut.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Deletes a memory record via DELETE /api/v1/memories/{memory_id}.
+  Future<void> deleteMemory(String memoryId) async {
+    final uri = baseUri.replace(
+      path: '${baseUri.path}/api/v1/memories/$memoryId',
+    );
     final headers = await _buildHeaders(requiresAuth: true);
     final response = await _httpClient.delete(uri, headers: headers);
     if (response.statusCode == 200 || response.statusCode == 204) {
