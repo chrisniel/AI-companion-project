@@ -86,9 +86,9 @@
    Command: backend\.venv\Scripts\python.exe -m pytest backend/tests/test_profile_deletion.py backend/tests/test_profile_admin.py backend/tests/test_profile_authorization.py backend/tests/test_profile_sessions.py -v
    Result: 130 passed in 20.38s
 
-2. OpenAPI Contract Parity:
-   Command: backend\.venv\Scripts\python.exe scripts/check_dart_openapi_parity.py --check
-   Result: ALL CONTRACT PARITY AND ROUTE COVERAGE CHECKS PASSED (28/28 schemas, 37/26 routes)
+2. OpenAPI Contract Parity & Test Suite:
+   Command: backend\.venv\Scripts\python.exe scripts/check_dart_openapi_parity.py --check; python -B -m unittest discover -s scripts/tests
+   Result: ALL CONTRACT PARITY AND ROUTE COVERAGE CHECKS PASSED (28/28 schemas, 37/26 routes); 38/38 unit tests passed
 
 3. OpenAPI Freshness:
    Command: backend\.venv\Scripts\python.exe scripts/check_openapi_contract.py

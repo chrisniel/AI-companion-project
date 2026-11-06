@@ -305,6 +305,7 @@ class ProfilePurgeService:
                 await self.purge_profile(pid, allow_unexpired=True)
                 purged_ids.append(pid)
             except Exception as exc:
+                await self.db.rollback()
                 logger.error("Failed to purge profile '%s': %s", pid, exc, exc_info=True)
                 failed_ids.append(pid)
 

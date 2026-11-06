@@ -75,7 +75,7 @@ class ProfileMetadata {
 
   @override
   String toString() =>
-      'ProfileMetadata(id: , name: , isDefault: , status: , pinProtected: , isDeleted: , deletedAt: , purgeAfter: )';
+      'ProfileMetadata(id: $id, name: $name, isDefault: $isDefault, status: $status, pinProtected: $pinProtected, isDeleted: $isDeleted, deletedAt: $deletedAt, purgeAfter: $purgeAfter)';
 }
 
 /// DTO for creating a new Profile.
@@ -102,7 +102,7 @@ class ProfileCreateRequest {
   int get hashCode => name.hashCode;
 
   @override
-  String toString() => 'ProfileCreateRequest(name: )';
+  String toString() => 'ProfileCreateRequest(name: $name)';
 }
 
 /// DTO for updating an existing Profile's display name.
@@ -129,7 +129,7 @@ class ProfileUpdateRequest {
   int get hashCode => name.hashCode;
 
   @override
-  String toString() => 'ProfileUpdateRequest(name: )';
+  String toString() => 'ProfileUpdateRequest(name: $name)';
 }
 
 /// Result summary for manual and periodic Profile purge maintenance sweeps.
@@ -177,7 +177,7 @@ class PurgeMaintenanceResult {
 
   @override
   String toString() =>
-      'PurgeMaintenanceResult(purgedProfileIds: , failedProfileIds: )';
+      'PurgeMaintenanceResult(purgedProfileIds: $purgedProfileIds, failedProfileIds: $failedProfileIds)';
 }
 
 bool _listEquals(List<String> a, List<String> b) {

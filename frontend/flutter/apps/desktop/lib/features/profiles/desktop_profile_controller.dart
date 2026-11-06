@@ -116,7 +116,7 @@ class DesktopProfileController extends ChangeNotifier {
       try {
         deletedProfiles = await chat.client.listDeletedProfiles();
       } catch (e) {
-        debugPrint('DesktopProfileController.refresh deletedProfiles failed: ');
+        debugPrint('DesktopProfileController.refresh deletedProfiles failed: $e');
       }
 
       if (explicitlyLocked) {
@@ -377,7 +377,7 @@ class DesktopProfileController extends ChangeNotifier {
       try {
         deletedProfiles = await chat.client.listDeletedProfiles();
       } catch (e) {
-        debugPrint('DesktopProfileController.refresh deletedProfiles failed: ');
+        debugPrint('DesktopProfileController.refresh deletedProfiles failed: $e');
       }
     } catch (_) {
       error =
@@ -425,7 +425,7 @@ class DesktopProfileController extends ChangeNotifier {
       }
       return deleted;
     } catch (e) {
-      debugPrint('DesktopProfileController.deleteProfile failed: ');
+      debugPrint('DesktopProfileController.deleteProfile failed: $e');
       if (e is CompanionApiException && e.statusCode == 400) {
         error = e.message;
       } else if (e is CompanionApiException && e.statusCode == 404) {
@@ -454,7 +454,7 @@ class DesktopProfileController extends ChangeNotifier {
       selectedProfileId = restored.id;
       return restored;
     } catch (e) {
-      debugPrint('DesktopProfileController.restoreProfile failed: ');
+      debugPrint('DesktopProfileController.restoreProfile failed: $e');
       if (e is CompanionApiException && e.statusCode == 404) {
         error = 'Profile not found or recovery window expired.';
       } else if (e is CompanionApiException && e.statusCode == 409) {
@@ -485,7 +485,7 @@ class DesktopProfileController extends ChangeNotifier {
       }
       return true;
     } catch (e) {
-      debugPrint('DesktopProfileController.purgeProfileImmediately failed: ');
+      debugPrint('DesktopProfileController.purgeProfileImmediately failed: $e');
       if (e is CompanionApiException && e.statusCode == 404) {
         error = 'Profile not found.';
       } else {
@@ -505,7 +505,7 @@ class DesktopProfileController extends ChangeNotifier {
       final remaining = purgeAfter.difference(DateTime.now().toUtc());
       if (remaining.isNegative) return 'Expiring soon';
       final days = (remaining.inHours / 24).ceil();
-      if (days >= 1) return '$days days remaining';
+      if (days >= 1) return days == 1 ? '1 day remaining' : '$days days remaining';
       final hours = remaining.inHours;
       if (hours >= 1) return '$hours hours remaining';
       return '< 1 hour remaining';

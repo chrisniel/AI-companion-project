@@ -191,7 +191,7 @@ class CompanionClient {
   Future<PurgeMaintenanceResult> runPurgeMaintenance({
     Duration timeout = const Duration(seconds: 15),
   }) async {
-    final uri = baseUri.replace(path: '\/api/v1/system/maintenance/purge-profiles');
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/system/maintenance/purge-profiles');
     final response = await _adminRequest('POST', uri, timeout: timeout);
     if (response.statusCode == 200) {
       final dynamic json = jsonDecode(response.body);
