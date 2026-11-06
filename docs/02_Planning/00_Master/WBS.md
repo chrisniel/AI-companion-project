@@ -72,8 +72,8 @@
 - **`PC-IDENTITY-001`**: Account & Multi-Profile Database Schema Migration (`owner_id` → `profile_id` transition; delivered via PR #25, commit `369d787`).
 - **`PC-IDENTITY-002`**: Strict Profile Authorization Context Middleware & Isolation Enforcement (Delivered via PR #27, commit `5cb2fe6`, stabilized in PR #28, commit `0bb0894`).
 - **`PC-IDENTITY-003`**: Satellite Device Enrollment & Single-Profile Binding (Individually revocable credentials).
-- **`PC-IDENTITY-004`**: Local PC Admin Profile Management Service (Host Admin `POST /api/v1/profiles` create, `PATCH /api/v1/profiles/{profile_id}` in-place rename, persistent selection preference, and acquire-before-teardown switching; Batch C implemented and verified on `feature/m2-profile-admin-c`; PIN protection and deletion deferred).
-- **`PC-IDENTITY-005`**: 7-Day Recoverable Profile Deletion Lifecycle & Hard Purge Maintenance.
+- **`PC-IDENTITY-004`**: Local PC Admin Profile Management Service (Host Admin `POST /api/v1/profiles` create, `PATCH /api/v1/profiles/{profile_id}` in-place rename, persistent selection preference, and acquire-before-teardown switching; delivered via PR #33, commit `2104d5c`; PIN protection deferred).
+- **`PC-IDENTITY-005`**: Recoverable Profile Deletion (30-day window) & Safe 5-Phase Permanent Purge Maintenance (Soft-delete with 30-day holding window, immediate session revocation, administrative restore preserving prior content deletions, 5-phase safe physical-first purge pipeline, startup and hourly background maintenance sweeps, and Desktop confirmation UI; delivered in M2 Batch D on `feature/m2-profile-deletion-recovery-d`).
 
 ### Stream: `PC-MODEL` — Model Library & D6 Import
 - **`PC-MODEL-001`**: Model Library Storage Derivation (`LIBRARY_ROOT/models/llm`, relocatable path support).

@@ -52,6 +52,7 @@ class Settings(BaseSettings):
 
     # Database & Retention Policy (Section 16.1)
     DATA_RETENTION_DAYS: int = 30
+    PROFILE_PURGE_INTERVAL_SECONDS: int = 3600
 
     # Native Runtime Engines & Local LLM (Track B4, Sections 11-14, Phase 8P.2)
     LLM_ENGINE: str = "llama_cpp"

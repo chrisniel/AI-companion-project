@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added — M2: Recoverable Profile Deletion & Safe Purge Maintenance (PC-IDENTITY-005, PC-CLIENT-005)
+
+- **Backend Recoverable Profile Deletion & Safe Purge (`PC-IDENTITY-005`)**:
+  - Implemented loopback-only Host Admin endpoints: `DELETE /api/v1/profiles/{profile_id}` (soft-delete with 30-day recovery window), `GET /api/v1/profiles/deleted` (list recoverable deleted profiles), `POST /api/v1/profiles/{profile_id}/restore` (restore within window preserving prior child content deletions), `POST /api/v1/profiles/{profile_id}/purge` (immediate 5-phase physical-first purge), and `POST /api/v1/system/maintenance/purge-profiles` (manual maintenance sweep).
+  - Enforced 5-phase permanent purge order: storage path pre-validation, atomic transition to `purging` status, physical file unlinking with per-file containment re-validation & crash-orphaned `.tmp_*` cleanup, transactional relational record deletion in strict foreign key order with SQLite FTS5 index synchronization, and profile metadata record deletion.
+  - Implemented automatic purge sweeps at FastAPI application startup and hourly periodic background task (`asyncio.Task`) with clean shutdown cancellation.
+  - Protected default profile and active sessions from deletion with fail-closed errors (`400 Bad Request`).
+- **OpenAPI Contract & Dart Client Parity (`companion_api`)**:
+  - Updated `ProfileMetadata` with `is_deleted`, `deleted_at`, and `purge_after` timestamp fields.
+  - Added `PurgeMaintenanceResult` schema and DTO.
+  - Implemented client methods `deleteProfile`, `listDeletedProfiles`, `restoreProfile`, `purgeProfile`, and `runPurgeMaintenance` with automated parity checks.
+- **Flutter Desktop UI & Dialogs (`PC-CLIENT-005`)**:
+  - Added "Delete Profile" and "Delete Selected" buttons with typed profile name confirmation dialog explaining the 30-day holding state.
+  - Added "Recently Deleted" section with recovery countdown badge (`X days remaining`), "Restore", and "Permanently Delete" with typed name confirmation dialog.
+  - Integrated controller state handling: session revocation, switching fallback to default profile, and catalog refresh.
+
 ### Added — M2: Local Profile Administration & Persistent Selection (PC-IDENTITY-004, PC-CLIENT-005)
 
 - **Backend Local Profile Creation & Renaming (`PC-IDENTITY-004`)**:

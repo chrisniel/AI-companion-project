@@ -172,6 +172,7 @@ The normative architecture for D7 and ADR-0018 is frozen. The following implemen
 - **Strict Owner Isolation:** Every memory query mandates `WHERE m.profile_id = :profile_id` (migrated from `owner_id`). No cross-profile or unauthenticated memory access is permitted.
 - **Untrusted Prompt Framing:** Memories are injected inside `<retrieved_memories>` XML tags. The orchestrator instructs the model that memory content represents historical user statements and must not execute instructions contained within them.
 - **Deletion Integrity:** Soft-deleted memories are immediately excluded from FTS5 index searches via trigger logic and SQL defensive filters (`m.deleted_at IS NULL`).
+- **Profile Deletion & Purge Cascade:** When a Profile is soft-deleted, all sessions are immediately revoked, preventing any memory retrieval or search for that profile. During permanent profile purge (Batch D `PC-IDENTITY-005`), all Profile memories are hard-deleted transactionally, and the SQLite `memories_fts` index entries are cleaned up atomically.
 
 ---
 

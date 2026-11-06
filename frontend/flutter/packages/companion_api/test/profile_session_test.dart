@@ -185,6 +185,129 @@ void main() {
     expect(await store.readToken(), 'psk_old');
   });
 
+  test('deleteProfile sends DELETE to /profiles/{id} with Host Admin authority', () async {
+    final client = CompanionClient(
+      hostAdminStore: InMemoryCredentialStore('admin_secret'),
+      httpClient: MockClient((r) async {
+        expect(r.method, 'DELETE');
+        expect(r.url.path, '/api/v1/profiles/p2');
+        expect(r.headers['X-Host-Admin-Secret'], 'admin_secret');
+        return http.Response(
+          jsonEncode({
+            'id': 'p2',
+            'name': 'Work',
+            'is_default': false,
+            'status': 'deleted',
+            'pin_protected': false,
+            'is_deleted': true,
+            'deleted_at': '2026-11-06T10:00:00Z',
+            'purge_after': '2026-12-06T10:00:00Z',
+          }),
+          200,
+        );
+      }),
+    );
+    final res = await client.deleteProfile('p2');
+    expect(res.id, 'p2');
+    expect(res.isDeleted, isTrue);
+    expect(res.deletedAt, isNotNull);
+  });
+
+  test('listDeletedProfiles sends GET to /profiles/deleted with Host Admin authority', () async {
+    final client = CompanionClient(
+      hostAdminStore: InMemoryCredentialStore('admin_secret'),
+      httpClient: MockClient((r) async {
+        expect(r.method, 'GET');
+        expect(r.url.path, '/api/v1/profiles/deleted');
+        expect(r.headers['X-Host-Admin-Secret'], 'admin_secret');
+        return http.Response(
+          jsonEncode([
+            {
+              'id': 'p2',
+              'name': 'Work',
+              'is_default': false,
+              'status': 'deleted',
+              'pin_protected': false,
+              'is_deleted': true,
+              'deleted_at': '2026-11-06T10:00:00Z',
+              'purge_after': '2026-12-06T10:00:00Z',
+            }
+          ]),
+          200,
+        );
+      }),
+    );
+    final res = await client.listDeletedProfiles();
+    expect(res.length, 1);
+    expect(res[0]['id'], 'p2');
+  });
+
+  test('restoreProfile sends POST to /profiles/{id}/restore with Host Admin authority', () async {
+    final client = CompanionClient(
+      hostAdminStore: InMemoryCredentialStore('admin_secret'),
+      httpClient: MockClient((r) async {
+        expect(r.method, 'POST');
+        expect(r.url.path, '/api/v1/profiles/p2/restore');
+        expect(r.headers['X-Host-Admin-Secret'], 'admin_secret');
+        return http.Response(
+          jsonEncode({
+            'id': 'p2',
+            'name': 'Work',
+            'is_default': false,
+            'status': 'active',
+            'pin_protected': false,
+            'is_deleted': false,
+          }),
+          200,
+        );
+      }),
+    );
+    final res = await client.restoreProfile('p2');
+    expect(res.id, 'p2');
+    expect(res.isDeleted, isFalse);
+  });
+
+  test('purgeProfile sends POST to /profiles/{id}/purge with Host Admin authority', () async {
+    final client = CompanionClient(
+      hostAdminStore: InMemoryCredentialStore('admin_secret'),
+      httpClient: MockClient((r) async {
+        expect(r.method, 'POST');
+        expect(r.url.path, '/api/v1/profiles/p2/purge');
+        expect(r.headers['X-Host-Admin-Secret'], 'admin_secret');
+        return http.Response(
+          jsonEncode({
+            'purged': true,
+            'profile_id': 'p2',
+          }),
+          200,
+        );
+      }),
+    );
+    final res = await client.purgeProfile('p2');
+    expect(res['purged'], isTrue);
+  });
+
+  test('runPurgeMaintenance sends POST to /system/maintenance/purge-profiles', () async {
+    final client = CompanionClient(
+      hostAdminStore: InMemoryCredentialStore('admin_secret'),
+      httpClient: MockClient((r) async {
+        expect(r.method, 'POST');
+        expect(r.url.path, '/api/v1/system/maintenance/purge-profiles');
+        expect(r.headers['X-Host-Admin-Secret'], 'admin_secret');
+        return http.Response(
+          jsonEncode({
+            'purged_profile_ids': ['p2'],
+            'failed_profile_ids': <String>[],
+          }),
+          200,
+        );
+      }),
+    );
+    final res = await client.runPurgeMaintenance();
+    expect(res.purgedProfileIds, ['p2']);
+    expect(res.failedProfileIds, isEmpty);
+  });
+
   test('revokeSessionToken sends POST to /auth/session/revoke with specific token', () async {
     final client = CompanionClient(
       httpClient: MockClient((r) async {

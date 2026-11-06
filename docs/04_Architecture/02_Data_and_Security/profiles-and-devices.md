@@ -44,7 +44,7 @@ The following constraints are permanently locked for PC V1:
 - **Host Ownership:** Runtime, providers, model library, and hardware are host/Account-owned, not Profile-owned.
 - **Security:** Optional Profile PIN/Windows Hello protects shared-PC Profile switching/unlock without requiring constant prompts.
 - **Deletion:** Profile deletion immediately disables access, revokes sessions, stops background work, and hides the Profile.
-- **Recovery:** 7-day recovery window; only local Account admin can restore. Hard purge after recovery period.
+- **Recovery:** 30-day recovery window; only local Account admin can restore. Hard purge after recovery period.
 - **Identity:** Stable UUID Profile identity; display name is not identity.
 
 Conceptual Profile and Device records are required, but exact columns/schema remain implementation-open. Do not invent exact schema/API fields beyond what is frozen.
@@ -109,7 +109,26 @@ Repository source code establishes the following baseline reality:
   - **Desktop Acquire-Before-Teardown Switching:** Minting and exchanging the destination Profile session completes before revoking the prior session or clearing personal caches, ensuring the active Profile remains intact if destination authorization fails.
   - **Sign Out Behavior:** "Sign out" sets `profileExplicitlyLocked = true`, revokes the active session, and stops automatic startup restoration until explicit user selection.
   - **UI Integration:** `ProfileSelectorHeader` provides quick switching in the navigation rail, `ProfileAccessCard` in Settings supports Create/Rename/Sign out, and `ChatScreen` displays the active Profile badge.
-- **Profile Administration Status:** Local Profile creation, in-place renaming, persistent selection, acquire-before-teardown switching, and Desktop UI are **IMPLEMENTED / VERIFIED** (Batch C). Profile deletion and 7-day recoverable deletion (`PC-IDENTITY-005` in Batch D), PIN enrollment/unlock challenges, and satellite device enrollment (`PC-IDENTITY-003`) remain future work.
+- **Recoverable Profile Deletion & Safe Purge (Batch D):**
+  - **Endpoints:**
+    - `DELETE /api/v1/profiles/{profile_id}`: Soft-deletes a profile, moving it to "Recently Deleted" with a 30-day recovery window (`purge_after = deleted_at + 30 days`). Immediately revokes active profile sessions, stops running background tasks, and prevents selecting or authenticating as the deleted profile. Protects default profile and active sessions with fail-closed errors.
+    - `GET /api/v1/profiles/deleted`: Enumerates soft-deleted profiles awaiting permanent purge, returning their stable UUID, name, `deleted_at`, and `purge_after` timestamps under Host Admin authority.
+    - `POST /api/v1/profiles/{profile_id}/restore`: Restores a soft-deleted profile to active status, making it selectable again and returning its restored metadata. Preserves prior user-initiated child content deletions (conversations soft-deleted before profile deletion remain soft-deleted).
+    - `POST /api/v1/profiles/{profile_id}/purge`: Permanently deletes a profile immediately via a 5-phase physical-first purge pipeline.
+    - `POST /api/v1/system/maintenance/purge-profiles`: Manually triggers the maintenance sweep across all expired soft-deleted profiles under Host Admin authority.
+  - **5-Phase Safe Purge Pipeline:**
+    - *Phase 1 (Pre-Validation):* Validates physical attachment storage paths against storage roots before mutating database state; fails closed if traversal or invalid path is detected.
+    - *Phase 2 (Atomic Transition):* Updates status to `purging` within a transaction to prevent concurrent restore or deletion operations.
+    - *Phase 3 (Physical Unlinking):* Deletes physical files from disk with strict directory containment re-validation per file and cleans up crash-orphaned promoted `.tmp_*` files.
+    - *Phase 4 (Relational Cascade):* Deletes database records transactionally in strict foreign key order (`profile_sessions`, `attachments`, `messages`, `conversations`, `memories`, `character_instances`, `profile_preferences`), synchronizing SQLite FTS5 search indexes.
+    - *Phase 5 (Metadata Purge):* Deletes the profile record from `profiles`.
+  - **Automatic Purge Maintenance:**
+    - Executes automatically at application startup during the FastAPI `lifespan` handler.
+    - Runs a periodic background sweep every hour (`asyncio.Task`) while the application remains open, with clean cancellation on shutdown.
+  - **Desktop UI Integration:**
+    - "Delete Profile" and "Delete Selected" buttons for non-default profiles with a typed-name confirmation dialog explaining the 30-day recovery window.
+    - "Recently Deleted" section displaying recoverable profiles with countdown badges (`X days remaining`), a "Restore" button, and a "Permanently Delete" button with typed-name confirmation.
+- **Profile Administration Status:** Local Profile creation, in-place renaming, persistent selection, acquire-before-teardown switching, recoverable 30-day soft-delete, administrative restore, 5-phase safe physical-first purge, automatic maintenance sweeps, and Desktop UI are **IMPLEMENTED / VERIFIED** (`PC-IDENTITY-004` in Batch C, `PC-IDENTITY-005` in Batch D). PIN enrollment/unlock challenges and satellite device enrollment (`PC-IDENTITY-003`) remain future work.
 - **Device Registry Status:** `NOT IMPLEMENTED`. No `devices` table or endpoint exists yet.
 - **Android Client Connection:** `SharedPreferencesConnectionRepository` stores the host URL and shared pairing token in unencrypted `SharedPreferences`.
 
@@ -119,7 +138,7 @@ Repository source code establishes the following baseline reality:
 
 Profile persistence and explicit personal-data ownership are implemented as described in §4. Remaining identity delivery includes the following target capabilities:
 
-- **Complete Profile Administration & Lifecycle:** Local PC administration, PIN enrollment/unlock, deletion/recovery and full Profile-owned settings/assets integration remain to be implemented.
+- **Complete Profile Administration & Lifecycle:** PIN enrollment/unlock and full Profile-owned settings/assets integration remain to be implemented.
 - **Device Enrollment:** Device enrollment/credential records must exist, distinct from Profiles.
 - **Single-Profile Satellite:** One normal satellite Device binds to exactly one Profile.
 - **Revocable Credentials:** Each device must have independently revocable device credentials.
@@ -130,7 +149,7 @@ The normative architecture for D4 and ADR-0018 is frozen. The following implemen
 
 - **Pairing & Enrollment UX:** User interaction flow for introducing a new client device (camera-scanned QR code vs. short numeric code entered on PC; `DEBT-V1-013`).
 - **Device Credential Format:** Token structure (cryptographically signed JWT device token vs. high-entropy random token hash).
-- **Profile Deletion Cascade:** Exact cascade/cleanup implementation during the hard purge phase (ACTIVE -> 7-day recoverable deletion -> hard purge).
+- **Profile Deletion Cascade:** RESOLVED in Batch D (`PC-IDENTITY-005`). 30-day recoverable soft-delete, session revocation, 5-phase safe physical-first purge pipeline, and startup/hourly automatic background maintenance sweeps.
 - **One Profile to Multiple Mobile Phones:** Binding a single Profile across multiple concurrently enrolled mobile phones remains **`OPEN / DECISION DEBT`** (to be formally registered and assigned an exact debt identifier in Batch D5; it is strictly NOT classified as deferred or post-V1).
 
 ---

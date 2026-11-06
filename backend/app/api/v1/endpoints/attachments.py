@@ -35,6 +35,46 @@ class SecurityException(Exception):
     pass
 
 
+def resolve_and_verify_profile_attachment_path(storage_path: str, profile_id: str) -> Path:
+    """Resolve and verify that a stored attachment path is strictly inside the target Profile's attachment root.
+
+    Verifies:
+    1. settings.ATTACHMENT_DIR is resolved.
+    2. profile_root = (settings.ATTACHMENT_DIR / profile_id).resolve() is inside settings.ATTACHMENT_DIR.
+    3. candidate is strictly inside profile_root and != profile_root.
+    4. candidate has no symlink traversal escaping profile_root.
+    Raises SecurityException on violation.
+    Returns candidate Path.
+    """
+    if not storage_path or not profile_id:
+        raise SecurityException("Invalid attachment path or profile identifier")
+
+    attachment_root = settings.ATTACHMENT_DIR.resolve()
+    profile_root = (settings.ATTACHMENT_DIR / profile_id).resolve()
+
+    if not profile_root.is_relative_to(attachment_root):
+        raise SecurityException("Profile root configuration error or traversal attempt")
+
+    candidate = Path(storage_path)
+    if not candidate.is_absolute():
+        if storage_path.startswith("attachments/") or storage_path.startswith("attachments\\"):
+            candidate = settings.COMPANION_DATA_ROOT / storage_path
+        elif storage_path.startswith(f"{profile_id}/") or storage_path.startswith(f"{profile_id}\\"):
+            candidate = settings.ATTACHMENT_DIR / storage_path
+        else:
+            candidate = settings.COMPANION_DATA_ROOT / storage_path
+
+    try:
+        resolved_candidate = candidate.resolve()
+    except (ValueError, RuntimeError) as exc:
+        raise SecurityException(f"Path resolution error: {exc}") from exc
+
+    if not resolved_candidate.is_relative_to(profile_root) or resolved_candidate == profile_root:
+        raise SecurityException(f"Attachment path '{storage_path}' escapes profile root for '{profile_id}'")
+
+    return resolved_candidate
+
+
 def sanitize_display_filename(raw_filename: Optional[str]) -> str:
     """Normalize user-supplied filename into a safe display-only metadata string.
 

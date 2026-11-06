@@ -23,9 +23,10 @@
   - The local PC user possesses administrator authority to create, switch, export, and delete profiles.
   - Normal satellite devices (such as Android companions) bind to exactly one Profile during pairing.
 - **Strict Profile Deletion Lifecycle:**
-  - Deleting a profile enters a 7-day recoverable soft-delete window.
-  - During this window, only the local PC admin can restore the profile.
-  - After 7 days, a hard purge permanently destroys all database records, embeddings, and referenced assets for that profile.
+  - Deleting a profile enters a 30-day recoverable soft-delete window (`purge_after = deleted_at + 30 days`).
+  - Active sessions are immediately revoked, halting ongoing tasks and preventing profile selection or token authentication.
+  - During this window, only the local PC admin can restore the profile, preserving prior user-initiated child content deletions.
+  - After 30 days (or upon manual hard delete), a safe 5-phase physical-first purge permanently unlinks physical assets, cascades relational records in foreign key order, and cleans up FTS5 search indexes.
 - **Schema Migration Path:**
   - Existing database columns referencing `owner_id` map directly to `profile_id`.
   - Existing single-user databases migrate seamlessly into the "Default Profile" upon upgrade.

@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import verify_token
+from app.api.deps import get_db, verify_token
 from app.core.config import settings
 from app.core.host_admin import require_host_admin
 from app.core.runtime_lifecycle import runtime_lifecycle
@@ -19,6 +19,10 @@ from app.schemas.health import (
     SystemShutdownRequest,
     SystemShutdownResponse,
     SystemStatusResponse,
+)
+from app.services.profile_purge_service import (
+    ProfilePurgeService,
+    PurgeMaintenanceResult,
 )
 
 public_health_router = APIRouter(tags=["Health"])
@@ -108,3 +112,17 @@ async def system_shutdown(
         shutdown_phase=runtime_lifecycle.shutdown_phase,
         message=f"Cooperative shutdown {'resumed' if msg == 'shutdown_retried' else ('already in progress' if already_shutting_down else 'initiated')}.",
     )
+
+
+@system_router.post(
+    "/system/maintenance/purge-profiles",
+    response_model=PurgeMaintenanceResult,
+    summary="Trigger Profile Purge Maintenance",
+)
+async def system_purge_profiles(
+    db: AsyncSession = Depends(get_db),
+    _: str = Depends(require_host_admin),
+) -> PurgeMaintenanceResult:
+    """Trigger an immediate maintenance purge of expired and interrupted Profiles (Host Admin only)."""
+    service = ProfilePurgeService(db)
+    return await service.execute_maintenance_purge()

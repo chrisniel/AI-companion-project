@@ -56,6 +56,19 @@ class ProfileAccessCard extends StatelessWidget {
                               icon: const Icon(Icons.edit_rounded, size: 16),
                               label: const Text('Rename Profile'),
                             ),
+                            if (!isDefault)
+                              OutlinedButton.icon(
+                                onPressed: controller.busy
+                                    ? null
+                                    : () => showMoveToRecentlyDeletedDialog(
+                                          context,
+                                          controller,
+                                          profileId: controller.activeProfileId!,
+                                          profileName: controller.activeProfileName ?? '',
+                                        ),
+                                icon: const Icon(Icons.delete_outline_rounded, size: 16),
+                                label: const Text('Delete Profile'),
+                              ),
                             TextButton.icon(
                               onPressed: controller.busy
                                   ? null
@@ -102,7 +115,7 @@ class ProfileAccessCard extends StatelessWidget {
                     onPressed: controller.busy ? null : controller.refresh,
                     child: const Text('Refresh requests'),
                   ),
-                  if (selected != null && selected['id'] != controller.activeProfileId)
+                  if (selected != null && selected['id'] != controller.activeProfileId) ...[
                     OutlinedButton(
                       onPressed: controller.busy
                           ? null
@@ -115,6 +128,19 @@ class ProfileAccessCard extends StatelessWidget {
                               ),
                       child: const Text('Rename Selected'),
                     ),
+                    if (selected['is_default'] != true)
+                      OutlinedButton(
+                        onPressed: controller.busy
+                            ? null
+                            : () => showMoveToRecentlyDeletedDialog(
+                                  context,
+                                  controller,
+                                  profileId: selected['id'] as String,
+                                  profileName: selected['name'] as String,
+                                ),
+                        child: const Text('Delete Selected'),
+                      ),
+                  ],
                 ]),
                 const SizedBox(height: 12),
                 if (controller.activeProfileId != null) ...[
@@ -142,6 +168,86 @@ class ProfileAccessCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 12),
+                ],
+                if (controller.deletedProfiles.isNotEmpty) ...[
+                  const Divider(height: 24),
+                  Row(
+                    children: [
+                      const Icon(Icons.history_rounded, size: 18, color: Colors.grey),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Recently Deleted (${controller.deletedProfiles.length})',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Profiles remain recoverable for 30 days before permanent purge.',
+                    style: TextStyle(fontSize: 12, color: Colors.black54),
+                  ),
+                  const SizedBox(height: 8),
+                  for (final dp in controller.deletedProfiles)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  dp['name']?.toString() ?? 'Profile',
+                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                ),
+                                const SizedBox(height: 2),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    DesktopProfileController.formatRemainingRecovery(dp['purge_after']),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.orange.shade900,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: controller.busy
+                                ? null
+                                : () => controller.restoreProfile(dp['id'] as String),
+                            icon: const Icon(Icons.restore_rounded, size: 16),
+                            label: const Text('Restore'),
+                          ),
+                          const SizedBox(width: 4),
+                          TextButton.icon(
+                            onPressed: controller.busy
+                                ? null
+                                : () => showPermanentDeleteProfileDialog(
+                                      context,
+                                      controller,
+                                      profileId: dp['id'] as String,
+                                      profileName: dp['name'] as String,
+                                    ),
+                            icon: const Icon(Icons.delete_forever_rounded, size: 16, color: Colors.red),
+                            label: const Text('Permanently Delete', style: TextStyle(color: Colors.red)),
+                          ),
+                        ],
+                      ),
+                    ),
                 ],
                 const Text(
                   'Browser requests — approve only the request and Origin you recognize.',
