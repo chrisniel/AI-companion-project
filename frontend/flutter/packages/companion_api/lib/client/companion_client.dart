@@ -852,6 +852,9 @@ class CompanionClient {
     String? scope,
     String? characterInstanceId,
     bool? isCore,
+    bool? userVerified,
+    String? sourceType,
+    String? q,
     bool includeExpired = false,
     int skip = 0,
     int limit = 50,
@@ -859,10 +862,13 @@ class CompanionClient {
     final queryParams = <String, String>{
       'skip': skip.toString(),
       'limit': limit.toString(),
+      if (q != null && q.isNotEmpty) 'q': q,
       if (category != null) 'category': category,
       if (scope != null) 'scope': scope,
       if (characterInstanceId != null) 'character_instance_id': characterInstanceId,
       if (isCore != null) 'is_core': isCore.toString(),
+      if (userVerified != null) 'user_verified': userVerified.toString(),
+      if (sourceType != null) 'source_type': sourceType,
       if (includeExpired) 'include_expired': 'true',
     };
     final uri = baseUri.replace(

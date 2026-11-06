@@ -2,7 +2,7 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- **Status:** Awaiting Approval (Human Plan Approval Gate)
+- **Status:** Completed & Verified (Phases 1–3 Complete; Ready for Phase 4 Review & Merge)
 - **Delivery Level:** Level B — Planned Autonomous (Core Feature Implementation under Approved Architecture D7/ADR-0018)
 - **Scope Mode:** New Feature — Desktop Memory Control Center UI (`PC-CLIENT-009`), Alembic Migration 011 (`profiles.memory_extraction_enabled`), Backend Memory Query & Update Filters (`q`, `user_verified`, `source_type`), Dart OpenAPI Client Parity, Conversational Memory Conflict Hinting, and System Default ON Extraction Toggle
 - **Target Files:**
@@ -224,13 +224,14 @@ In Batch C3, resolution is handled along two complementary surfaces:
 ## 5. Acceptance Criteria & Verification Strategy
 
 ### Automated Repository Checks
-- [ ] Backend Migration 011 test: `backend/.venv/Scripts/python.exe -m pytest backend/tests/test_migration_011.py -v`
-- [ ] Backend Memory API filter tests: `backend/.venv/Scripts/python.exe -m pytest backend/tests/test_memories_api_filters.py -v`
-- [ ] Backend Extraction & Orchestrator tests: `backend/.venv/Scripts/python.exe -m pytest backend/tests/test_memory_extraction_pipeline.py -v`
-- [ ] Backend Full Regression Suite: `backend/.venv/Scripts/python.exe -m pytest backend/tests` (755+ tests passing, 0 failures)
-- [ ] Dart OpenAPI Parity: `backend/.venv/Scripts/python.exe scripts/check_dart_openapi_parity.py` (32/32 schemas, 42/26 routes passing)
-- [ ] Dart API tests: `dart test` inside `frontend/flutter/packages/companion_api`
-- [ ] Flutter Desktop tests: `flutter test` inside `frontend/flutter/apps/desktop`
+- [x] Backend Migration 011 test: `backend/.venv/Scripts/python.exe -m pytest backend/tests/test_migration_011.py -v` (3/3 PASSED)
+- [x] Backend Memory API filter tests: `backend/.venv/Scripts/python.exe -m pytest backend/tests/test_memories_api_filters.py -v` (5/5 PASSED)
+- [x] Backend Extraction & Orchestrator tests: `backend/.venv/Scripts/python.exe -m pytest backend/tests/test_memory_extraction_pipeline.py -v` (7/7 PASSED)
+- [x] Backend Full Regression Suite: `backend/.venv/Scripts/python.exe -m pytest backend/tests` (767/767 tests passing, 0 failures)
+- [x] Dart OpenAPI Parity: `backend/.venv/Scripts/python.exe scripts/check_dart_openapi_parity.py` (32/32 schemas, 42/26 routes passing)
+- [x] Dart API tests: `dart test` inside `frontend/flutter/packages/companion_api` (95/95 PASSED)
+- [x] Flutter Desktop tests: `flutter test` inside `frontend/flutter/apps/desktop` (All unit, widget & shell tests PASSED)
+- [x] Flutter Static Analysis: `flutter analyze` inside `frontend/flutter/apps/desktop` (No issues found)
 
 ### Manual & Host-Level Checks (Where Applicable)
 - [ ] Open Desktop App, navigate to Memory Control Center via rail.

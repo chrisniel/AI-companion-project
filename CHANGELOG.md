@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added — M3: Desktop Memory Control Center UI, Migration 011 Per-Profile Extraction Toggle, and Conflict Resolution (PC-CLIENT-009)
+
+- **Desktop Memory Control Center (`PC-CLIENT-009`)**:
+  - Implemented `DesktopMemoryController` managing reactive memory state, active profile synchronization, real-time filtering, conflict resolution, memory CRUD, and per-profile auto-extraction toggling.
+  - Implemented `MemoryScreen` replacing placeholder screen with full Memory Control Center: header with auto-extraction switch, contradiction alert banner, multi-faceted search & filter bar, and memory item cards.
+  - Implemented `MemoryConflictBanner` alerting users to unresolved contradictory beliefs (`source_type="conflict"`, `user_verified=False`) with side-by-side diff comparison and 1-click resolution actions: *Keep New*, *Keep Old (Discard New)*, and *Edit & Merge*.
+  - Implemented `MemoryFilterBar` supporting live text query (`q`), scope chips (`all`, `profile`, `character`), category chips (`all`, `fact`, `preference`, `context`), and status chips (`all`, `verified`, `pending`, `conflicts`).
+  - Implemented `MemoryItemCard` displaying category badges, scope indicators, status badges (`VERIFIED`, `PENDING REVIEW`, `CONFLICT`), core fact star pin toggle, inline approval, edit modal trigger, and confirmation-gated deletion.
+  - Implemented `MemoryEditDialog` for creating manual memories or editing content, category, scope, and core fact pin status.
+  - Wired `MemoryController` into `DesktopShell` and removed `'M3'` planned badge from `DesktopNavDestination.memory`.
+- **Per-Profile Auto-Extraction Toggle & Migration 011**:
+  - Authored Alembic Migration `011_profile_memory_extraction_toggle.py` adding `profiles.memory_extraction_enabled` (Boolean, default `True`, `server_default="1"`, NOT NULL) with SQLite trigger cycle handling.
+  - Updated `Profile` ORM model, `ProfileMetadata`, and `ProfileUpdateRequest` to expose and manage `memory_extraction_enabled`.
+  - Turned default extraction setting to `MEMORY_EXTRACTION_ENABLED = True` in `config.py`, dynamically guarded by the active profile's `memory_extraction_enabled` state.
+- **Memory API Query Filters & Approval Updates**:
+  - Extended `GET /api/v1/memories` with query parameters: `q` (case-insensitive substring filter), `user_verified` (Boolean filter), and `source_type` (String filter).
+  - Extended `PATCH /api/v1/memories/{memory_id}` with `user_verified` (which sets `last_verified_at = now()`) and `source_type`.
+  - Injected `<memory_conflicts>` into `ChatOrchestrator` context assembly with companion-toned clarification instructions when unresolved conflicts exist.
+- **Client Contract Parity**:
+  - Updated `companion_api` Dart client and DTOs (`MemoryUpdate`, `ProfileMetadata`, `ProfileUpdateRequest`, and `CompanionClient.listMemories`) maintaining 100% contract parity with OpenAPI specification.
+
+
 ### Added — M3: Selective Automatic Memory Extraction & Deterministic Slot Reconciliation (PC-MEM-002)
 
 - **Disclosure-Aware Skip Gate & Explicit Bypass (`PC-MEM-002`)**:

@@ -1197,6 +1197,60 @@
             "description": "Filter by is_core flag"
           },
           {
+            "name": "user_verified",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by user verification state",
+              "title": "User Verified"
+            },
+            "description": "Filter by user verification state"
+          },
+          {
+            "name": "source_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by source type: manual, extracted, conflict, etc.",
+              "title": "Source Type"
+            },
+            "description": "Filter by source type: manual, extracted, conflict, etc."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Search memory content",
+              "title": "Q"
+            },
+            "description": "Search memory content"
+          },
+          {
             "name": "include_expired",
             "in": "query",
             "required": false,
@@ -4893,6 +4947,28 @@
               }
             ],
             "title": "Expires At"
+          },
+          "user_verified": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Verified"
+          },
+          "source_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Type"
           }
         },
         "additionalProperties": false,
@@ -5818,6 +5894,11 @@
               }
             ],
             "title": "Purge After"
+          },
+          "memory_extraction_enabled": {
+            "type": "boolean",
+            "title": "Memory Extraction Enabled",
+            "default": true
           }
         },
         "type": "object",
@@ -5833,17 +5914,32 @@
       "ProfileUpdateRequest": {
         "properties": {
           "name": {
-            "type": "string",
-            "maxLength": 64,
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Name"
+          },
+          "memory_extraction_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Extraction Enabled"
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "name"
-        ],
         "title": "ProfileUpdateRequest"
       },
       "PurgeMaintenanceResult": {
@@ -5929,6 +6025,11 @@
               }
             ],
             "title": "Purge After"
+          },
+          "memory_extraction_enabled": {
+            "type": "boolean",
+            "title": "Memory Extraction Enabled",
+            "default": true
           },
           "expires_at": {
             "type": "string",

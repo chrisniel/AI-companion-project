@@ -8,6 +8,7 @@ import '../coordinator/desktop_runtime_coordinator.dart';
 import '../dialogs/desktop_shutdown_dialogs.dart';
 import '../features/chat/desktop_chat_controller.dart';
 import '../features/profiles/desktop_profile_controller.dart';
+import '../features/memory/desktop_memory_controller.dart';
 import '../features/studio/desktop_studio_controller.dart';
 import '../lifecycle/desktop_lifecycle_coordinator.dart';
 import '../platform/desktop_client_settings.dart';
@@ -35,6 +36,7 @@ class DesktopShell extends StatefulWidget {
     this.chatController,
     this.profileController,
     this.studioController,
+    this.memoryController,
     this.runtimeCoordinator,
     this.clientSettings,
     this.credentialStore,
@@ -45,6 +47,7 @@ class DesktopShell extends StatefulWidget {
   final DesktopChatController? chatController;
   final DesktopProfileController? profileController;
   final DesktopStudioController? studioController;
+  final DesktopMemoryController? memoryController;
   final DesktopRuntimeCoordinator? runtimeCoordinator;
   final DesktopClientSettings? clientSettings;
   final CredentialStore? credentialStore;
@@ -57,6 +60,8 @@ class _DesktopShellState extends State<DesktopShell> {
   final Set<DesktopNavDestination> _visitedDestinations = <DesktopNavDestination>{};
   late final DesktopStudioController? _studioController;
   bool _ownsStudioController = false;
+  late final DesktopMemoryController? _memoryController;
+  bool _ownsMemoryController = false;
 
   @override
   void initState() {
@@ -70,6 +75,24 @@ class _DesktopShellState extends State<DesktopShell> {
     } else {
       _studioController = null;
     }
+
+    if (widget.memoryController != null) {
+      _memoryController = widget.memoryController;
+    } else if (widget.chatController != null) {
+      final active = widget.profileController?.activeProfile;
+      final profileId = active?['id'] as String?;
+      final extractionEnabled = active?['memory_extraction_enabled'] as bool? ?? true;
+      _memoryController = DesktopMemoryController(
+        client: widget.chatController!.client,
+        profileId: profileId,
+        initialExtractionEnabled: extractionEnabled,
+      );
+      _ownsMemoryController = true;
+    } else {
+      _memoryController = null;
+    }
+
+    widget.profileController?.addListener(_handleProfileChange);
     widget.controller.navigationGuard = _handleNavigationGuard;
     widget.coordinator?.onExitMenuTriggered = () async {
       if (mounted) {
@@ -168,10 +191,24 @@ class _DesktopShellState extends State<DesktopShell> {
     }
   }
 
+  void _handleProfileChange() {
+    final active = widget.profileController?.activeProfile;
+    final profileId = active?['id'] as String?;
+    final extractionEnabled = active?['memory_extraction_enabled'] as bool?;
+    _memoryController?.updateProfileScope(
+      profileId: profileId,
+      memoryExtractionEnabled: extractionEnabled,
+    );
+  }
+
   @override
   void dispose() {
+    widget.profileController?.removeListener(_handleProfileChange);
     if (_ownsStudioController) {
       _studioController?.dispose();
+    }
+    if (_ownsMemoryController) {
+      _memoryController?.dispose();
     }
     super.dispose();
   }
@@ -328,7 +365,10 @@ class _DesktopShellState extends State<DesktopShell> {
       case DesktopNavDestination.schedule:
         return const ScheduleScreen(key: ValueKey('schedule_screen'));
       case DesktopNavDestination.memory:
-        return const MemoryScreen(key: ValueKey('memory_screen'));
+        return MemoryScreen(
+          key: const ValueKey('memory_screen'),
+          controller: _memoryController,
+        );
       case DesktopNavDestination.studio:
         final studio = _studioController;
         if (studio != null) {

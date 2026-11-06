@@ -11,6 +11,7 @@ class ProfileMetadata {
   final bool isDeleted;
   final String? deletedAt;
   final String? purgeAfter;
+  final bool memoryExtractionEnabled;
 
   const ProfileMetadata({
     required this.id,
@@ -21,6 +22,7 @@ class ProfileMetadata {
     this.isDeleted = false,
     this.deletedAt,
     this.purgeAfter,
+    this.memoryExtractionEnabled = true,
   });
 
   factory ProfileMetadata.fromJson(Map<String, dynamic> json) {
@@ -33,6 +35,7 @@ class ProfileMetadata {
       isDeleted: json['is_deleted'] as bool? ?? false,
       deletedAt: json['deleted_at'] as String?,
       purgeAfter: json['purge_after'] as String?,
+      memoryExtractionEnabled: json['memory_extraction_enabled'] as bool? ?? true,
     );
   }
 
@@ -45,6 +48,7 @@ class ProfileMetadata {
         'is_deleted': isDeleted,
         'deleted_at': deletedAt,
         'purge_after': purgeAfter,
+        'memory_extraction_enabled': memoryExtractionEnabled,
       };
 
   @override
@@ -59,7 +63,8 @@ class ProfileMetadata {
           pinProtected == other.pinProtected &&
           isDeleted == other.isDeleted &&
           deletedAt == other.deletedAt &&
-          purgeAfter == other.purgeAfter;
+          purgeAfter == other.purgeAfter &&
+          memoryExtractionEnabled == other.memoryExtractionEnabled;
 
   @override
   int get hashCode => Object.hash(
@@ -71,6 +76,7 @@ class ProfileMetadata {
         isDeleted,
         deletedAt,
         purgeAfter,
+        memoryExtractionEnabled,
       );
 
   @override
@@ -108,28 +114,40 @@ class ProfileCreateRequest {
 /// DTO for updating an existing Profile's display name.
 @immutable
 class ProfileUpdateRequest {
-  final String name;
+  final String? name;
+  final bool? memoryExtractionEnabled;
 
-  const ProfileUpdateRequest({required this.name});
+  const ProfileUpdateRequest({
+    this.name,
+    this.memoryExtractionEnabled,
+  });
 
   factory ProfileUpdateRequest.fromJson(Map<String, dynamic> json) {
-    return ProfileUpdateRequest(name: json['name'] as String);
+    return ProfileUpdateRequest(
+      name: json['name'] as String?,
+      memoryExtractionEnabled: json['memory_extraction_enabled'] as bool?,
+    );
   }
 
-  Map<String, dynamic> toJson() => {'name': name};
+  Map<String, dynamic> toJson() => {
+        if (name != null) 'name': name,
+        if (memoryExtractionEnabled != null) 'memory_extraction_enabled': memoryExtractionEnabled,
+      };
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is ProfileUpdateRequest &&
           runtimeType == other.runtimeType &&
-          name == other.name;
+          name == other.name &&
+          memoryExtractionEnabled == other.memoryExtractionEnabled;
 
   @override
-  int get hashCode => name.hashCode;
+  int get hashCode => Object.hash(name, memoryExtractionEnabled);
 
   @override
-  String toString() => 'ProfileUpdateRequest(name: $name)';
+  String toString() =>
+      'ProfileUpdateRequest(name: , memoryExtractionEnabled: )';
 }
 
 /// Result summary for manual and periodic Profile purge maintenance sweeps.

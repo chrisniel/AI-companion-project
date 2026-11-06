@@ -177,8 +177,8 @@ class Settings(BaseSettings):
     MEMORY_CORE_FACTS_LIMIT: int = 5
     MEMORY_CORE_FACTS_BUDGET_TOKENS: int = 100
 
-    # M3 Batch C2: Selective Automatic Memory Extraction
-    MEMORY_EXTRACTION_ENABLED: bool = False
+    # M3 Batch C2 & C3: Selective Automatic Memory Extraction (Default ON; guarded per profile by profile.memory_extraction_enabled)
+    MEMORY_EXTRACTION_ENABLED: bool = True
     MEMORY_EXTRACTION_CONFIDENCE_THRESHOLD: float = 0.8
     MEMORY_EXTRACTION_MAX_CANDIDATES: int = 3
     MEMORY_EXTRACTION_TEMPERATURE: float = 0.1

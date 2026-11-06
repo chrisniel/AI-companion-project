@@ -51,6 +51,12 @@ class Profile(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
         nullable=True,
         index=True,
     )
+    memory_extraction_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="1",
+    )
 
     def __init__(
         self,
@@ -61,6 +67,7 @@ class Profile(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
         is_default: bool = False,
         status: str = "active",
         active_character_instance_id: Optional[str] = None,
+        memory_extraction_enabled: bool = True,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -72,6 +79,7 @@ class Profile(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
         self.is_default = is_default
         self.status = status
         self.active_character_instance_id = active_character_instance_id
+        self.memory_extraction_enabled = memory_extraction_enabled
         self.is_deleted = kwargs.get("is_deleted", False)
         self.deleted_at = kwargs.get("deleted_at", None)
         self.purge_after = kwargs.get("purge_after", None)
@@ -91,8 +99,8 @@ def _insert_default_profile_after_create(target, connection, **kw):
     """
     connection.execute(
         text(
-            "INSERT INTO profiles (id, created_at, updated_at, name, is_default, status, is_deleted) "
-            "SELECT :id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'Default Profile', 1, 'active', 0 "
+            "INSERT INTO profiles (id, created_at, updated_at, name, is_default, status, is_deleted, memory_extraction_enabled) "
+            "SELECT :id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'Default Profile', 1, 'active', 0, 1 "
             "WHERE NOT EXISTS (SELECT 1 FROM profiles WHERE is_default = 1)"
         ),
         {"id": str(uuid.uuid4())},

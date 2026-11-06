@@ -86,6 +86,8 @@ class MemoryUpdate {
   final double? importance;
   final bool? isCore;
   final String? expiresAt;
+  final bool? userVerified;
+  final String? sourceType;
 
   const MemoryUpdate({
     this.content,
@@ -93,6 +95,8 @@ class MemoryUpdate {
     this.importance,
     this.isCore,
     this.expiresAt,
+    this.userVerified,
+    this.sourceType,
   });
 
   factory MemoryUpdate.fromJson(Map<String, dynamic> json) {
@@ -102,6 +106,8 @@ class MemoryUpdate {
       importance: (json['importance'] as num?)?.toDouble(),
       isCore: json['is_core'] as bool?,
       expiresAt: json['expires_at'] as String?,
+      userVerified: json['user_verified'] as bool?,
+      sourceType: json['source_type'] as String?,
     );
   }
 
@@ -111,6 +117,8 @@ class MemoryUpdate {
         if (importance != null) 'importance': importance,
         if (isCore != null) 'is_core': isCore,
         'expires_at': expiresAt,
+        if (userVerified != null) 'user_verified': userVerified,
+        if (sourceType != null) 'source_type': sourceType,
       };
 
   @override
@@ -122,7 +130,9 @@ class MemoryUpdate {
           category == other.category &&
           importance == other.importance &&
           isCore == other.isCore &&
-          expiresAt == other.expiresAt;
+          expiresAt == other.expiresAt &&
+          userVerified == other.userVerified &&
+          sourceType == other.sourceType;
 
   @override
   int get hashCode => Object.hash(
@@ -131,11 +141,13 @@ class MemoryUpdate {
         importance,
         isCore,
         expiresAt,
+        userVerified,
+        sourceType,
       );
 
   @override
   String toString() =>
-      'MemoryUpdate(content: $content, category: $category, isCore: $isCore, expiresAt: $expiresAt)';
+      'MemoryUpdate(content: , category: , isCore: , expiresAt: , userVerified: , sourceType: )';
 }
 
 /// Authoritative memory record returned by the backend.
