@@ -62,6 +62,7 @@ class _DesktopShellState extends State<DesktopShell> {
   bool _ownsStudioController = false;
   late final DesktopMemoryController? _memoryController;
   bool _ownsMemoryController = false;
+  DesktopNavDestination _lastDestination = DesktopNavDestination.chat;
 
   @override
   void initState() {
@@ -92,6 +93,8 @@ class _DesktopShellState extends State<DesktopShell> {
       _memoryController = null;
     }
 
+    _lastDestination = widget.controller.currentDestination;
+    widget.controller.addListener(_handleDestinationChange);
     widget.profileController?.addListener(_handleProfileChange);
     widget.controller.navigationGuard = _handleNavigationGuard;
     widget.coordinator?.onExitMenuTriggered = () async {
@@ -191,6 +194,16 @@ class _DesktopShellState extends State<DesktopShell> {
     }
   }
 
+  void _handleDestinationChange() {
+    final dest = widget.controller.currentDestination;
+    if (dest != _lastDestination) {
+      _lastDestination = dest;
+      if (dest == DesktopNavDestination.memory) {
+        _memoryController?.loadMemories();
+      }
+    }
+  }
+
   void _handleProfileChange() {
     final active = widget.profileController?.activeProfile;
     final profileId = active?['id'] as String?;
@@ -203,6 +216,7 @@ class _DesktopShellState extends State<DesktopShell> {
 
   @override
   void dispose() {
+    widget.controller.removeListener(_handleDestinationChange);
     widget.profileController?.removeListener(_handleProfileChange);
     if (_ownsStudioController) {
       _studioController?.dispose();

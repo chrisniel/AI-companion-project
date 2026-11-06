@@ -58,6 +58,15 @@
   - [x] Implement `MemoryScreen` replacing placeholder.
   - [x] Wire into `DesktopShell` and test with `memory_screen_test.dart` (8/8 PASSED) and `desktop_shell_test.dart` (4/4 PASSED).
   - [x] Verify clean `flutter analyze` ("No issues found!").
+- [x] **Step 6 — Real-World Experience Refinements (Local Testing Follow-Up):**
+  - [x] Step 6.1: Tighten extraction prompt against meta-conversational style analysis & ignore question turns ending in `?`.
+  - [x] Step 6.2: Refine token overlap denominator in reconciler to `min(cand, mem)` and add recovery/update signals (`healed`, `no longer`, etc.).
+  - [x] Step 6.3: Auto-refresh `_memoryController` upon navigating to `DesktopNavDestination.memory` in `DesktopShell`.
+- [x] **Step 7 — Settings Navigation Sync & Anti-Repetition Sampling (Follow-Up):**
+  - [x] Step 7.1: Add `repeat_penalty: 1.15`, `min_p: 0.05`, and explicit stop sequences in `backend/app/services/llm/llama_cpp.py`.
+  - [x] Step 7.2: Auto-refresh model catalog/status on navigating to `DesktopNavDestination.settings` and await credential store safely in `settings_screen.dart`.
+  - [x] Step 7.3: Partition stream circuit breaker, sentence-chunked streaming, and UI presets into `docs/02_Planning/00_Master/BACKLOG.md`.
+
 
 ---
 

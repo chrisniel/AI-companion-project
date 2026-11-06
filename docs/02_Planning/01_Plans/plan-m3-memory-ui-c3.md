@@ -219,6 +219,22 @@ In Batch C3, resolution is handled along two complementary surfaces:
 - Wire into `desktop_shell.dart`.
 - Run `flutter test` across desktop app tests.
 
+### Step 6: Real-World Experience Refinements (Local Testing Follow-Up)
+- **Step 6.1 (Anti-Poisoning Extraction Prompt & Question Skip Filter):**
+  - Tighten `EXTRACTION_SYSTEM_PROMPT` in `backend/app/services/memory/extractor.py` to prohibit meta-conversational style analysis (e.g. "User enjoys metaphors", "User is willing to ask questions").
+  - Update `should_skip_extraction(user_text)`: Treat interrogative advice-seeking questions ending in `?` without explicit memory triggers as non-factual turns, skipping background extraction to prevent prompt poisoning.
+- **Step 6.2 (Subject-Based Overlap Normalization & Contradiction Detection):**
+  - In `backend/app/services/memory/reconciler.py`, refine token overlap ratio to `len(intersection) / min(len(cand_tokens), len(mem_tokens))` so that concise existing facts (e.g. "allergic to shrimp") match longer explanatory updates.
+  - Expand `UPDATE_SIGNALS` and contradiction vocabulary with recovery/cessation signals (`"healed"`, `"no longer"`, `"cured"`, `"previously had"`) so changes in medical/preference status supersede rather than duplicate.
+- **Step 6.3 (Auto-Refresh on Navigation Rail Switch):**
+  - In `frontend/flutter/apps/desktop/lib/shell/desktop_shell.dart`, trigger `_memoryController?.loadMemories()` upon navigating to `DesktopNavDestination.memory` to ensure newly extracted facts appear immediately without manual refresh.
+
+- **Step 7: Navigation Auto-Sync & Anti-Repetition Sampling Safeguards**
+  - In `backend/app/services/llm/llama_cpp.py`, pass `repeat_penalty=1.15`, `min_p=0.05`, and explicit stop sequences (`["<|im_end|>", "<|endoftext|>", "\nUser:"]`) in generation payloads for both standalone `llama-server` and native `llama_cpp`, suppressing degenerative token loops on small 2B/4B models.
+  - In `frontend/flutter/apps/desktop/lib/screens/settings_screen.dart`, add a destination listener to `widget.controller` so switching to `DesktopNavDestination.settings` automatically re-fetches model catalog and status without manual reload; safely await DPAPI token read in `_loadModelData`.
+  - Partition larger architectural items (Stream Circuit Breaker, Sentence-Chunked Streaming for TTS, UI Persona Presets) into `docs/02_Planning/00_Master/BACKLOG.md` for dedicated M4/M5 milestone delivery.
+
+
 ---
 
 ## 5. Acceptance Criteria & Verification Strategy

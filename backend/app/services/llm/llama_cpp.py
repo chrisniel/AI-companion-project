@@ -1139,6 +1139,9 @@ class LlamaCppProvider(BaseLLMProvider):
         formatted_messages = _translate_messages(messages)
         lease = await self._acquire_generation()
         worker_owns_lease = False
+        repeat_penalty = kwargs.get("repeat_penalty", 1.15)
+        min_p = kwargs.get("min_p", 0.05)
+        stop_sequences = kwargs.get("stop", ["<|im_end|>", "<|endoftext|>", "\nUser:"])
 
         try:
             # Route A: Standalone llama-server via HTTP
@@ -1150,6 +1153,9 @@ class LlamaCppProvider(BaseLLMProvider):
                         "temperature": temperature,
                         "max_tokens": max_tokens,
                         "stream": False,
+                        "repeat_penalty": repeat_penalty,
+                        "min_p": min_p,
+                        "stop": stop_sequences,
                     }
                     resp = await client.post(f"{settings.LLAMA_SERVER_URL}/chat/completions", json=payload)
                     if not resp.is_success:
@@ -1164,12 +1170,15 @@ class LlamaCppProvider(BaseLLMProvider):
             native_model = self._llm
 
             def _infer():
-                return native_model.create_chat_completion(
-                    messages=formatted_messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    stream=False,
-                )
+                infer_kwargs = {
+                    "messages": formatted_messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    "stream": False,
+                    "repeat_penalty": repeat_penalty,
+                    "stop": stop_sequences,
+                }
+                return native_model.create_chat_completion(**infer_kwargs)
 
             worker = self._start_owned_worker(_infer, lease)
             worker_owns_lease = True
@@ -1201,6 +1210,9 @@ class LlamaCppProvider(BaseLLMProvider):
             formatted_messages = _translate_messages(messages)
             lease = await self._acquire_generation()
             worker_owns_lease = False
+            repeat_penalty = kwargs.get("repeat_penalty", 1.15)
+            min_p = kwargs.get("min_p", 0.05)
+            stop_sequences = kwargs.get("stop", ["<|im_end|>", "<|endoftext|>", "\nUser:"])
 
             try:
                 # Route A: Standalone llama-server streaming
@@ -1211,6 +1223,9 @@ class LlamaCppProvider(BaseLLMProvider):
                         "temperature": temperature,
                         "max_tokens": max_tokens,
                         "stream": True,
+                        "repeat_penalty": repeat_penalty,
+                        "min_p": min_p,
+                        "stop": stop_sequences,
                     }
                     async with httpx.AsyncClient(timeout=120.0) as client:
                         async with client.stream("POST", f"{settings.LLAMA_SERVER_URL}/chat/completions", json=payload) as response:
@@ -1225,12 +1240,15 @@ class LlamaCppProvider(BaseLLMProvider):
 
                 def _worker():
                     try:
-                        stream = native_model.create_chat_completion(
-                            messages=formatted_messages,
-                            temperature=temperature,
-                            max_tokens=max_tokens,
-                            stream=True,
-                        )
+                        infer_kwargs = {
+                            "messages": formatted_messages,
+                            "temperature": temperature,
+                            "max_tokens": max_tokens,
+                            "stream": True,
+                            "repeat_penalty": repeat_penalty,
+                            "stop": stop_sequences,
+                        }
+                        stream = native_model.create_chat_completion(**infer_kwargs)
                         for chunk in stream:
                             choices = chunk.get("choices", [])
                             if choices:

@@ -36,6 +36,10 @@
 - **Resilience & Maintenance:** Coordinated DB+Profile asset backup, pre-migration snapshots, staged restore verification, local admin Factory Reset.
 - **Low-Impact / Gaming Mode:** Normal / Low Impact / Auto; Option B configured game/heavy app list; Low-Impact lightweight model substitution.
 - **Two-Tier Verification:** Scoped CI matrix (always-running `ci-gate`) + 14-group Golden PC V1 Acceptance Gate.
+- **Advanced Local LLM Sampling Pipeline:** Min-P sampling (`min_p: 0.05`), repetition penalty (`repeat_penalty: 1.15`), and explicit persona stop sequences in llama.cpp runner to prevent degenerative repetition loops on small models.
+- **Stream Degeneracy Circuit Breaker:** Real-time sliding-window repetition detector in FastAPI SSE stream that auto-truncates runaway loops before reaching the UI.
+- **Sentence-Chunked Streaming (M4 Voice Readiness):** Token stream punctuation buffering (`.`, `!`, `?`, `\n`) for low-latency (<400ms) local Text-to-Speech (TTS) audio streaming.
+- **UI Sampling & Power Presets:** One-click presets in Settings (Roleplay / Expressive, Precise / Knowledge, Eco / Low VRAM).
 - **Self-Contained Windows Installer (PC-HOST-006):** Consumer distribution bundling private Python environment, dependencies, Flutter Desktop, and native inference binaries; deferred packaging with OPEN DESIGN format and toolchain.
 
 ### 2.2 PC Later (Post-V1 Approved Backlog)
