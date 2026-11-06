@@ -83,6 +83,11 @@ M2_ROUTE_DART_METHODS: Dict[Tuple[str, str], Tuple[str, str]] = {
     ("POST", "/api/v1/auth/session/exchange"): ("establishProfileSession", "'auth/session/exchange'"),
     ("GET", "/api/v1/auth/session/me"): ("getOwnSession", "'auth/session/me'"),
     ("POST", "/api/v1/auth/session/revoke"): ("revokeProfileSession", "'auth/session/revoke'"),
+    ("DELETE", "/api/v1/profiles/{profile_id}"): ("deleteProfile", "'profiles/$profileId'"),
+    ("GET", "/api/v1/profiles/deleted"): ("listDeletedProfiles", "'profiles/deleted'"),
+    ("POST", "/api/v1/profiles/{profile_id}/restore"): ("restoreProfile", "'profiles/$profileId/restore'"),
+    ("POST", "/api/v1/profiles/{profile_id}/purge"): ("purgeProfile", "'profiles/$profileId/purge'"),
+    ("POST", "/api/v1/system/maintenance/purge-profiles"): ("runPurgeMaintenance", "/api/v1/system/maintenance/purge-profiles"),
 }
 
 # Character foundation routes delivered in M3 Character Foundation (PC-CHAR-001, PC-CHAR-005).
@@ -156,6 +161,7 @@ SCHEMA_TO_DART_CLASS: Dict[str, Tuple[str, str]] = {
     "ProfileMetadata": ("profile_dto.dart", "ProfileMetadata"),
     "ProfileCreateRequest": ("profile_dto.dart", "ProfileCreateRequest"),
     "ProfileUpdateRequest": ("profile_dto.dart", "ProfileUpdateRequest"),
+    "PurgeMaintenanceResult": ("profile_dto.dart", "PurgeMaintenanceResult"),
 }
 
 

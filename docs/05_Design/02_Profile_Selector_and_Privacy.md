@@ -44,17 +44,18 @@ When adding or editing a profile:
 
 ## 4. Profile Privacy & Deletion Lifecycle UX
 
-### 4.1 Deletion Confirmation & 7-Day Soft-Delete Warning
+### 4.1 Deletion Confirmation & 30-Day Soft-Delete Warning
 - To prevent accidental data destruction, selecting "Delete Profile" triggers a high-severity dialog:
-  - Clearly explains that all memories, conversation threads, tasks, and persona customizations will enter a **7-day soft-delete holding state**.
+  - Clearly explains that all memories, conversation threads, tasks, and persona customizations will enter a **30-day soft-delete holding state** (`purge_after = deleted_at + 30 days`).
+  - Active profile sessions are immediately revoked, stopping background tasks and access.
   - Highlights that shared model weights in `LIBRARY_ROOT` remain untouched.
-  - Requires the user to type the profile name to confirm deletion.
+  - Requires the user to type the profile name to confirm deletion before moving the profile to Recently Deleted.
 
-### 4.2 Recovery Banner & Admin Restoration
-- If a profile is in the 7-day soft-delete state:
-  - The Profile Management settings screen displays a **"Recently Deleted Profiles"** tab with a countdown timer (e.g., *"Expires in 5 days, 14 hours"*).
-  - An explicit **"Restore Profile"** button allows the local host administrator to instantly reactivate the profile.
-  - An explicit **"Permanently Purge Now"** button allows immediate hard deletion with a second confirmation.
+### 4.2 Recovery & Admin Restoration
+- If a profile is in the 30-day soft-delete state:
+  - The Profile Management card in Settings displays a **"Recently Deleted"** section with a countdown badge (e.g., *"30 days remaining"*).
+  - An explicit **"Restore"** button allows the local host administrator to reactivate the profile and return it to active selection, while preserving prior user-initiated child content deletions.
+  - An explicit **"Permanently Delete"** button allows immediate physical-first hard purge with typed profile name confirmation.
 
 ---
 

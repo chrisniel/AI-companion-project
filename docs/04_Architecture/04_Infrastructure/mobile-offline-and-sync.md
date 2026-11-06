@@ -201,12 +201,12 @@ The architecture explicitly resolves all mandatory failure scenarios via typed o
   6. Mobile transitions to an un-enrolled setup state.
 
 ### Case 6: Bound Profile is soft-deleted while Device is offline
-- **Mechanism:** PC Admin initiates Profile soft-delete (entering the 7-day recovery window). Mobile reconnects.
-- **Resolution:** Host returns a typed `PROFILE_INACTIVE` outcome. Mobile does NOT execute destructive local erasure. Instead, Mobile enters a **quarantined/disabled mode**: UI displays "Profile Inactive / Soft-Deleted", local mutations are paused, and access is locked. If PC Admin restores the Profile within 7 days, subsequent authentication succeeds and normal sync resumes.
+- **Mechanism:** PC Admin initiates Profile soft-delete (entering the 30-day recovery window). Mobile reconnects.
+- **Resolution:** Host returns a typed `PROFILE_INACTIVE` outcome (or rejects requests with 401 fail-closed). Mobile does NOT execute destructive local erasure. Instead, Mobile enters a **quarantined/disabled mode**: UI displays "Profile Inactive / Soft-Deleted", local mutations are paused, and access is locked. If PC Admin restores the Profile within 30 days, subsequent authentication succeeds and normal sync resumes.
 
 ### Case 7: Bound Profile reaches hard purge while Device is offline
-- **Mechanism:** The 7-day recovery window expires and the Host permanently purges the Profile. Mobile reconnects.
-- **Resolution:** Host returns a typed `PROFILE_PURGED` outcome. Mobile treats this as permanent destruction: all local replicated Profile records, caches, and pending mutations are permanently deleted. The device resets to fresh enrollment.
+- **Mechanism:** The 30-day recovery window expires and the Host permanently purges the Profile (or PC Admin explicitly purges it). Mobile reconnects.
+- **Resolution:** Host returns a typed `PROFILE_PURGED` outcome. Mobile treats this as permanent destruction: all local replicated Profile records, caches, and pending mutations are permanently deleted, and server sync anchors are removed while existing client tombstones remain preserved. The device resets to fresh enrollment.
 
 ### Case 8: Mobile app is reinstalled and loses local synchronization metadata
 - **Mechanism:** User uninstalls and reinstalls the app. Local database, secure keystore entries, and outbox are wiped by the OS.
@@ -334,7 +334,7 @@ Authorization revocation and data erasure are strictly distinct architectural ev
 |                      | Reject mutations        | PRESERVE 3rd-party user API keys |
 +-----------------------------------------------------------------------------------+
 | PROFILE_INACTIVE     | Disable profile access  | Quarantine local replica;        |
-| (7-day recovery)     | Reject mutations        | Lock UI; preserve for recovery   |
+| (30-day recovery)    | Reject mutations        | Lock UI; preserve for recovery   |
 +-----------------------------------------------------------------------------------+
 | PROFILE_PURGED       | Destroy profile data    | Permanent Local Data Erasure;    |
 | (Permanent)          | Reject authentication   | Full client reset                |

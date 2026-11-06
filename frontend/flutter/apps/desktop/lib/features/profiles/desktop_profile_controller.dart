@@ -15,6 +15,7 @@ class DesktopProfileController extends ChangeNotifier {
 
   List<Map<String, dynamic>> profiles = [];
   List<Map<String, dynamic>> requests = [];
+  List<Map<String, dynamic>> deletedProfiles = [];
   String? selectedProfileId;
   String? activeProfileId;
   String? error;
@@ -112,6 +113,11 @@ class DesktopProfileController extends ChangeNotifier {
       // Catalog refresh occurs next (must not block already-restored valid session if it fails)
       profiles = await chat.client.listProfiles();
       requests = await chat.client.pendingBrowserRequests();
+      try {
+        deletedProfiles = await chat.client.listDeletedProfiles();
+      } catch (e) {
+        debugPrint('DesktopProfileController.refresh deletedProfiles failed: ');
+      }
 
       if (explicitlyLocked) {
         if (persistedProfileId != null && profiles.any((p) => p['id'] == persistedProfileId)) {
@@ -368,12 +374,143 @@ class DesktopProfileController extends ChangeNotifier {
     try {
       await chat.client.approveBrowserRequest(requestId, activeProfileId!);
       requests = await chat.client.pendingBrowserRequests();
+      try {
+        deletedProfiles = await chat.client.listDeletedProfiles();
+      } catch (e) {
+        debugPrint('DesktopProfileController.refresh deletedProfiles failed: ');
+      }
     } catch (_) {
       error =
           'Approval failed or request expired. Refresh requests and review again.';
     } finally {
       busy = false;
       _notify();
+    }
+  }
+
+  Future<ProfileMetadata?> deleteProfile(String profileId) async {
+    if (busy) return null;
+    busy = true;
+    error = null;
+    _notify();
+    try {
+      final wasActive = activeProfileId == profileId;
+      final deleted = await chat.client.deleteProfile(profileId);
+      profiles = await chat.client.listProfiles();
+      try {
+        deletedProfiles = await chat.client.listDeletedProfiles();
+      } catch (_) {}
+
+      if (wasActive) {
+        activeProfileId = null;
+        await chat.invalidateProfileSession(clearStoredToken: true);
+        await clientSettings?.writeSelectedProfileId(null);
+        await clientSettings?.writeSelectedProfileSessionExpiry(null);
+
+        final defaultProfile = profiles.cast<Map<String, dynamic>?>().firstWhere(
+              (p) =>
+                  p?['is_default'] == true &&
+                  p?['status'] == 'active' &&
+                  p?['pin_protected'] != true,
+              orElse: () => null,
+            );
+        if (defaultProfile != null) {
+          busy = false;
+          await switchToProfile(defaultProfile['id'] as String);
+        } else {
+          selectedProfileId = profiles.isNotEmpty ? profiles.first['id'] as String : null;
+        }
+      } else if (selectedProfileId == profileId) {
+        selectedProfileId = profiles.isNotEmpty ? profiles.first['id'] as String : null;
+      }
+      return deleted;
+    } catch (e) {
+      debugPrint('DesktopProfileController.deleteProfile failed: ');
+      if (e is CompanionApiException && e.statusCode == 400) {
+        error = e.message;
+      } else if (e is CompanionApiException && e.statusCode == 404) {
+        error = 'Profile not found.';
+      } else {
+        error = 'Failed to delete Profile. Ensure the local runtime is reachable.';
+      }
+      return null;
+    } finally {
+      busy = false;
+      _notify();
+    }
+  }
+
+  Future<ProfileMetadata?> restoreProfile(String profileId) async {
+    if (busy) return null;
+    busy = true;
+    error = null;
+    _notify();
+    try {
+      final restored = await chat.client.restoreProfile(profileId);
+      profiles = await chat.client.listProfiles();
+      try {
+        deletedProfiles = await chat.client.listDeletedProfiles();
+      } catch (_) {}
+      selectedProfileId = restored.id;
+      return restored;
+    } catch (e) {
+      debugPrint('DesktopProfileController.restoreProfile failed: ');
+      if (e is CompanionApiException && e.statusCode == 404) {
+        error = 'Profile not found or recovery window expired.';
+      } else if (e is CompanionApiException && e.statusCode == 409) {
+        error = 'A Profile with this name already exists. Rename or remove the conflicting Profile.';
+      } else {
+        error = 'Failed to restore Profile.';
+      }
+      return null;
+    } finally {
+      busy = false;
+      _notify();
+    }
+  }
+
+  Future<bool> purgeProfileImmediately(String profileId) async {
+    if (busy) return false;
+    busy = true;
+    error = null;
+    _notify();
+    try {
+      await chat.client.purgeProfile(profileId);
+      profiles = await chat.client.listProfiles();
+      try {
+        deletedProfiles = await chat.client.listDeletedProfiles();
+      } catch (_) {}
+      if (selectedProfileId == profileId) {
+        selectedProfileId = profiles.isNotEmpty ? profiles.first['id'] as String : null;
+      }
+      return true;
+    } catch (e) {
+      debugPrint('DesktopProfileController.purgeProfileImmediately failed: ');
+      if (e is CompanionApiException && e.statusCode == 404) {
+        error = 'Profile not found.';
+      } else {
+        error = 'Failed to permanently purge Profile.';
+      }
+      return false;
+    } finally {
+      busy = false;
+      _notify();
+    }
+  }
+
+  static String formatRemainingRecovery(dynamic purgeAfterVal) {
+    if (purgeAfterVal == null) return '30 days remaining';
+    try {
+      final purgeAfter = DateTime.parse(purgeAfterVal.toString()).toUtc();
+      final remaining = purgeAfter.difference(DateTime.now().toUtc());
+      if (remaining.isNegative) return 'Expiring soon';
+      final days = (remaining.inHours / 24).ceil();
+      if (days >= 1) return '$days days remaining';
+      final hours = remaining.inHours;
+      if (hours >= 1) return '$hours hours remaining';
+      return '< 1 hour remaining';
+    } catch (_) {
+      return '30 days remaining';
     }
   }
 

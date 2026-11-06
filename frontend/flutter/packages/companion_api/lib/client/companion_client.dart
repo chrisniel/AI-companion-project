@@ -156,6 +156,50 @@ class CompanionClient {
     return ProfileMetadata.fromJson(Map<String, dynamic>.from(json as Map));
   }
 
+  Future<ProfileMetadata> deleteProfile(String profileId) async {
+    final dynamic json = await _sessionRequest(
+      'profiles/$profileId',
+      admin: true,
+      method: 'DELETE',
+    );
+    return ProfileMetadata.fromJson(Map<String, dynamic>.from(json as Map));
+  }
+
+  Future<List<Map<String, dynamic>>> listDeletedProfiles() async =>
+      (await _sessionRequest('profiles/deleted', admin: true) as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+  Future<ProfileMetadata> restoreProfile(String profileId) async {
+    final dynamic json = await _sessionRequest(
+      'profiles/$profileId/restore',
+      admin: true,
+      post: true,
+    );
+    return ProfileMetadata.fromJson(Map<String, dynamic>.from(json as Map));
+  }
+
+  Future<Map<String, dynamic>> purgeProfile(String profileId) async {
+    final dynamic json = await _sessionRequest(
+      'profiles/$profileId/purge',
+      admin: true,
+      post: true,
+    );
+    return Map<String, dynamic>.from(json as Map);
+  }
+
+  Future<PurgeMaintenanceResult> runPurgeMaintenance({
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
+    final uri = baseUri.replace(path: '\/api/v1/system/maintenance/purge-profiles');
+    final response = await _adminRequest('POST', uri, timeout: timeout);
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return PurgeMaintenanceResult.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
   Future<List<Map<String, dynamic>>> pendingBrowserRequests() async =>
       (await _sessionRequest('auth/bootstrap/requests', admin: true) as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
 

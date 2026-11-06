@@ -102,10 +102,10 @@
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-CONTRACT-005`**: Satellite Device Lifecycle Outcomes Protocol
-  - *Scope:* Implement typed response outcomes for device authorization lifecycle: `DEVICE_REVOKED`, `PROFILE_INACTIVE` (7-day recovery), `PROFILE_PURGED`, and `CREDENTIAL_EXPIRED`.
+  - *Scope:* Implement typed response outcomes for device authorization lifecycle: `DEVICE_REVOKED`, `PROFILE_INACTIVE` (30-day recovery), `PROFILE_PURGED`, and `CREDENTIAL_EXPIRED`.
   - *Responsibility:* Host Runtime (PC Backend)
   - *Architectural Owner:* [`mobile-offline-and-sync.md`](../../04_Architecture/04_Infrastructure/mobile-offline-and-sync.md) §7, [`MOBILE_SYSTEM_BASELINE.md`](../../04_Architecture/MOBILE_SYSTEM_BASELINE.md) §4.3
-  - *Principal Dependencies:* `PC-IDENTITY-003`, `PC-IDENTITY-005`
+  - *Principal Dependencies:* `PC-IDENTITY-003`, `PC-IDENTITY-005` (Batch D Recoverable Profile Deletion & Safe Purge)
   - *Implementation State:* `APPROVED TARGET / NOT STARTED`
 
 - **`MOB-CONTRACT-006`**: Client-Generated Conversation Identity & Batch Turn Import Endpoint

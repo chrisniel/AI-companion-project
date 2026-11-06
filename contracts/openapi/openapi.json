@@ -1892,6 +1892,56 @@
         }
       }
     },
+    "/api/v1/system/maintenance/purge-profiles": {
+      "post": {
+        "tags": [
+          "System Status"
+        ],
+        "summary": "Trigger Profile Purge Maintenance",
+        "description": "Trigger an immediate maintenance purge of expired and interrupted Profiles (Host Admin only).",
+        "operationId": "system_purge_profiles_api_v1_system_maintenance_purge_profiles_post",
+        "parameters": [
+          {
+            "name": "x-host-admin-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Host-Admin-Secret"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurgeMaintenanceResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/verify": {
       "post": {
         "tags": [
@@ -2295,6 +2345,59 @@
         }
       }
     },
+    "/api/v1/profiles/deleted": {
+      "get": {
+        "tags": [
+          "Profiles"
+        ],
+        "summary": "Profile Deleted Catalog",
+        "operationId": "profile_deleted_catalog_api_v1_profiles_deleted_get",
+        "parameters": [
+          {
+            "name": "x-host-admin-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Host-Admin-Secret"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProfileMetadata"
+                  },
+                  "title": "Response Profile Deleted Catalog Api V1 Profiles Deleted Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/profiles/{profile_id}": {
       "patch": {
         "tags": [
@@ -2362,6 +2465,62 @@
           }
         }
       },
+      "delete": {
+        "tags": [
+          "Profiles"
+        ],
+        "summary": "Profile Delete",
+        "operationId": "profile_delete_api_v1_profiles__profile_id__delete",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          },
+          {
+            "name": "x-host-admin-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Host-Admin-Secret"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileMetadata"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "get": {
         "tags": [
           "Profiles"
@@ -2387,6 +2546,120 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProfileMetadata"
                 }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profiles/{profile_id}/restore": {
+      "post": {
+        "tags": [
+          "Profiles"
+        ],
+        "summary": "Profile Restore",
+        "operationId": "profile_restore_api_v1_profiles__profile_id__restore_post",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          },
+          {
+            "name": "x-host-admin-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Host-Admin-Secret"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileMetadata"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profiles/{profile_id}/purge": {
+      "post": {
+        "tags": [
+          "Profiles"
+        ],
+        "summary": "Profile Purge",
+        "operationId": "profile_purge_api_v1_profiles__profile_id__purge_post",
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Id"
+            }
+          },
+          {
+            "name": "x-host-admin-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Host-Admin-Secret"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -5262,6 +5535,35 @@
           "pin_protected": {
             "type": "boolean",
             "title": "Pin Protected"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          },
+          "purge_after": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purge After"
           }
         },
         "type": "object",
@@ -5289,6 +5591,29 @@
           "name"
         ],
         "title": "ProfileUpdateRequest"
+      },
+      "PurgeMaintenanceResult": {
+        "properties": {
+          "purged_profile_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Purged Profile Ids",
+            "default": []
+          },
+          "failed_profile_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Failed Profile Ids",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "PurgeMaintenanceResult",
+        "description": "Result summary for manual and periodic Profile purge maintenance sweeps."
       },
       "ReasoningMode": {
         "type": "string",
@@ -5321,6 +5646,35 @@
           "pin_protected": {
             "type": "boolean",
             "title": "Pin Protected"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "title": "Is Deleted",
+            "default": false
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          },
+          "purge_after": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purge After"
           },
           "expires_at": {
             "type": "string",

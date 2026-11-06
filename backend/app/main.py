@@ -1,3 +1,4 @@
+import asyncio
 import re
 import time
 import uuid
@@ -251,7 +252,30 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Pairing credential initialized using selected local configuration.")
     logger.info("==================================================================")
 
+    # Step 4: Maintenance startup sweep & background periodic purge worker
+    periodic_task = None
+    try:
+        from app.db.session import _session_factory
+        if _session_factory is not None:
+            from app.services.profile_purge_service import ProfilePurgeService, run_periodic_profile_purge
+            async with _session_factory() as session:
+                service = ProfilePurgeService(session)
+                sweep_res = await service.execute_maintenance_purge()
+                if sweep_res.purged_profile_ids:
+                    logger.info("Startup Profile purge maintenance: purged %d profiles", len(sweep_res.purged_profile_ids))
+            interval = getattr(settings, "PROFILE_PURGE_INTERVAL_SECONDS", 3600)
+            periodic_task = asyncio.create_task(run_periodic_profile_purge(_session_factory, interval_seconds=interval))
+    except Exception as exc:
+        logger.warning(f"Error initializing profile purge maintenance: {exc}")
+
     yield
+
+    if periodic_task is not None:
+        periodic_task.cancel()
+        try:
+            await periodic_task
+        except asyncio.CancelledError:
+            pass
 
     logger.info("Shutting down Local AI Runtime, draining LLM and disposing database...")
     try:

@@ -8,6 +8,9 @@ class ProfileMetadata {
   final bool isDefault;
   final String status;
   final bool pinProtected;
+  final bool isDeleted;
+  final String? deletedAt;
+  final String? purgeAfter;
 
   const ProfileMetadata({
     required this.id,
@@ -15,6 +18,9 @@ class ProfileMetadata {
     required this.isDefault,
     required this.status,
     required this.pinProtected,
+    this.isDeleted = false,
+    this.deletedAt,
+    this.purgeAfter,
   });
 
   factory ProfileMetadata.fromJson(Map<String, dynamic> json) {
@@ -24,6 +30,9 @@ class ProfileMetadata {
       isDefault: json['is_default'] as bool,
       status: json['status'] as String,
       pinProtected: json['pin_protected'] as bool,
+      isDeleted: json['is_deleted'] as bool? ?? false,
+      deletedAt: json['deleted_at'] as String?,
+      purgeAfter: json['purge_after'] as String?,
     );
   }
 
@@ -33,6 +42,9 @@ class ProfileMetadata {
         'is_default': isDefault,
         'status': status,
         'pin_protected': pinProtected,
+        'is_deleted': isDeleted,
+        'deleted_at': deletedAt,
+        'purge_after': purgeAfter,
       };
 
   @override
@@ -44,14 +56,26 @@ class ProfileMetadata {
           name == other.name &&
           isDefault == other.isDefault &&
           status == other.status &&
-          pinProtected == other.pinProtected;
+          pinProtected == other.pinProtected &&
+          isDeleted == other.isDeleted &&
+          deletedAt == other.deletedAt &&
+          purgeAfter == other.purgeAfter;
 
   @override
-  int get hashCode => Object.hash(id, name, isDefault, status, pinProtected);
+  int get hashCode => Object.hash(
+        id,
+        name,
+        isDefault,
+        status,
+        pinProtected,
+        isDeleted,
+        deletedAt,
+        purgeAfter,
+      );
 
   @override
   String toString() =>
-      'ProfileMetadata(id: $id, name: $name, isDefault: $isDefault, status: $status, pinProtected: $pinProtected)';
+      'ProfileMetadata(id: , name: , isDefault: , status: , pinProtected: , isDeleted: , deletedAt: , purgeAfter: )';
 }
 
 /// DTO for creating a new Profile.
@@ -78,7 +102,7 @@ class ProfileCreateRequest {
   int get hashCode => name.hashCode;
 
   @override
-  String toString() => 'ProfileCreateRequest(name: $name)';
+  String toString() => 'ProfileCreateRequest(name: )';
 }
 
 /// DTO for updating an existing Profile's display name.
@@ -105,5 +129,61 @@ class ProfileUpdateRequest {
   int get hashCode => name.hashCode;
 
   @override
-  String toString() => 'ProfileUpdateRequest(name: $name)';
+  String toString() => 'ProfileUpdateRequest(name: )';
+}
+
+/// Result summary for manual and periodic Profile purge maintenance sweeps.
+@immutable
+class PurgeMaintenanceResult {
+  final List<String> purgedProfileIds;
+  final List<String> failedProfileIds;
+
+  const PurgeMaintenanceResult({
+    this.purgedProfileIds = const [],
+    this.failedProfileIds = const [],
+  });
+
+  factory PurgeMaintenanceResult.fromJson(Map<String, dynamic> json) {
+    return PurgeMaintenanceResult(
+      purgedProfileIds: (json['purged_profile_ids'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          const [],
+      failedProfileIds: (json['failed_profile_ids'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          const [],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'purged_profile_ids': purgedProfileIds,
+        'failed_profile_ids': failedProfileIds,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PurgeMaintenanceResult &&
+          runtimeType == other.runtimeType &&
+          _listEquals(purgedProfileIds, other.purgedProfileIds) &&
+          _listEquals(failedProfileIds, other.failedProfileIds);
+
+  @override
+  int get hashCode => Object.hash(
+        Object.hashAll(purgedProfileIds),
+        Object.hashAll(failedProfileIds),
+      );
+
+  @override
+  String toString() =>
+      'PurgeMaintenanceResult(purgedProfileIds: , failedProfileIds: )';
+}
+
+bool _listEquals(List<String> a, List<String> b) {
+  if (a.length != b.length) return false;
+  for (int i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
 }
