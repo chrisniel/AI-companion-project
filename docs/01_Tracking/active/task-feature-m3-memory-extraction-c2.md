@@ -5,7 +5,8 @@
 - **Delivery Level:** Level B — Planned Autonomous (Core Feature Implementation under Approved Architecture D7/ADR-0018)
 - **Work Breakdown Structure IDs:** `PC-MEM-002`
 - **Implementation Plan:** [`docs/02_Planning/01_Plans/plan-m3-memory-extraction-c2.md`](../../02_Planning/01_Plans/plan-m3-memory-extraction-c2.md)
-- **Status:** **PHASE 2 IN PROGRESS (AUTONOMOUS IMPLEMENTATION & VERIFICATION)**
+- **Walkthrough:** [`docs/03_Walkthroughs/walkthrough-m3-batch-c2-memory-extraction.md`](../../03_Walkthroughs/walkthrough-m3-batch-c2-memory-extraction.md)
+- **Status:** **PHASE 3 COMPLETE / READY FOR PHASE 4 COMBINED REVIEW & MERGE**
 
 ---
 
@@ -34,47 +35,48 @@
 
 ---
 
-## Phase 2: Autonomous Implementation & Verification (IN PROGRESS)
+## Phase 2: Autonomous Implementation & Verification (COMPLETED)
 
-- [ ] **Step 1 — Settings & Skip Gate (TDD):**
-  - [ ] Create `backend/tests/test_memory_extraction_skip_gate.py`.
-  - [ ] Add extraction configuration settings in `backend/app/core/config.py`.
-  - [ ] Implement `should_skip_extraction` and `is_explicit_intent` in `backend/app/services/memory/extractor.py`.
-  - [ ] Verify skip gate tests pass cleanly.
-- [ ] **Step 2 — Extraction Prompt, Parser & Candidate Schema (TDD):**
-  - [ ] Create `backend/tests/test_memory_extraction_prompt.py`.
-  - [ ] Implement `MemoryCandidate` schema, prompt template, LLM generation, JSON parser, secret sanitizer, and model ready pre-flight in `extractor.py`.
-  - [ ] Verify prompt and parser tests pass cleanly.
-- [ ] **Step 3 — Slot Reconciler Engine (TDD):**
-  - [ ] Create `backend/tests/test_memory_reconciliation.py`.
-  - [ ] Implement `reconcile_candidate` in `backend/app/services/memory/reconciler.py` with `DUPLICATE`, `NEW`, `MERGE`, `UPDATE`, `CONFLICT` slots.
-  - [ ] Enforce character scoping normalization and auto-save threshold.
-  - [ ] Verify reconciliation tests pass cleanly.
-- [ ] **Step 4 — Background Post-Stream Wiring & Concurrency Lock:**
-  - [ ] Create `backend/tests/test_memory_extraction_pipeline.py`.
-  - [ ] Wire background extraction into `backend/app/services/assistant/orchestrator.py` after `[DONE]`.
-  - [ ] Implement session isolation (`get_session_factory()`), rollback protection, and per-profile single-flight lock.
-  - [ ] Verify pipeline integration tests pass cleanly.
-- [ ] **Step 5 — Full Regression & Parity Checks:**
-  - [ ] Run backend test suite: `pytest backend/tests`.
-  - [ ] Run Dart contract parity: `python scripts/check_dart_openapi_parity.py`.
-  - [ ] Verify 0 regressions across existing chat and memory tests.
+- [x] **Step 1 — Settings & Skip Gate (TDD):**
+  - [x] Create `backend/tests/test_memory_extraction_skip_gate.py`.
+  - [x] Add extraction configuration settings in `backend/app/core/config.py`.
+  - [x] Implement `should_skip_extraction` and `is_explicit_intent` in `backend/app/services/memory/extractor.py`.
+  - [x] Verify skip gate tests pass cleanly (7/7 passed).
+- [x] **Step 2 — Extraction Prompt, Parser & Candidate Schema (TDD):**
+  - [x] Create `backend/tests/test_memory_extraction_prompt.py`.
+  - [x] Implement `MemoryCandidate` schema, prompt template, LLM generation, JSON parser, secret sanitizer, and model ready pre-flight in `extractor.py`.
+  - [x] Verify prompt and parser tests pass cleanly (7/7 passed).
+- [x] **Step 3 — Slot Reconciler Engine (TDD):**
+  - [x] Create `backend/tests/test_memory_reconciliation.py`.
+  - [x] Implement `reconcile_candidate` in `backend/app/services/memory/reconciler.py` with `DUPLICATE`, `NEW`, `MERGE`, `UPDATE`, `CONFLICT` slots.
+  - [x] Enforce character scoping normalization and auto-save threshold.
+  - [x] Verify reconciliation tests pass cleanly (8/8 passed).
+- [x] **Step 4 — Background Post-Stream Wiring & Concurrency Lock:**
+  - [x] Create `backend/tests/test_memory_extraction_pipeline.py`.
+  - [x] Wire background extraction into `backend/app/services/assistant/orchestrator.py` after `[DONE]`.
+  - [x] Implement session isolation (`get_session_factory()`), rollback protection, and per-profile single-flight lock.
+  - [x] Verify pipeline integration tests pass cleanly (5/5 passed).
+- [x] **Step 5 — Full Regression & Parity Checks:**
+  - [x] Run backend test suite: `pytest backend/tests` (755/755 passed in 270.55s).
+  - [x] Run Dart contract parity: `python scripts/check_dart_openapi_parity.py` (32/32 schemas, 42/26 routes).
+  - [x] Verify 0 regressions across existing chat and memory tests.
 
 ---
 
-## Phase 3: Documentation, Closure & Draft PR (PENDING PHASE 2)
+## Phase 3: Documentation, Closure & Draft PR (COMPLETED)
 
-- [ ] Update canonical domain documentation (`memory-and-personalization.md`, `task.md`, `DELIVERY_INDEX.md`).
-- [ ] Add unreleased entry to `CHANGELOG.md`.
-- [ ] Archive active branch execution tracker to `docs/01_Tracking/archive/task-feature-m3-memory-extraction-c2.md`.
-- [ ] Stage and commit all Phase 2–3 deliverables using Conventional Commits.
-- [ ] Push commits to remote branch `origin/feature/m3-memory-extraction-c2`.
-- [ ] Open Draft Pull Request against `develop`.
+- [x] Update canonical domain documentation: [`docs/04_Architecture/01_Domains/memory-and-personalization.md`](../../04_Architecture/01_Domains/memory-and-personalization.md) (§3.3 implemented baseline).
+- [x] Add unreleased entry to [`CHANGELOG.md`](../../../CHANGELOG.md).
+- [x] Author comprehensive delivery walkthrough: [`docs/03_Walkthroughs/walkthrough-m3-batch-c2-memory-extraction.md`](../../03_Walkthroughs/walkthrough-m3-batch-c2-memory-extraction.md).
+- [x] Reconcile active branch execution tracker and archive to [`docs/01_Tracking/archive/task-feature-m3-memory-extraction-c2.md`](../archive/task-feature-m3-memory-extraction-c2.md).
+- [x] Stage and commit all Phase 2–3 deliverables using Conventional Commits.
+- [x] Push commits to remote branch `origin/feature/m3-memory-extraction-c2`.
+- [x] Open Draft Pull Request against `develop`.
 - [ ] Monitor GitHub Actions CI until passing.
 
 ---
 
-## Phase 4: Combined Independent Review & Human Merge (PENDING PHASE 3)
+## Phase 4: Combined Independent Review & Human Merge (PENDING CI & REVIEW)
 
 - [ ] Present diff, verification evidence, and CI status to Human Owner.
 - [ ] Human Owner performs squash merge into `develop`.

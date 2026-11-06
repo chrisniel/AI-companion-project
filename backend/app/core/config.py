@@ -177,6 +177,13 @@ class Settings(BaseSettings):
     MEMORY_CORE_FACTS_LIMIT: int = 5
     MEMORY_CORE_FACTS_BUDGET_TOKENS: int = 100
 
+    # M3 Batch C2: Selective Automatic Memory Extraction
+    MEMORY_EXTRACTION_ENABLED: bool = False
+    MEMORY_EXTRACTION_CONFIDENCE_THRESHOLD: float = 0.8
+    MEMORY_EXTRACTION_MAX_CANDIDATES: int = 3
+    MEMORY_EXTRACTION_TEMPERATURE: float = 0.1
+    MEMORY_EXTRACTION_MAX_TOKENS: int = 256
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:

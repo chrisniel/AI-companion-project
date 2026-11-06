@@ -35,7 +35,13 @@ from app.services.attachment_service import (
     validate_attachment_ids_syntax,
 )
 from app.services.llm.manager import get_llm_provider
-from app.services.memory.retriever import search_relevant_memories
+from app.services.memory.extractor import (
+    extract_memory_candidates,
+    is_explicit_intent,
+    should_skip_extraction,
+)
+from app.services.memory.reconciler import reconcile_candidate
+from app.services.memory.retriever import get_core_memories, search_relevant_memories
 from app.services.model_registry import find_model_registry_entry
 
 logger = logging.getLogger("app.services.assistant.orchestrator")
@@ -358,6 +364,85 @@ async def _persist_terminal_assistant_status(
         return False
 
 
+_profile_extraction_locks: dict[str, asyncio.Lock] = {}
+
+
+def _get_profile_extraction_lock(profile_id: str) -> asyncio.Lock:
+    """Retrieve or create a concurrency lock for background profile memory extraction."""
+    if profile_id not in _profile_extraction_locks:
+        _profile_extraction_locks[profile_id] = asyncio.Lock()
+    return _profile_extraction_locks[profile_id]
+
+
+async def _run_post_turn_memory_extraction(
+    profile_id: str,
+    user_text: str,
+    assistant_text: str,
+    source_message_id: str,
+    character_instance_id: Optional[str] = None,
+    engine: Any = None,
+) -> None:
+    """Asynchronously extract and reconcile candidate memories in an isolated DB session.
+
+    Guarantees:
+    - Zero impact on SSE streaming response latency.
+    - Single-flight serialization per profile (lock protected).
+    - Isolated DB session with rollback on failure.
+    - Shielded from caller: failures logged and never raise or crash caller.
+    """
+    if not settings.MEMORY_EXTRACTION_ENABLED:
+        return
+
+    if should_skip_extraction(user_text):
+        return
+
+    lock = _get_profile_extraction_lock(profile_id)
+    async with lock:
+        provider = get_llm_provider()
+        if not provider or not provider.is_loaded():
+            logger.debug("Memory extraction skipped: provider is not loaded.")
+            return
+
+        try:
+            candidates = await extract_memory_candidates(
+                user_text=user_text,
+                assistant_text=assistant_text,
+                provider=provider,
+            )
+            if not candidates:
+                return
+
+            if engine is not None:
+                session_factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+            else:
+                session_factory = get_session_factory()
+
+            async with session_factory() as extraction_db:
+                try:
+                    is_explicit = is_explicit_intent(user_text)
+                    for candidate in candidates:
+                        await reconcile_candidate(
+                            db=extraction_db,
+                            profile_id=profile_id,
+                            candidate=candidate,
+                            source_message_id=source_message_id,
+                            active_character_instance_id=character_instance_id,
+                            source_type="user_explicit" if is_explicit else "extracted",
+                            user_verified=True if is_explicit else False,
+                        )
+                    await extraction_db.commit()
+                    logger.info(
+                        f"Extracted and reconciled {len(candidates)} memories for profile {profile_id}"
+                    )
+                except Exception as db_exc:
+                    await extraction_db.rollback()
+                    logger.warning(
+                        f"Database error during memory extraction for profile {profile_id}: {db_exc}"
+                    )
+        except Exception as exc:
+            logger.warning(f"Error during memory extraction background task: {exc}")
+
+
 async def orchestrate_chat_stream(
     db: AsyncSession,
     conversation_id: str,
@@ -539,6 +624,19 @@ async def orchestrate_chat_stream(
         yield f"data: {done_data}\n\n"
         await _require_prepared_turn(db, profile_session, conversation_id, prepared_turn)
         yield "data: [DONE]\n\n"
+
+        # M3 Batch C2: Post-stream selective memory extraction (0ms streaming overhead)
+        if settings.MEMORY_EXTRACTION_ENABLED and asst_msg.status == "completed":
+            asyncio.create_task(
+                _run_post_turn_memory_extraction(
+                    profile_id=profile_session.profile_id,
+                    user_text=user_text,
+                    assistant_text=full_response_text,
+                    source_message_id=prepared_turn.user_message.id,
+                    character_instance_id=char_inst_id,
+                    engine=db.bind,
+                )
+            )
 
     except (asyncio.CancelledError, GeneratorExit):
         logger.info(f"Generation cancelled for conversation {conversation_id}")
