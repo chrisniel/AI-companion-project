@@ -222,7 +222,8 @@ erDiagram
 - In `PATCH`, use `payload.model_dump(exclude_unset=True)` so that explicitly passing `{"expires_at": null}` clears the expiration.
 
 ### 7. [MODIFY] `backend/app/services/profile_purge_service.py`
-- Add expired soft-deleted memory purge to maintenance loop: `DELETE FROM memories WHERE deleted_at IS NOT NULL AND deleted_at < :cutoff_date`.
+- Reorder relational hard purge in Phase E: execute `delete(Memory)` **before** `delete(CharacterInstance)` to satisfy foreign key integrity under `ondelete="RESTRICT"` on `memories.character_instance_id`.
+- Add expired soft-deleted memory purge to periodic maintenance loop: `DELETE FROM memories WHERE deleted_at IS NOT NULL AND deleted_at < :cutoff_date`.
 
 ### 8. [ADD] `frontend/flutter/packages/companion_api/lib/dto/memory_dto.dart`
 - Dart data transfer objects: `MemoryDto`, `MemoryCreateDto`, `MemoryUpdateDto`, `MemoryListDto`.
