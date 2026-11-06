@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added — M3: Selective Automatic Memory Extraction & Deterministic Slot Reconciliation (PC-MEM-002)
+
+- **Disclosure-Aware Skip Gate & Explicit Bypass (`PC-MEM-002`)**:
+  - Implemented heuristic skip gate in `app.services.memory.extractor` that skips trivial conversational acknowledgments, standalone emojis, code blocks, and queries lacking self-disclosures.
+  - Protected first-person disclosure markers (`I am`, `I'm`, `my`, `I have`, `I like`, `I love`, `I hate`, `I live`, `I work`, etc.), ensuring short personal disclosures (e.g. *"I'm vegetarian"*, *"I have celiac"*) are never skipped.
+  - Implemented explicit intent filter matching commands (e.g., `^remember\b`, `^please remember\b`, `^don't forget\b`) that bypass heuristic filtering and set `confidence = 1.0`, `source_type = "user_explicit"`, and `user_verified = True`.
+- **Structured Candidate Extraction & Model Readiness (`PC-MEM-002`)**:
+  - Implemented `extract_memory_candidates` prompting the active LLM provider with a rigid JSON array schema with `content`, `category`, `scope`, `is_core`, `expires_at`, and `confidence`.
+  - Added secret sanitization regex filters discarding candidate facts containing passwords, API keys, tokens, or credit cards.
+  - Implemented model readiness pre-flight check (`provider.is_loaded()`) to avoid background model loading during standby.
+- **Deterministic Slot Reconciliation Engine (`PC-MEM-002`)**:
+  - Implemented `reconcile_candidate` in `app.services.memory.reconciler` applying 5 deterministic slot transitions:
+    - `DUPLICATE`: Touches existing memory (`last_verified_at = now()`) without creating redundant database rows.
+    - `NEW`: Inserts a new memory row with `source_type = "extracted"` and `user_verified = False` (or explicit intent flags).
+    - `MERGE`: Enriches existing memory with additive details, setting `last_verified_at = now()`.
+    - `UPDATE`: Updates existing memory when candidate indicates change or attribute supersession.
+    - `CONFLICT`: Preserves existing memory intact and inserts candidate with `source_type = "conflict"` and `user_verified = False`, eliminating silent overwriting and preparing records for C3 UI resolution and conversational clarification.
+  - Enforced scoping normalization coercing `scope = "character"` to `"profile"` if conversation has no active character instance, ensuring compliance with SQLite check constraint `ck_memories_character_scope`.
+- **Zero-Latency Background Orchestration (`PC-MEM-002`)**:
+  - Wired post-stream background extraction in `app.services.assistant.orchestrator` executing strictly after the assistant turn message is committed and `data: [DONE]\n\n` is delivered (0ms streaming overhead).
+  - Isolated background database transactions using `get_session_factory()` with explicit `db.rollback()` on exception.
+  - Added per-profile async lock serialization (`_profile_extraction_locks`) preventing local LLM GPU lease contention.
+  - Configured dormant default `settings.MEMORY_EXTRACTION_ENABLED = False` until C3 UI ships.
+
 ### Added — M3: Memory Foundation, Scoping & Context Assembly (PC-MEM-001, PC-MEM-003, PC-MEM-005, PC-API-001)
 
 - **Database Migration 010 & Scoping Columns (`PC-MEM-001`)**:

@@ -145,10 +145,17 @@ Verified in `app.services.memory.retriever` and `app.services.assistant.orchestr
 - **Client Parity:** Flutter Dart client package `companion_api` provides typed models (`MemoryCreate`, `MemoryUpdate`, `MemoryOut`, `MemoryListOut`) and client methods (`listMemories`, `getMemory`, `createMemory`, `updateMemory`, `deleteMemory`) matching OpenAPI contracts.
 - **Relational Purge Ordering:** `ProfilePurgeService` permanently purges `Memory` rows before `CharacterInstance` rows to satisfy the `RESTRICT` foreign key constraint without integrity failures.
 
-### 3.3 Explicitly Unimplemented Capabilities
+### 3.3 Implemented Automatic Memory Extraction & Slot Reconciliation (M3 Batch C2 Baseline)
 
-- **Selective Automatic Memory Extraction:** `NOT IMPLEMENTED / DEFERRED TO BATCH C2` (all current memories originate via manual API calls or manual user input; LLM-based turn extraction pipeline is scoped to Batch C2).
-- **Memory Reconciliation Engine:** `NOT IMPLEMENTED / DEFERRED TO BATCH C2` (slot-based merge/conflict resolution is scoped to Batch C2).
+Verified in `app.services.memory.extractor`, `app.services.memory.reconciler`, and `app.services.assistant.orchestrator`:
+- **Disclosure-Aware Skip Gate:** Post-turn background heuristic filters out trivial turn fillers, emojis, code snippets, and general questions without first-person disclosures, avoiding unnecessary inference load while protecting personal statements (e.g., *"I'm vegetarian"*, *"I like tea"*) and explicit memory commands.
+- **Structured LLM Extraction:** Prompts active LLM provider with rigid JSON array schema, enforcing secrets sanitization, token budgeting (256 tokens), low temperature (0.1), and model readiness pre-flight (`provider.is_loaded()`).
+- **Deterministic Slot Reconciliation:** Classifies extracted candidates against existing profile memories via token overlap and sentiment analysis into 5 deterministic slots: `DUPLICATE` (touch `last_verified_at = now()`), `NEW` (persist new record), `MERGE` (enrich existing content), `UPDATE` (supersede existing fact), and `CONFLICT` (retain existing fact intact, insert candidate with `source_type="conflict"` and `user_verified=False` for user resolution).
+- **Post-Stream Background Orchestration:** Extraction executes in an isolated `AsyncSession` spawned via `get_session_factory()` with explicit rollback on error, guarded by a per-profile async lock (`_profile_extraction_locks`) to eliminate concurrent inference contention, with 0ms impact on user SSE streaming latency.
+- **Opt-In Configuration:** Governed by `settings.MEMORY_EXTRACTION_ENABLED = False`, remaining dormant until explicitly enabled in test fixtures or until the Desktop UI ships in Batch C3.
+
+### 3.4 Explicitly Unimplemented Capabilities
+
 - **Desktop Memory Control Center UI:** `NOT IMPLEMENTED / DEFERRED TO BATCH C3` (PC-CLIENT-009 Flutter UI is scoped to Batch C3).
 - **Semantic / Vector Memory:** `NOT IMPLEMENTED / NOT STARTED` (post-PC-V1 enhancement).
 
