@@ -42,22 +42,36 @@ Revamp companion memory and knowledge systems from a single flat list of facts i
 - **Context Budget Manager (`D-SHARED-AI-01`):** Maintain strict token budgeting for prompt context across 2B-parameter models (`qwen3-vl-2b-instruct`).
 
 ### 1.3 Concrete Deliverables
-1. **Alembic Migration 013 (`trigger_keywords` Column)**: Adds `trigger_keywords` JSON text column to `memories`, with trigger and FTS5 preservation, and fail-closed downgrade protection.
-2. **Deterministic Short-Term TTL Decay & Fixed Knowledge Protection**:
+1. **Alembic Migration 013 (`trigger_keywords` & `recall_count` Columns)**: Adds `trigger_keywords` JSON text column and `recall_count` (`Integer, default=0, nullable=False`) column to `memories`, with trigger and FTS5 preservation, and fail-closed downgrade protection.
+2. **Deterministic Short-Term TTL Decay, Explicit Intent Boost & Fixed Knowledge Protection**:
    - Situational context (`category == "context"` or temporal indicators like *today, tonight, currently*) receives a deterministic 72-hour `expires_at` default from Python upon creation.
+   - Explicit `"Remember that..."` intent (`is_explicit_intent(user_text)`) immediately marks extracted candidates `user_verified = True` and boosts their importance floor to `>= 1.5`.
    - `reconciler.py` enforces that auto-extracted candidates cannot merge into or overwrite manual or pinned core knowledge (`is_core = True` or `source_type == "manual"`).
    - Re-mentioning an active short-term context item across sessions either refreshes its TTL or promotes it to long-term memory (`expires_at = None`).
-3. **Keyword-Triggered Lorebook / Knowledge Engine (`PC-MEM-006`)**:
-   - Dormant knowledge entries with defined trigger words (e.g. `["project-x", "tokyo", "sarah"]`) activate only when matching terms appear in recent conversation turns, saving active context window budget.
+3. **Stem/Prefix-Aware Keyword-Triggered Lorebook & Recall Tracking (`PC-MEM-006`)**:
+   - Dormant knowledge entries with defined trigger words (e.g. `["project-x", "tokyo", "sarah"]`) activate when matching terms or stem prefixes (e.g. `"cook"` matching `"cooking"`, `"sarah"` matching `"Sarah's"`) appear in recent conversation turns, saving active context window budget.
+   - FTS5 retrieval uses prefix matching (`token*`) and increments `recall_count` whenever a memory is retrieved into active prompt context, factoring recall frequency into retrieval priority.
 4. **Structured Multi-Section XML Prompt Context**:
    - Replaces monolithic `<retrieved_memories>` with distinct, semantically partitioned XML tags: `<user_core_profile>`, `<triggered_knowledge_lore>`, `<episodic_and_long_term_memories>`, and `<short_term_context>`.
 5. **3-Tab Desktop Memory Control Center UI (`PC-CLIENT-009`)**:
-   - Segmented navigation: 📌 **Knowledge Base & Profile**, 🧠 **Long-Term Memories**, and ⏳ **Short-Term Context** (with remaining TTL badge and 1-click *Promote* button).
+   - Segmented navigation: 📌 **Knowledge Base & Profile**, 🧠 **Long-Term Memories**, and ⏳ **Short-Term Context** (with remaining TTL badge, `Recalled N×` badge, and 1-click *Promote* button).
    - Keyword tag chip editor in `MemoryEditDialog`.
 
 ### 1.4 Explicit Out-of-Scope
 - Standalone vector embedding database / dense semantic search (reserved for PC Later per Decision D7).
 - Modifying character personality presets, emotion engine, or mood step decay (frozen in Batch D).
+
+### 1.5 Documented Follow-On ("Big Benefits" Scheduled for Next Batch M3-F)
+Per canonical architecture decisions **`D-SHARED-AI-01`**, **`D-SHARED-AI-02`**, and **`D-SHARED-AI-03`** in [`assistant-and-conversations.md`](../../04_Architecture/01_Domains/assistant-and-conversations.md) and [`BACKLOG.md`](../00_Master/BACKLOG.md), the following high-impact memory & context capabilities are documented for the immediately following implementation batch:
+1. **Pre-Limit Context Compaction & Rolling Conversation Summaries (`D-SHARED-AI-01` & `D-SHARED-AI-02`):**
+   - Automatic compaction before reaching the configured/effective safe context limit, plus explicit user-triggered `Compact context` action.
+   - Persists rolling episode digests (`conversation_summaries`) as **derived conversation records** (preserving raw SQLite transcript authority and provenance without polluting canonical `D7` `memories`) and injects `<recent_episode_digest>` under `D-SHARED-AI-03`.
+2. **Emotion-Weighted Memory Importance (`D11` + `D7` Synergy):**
+   - Boosts initial `importance` (`+0.3`) when facts are extracted during high-intensity emotional turns (`user_distress` / `empathetic` or `user_gratitude` / `cheerful`).
+3. **Temporal Fact Evolution ("Used to..." Historical Supersession Trail):**
+   - Preserves prior values and transition timestamps when `reconciler.py` performs an `UPDATE` on a mutable fact (e.g., *"Lives in Cebu (previously Manila until Nov 2026)"*).
+4. **Chat Bubble "Quick Capture to Memory / Knowledge" Action:**
+   - 1-click bookmark action on chat bubbles in `ChatScreen` to save any turn directly into Knowledge Base or Episodic Memory.
 
 ---
 
@@ -104,26 +118,32 @@ Revamp companion memory and knowledge systems from a single flat list of facts i
 
 ### [ADD] `backend/migrations/versions/013_memory_knowledge_and_triggers.py`
 - Add `trigger_keywords` nullable `Text` column to `memories` table (JSON array of strings, e.g. `["project-x", "tokyo"]`).
-- Recreate FTS5 triggers safely ensuring `trigger_keywords` does not break index synchronization.
-- Implement fail-closed `downgrade()` refusing rollback if any non-null `trigger_keywords` exist.
+- Add `recall_count` non-nullable `Integer` column (`server_default="0"`) to `memories` table.
+- Recreate FTS5 triggers safely ensuring `trigger_keywords` and `recall_count` do not break index synchronization.
+- Implement fail-closed `downgrade()` refusing rollback if any non-null `trigger_keywords` or non-zero `recall_count` exist.
 
 ### [MODIFY] `backend/app/models/memory.py`
 - Add `trigger_keywords: Mapped[Optional[str]] = mapped_column(Text, nullable=True)`.
+- Add `recall_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)`.
 - Helper properties: `is_fixed_knowledge`, `is_short_term`, `is_long_term`.
 
 ### [MODIFY] `backend/app/schemas/memory.py`
 - Add `trigger_keywords: Optional[List[str]] = None` to `MemoryCreate`, `MemoryUpdate`, `MemoryOut`.
+- Add `recall_count: int = 0` to `MemoryOut`.
 - Add `tier: Optional[Literal["knowledge", "long_term", "short_term"]] = None` query filter parameter to `MemoryList`.
 
 ### [MODIFY] `backend/app/services/memory/extractor.py` & `reconciler.py`
-- In `extractor.py`: When a candidate has `category == "context"` or contains temporal phrases (*today, tonight, this week, right now*), deterministically set `expires_at = now + 72 hours` in Python if null.
+- In `extractor.py`:
+  - When a candidate has `category == "context"` or contains temporal phrases (*today, tonight, this week, right now*), deterministically set `expires_at = now + 72 hours` in Python if null.
+  - When `is_explicit_intent(user_text)` is true (e.g., *"Remember that..."*, *"Don't forget..."*), immediately set `user_verified = True` and enforce an importance floor `importance = max(candidate.importance, 1.5)`.
 - In `reconciler.py`:
   - Protect Fixed Knowledge: If existing memory has `is_core = True` or `source_type == "manual"`, candidate CANNOT execute `UPDATE` or `MERGE`. It must either be `DUPLICATE` (touch `last_verified_at`), `NEW`, or `CONFLICT`.
   - Consolidation: When a candidate matches an existing Short-Term memory in a later session ($> 12$ hours later), extend TTL by 72 hours or promote to Long-Term (`expires_at = None`) if verified twice.
 
 ### [MODIFY] `backend/app/services/memory/retriever.py` & `orchestrator.py`
 - In `retriever.py`:
-  - Implement `get_triggered_knowledge(profile_id, user_message_tokens)`: Queries memories with `trigger_keywords IS NOT NULL`, scanning token overlap against recent user message.
+  - Implement `get_triggered_knowledge(profile_id, user_message_tokens)`: Queries memories with `trigger_keywords IS NOT NULL`, scanning token overlap with stem/prefix matching (so `"cook"` matches `"cooking"` and `"sarah"` matches `"Sarah's"`).
+  - Use FTS5 prefix queries (`token*`) for long-term retrieval and increment `recall_count` on retrieved memories, adding a bounded recall-frequency boost (`0.05 * min(recall_count, 10)`) to ranking.
   - Separate queries for Core Profile, Triggered Knowledge, Relevant Long-Term, and Active Short-Term.
 - In `orchestrator.py`:
   - Format distinct XML prompt sections:
@@ -134,7 +154,7 @@ Revamp companion memory and knowledge systems from a single flat list of facts i
 
 ### [MODIFY] `contracts/openapi/openapi.json` & `companion_api`
 - Regenerate OpenAPI specification.
-- Update `memory_dto.dart` with `triggerKeywords` and parity assertions.
+- Update `memory_dto.dart` with `triggerKeywords`, `recallCount`, and parity assertions.
 
 ### [MODIFY] `frontend/flutter/apps/desktop/lib/screens/memory_screen.dart` & `features/memory/`
 - Add 3-segment top workspace selector:
@@ -142,7 +162,7 @@ Revamp companion memory and knowledge systems from a single flat list of facts i
   2. 🧠 **Long-Term Memories** (Durable preferences and character-scoped memories).
   3. ⏳ **Short-Term Context** (Situational context with `⏳ 48h remaining` badge and 1-click **Promote** button).
 - In `memory_edit_dialog.dart`: Add `Trigger Keywords` comma-separated tag input.
-- In `memory_item_card.dart`: Display trigger keyword pills and 1-click "Promote to Long-Term" action for short-term cards.
+- In `memory_item_card.dart`: Display trigger keyword pills, `Recalled N×` badge when `recallCount > 0`, and 1-click "Promote to Long-Term" action for short-term cards.
 
 ---
 
