@@ -149,6 +149,10 @@ Alembic Migration 009 (`backend/migrations/versions/009_character_foundation.py`
   8. `trg_conversations_character_immutable_update`: Enforces permanent immutability of `(profile_id, character_id, character_instance_id)` on conversations.
 - **Pre-Migration Safety & Dynamic Head Discovery:** Pre-migration SQLite WAL backup hook in `backend/app/core/storage.py::prepare_database_schema()` dynamically discovers the Alembic head and creates a verified pre-migration backup before upgrading existing databases.
 - **Loss-Aware Fail-Closed Downgrade:** Migration 009 `downgrade()` deterministically compares substantive attributes of `character_templates` against `SEED_TEMPLATES` (excluding incidental timestamp metadata) and checks for user-created instances or active selections; refuses downgrade with `RuntimeError` on modified templates, active selections, or existing instances, preserving all user data and schema intact.
+- **Alembic Migration 012 (`012_character_mood_and_emotion.py`):** Extends `character_instances` with persistent bounded mood columns (`current_mood` String(32), `mood_intensity` Integer, `mood_updated_at` DateTime(timezone=True)) and the SQLite CHECK constraint `ck_character_instances_mood_invariants` enforcing:
+  - Legacy placeholders (`is_legacy_placeholder = 1`) must have `current_mood IS NULL AND mood_intensity IS NULL AND mood_updated_at IS NULL`.
+  - Standard instances (`is_legacy_placeholder = 0`) must have `current_mood IN ('calm', 'cheerful', 'playful', 'empathetic', 'thoughtful', 'curious') AND mood_intensity >= 0 AND mood_intensity <= 100 AND mood_updated_at IS NOT NULL`.
+  - Explicitly cycles all five dependent SQLite triggers and partial index `uq_character_instances_profile_legacy_id` across `batch_alter_table`, verifies `PRAGMA foreign_key_check`, and enforces loss-aware fail-closed `downgrade()` if any standard instance has non-baseline mood state (`current_mood != 'calm'` or `mood_intensity != 50`).
 
 ### 3.2 Models, Schemas & Personality Presets
 
@@ -190,7 +194,18 @@ The backend personality prompt modulation engine (`backend/app/services/characte
 - **Dynamic Interaction Synthesis:** Supports four prioritized dynamics (selected by ordered evaluation): Guarded Banter / Tsundere, Shy Devotion / Dandere, Stoic Care / Kuudere, and Analytical Precision.
 - **Strict Budget Bounding:** The modulation block is constrained to a maximum of 700 characters (`MODULATION_BLOCK_MAX_CHARS = 700`). The mathematically conservative maximum candidate length is $\le 695$ characters $\le 700$ characters, and sampled tests across dynamic combinations confirm all emitted blocks stay within budget. If the character budget is ever exceeded, defense-in-depth drops the optional dynamic line first while preserving the Autonomy Guard.
 - **Turn Persona Resolution & Context Budgeting:** In `resolve_turn_persona_prompt()`, user-supplied `system_prompt` is bounded to 1,200 characters and `lore` to 1,600 characters on word boundaries before XML-delimiter escaping. The 700-character modulation-block cap is deterministic, while complete system-prompt token cost depends on field content, delimiter escaping, and the runtime's heuristic estimator. The 4,096-token context window regression represents a verified test configuration rather than a universal upper-bound guarantee.
+- **Natural Companion Conversational Grounding & Mood Injection:** Inside `<character_persona>`, `resolve_turn_persona_prompt()` injects the companion's current rebalanced mood (`Current Mood: {label} ({intensity}/100) — {directive}`) alongside compact `Conversational Grounding` instructions that prohibit asterisk stage directions (`*smiles*`), theatrical self-interruptions (`"Wait... nope!"`), and repetitive catchphrases while keeping total persona overhead within the 4,096-token context window budget.
+- **DRY Anti-Repetition Sampling & Stream Circuit Breaker:** Standalone `llama.cpp` payloads in `backend/app/services/llm/llama_cpp.py` include native DRY sampling parameters (`dry_multiplier: 0.8`, `dry_base: 1.75`, `dry_allowed_length: 2`, `dry_penalty_last_n: 128`), and `AssistantOrchestrator._guard_repetitive_stream()` in `backend/app/services/assistant/orchestrator.py` wraps live SSE token streams with a sliding-window 4-gram circuit breaker that cleanly halts degenerate repetition loops ($\ge 3$ occurrences of the same 4-word phrase).
 - **Stylistic Non-Claim:** Personality modulation guides stylistic phrasing, tone, and delivery preferences; it **does not guarantee a particular LLM response** or override model safety training.
+
+### 3.4.1 Persistent Bounded Emotion & Mood Engine & Turn Appraisal (`PC-CHAR-003`, `PC-CHAR-004`)
+
+Implemented in `backend/app/services/emotion/mood_engine.py` and `backend/app/services/emotion/appraisal.py`:
+- **Six Bounded Mood Categories:** `calm` (`😌`), `cheerful` (`😊`), `playful` (`😄`), `empathetic` (`🥺`), `thoughtful` (`🤔`), and `curious` (`✨`), paired with integer intensity `0..100` (equilibrium `50`).
+- **Trait-Derived Baseline Mood (`resolve_baseline_mood()`):** Derives a companion's resting mood from its 8-trait vector (`playful` when `teasing >= 70 and expressiveness >= 60`; `cheerful` when `warmth >= 70 and guardedness < 50`; `thoughtful` when `formality >= 70 and directness >= 60`; otherwise `calm`).
+- **Deterministic Step Rebalancing (`compute_decayed_mood()`):** Across elapsed wall-clock time and Runtime/Windows restarts, `mood_intensity` rebalances toward equilibrium `50` at a deterministic step rate of `5` integer points per full `30` minutes (`1,800` seconds) elapsed. Once at equilibrium `50` for $\ge 4$ hours (`8` steps), `current_mood` settles back to the instance's trait-derived baseline mood.
+- **Pre-Generation Turn Appraisal (`appraise_user_turn()`):** Zero-LLM-latency (`<1ms`) deterministic lexical/heuristic appraisal executed in `AssistantOrchestrator` prior to prompt assembly. Evaluates user turns into typed `EmotionEvent` categories (`user_distress` $\to$ `empathetic`, `user_playful` $\to$ `playful` or `cheerful` when `teasing < 30`, `user_gratitude` $\to$ `cheerful`, `user_analytical` $\to$ `thoughtful`, `user_curiosity` $\to$ `curious`, or `neutral_turn`), scales intensity deltas by personality traits, clamps within `[15, 95]`, and persists updated mood state for standard non-archived instances.
+- **Strict Mood Isolation:** Neutral Assistant fallback (`character_instance_id = None`) and legacy placeholders (`is_legacy_placeholder = True`) never track or emit mood state (`None`). Mood state influences only `<character_persona>` social presentation and UI mood badges; it never alters tool policy, permissions, memories, or scheduling.
 
 ### 3.5 Immersive Windows Desktop Character Studio (`PC-CLIENT-007`)
 
@@ -199,7 +214,7 @@ The desktop client provides a full-viewport, game-style character authoring expe
 - **Thematic Backdrops (`StudioBackdropLayer`):** Full-content-area thematic imagery (Cozy Studio, Cyber Lounge, Twilight Balcony, Minimalist Vault) with procedural gradient fallback (`StudioAtmospherePainter`) and dark contrast scrims maintaining verified contrast across light and dark themes (automated checks: text $\ge 4.5:1$, controls $\ge 3.0:1$).
 - **Translucent Docks (`SoftGlassPanel`):**
   - *Left Dock (`StudioLibraryPanel`):* Category browsing of Starter Templates, System Fallback (Neutral Assistant), and My Characters (active and archived). Selecting a starter template begins creation of a fresh draft from that template. Auto-collapses to a drawer on screens $< 920\text{px}$.
-  - *Right Dock (`StudioInspectorPanel`):* Archetype identity, 8 continuous trait sliders with 5-band indicators, single Custom chip + 8 presets total (7 named styles + custom), per-trait reset to template baseline, inline Illustrative Style Summary presenter (`CharacterStagePresenter.buildIllustrativeStyleSummary`), and scrollable large-text lore & system prompt editors.
+  - *Right Dock (`StudioInspectorPanel`):* Archetype identity, live Mood + Emoji Glyph badge (`studio-inspector-mood-badge`, e.g., `😊 Cheerful · 70/100`) for saved non-legacy instances, 8 continuous trait sliders with 5-band indicators, single Custom chip + 8 presets total (7 named styles + custom), per-trait reset to template baseline, inline Illustrative Style Summary presenter (`CharacterStagePresenter.buildIllustrativeStyleSummary`), and scrollable large-text lore & system prompt editors.
 - **Sequential Save & Activate (`saveAndActivateDraft()`):** When local slider edits are unsaved (`isDirty == true`), the primary action dynamically renders **"Save & Activate"**. Clicking it sequentially submits `PATCH /api/v1/characters/instances/{id}`, confirms clean persistence (`isDirty == false`), and only then calls `PUT /api/v1/characters/active`. If the save fails, activation is aborted and local draft edits are preserved. Clean drafts display **"Set Active for Profile"**.
 - **Concurrency & Concurrency Protection:**
   - *Single-Flight Locking:* Each mutation is guarded by an incrementing `_activeMutationToken`. Asynchronous completions with mismatched tokens are dropped.
@@ -210,9 +225,10 @@ The desktop client provides a full-viewport, game-style character authoring expe
 ### 3.6 Desktop Chat Character Identity Visibility & Turn Binding
 
 - **Permanent Conversation Binding:** In accordance with D11, conversations permanently bind to `character_id` and `character_instance_id`.
-- **Dual-Indicator Header Architecture:**
-  - `This Conversation: [Name]` renders as an accent pill showing the conversation's bound Character.
+- **Dual-Indicator Header Architecture & Live Mood Badge:**
+  - `This Conversation: [Name]` renders as an accent pill showing the conversation's bound Character, accompanied by a live Mood + Emoji Glyph pill (`chat-header-mood-badge`, e.g., `😊 Cheerful`) for standard Character Instances (`getConversationCharacterMoodBadge()`).
   - `New Conversations: [Name]` renders as a secondary subtle pill **only when the authenticated Profile's active Character differs from the current conversation's bound Character**, clearly communicating that new chats will use the new Character without retroactively reassigning existing threads.
+  - Upon SSE turn completion (`SseDoneEvent`), `DesktopChatController._refreshCharacterInstanceMood()` refreshes the bound Character Instance from `GET /api/v1/characters/instances/{instance_id}` so the Chat header and welcome stage mood pills (`chat-welcome-mood-badge`) reflect turn appraisal updates immediately.
 - **Session History Badges:** `ConversationHistoryDrawer` renders a compact character name badge on each conversation session card.
 - **Welcome Stage Status:** The initial empty chat screen displays a centered card identifying the conversation's bound Character and the Profile's active Character.
 - **Corrected Empty-Conversation Reuse:** `DesktopChatController.createNewConversation()` reuses an untouched empty draft conversation only if its bound Character matches the intended Character. If the intended Character differs, the client creates a new conversation with the intended binding, preserving the original empty conversation's identity, title, and Character relationship without silent rebinding.
@@ -245,9 +261,9 @@ The following capabilities are approved under Decision D11 and scheduled for sub
    - Deferred to PC Later. The stage architecture isolates visual asset loading through presenter contracts, preserving a clean boundary for future 3D/rigged viewports.
 3. **Dynamic Personality Drift Engine (PC V1 Follow-on):**
    - Dynamic trait weighting, conversational drift within bounded limits, and real-time interaction feedback.
-4. **Persistent Mood Dynamics (PC V1 — `PC-CHAR-003`):**
-   - Persistent simulated companion mood across restarts with time decay back to baseline.
-5. **Relationship Continuity State (PC Later — `PC-CHAR-004`):**
+4. **Persistent Mood Dynamics & Turn Appraisal (PC V1 — `PC-CHAR-003`, `PC-CHAR-004`):**
+   - Implemented and verified in M3 Batch D (Alembic Migration 012, persistent simulated companion mood across restarts with deterministic step rebalancing to trait-derived baseline, `<1ms` lexical/heuristic pre-generation turn appraisal, natural companion grounding, DRY sampling + stream repetition circuit breaker, and Desktop Chat & Studio live mood badges).
+5. **Relationship Continuity State (PC Later):**
    - Long-term interaction familiarity depth and opt-in relationship progression.
 6. **Decoupled Voice Synthesis Integration (PC V1 — `PC-VOICE-003`):**
    - TTS acoustic profiles and prosody mapping bound to character definitions.

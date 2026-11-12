@@ -703,5 +703,77 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('Test Archetype'), findsOneWidget);
     });
+
+    testWidgets('StudioInspectorPanel displays live mood badge and DesktopChatController resolves conversation mood', (tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      (mockServerState['instances'] as List).add({
+        'id': 'inst-cheerful-1',
+        'profile_id': 'profile-1',
+        'is_legacy_placeholder': false,
+        'legacy_character_id': null,
+        'template_id': 'warm-companion',
+        'source_template_version': 1,
+        'name': 'Aria Mood',
+        'summary': 'Bright companion',
+        'lore': '',
+        'system_prompt': 'Be warm',
+        'avatar_asset': 'avatar_warm',
+        'preset_id': 'warm_companion',
+        'traits': {
+          'warmth': 85, 'teasing': 35, 'guardedness': 25, 'directness': 60,
+          'expressiveness': 70, 'affection': 80, 'formality': 30, 'verbosity': 60,
+        },
+        'current_mood': 'cheerful',
+        'mood_intensity': 65,
+        'mood_updated_at': '2026-11-12T12:00:00Z',
+        'status': 'active',
+        'created_at': '2026-01-01',
+        'updated_at': '2026-01-01',
+      });
+
+      final client = CompanionClient(
+        sessionStore: InMemoryCredentialStore('psk_test'),
+        httpClient: MockClient(handleStudioRequest),
+      );
+      final chat = DesktopChatController(client: client);
+      await chat.checkConnection();
+
+      final studio = DesktopStudioController(chat: chat);
+      await studio.loadStudioCatalog();
+      studio.selectInstance(studio.instances.first);
+
+      // Verify DesktopChatController mood badge resolution
+      chat.cacheCharacterInstance(studio.instances.first);
+      const conv = ConversationOut(
+        id: 'conv-1',
+        title: 'Chat with Aria',
+        characterId: 'inst-cheerful-1',
+        characterInstanceId: 'inst-cheerful-1',
+        ownerId: 'profile-1',
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+        messageCount: 1,
+      );
+      expect(chat.getConversationCharacterMoodBadge(conv), '😊 Cheerful');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: StudioScreen(controller: studio),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('studio-inspector-mood-badge')), findsOneWidget);
+      expect(find.text('Mood: 😊 Cheerful (65%)'), findsOneWidget);
+
+      studio.dispose();
+      chat.dispose();
+    });
   });
 }

@@ -24,6 +24,13 @@ from app.schemas.character import (
     NeutralAssistantOut,
 )
 from app.services.assistant.orchestrator import DEFAULT_PERSONA
+from app.services.emotion import (
+    apply_emotion_transition,
+    appraise_user_turn,
+    build_mood_and_grounding_lines,
+    rebalance_mood_for_elapsed_time,
+    resolve_baseline_mood,
+)
 
 # Frozen personality preset catalog with candidate baseline trait vectors
 PRESET_REGISTRY: dict[CharacterPresetId, dict] = {
@@ -298,6 +305,22 @@ def _map_instance_traits(inst: CharacterInstance) -> Optional[CharacterTraitVect
 
 
 def _to_instance_out(inst: CharacterInstance, active_id: Optional[str] = None) -> CharacterInstanceOut:
+    traits = _map_instance_traits(inst)
+    if inst.is_legacy_placeholder:
+        current_mood = None
+        mood_intensity = None
+        mood_updated_at = None
+    else:
+        baseline = resolve_baseline_mood(traits)
+        current_mood, mood_intensity, _ = rebalance_mood_for_elapsed_time(
+            inst.current_mood,
+            inst.mood_intensity,
+            inst.mood_updated_at,
+            now_utc(),
+            baseline,
+        )
+        mood_updated_at = inst.mood_updated_at
+
     return CharacterInstanceOut(
         id=inst.id,
         profile_id=inst.profile_id,
@@ -311,7 +334,10 @@ def _to_instance_out(inst: CharacterInstance, active_id: Optional[str] = None) -
         system_prompt=inst.system_prompt,
         avatar_asset=inst.avatar_asset,
         preset_id=inst.preset_id,  # type: ignore[arg-type]
-        traits=_map_instance_traits(inst),
+        traits=traits,
+        current_mood=current_mood,
+        mood_intensity=mood_intensity,
+        mood_updated_at=mood_updated_at,
         status=inst.status,
         is_active_for_profile=(active_id is not None and inst.id == active_id),
         created_at=inst.created_at,
@@ -592,6 +618,8 @@ async def create_character_instance(
         trait_dict = payload.traits.model_dump()
 
     # 3. Create instance snapshot
+    initial_traits = CharacterTraitVector(**trait_dict)
+    initial_mood = resolve_baseline_mood(initial_traits)
     new_instance = CharacterInstance(
         id=str(uuid.uuid4()),
         profile_id=session.profile_id,
@@ -613,6 +641,9 @@ async def create_character_instance(
         affection=trait_dict["affection"],
         formality=trait_dict["formality"],
         verbosity=trait_dict["verbosity"],
+        current_mood=initial_mood,
+        mood_intensity=50,
+        mood_updated_at=now_utc(),
         status="active",
         is_deleted=False,
         deleted_at=None,
@@ -807,6 +838,57 @@ def _escape_delimiters(text: str) -> str:
     )
 
 
+async def appraise_and_update_conversation_mood(
+    db: AsyncSession,
+    session: ProfileSession,
+    conversation: Conversation,
+    user_text: str,
+) -> Optional[CharacterInstanceOut]:
+    """Appraise user turn, rebalance elapsed time, and persist bounded mood state (PC-CHAR-003, PC-CHAR-004)."""
+    session = await validate_profile_session(db, session)
+
+    if conversation.profile_id != session.profile_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+
+    if not conversation.character_instance_id or conversation.character_id in ("default", "neutral-assistant"):
+        return None
+
+    instance = await db.scalar(
+        select(CharacterInstance).where(
+            CharacterInstance.id == conversation.character_instance_id,
+            CharacterInstance.profile_id == session.profile_id,
+        )
+    )
+    if instance is None or instance.is_legacy_placeholder:
+        return None
+
+    now = now_utc()
+    traits = _map_instance_traits(instance)
+    baseline = resolve_baseline_mood(traits)
+    rebalanced_mood, rebalanced_intensity, _ = rebalance_mood_for_elapsed_time(
+        instance.current_mood,
+        instance.mood_intensity,
+        instance.mood_updated_at,
+        now,
+        baseline,
+    )
+    appraisal = appraise_user_turn(user_text)
+    next_mood, next_intensity = apply_emotion_transition(
+        rebalanced_mood,
+        rebalanced_intensity,
+        appraisal.target_mood,
+        appraisal.intensity_delta,
+        traits,
+    )
+
+    instance.current_mood = next_mood
+    instance.mood_intensity = next_intensity
+    instance.mood_updated_at = now
+    await db.commit()
+    await db.refresh(instance)
+    return _to_instance_out(instance)
+
+
 async def resolve_turn_persona_prompt(
     db: AsyncSession,
     session: ProfileSession,
@@ -847,6 +929,18 @@ async def resolve_turn_persona_prompt(
     traits = _map_instance_traits(instance)
     modulation_block = compile_personality_modulation_block(traits, instance.preset_id) if traits else ""
 
+    baseline = resolve_baseline_mood(traits)
+    effective_mood, effective_intensity, _ = rebalance_mood_for_elapsed_time(
+        instance.current_mood,
+        instance.mood_intensity,
+        instance.mood_updated_at,
+        now_utc(),
+        baseline,
+    )
+    mood_grounding_lines = "\n".join(
+        build_mood_and_grounding_lines(effective_mood, effective_intensity)
+    )
+
     persona_body = (
         f"Name: {sanitized_name}\n"
         f"Summary: {sanitized_summary}\n"
@@ -855,6 +949,8 @@ async def resolve_turn_persona_prompt(
     )
     if modulation_block:
         persona_body += f"\n\nPersonality Modulation:\n{modulation_block}"
+    if mood_grounding_lines:
+        persona_body += f"\n{mood_grounding_lines}"
 
     return (
         f"{DEFAULT_PERSONA}\n\n"

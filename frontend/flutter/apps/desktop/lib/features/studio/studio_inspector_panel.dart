@@ -139,6 +139,16 @@ class _StudioInspectorPanelState extends State<StudioInspectorPanel> {
     final ext = Theme.of(context).extension<CompanionThemeExtension>();
     final controller = widget.controller;
     final draft = controller.draft;
+    CharacterInstanceOut? selectedInstance;
+    if (draft != null && draft.instanceId != null) {
+      for (final item in controller.instances) {
+        if (item.id == draft.instanceId) {
+          selectedInstance = item;
+          break;
+        }
+      }
+    }
+    final moodBadge = selectedInstance?.moodBadgeText;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -159,6 +169,28 @@ class _StudioInspectorPanelState extends State<StudioInspectorPanel> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            if (moodBadge != null) ...[
+              Container(
+                key: const Key('studio-inspector-mood-badge'),
+                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 3.0),
+                decoration: BoxDecoration(
+                  color: (ext?.accent ?? CompanionColors.lightAccent).withValues(alpha: 0.12),
+                  borderRadius: CompanionRadius.borderFull,
+                  border: Border.all(
+                    color: (ext?.accent ?? CompanionColors.lightAccent).withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Text(
+                  'Mood: $moodBadge (${selectedInstance?.moodIntensity ?? 50}%)',
+                  style: CompanionTypography.caption.copyWith(
+                    color: ext?.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6.0),
+            ],
             if (draft != null && draft.isDirty)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 3.0),

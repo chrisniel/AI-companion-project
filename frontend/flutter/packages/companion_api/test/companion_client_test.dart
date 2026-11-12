@@ -783,6 +783,34 @@ void main() {
         );
         await expectLater(client.deleteMemory('mem-123'), completes);
       });
+
+      test('CharacterInstanceOut parses mood fields and exposes moodBadgeText', () {
+        final inst = CharacterInstanceOut.fromJson(const {
+          'id': 'inst-mood-1',
+          'profile_id': 'prof-1',
+          'name': 'Aria',
+          'summary': 'Warm friend',
+          'lore': '',
+          'system_prompt': 'Be supportive',
+          'avatar_asset': 'warm_companion_avatar',
+          'preset_id': 'warm_companion',
+          'current_mood': 'empathetic',
+          'mood_intensity': 72,
+          'mood_updated_at': '2026-11-12T12:00:00Z',
+          'status': 'active',
+          'is_active_for_profile': true,
+          'created_at': '2026-11-12T10:00:00Z',
+          'updated_at': '2026-11-12T12:00:00Z',
+        });
+
+        expect(inst.currentMood, 'empathetic');
+        expect(inst.moodIntensity, 72);
+        expect(inst.moodUpdatedAt, '2026-11-12T12:00:00Z');
+        expect(inst.moodEmoji, '🥺');
+        expect(inst.moodLabel, 'Empathetic');
+        expect(inst.moodBadgeText, '🥺 Empathetic');
+        expect(CharacterInstanceOut.fromJson(inst.toJson()), equals(inst));
+      });
     });
   });
 }

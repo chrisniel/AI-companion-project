@@ -494,6 +494,9 @@ class CharacterInstanceOut {
   final String avatarAsset;
   final String? presetId;
   final CharacterTraitVector? traits;
+  final String? currentMood;
+  final int? moodIntensity;
+  final String? moodUpdatedAt;
   final String status;
   final bool isActiveForProfile;
   final String createdAt;
@@ -513,11 +516,63 @@ class CharacterInstanceOut {
     required this.avatarAsset,
     this.presetId,
     this.traits,
+    this.currentMood,
+    this.moodIntensity,
+    this.moodUpdatedAt,
     required this.status,
     this.isActiveForProfile = false,
     required this.createdAt,
     required this.updatedAt,
   });
+
+  String? get moodEmoji {
+    switch (currentMood) {
+      case 'calm':
+        return '😌';
+      case 'cheerful':
+        return '😊';
+      case 'playful':
+        return '😜';
+      case 'thoughtful':
+        return '🤔';
+      case 'empathetic':
+        return '🥺';
+      case 'curious':
+        return '✨';
+      case 'attentive':
+        return '🎯';
+      default:
+        return null;
+    }
+  }
+
+  String? get moodLabel {
+    switch (currentMood) {
+      case 'calm':
+        return 'Calm';
+      case 'cheerful':
+        return 'Cheerful';
+      case 'playful':
+        return 'Playful';
+      case 'thoughtful':
+        return 'Thoughtful';
+      case 'empathetic':
+        return 'Empathetic';
+      case 'curious':
+        return 'Curious';
+      case 'attentive':
+        return 'Attentive';
+      default:
+        return null;
+    }
+  }
+
+  String? get moodBadgeText {
+    final emoji = moodEmoji;
+    final label = moodLabel;
+    if (emoji == null || label == null) return null;
+    return '$emoji $label';
+  }
 
   factory CharacterInstanceOut.fromJson(Map<String, dynamic> json) {
     return CharacterInstanceOut(
@@ -536,6 +591,9 @@ class CharacterInstanceOut {
       traits: json['traits'] != null
           ? CharacterTraitVector.fromJson(Map<String, dynamic>.from(json['traits'] as Map))
           : null,
+      currentMood: json['current_mood'] as String?,
+      moodIntensity: json['mood_intensity'] as int?,
+      moodUpdatedAt: json['mood_updated_at'] as String?,
       status: json['status'] as String,
       isActiveForProfile: json['is_active_for_profile'] as bool? ?? false,
       createdAt: json['created_at'] as String,
@@ -557,6 +615,9 @@ class CharacterInstanceOut {
         'avatar_asset': avatarAsset,
         if (presetId != null) 'preset_id': presetId,
         if (traits != null) 'traits': traits!.toJson(),
+        if (currentMood != null) 'current_mood': currentMood,
+        if (moodIntensity != null) 'mood_intensity': moodIntensity,
+        if (moodUpdatedAt != null) 'mood_updated_at': moodUpdatedAt,
         'status': status,
         'is_active_for_profile': isActiveForProfile,
         'created_at': createdAt,
@@ -581,6 +642,9 @@ class CharacterInstanceOut {
           avatarAsset == other.avatarAsset &&
           presetId == other.presetId &&
           traits == other.traits &&
+          currentMood == other.currentMood &&
+          moodIntensity == other.moodIntensity &&
+          moodUpdatedAt == other.moodUpdatedAt &&
           status == other.status &&
           isActiveForProfile == other.isActiveForProfile &&
           createdAt == other.createdAt &&
@@ -601,6 +665,9 @@ class CharacterInstanceOut {
         avatarAsset,
         presetId,
         traits,
+        currentMood,
+        moodIntensity,
+        moodUpdatedAt,
         status,
         isActiveForProfile,
         createdAt,

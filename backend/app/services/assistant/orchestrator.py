@@ -8,6 +8,7 @@ SSE token streaming, idempotency, and concurrency controls.
 import asyncio
 import json
 import logging
+import re
 from contextlib import aclosing, suppress
 from dataclasses import dataclass
 from typing import Any, AsyncGenerator, List, Optional, Union
@@ -210,6 +211,52 @@ async def _validate_prepared_turn(
     ))).scalars().all()
     if len(rows) != 2:
         raise HTTPException(status_code=404, detail="Turn not found")
+
+
+_WORD_RE = re.compile(r"[a-z0-9']+")
+
+
+async def _guard_repetitive_stream(
+    tokens: AsyncGenerator[str, None],
+    state: Optional[dict[str, Any]] = None,
+    *,
+    ngram_size: int = 4,
+    max_repeats: int = 3,
+) -> AsyncGenerator[str, None]:
+    """Sliding-window n-gram circuit breaker that halts runaway repetition loops."""
+    accumulated = ""
+    ngram_counts: dict[tuple[str, ...], int] = {}
+    processed_ngram_end = 0
+
+    async for token in tokens:
+        candidate_text = accumulated + token
+        words = _WORD_RE.findall(candidate_text.lower())
+        complete_words = (
+            words
+            if (candidate_text and (candidate_text[-1].isspace() or candidate_text[-1] in ".!?,;:\n\"')]}"))
+            else words[:-1]
+        )
+        cutoff = False
+        while processed_ngram_end + ngram_size <= len(complete_words):
+            gram = tuple(complete_words[processed_ngram_end : processed_ngram_end + ngram_size])
+            processed_ngram_end += 1
+            count = ngram_counts.get(gram, 0) + 1
+            ngram_counts[gram] = count
+            if count >= max_repeats:
+                cutoff = True
+                break
+
+        if cutoff:
+            if state is not None:
+                state["repetition_cutoff"] = True
+                state["finish_reason"] = "repetition_cutoff"
+            logger.warning(
+                f"Stream degeneracy circuit breaker triggered on repeated {ngram_size}-gram {gram!r}"
+            )
+            return
+
+        accumulated = candidate_text
+        yield token
 
 
 async def _authorized_tokens(db, profile_session, conversation_id, turn, tokens):
@@ -494,7 +541,10 @@ async def orchestrate_chat_stream(
         await _require_prepared_turn(db, profile_session, conversation_id, prepared_turn)
 
         from app.models.conversation import Conversation
-        from app.services.character_service import resolve_turn_persona_prompt
+        from app.services.character_service import (
+            appraise_and_update_conversation_mood,
+            resolve_turn_persona_prompt,
+        )
         from app.services.memory.retriever import get_core_memories
 
         conv = await db.scalar(
@@ -557,6 +607,9 @@ async def orchestrate_chat_stream(
 
         status_resp = await provider.get_status()
         context_capacity = status_resp.context_size or 4096
+        if conv:
+            await appraise_and_update_conversation_mood(db, profile_session, conv, user_text)
+
         if persona:
             active_persona = persona
         else:
@@ -617,25 +670,33 @@ async def orchestrate_chat_stream(
         max_tokens = min(1024, available_generation_tokens)
 
         stream = provider.generate_stream(prompt_messages, max_tokens=max_tokens, conversation_id=conversation_id)
+        guard_state: dict[str, Any] = {}
         async with aclosing(stream) as tokens:
-            async for token in _authorized_tokens(db, profile_session, conversation_id, prepared_turn, tokens):
-                full_response_text += token
-                chunk_data = json.dumps({
-                    "type": "token",
-                    "content": token,
-                    "choices": [
-                        {
-                            "delta": {"content": token},
-                            "index": 0,
-                        }
-                    ],
-                })
-                yield f"data: {chunk_data}\n\n"
+            authorized_stream = _authorized_tokens(db, profile_session, conversation_id, prepared_turn, tokens)
+            async with aclosing(_guard_repetitive_stream(authorized_stream, state=guard_state)) as guarded_tokens:
+                async for token in guarded_tokens:
+                    full_response_text += token
+                    chunk_data = json.dumps({
+                        "type": "token",
+                        "content": token,
+                        "choices": [
+                            {
+                                "delta": {"content": token},
+                                "index": 0,
+                            }
+                        ],
+                    })
+                    yield f"data: {chunk_data}\n\n"
 
         await _require_prepared_turn(db, profile_session, conversation_id, prepared_turn)
         # Update assistant placeholder upon completion
         completion_tokens = _estimate_tokens(full_response_text)
-        finish_reason = getattr(stream, "finish_reason", None) or getattr(provider, "last_finish_reason", "stop") or "stop"
+        finish_reason = (
+            guard_state.get("finish_reason")
+            or getattr(stream, "finish_reason", None)
+            or getattr(provider, "last_finish_reason", "stop")
+            or "stop"
+        )
         asst_msg.content = full_response_text
         asst_msg.status = "length" if finish_reason == "length" else "completed"
         asst_msg.prompt_tokens = prompt_tokens

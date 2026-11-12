@@ -2,7 +2,7 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- **Status:** Awaiting Approval (Phase 1 Planning Complete — Thoroughly Audited)
+- **Status:** Implemented & Verified (Phase 2 & Phase 3 Complete on `feature/m3-emotion-mood-engine-d`)
 - **Delivery Level:** Level B — Planned Autonomous (Core Architecture Feature Implementation under Approved Decisions D11/ADR-0012)
 - **Work Breakdown Structure IDs:** `PC-CHAR-003`, `PC-CHAR-004`, `PC-CHAR-002` (grounding refinement), `PC-CLIENT-006`, `PC-CLIENT-007`
 - **Scope Mode:** New Feature & Quality Polish — Persistent bounded companion mood simulation, elapsed-time decay, pre-generation turn appraisal, natural companion grounding, DRY/stream safeguards, and live desktop mood presentation.
@@ -213,13 +213,13 @@ This block is $\approx 260$ characters ($\approx 65$ tokens), keeping the total 
 ## 5. Acceptance Criteria & Verification Strategy
 
 ### Automated Repository Checks
-- [ ] Backend Migration 012 & Schema Lifecycle: `backend/.venv/Scripts/python.exe -m pytest backend/tests/test_migration_012.py backend/tests/test_schema_lifecycle.py backend/tests/test_prepare_database_schema_backup.py -v`
-- [ ] Backend Mood, Appraisal & Modulator Suite: `backend/.venv/Scripts/python.exe -m pytest backend/tests/test_mood_engine_and_appraisal.py backend/tests/test_character_personality_modulator.py backend/tests/test_character_foundation.py -v`
-- [ ] Backend Full Regression Suite: `backend/.venv/Scripts/python.exe -m pytest backend/tests`
-- [ ] OpenAPI Contract Verification: `backend/.venv/Scripts/python.exe scripts/check_openapi_contract.py --check`
-- [ ] Dart OpenAPI Parity: `backend/.venv/Scripts/python.exe scripts/check_dart_openapi_parity.py`
-- [ ] Dart API Package Tests: `dart test` (in `frontend/flutter/packages/companion_api`)
-- [ ] Flutter Desktop Tests & Analyze: `flutter analyze` and `flutter test` (in `frontend/flutter/apps/desktop`)
+- [x] Backend Migration 012 & Schema Lifecycle: `backend/.venv/Scripts/python.exe -m pytest backend/tests/test_migration_012.py backend/tests/test_schema_lifecycle.py backend/tests/test_prepare_database_schema_backup.py -v` (14 passed)
+- [x] Backend Mood, Appraisal & Modulator Suite: `backend/.venv/Scripts/python.exe -m pytest backend/tests/test_mood_engine_and_appraisal.py backend/tests/test_character_personality_modulator.py backend/tests/test_character_foundation.py -v` (34 passed)
+- [x] Backend Full Regression Suite: `backend/.venv/Scripts/python.exe -m pytest backend/tests` (779 passed)
+- [x] OpenAPI Contract Verification: `backend/.venv/Scripts/python.exe scripts/check_openapi_contract.py --check` (PASSED — 44 routes)
+- [x] Dart OpenAPI Parity: `backend/.venv/Scripts/python.exe scripts/check_dart_openapi_parity.py` (PASSED — 32/32 schemas, 42 routes)
+- [x] Dart API Package Tests: `dart test` (in `frontend/flutter/packages/companion_api` — 96 passed)
+- [x] Flutter Desktop Tests & Analyze: `flutter analyze` (No issues found) and `flutter test` (in `frontend/flutter/apps/desktop` — 350 passed)
 
 ### Manual & Host-Level Checks (Where Applicable)
 - [ ] Launch Desktop App and confirm active character conversation displays the live mood pill in the Chat header (e.g., `😌 Calm` or `😊 Cheerful`).
