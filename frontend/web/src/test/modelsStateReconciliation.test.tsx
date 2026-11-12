@@ -215,7 +215,8 @@ describe('Phase 4: Models Web UI State Reconciliation & Truthfulness', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getAllByText('Qwen3-VL-4B-Instruct').length).toBeGreaterThanOrEqual(1);
+      const card4b = document.getElementById('model-card-qwen3-vl-4b-instruct');
+      expect(card4b?.textContent).toContain('Loaded');
     });
 
     // User clicks on 2B card to select it
@@ -242,7 +243,7 @@ describe('Phase 4: Models Web UI State Reconciliation & Truthfulness', () => {
 
     // Wait a tick and verify 2B is STILL Selected
     await waitFor(() => {
-      expect(card2b?.textContent).toContain('Selected');
+      expect(document.getElementById('model-card-qwen3-vl-2b-instruct')?.textContent).toContain('Selected');
     });
   });
 
