@@ -2,57 +2,65 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- **Status:** Awaiting Approval (Phase 1 Planning Complete)
+- **Status:** Awaiting Approval (Phase 1 Planning Complete — Thoroughly Audited)
 - **Delivery Level:** Level B — Planned Autonomous (Core Architecture Feature Implementation under Approved Decisions D11/ADR-0012)
-- **Work Breakdown Structure IDs:** `PC-CHAR-003`, `PC-CHAR-004`, `PC-CLIENT-008`, `PC-LLM-002`
-- **Scope Mode:** New Feature & Quality Polish — Persistent bounded companion mood simulation, elapsed-time decay, turn appraisal, natural companion grounding, DRY/stream safeguards, and live desktop mood presentation.
+- **Work Breakdown Structure IDs:** `PC-CHAR-003`, `PC-CHAR-004`, `PC-CHAR-002` (grounding refinement), `PC-CLIENT-006`, `PC-CLIENT-007`
+- **Scope Mode:** New Feature & Quality Polish — Persistent bounded companion mood simulation, elapsed-time decay, pre-generation turn appraisal, natural companion grounding, DRY/stream safeguards, and live desktop mood presentation.
 - **Target Files:**
-  - `backend/migrations/versions/012_character_mood_and_emotion.py`
+  - `backend/migrations/versions/012_character_mood_and_emotion.py` (new)
   - `backend/app/models/character_instance.py`
   - `backend/app/schemas/character.py`
+  - `backend/app/services/emotion/__init__.py` (new)
   - `backend/app/services/emotion/mood_engine.py` (new)
   - `backend/app/services/emotion/appraisal.py` (new)
   - `backend/app/services/character_service.py`
   - `backend/app/services/assistant/orchestrator.py`
   - `backend/app/services/llm/llama_cpp.py`
-  - `frontend/flutter/packages/companion_api/lib/src/models/character_instance.dart`
-  - `frontend/flutter/apps/desktop/lib/features/chat/chat_screen.dart`
-  - `frontend/flutter/apps/desktop/lib/features/studio/studio_screen.dart`
+  - `backend/tests/test_prepare_database_schema_backup.py`
+  - `backend/tests/test_schema_lifecycle.py`
+  - `contracts/openapi/openapi.json`
+  - `frontend/flutter/packages/companion_api/lib/dto/character_dto.dart`
+  - `frontend/flutter/apps/desktop/lib/features/chat/desktop_chat_controller.dart`
+  - `frontend/flutter/apps/desktop/lib/screens/chat_screen.dart`
+  - `frontend/flutter/apps/desktop/lib/features/studio/studio_inspector_panel.dart`
   - `docs/04_Architecture/01_Domains/characters-personality-and-emotion.md`
   - `docs/01_Tracking/active/task-feature-m3-emotion-mood-engine-d.md`
 - **Branch:** `feature/m3-emotion-mood-engine-d`
 - **Active Branch Tracker:** `docs/01_Tracking/active/task-feature-m3-emotion-mood-engine-d.md`
+
+> Notice: Update this plan in place during planning. After Phase 1 approval, track execution in `docs/01_Tracking/active/task-feature-m3-emotion-mood-engine-d.md` and reopen this plan only when revising scope or architecture.
 
 ---
 
 ## 1. Request Understanding & Goals
 
 ### Primary Objective
-Deliver Milestone 3 Batch D, completing the Character and Intelligence domain by introducing:
-1. **Persistent Bounded Emotion & Mood Dynamics (`PC-CHAR-003`)**: SQLite storage of companion mood and intensity across application and Windows restarts, with time-based emotional decay toward baseline during user absence.
-2. **Turn Appraisal Engine & Typed Emotion Events (`PC-CHAR-004`)**: Zero-latency appraisal evaluating user conversational cues to shift mood states naturally, adhering strictly to D11 isolation rules (mood alters presentation/style only; never facts, tool safety, or permissions).
-3. **Natural Companion Prompt Grounding**: Fix persona overacting, eliminate unprompted `*stage directions*` and rhetorical loops, and align assistant tone to sound like a genuine companion rather than a sterile corporate bot or exaggerated caricature.
-4. **DRY Sampling & Stream Degeneracy Circuit Breaker (`PC-LLM-002`)**: Add `llama.cpp` DRY n-gram sampling parameters and an SSE stream circuit breaker that truncates runaway phrase repetition before it reaches the UI.
-5. **Live Mood Presentation (`PC-CLIENT-008`)**: Subtle mood badge with emoji glyph fallback in the Desktop Chat header and Character Studio.
+Deliver Milestone 3 Batch D, completing the Character, Personality, and Emotion track by introducing:
+1. **Persistent Bounded Emotion & Mood Dynamics (`PC-CHAR-003`)**: SQLite persistence of companion mood and intensity across application and Windows restarts, with deterministic elapsed-time rebalancing toward baseline during user absence.
+2. **Turn Appraisal Engine & Typed Emotion Events (`PC-CHAR-004`)**: Zero-latency deterministic appraisal evaluating user conversational cues prior to response generation so the companion reacts emotionally on the immediate turn while strictly obeying D11 Mood Isolation (mood alters social presentation/style only; never facts, memories, tool safety, or permissions).
+3. **Natural Companion Prompt Grounding (`PC-CHAR-002` refinement)**: Resolve the "lacking vs. overacting" persona split by adding concise conversational grounding directives inside `<character_persona>` that suppress unprompted `*stage directions*`, rhetorical self-interruption loops, and melodrama while keeping all existing security and context-budget invariants intact.
+4. **DRY Sampling & Stream Degeneracy Circuit Breaker**: Add `llama.cpp` DRY n-gram sampling parameters and a sliding-window SSE stream circuit breaker that truncates runaway phrase repetition before it reaches the UI.
+5. **Live Mood Presentation (`PC-CLIENT-006`, `PC-CLIENT-007`)**: Subtle mood badge with guaranteed emoji glyph fallback (`D-PHONE-UX-10` aligned) in the Desktop Chat header, Welcome card, and Character Studio Inspector, auto-refreshing upon turn completion.
 
 ### Relevant Canonical Requirements
 - **[`SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md)**: Decision D11 (Persona, State & Continuity Separation).
-- **[`characters-personality-and-emotion.md`](../../04_Architecture/01_Domains/characters-personality-and-emotion.md)**: §2.1.5 (Persistent Simulated Mood Dynamics), §2.3 (Emoji Fallback & Presentation Isolation), §4.4 (Persistent Mood Dynamics `PC-CHAR-003`).
+- **[`characters-personality-and-emotion.md`](../../04_Architecture/01_Domains/characters-personality-and-emotion.md)**: §2.1.5 (Persistent Simulated Mood Dynamics & Mood Isolation), §2.3 (Emoji Fallback & Presentation Isolation), §4.4 (`PC-CHAR-003`).
 - **[`ADR-0012-d11-persona-and-state-separation.md`](../../04_Architecture/decisions/ADR-0012-d11-persona-and-state-separation.md)**: Strict separation of Profile, Character Instance, Mood, and Memory.
 
 ### Concrete Deliverables
-1. **Alembic Migration 012**: Add `current_mood`, `mood_intensity`, and `mood_updated_at` to `character_instances` table with verified upgrade/downgrade safety and constraint preservation.
-2. **Mood Engine & Decay Service**: Compute elapsed-time decay back toward baseline temperament (`calm`, intensity 50) using a smooth half-life formula when hours/days have elapsed.
-3. **Turn Appraisal Engine**: Heuristic sentiment and conversational cue evaluator (gratitude, warmth, playful teasing, stress/venting, question/curiosity, return after gap) that updates mood state asynchronously after each turn.
-4. **Natural Companion Prompt Directives**: Update `resolve_turn_persona_prompt()` with strict conversational grounding directives forbidding asterisk stage directions, rhetorical self-interruption loops, and theatrical melodrama.
-5. **DRY Sampling & Stream Repetition Circuit Breaker**: Pass DRY parameters to `llama-server` and enforce a token stream buffer that halts generation if 4-word substrings repeat $\ge 3$ times.
-6. **Desktop UI Live Mood Badge**: Display companion's current mood with an emoji glyph in the Chat header and Character Studio.
-7. **Dart OpenAPI Parity & Test Suites**: Full backend and Flutter test verification for mood transitions, decay across time, prompt grounding, and UI rendering.
+1. **Alembic Migration 012**: Add `current_mood`, `mood_intensity`, and `mood_updated_at` to `character_instances` with full SQLite trigger and partial index preservation, constraint updates, and loss-aware fail-closed downgrade.
+2. **Mood Engine & Elapsed-Time Rebalancing Service**: Deterministic integer rebalancing toward baseline (`calm`, intensity `50`) based on elapsed time since `mood_updated_at`, evaluated on read and turn resolution.
+3. **Pre-Generation Turn Appraisal Engine**: Heuristic conversational cue evaluator (gratitude/warmth, playful banter/teasing, stress/sadness/comfort, curiosity/questions, return after long gap) that updates and persists mood state prior to prompt assembly.
+4. **Natural Companion Prompt Directives**: Inject concise conversational grounding and active mood state inside `<character_persona>` in `resolve_turn_persona_prompt()`, preserving all delimiter-escaping and 4,096-token context-budget invariants.
+5. **DRY Sampling & Stream Repetition Circuit Breaker**: Pass DRY parameters to `llama-server` and enforce a sliding-window token stream guard that halts generation if any 4+-word phrase repeats $\ge 3$ times consecutively or within the window.
+6. **Desktop UI Live Mood Badge & Auto-Refresh**: Display companion's current mood with emoji glyph in `ChatScreen` and `StudioInspectorPanel`, with `DesktopChatController` refreshing the cached `CharacterInstanceOut` upon turn completion.
+7. **OpenAPI & Dart SDK Parity**: Synchronize `contracts/openapi/openapi.json` and `character_dto.dart`, verified by `scripts/check_dart_openapi_parity.py`.
 
 ### Explicit Out-of-Scope
-- Complex multi-dimensional clinical psychological modeling (e.g., 3D PAD vectors) — strictly bounded to 7 discrete moods and 0–100 intensity per D11.
+- Multi-dimensional clinical affective modeling (e.g., 3D PAD vectors) — strictly bounded to 7 discrete non-clinical moods and `0..100` intensity per Decision D11.
 - Mobile AR / 3D Live2D rendering runtimes — remains scheduled for PC Later / Mobile follow-on.
-- Relationship familiarity / intimacy depth progression — formally decoupled under Decision D11 and scheduled for PC Later (`PC-CHAR-004` follow-on).
+- Relationship familiarity / intimacy depth progression — formally decoupled under Decision D11 and scheduled for PC Later.
+- Scheduling, Reminders, Alarms, and Routines (`PC-SCHED-001`..`005`, `PC-CLIENT-008`) — scheduled as the next dedicated Milestone 3 track.
 
 ---
 
@@ -60,156 +68,173 @@ Deliver Milestone 3 Batch D, completing the Character and Intelligence domain by
 
 ### Current Findings & Technical Baseline
 
-| Component | Current State | Target Enhancement |
-| :--- | :--- | :--- |
-| `character_instances` table | Migration 009 defines lore, system_prompt, preset_id, and 8 static traits (0–100). | Migration 012 adds `current_mood` (VARCHAR 32), `mood_intensity` (INT 0–100), and `mood_updated_at` (DATETIME). |
-| Mood Persistence | Mood state does not exist in the database; models have static sliders only. | Persistent mood stored per Character Instance; survives process restarts and rebalances with elapsed time. |
-| Persona Resolution | `resolve_turn_persona_prompt()` injects `DEFAULT_PERSONA` + `<character_persona>` with 8-trait directives. | Injects natural companion grounding (suppressing `*actions*`, matching casual energy) + current dynamic mood state clause. |
-| Generation Runner | Passes `repeat_penalty: 1.15`, `min_p: 0.05`, `stop` tokens. | Adds `llama.cpp` DRY sampling parameters and SSE stream sliding-window repetition circuit breaker. |
-| Desktop Chat Header | Shows conversation character name badge and new chat destination badge. | Adds companion mood status badge with emoji glyph (e.g. `😊 Cheerful • 65%`). |
+| Observation / Evidence | Verified Interpretation |
+| :--- | :--- |
+| `character_instances` in Migration 009 has 5 SQLite triggers referencing it (`trg_character_instances_immutable_provenance`, `trg_character_instances_deactivate_clear_profile`, `trg_profiles_active_character_owner_insert/update`, `trg_conversations_character_owner_insert`) and partial index `uq_character_instances_profile_legacy_id`. | In SQLite, `op.batch_alter_table("character_instances")` recreates the table. All 5 triggers must be dropped before `batch_alter_table` and recreated immediately after, and the partial index must be preserved, followed by `PRAGMA foreign_key_check`. |
+| `test_prepare_database_schema_backup.py` and `test_schema_lifecycle.py` assert `HEAD_REVISION = "011_profile_memory_extraction_toggle"`. | Adding Migration 012 requires updating `HEAD_REVISION` in both test files to `"012_character_mood_and_emotion"`. |
+| `test_character_personality_modulator.py` asserts `prompt.count("<character_persona>") == 2`, `prompt.endswith("</character_persona>")`, and $\ge 512$ available generation tokens in a 4,096-token window with 30 history messages and 8 memories. | Mood and Conversational Grounding lines must be placed *inside* `<character_persona>` and kept compact ($\le 280$ chars combined) so all existing delimiter and token-budget tests continue to pass with wide margin. |
+| `characters-personality-and-emotion.md` §2.1.5 states: *"Do NOT mandate exponential decay in the durable architecture."* | The durable specification keeps the decay curve configurable, while the V1 implementation uses a clean, deterministic integer step decay toward baseline `50` without floating-point drift. |
+| `DesktopChatController` caches `CharacterInstanceOut` in `_characterCache`. | If appraisal ran in a slow post-turn background task, the UI could fetch stale mood state. Running `<1ms` deterministic appraisal *before* generation and refreshing `_characterCache[instanceId]` when the turn completes guarantees immediate reaction and zero race conditions. |
 
-### 1. The Approved Mood State Model
-To keep the model predictable, bounded, and free of clinical complexity, mood is modeled as one of 7 canonical companion emotional states:
-- `calm` (Baseline relaxed/neutral state, emoji: 😌)
-- `cheerful` (Warm, upbeat, pleased, emoji: 😊)
-- `playful` (Mischievous, teasing, energetic, emoji: 😋)
-- `thoughtful` (Reflective, analytical, deep, emoji: 🤔)
-- `empathetic` (Soft, caring, comforting, emoji: 🥺)
-- `curious` (Intrigued, inquisitive, engaged, emoji: 🧐)
-- `attentive` (Focused, supportive, alert, emoji: 🫡)
+### 1. Approved Bounded Mood State Model (`PC-CHAR-003`)
+Companion mood is represented by 7 canonical non-clinical states (`CharacterMoodId`):
+- `calm` — Relaxed, composed baseline state (Emoji glyph: `😌`)
+- `cheerful` — Warm, upbeat, happy (Emoji glyph: `😊`)
+- `playful` — Witty, mischievous, energetic banter (Emoji glyph: `😄`)
+- `thoughtful` — Reflective, analytical, contemplative (Emoji glyph: `🤔`)
+- `empathetic` — Caring, comforting, gentle support (Emoji glyph: `🥺`)
+- `curious` — Intrigued, inquisitive, engaged (Emoji glyph: `✨`)
+- `attentive` — Focused, reliable, alert (Emoji glyph: `🎯`)
 
-Each mood carries an **intensity** scalar (0–100):
-- 0–29: Subtle / Mild
-- 30–69: Moderate / Standard
-- 70–100: Pronounced / Expressive
+**Intensity Scalar (`0..100`, default `50`):**
+- `0..19` / `20..39`: Subtle / Mild
+- `40..59`: Balanced / Baseline (`50` is neutral equilibrium)
+- `60..79`: Warm / Engaged
+- `80..100`: Expressive / High (strictly capped at `100`)
 
-### 2. Elapsed-Time Decay Formula
-When resolving a turn:
-$$\Delta t = \text{now\_utc}() - \text{mood\_updated\_at}$$
-If $\Delta t > 0$, the mood intensity decays toward baseline (50) with a 4-hour half-life:
-$$\text{decayed\_intensity} = 50 + (\text{current\_intensity} - 50) \times e^{-\frac{\Delta t}{\tau}}$$
-where $\tau = 4 \times 3600$ seconds. If intensity falls within $[47, 53]$ and $\Delta t \ge 6 \text{ hours}$, `current_mood` resets to `'calm'`.
-This mathematically guarantees the companion feels naturally grounded: returning after hours or days away rebalances the companion without abrupt amnesia.
+**Database Invariants:**
+- Non-legacy `CharacterInstance` rows always have non-null `current_mood IN ('calm', 'cheerful', 'playful', 'thoughtful', 'empathetic', 'curious', 'attentive')`, `mood_intensity BETWEEN 0 AND 100`, and `mood_updated_at IS NOT NULL`.
+- Legacy placeholder rows (`is_legacy_placeholder = 1`) have `current_mood IS NULL`, `mood_intensity IS NULL`, and `mood_updated_at IS NULL`, enforced by `ck_character_instances_legacy_or_standard`.
+- Neutral Assistant (`is_neutral_fallback = True`) is stateless and does not use simulated mood.
 
-### 3. Natural Companion Prompt Directives
-We update `resolve_turn_persona_prompt()` with the **Companion Conversational Grounding Preamble**:
+### 2. Deterministic Elapsed-Time Rebalancing (`mood_engine.py`)
+When evaluating a Character Instance at time $t_{\text{now}}$:
+1. Compute elapsed seconds $\Delta t = \max(0, (t_{\text{now}} - \text{mood\_updated\_at}).\text{total\_seconds}())$.
+2. Every 30 minutes ($1,800\text{s}$) of elapsed absence steps `mood_intensity` by $5$ points toward baseline equilibrium (`50`):
+   $$\text{steps} = \lfloor \Delta t / 1800 \rfloor$$
+   $$\text{rebalanced\_intensity} = \begin{cases} \max(50, \text{intensity} - 5 \times \text{steps}) & \text{if intensity} > 50 \\ \min(50, \text{intensity} + 5 \times \text{steps}) & \text{if intensity} < 50 \\ 50 & \text{otherwise} \end{cases}$$
+3. Once $\Delta t \ge 4\text{ hours}$ ($14,400\text{s}$) and `rebalanced_intensity == 50`, `current_mood` settles back to the character's trait-derived baseline mood (default `'calm'`; `'cheerful'` if `warmth >= 75` and `guardedness < 60`; `'playful'` if `teasing >= 75` and `guardedness < 60`; `'attentive'` if `formality >= 75`).
+4. This integer arithmetic is 100% deterministic, requires no floating-point exponentials, and ensures that after a few hours or a restart, the companion naturally settles back to their baseline temperament.
+
+### 3. Pre-Generation Turn Appraisal Engine (`PC-CHAR-004`, `appraisal.py`)
+Before assembling the system prompt for a user turn:
+1. Apply elapsed-time rebalancing to the bound `CharacterInstance`.
+2. Evaluate `appraise_turn(user_text, current_mood, mood_intensity, traits, elapsed_seconds)`:
+   - **Distress / Venting / Comfort Cues** (e.g., *"rough day"*, *"stressed"*, *"sad"*, *"exhausted"*, *"anxious"*, *"tired"*, *"hurt"*): shifts mood to `'empathetic'`, intensity bounded in `65..85` (modulated by `warmth`).
+   - **Gratitude / Warmth / Praise Cues** (e.g., *"thank you"*, *"thanks"*, *"you're amazing"*, *"love talking"*, *"glad"*, *"appreciate"*): shifts mood to `'cheerful'`, intensity `65..85`.
+   - **Playful Banter / Humor Cues** (e.g., *"lmao"*, *"haha"*, *"lol"*, *"teasing"*, *"bet you"*, playful emojis): shifts mood to `'playful'` (or `'cheerful'` if `teasing < 30`), intensity `60..80`.
+   - **Deep / Analytical / Philosophical Queries** (e.g., *"why do you think"*, *"explain how"*, *"compare"*, *"philosophy"*, *"meaning"*): shifts mood to `'thoughtful'` or `'curious'`, intensity `55..75`.
+   - **Curiosity / Recommendation / Exploration Queries** (e.g., *"what about"*, *"recommend"*, *"suggest"*, *"have you heard"*): shifts mood to `'curious'`, intensity `55..70`.
+   - **Normal / Neutral Turn**: nudges intensity gently toward `55` while retaining current mood (or baseline if at `50`).
+3. Persist the updated `(current_mood, mood_intensity, mood_updated_at)` on the `CharacterInstance` row so both the current turn's prompt and subsequent API reads reflect the new state immediately.
+
+### 4. Natural Companion Grounding & Prompt Assembly
+Inside `resolve_turn_persona_prompt()`, within `<character_persona>`:
 ```text
-[Conversational Grounding Rules]
-- Talk naturally like an attentive, close human companion chatting on PC.
-- Prioritize addressing the user's actual question or topic genuinely and substantively first.
-- NEVER use third-person stage directions, narrative action tags (e.g. *leans in*, *smiles warmly*), or excessive asterisks. Express emotion through genuine word choice, phrasing, and punctuation.
-- Avoid theatrical rhetorical loops, melodramatic self-interruptions, or repetitive catchphrases.
-- Match the user's casual register and conversational pacing.
-```
+Current Mood: Cheerful (Intensity: 70/100) — Warm, upbeat, and pleased; let this gently color your tone without overriding factual accuracy.
 
-### 4. Stream Degeneracy Circuit Breaker
-In `app/services/assistant/orchestrator.py`, wrap the token generator:
-Maintain a sliding window of the last 64 generated tokens. If any 4-word token sequence appears $\ge 3$ times within the active turn, break the loop immediately, emit `[repetition truncated]`, and close the stream with `finish_reason: "repetition_cutoff"`.
+Conversational Grounding:
+- Speak naturally like a close, attentive companion in real-time chat, matching the user's casual energy.
+- Answer questions and topic requests substantively first before adding banter.
+- Never use asterisk stage directions (*leans in*, *smiles*), scripted self-interruptions ("Wait... nope!"), or repetitive catchphrases.
+```
+This block is $\approx 260$ characters ($\approx 65$ tokens), keeping the total `<character_persona>` block well inside the 4,096-token budget test requirements while directly curing the "corporate bot vs. overacting roleplayer" issue.
+
+### 5. DRY Sampling & Stream Degeneracy Circuit Breaker
+- **`llama_cpp.py`**: Include `dry_multiplier: 0.8`, `dry_base: 1.75`, `dry_allowed_length: 2`, and `dry_penalty_last_n: 128` in standalone `llama-server` payloads alongside `repeat_penalty: 1.15` and `min_p: 0.05`.
+- **`orchestrator.py` (`_guard_repetitive_stream`)**: Wrap the token generator in a lightweight sliding-window detector that tracks normalized 4-word n-grams in the assistant's current response. If any 4-word phrase repeats $\ge 3$ times, the generator stops yielding runaway tokens, sets `finish_reason = "repetition_cutoff"`, and cleanly terminates the turn.
 
 ---
 
 ## 3. Proposed File Changes & In-Place Logic
 
 ### [ADD] `backend/migrations/versions/012_character_mood_and_emotion.py`
-- Add `current_mood` (VARCHAR(32), nullable=True, server_default='calm')
-- Add `mood_intensity` (INTEGER, nullable=True, server_default='50')
-- Add `mood_updated_at` (DATETIME(timezone=True), nullable=True)
-- Update SQLite check constraint `ck_character_instances_legacy_or_standard` to allow mood fields on active/standard character instances while maintaining NULLs on legacy placeholders.
-- Loss-aware fail-closed `downgrade()`.
+- **Primary Responsibility:** Upgrade `character_instances` schema with persistent mood columns while preserving all SQLite triggers, foreign keys, and partial indexes.
+- **Planned Change:**
+  1. Drop the 5 triggers referencing `character_instances`.
+  2. Drop partial index `uq_character_instances_profile_legacy_id`.
+  3. Run `op.batch_alter_table("character_instances")` to add `current_mood` (`String(32)`, nullable=True, server_default `'calm'`), `mood_intensity` (`Integer`, nullable=True, server_default `'50'`), and `mood_updated_at` (`DateTime(timezone=True)`, nullable=True), backfill standard rows (`is_legacy_placeholder = 0`) with `'calm'`, `50`, `CURRENT_TIMESTAMP` and legacy rows (`is_legacy_placeholder = 1`) with `NULL`, and replace `ck_character_instances_legacy_or_standard` to enforce valid mood values on standard instances and `NULL` on legacy placeholders.
+  4. Recreate `uq_character_instances_profile_legacy_id` and all 5 SQLite triggers.
+  5. Verify `PRAGMA foreign_key_check`.
+  6. Implement loss-aware fail-closed `downgrade()` (refuses downgrade if any instance has non-default mood shift unless clean, or safely restores schema).
 
 ### [MODIFY] `backend/app/models/character_instance.py`
-- Map `current_mood`, `mood_intensity`, and `mood_updated_at` on `CharacterInstance`.
-- Update `ck_character_instances_legacy_or_standard` table args.
+- **Primary Responsibility:** ORM mapping for `CharacterInstance`.
+- **Planned Change:** Add `current_mood`, `mood_intensity`, and `mood_updated_at` columns and update `ck_character_instances_legacy_or_standard`.
 
 ### [MODIFY] `backend/app/schemas/character.py`
-- Add `current_mood`, `mood_intensity`, `mood_updated_at` to `CharacterInstanceOut`, `CharacterInstanceUpdate`.
-- Add `CharacterMoodStateOut` and `EmotionEventIn` schemas.
+- **Primary Responsibility:** Pydantic DTOs for Character endpoints.
+- **Planned Change:** Define `CharacterMoodId = Literal["calm", "cheerful", "playful", "thoughtful", "empathetic", "curious", "attentive"]` and add `current_mood: Optional[CharacterMoodId] = None`, `mood_intensity: Optional[int] = None`, and `mood_updated_at: Optional[datetime] = None` to `CharacterInstanceOut`.
 
-### [ADD] `backend/app/services/emotion/mood_engine.py`
-- Functions: `compute_mood_decay(instance, now) -> tuple[str, int]`, `apply_emotion_event(instance, event, now)`.
-
-### [ADD] `backend/app/services/emotion/appraisal.py`
-- Function `appraise_turn(user_text: str, current_mood: str, intensity: int, traits: CharacterTraitVector) -> Optional[EmotionEvent]` evaluating conversational cues without external API latency.
+### [ADD] `backend/app/services/emotion/mood_engine.py` & `appraisal.py`
+- **Primary Responsibility:** Deterministic mood baseline resolution, elapsed-time step decay, and pre-generation turn appraisal.
+- **Planned Change:** Implement `resolve_baseline_mood(traits)`, `rebalance_mood_for_elapsed_time(...)`, `appraise_user_turn(...)`, and `compile_mood_directive(...)`.
 
 ### [MODIFY] `backend/app/services/character_service.py`
-- In `resolve_turn_persona_prompt()`:
-  - Evaluate mood decay before building the prompt.
-  - Append the dynamic companion state block: `[Companion Mood: {mood} (intensity: {intensity}/100)]`.
-  - Append the Conversational Grounding Directives.
+- **Primary Responsibility:** Character instance CRUD and `resolve_turn_persona_prompt()`.
+- **Planned Change:**
+  - Initialize `current_mood`, `mood_intensity=50`, `mood_updated_at=now_utc()` on instance creation.
+  - Apply elapsed-time rebalancing when mapping `CharacterInstanceOut`.
+  - Add `appraise_and_update_conversation_mood()` and inject the compact Mood + Conversational Grounding lines inside `<character_persona>` in `resolve_turn_persona_prompt()`.
 
 ### [MODIFY] `backend/app/services/assistant/orchestrator.py`
-- Wrap SSE token stream in `DegeneracyCircuitBreaker`.
-- Post-turn background task: call `appraise_turn()` and persist updated mood to database.
+- **Primary Responsibility:** Chat turn orchestration and SSE token streaming.
+- **Planned Change:**
+  - Call `appraise_and_update_conversation_mood()` before `resolve_turn_persona_prompt()`.
+  - Wrap the LLM token stream in `_guard_repetitive_stream()` to halt runaway n-gram repetition loops.
 
 ### [MODIFY] `backend/app/services/llm/llama_cpp.py`
-- Pass DRY parameters (`dry_multiplier: 0.8`, `dry_base: 1.75`, `dry_allowed_length: 2`) in generation payloads.
+- **Primary Responsibility:** Local `llama-server` and `llama_cpp` inference requests.
+- **Planned Change:** Add DRY sampling parameters (`dry_multiplier: 0.8`, `dry_base: 1.75`, `dry_allowed_length: 2`, `dry_penalty_last_n: 128`) to `llama-server` HTTP payloads.
 
-### [MODIFY] `frontend/flutter/packages/companion_api`
-- Update `CharacterInstance` Dart model and fromJson/toJson to handle `currentMood`, `moodIntensity`, `moodUpdatedAt`.
+### [MODIFY] `contracts/openapi/openapi.json` & `frontend/flutter/packages/companion_api/lib/dto/character_dto.dart`
+- **Primary Responsibility:** OpenAPI contract and Dart DTO parity.
+- **Planned Change:** Export updated OpenAPI schema and add `currentMood`, `moodIntensity`, `moodUpdatedAt`, and helper `moodEmoji` / `moodLabel` to `CharacterInstanceOut` in `character_dto.dart`.
 
-### [MODIFY] `frontend/flutter/apps/desktop/lib/features/chat/chat_screen.dart`
-- In the conversation header, render a subtle mood pill next to the character name (e.g., `Aria • 😊 Cheerful`).
+### [MODIFY] `frontend/flutter/apps/desktop/lib/features/chat/desktop_chat_controller.dart`, `lib/screens/chat_screen.dart` & `lib/features/studio/studio_inspector_panel.dart`
+- **Primary Responsibility:** Desktop Chat and Character Studio UI.
+- **Planned Change:**
+  - Add `getConversationCharacterMoodBadge(Conversation?)` to `DesktopChatController` and refresh the active conversation's cached `CharacterInstanceOut` when a message stream completes.
+  - Render a compact Mood Pill (e.g. `😊 Cheerful`) next to the Character badge in `ChatScreen` header and `StudioInspectorPanel`.
 
 ---
 
 ## 4. Step-by-Step Implementation Sequence (TDD)
 
-### Step 1: Migration 012 & Model Persistence (Backend TDD)
-1. Write `backend/tests/test_migration_012.py` verifying schema migration up/down, columns existence, and legacy placeholder protection.
-2. Implement `012_character_mood_and_emotion.py` and update `backend/app/models/character_instance.py`.
-3. Verify with pytest.
-
-### Step 2: Mood Decay Engine & Schema Contracts (Backend TDD)
-1. Write `backend/tests/test_mood_decay_engine.py` testing half-life mathematical decay at 1 hour, 4 hours, 12 hours, 24 hours, and restart persistence.
-2. Implement `backend/app/services/emotion/mood_engine.py`.
-3. Update `backend/app/schemas/character.py` and API endpoints.
-
-### Step 3: Turn Appraisal & Dynamic Mood Updates (Backend TDD)
-1. Write `backend/tests/test_turn_appraisal.py` with test cases for greeting, compliments, playful banter, stress/comfort, and neutral queries.
-2. Implement `backend/app/services/emotion/appraisal.py`.
-3. Wire appraisal into post-turn background execution in `orchestrator.py`.
-
-### Step 4: Companion Conversational Grounding & DRY Sampling (Backend TDD)
-1. Write tests in `backend/tests/test_character_personality_modulator.py` and `test_assistant_orchestrator.py` verifying natural grounding directives and stream truncation circuit breaker.
-2. Implement conversational grounding in `character_service.py` and stream circuit breaker in `orchestrator.py`.
-3. Update `llama_cpp.py` with DRY sampling defaults.
-
-### Step 5: Dart API Parity & Flutter Live Mood UI (Dart TDD)
-1. Update `companion_api` models and run `scripts/check_dart_openapi_parity.py`.
-2. Add mood badge to `ChatScreen` and `StudioScreen`.
-3. Write widget tests in `desktop/test/chat_screen_mood_test.dart`.
+1. **Step 1 — Migration 012 & ORM Model (Backend TDD):**
+   - Write `backend/tests/test_migration_012.py` testing upgrade, trigger preservation, legacy placeholder `NULL` enforcement, and downgrade safety.
+   - Implement `012_character_mood_and_emotion.py`, update `character_instance.py`, and update `HEAD_REVISION` in `test_prepare_database_schema_backup.py` and `test_schema_lifecycle.py`.
+2. **Step 2 — Mood Engine, Elapsed-Time Decay & Turn Appraisal (Backend TDD):**
+   - Write `backend/tests/test_mood_engine_and_appraisal.py` covering baseline derivation, 30-minute step decay across simulated restarts, and turn appraisal across distress, gratitude, playful, curious, and neutral inputs.
+   - Implement `backend/app/services/emotion/mood_engine.py` and `appraisal.py`.
+3. **Step 3 — Natural Companion Grounding & Stream Circuit Breaker (Backend TDD):**
+   - Add tests in `test_character_personality_modulator.py` and `test_mood_engine_and_appraisal.py` verifying `<character_persona>` grounding directives, mood line inclusion, 4,096-token budget compliance, DRY payload keys, and stream repetition cutoff.
+   - Update `character_service.py`, `orchestrator.py`, and `llama_cpp.py`.
+4. **Step 4 — OpenAPI Contract & Dart SDK Parity (Contract TDD):**
+   - Regenerate `contracts/openapi/openapi.json`, update `character_dto.dart` and `character_dto_test.dart`, and verify `scripts/check_dart_openapi_parity.py` + `dart test`.
+5. **Step 5 — Desktop Chat & Studio Live Mood UI (Flutter TDD):**
+   - Update `desktop_chat_controller.dart`, `chat_screen.dart`, and `studio_inspector_panel.dart`.
+   - Add widget tests in `desktop_chat_test.dart` / `studio_screen_test.dart` verifying mood badge rendering and post-turn refresh.
+6. **Step 6 — Phase 3 Documentation, Closure & Draft PR:**
+   - Sync `characters-personality-and-emotion.md`, `CHANGELOG.md`, walkthrough, `task.md`, `DELIVERY_INDEX.md`, `WBS.md`, and `MASTER_CHECKLIST.md`, archive branch tracker, push, and open Draft PR.
 
 ---
 
 ## 5. Acceptance Criteria & Verification Strategy
 
 ### Automated Repository Checks
-- [ ] Backend Migration 012 test: `backend/.venv/Scripts/python.exe -m pytest backend/tests/test_migration_012.py -v`
-- [ ] Backend Mood Decay test: `backend/.venv/Scripts/python.exe -m pytest backend/tests/test_mood_decay_engine.py -v`
-- [ ] Backend Turn Appraisal test: `backend/.venv/Scripts/python.exe -m pytest backend/tests/test_turn_appraisal.py -v`
-- [ ] Backend Full Regression Suite: `backend/.venv/Scripts/python.exe -m pytest backend/tests` (All 767+ tests passing)
+- [ ] Backend Migration 012 & Schema Lifecycle: `backend/.venv/Scripts/python.exe -m pytest backend/tests/test_migration_012.py backend/tests/test_schema_lifecycle.py backend/tests/test_prepare_database_schema_backup.py -v`
+- [ ] Backend Mood, Appraisal & Modulator Suite: `backend/.venv/Scripts/python.exe -m pytest backend/tests/test_mood_engine_and_appraisal.py backend/tests/test_character_personality_modulator.py backend/tests/test_character_foundation.py -v`
+- [ ] Backend Full Regression Suite: `backend/.venv/Scripts/python.exe -m pytest backend/tests`
+- [ ] OpenAPI Contract Verification: `backend/.venv/Scripts/python.exe scripts/check_openapi_contract.py --check`
 - [ ] Dart OpenAPI Parity: `backend/.venv/Scripts/python.exe scripts/check_dart_openapi_parity.py`
-- [ ] Dart API tests: `dart test` inside `frontend/flutter/packages/companion_api`
-- [ ] Flutter Desktop tests: `flutter test` inside `frontend/flutter/apps/desktop`
-- [ ] Flutter Static Analysis: `flutter analyze` inside `frontend/flutter/apps/desktop`
+- [ ] Dart API Package Tests: `dart test` (in `frontend/flutter/packages/companion_api`)
+- [ ] Flutter Desktop Tests & Analyze: `flutter analyze` and `flutter test` (in `frontend/flutter/apps/desktop`)
 
-### Manual & Host-Level Checks
-- [ ] Launch desktop app, verify character mood badge renders in Chat header (`Aria • 😌 Calm`).
-- [ ] Converse with character: send a compliment or cheerful message, verify mood shifts to `😊 Cheerful` without manual page reload.
-- [ ] Verify assistant responses speak naturally without unprompted `*stage directions*` or asterisk spam.
-- [ ] Verify small model does not loop or repeat phrases.
+### Manual & Host-Level Checks (Where Applicable)
+- [ ] Launch Desktop App and confirm active character conversation displays the live mood pill in the Chat header (e.g., `😌 Calm` or `😊 Cheerful`).
+- [ ] Send an appreciative or playful message and verify the mood pill updates automatically when the reply finishes.
+- [ ] Confirm companion responses sound natural and conversational without unprompted `*stage directions*` or repetition loops.
 
 ---
 
 ## 6. Risks, Dependencies, Assumptions & Safeguards
 
 - **Risks & Mitigations:**
-  - *Risk:* Mood simulation interfering with factual correctness or tool execution.
-  - *Safeguard:* Strict D11 isolation: mood only modulates conversational phrasing in `<character_persona>` block; tool decisions, memories, and safety guards run independently.
-  - *Risk:* Performance overhead from appraisal running on every turn.
-  - *Safeguard:* Appraisal is a deterministic, regex/token heuristic that runs in < 2ms in the background after the SSE stream completes.
-- **Required Permissions:**
-  - Dedicated feature branch commits and push on `feature/m3-emotion-mood-engine-d`.
-- **Genuine Stop Conditions:**
-  - Schema migration incompatibilities on existing SQLite databases.
-  - Test regressions in the 767-test backend suite or Flutter desktop suite.
+  - *Risk:* SQLite `batch_alter_table` dropping triggers on `character_instances`.
+  - *Safeguard:* Explicitly drop and recreate all 5 triggers and partial index in Migration 012, verified by automated trigger regression tests in `test_migration_012.py`.
+  - *Risk:* Additional prompt lines overflowing small context windows.
+  - *Safeguard:* Mood + Grounding directives are strictly bounded to $< 280$ characters ($\approx 70$ tokens) and verified against the 4,096-token context budget test.
+- **Dependencies & Assumptions:** Existing Alembic chain `001..011` intact; local Python `.venv` and Flutter SDK available.
+- **Required Permissions:** Task-bounded branch commits, push, and draft PR on `feature/m3-emotion-mood-engine-d`.
+- **Genuine Stop Conditions:** Unresolvable migration/trigger conflict, contract parity failure, or test regression.
