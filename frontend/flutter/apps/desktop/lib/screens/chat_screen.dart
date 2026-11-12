@@ -490,6 +490,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final badgeColor = _modelBadgeColor(chatCtrl.modelStateCategory, ext);
     final badgeIcon = _modelBadgeIcon(chatCtrl.modelStateCategory);
     final thisConvName = chatCtrl.getConversationCharacterName(chatCtrl.activeConversation);
+    final thisConvMoodBadge = chatCtrl.getConversationCharacterMoodBadge(chatCtrl.activeConversation);
     final newConvName = chatCtrl.getActiveProfileCharacterName();
     final bool sameCharacter = (thisConvName == newConvName);
 
@@ -613,6 +614,26 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ),
                   ),
+                  if (thisConvMoodBadge != null)
+                    Container(
+                      key: const Key('chat-header-mood-badge'),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.05),
+                        borderRadius: CompanionRadius.borderSm,
+                        border: Border.all(
+                          color: ext?.borderSubtle ?? Colors.transparent,
+                        ),
+                      ),
+                      child: Text(
+                        'Mood: $thisConvMoodBadge',
+                        style: CompanionTypography.caption.copyWith(
+                          color: ext?.textPrimary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
                   if (!sameCharacter)
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 240),
@@ -838,6 +859,7 @@ class _ChatScreenState extends State<ChatScreen> {
     DesktopChatController chatCtrl,
   ) {
     final thisConvName = chatCtrl.getConversationCharacterName(chatCtrl.activeConversation);
+    final thisConvMoodBadge = chatCtrl.getConversationCharacterMoodBadge(chatCtrl.activeConversation);
     final newConvName = chatCtrl.getActiveProfileCharacterName();
     final bool sameCharacter = (thisConvName == newConvName);
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -915,6 +937,17 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                       ],
                     ),
+                    if (thisConvMoodBadge != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Current Mood: $thisConvMoodBadge',
+                        key: const Key('chat-welcome-mood-badge'),
+                        style: CompanionTypography.caption.copyWith(
+                          color: ext?.textSecondary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                     if (!sameCharacter) ...[
                       const SizedBox(height: 4),
                       Text(

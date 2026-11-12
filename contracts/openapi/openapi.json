@@ -3672,6 +3672,51 @@
               }
             ]
           },
+          "current_mood": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "calm",
+                  "cheerful",
+                  "playful",
+                  "thoughtful",
+                  "empathetic",
+                  "curious",
+                  "attentive"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Mood"
+          },
+          "mood_intensity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mood Intensity"
+          },
+          "mood_updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mood Updated At"
+          },
           "status": {
             "type": "string",
             "title": "Status"

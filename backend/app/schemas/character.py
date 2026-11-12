@@ -1,4 +1,4 @@
-"""Character schemas for templates, presets, instances, and active selection (PC-CHAR-001, PC-CHAR-005)."""
+"""Character schemas for templates, presets, instances, and active selection (PC-CHAR-001, PC-CHAR-003, PC-CHAR-005)."""
 
 from datetime import datetime
 from typing import Literal, Optional
@@ -14,6 +14,16 @@ CharacterPresetId = Literal[
     "kuudere",
     "dandere",
     "yandere",
+]
+
+CharacterMoodId = Literal[
+    "calm",
+    "cheerful",
+    "playful",
+    "thoughtful",
+    "empathetic",
+    "curious",
+    "attentive",
 ]
 
 
@@ -153,6 +163,9 @@ class CharacterInstanceOut(BaseModel):
     avatar_asset: str
     preset_id: Optional[CharacterPresetId] = None
     traits: Optional[CharacterTraitVector] = None
+    current_mood: Optional[CharacterMoodId] = None
+    mood_intensity: Optional[int] = Field(default=None, ge=0, le=100)
+    mood_updated_at: Optional[datetime] = None
     status: str
     is_active_for_profile: bool = False
     created_at: datetime

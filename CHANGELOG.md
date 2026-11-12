@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added — M3 Batch D: Persistent Bounded Emotion & Mood Engine, Pre-Generation Turn Appraisal, Natural Companion Grounding, and Live Mood UI (PC-CHAR-003, PC-CHAR-004)
+
+- **Alembic Migration 012 & Persistent Mood Schema (`PC-CHAR-003`)**:
+  - Added `backend/migrations/versions/012_character_mood_and_emotion.py` adding `current_mood` (`String(32)`), `mood_intensity` (`Integer`), and `mood_updated_at` (`DateTime(timezone=True)`) to `character_instances` alongside SQLite CHECK constraint `ck_character_instances_mood_invariants`.
+  - Preserved all 5 dependent SQLite triggers (`trg_character_instances_immutable_provenance`, `trg_profiles_active_character_owner_insert`, `trg_profiles_active_character_owner_update`, `trg_character_instances_deactivate_clear_profile`, `trg_conversations_character_owner_insert`) and partial index `uq_character_instances_profile_legacy_id` across `batch_alter_table`, with loss-aware fail-closed downgrade protection.
+- **Persistent Bounded Mood Engine & Deterministic Step Rebalancing (`PC-CHAR-003`)**:
+  - Implemented `backend/app/services/emotion/mood_engine.py` supporting 6 bounded moods (`calm`, `cheerful`, `playful`, `empathetic`, `thoughtful`, `curious`), trait-derived baseline mood resolution (`resolve_baseline_mood`), and deterministic integer step rebalancing (`compute_decayed_mood`: 5 intensity points per 30 minutes toward `50`, settling to baseline mood after $\ge 4$ hours at equilibrium).
+- **Pre-Generation Turn Appraisal Engine (`PC-CHAR-004`)**:
+  - Implemented `backend/app/services/emotion/appraisal.py` (`appraise_user_turn`) performing `<1ms` deterministic lexical/heuristic turn appraisal across `user_distress`, `user_playful`, `user_gratitude`, `user_analytical`, `user_curiosity`, and `neutral_turn` while strictly preserving Decision D11 Mood Isolation.
+  - Wired `CharacterService.appraise_and_update_conversation_mood()` into `AssistantOrchestrator` prior to prompt assembly so companion mood responds in-turn to the user's message.
+- **Natural Companion Grounding, DRY Sampling & Stream Circuit Breaker (`PC-CHAR-002`)**:
+  - Updated `resolve_turn_persona_prompt()` in `backend/app/services/character_service.py` to inject compact `Current Mood` and `Conversational Grounding` directives inside `<character_persona>`, eliminating theatrical `*stage directions*`, scripted self-interruptions, and repetitive catchphrases within the 4,096-token context budget.
+  - Added native DRY anti-repetition sampling parameters (`dry_multiplier: 0.8`, `dry_base: 1.75`, `dry_allowed_length: 2`, `dry_penalty_last_n: 128`) in `backend/app/services/llm/llama_cpp.py` and sliding-window 4-gram stream degeneracy circuit breaker `_guard_repetitive_stream()` in `backend/app/services/assistant/orchestrator.py`.
+- **Desktop Live Mood Badges & Dart SDK Parity (`PC-CLIENT-006`, `PC-CLIENT-007`)**:
+  - Regenerated `contracts/openapi/openapi.json` and extended `CharacterInstanceOut` in `companion_api` with `currentMood`, `moodIntensity`, `moodUpdatedAt`, `moodEmoji`, `moodLabel`, and `moodBadgeText`.
+  - Rendered live Mood + Emoji Glyph badges in `ChatScreen` header (`chat-header-mood-badge`), `ChatScreen` welcome card (`chat-welcome-mood-badge`), and `StudioInspectorPanel` header (`studio-inspector-mood-badge`), with automatic post-turn refresh on `SseDoneEvent`.
+
 ### Added — M3: Desktop Memory Control Center UI, Migration 011 Per-Profile Extraction Toggle, and Conflict Resolution (PC-CLIENT-009)
 
 - **Desktop Memory Control Center (`PC-CLIENT-009`)**:

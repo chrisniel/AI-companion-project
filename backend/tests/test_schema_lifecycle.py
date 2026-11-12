@@ -15,7 +15,7 @@ from app.db.session import (
     get_engine,
 )
 
-HEAD_REVISION = "011_profile_memory_extraction_toggle"
+HEAD_REVISION = "012_character_mood_and_emotion"
 
 
 def _create_legacy_v004_db(path: Path) -> None:

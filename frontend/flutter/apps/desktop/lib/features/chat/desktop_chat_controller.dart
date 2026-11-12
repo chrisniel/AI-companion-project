@@ -376,6 +376,47 @@ class DesktopChatController extends ChangeNotifier {
     return 'Loading...';
   }
 
+  /// Authoritative mood badge text (e.g., '😌 Calm' or '😊 Cheerful') for the character bound to a conversation.
+  String? getConversationCharacterMoodBadge(ConversationOut? conv) {
+    if (conv == null ||
+        conv.characterInstanceId == null ||
+        conv.characterId == 'default' ||
+        conv.characterId == 'neutral-assistant') {
+      return null;
+    }
+    final instId = conv.characterInstanceId!;
+    final cached = _characterCache[instId] ??
+        (_activeCharacterState?.activeCharacterInstanceId == instId
+            ? _activeCharacterState?.activeInstance
+            : null);
+    if (cached == null || cached.isLegacyPlaceholder) {
+      return null;
+    }
+    return cached.moodBadgeText;
+  }
+
+  Future<void> _refreshCharacterInstanceMood(String instanceId) async {
+    if (!isConnected || _isDisposed) return;
+    final epoch = _configEpoch;
+    try {
+      final inst = await _client.getCharacterInstance(instanceId);
+      if (_configEpoch != epoch || _isDisposed) return;
+      _characterCache[instanceId] = inst;
+      if (_activeCharacterState != null &&
+          _activeCharacterState!.activeCharacterInstanceId == instanceId) {
+        _activeCharacterState = ActiveCharacterStateOut(
+          profileId: _activeCharacterState!.profileId,
+          isNeutralFallback: _activeCharacterState!.isNeutralFallback,
+          activeCharacterId: _activeCharacterState!.activeCharacterId,
+          activeCharacterInstanceId: _activeCharacterState!.activeCharacterInstanceId,
+          neutralFallback: _activeCharacterState!.neutralFallback,
+          activeInstance: inst,
+        );
+      }
+      notifyListeners();
+    } catch (_) {}
+  }
+
   String _formatInstanceName(CharacterInstanceOut inst) {
     if (inst.isLegacyPlaceholder) return '${inst.name} (Legacy)';
     if (inst.status == 'archived') return '${inst.name} (Archived)';
@@ -1058,6 +1099,10 @@ class DesktopChatController extends ChangeNotifier {
               ];
             }
             _finalizeTurn(boundConvId, turnToken, hasBeenAccepted: hasBeenAccepted);
+            final boundInstId = _activeConversation?.characterInstanceId;
+            if (boundInstId != null && boundInstId.isNotEmpty) {
+              unawaited(_refreshCharacterInstanceMood(boundInstId));
+            }
             _maybeGenerateModelTitle(boundConvId, deterministicTitle);
             if (!completer.isCompleted) completer.complete(true);
           } else if (event is SseErrorEvent) {

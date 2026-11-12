@@ -85,9 +85,9 @@
 
 ### Stream: `PC-CHAR` — Character, Personality & Mood
 - **`PC-CHAR-001`**: Character Template (App-Owned) & Character Instance (Profile-Owned) Storage Schema (Delivered via PR #29, commit `d22dd7e`).
-- **`PC-CHAR-002`**: 8 Continuous Personality Traits Scoring & Prompt Modulator (Deterministic 5-band modulation, Autonomy Guard, <= 700 char bound, context budgeting; implemented and independently approved for provisional closure on `feature/m3-character-studio-personality-b`, not yet merged into develop).
-- **`PC-CHAR-003`**: Persistent Bounded Emotion & Mood Engine (Restart persistence, decay over elapsed time).
-- **`PC-CHAR-004`**: Appraisal Engine & Typed Emotion Events (Ensuring mood cannot alter system correctness).
+- **`PC-CHAR-002`**: 8 Continuous Personality Traits Scoring & Prompt Modulator (Deterministic 5-band modulation, Autonomy Guard, <= 700 char bound, context budgeting; delivered via PR #30, commit `319ab66`, with natural companion conversational grounding and DRY/stream anti-repetition safeguards added in M3 Batch D on `feature/m3-emotion-mood-engine-d`).
+- **`PC-CHAR-003`**: Persistent Bounded Emotion & Mood Engine (Alembic Migration 012, SQLite `ck_character_instances_mood_invariants`, restart persistence, deterministic integer step rebalancing toward trait-derived baseline over elapsed time; implemented and verified in M3 Batch D on `feature/m3-emotion-mood-engine-d`).
+- **`PC-CHAR-004`**: Appraisal Engine & Typed Emotion Events (`<1ms` lexical/heuristic pre-generation turn appraisal across 6 bounded mood states, strict Decision D11 Mood Isolation ensuring mood cannot alter system correctness; implemented and verified in M3 Batch D on `feature/m3-emotion-mood-engine-d`).
 - **`PC-CHAR-005`**: Immutable Neutral Assistant Fallback Definition (Delivered via PR #29, commit `d22dd7e`).
 
 ### Stream: `PC-MEM` — Memory & Continuity

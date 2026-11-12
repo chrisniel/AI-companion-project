@@ -1,7 +1,8 @@
-"""CharacterInstance SQLAlchemy ORM model definition (PC-CHAR-001, PC-CHAR-005)."""
+"""CharacterInstance SQLAlchemy ORM model definition (PC-CHAR-001, PC-CHAR-003, PC-CHAR-005)."""
 
+from datetime import datetime
 from typing import Optional
-from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, event
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -51,6 +52,21 @@ class CharacterInstance(Base, TimestampMixin, SoftDeleteMixin):
             )""",
             name="ck_character_instances_legacy_or_standard",
         ),
+        CheckConstraint(
+            """(
+                is_legacy_placeholder = 0
+                AND current_mood IS NOT NULL
+                AND current_mood IN ('calm', 'cheerful', 'playful', 'thoughtful', 'empathetic', 'curious', 'attentive')
+                AND mood_intensity IS NOT NULL
+                AND mood_intensity BETWEEN 0 AND 100
+            ) OR (
+                is_legacy_placeholder = 1
+                AND current_mood IS NULL
+                AND mood_intensity IS NULL
+                AND mood_updated_at IS NULL
+            )""",
+            name="ck_character_instances_mood_invariants",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -76,7 +92,25 @@ class CharacterInstance(Base, TimestampMixin, SoftDeleteMixin):
     formality: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     verbosity: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
+    # Persistent bounded mood state (PC-CHAR-003; NULL for legacy placeholders)
+    current_mood: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    mood_intensity: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    mood_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active", server_default="active")
 
     def __repr__(self) -> str:
         return f"<CharacterInstance id={self.id!r} profile_id={self.profile_id!r} name={self.name!r} status={self.status!r}>"
+
+
+@event.listens_for(CharacterInstance, "before_insert")
+def _ensure_character_instance_mood_invariants(mapper, connection, target: CharacterInstance) -> None:
+    if target.is_legacy_placeholder:
+        target.current_mood = None
+        target.mood_intensity = None
+        target.mood_updated_at = None
+    else:
+        if target.current_mood is None:
+            target.current_mood = "calm"
+        if target.mood_intensity is None:
+            target.mood_intensity = 50

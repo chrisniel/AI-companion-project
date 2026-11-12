@@ -1141,6 +1141,10 @@ class LlamaCppProvider(BaseLLMProvider):
         worker_owns_lease = False
         repeat_penalty = kwargs.get("repeat_penalty", 1.15)
         min_p = kwargs.get("min_p", 0.05)
+        dry_multiplier = kwargs.get("dry_multiplier", 0.8)
+        dry_base = kwargs.get("dry_base", 1.75)
+        dry_allowed_length = kwargs.get("dry_allowed_length", 2)
+        dry_penalty_last_n = kwargs.get("dry_penalty_last_n", 128)
         stop_sequences = kwargs.get("stop", ["<|im_end|>", "<|endoftext|>", "\nUser:"])
 
         try:
@@ -1155,6 +1159,10 @@ class LlamaCppProvider(BaseLLMProvider):
                         "stream": False,
                         "repeat_penalty": repeat_penalty,
                         "min_p": min_p,
+                        "dry_multiplier": dry_multiplier,
+                        "dry_base": dry_base,
+                        "dry_allowed_length": dry_allowed_length,
+                        "dry_penalty_last_n": dry_penalty_last_n,
                         "stop": stop_sequences,
                     }
                     resp = await client.post(f"{settings.LLAMA_SERVER_URL}/chat/completions", json=payload)
@@ -1212,6 +1220,10 @@ class LlamaCppProvider(BaseLLMProvider):
             worker_owns_lease = False
             repeat_penalty = kwargs.get("repeat_penalty", 1.15)
             min_p = kwargs.get("min_p", 0.05)
+            dry_multiplier = kwargs.get("dry_multiplier", 0.8)
+            dry_base = kwargs.get("dry_base", 1.75)
+            dry_allowed_length = kwargs.get("dry_allowed_length", 2)
+            dry_penalty_last_n = kwargs.get("dry_penalty_last_n", 128)
             stop_sequences = kwargs.get("stop", ["<|im_end|>", "<|endoftext|>", "\nUser:"])
 
             try:
@@ -1225,6 +1237,10 @@ class LlamaCppProvider(BaseLLMProvider):
                         "stream": True,
                         "repeat_penalty": repeat_penalty,
                         "min_p": min_p,
+                        "dry_multiplier": dry_multiplier,
+                        "dry_base": dry_base,
+                        "dry_allowed_length": dry_allowed_length,
+                        "dry_penalty_last_n": dry_penalty_last_n,
                         "stop": stop_sequences,
                     }
                     async with httpx.AsyncClient(timeout=120.0) as client:
