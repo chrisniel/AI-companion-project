@@ -13,10 +13,14 @@ void main() {
     late List<Map<String, dynamic>> recordedRequests;
     late List<Map<String, dynamic>> mockMemories;
     late List<Map<String, dynamic>> mockConflicts;
+    late bool filterByTier;
+    late int mockKnowledgeCount;
+    late int mockLongTermCount;
+    late int mockShortTermCount;
 
-    void setupDesktopViewport(WidgetTester tester) {
+    void setupDesktopViewport(WidgetTester tester, {Size size = const Size(1280, 800)}) {
       tester.view.devicePixelRatio = 1.0;
-      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.physicalSize = size;
       addTearDown(() {
         tester.view.resetPhysicalSize();
         tester.view.resetDevicePixelRatio();
@@ -25,6 +29,10 @@ void main() {
 
     setUp(() {
       recordedRequests = [];
+      filterByTier = false;
+      mockKnowledgeCount = 1;
+      mockLongTermCount = 1;
+      mockShortTermCount = 0;
       mockMemories = [
         {
           'id': 'mem-1',
@@ -37,6 +45,7 @@ void main() {
           'owner_id': 'prof-1',
           'scope': 'profile',
           'is_core': false,
+          'recall_count': 0,
         },
         {
           'id': 'mem-2',
@@ -49,6 +58,7 @@ void main() {
           'owner_id': 'prof-1',
           'scope': 'profile',
           'is_core': true,
+          'recall_count': 2,
         },
       ];
       mockConflicts = [
@@ -89,20 +99,55 @@ void main() {
                 'total': mockConflicts.length,
                 'page': 1,
                 'page_size': 10,
+                'knowledge_count': mockKnowledgeCount,
+                'long_term_count': mockLongTermCount,
+                'short_term_count': mockShortTermCount,
               }),
               200,
               headers: {'content-type': 'application/json'},
             );
           }
 
+          final requestedTier = request.url.queryParameters['tier'];
+          final items = filterByTier && requestedTier != null
+              ? mockMemories.where((m) => m['_tier'] == requestedTier).toList()
+              : mockMemories;
+
           return http.Response(
             jsonEncode({
-              'items': mockMemories,
-              'total': mockMemories.length,
+              'items': items,
+              'total': items.length,
               'page': 1,
               'page_size': 20,
+              'knowledge_count': mockKnowledgeCount,
+              'long_term_count': mockLongTermCount,
+              'short_term_count': mockShortTermCount,
             }),
             200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+
+        // POST /api/v1/memories
+        if (request.method == 'POST' && path == '/api/v1/memories') {
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          return http.Response(
+            jsonEncode({
+              'id': 'mem-new-1',
+              'content': body['content'] ?? '',
+              'category': body['category'] ?? 'fact',
+              'importance': body['importance'] ?? 1.0,
+              'source_type': body['source_type'] ?? 'manual',
+              'user_verified': true,
+              'created_at': '2026-11-13T10:00:00Z',
+              'owner_id': 'prof-1',
+              'scope': body['scope'] ?? 'profile',
+              'is_core': body['is_core'] ?? false,
+              'trigger_keywords': body['trigger_keywords'],
+              'expires_at': body['expires_at'],
+              'recall_count': 0,
+            }),
+            201,
             headers: {'content-type': 'application/json'},
           );
         }
@@ -350,7 +395,7 @@ void main() {
       expect(find.text('Save Changes'), findsOneWidget);
 
       // Enter new text in the content field
-      await tester.enterText(find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextField)), 'User loves hot green tea');
+      await tester.enterText(find.byKey(const Key('memory_content_field')), 'User loves hot green tea');
       await tester.tap(find.text('Save Changes'));
       await tester.pumpAndSettle();
 
@@ -393,6 +438,183 @@ void main() {
         (r) => r['method'] == 'DELETE' && (r['url'] as String).contains('/api/v1/memories/mem-1'),
       );
       expect(deleteReq, isNotNull);
+    });
+
+    testWidgets('Option 2A tier sidebar switches tiers, updates CTA, and supports compact layout', (tester) async {
+      setupDesktopViewport(tester);
+      filterByTier = true;
+      mockKnowledgeCount = 2;
+      mockLongTermCount = 3;
+      mockShortTermCount = 1;
+      mockConflicts.clear();
+
+      mockMemories = [
+        {
+          '_tier': 'knowledge',
+          'id': 'k-1',
+          'content': 'Sarah loves sourdough bread',
+          'category': 'fact',
+          'importance': 1.5,
+          'source_type': 'manual',
+          'user_verified': true,
+          'created_at': '2026-11-13T10:00:00Z',
+          'owner_id': 'prof-1',
+          'scope': 'profile',
+          'is_core': false,
+          'trigger_keywords': ['sarah', 'cook'],
+          'recall_count': 4,
+        },
+        {
+          '_tier': 'long_term',
+          'id': 'lt-1',
+          'content': 'User enjoys sci-fi novels',
+          'category': 'preference',
+          'importance': 1.0,
+          'source_type': 'user_explicit',
+          'user_verified': true,
+          'created_at': '2026-11-13T10:00:00Z',
+          'owner_id': 'prof-1',
+          'scope': 'profile',
+          'is_core': false,
+          'recall_count': 1,
+        },
+        {
+          '_tier': 'short_term',
+          'id': 'st-1',
+          'content': 'User has a deadline tonight',
+          'category': 'context',
+          'importance': 0.9,
+          'source_type': 'auto_extracted',
+          'user_verified': false,
+          'created_at': '2026-11-13T10:00:00Z',
+          'owner_id': 'prof-1',
+          'scope': 'profile',
+          'expires_at': DateTime.now().toUtc().add(const Duration(hours: 48)).toIso8601String(),
+          'is_core': false,
+          'recall_count': 0,
+        },
+      ];
+
+      final client = createMockClient();
+      final controller = DesktopMemoryController(
+        client: client,
+        profileId: 'prof-1',
+        initialExtractionEnabled: true,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(body: MemoryScreen(controller: controller)),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Default tier is Knowledge & Profile with keyword chips and recall counter
+      expect(find.text('Knowledge & Profile'), findsOneWidget);
+      expect(find.text('Long-Term Memories'), findsOneWidget);
+      expect(find.text('Short-Term Context'), findsOneWidget);
+      expect(find.text('Add Knowledge'), findsOneWidget);
+      expect(find.text('Sarah loves sourdough bread'), findsOneWidget);
+      expect(find.text('#sarah'), findsOneWidget);
+      expect(find.text('#cook'), findsOneWidget);
+      expect(find.text('RECALLED 4×'), findsOneWidget);
+
+      // Switch to Long-Term Memories
+      await tester.tap(find.byKey(const Key('memory_tier_long_term')));
+      await tester.pumpAndSettle();
+      expect(find.text('Add Memory'), findsOneWidget);
+      expect(find.text('User enjoys sci-fi novels'), findsOneWidget);
+      expect(
+        recordedRequests.any((r) => (r['url'] as String).contains('tier=long_term')),
+        isTrue,
+      );
+
+      // Switch to Short-Term Context and promote entry
+      await tester.tap(find.byKey(const Key('memory_tier_short_term')));
+      await tester.pumpAndSettle();
+      expect(find.text('Add Context'), findsOneWidget);
+      expect(find.text('User has a deadline tonight'), findsOneWidget);
+      expect(find.text('Promote'), findsOneWidget);
+      expect(find.textContaining('TTL'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('promote_memory_st-1')));
+      await tester.pumpAndSettle();
+
+      final promotePatch = recordedRequests.lastWhere(
+        (r) => r['method'] == 'PATCH' && (r['url'] as String).contains('/api/v1/memories/st-1'),
+      );
+      final promoteBody = promotePatch['body'] as Map<String, dynamic>;
+      expect(promoteBody['expires_at'], isNull);
+      expect(promoteBody['category'], 'fact');
+      expect(promoteBody['source_type'], 'user_explicit');
+      expect(promoteBody['user_verified'], isTrue);
+    });
+
+    testWidgets('Add Knowledge dialog submits manual lorebook trigger keywords', (tester) async {
+      setupDesktopViewport(tester);
+      mockConflicts.clear();
+
+      final client = createMockClient();
+      final controller = DesktopMemoryController(
+        client: client,
+        profileId: 'prof-1',
+        initialExtractionEnabled: true,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(body: MemoryScreen(controller: controller)),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('add_memory_cta')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('memory_content_field')),
+        'Kael runs the harbor workshop',
+      );
+      await tester.enterText(
+        find.byKey(const Key('memory_keywords_field')),
+        'kael, harbor, workshop',
+      );
+      await tester.tap(find.text('Create Memory'));
+      await tester.pumpAndSettle();
+
+      final postReq = recordedRequests.lastWhere((r) => r['method'] == 'POST');
+      final body = postReq['body'] as Map<String, dynamic>;
+      expect(body['content'], 'Kael runs the harbor workshop');
+      expect(body['source_type'], 'manual');
+      expect(body['is_core'], isTrue);
+      expect(body['trigger_keywords'], ['kael', 'harbor', 'workshop']);
+    });
+
+    testWidgets('renders compact horizontal tier switcher under narrow width without overflow', (tester) async {
+      setupDesktopViewport(tester, size: const Size(640, 800));
+      mockConflicts.clear();
+
+      final client = createMockClient();
+      final controller = DesktopMemoryController(
+        client: client,
+        profileId: 'prof-1',
+        initialExtractionEnabled: true,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(body: MemoryScreen(controller: controller)),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('memory_tier_knowledge')), findsOneWidget);
+      expect(find.byKey(const Key('memory_tier_long_term')), findsOneWidget);
+      expect(find.byKey(const Key('memory_tier_short_term')), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 }

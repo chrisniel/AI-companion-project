@@ -854,6 +854,7 @@ class CompanionClient {
     bool? isCore,
     bool? userVerified,
     String? sourceType,
+    String? tier,
     String? q,
     bool includeExpired = false,
     int skip = 0,
@@ -869,6 +870,7 @@ class CompanionClient {
       if (isCore != null) 'is_core': isCore.toString(),
       if (userVerified != null) 'user_verified': userVerified.toString(),
       if (sourceType != null) 'source_type': sourceType,
+      if (tier != null) 'tier': tier,
       if (includeExpired) 'include_expired': 'true',
     };
     final uri = baseUri.replace(

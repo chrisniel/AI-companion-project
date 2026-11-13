@@ -5,6 +5,7 @@ import '../features/memory/desktop_memory_controller.dart';
 import '../features/memory/memory_conflict_banner.dart';
 import '../features/memory/memory_filter_bar.dart';
 import '../features/memory/memory_item_card.dart';
+import '../features/memory/memory_tier_sidebar.dart';
 
 /// Full Desktop Memory Control Center Screen (PC-CLIENT-009).
 class MemoryScreen extends StatefulWidget {
@@ -115,13 +116,46 @@ class _MemoryScreenState extends State<MemoryScreen> {
               // Active Conflicts Warning Banner
               MemoryConflictBanner(controller: controller),
 
-              // Filter & Search Bar
-              MemoryFilterBar(controller: controller),
-              const SizedBox(height: CompanionSpacing.md),
-
-              // Memory List / Status View
+              // Option 2A Two-Column Workspace: Inner Tier Sub-Menu + Filtered Content Pane
               Expanded(
-                child: _buildListContent(context, ext, controller),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    if (constraints.maxWidth >= 720) {
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          MemoryTierSidebar(controller: controller, width: 224),
+                          const SizedBox(width: CompanionSpacing.lg),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                MemoryFilterBar(controller: controller),
+                                const SizedBox(height: CompanionSpacing.md),
+                                Expanded(
+                                  child: _buildListContent(context, ext, controller),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        MemoryTierSidebar(controller: controller, compact: true),
+                        const SizedBox(height: CompanionSpacing.md),
+                        MemoryFilterBar(controller: controller),
+                        const SizedBox(height: CompanionSpacing.md),
+                        Expanded(
+                          child: _buildListContent(context, ext, controller),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ),
             ],
           ),

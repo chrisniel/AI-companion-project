@@ -1,9 +1,38 @@
 """Pydantic schemas for Memory creation, listing, and updates."""
 
 from datetime import datetime
-from typing import List, Literal, Optional
-from pydantic import Field, model_validator
+import json
+from typing import Any, List, Literal, Optional
+from pydantic import Field, field_validator, model_validator
 from app.schemas.common import BaseSchema
+
+
+def _normalize_keywords(value: Any) -> Optional[List[str]]:
+    """Normalize keyword list or JSON string into deduplicated lowercase terms."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return None
+        try:
+            parsed = json.loads(raw)
+            items = parsed if isinstance(parsed, list) else raw.split(",")
+        except Exception:
+            items = raw.split(",")
+    elif isinstance(value, (list, tuple, set)):
+        items = list(value)
+    else:
+        return None
+
+    seen: set[str] = set()
+    cleaned: List[str] = []
+    for item in items:
+        kw = str(item).strip().lower()
+        if kw and kw not in seen:
+            seen.add(kw)
+            cleaned.append(kw)
+    return cleaned or None
 
 
 class MemoryCreate(BaseSchema):
@@ -17,6 +46,13 @@ class MemoryCreate(BaseSchema):
     valid_from: Optional[datetime] = Field(default=None)
     expires_at: Optional[datetime] = Field(default=None)
     is_core: bool = Field(default=False)
+    trigger_keywords: Optional[List[str]] = Field(default=None)
+    source_type: Literal["manual", "user_explicit"] = Field(default="manual")
+
+    @field_validator("trigger_keywords", mode="before")
+    @classmethod
+    def validate_trigger_keywords(cls, value: Any) -> Optional[List[str]]:
+        return _normalize_keywords(value)
 
     @model_validator(mode="after")
     def validate_scoping(self) -> "MemoryCreate":
@@ -39,6 +75,12 @@ class MemoryUpdate(BaseSchema):
     expires_at: Optional[datetime] = None
     user_verified: Optional[bool] = None
     source_type: Optional[str] = None
+    trigger_keywords: Optional[List[str]] = None
+
+    @field_validator("trigger_keywords", mode="before")
+    @classmethod
+    def validate_trigger_keywords(cls, value: Any) -> Optional[List[str]]:
+        return _normalize_keywords(value)
 
 
 class MemoryOut(BaseSchema):
@@ -59,12 +101,22 @@ class MemoryOut(BaseSchema):
     expires_at: Optional[datetime] = None
     last_verified_at: Optional[datetime] = None
     is_core: bool = False
+    trigger_keywords: Optional[List[str]] = None
+    recall_count: int = 0
+
+    @field_validator("trigger_keywords", mode="before")
+    @classmethod
+    def parse_trigger_keywords(cls, value: Any) -> Optional[List[str]]:
+        return _normalize_keywords(value)
 
 
 class MemoryListOut(BaseSchema):
-    """List of memories with pagination info."""
+    """List of memories with pagination info and per-tier counts."""
 
     items: List[MemoryOut]
     total: int
     page: int = 1
     page_size: int = 50
+    knowledge_count: int = 0
+    long_term_count: int = 0
+    short_term_count: int = 0

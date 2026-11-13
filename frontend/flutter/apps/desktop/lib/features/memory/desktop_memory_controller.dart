@@ -28,6 +28,11 @@ class DesktopMemoryController extends ChangeNotifier {
   List<MemoryOut> _memories = [];
   List<MemoryOut> _activeConflicts = [];
 
+  String _selectedTier = 'knowledge'; // 'knowledge', 'long_term', 'short_term'
+  int _knowledgeCount = 0;
+  int _longTermCount = 0;
+  int _shortTermCount = 0;
+
   String _searchQuery = '';
   String _selectedScopeFilter = 'all'; // 'all', 'profile', 'character'
   String _selectedCategoryFilter = 'all'; // 'all', 'fact', 'preference', 'context'
@@ -40,10 +45,29 @@ class DesktopMemoryController extends ChangeNotifier {
   List<MemoryOut> get memories => List.unmodifiable(_memories);
   List<MemoryOut> get activeConflicts => List.unmodifiable(_activeConflicts);
 
+  String get selectedTier => _selectedTier;
+  int get knowledgeCount => _knowledgeCount;
+  int get longTermCount => _longTermCount;
+  int get shortTermCount => _shortTermCount;
+
   String get searchQuery => _searchQuery;
   String get selectedScopeFilter => _selectedScopeFilter;
   String get selectedCategoryFilter => _selectedCategoryFilter;
   String get selectedStatusFilter => _selectedStatusFilter;
+
+  void setTier(String tier) {
+    if (_selectedTier != tier) {
+      _selectedTier = tier;
+      if (tier != 'short_term' && _selectedCategoryFilter == 'context') {
+        _selectedCategoryFilter = 'all';
+      } else if (tier == 'short_term' &&
+          (_selectedCategoryFilter == 'fact' || _selectedCategoryFilter == 'preference')) {
+        _selectedCategoryFilter = 'all';
+      }
+      notifyListeners();
+      loadMemories();
+    }
+  }
 
   void updateProfileScope({
     required String? profileId,
@@ -147,10 +171,14 @@ class DesktopMemoryController extends ChangeNotifier {
         category: category,
         userVerified: userVerified,
         sourceType: sourceType,
+        tier: _selectedTier,
         limit: 100,
       );
 
       _memories = listResult.items;
+      _knowledgeCount = listResult.knowledgeCount;
+      _longTermCount = listResult.longTermCount;
+      _shortTermCount = listResult.shortTermCount;
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -166,6 +194,27 @@ class DesktopMemoryController extends ChangeNotifier {
       await _client.updateMemory(
         memoryId,
         const MemoryUpdate(userVerified: true),
+      );
+      await loadMemories();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Promotes a temporary short-term context memory into durable verified long-term memory.
+  Future<bool> promoteMemory(MemoryOut memory) async {
+    try {
+      await _client.updateMemory(
+        memory.id,
+        MemoryUpdate(
+          expiresAt: null,
+          category: memory.category == 'context' ? 'fact' : memory.category,
+          sourceType: 'user_explicit',
+          userVerified: true,
+        ),
       );
       await loadMemories();
       return true;

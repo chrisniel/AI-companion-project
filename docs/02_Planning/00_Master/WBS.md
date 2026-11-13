@@ -91,11 +91,11 @@
 - **`PC-CHAR-005`**: Immutable Neutral Assistant Fallback Definition (Delivered via PR #29, commit `d22dd7e`).
 
 ### Stream: `PC-MEM` — Memory & Continuity
-- **`PC-MEM-001`**: Profile & Character Scoped Memory Schema Extension.
-- **`PC-MEM-002`**: Selective Automatic Memory Extraction Pipeline (Local-only extraction default, confidence heuristics).
-- **`PC-MEM-003`**: Temporary Memory Lifecycle, Expiration Tracking & Natural Revalidation.
-- **`PC-MEM-004`**: User Inspection, Correction, Deletion & Tombstone Propagation.
-- **`PC-MEM-005`**: Bounded Conversation History Recall & Context Assembly.
+- **`PC-MEM-001`**: Profile & Character Scoped Memory Schema Extension (Delivered via PR #35 `b3d31d7`; extended with `trigger_keywords`, `recall_count`, and 3-tier helpers via Migration 013 in M3 Batch E on `feature/m3-memory-knowledge-e`).
+- **`PC-MEM-002`**: Selective Automatic Memory Extraction Pipeline (Delivered via PR #36 `f7de198` & PR #37 `64ac521`; strengthened with explicit `"Remember that..."` priority boost, Fixed Knowledge write-protection, and cross-session promotion in M3 Batch E).
+- **`PC-MEM-003`**: Temporary Memory Lifecycle, Expiration Tracking & Natural Revalidation (Delivered via PR #35 `b3d31d7` & extended with deterministic 72h situational TTL and 1-click UI promotion in M3 Batch E).
+- **`PC-MEM-004`**: User Inspection, Correction, Deletion & Tombstone Propagation (Delivered via PR #37 `64ac521` and updated with Option 2A 3-tier inner sub-menu UI in M3 Batch E).
+- **`PC-MEM-005`**: Bounded Conversation History Recall & Context Assembly (Delivered via PR #35 `b3d31d7`; upgraded with stem/prefix lorebook matching, FTS5 prefix ranking + `recall_count`, and 4-section XML context assembly in M3 Batch E).
 
 ### Stream: `PC-ACTION` — D9 Typed Action Engine
 - **`PC-ACTION-001`**: 5-Stage Deterministic Pipeline Implementation ($\text{Model} \rightarrow \text{Typed} \rightarrow \text{Policy} \rightarrow \text{Adapter} \rightarrow \text{Capability}$).

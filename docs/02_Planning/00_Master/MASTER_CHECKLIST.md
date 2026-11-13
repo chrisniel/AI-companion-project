@@ -31,9 +31,9 @@
 | **Persona** | 8 Continuous Personality Traits & Studio| `characters-personality-and-emotion.md`| `compile_personality_modulation_block` (8 traits, 5 bands, Autonomy Guard, <=700 bound), Flutter Character Studio V1 (`PC-CLIENT-007`), draft/dirty state, sequential Save & Activate, snapshot PATCH reconciliation, chat identity visibility | 641 pytest (17 modulator), 278 flutter desktop, 248 web (16 files), Windows acceptance 14 PASS | G5 | **IMPLEMENTED / VERIFIED (PR #30 SQUASH-MERGED)** |
 | **Persona** | Persistent Bounded Mood & Decay | `characters-personality-and-emotion.md`| Migration 012, `mood_engine.py`, `appraisal.py`, `<character_persona>` grounding, DRY sampling + 4-gram stream circuit breaker, Desktop Chat & Studio live mood badges | 779 pytest, 96 `companion_api`, 350 flutter desktop | G5 | **IMPLEMENTED / VERIFIED (BRANCH feature/m3-emotion-mood-engine-d)** |
 | **Persona** | Immutable Neutral Assistant Fallback | `characters-personality-and-emotion.md`| Template 00000000-0000-0000-0000-000000000001, immutable fallback logic, UI fallback safeguards | Unit & API tests | G5 | **IMPLEMENTED / VERIFIED (PR #29 SQUASH-MERGED)** |
-| **Memory** | Profile & Character Scopes | `memory-and-personalization.md` | SQLite+FTS5 baseline exists | FTS5 tests | G6 | **PARTIAL** |
-| **Memory** | Selective Automatic Memory Extraction | `memory-and-personalization.md` | Pending policy engine | Extraction tests | G6 | **NOT STARTED** |
-| **Memory** | Temporary Memory Validity & Expiry | `memory-and-personalization.md` | Pending schema columns | Expiry tests | G6 | **NOT STARTED** |
+| **Memory** | Profile & Character Scopes | `memory-and-personalization.md` | Migration 010/013, 3-tier classification (`knowledge`, `long_term`, `short_term`), FTS5 prefix search + stem lorebooks | Memory foundation, FTS5 & tier tests | G6 | **IMPLEMENTED / VERIFIED (PR #35–#37 SQUASH-MERGED + BATCH E ON `feature/m3-memory-knowledge-e`)** |
+| **Memory** | Selective Automatic Memory Extraction | `memory-and-personalization.md` | Extraction gate, explicit boost, Fixed Knowledge protection, cross-session promotion, conflict banner | Extraction, reconciler & tier tests | G6 | **IMPLEMENTED / VERIFIED (PR #36–#37 SQUASH-MERGED + BATCH E ON `feature/m3-memory-knowledge-e`)** |
+| **Memory** | Temporary Memory Validity & Expiry | `memory-and-personalization.md` | Deterministic 72h situational TTL, `:now` exclusion, TTL badges & 1-click UI Promote | Foundation & tier TTL tests | G6 | **IMPLEMENTED / VERIFIED (PR #35 SQUASH-MERGED + BATCH E ON `feature/m3-memory-knowledge-e`)** |
 | **Actions** | D9 Deterministic 5-Stage Pipeline | `tool-permissions-and-actions.md` | Pending engine | Policy matrix | G7 | **NOT STARTED** |
 | **Actions** | DEFAULT DENY & Parameter Confirmation | `tool-permissions-and-actions.md` | Pending engine | Security tests | G7 | **NOT STARTED** |
 | **Actions** | Persistent Tool Kill Switch | `tool-permissions-and-actions.md` | Pending engine | Safety tests | G7 | **NOT STARTED** |
@@ -68,7 +68,7 @@
 - [ ] **M2 D6 Model Import:** Proved working with GGUF + mmproj paired bundle.
 - [x] **M3 Character Studio & 8 Traits:** Batch A foundation delivered (PR #29, `d22dd7e`). Batch B 8-trait modulator and immersive Studio V1 delivered via PR #30 (`319ab66`).
 - [x] **M3 Persistent Mood:** Proved surviving restart with deterministic step rebalancing, `<1ms` pre-generation turn appraisal, natural companion grounding, DRY sampling + 4-gram stream circuit breaker, and Desktop Chat & Studio live mood badges (implemented and verified on branch `feature/m3-emotion-mood-engine-d` with 779/779 backend tests, 96/96 `companion_api` tests, and 350/350 Flutter desktop tests passing).
-- [ ] **M3 Memory & Scheduling:** Proved auto-extraction and alarm dispatch.
+- [ ] **M3 Memory & Scheduling:** Memory 3-tier extraction, lorebooks, protection, and Option 2A UI verified on `feature/m3-memory-knowledge-e`; `SchedulerService` and alarm dispatch remain planned.
 - [ ] **M4 Voice Pipeline:** Proved live spoken turn with instant barge-in cancellation.
 - [ ] **M4 D9 Policy Engine:** Proved DEFAULT DENY and Risk 2 confirmation prompts.
 - [ ] **M4 Web Security:** Proved SSRF containment and source provenance.

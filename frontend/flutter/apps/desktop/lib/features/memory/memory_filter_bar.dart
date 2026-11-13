@@ -55,10 +55,11 @@ class MemoryFilterBar extends StatelessWidget {
             ),
             const SizedBox(width: CompanionSpacing.md),
 
-            // Add Memory Button
+            // Context-aware Add Button
             FilledButton.icon(
+              key: const Key('add_memory_cta'),
               icon: const Icon(Icons.add_rounded, size: 18),
-              label: const Text('Add Memory'),
+              label: Text(_addButtonLabel(controller.selectedTier)),
               style: FilledButton.styleFrom(
                 visualDensity: VisualDensity.compact,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -68,6 +69,7 @@ class MemoryFilterBar extends StatelessWidget {
                   context: context,
                   builder: (ctx) => MemoryEditDialog(
                     activeCharacterInstanceId: controller.activeCharacterInstanceId,
+                    initialTier: controller.selectedTier,
                   ),
                 );
                 if (result is MemoryCreate) {
@@ -118,11 +120,13 @@ class MemoryFilterBar extends StatelessWidget {
                 context,
                 title: 'Category',
                 selectedValue: controller.selectedCategoryFilter,
-                options: const [
-                  ('all', 'All Categories'),
-                  ('fact', 'Facts'),
-                  ('preference', 'Preferences'),
-                  ('context', 'Context'),
+                options: [
+                  const ('all', 'All Categories'),
+                  if (controller.selectedTier != 'short_term') ...[
+                    const ('fact', 'Facts'),
+                    const ('preference', 'Preferences'),
+                  ],
+                  if (controller.selectedTier == 'short_term') const ('context', 'Context'),
                 ],
                 onSelected: controller.setCategoryFilter,
               ),
@@ -131,6 +135,17 @@ class MemoryFilterBar extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  String _addButtonLabel(String tier) {
+    switch (tier) {
+      case 'knowledge':
+        return 'Add Knowledge';
+      case 'short_term':
+        return 'Add Context';
+      default:
+        return 'Add Memory';
+    }
   }
 
   Widget _buildFilterChipGroup(

@@ -6,7 +6,7 @@ using deterministic slot resolution: DUPLICATE, NEW, MERGE, UPDATE, and CONFLICT
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import logging
 import re
 from typing import List, Optional, Set
@@ -96,6 +96,51 @@ def _is_update(existing_text: str, candidate_text: str) -> bool:
     return False
 
 
+def _as_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    """Normalize SQLite naive timestamps to UTC-aware datetimes."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _create_new_memory(
+    *,
+    profile_id: str,
+    candidate: MemoryCandidate,
+    effective_scope: str,
+    effective_character_instance_id: Optional[str],
+    is_explicit: bool,
+    user_verified: bool,
+    source_message_id: Optional[str],
+    now: datetime,
+    source_type_override: Optional[str] = None,
+) -> Memory:
+    effective_verified = True if (is_explicit or user_verified or candidate.user_verified) else False
+    effective_importance = max(float(candidate.importance), float(candidate.confidence))
+    if is_explicit:
+        effective_importance = max(effective_importance, 1.5)
+    return Memory(
+        id=str(uuid.uuid4()),
+        profile_id=profile_id,
+        owner_id=profile_id,
+        category=candidate.category,
+        content=candidate.content,
+        importance=min(2.0, effective_importance),
+        source_type=source_type_override or ("user_explicit" if is_explicit else "extracted"),
+        source_message_id=source_message_id,
+        user_verified=effective_verified if source_type_override != "conflict" else False,
+        scope=effective_scope,
+        character_instance_id=effective_character_instance_id,
+        valid_from=now,
+        expires_at=candidate.expires_at,
+        last_verified_at=now,
+        is_core=candidate.is_core,
+        recall_count=0,
+    )
+
+
 async def reconcile_candidate(
     db: AsyncSession,
     profile_id: str,
@@ -104,11 +149,12 @@ async def reconcile_candidate(
     active_character_instance_id: Optional[str] = None,
     source_type: str = "extracted",
     user_verified: bool = False,
+    now: Optional[datetime] = None,
 ) -> Optional[Memory]:
     """Reconcile a candidate memory against existing profile and character memories.
 
-    Applies deterministic slot logic (DUPLICATE, NEW, MERGE, UPDATE, CONFLICT).
-    Enforces scoping check constraints and confidence thresholds.
+    Applies deterministic slot logic (DUPLICATE, NEW, MERGE, UPDATE, CONFLICT),
+    enforces Fixed Knowledge write-protection, and consolidates recurring Short-Term Context.
     """
     # 1. Confidence threshold check
     is_explicit = source_type == "user_explicit" or candidate.confidence >= 1.0
@@ -133,7 +179,7 @@ async def reconcile_candidate(
         effective_scope = "profile"
         effective_character_instance_id = None
 
-    now = datetime.now(timezone.utc)
+    current_now = now or datetime.now(timezone.utc)
 
     # 3. Retrieve existing active memories for this profile & scope
     stmt = select(Memory).where(
@@ -165,9 +211,6 @@ async def reconcile_candidate(
         if not mem_tokens or not cand_tokens:
             continue
         intersection = cand_tokens & mem_tokens
-        # Subject-aware overlap: normalize by the smaller token set
-        # so concise existing facts (e.g. "allergic to shrimp" - 2 tokens) match
-        # longer descriptive updates (e.g. "previously had shrimp allergy but now healed")
         min_len = min(len(cand_tokens), len(mem_tokens))
         overlap = len(intersection) / max(1, min_len)
         if overlap > best_overlap:
@@ -177,60 +220,107 @@ async def reconcile_candidate(
     # 5. Slot Determination
     # Slot: NEW (no significant overlap with any existing memory)
     if not best_match or best_overlap < 0.25:
-        new_memory = Memory(
-            id=str(uuid.uuid4()),
+        new_memory = _create_new_memory(
             profile_id=profile_id,
-            owner_id=profile_id,
-            category=candidate.category,
-            content=candidate.content,
-            importance=candidate.confidence,
-            source_type="user_explicit" if is_explicit else "extracted",
+            candidate=candidate,
+            effective_scope=effective_scope,
+            effective_character_instance_id=effective_character_instance_id,
+            is_explicit=is_explicit,
+            user_verified=user_verified,
             source_message_id=source_message_id,
-            user_verified=True if is_explicit else False,
-            scope=effective_scope,
-            character_instance_id=effective_character_instance_id,
-            valid_from=now,
-            expires_at=candidate.expires_at,
-            last_verified_at=now,
-            is_core=candidate.is_core,
+            now=current_now,
         )
         db.add(new_memory)
         await db.flush()
         return new_memory
 
-    # Slot: DUPLICATE (content is identical or almost identical)
     cand_clean = candidate.content.strip().lower()
     ex_clean = best_match.content.strip().lower()
     mem_tokens = _tokenize(best_match.content)
     jaccard = len(cand_tokens & mem_tokens) / max(1, len(cand_tokens | mem_tokens))
+
+    # Fixed Knowledge Protection (Tier 1 lock against background AI overwrites)
+    if best_match.is_fixed_knowledge and not is_explicit:
+        if cand_clean == ex_clean or jaccard >= 0.80:
+            best_match.last_verified_at = current_now
+            db.add(best_match)
+            await db.flush()
+            return best_match
+        if _is_contradiction(best_match.content, candidate.content):
+            conflict_memory = _create_new_memory(
+                profile_id=profile_id,
+                candidate=candidate,
+                effective_scope=effective_scope,
+                effective_character_instance_id=effective_character_instance_id,
+                is_explicit=False,
+                user_verified=False,
+                source_message_id=source_message_id,
+                now=current_now,
+                source_type_override="conflict",
+            )
+            db.add(conflict_memory)
+            await db.flush()
+            return conflict_memory
+        # Non-contradictory auto-extracted detail cannot mutate fixed knowledge; insert as separate NEW item
+        isolated_memory = _create_new_memory(
+            profile_id=profile_id,
+            candidate=candidate,
+            effective_scope=effective_scope,
+            effective_character_instance_id=effective_character_instance_id,
+            is_explicit=False,
+            user_verified=False,
+            source_message_id=source_message_id,
+            now=current_now,
+        )
+        db.add(isolated_memory)
+        await db.flush()
+        return isolated_memory
+
+    # Short-Term Consolidation across sessions (> 12h after initial observation)
+    if best_match.is_short_term and not _is_contradiction(best_match.content, candidate.content):
+        baseline = _as_utc(best_match.valid_from) or _as_utc(best_match.created_at) or current_now
+        last_verified = _as_utc(best_match.last_verified_at) or baseline
+        hours_since_origin = (current_now - baseline).total_seconds() / 3600.0
+        already_reinforced_later = (last_verified - baseline).total_seconds() >= 12 * 3600
+        if hours_since_origin >= 12.0:
+            if already_reinforced_later or (best_match.recall_count or 0) >= 1:
+                best_match.expires_at = None
+                if best_match.category == "context":
+                    best_match.category = "fact"
+            else:
+                best_match.expires_at = current_now + timedelta(hours=72)
+            best_match.last_verified_at = current_now
+            if is_explicit or user_verified or candidate.user_verified:
+                best_match.user_verified = True
+            db.add(best_match)
+            await db.flush()
+            return best_match
+
+    # Slot: DUPLICATE (content is identical or almost identical)
     if cand_clean == ex_clean or jaccard >= 0.80:
-        best_match.last_verified_at = now
+        best_match.last_verified_at = current_now
         if candidate.is_core:
             best_match.is_core = True
-        if is_explicit or user_verified:
+        if is_explicit or user_verified or candidate.user_verified:
             best_match.user_verified = True
+        if is_explicit:
+            best_match.importance = min(2.0, max(float(best_match.importance), 1.5))
         db.add(best_match)
         await db.flush()
         return best_match
 
     # Slot: CONFLICT (contradiction on common subject)
     if _is_contradiction(best_match.content, candidate.content):
-        conflict_memory = Memory(
-            id=str(uuid.uuid4()),
+        conflict_memory = _create_new_memory(
             profile_id=profile_id,
-            owner_id=profile_id,
-            category=candidate.category,
-            content=candidate.content,
-            importance=candidate.confidence,
-            source_type="conflict",
+            candidate=candidate,
+            effective_scope=effective_scope,
+            effective_character_instance_id=effective_character_instance_id,
+            is_explicit=is_explicit,
+            user_verified=False,
             source_message_id=source_message_id,
-            user_verified=False,  # Unverified until resolved in UI or chat
-            scope=effective_scope,
-            character_instance_id=effective_character_instance_id,
-            valid_from=now,
-            expires_at=candidate.expires_at,
-            last_verified_at=now,
-            is_core=candidate.is_core,
+            now=current_now,
+            source_type_override="conflict",
         )
         db.add(conflict_memory)
         await db.flush()
@@ -240,8 +330,8 @@ async def reconcile_candidate(
     if _is_update(best_match.content, candidate.content):
         best_match.content = candidate.content
         best_match.category = candidate.category
-        best_match.last_verified_at = now
-        if is_explicit or user_verified:
+        best_match.last_verified_at = current_now
+        if is_explicit or user_verified or candidate.user_verified:
             best_match.user_verified = True
             best_match.source_type = "user_explicit"
         if candidate.is_core:
@@ -255,8 +345,8 @@ async def reconcile_candidate(
     # Slot: MERGE (enrichment with complementary information)
     best_match.content = candidate.content
     best_match.category = candidate.category
-    best_match.last_verified_at = now
-    if is_explicit or user_verified:
+    best_match.last_verified_at = current_now
+    if is_explicit or user_verified or candidate.user_verified:
         best_match.user_verified = True
         best_match.source_type = "user_explicit"
     if candidate.is_core:

@@ -1,9 +1,10 @@
 """Memory SQLAlchemy ORM model definition."""
 
 from datetime import datetime
-from typing import Optional
+import json
+from typing import List, Optional
 import sqlalchemy as sa
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, ForeignKey, Index, String, Text, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -50,6 +51,15 @@ class Memory(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, ProfileMixin
         server_default=sa.text("0"),
     )
 
+    # M3 Batch E: Keyword-Triggered Lorebooks & Recall Tracking
+    trigger_keywords: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    recall_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+
     __table_args__ = (
         CheckConstraint("scope IN ('profile', 'character')", name="ck_memories_scope"),
         CheckConstraint(
@@ -57,11 +67,53 @@ class Memory(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, ProfileMixin
             name="ck_memories_character_scope",
         ),
         CheckConstraint("expires_at IS NULL OR expires_at >= valid_from", name="ck_memories_validity"),
+        CheckConstraint("recall_count >= 0", name="ck_memories_recall_count"),
         Index("ix_memories_profile_scope", "profile_id", "scope", "deleted_at"),
         Index("ix_memories_character_instance_id", "character_instance_id"),
         Index("ix_memories_expires_at", "expires_at", "deleted_at"),
         Index("ix_memories_is_core", "profile_id", "is_core", "deleted_at"),
     )
+
+    @property
+    def trigger_keywords_list(self) -> List[str]:
+        """Parse stored JSON array of trigger keywords cleanly."""
+        if not self.trigger_keywords:
+            return []
+        try:
+            parsed = json.loads(self.trigger_keywords)
+            if isinstance(parsed, list):
+                return [str(k).strip() for k in parsed if str(k).strip()]
+        except Exception:
+            pass
+        return [k.strip() for k in self.trigger_keywords.split(",") if k.strip()]
+
+    @property
+    def is_short_term(self) -> bool:
+        """True when record holds temporary situational context with TTL or non-core context category."""
+        if self.expires_at is not None:
+            return True
+        return self.category == "context" and not self.is_core and not bool(self.trigger_keywords_list)
+
+    @property
+    def is_fixed_knowledge(self) -> bool:
+        """True when record belongs to locked Tier 1 Knowledge Base & User Profile."""
+        if self.is_short_term:
+            return False
+        return self.is_core or self.source_type == "manual" or bool(self.trigger_keywords_list)
+
+    @property
+    def is_long_term(self) -> bool:
+        """True when record is durable semantic/episodic Tier 2 memory."""
+        return not self.is_short_term and not self.is_fixed_knowledge
+
+    @property
+    def tier(self) -> str:
+        """Mutually exclusive tier classification: knowledge | long_term | short_term."""
+        if self.is_short_term:
+            return "short_term"
+        if self.is_fixed_knowledge:
+            return "knowledge"
+        return "long_term"
 
     def __repr__(self) -> str:
         return f"<Memory id={self.id} scope={self.scope} category={self.category} is_core={self.is_core}>"

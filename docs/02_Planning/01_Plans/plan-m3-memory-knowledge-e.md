@@ -2,7 +2,7 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- **Status:** Awaiting Approval (Phase 1 Planning Complete)
+- **Status:** Implemented & Verified on `feature/m3-memory-knowledge-e` (Phase 3 Closure Complete — Draft PR Ready for Phase 4 Review)
 - **Delivery Level:** Level B — Planned Autonomous (Core Architecture Feature Implementation under Approved Decision D7 & ADR-0018)
 - **Work Breakdown Structure IDs:** `PC-MEM-002` (guardrails & TTL), `PC-MEM-006` (3-tier memory & keyword lorebook), `PC-CLIENT-009` (Memory Control Center 3-tier inner sub-menu UI)
 - **Scope Mode:** New Feature & Architectural Revamp — 3-Tier memory model (Fixed Knowledge, Long-Term Memory, Short-Term Context), Alembic Migration 013 (`trigger_keywords` + `recall_count`), deterministic 72h Short-Term TTL decay, background AI overwrite protection for Fixed Knowledge, stem/prefix-aware keyword lorebook retrieval, explicit `"Remember that..."` instant verification & importance boost, structured multi-section prompt assembly, and Desktop UI revamp with Option 2A inner left sub-menu & context-aware creation CTA.
@@ -203,14 +203,14 @@ Per canonical architecture decisions **`D-SHARED-AI-01`**, **`D-SHARED-AI-02`**,
 ## 5. Acceptance Criteria & Verification Strategy
 
 ### Automated Repository Checks
-- [ ] Backend Migration 013 & Schema: `backend/.venv/Scripts/python.exe -m pytest backend/tests/test_migration_013.py backend/tests/test_schema_lifecycle.py backend/tests/test_prepare_database_schema_backup.py -v`
-- [ ] Backend Memory Tiers & Knowledge Suite: `backend/.venv/Scripts/python.exe -m pytest backend/tests/test_memory_knowledge_tiers.py backend/tests/test_memory_foundation.py -v`
-- [ ] Full Backend Regression Suite: `backend/.venv/Scripts/python.exe -m pytest backend/tests -q`
-- [ ] OpenAPI Contract Verification: `backend/.venv/Scripts/python.exe scripts/check_openapi_contract.py --check`
-- [ ] Dart OpenAPI Parity: `backend/.venv/Scripts/python.exe scripts/check_dart_openapi_parity.py --check`
-- [ ] Companion API Tests: `dart test` (in `frontend/flutter/packages/companion_api`)
-- [ ] Flutter Desktop Tests & Analyze: `flutter analyze` & `flutter test` (in `frontend/flutter/apps/desktop`)
-- [ ] React Web Tests & Build: `npm --prefix frontend/web test -- --run` & `npm --prefix frontend/web run build`
+- [x] Backend Migration 013 & Schema: `backend/.venv/Scripts/python.exe -m pytest backend/tests/test_migration_013.py backend/tests/test_schema_lifecycle.py backend/tests/test_prepare_database_schema_backup.py -v` (`14 passed`)
+- [x] Backend Memory Tiers & Knowledge Suite: `backend/.venv/Scripts/python.exe -m pytest backend/tests/test_memory_knowledge_tiers.py backend/tests/test_memory_foundation.py backend/tests/test_memory_fts.py backend/tests/test_memory_reconciliation.py backend/tests/test_memory_extraction_pipeline.py backend/tests/test_assistant_orchestrator.py -v` (`50 passed`)
+- [x] Full Backend Regression Suite: `backend/.venv/Scripts/python.exe -m pytest backend/tests -q` (`788 passed`)
+- [x] OpenAPI Contract Verification: `backend/.venv/Scripts/python.exe scripts/check_openapi_contract.py --check` (`0 errors`, `44` routes)
+- [x] Dart OpenAPI Parity: `backend/.venv/Scripts/python.exe scripts/check_dart_openapi_parity.py --check` (`32/32` DTOs OK, `42/26` M1+M2 routes OK)
+- [x] Companion API Tests: `dart test` (in `frontend/flutter/packages/companion_api` — `97 passed`)
+- [x] Flutter Desktop Tests & Analyze: `flutter analyze` (`No issues found`) & `flutter test` (`353 passed`)
+- [x] React Web Tests & Build: `npm --prefix frontend/web test -- --run` (`248 passed`, 16 files) & `npm --prefix frontend/web run build` (`vite build` exit 0)
 
 ### Manual & Host-Level Checks
 - [ ] Open **Memory & Knowledge** in Desktop app and verify the inner left sub-menu (`Option 2A`) switches cleanly between **Knowledge & Profile**, **Long-Term Memories**, and **Short-Term Context** with accurate item counts.

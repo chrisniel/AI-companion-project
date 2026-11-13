@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added — M3 Batch E: Memory & Knowledge Architecture V2, 3-Tier Lifecycle, Keyword Lorebooks & Option 2A Desktop UI (`PC-MEM-001`..`005`, `PC-CLIENT-009`)
+
+- **Alembic Migration 013 & Tier Model (`013_memory_knowledge_and_triggers.py`, `backend/app/models/memory.py`)**:
+  - Added `trigger_keywords` (`Text` JSON list) and `recall_count` (`Integer`, default `0`, `ck_memories_recall_count`) to `memories`, preserving FTS5 virtual table triggers and enforcing fail-closed downgrade safety.
+  - Added tier helpers (`knowledge`, `long_term`, `short_term`) while strictly keeping temporary `expires_at` precedence (`is_short_term`) over `is_core`.
+- **Deterministic 72h TTL, Explicit Intent Boost, Protection & Consolidation (`extractor.py`, `reconciler.py`)**:
+  - Assigned deterministic 72-hour expiration (`DEFAULT_SHORT_TERM_TTL_HOURS = 72`) for situational context lacking an LLM-provided `expires_at`; promoted explicit *"Remember that..."* turns immediately (`user_verified = True`, `importance >= 1.5`).
+  - Shielded Fixed Knowledge (`is_core`, `manual`, or keyword lorebook entries) from automatic `UPDATE`/`MERGE` mutation during background extraction and added cross-session ($\ge 12$h) consolidation/promotion for recurring short-term episodes.
+- **Stem/Prefix Lorebooks, FTS5 Prefix Search & Multi-Section XML Assembly (`retriever.py`, `orchestrator.py`)**:
+  - Added `get_triggered_knowledge` with normalized phrase and ASCII stem/prefix matching ($\ge 3$ chars), isolated keyword-gated entries out of unconditional `<user_core_profile>`, switched FTS5 retrieval to prefix queries (`token*`), and tracked `recall_count` with bounded ranking boosts.
+  - Partitioned `<retrieved_memories>` in `AssistantOrchestrator._build_context` into `<user_core_profile>` ($\le 120$), `<triggered_knowledge_lore>` ($\le 150$), `<episodic_and_long_term_memories>` ($\le 200$), and `<short_term_context>` ($\le 100$) within the tight 2B context budget.
+- **API, OpenAPI/Dart Parity & Option 2A Desktop Memory Control Center (`memories.py`, `companion_api`, Desktop UI)**:
+  - Extended `GET /api/v1/memories` with `?tier=` filtering, keyword search, and profile-wide tier counts (`knowledge_count`, `long_term_count`, `short_term_count`); regenerated `contracts/openapi/openapi.json` and updated `companion_api` DTOs & `CompanionClient.listMemories`.
+  - Delivered Option 2A inner left tier sub-menu (`MemoryTierSidebar` with compact narrow fallback), context-aware `+ Add Knowledge` / `+ Add Memory` / `+ Add Context` dialog defaults, Trigger Keyword inputs & `#keyword` pills, `RECALLED N×` & TTL badges, and 1-click **Promote** on short-term cards.
+  - Verified with `788/788` backend pytest tests, OpenAPI + `companion_api` Dart parity checks (`97/97` tests), `flutter analyze` (`0` issues) + `353/353` Flutter desktop tests, and `248/248` Web Vitest tests + production build.
+
 ### Added — M3 Batch D: Persistent Bounded Emotion & Mood Engine, Pre-Generation Turn Appraisal, Natural Companion Grounding, and Live Mood UI (PC-CHAR-003, PC-CHAR-004)
 
 - **Alembic Migration 012 & Persistent Mood Schema (`PC-CHAR-003`)**:
