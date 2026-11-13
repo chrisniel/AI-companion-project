@@ -3,7 +3,7 @@
 - **Branch:** `feature/m3-memory-knowledge-e`
 - **Base Integration Branch:** `develop` (`04e7bc0`)
 - **Delivery Level:** Level B — Planned Autonomous (Core Architecture Feature Implementation under Approved Decision D7 & ADR-0018)
-- **Work Breakdown Structure IDs:** `PC-MEM-002` (guardrails & TTL), `PC-MEM-006` (3-tier memory & keyword lorebook), `PC-CLIENT-009` (3-tab Memory Control Center UI)
+- **Work Breakdown Structure IDs:** `PC-MEM-002` (guardrails & TTL), `PC-MEM-006` (3-tier memory & keyword lorebook), `PC-CLIENT-009` (Memory Control Center 3-tier inner sub-menu UI)
 - **Implementation Plan:** [`docs/02_Planning/01_Plans/plan-m3-memory-knowledge-e.md`](../../02_Planning/01_Plans/plan-m3-memory-knowledge-e.md)
 - **Status:** **PHASE 1 COMPLETE / AWAITING HUMAN OWNER PLAN APPROVAL**
 
@@ -14,7 +14,7 @@
 - **Batch M3-B (MERGED):** Immersive Character Studio V1 & 8-Trait Modulator (`PC-CHAR-002`, `PC-CLIENT-007`, PR #30).
 - **Batch M3-C1..C3 (MERGED):** Memory Foundation, Extraction, and Desktop Control Center UI (`PC-MEM-001`..`005`, `PC-CLIENT-009`, PRs #35, #36, #37).
 - **Batch M3-D (MERGED):** Persistent Bounded Emotion & Mood Dynamics, Turn Appraisal, Grounding & Live Mood UI (`PC-CHAR-003`, `PC-CHAR-004`, PR #38).
-- **Batch M3-E (ACTIVE ON `feature/m3-memory-knowledge-e`):** Memory & Knowledge Architecture V2 (3-Tier Separation: Fixed Knowledge & Profile, Long-Term & Episodic Memory, Short-Term Context; Migration 013 `trigger_keywords` + `recall_count`; 72h context TTL; Explicit `"Remember that..."` instant verification & importance boost; Reconciler Fixed Knowledge Protection; Stem/Prefix Keyword-Triggered Lorebooks & Recall Frequency Ranking; Multi-Section XML Prompt Context; 3-Tab Desktop UI with `Recalled N×` badge).
+- **Batch M3-E (ACTIVE ON `feature/m3-memory-knowledge-e`):** Memory & Knowledge Architecture V2 (3-Tier Separation: Fixed Knowledge & Profile, Long-Term & Episodic Memory, Short-Term Context; Migration 013 `trigger_keywords` + `recall_count`; 72h context TTL; Explicit `"Remember that..."` instant verification & importance boost; Reconciler Fixed Knowledge Protection; Stem/Prefix Keyword-Triggered Lorebooks & Recall Frequency Ranking; Multi-Section XML Prompt Context; Desktop UI revamp with Option 2A inner left sub-menu, context-aware `+ Add` CTA, & `Recalled N×` badge).
 
 ---
 
@@ -47,8 +47,8 @@
   - [ ] Regenerate `contracts/openapi/openapi.json`.
   - [ ] Update `frontend/flutter/packages/companion_api/lib/dto/memory_dto.dart` (`triggerKeywords`, `recallCount`).
   - [ ] Verify `scripts/check_dart_openapi_parity.py --check` and `dart test`.
-- [ ] **Step 5 — Desktop 3-Tab Workspace & Lorebook UI (Flutter TDD):**
-  - [ ] Update `desktop_memory_controller.dart`, `memory_screen.dart`, `memory_item_card.dart` (including `Recalled N×` badge), `memory_edit_dialog.dart`.
+- [ ] **Step 5 — Desktop Option 2A Inner Sub-Menu & Lorebook UI (Flutter TDD):**
+  - [ ] Update `desktop_memory_controller.dart`, `memory_screen.dart`, add `memory_tier_sidebar.dart`, and update `memory_filter_bar.dart` (context-aware `+ Add`), `memory_item_card.dart` (including `Recalled N×` badge & keyword pills), `memory_edit_dialog.dart`.
   - [ ] Add widget tests in `frontend/flutter/apps/desktop/test/memory_screen_test.dart`.
   - [ ] Verify `flutter analyze` and `flutter test`.
 

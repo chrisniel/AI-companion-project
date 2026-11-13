@@ -4,8 +4,8 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - **Status:** Awaiting Approval (Phase 1 Planning Complete)
 - **Delivery Level:** Level B — Planned Autonomous (Core Architecture Feature Implementation under Approved Decision D7 & ADR-0018)
-- **Work Breakdown Structure IDs:** `PC-MEM-002` (guardrails & TTL), `PC-MEM-006` (3-tier memory & keyword lorebook), `PC-CLIENT-009` (3-tab Memory Control Center UI)
-- **Scope Mode:** New Feature & Architectural Revamp — 3-Tier memory model (Fixed Knowledge, Long-Term Memory, Short-Term Context), Alembic Migration 013 (`trigger_keywords`), deterministic 72h Short-Term TTL decay, background AI overwrite protection for Fixed Knowledge, keyword-triggered lorebook retrieval, structured multi-section prompt assembly, and 3-tab Desktop UI.
+- **Work Breakdown Structure IDs:** `PC-MEM-002` (guardrails & TTL), `PC-MEM-006` (3-tier memory & keyword lorebook), `PC-CLIENT-009` (Memory Control Center 3-tier inner sub-menu UI)
+- **Scope Mode:** New Feature & Architectural Revamp — 3-Tier memory model (Fixed Knowledge, Long-Term Memory, Short-Term Context), Alembic Migration 013 (`trigger_keywords` + `recall_count`), deterministic 72h Short-Term TTL decay, background AI overwrite protection for Fixed Knowledge, stem/prefix-aware keyword lorebook retrieval, explicit `"Remember that..."` instant verification & importance boost, structured multi-section prompt assembly, and Desktop UI revamp with Option 2A inner left sub-menu & context-aware creation CTA.
 - **Target Files:**
   - `backend/migrations/versions/013_memory_knowledge_and_triggers.py` (new)
   - `backend/app/models/memory.py`
@@ -18,6 +18,8 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
   - `frontend/flutter/packages/companion_api/lib/dto/memory_dto.dart`
   - `frontend/flutter/apps/desktop/lib/features/memory/desktop_memory_controller.dart`
   - `frontend/flutter/apps/desktop/lib/screens/memory_screen.dart`
+  - `frontend/flutter/apps/desktop/lib/features/memory/memory_tier_sidebar.dart` (new)
+  - `frontend/flutter/apps/desktop/lib/features/memory/memory_filter_bar.dart`
   - `frontend/flutter/apps/desktop/lib/features/memory/memory_edit_dialog.dart`
   - `frontend/flutter/apps/desktop/lib/features/memory/memory_item_card.dart`
   - `backend/tests/test_migration_013.py` (new)
@@ -53,9 +55,13 @@ Revamp companion memory and knowledge systems from a single flat list of facts i
    - FTS5 retrieval uses prefix matching (`token*`) and increments `recall_count` whenever a memory is retrieved into active prompt context, factoring recall frequency into retrieval priority.
 4. **Structured Multi-Section XML Prompt Context**:
    - Replaces monolithic `<retrieved_memories>` with distinct, semantically partitioned XML tags: `<user_core_profile>`, `<triggered_knowledge_lore>`, `<episodic_and_long_term_memories>`, and `<short_term_context>`.
-5. **3-Tab Desktop Memory Control Center UI (`PC-CLIENT-009`)**:
-   - Segmented navigation: 📌 **Knowledge Base & Profile**, 🧠 **Long-Term Memories**, and ⏳ **Short-Term Context** (with remaining TTL badge, `Recalled N×` badge, and 1-click *Promote* button).
-   - Keyword tag chip editor in `MemoryEditDialog`.
+5. **Desktop Memory Control Center UI Revamp — Option 2A Inner Sub-Menu (`PC-CLIENT-009`)**:
+   - Inner left sub-menu (`memory_tier_sidebar.dart`, `~210px`) inside `MemoryScreen` separating the 3 tiers right next to the main navigation rail for minimal cursor travel:
+     - 📌 **Knowledge & Profile** (live count + subtitle *Locked rules & #lorebook*)
+     - 🧠 **Long-Term Memories** (live count + subtitle *Durable facts & preferences*)
+     - ⏳ **Short-Term Context** (live count + subtitle *72h working state*)
+   - Responsive fallback to a compact horizontal selector if the window width narrows below split-pane threshold.
+   - Context-aware `+ Add` CTA and `MemoryEditDialog` defaults per active tier (`+ Add Knowledge`, `+ Add Memory`, `+ Add Context`), plus keyword tag chip editor, `Recalled N×` badge, TTL remaining badge, and 1-click *Promote* button.
 
 ### 1.4 Explicit Out-of-Scope
 - Standalone vector embedding database / dense semantic search (reserved for PC Later per Decision D7).
@@ -156,12 +162,15 @@ Per canonical architecture decisions **`D-SHARED-AI-01`**, **`D-SHARED-AI-02`**,
 - Regenerate OpenAPI specification.
 - Update `memory_dto.dart` with `triggerKeywords`, `recallCount`, and parity assertions.
 
-### [MODIFY] `frontend/flutter/apps/desktop/lib/screens/memory_screen.dart` & `features/memory/`
-- Add 3-segment top workspace selector:
-  1. 📌 **Knowledge & Profile** (Core pinned facts, manual rules, Lorebook entries with `#tag` chips).
-  2. 🧠 **Long-Term Memories** (Durable preferences and character-scoped memories).
-  3. ⏳ **Short-Term Context** (Situational context with `⏳ 48h remaining` badge and 1-click **Promote** button).
-- In `memory_edit_dialog.dart`: Add `Trigger Keywords` comma-separated tag input.
+### [ADD / MODIFY] `frontend/flutter/apps/desktop/lib/screens/memory_screen.dart` & `features/memory/`
+- **Inner Left Sub-Menu (`memory_tier_sidebar.dart`, Option 2A):**
+  - Renders a `~210px` vertical sub-menu inside `MemoryScreen` (positioned immediately adjacent to the main app navigation rail) with icon, title, live item count badge, and 1-line subtitle for each tier:
+    1. 📌 **Knowledge & Profile** (Core pinned facts, manual rules, Lorebook entries with `#tag` chips).
+    2. 🧠 **Long-Term Memories** (Durable preferences and character-scoped memories).
+    3. ⏳ **Short-Term Context** (Situational context with `⏳ 48h remaining` badge and 1-click **Promote** button).
+  - Automatically falls back to a compact horizontal tier switcher when viewport width is narrow.
+- In `memory_filter_bar.dart`: Make the primary CTA label and creation defaults context-aware to the selected tier (`+ Add Knowledge`, `+ Add Memory`, `+ Add Context`).
+- In `memory_edit_dialog.dart`: Accept `initialTier` preset defaults (`knowledge` defaults `sourceType='manual'` / shows `Trigger Keywords`; `short_term` defaults `category='context'` + 72h TTL) and include the `Trigger Keywords` comma-separated tag input.
 - In `memory_item_card.dart`: Display trigger keyword pills, `Recalled N×` badge when `recallCount > 0`, and 1-click "Promote to Long-Term" action for short-term cards.
 
 ---
@@ -183,9 +192,9 @@ Per canonical architecture decisions **`D-SHARED-AI-01`**, **`D-SHARED-AI-02`**,
    - Update `orchestrator.py` and verify context budget tests.
 4. **Step 4 — OpenAPI Contract & Dart SDK Parity (Contract TDD):**
    - Regenerate `openapi.json`, update `memory_dto.dart`, and verify parity scripts (`scripts/check_dart_openapi_parity.py`).
-5. **Step 5 — Desktop 3-Tab Workspace & Lorebook UI (Flutter TDD):**
-   - Update `desktop_memory_controller.dart`, `memory_screen.dart`, `memory_edit_dialog.dart`, `memory_item_card.dart`.
-   - Add widget tests in `memory_screen_test.dart` verifying 3-tab filtering, trigger keyword chips, and 1-click promotion.
+5. **Step 5 — Desktop Option 2A Inner Sub-Menu & Lorebook UI (Flutter TDD):**
+   - Update `desktop_memory_controller.dart`, `memory_screen.dart`, add `memory_tier_sidebar.dart`, and update `memory_filter_bar.dart`, `memory_edit_dialog.dart`, `memory_item_card.dart`.
+   - Add widget tests in `memory_screen_test.dart` verifying Option 2A inner sub-menu tier switching, live tier counts, context-aware `+ Add` defaults, trigger keyword chips, `Recalled N×` badge, and 1-click promotion.
 6. **Step 6 — Phase 3 Documentation, Closure & Draft PR:**
    - Update `memory-and-personalization.md`, `CHANGELOG.md`, create walkthrough, reconcile tracking, commit, push, and open Draft PR.
 
@@ -204,7 +213,7 @@ Per canonical architecture decisions **`D-SHARED-AI-01`**, **`D-SHARED-AI-02`**,
 - [ ] React Web Tests & Build: `npm --prefix frontend/web test -- --run` & `npm --prefix frontend/web run build`
 
 ### Manual & Host-Level Checks
-- [ ] Open **Memory Control Center** in Desktop app and verify 3 tabs: **Knowledge Base**, **Long-Term Memories**, **Short-Term Context**.
+- [ ] Open **Memory & Knowledge** in Desktop app and verify the inner left sub-menu (`Option 2A`) switches cleanly between **Knowledge & Profile**, **Long-Term Memories**, and **Short-Term Context** with accurate item counts.
 - [ ] Add a Knowledge entry with trigger keywords `["anime", "movie"]`. Verify it appears under Knowledge Base with trigger pills.
 - [ ] Say *"I had a really tiring day today"* in Chat. Verify it is extracted into **Short-Term Context** with a `⏳ 3d` badge.
 - [ ] Click **Promote** on a Short-Term Context card and confirm it moves to **Long-Term Memories** with `expires_at = null`.
