@@ -1,12 +1,13 @@
 """Memory management CRUD endpoints — Master Plan §18, §34 (Track B5), Milestone M3 Batch C1."""
 
 from datetime import datetime, timezone
+import json
 import logging
-from typing import Optional
+from typing import Literal, Optional
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, case, func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_profile_session, get_db
@@ -21,6 +22,40 @@ logger = logging.getLogger("app.api.v1.endpoints.memories")
 router = APIRouter()
 
 
+def _has_trigger_keywords_expr():
+    return and_(
+        Memory.trigger_keywords.is_not(None),
+        Memory.trigger_keywords != "",
+        Memory.trigger_keywords != "[]",
+    )
+
+
+def _short_term_expr():
+    return or_(
+        Memory.expires_at.is_not(None),
+        and_(
+            Memory.category == "context",
+            Memory.is_core.is_(False),
+            not_(_has_trigger_keywords_expr()),
+        ),
+    )
+
+
+def _knowledge_expr():
+    return and_(
+        not_(_short_term_expr()),
+        or_(
+            Memory.is_core.is_(True),
+            Memory.source_type == "manual",
+            _has_trigger_keywords_expr(),
+        ),
+    )
+
+
+def _long_term_expr():
+    return and_(not_(_short_term_expr()), not_(_knowledge_expr()))
+
+
 @router.get(
     "",
     response_model=MemoryListOut,
@@ -33,6 +68,10 @@ async def list_memories(
     is_core: Optional[bool] = Query(None, description="Filter by is_core flag"),
     user_verified: Optional[bool] = Query(None, description="Filter by user verification state"),
     source_type: Optional[str] = Query(None, description="Filter by source type: manual, extracted, conflict, etc."),
+    tier: Optional[Literal["knowledge", "long_term", "short_term"]] = Query(
+        None,
+        description="Filter by memory tier: knowledge, long_term, or short_term",
+    ),
     q: Optional[str] = Query(None, description="Search memory content"),
     include_expired: bool = Query(False, description="Whether to include expired temporary memories"),
     skip: int = Query(0, ge=0),
@@ -40,14 +79,39 @@ async def list_memories(
     session: ProfileSession = Depends(get_current_profile_session),
     db: AsyncSession = Depends(get_db),
 ) -> MemoryListOut:
-    """List active memories owned by the user, optionally filtered by category, scope, and expiry."""
+    """List active memories owned by the user, optionally filtered by tier, category, scope, and expiry."""
     now = datetime.now(timezone.utc)
-    query = select(Memory).where(
+    base_query = select(Memory).where(
         Memory.profile_id == session.profile_id,
         Memory.deleted_at.is_(None),
     )
+    if not include_expired:
+        base_query = base_query.where(or_(Memory.expires_at.is_(None), Memory.expires_at > now))
+
+    st_expr = _short_term_expr()
+    know_expr = _knowledge_expr()
+    lt_expr = _long_term_expr()
+
+    # Profile-wide tier counts (respecting expiry boundary, independent of active tier tab)
+    counts_stmt = select(
+        func.coalesce(func.sum(case((know_expr, 1), else_=0)), 0),
+        func.coalesce(func.sum(case((lt_expr, 1), else_=0)), 0),
+        func.coalesce(func.sum(case((st_expr, 1), else_=0)), 0),
+    ).where(
+        Memory.profile_id == session.profile_id,
+        Memory.deleted_at.is_(None),
+    )
+    if not include_expired:
+        counts_stmt = counts_stmt.where(or_(Memory.expires_at.is_(None), Memory.expires_at > now))
+    counts_row = (await db.execute(counts_stmt)).one()
+    knowledge_count = int(counts_row[0] or 0)
+    long_term_count = int(counts_row[1] or 0)
+    short_term_count = int(counts_row[2] or 0)
+
+    query = base_query
     if q and q.strip():
-        query = query.where(Memory.content.icontains(q.strip()))
+        needle = q.strip()
+        query = query.where(or_(Memory.content.icontains(needle), Memory.trigger_keywords.icontains(needle)))
     if category:
         query = query.where(Memory.category == category)
     if scope:
@@ -60,8 +124,12 @@ async def list_memories(
         query = query.where(Memory.user_verified.is_(user_verified))
     if source_type:
         query = query.where(Memory.source_type == source_type)
-    if not include_expired:
-        query = query.where(or_(Memory.expires_at.is_(None), Memory.expires_at > now))
+    if tier == "knowledge":
+        query = query.where(know_expr)
+    elif tier == "long_term":
+        query = query.where(lt_expr)
+    elif tier == "short_term":
+        query = query.where(st_expr)
 
     count_query = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_query)).scalar_one_or_none() or 0
@@ -70,7 +138,15 @@ async def list_memories(
     items = list((await db.execute(items_query)).scalars().all())
 
     page = (skip // limit) + 1
-    return MemoryListOut(items=items, total=total, page=page, page_size=limit)
+    return MemoryListOut(
+        items=items,
+        total=total,
+        page=page,
+        page_size=limit,
+        knowledge_count=knowledge_count,
+        long_term_count=long_term_count,
+        short_term_count=short_term_count,
+    )
 
 
 @router.get(
@@ -129,8 +205,10 @@ async def create_memory(
         valid_from=payload.valid_from or datetime.now(timezone.utc),
         expires_at=payload.expires_at,
         is_core=payload.is_core,
-        source_type="manual",
+        source_type=payload.source_type,
         user_verified=True,
+        trigger_keywords=json.dumps(payload.trigger_keywords) if payload.trigger_keywords else None,
+        recall_count=0,
     )
     db.add(memory)
     await validate_profile_session(db, session)
@@ -180,6 +258,9 @@ async def update_memory(
             memory.last_verified_at = datetime.now(timezone.utc)
     if "source_type" in update_dict and update_dict["source_type"] is not None:
         memory.source_type = update_dict["source_type"]
+    if "trigger_keywords" in update_dict:
+        kws = update_dict["trigger_keywords"]
+        memory.trigger_keywords = json.dumps(kws) if kws else None
 
     await validate_profile_session(db, session)
     await db.commit()

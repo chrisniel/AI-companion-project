@@ -169,7 +169,22 @@ Verified in `frontend/flutter/apps/desktop`:
 - **Conversational Conflict Clarification:** When active conflicts exist for the profile, `ChatOrchestrator` context assembly injects `<memory_conflicts>` with polite companion-toned clarification instructions.
 - **API and Dart Parity:** `GET /api/v1/memories` extended with `q`, `user_verified`, and `source_type` query filters; `PATCH /api/v1/memories/{memory_id}` supports `user_verified` and `source_type`. OpenAPI schema and Dart DTOs in `companion_api` maintain 100% parity.
 
-### 3.5 Explicitly Unimplemented Capabilities
+### 3.5 Implemented 3-Tier Memory & Knowledge Architecture V2 (M3 Batch E Baseline)
+
+Verified across `backend/migrations/versions/013_memory_knowledge_and_triggers.py`, `app.models.memory`, `app.api.v1.endpoints.memories`, `app.services.memory.*`, `app.services.assistant.orchestrator`, `companion_api`, and `frontend/flutter/apps/desktop`:
+
+- **Alembic Migration 013 (`013_memory_knowledge_and_triggers.py`):** Added `trigger_keywords` (`Text`, JSON array of lowercase trigger strings) and `recall_count` (`Integer`, not null, default `0`, CHECK constraint `ck_memories_recall_count` enforcing `recall_count >= 0`), preserving all `memories` table triggers and rebuilding `memories_fts` across `batch_alter_table`, with fail-closed downgrade protection when populated trigger keywords or recall counts exist.
+- **Logical 3-Tier Partitioning Under Profile Authority (D7 & D-SHARED-AI-03):**
+  - `knowledge` (**Fixed Knowledge & Profile**): Active non-expired entries that are `is_core=True`, `source_type="manual"`, or carry non-empty `trigger_keywords`.
+  - `long_term` (**Long-Term & Episodic Memory**): Durable `user_verified` or `auto_extracted` facts/preferences without active `expires_at`.
+  - `short_term` (**Short-Term Context**): Ephemeral situational records with active `expires_at` or `category="context"`.
+- **Deterministic 72h Contextual TTL & Explicit Command Priority (`extractor.py`):** Situational context candidates (`category="context"` or temporal cues without an LLM-supplied `expires_at`) deterministically receive a 72-hour expiration (`DEFAULT_SHORT_TERM_TTL_HOURS = 72`). Explicit *"Remember that..."* turns bypass skip heuristics, immediately receive `user_verified=True`, and enforce an `importance >= 1.5` floor.
+- **Fixed Knowledge Write-Protection & Cross-Session Consolidation (`reconciler.py`):** Background reconciliation (`reconcile_candidate`) protects `is_fixed_knowledge` records from silent automatic `UPDATE`/`MERGE` overwrites (retaining fixed knowledge intact and creating isolated `NEW` or `CONFLICT` candidates as appropriate). Recurring short-term situational disclosures separated by $\ge 12$ hours extend TTL and automatically promote to durable `fact` memories upon repeated cross-session occurrence.
+- **Stem/Prefix Keyword Lorebooks, FTS5 Prefix Queries & Recall Tracking (`retriever.py`):** `get_triggered_knowledge` activates dormant lorebook entries via phrase matching and ASCII stem/prefix overlap ($\ge 3$ characters), while `get_core_memories` excludes keyword-gated lorebooks so dormant entries do not consume core prompt tokens until triggered. `search_relevant_memories` uses sanitized FTS5 prefix queries (`token*`), applies a bounded `recall_count` ranking boost, and atomically increments `recall_count` for memories injected into live turns.
+- **Multi-Section XML Context Injection (`orchestrator.py`):** `_build_context` partitions `<retrieved_memories>` into semantically labeled XML sections with strict token caps: `<user_core_profile>` ($\le 120$), `<triggered_knowledge_lore>` ($\le 150$), `<episodic_and_long_term_memories>` ($\le 200$), and `<short_term_context>` ($\le 100$).
+- **API, Contract Parity & Option 2A Desktop UI:** `GET /api/v1/memories` supports `?tier=knowledge|long_term|short_term`, searches across `trigger_keywords`, and returns profile-wide counts (`knowledge_count`, `long_term_count`, `short_term_count`). Desktop `MemoryScreen` implements Option 2A (`MemoryTierSidebar` inner left sub-menu with compact narrow fallback), context-aware `+ Add Knowledge`/`Add Memory`/`Add Context` creation defaults, trigger keyword pills (`#keyword`), `RECALLED N×` badges, remaining TTL indicators, and 1-click **Promote**.
+
+### 3.6 Explicitly Unimplemented Capabilities
 
 - **Semantic / Vector Memory:** `NOT IMPLEMENTED / NOT STARTED` (post-PC-V1 enhancement).
 

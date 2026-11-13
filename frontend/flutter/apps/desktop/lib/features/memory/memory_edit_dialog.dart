@@ -8,10 +8,12 @@ class MemoryEditDialog extends StatefulWidget {
     super.key,
     this.initialMemory,
     this.activeCharacterInstanceId,
+    this.initialTier = 'knowledge',
   });
 
   final MemoryOut? initialMemory;
   final String? activeCharacterInstanceId;
+  final String initialTier;
 
   @override
   State<MemoryEditDialog> createState() => _MemoryEditDialogState();
@@ -19,9 +21,11 @@ class MemoryEditDialog extends StatefulWidget {
 
 class _MemoryEditDialogState extends State<MemoryEditDialog> {
   late final TextEditingController _contentCtrl;
+  late final TextEditingController _keywordsCtrl;
   late String _category;
   late String _scope;
   late bool _isCore;
+  late String _createSourceType;
   DateTime? _expiresAt;
 
   @override
@@ -29,16 +33,56 @@ class _MemoryEditDialogState extends State<MemoryEditDialog> {
     super.initState();
     final mem = widget.initialMemory;
     _contentCtrl = TextEditingController(text: mem?.content ?? '');
-    _category = mem?.category ?? 'fact';
+    _keywordsCtrl = TextEditingController(
+      text: (mem?.triggerKeywords ?? const <String>[]).join(', '),
+    );
     _scope = mem?.scope ?? 'profile';
-    _isCore = mem?.isCore ?? false;
-    _expiresAt = mem?.expiresAt != null ? DateTime.tryParse(mem!.expiresAt!) : null;
+
+    if (mem != null) {
+      _category = mem.category;
+      _isCore = mem.isCore;
+      _createSourceType = mem.sourceType;
+      _expiresAt = mem.expiresAt != null ? DateTime.tryParse(mem.expiresAt!) : null;
+    } else {
+      switch (widget.initialTier) {
+        case 'short_term':
+          _category = 'context';
+          _isCore = false;
+          _createSourceType = 'manual';
+          _expiresAt = DateTime.now().toUtc().add(const Duration(hours: 72));
+          break;
+        case 'long_term':
+          _category = 'fact';
+          _isCore = false;
+          _createSourceType = 'user_explicit';
+          _expiresAt = null;
+          break;
+        default: // 'knowledge'
+          _category = 'fact';
+          _isCore = true;
+          _createSourceType = 'manual';
+          _expiresAt = null;
+      }
+    }
   }
 
   @override
   void dispose() {
     _contentCtrl.dispose();
+    _keywordsCtrl.dispose();
     super.dispose();
+  }
+
+  String _dialogTitle(bool isEditing) {
+    if (isEditing) return 'Edit Memory';
+    switch (widget.initialTier) {
+      case 'knowledge':
+        return 'Add Knowledge';
+      case 'short_term':
+        return 'Add Context';
+      default:
+        return 'Add Memory';
+    }
   }
 
   @override
@@ -48,7 +92,7 @@ class _MemoryEditDialogState extends State<MemoryEditDialog> {
 
     return AlertDialog(
       title: Text(
-        isEditing ? 'Edit Memory' : 'Add Memory',
+        _dialogTitle(isEditing),
         style: CompanionTypography.titleMedium.copyWith(color: ext?.textPrimary),
       ),
       content: SizedBox(
@@ -59,6 +103,7 @@ class _MemoryEditDialogState extends State<MemoryEditDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               TextField(
+                key: const Key('memory_content_field'),
                 controller: _contentCtrl,
                 maxLines: 3,
                 decoration: InputDecoration(
@@ -74,14 +119,24 @@ class _MemoryEditDialogState extends State<MemoryEditDialog> {
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       initialValue: _category,
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Category',
                         border: OutlineInputBorder(),
                       ),
                       items: const [
-                        DropdownMenuItem(value: 'fact', child: Text('Fact')),
-                        DropdownMenuItem(value: 'preference', child: Text('Preference')),
-                        DropdownMenuItem(value: 'context', child: Text('Context')),
+                        DropdownMenuItem(
+                          value: 'fact',
+                          child: Text('Fact', overflow: TextOverflow.ellipsis),
+                        ),
+                        DropdownMenuItem(
+                          value: 'preference',
+                          child: Text('Preference', overflow: TextOverflow.ellipsis),
+                        ),
+                        DropdownMenuItem(
+                          value: 'context',
+                          child: Text('Context', overflow: TextOverflow.ellipsis),
+                        ),
                       ],
                       onChanged: (val) {
                         if (val != null) setState(() => _category = val);
@@ -93,14 +148,21 @@ class _MemoryEditDialogState extends State<MemoryEditDialog> {
                     Expanded(
                       child: DropdownButtonFormField<String>(
                         initialValue: _scope,
+                        isExpanded: true,
                         decoration: const InputDecoration(
                           labelText: 'Scope',
                           border: OutlineInputBorder(),
                         ),
                         items: [
-                          const DropdownMenuItem(value: 'profile', child: Text('Profile (Global)')),
+                          const DropdownMenuItem(
+                            value: 'profile',
+                            child: Text('Profile (Global)', overflow: TextOverflow.ellipsis),
+                          ),
                           if (widget.activeCharacterInstanceId != null)
-                            const DropdownMenuItem(value: 'character', child: Text('Character Only')),
+                            const DropdownMenuItem(
+                              value: 'character',
+                              child: Text('Character Only', overflow: TextOverflow.ellipsis),
+                            ),
                         ],
                         onChanged: (val) {
                           if (val != null) setState(() => _scope = val);
@@ -109,6 +171,20 @@ class _MemoryEditDialogState extends State<MemoryEditDialog> {
                     ),
                   ],
                 ],
+              ),
+              const SizedBox(height: CompanionSpacing.md),
+              TextField(
+                key: const Key('memory_keywords_field'),
+                controller: _keywordsCtrl,
+                decoration: InputDecoration(
+                  labelText: 'Trigger Keywords (Optional Lorebook)',
+                  hintText: 'e.g. sarah, cook, sourdough',
+                  helperText:
+                      'Comma-separated keywords activate this entry on demand when mentioned.',
+                  helperMaxLines: 2,
+                  border: const OutlineInputBorder(),
+                  labelStyle: TextStyle(color: ext?.textSecondary),
+                ),
               ),
               const SizedBox(height: CompanionSpacing.md),
               SwitchListTile(
@@ -138,12 +214,19 @@ class _MemoryEditDialogState extends State<MemoryEditDialog> {
             final text = _contentCtrl.text.trim();
             if (text.isEmpty) return;
 
+            final keywords = _keywordsCtrl.text
+                .split(',')
+                .map((k) => k.trim())
+                .where((k) => k.isNotEmpty)
+                .toList();
+
             if (isEditing) {
               final update = MemoryUpdate(
                 content: text,
                 category: _category,
                 isCore: _isCore,
                 expiresAt: _expiresAt?.toUtc().toIso8601String(),
+                triggerKeywords: keywords,
               );
               Navigator.of(context).pop(update);
             } else {
@@ -154,6 +237,8 @@ class _MemoryEditDialogState extends State<MemoryEditDialog> {
                 characterInstanceId: _scope == 'character' ? widget.activeCharacterInstanceId : null,
                 isCore: _isCore,
                 expiresAt: _expiresAt?.toUtc().toIso8601String(),
+                triggerKeywords: keywords.isEmpty ? null : keywords,
+                sourceType: _createSourceType,
               );
               Navigator.of(context).pop(create);
             }

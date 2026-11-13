@@ -42,7 +42,12 @@ from app.services.memory.extractor import (
     should_skip_extraction,
 )
 from app.services.memory.reconciler import reconcile_candidate
-from app.services.memory.retriever import get_core_memories, search_relevant_memories
+from app.services.memory.retriever import (
+    get_active_short_term_memories,
+    get_core_memories,
+    get_triggered_knowledge,
+    search_relevant_memories,
+)
 from app.services.model_registry import find_model_registry_entry
 
 logger = logging.getLogger("app.services.assistant.orchestrator")
@@ -96,6 +101,38 @@ def _estimate_tokens(content: Union[str, List[Any]]) -> int:
     return 0
 
 
+def _pack_memory_section(
+    tag_name: str,
+    items: List[Memory],
+    max_section_tokens: int,
+    remaining_budget: int,
+    seen_ids: set[str],
+) -> tuple[Optional[str], int]:
+    """Pack deduplicated memories into a semantic XML section within token bounds."""
+    cap = min(max_section_tokens, remaining_budget)
+    if cap <= 0 or not items:
+        return None, 0
+
+    lines: List[str] = []
+    used = 0
+    for mem in items:
+        mem_id = getattr(mem, "id", None)
+        if mem_id and mem_id in seen_ids:
+            continue
+        line = f"- [{mem.category}] {mem.content}"
+        cost = _estimate_tokens(line)
+        if used + cost > cap:
+            break
+        lines.append(line)
+        used += cost
+        if mem_id:
+            seen_ids.add(mem_id)
+
+    if not lines:
+        return None, 0
+    return f"<{tag_name}>\n" + "\n".join(lines) + f"\n</{tag_name}>", used
+
+
 def _build_context(
     history: List[Message],
     system_prompt: str,
@@ -103,29 +140,61 @@ def _build_context(
     memories: List[Memory],
     context_capacity: int,
     generation_reserve: int = 512,
-    memory_budget: int = 256,
+    memory_budget: int = 570,
     conflicts: Optional[List[Memory]] = None,
+    core_memories: Optional[List[Memory]] = None,
+    triggered_lore: Optional[List[Memory]] = None,
+    short_term_memories: Optional[List[Memory]] = None,
 ) -> List[ChatMessage]:
     """
-    Construct context fitting within the token budget.
+    Construct context fitting within the token budget with semantic 3-tier XML partitioning.
     Budget: context_capacity - generation_reserve - system_tokens - memory_tokens = history_budget.
     Walk history newest-first until budget exhausted.
     """
     used = generation_reserve + _estimate_tokens(system_prompt)
-    lines: List[str] = []
-    mem_used = 0
-    for m in memories:
-        line = f"- [{m.category}] {m.content}"
-        cost = _estimate_tokens(line)
-        if mem_used + cost > memory_budget:
-            break
-        lines.append(line)
-        mem_used += cost
+    effective_budget = max(memory_budget, 256) if (core_memories or triggered_lore or short_term_memories) else memory_budget
 
-    memories_block = "\n".join(lines) if lines else "(none)"
+    # Fallback partitioning when legacy callers supply a flat `memories` list only
+    core_list = list(core_memories) if core_memories is not None else []
+    lore_list = list(triggered_lore) if triggered_lore is not None else []
+    short_list = list(short_term_memories) if short_term_memories is not None else []
+    long_term_list: List[Memory] = []
+
+    for m in memories:
+        if core_memories is None and m.is_core and not m.is_short_term and not m.trigger_keywords_list:
+            core_list.append(m)
+        elif triggered_lore is None and m.trigger_keywords_list and not m.is_short_term:
+            lore_list.append(m)
+        elif short_term_memories is None and m.is_short_term:
+            short_list.append(m)
+        else:
+            long_term_list.append(m)
+
+    seen_ids: set[str] = set()
+    sections: List[str] = []
+    mem_used = 0
+
+    for tag, items, cap in (
+        ("user_core_profile", core_list, 120),
+        ("triggered_knowledge_lore", lore_list, 150),
+        ("episodic_and_long_term_memories", long_term_list, 200),
+        ("short_term_context", short_list, 100),
+    ):
+        section_xml, section_cost = _pack_memory_section(
+            tag_name=tag,
+            items=items,
+            max_section_tokens=cap,
+            remaining_budget=effective_budget - mem_used,
+            seen_ids=seen_ids,
+        )
+        if section_xml:
+            sections.append(section_xml)
+            mem_used += section_cost
+
+    memories_block = "\n".join(sections) if sections else "(none)"
     final_system = (
         SYSTEM_PROMPT_TEMPLATE.format(persona=system_prompt, memories_block=memories_block)
-        if lines
+        if sections
         else system_prompt
     )
 
@@ -545,7 +614,6 @@ async def orchestrate_chat_stream(
             appraise_and_update_conversation_mood,
             resolve_turn_persona_prompt,
         )
-        from app.services.memory.retriever import get_core_memories
 
         conv = await db.scalar(
             select(Conversation).where(
@@ -556,25 +624,46 @@ async def orchestrate_chat_stream(
         )
         char_inst_id = conv.character_instance_id if conv else None
 
-        # Retrieve relevant memories via FTS5
-        memories = await search_relevant_memories(
-            db=db,
-            query=user_text,
-            profile_session=profile_session,
-            character_instance_id=char_inst_id,
-            limit=settings.MEMORY_SEARCH_LIMIT,
-        )
-
-        # Retrieve core facts if enabled
+        # Tier 1: Always-on Core Profile (non-keyword-gated) + Keyword-Triggered Lorebook
+        core_memories: List[Memory] = []
         if settings.MEMORY_CORE_FACTS_ENABLED:
             core_memories = await get_core_memories(
                 db=db,
                 profile_id=profile_session.profile_id,
                 limit=settings.MEMORY_CORE_FACTS_LIMIT,
             )
-            existing_ids = {m.id for m in memories}
-            additional_core = [cm for cm in core_memories if cm.id not in existing_ids]
-            memories = [*additional_core, *memories]
+
+        triggered_lore = await get_triggered_knowledge(
+            db=db,
+            profile_session=profile_session,
+            query=user_text,
+            character_instance_id=char_inst_id,
+            limit=5,
+            increment_recall=True,
+        )
+
+        # Tier 2: Relevant Long-Term & Episodic Memories via prefix-aware FTS5 + recall frequency
+        recalled_memories = await search_relevant_memories(
+            db=db,
+            query=user_text,
+            profile_session=profile_session,
+            character_instance_id=char_inst_id,
+            limit=settings.MEMORY_SEARCH_LIMIT,
+            increment_recall=True,
+        )
+        seen_mem_ids = {m.id for m in core_memories} | {m.id for m in triggered_lore}
+        long_term_memories = [
+            m for m in recalled_memories
+            if m.id not in seen_mem_ids and not m.is_short_term
+        ]
+
+        # Tier 3: Active Short-Term Context (72h working state)
+        short_term_memories = await get_active_short_term_memories(
+            db=db,
+            profile_id=profile_session.profile_id,
+            character_instance_id=char_inst_id,
+            limit=5,
+        )
 
         # Query active unresolved conflicts for gentle companion conversational clarification
         conflicts_query = (
@@ -622,10 +711,13 @@ async def orchestrate_chat_stream(
             history=history,
             system_prompt=active_persona,
             user_text=user_text,
-            memories=memories,
+            memories=long_term_memories,
+            core_memories=core_memories,
+            triggered_lore=triggered_lore,
+            short_term_memories=short_term_memories,
             context_capacity=context_capacity,
             generation_reserve=settings.GENERATION_RESERVE_TOKENS,
-            memory_budget=settings.MEMORY_BUDGET_TOKENS,
+            memory_budget=max(settings.MEMORY_BUDGET_TOKENS, 570),
             conflicts=conflicts,
         )
 

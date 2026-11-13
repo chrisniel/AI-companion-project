@@ -6,10 +6,10 @@ candidate memory extraction prompt assembly, and robust JSON parsing.
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import json
 import logging
 import re
-from datetime import datetime, timezone
 from typing import List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
@@ -23,6 +23,12 @@ logger = logging.getLogger("app.services.memory.extractor")
 EXPLICIT_INTENT_PATTERN = re.compile(
     r"(?i)\b(remember|please remember|don't forget|keep in mind)\b"
 )
+
+TEMPORAL_CONTEXT_PATTERN = re.compile(
+    r"(?i)\b(today|tonight|this morning|this afternoon|this evening|this week|right now|currently|at the moment|for now|temporarily)\b"
+)
+
+DEFAULT_SHORT_TERM_TTL_HOURS = 72
 
 DISCLOSURE_PATTERN = re.compile(
     r"(?i)\b(i am|i'm|my|i have|i've|i like|i love|i hate|i dislike|i prefer|"
@@ -92,6 +98,8 @@ class MemoryCandidate(BaseModel):
     is_core: bool = Field(default=False)
     expires_at: Optional[datetime] = Field(default=None)
     confidence: float = Field(default=0.9, ge=0.0, le=1.0)
+    importance: float = Field(default=1.0, ge=0.0, le=2.0)
+    user_verified: bool = Field(default=False)
 
 
 def is_explicit_intent(user_text: str) -> bool:
@@ -227,6 +235,8 @@ async def extract_memory_candidates(
 
     candidates: List[MemoryCandidate] = []
     is_explicit = is_explicit_intent(user_text)
+    now = datetime.now(timezone.utc)
+    has_temporal_cue = bool(TEMPORAL_CONTEXT_PATTERN.search(user_text))
 
     for item in parsed_data[: settings.MEMORY_EXTRACTION_MAX_CANDIDATES]:
         if not isinstance(item, dict):
@@ -236,17 +246,31 @@ async def extract_memory_candidates(
         if not content or contains_secrets(content):
             continue
 
-        # Explicit commands boost confidence to 1.0
+        raw_category = item.get("category", "fact")
+        is_core_flag = bool(item.get("is_core", False))
+        raw_expires_at = item.get("expires_at")
+
+        # Small Win: Explicit "Remember that..." immediately boosts verification and importance >= 1.5
         confidence = 1.0 if is_explicit else float(item.get("confidence", 0.9))
+        importance = max(float(item.get("importance", confidence)), 1.5) if is_explicit else confidence
+        user_verified_flag = True if is_explicit else False
+
+        # M3 Batch E: Deterministic 72h TTL for temporary situational context when 2B LLM emits null
+        if raw_expires_at is None and not is_core_flag and not is_explicit:
+            if raw_category == "context" or has_temporal_cue or TEMPORAL_CONTEXT_PATTERN.search(content):
+                raw_expires_at = now + timedelta(hours=DEFAULT_SHORT_TERM_TTL_HOURS)
+                raw_category = "context"
 
         try:
             candidate = MemoryCandidate(
                 content=content,
-                category=item.get("category", "fact"),
+                category=raw_category,
                 scope=item.get("scope", "profile"),
-                is_core=bool(item.get("is_core", False)),
-                expires_at=item.get("expires_at"),
+                is_core=is_core_flag,
+                expires_at=raw_expires_at,
                 confidence=confidence,
+                importance=importance,
+                user_verified=user_verified_flag,
             )
             candidates.append(candidate)
         except Exception as val_exc:

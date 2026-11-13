@@ -1116,7 +1116,7 @@
           "Memories"
         ],
         "summary": "List Memories",
-        "description": "List active memories owned by the user, optionally filtered by category, scope, and expiry.",
+        "description": "List active memories owned by the user, optionally filtered by tier, category, scope, and expiry.",
         "operationId": "list_memories_api_v1_memories_get",
         "security": [
           {
@@ -1231,6 +1231,29 @@
               "title": "Source Type"
             },
             "description": "Filter by source type: manual, extracted, conflict, etc."
+          },
+          {
+            "name": "tier",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "knowledge",
+                    "long_term",
+                    "short_term"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by memory tier: knowledge, long_term, or short_term",
+              "title": "Tier"
+            },
+            "description": "Filter by memory tier: knowledge, long_term, or short_term"
           },
           {
             "name": "q",
@@ -4764,6 +4787,29 @@
             "type": "boolean",
             "title": "Is Core",
             "default": false
+          },
+          "trigger_keywords": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Keywords"
+          },
+          "source_type": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "user_explicit"
+            ],
+            "title": "Source Type",
+            "default": "manual"
           }
         },
         "additionalProperties": false,
@@ -4796,6 +4842,21 @@
             "type": "integer",
             "title": "Page Size",
             "default": 50
+          },
+          "knowledge_count": {
+            "type": "integer",
+            "title": "Knowledge Count",
+            "default": 0
+          },
+          "long_term_count": {
+            "type": "integer",
+            "title": "Long Term Count",
+            "default": 0
+          },
+          "short_term_count": {
+            "type": "integer",
+            "title": "Short Term Count",
+            "default": 0
           }
         },
         "additionalProperties": false,
@@ -4805,7 +4866,7 @@
           "total"
         ],
         "title": "MemoryListOut",
-        "description": "List of memories with pagination info."
+        "description": "List of memories with pagination info and per-tier counts."
       },
       "MemoryOut": {
         "properties": {
@@ -4909,6 +4970,25 @@
             "type": "boolean",
             "title": "Is Core",
             "default": false
+          },
+          "trigger_keywords": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Keywords"
+          },
+          "recall_count": {
+            "type": "integer",
+            "title": "Recall Count",
+            "default": 0
           }
         },
         "additionalProperties": false,
@@ -5014,6 +5094,20 @@
               }
             ],
             "title": "Source Type"
+          },
+          "trigger_keywords": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Keywords"
           }
         },
         "additionalProperties": false,

@@ -23,6 +23,9 @@ class MemoryItemCard extends StatelessWidget {
 
     final isPending = !memory.userVerified;
     final isConflict = memory.sourceType == 'conflict';
+    final isShortTerm = memory.expiresAt != null || memory.category == 'context';
+    final ttlLabel = _formatRemainingTtl(memory.expiresAt);
+    final keywords = memory.triggerKeywords ?? const <String>[];
 
     return Container(
       margin: const EdgeInsets.only(bottom: CompanionSpacing.sm),
@@ -42,44 +45,67 @@ class MemoryItemCard extends StatelessWidget {
         children: [
           // Header Badges
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Category badge
-              _buildBadge(
-                label: memory.category.toUpperCase(),
-                backgroundColor: (ext?.accent ?? CompanionColors.lightAccent).withValues(alpha: 0.12),
-                textColor: ext?.accent ?? CompanionColors.lightAccent,
-              ),
-              const SizedBox(width: CompanionSpacing.xs),
+              Expanded(
+                child: Wrap(
+                  spacing: CompanionSpacing.xs,
+                  runSpacing: CompanionSpacing.xs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    // Category badge
+                    _buildBadge(
+                      label: memory.category.toUpperCase(),
+                      backgroundColor: (ext?.accent ?? CompanionColors.lightAccent).withValues(alpha: 0.12),
+                      textColor: ext?.accent ?? CompanionColors.lightAccent,
+                    ),
 
-              // Scope badge
-              _buildBadge(
-                label: memory.scope.toUpperCase(),
-                backgroundColor: isDark ? Colors.white10 : Colors.black12,
-                textColor: ext?.textSecondary ?? Colors.grey,
-              ),
-              const SizedBox(width: CompanionSpacing.xs),
+                    // Scope badge
+                    _buildBadge(
+                      label: memory.scope.toUpperCase(),
+                      backgroundColor: isDark ? Colors.white10 : Colors.black12,
+                      textColor: ext?.textSecondary ?? Colors.grey,
+                    ),
 
-              // Status badge
-              if (isConflict)
-                _buildBadge(
-                  label: 'CONFLICT',
-                  backgroundColor: Colors.red.withValues(alpha: 0.15),
-                  textColor: Colors.redAccent,
-                )
-              else if (isPending)
-                _buildBadge(
-                  label: 'PENDING REVIEW',
-                  backgroundColor: Colors.amber.withValues(alpha: 0.15),
-                  textColor: Colors.amber,
-                )
-              else
-                _buildBadge(
-                  label: 'VERIFIED',
-                  backgroundColor: Colors.green.withValues(alpha: 0.12),
-                  textColor: Colors.green,
+                    // Status badge
+                    if (isConflict)
+                      _buildBadge(
+                        label: 'CONFLICT',
+                        backgroundColor: Colors.red.withValues(alpha: 0.15),
+                        textColor: Colors.redAccent,
+                      )
+                    else if (isPending)
+                      _buildBadge(
+                        label: 'PENDING REVIEW',
+                        backgroundColor: Colors.amber.withValues(alpha: 0.15),
+                        textColor: Colors.amber,
+                      )
+                    else
+                      _buildBadge(
+                        label: 'VERIFIED',
+                        backgroundColor: Colors.green.withValues(alpha: 0.12),
+                        textColor: Colors.green,
+                      ),
+
+                    // Recall Frequency Counter Badge
+                    if (memory.recallCount > 0)
+                      _buildBadge(
+                        label: 'RECALLED ${memory.recallCount}×',
+                        backgroundColor: (ext?.accentSecondary ?? ext?.accent ?? CompanionColors.lightAccent)
+                            .withValues(alpha: 0.14),
+                        textColor: ext?.accent ?? CompanionColors.lightAccent,
+                      ),
+
+                    // Remaining TTL Badge for Short-Term Context
+                    if (ttlLabel != null)
+                      _buildBadge(
+                        label: ttlLabel,
+                        backgroundColor: Colors.orange.withValues(alpha: 0.15),
+                        textColor: Colors.orangeAccent,
+                      ),
+                  ],
                 ),
-
-              const Spacer(),
+              ),
 
               // Core Star
               IconButton(
@@ -110,12 +136,56 @@ class MemoryItemCard extends StatelessWidget {
               fontWeight: FontWeight.w500,
             ),
           ),
+
+          // Trigger Keyword Pills (Lorebook Activation Triggers)
+          if (keywords.isNotEmpty) ...[
+            const SizedBox(height: CompanionSpacing.xs),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: keywords
+                  .map(
+                    (kw) => Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: (ext?.accent ?? CompanionColors.lightAccent).withValues(alpha: 0.08),
+                        borderRadius: CompanionRadius.borderSm,
+                        border: Border.all(
+                          color: (ext?.accent ?? CompanionColors.lightAccent).withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: Text(
+                        '#$kw',
+                        style: CompanionTypography.caption.copyWith(
+                          color: ext?.accent ?? CompanionColors.lightAccent,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
           const SizedBox(height: CompanionSpacing.sm),
 
           // Action Bar
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
+              if (isShortTerm && !isConflict) ...[
+                OutlinedButton.icon(
+                  key: Key('promote_memory_${memory.id}'),
+                  icon: const Icon(Icons.arrow_upward_rounded, size: 15),
+                  label: const Text('Promote'),
+                  style: OutlinedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    foregroundColor: ext?.accent ?? CompanionColors.lightAccent,
+                  ),
+                  onPressed: () => controller.promoteMemory(memory),
+                ),
+                const SizedBox(width: CompanionSpacing.sm),
+              ],
               if (isPending && !isConflict) ...[
                 FilledButton.tonalIcon(
                   icon: const Icon(Icons.check_rounded, size: 16),
@@ -180,6 +250,19 @@ class MemoryItemCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String? _formatRemainingTtl(String? expiresAtIso) {
+    if (expiresAtIso == null || expiresAtIso.isEmpty) return null;
+    final parsed = DateTime.tryParse(expiresAtIso);
+    if (parsed == null) return null;
+    final diff = parsed.toUtc().difference(DateTime.now().toUtc());
+    if (diff <= Duration.zero) return 'EXPIRED';
+    if (diff.inHours < 24) {
+      final hours = diff.inHours < 1 ? 1 : diff.inHours;
+      return 'TTL ${hours}H LEFT';
+    }
+    return 'TTL ${diff.inDays}D LEFT';
   }
 
   Widget _buildBadge({

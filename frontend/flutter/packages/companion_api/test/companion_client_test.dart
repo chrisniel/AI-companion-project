@@ -663,6 +663,52 @@ void main() {
         expect(result.items.first.isCore, isTrue);
       });
 
+      test('listMemories supports tier query and parses tier counts & lorebook metadata', () async {
+        final mock = MockClient((request) async {
+          expect(request.url.path, '/api/v1/memories');
+          expect(request.url.queryParameters['tier'], 'knowledge');
+          return http.Response(
+            jsonEncode({
+              'items': [
+                {
+                  'id': 'mem-lore-1',
+                  'content': 'Sarah loves sourdough.',
+                  'category': 'fact',
+                  'importance': 1.5,
+                  'source_type': 'manual',
+                  'user_verified': true,
+                  'created_at': '2026-11-13T10:00:00Z',
+                  'owner_id': 'owner-1',
+                  'profile_id': 'prof-1',
+                  'scope': 'profile',
+                  'is_core': false,
+                  'trigger_keywords': ['sarah', 'bread'],
+                  'recall_count': 4,
+                }
+              ],
+              'total': 1,
+              'page': 1,
+              'page_size': 50,
+              'knowledge_count': 3,
+              'long_term_count': 5,
+              'short_term_count': 2,
+            }),
+            200,
+          );
+        });
+
+        final client = CompanionClient(
+          httpClient: mock,
+          sessionStore: InMemoryCredentialStore('test_session'),
+        );
+        final result = await client.listMemories(tier: 'knowledge');
+        expect(result.knowledgeCount, 3);
+        expect(result.longTermCount, 5);
+        expect(result.shortTermCount, 2);
+        expect(result.items.first.triggerKeywords, equals(['sarah', 'bread']));
+        expect(result.items.first.recallCount, 4);
+      });
+
       test('getMemory returns MemoryOut', () async {
         final mock = MockClient((request) async {
           expect(request.url.path, '/api/v1/memories/mem-123');

@@ -15,7 +15,7 @@ from app.db.session import (
     get_engine,
 )
 
-HEAD_REVISION = "012_character_mood_and_emotion"
+HEAD_REVISION = "013_memory_knowledge_and_triggers"
 
 
 def _create_legacy_v004_db(path: Path) -> None:
