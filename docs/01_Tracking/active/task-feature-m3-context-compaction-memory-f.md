@@ -26,7 +26,8 @@
 - [x] Author Phase 1 Implementation Plan: [`docs/02_Planning/01_Plans/plan-m3-context-compaction-memory-f.md`](../../02_Planning/01_Plans/plan-m3-context-compaction-memory-f.md).
 - [x] Author Active Branch Tracker: `docs/01_Tracking/active/task-feature-m3-context-compaction-memory-f.md`.
 - [x] Register plan in [`docs/02_Planning/00_Master/DELIVERY_INDEX.md`](../../02_Planning/00_Master/DELIVERY_INDEX.md).
-- [ ] Commit & push Phase 1 planning files to `origin/feature/m3-context-compaction-memory-f`.
+- [x] Commit & push initial Phase 1 planning files to `origin/feature/m3-context-compaction-memory-f` (`df49406`).
+- [x] Complete final pre-approval related-file audit (`backend/app/db/base.py`, `backend/app/models/base.py`, `backend/tests/conftest.py`, `.github/workflows/ci.yml`, `scripts/check_openapi_contract.py`, `scripts/tests/test_check_dart_openapi_parity.py`) and refine plan in place.
 - [ ] **GATE:** Human Owner review and explicit plan approval before Phase 2 implementation begins.
 
 ---

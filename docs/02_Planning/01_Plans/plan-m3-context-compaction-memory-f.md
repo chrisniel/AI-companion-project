@@ -7,10 +7,11 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 - **Delivery Level:** Level B — Planned Autonomous (with Level C database schema migration `014_conversation_summaries_and_compaction`)
 - **Target Milestone:** M3 — Intelligence & Productivity (`Local Intelligence, Memory & Persona Core`)
 - **Work Breakdown Structure IDs:** `PC-MEM-005` (Pre-Limit Context Compaction & Rolling Conversation Summaries), `PC-MEM-002` / `PC-MEM-003` / `PC-MEM-004` (Emotion-Weighted Memory Importance & Temporal Fact Evolution), `PC-CLIENT-006` & `PC-CLIENT-009` (1-Click Chat Bubble Bookmark & Manual Compaction UI), plus Batch E Phase 4 Independent Review Hardening items
-- **Scope Mode:** New Feature, Schema Extension & Follow-On Hardening — Adds `conversation_summaries` (Alembic Migration `014`), pre-limit & manual rolling conversation compaction (`<recent_episode_digest>`), `D11`+`D7` emotion-weighted memory importance (`+0.3`), single-step temporal fact evolution (`previously: ... until YYYY-MM`), 1-click chat bubble memory bookmark & header compaction UI in Flutter Desktop, OpenAPI/TS/Dart contract sync, and 6 Batch E independent review hardening fixes.
+- **Scope Mode:** New Feature, Schema Extension & Follow-On Hardening — Adds `conversation_summaries` (Alembic Migration `014`), pre-limit & manual rolling conversation compaction (`<recent_episode_digest>`), `D11`+`D7` emotion-weighted memory importance (`+0.3`), single-step temporal fact evolution (`previously: ... until YYYY-MM`), 1-click chat bubble memory bookmark & header compaction UI in Flutter Desktop, OpenAPI & Dart contract sync, and 6 Batch E independent review hardening fixes.
 - **Target Files:**
   - `backend/app/models/conversation_summary.py` (new)
   - `backend/app/models/__init__.py`
+  - `backend/app/db/base.py`
   - `backend/migrations/versions/014_conversation_summaries_and_compaction.py` (new)
   - `backend/migrations/versions/013_memory_knowledge_and_triggers.py` (remove unused `import json`)
   - `backend/app/core/config.py`
@@ -25,8 +26,8 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
   - `backend/app/api/v1/endpoints/conversations.py`
   - `backend/app/api/v1/endpoints/memories.py`
   - `contracts/openapi/openapi.json`
-  - `frontend/web/src/types/api.generated.ts`
   - `scripts/check_dart_openapi_parity.py`
+  - `scripts/tests/test_check_dart_openapi_parity.py`
   - `frontend/flutter/packages/companion_api/lib/dto/conversation_dto.dart`
   - `frontend/flutter/packages/companion_api/lib/dto/memory_dto.dart`
   - `frontend/flutter/packages/companion_api/lib/client/companion_client.dart`
@@ -65,11 +66,11 @@ Complete the documented follow-on capabilities for Milestone M3 Memory & Context
 - [`docs/02_Planning/01_Plans/plan-m3-memory-knowledge-e.md`](plan-m3-memory-knowledge-e.md) §1.5 — Documented M3-F follow-on roadmap.
 
 ### 1.3 Concrete Deliverables
-1. **Database Schema & Migration 014 (`conversation_summaries`):** ORM model `ConversationSummary`, Migration `014_conversation_summaries_and_compaction.py` with fail-closed `downgrade()`, Profile permanent purge integration (`ProfilePurgeService.purge_profile`), and conversation soft-delete cascade (`delete_conversation`).
-2. **Pre-Limit & Manual Compaction Engine (`compactor.py`) & Orchestrator Wiring:** Automatic pre-limit compaction (LLM digest with deterministic extractive fallback when unloaded/failed) and explicit endpoints `GET /api/v1/conversations/{conversation_id}/summary` and `POST /api/v1/conversations/{conversation_id}/compact`, plus `<recent_episode_digest>` prompt assembly (`<= 180` tokens) and exclusion of already-compacted history turns (`sequence_no <= active_summary.to_sequence_no`).
+1. **Database Schema & Migration 014 (`conversation_summaries`):** ORM model `ConversationSummary` registered in `backend/app/models/__init__.py` and `backend/app/db/base.py`, Migration `014_conversation_summaries_and_compaction.py` with fail-closed `downgrade()`, Profile permanent purge & retention cleanup integration (`ProfilePurgeService.purge_profile`, `execute_maintenance_purge`), and conversation soft-delete cascade (`delete_conversation`).
+2. **Pre-Limit & Manual Compaction Engine (`compactor.py`) & Orchestrator Wiring:** Automatic pre-limit compaction (LLM digest with deterministic extractive fallback when unloaded/failed) and explicit endpoints `GET /api/v1/conversations/{conversation_id}/summary` and `POST /api/v1/conversations/{conversation_id}/compact`, plus `<recent_episode_digest>` prompt assembly (`<= 180` tokens) with XML delimiter escaping and exclusion of already-compacted history turns (`sequence_no <= active_summary.to_sequence_no`).
 3. **Emotion-Weighted Importance & Temporal Fact Evolution:** `appraise_user_turn(user_text).event_type` passed to post-turn extraction for `+0.3` boost on high-intensity turns (`user_distress`, `user_gratitude`), and `_format_temporal_supersession` preserving single-step history on durable `UPDATE` slots in `reconciler.py`.
 4. **Six Batch E Hardening Fixes:** De-duplication & `exclude_short_term` pre-filtering in `search_relevant_memories` before slicing/recall increment; `Memory.profile_id == profile_id` guard in `_increment_recall_counts`; keyword-gated lore exclusion from `get_active_short_term_memories` legacy fallback; null-safe float/content parsing in `extractor.py`; explicit `clear_expires_at` / non-destructive `MemoryUpdate.toJson()` in Dart & Pydantic; plus minor tidy-ups (`import json` removal in `013`, `"NEAR"` in `FTS5_RESERVED`, and `PC-MEM-006` header correction in `plan-m3-memory-knowledge-e.md`).
-5. **OpenAPI, TypeScript & Dart SDK Parity + Flutter Desktop UI:** Updated OpenAPI contract, TS generated types, Dart DTOs & `CompanionClient`, `DesktopChatController`, and `ChatScreen` header digest pill/compact button + chat bubble memory bookmark actions.
+5. **OpenAPI & Dart SDK Parity + Flutter Desktop UI:** Updated `contracts/openapi/openapi.json` (via `scripts/check_openapi_contract.py --write`), `scripts/check_dart_openapi_parity.py`, `scripts/tests/test_check_dart_openapi_parity.py`, Dart DTOs & `CompanionClient`, `DesktopChatController`, and `ChatScreen` header digest pill/compact button + chat bubble memory bookmark actions.
 
 ### 1.4 Explicit Out-of-Scope
 - Profile PIN / device biometric enrollment or runtime autostart / Windows Toast (`M2` remaining items and `PC-SCHED-*`).
@@ -89,7 +90,8 @@ Complete the documented follow-on capabilities for Milestone M3 Memory & Context
 | `reconciler.py` overwrites `best_match.content = candidate.content` directly in the `UPDATE` branch (line 331). | Mutated facts lose prior context unless a bounded single-step `previously: ... until YYYY-MM` suffix is preserved. |
 | `orchestrator.py:646-658` filters `seen_mem_ids` and `is_short_term` *after* `search_relevant_memories(..., limit=settings.MEMORY_SEARCH_LIMIT, increment_recall=True)`. | Excluded core/lore/short-term hits still consume `limit` slots and get `recall_count` incremented unnecessarily (`retriever.py` also lacks `profile_id` filter in `_increment_recall_counts` and allows keyword-gated items in legacy `get_active_short_term_memories` fallback). |
 | `memory_dto.dart:147` emits `'expires_at': expiresAt` unconditionally even when `expiresAt == null`, while `memories.py:251` treats presence of `'expires_at'` key as clearing expiry (`promoteMemory` in `desktop_memory_controller.dart:213` relies on `expiresAt: null`). | Adding `clear_expires_at: Optional[bool] = None` to `MemoryUpdate` (backend Pydantic + Dart DTO) and serializing `'expires_at'` only when non-null cleanly separates partial updates (`approveMemory`, `toggleCore`) from intentional TTL promotion (`promoteMemory`), while keeping `check_dart_openapi_parity.py` 100% green. |
-| `test_schema_lifecycle.py:18` and `test_prepare_database_schema_backup.py:22` pin `HEAD_REVISION = "013_memory_knowledge_and_triggers"`. | Both tests must be updated to `014_conversation_summaries_and_compaction`. |
+| `test_schema_lifecycle.py:18` and `test_prepare_database_schema_backup.py:22` pin `HEAD_REVISION = "013_memory_knowledge_and_triggers"`, while `tests/conftest.py` and `migrations/env.py` import `Base` from `app.db.base`. | Both schema tests must update to `014_conversation_summaries_and_compaction`, and `ConversationSummary` must be registered in `backend/app/db/base.py` so `Base.metadata.create_all` and Alembic metadata discovery see the table. |
+| `scripts/tests/test_check_dart_openapi_parity.py:84` asserts `len(verified) == 42`. | Registering `GET /summary` and `POST /compact` in `M3_ROUTE_DART_METHODS` increases verified routes from `42` to `44`, requiring a matching parity-test update. |
 
 ### 2.2 Architectural Approach — Prompt Assembly Order & Context Compaction Flow
 In `orchestrator.py:_build_context`:
@@ -120,24 +122,21 @@ Mark prior active ConversationSummary is_active=False, superseded_by_id=new_summ
 ```
 
 ### 2.3 Contract & Schema Impact
-- **Database Migration (`014_conversation_summaries_and_compaction`):** Creates `conversation_summaries` table with foreign keys to `conversations.id` (`ON DELETE CASCADE`) and `profiles.id` (`ON DELETE RESTRICT`), sequence/mode/count CHECK constraints, active lookup index, and fail-closed `downgrade()`.
+- **Database Migration (`014_conversation_summaries_and_compaction`):** Creates `conversation_summaries` table with foreign keys to `conversations.id` (`ON DELETE CASCADE`) and `profiles.id` (`ProfileMixin`, `ON DELETE CASCADE`), sequence/mode/count CHECK constraints, active lookup index, and fail-closed `downgrade()`.
 - **API Endpoints & Schemas:**
   - `GET /api/v1/conversations/{conversation_id}/summary` -> `Optional[ConversationSummaryOut]`
   - `POST /api/v1/conversations/{conversation_id}/compact` (`ConversationCompactRequest`) -> `ConversationCompactResponse`
   - `PATCH /api/v1/memories/{memory_id}` (`MemoryUpdate`) -> adds optional `clear_expires_at: Optional[bool] = None`
-- **Parity Sync:** `contracts/openapi/openapi.json`, `frontend/web/src/types/api.generated.ts`, `scripts/check_dart_openapi_parity.py`, and `companion_api` DTOs/client updated atomically.
+- **Parity Sync:** `contracts/openapi/openapi.json` (via `python scripts/check_openapi_contract.py --write`), `scripts/check_dart_openapi_parity.py`, `scripts/tests/test_check_dart_openapi_parity.py`, and `companion_api` DTOs/client updated atomically.
 
 ---
 
 ## 3. Proposed File Changes & In-Place Logic
 
-### 3.1 [ADD] `backend/app/models/conversation_summary.py` & [MODIFY] `backend/app/models/__init__.py`
+### 3.1 [ADD] `backend/app/models/conversation_summary.py` & [MODIFY] `backend/app/models/__init__.py`, `backend/app/db/base.py`
 - **Primary Responsibility:** SQLAlchemy 2 ORM model storing rolling conversation episode digests (`D-SHARED-AI-02`) without mutating raw `messages` or polluting `memories`.
-- **Planned Change:** Define `ConversationSummary(Base, TimestampMixin, SoftDeleteMixin)` with fields:
-  - `id: Mapped[str]` (PK, `uuid4` default)
+- **Planned Change:** Define `ConversationSummary(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, ProfileMixin, SoftDeleteMixin)` reusing the standard `app.models.base` mixins (which provide `id`, `created_at`, `updated_at`, `owner_id` with default listener, `profile_id` non-null FK to `profiles.id` with `ondelete="CASCADE"`, `is_deleted`, and `deleted_at`), plus:
   - `conversation_id: Mapped[str]` (FK `conversations.id` `ondelete="CASCADE"`, indexed, `nullable=False`)
-  - `profile_id: Mapped[str]` (FK `profiles.id` `ondelete="RESTRICT"`, indexed, `nullable=False`)
-  - `owner_id: Mapped[str]` (indexed, `nullable=False`)
   - `summary_text: Mapped[str]` (`Text`, `nullable=False`)
   - `from_sequence_no: Mapped[int]` (`Integer`, `nullable=False`)
   - `to_sequence_no: Mapped[int]` (`Integer`, `nullable=False`)
@@ -148,8 +147,8 @@ Mark prior active ConversationSummary is_active=False, superseded_by_id=new_summ
   - `superseded_by_id: Mapped[Optional[str]]` (`String`, `nullable=True`)
   - `is_active: Mapped[bool]` (`Boolean`, `nullable=False`, default `True`, server_default `'1'`)
   - Table args: `CheckConstraint("from_sequence_no >= 1 AND to_sequence_no >= from_sequence_no", name="ck_conversation_summaries_seq_range")`, `CheckConstraint("turn_count >= 1", name="ck_conversation_summaries_turn_count")`, `CheckConstraint("compaction_mode IN ('auto', 'manual')", name="ck_conversation_summaries_mode")`, `Index("ix_conversation_summaries_conv_active", "conversation_id", "is_active", "is_deleted", "to_sequence_no")`.
-  - Export `ConversationSummary` in `backend/app/models/__init__.py`.
-- **Invariants to Preserve:** Multi-Profile isolation (`profile_id` non-null FK), soft-delete compatibility.
+  - Register `ConversationSummary` in both `backend/app/models/__init__.py` and `backend/app/db/base.py` (needed so `tests/conftest.py` `Base.metadata.create_all` and `migrations/env.py` `target_metadata` include `conversation_summaries`), and assert `"conversation_summaries" in tables` in `backend/tests/test_schema_lifecycle.py`.
+- **Invariants to Preserve:** Multi-Profile isolation (`profile_id` non-null FK via `ProfileMixin`), soft-delete compatibility, and 32-char hex UUID PK consistency.
 
 ### 3.2 [ADD] `backend/migrations/versions/014_conversation_summaries_and_compaction.py` & [MODIFY] `backend/migrations/versions/013_memory_knowledge_and_triggers.py`
 - **Primary Responsibility:** Forward-only safe DDL creation of `conversation_summaries` and cleanup of unused `import json` in `013`.
@@ -186,14 +185,14 @@ Mark prior active ConversationSummary is_active=False, superseded_by_id=new_summ
 - **Primary Responsibility:** Inject `<recent_episode_digest>`, run pre-limit compaction, enforce cascades, expose compaction API, and fix Batch E orchestrator filtering.
 - **Planned Change:**
   - `orchestrator.py`:
-    - Add `active_summary: Optional[ConversationSummary] = None` parameter to `_build_context(...)`; inject `<recent_episode_digest>` block before `used += ...` budget calculation so verbatim history gets the exact remaining token budget.
+    - Add `active_summary: Optional[ConversationSummary] = None` parameter to `_build_context(...)`; inject `<recent_episode_digest>` block before `used += ...` budget calculation so verbatim history gets the exact remaining token budget. Escape XML section delimiter tags (`<recent_episode_digest>`, `<user_core_profile>`, `<triggered_knowledge_lore>`, `<episodic_and_long_term_memories>`, `<short_term_context>`, `<memory_conflicts>`, and closing tags) inside `_pack_memory_section` and `<recent_episode_digest>` / `<memory_conflicts>` assembly so untrusted memory/summary content cannot break out of prompt XML boundaries.
     - In `orchestrator.orchestrate_chat_stream(...)`:
       - Pass `exclude_ids=seen_mem_ids, exclude_short_term=True` to `search_relevant_memories` (fixing Batch E review finding #1!).
       - Call `appraisal = appraise_user_turn(user_text)` once per turn and pass `emotion_event=appraisal.event_type` into `_run_post_turn_memory_extraction`.
       - Load `active_summary = await get_active_conversation_summary(db, conversation_id, profile_session.profile_id)` before loading `history`.
       - Filter `hist_query` with `Message.sequence_no > active_summary.to_sequence_no` when `active_summary` exists.
       - Check `should_compact_conversation(...)` against available history token budget before `_build_context`; when triggered, run `compact_conversation(..., mode="auto")` synchronously (fast LLM or deterministic extractive fallback) and re-slice `history` to post-compaction turns (`sequence_no > new_summary.to_sequence_no`) while keeping the full pre-limit threshold check bounded.
-  - `profile_purge_service.py`: In `purge_profile` Phase E, delete `ConversationSummary` rows (`ConversationSummary.profile_id == profile_id`) before `Conversation`.
+  - `profile_purge_service.py`: In `purge_profile` Phase E, delete `ConversationSummary` rows (`ConversationSummary.profile_id == profile_id`) before `Conversation`; in `execute_maintenance_purge`, purge expired soft-deleted `ConversationSummary` rows (`deleted_at <= cutoff_date`) alongside `Memory` retention cleanup.
   - `conversations.py` & `schemas/conversation.py`:
     - Cascade soft-delete to `ConversationSummary` (`is_deleted=True, deleted_at=now, is_active=False`) inside `delete_conversation`.
     - Add `ConversationSummaryOut`, `ConversationCompactRequest`, `ConversationCompactResponse` schemas and routes:
@@ -220,15 +219,16 @@ Mark prior active ConversationSummary is_active=False, superseded_by_id=new_summ
     - Add `clear_expires_at: Optional[bool] = Field(default=None)` to `MemoryUpdate`. In `update_memory`: if `update_dict.get("clear_expires_at")` is truthy, set `memory.expires_at = None`; elif `"expires_at" in update_dict`, update `memory.expires_at = update_dict["expires_at"]` (Batch E review finding #5).
 - **Invariants to Preserve:** Fixed Knowledge (`is_fixed_knowledge`) remains locked against background AI overwrites; `contains_secrets` filter preserved; strict Profile scoping across FTS5 and recall tracking.
 
-### 3.6 [MODIFY] OpenAPI, TypeScript, Parity Verifier & Dart SDK (`companion_api`)
-- **Primary Responsibility:** Maintain strict backend-to-Web/Flutter contract parity across all added schemas and endpoints.
+### 3.6 [MODIFY] OpenAPI, Parity Verifier & Dart SDK (`companion_api`)
+- **Primary Responsibility:** Maintain strict backend-to-Dart contract parity across all added schemas and endpoints (`scripts/check_openapi_contract.py`, `scripts/check_dart_openapi_parity.py`, `scripts/tests/test_check_dart_openapi_parity.py`).
 - **Planned Change:**
-  - Regenerate `contracts/openapi/openapi.json` (`python scripts/export_openapi.py`) and `frontend/web/src/types/api.generated.ts` (`npm --prefix frontend/web run generate:api-types`).
+  - Regenerate `contracts/openapi/openapi.json` using `python scripts/check_openapi_contract.py --write`.
   - Update `frontend/flutter/packages/companion_api/lib/dto/memory_dto.dart`: add `final bool? clearExpiresAt;` to `MemoryUpdate` (`fromJson`, `toJson`, `==`, `hashCode`, `toString`) and change `'expires_at': expiresAt` in `toJson()` to `if (expiresAt != null) 'expires_at': expiresAt, if (clearExpiresAt == true) 'clear_expires_at': true,`.
   - Update `frontend/flutter/packages/companion_api/lib/dto/conversation_dto.dart`: add `ConversationSummaryOut`, `ConversationCompactRequest`, and `ConversationCompactResponse`.
   - Update `frontend/flutter/packages/companion_api/lib/client/companion_client.dart`: add `getConversationSummary(String conversationId)` and `compactConversation(String conversationId, {ConversationCompactRequest? request})`.
-  - Update `scripts/check_dart_openapi_parity.py`: register `ConversationSummaryOut`, `ConversationCompactRequest`, `ConversationCompactResponse` in `SCHEMA_TO_DART_CLASS` and register the 2 new conversation routes in `M1_COVERED_ROUTES` / `M1_ROUTE_DART_METHODS` (or `M3_ROUTE_DART_METHODS`).
-- **Invariants to Preserve:** Zero schema drift (`check_openapi_contract.py`, `check_dart_openapi_parity.py --check`, `verify:api-types` all pass with 0 errors).
+  - Update `scripts/check_dart_openapi_parity.py`: register `ConversationSummaryOut`, `ConversationCompactRequest`, `ConversationCompactResponse` in `SCHEMA_TO_DART_CLASS` and register `("GET", "/api/v1/conversations/{conversation_id}/summary")` & `("POST", "/api/v1/conversations/{conversation_id}/compact")` in `M3_ROUTE_DART_METHODS`.
+  - Update `scripts/tests/test_check_dart_openapi_parity.py` (`test_verify_companion_client_implementations_passes`) route count assertion from `42` to `44`.
+- **Invariants to Preserve:** Zero schema drift (`python scripts/check_openapi_contract.py --check`, `python scripts/check_dart_openapi_parity.py --check`, and `python -B -m unittest scripts/tests/test_check_dart_openapi_parity.py` all pass cleanly).
 
 ### 3.7 [MODIFY] `desktop_memory_controller.dart`, `desktop_chat_controller.dart` & `chat_screen.dart`
 - **Primary Responsibility:** Deliver Desktop UI features `PC-CLIENT-006`, `PC-CLIENT-009` and safe Short-Term Context promotion.
@@ -253,18 +253,18 @@ Mark prior active ConversationSummary is_active=False, superseded_by_id=new_summ
 
 1. **Phase 2 Implementation Steps:**
    - **Step 1 — Migration 014 & Schema Lifecycle Tests (TDD):**
-     - Write failing schema & cascade tests first (`test_migration_014` in `backend/tests/test_context_compaction.py`, update `HEAD_REVISION` in `test_schema_lifecycle.py` and `test_prepare_database_schema_backup.py`).
-     - Implement `ConversationSummary` model (`models/conversation_summary.py`, `models/__init__.py`), Migration `014_conversation_summaries_and_compaction.py`, `ProfilePurgeService` cascade, and `delete_conversation` cascade.
+     - Write failing schema & cascade tests first (`test_migration_014` in `backend/tests/test_context_compaction.py`, update `HEAD_REVISION` and assert `"conversation_summaries" in tables` in `test_schema_lifecycle.py`, and update `HEAD_REVISION` in `test_prepare_database_schema_backup.py`).
+     - Implement `ConversationSummary` model (`models/conversation_summary.py`, `models/__init__.py`, `db/base.py`), Migration `014_conversation_summaries_and_compaction.py`, `ProfilePurgeService` purge & retention cleanup, and `delete_conversation` cascade.
      - Remove unused `import json` in `013_memory_knowledge_and_triggers.py`.
    - **Step 2 — Pre-Limit Compaction Engine, Orchestrator & Conversation API (TDD):**
-     - Write failing tests in `backend/tests/test_context_compaction.py` covering pre-limit auto-compaction trigger, extractive fallback, rolling summary chaining (`superseded_by_id`), raw `messages` immutability, `<recent_episode_digest>` prompt injection, and `GET /summary` + `POST /compact` routes.
+     - Write failing tests in `backend/tests/test_context_compaction.py` covering pre-limit auto-compaction trigger, extractive fallback, rolling summary chaining (`superseded_by_id`), raw `messages` immutability, `<recent_episode_digest>` prompt injection & XML delimiter escaping, and `GET /summary` + `POST /compact` routes.
      - Implement `config.py` settings, `services/assistant/compactor.py`, `orchestrator.py` compaction + `<recent_episode_digest>` injection, and `conversations.py` / `schemas/conversation.py` endpoints.
    - **Step 3 — Emotion-Weighted Importance, Temporal Evolution & Batch E Hardening (TDD):**
      - Write failing tests in `backend/tests/test_memory_knowledge_tiers.py` for `+0.3` emotion boost, single-step `previously: ... until YYYY-MM` evolution, pre-slice `exclude_ids` & `exclude_short_term`, `profile_id`-scoped recall counting, keyword-gated lore exclusion from legacy short-term fallback, null-safe extraction JSON parsing, `NEAR` FTS5 reservation, and `MemoryUpdate.clear_expires_at`.
      - Implement updates in `extractor.py`, `reconciler.py`, `retriever.py`, `orchestrator.py`, `schemas/memory.py`, and `memories.py`.
-   - **Step 4 — OpenAPI, TypeScript & Dart Parity Sync (TDD):**
-     - Export OpenAPI & regenerate TypeScript types.
-     - Add Dart DTO tests & client tests (`companion_client_test.dart`), implement `conversation_dto.dart`, `memory_dto.dart`, `companion_client.dart`, and update `check_dart_openapi_parity.py`.
+   - **Step 4 — OpenAPI & Dart Parity Sync (TDD):**
+     - Regenerate OpenAPI schema via `python scripts/check_openapi_contract.py --write`.
+     - Add Dart DTO tests & client tests (`companion_client_test.dart`), implement `conversation_dto.dart`, `memory_dto.dart`, `companion_client.dart`, update `check_dart_openapi_parity.py`, and update `scripts/tests/test_check_dart_openapi_parity.py` (42 -> 44 verified routes).
    - **Step 5 — Flutter Desktop UI (`DesktopMemoryController`, `DesktopChatController`, `ChatScreen`) (TDD):**
      - Add widget & controller tests in `frontend/flutter/apps/desktop/test/chat_screen_test.dart` and memory controller tests verifying `clearExpiresAt: true` on `promoteMemory` vs preservation on `approveMemory`, `compactActiveConversation`, `bookmarkMessageToMemory`, header digest badge, and bubble bookmark button.
      - Implement UI & controller changes in `desktop_memory_controller.dart`, `desktop_chat_controller.dart`, and `chat_screen.dart`.
@@ -278,11 +278,14 @@ Mark prior active ConversationSummary is_active=False, superseded_by_id=new_summ
 ### Automated Repository Checks
 - [ ] Backend compaction & memory tests: `pytest backend/tests/test_context_compaction.py backend/tests/test_memory_knowledge_tiers.py backend/tests/test_schema_lifecycle.py backend/tests/test_prepare_database_schema_backup.py`
 - [ ] Full backend test suite: `pytest backend/tests`
-- [ ] Contract & Dart parity checks:
-  - `python scripts/export_openapi.py --check`
-  - `npm --prefix frontend/web run verify:api-types`
+- [ ] Contract & Dart parity checks (matching `.github/workflows/ci.yml`):
+  - `python scripts/check_openapi_contract.py --check`
   - `python scripts/check_dart_openapi_parity.py --check`
-- [ ] Web frontend tests & build: `npm --prefix frontend/web test -- --run` and `npm --prefix frontend/web run build`
+  - `python -B -m unittest scripts/tests/test_check_dart_openapi_parity.py`
+- [ ] Web frontend typecheck, tests & build:
+  - `npm --prefix frontend/web run lint`
+  - `npm --prefix frontend/web test -- --run`
+  - `npm --prefix frontend/web run build`
 - [ ] Flutter Dart package & Desktop app checks:
   - `dart test` in `frontend/flutter/packages/companion_api`
   - `flutter analyze` across `frontend/flutter`
