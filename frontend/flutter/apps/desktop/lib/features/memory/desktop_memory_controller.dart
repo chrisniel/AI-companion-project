@@ -210,7 +210,7 @@ class DesktopMemoryController extends ChangeNotifier {
       await _client.updateMemory(
         memory.id,
         MemoryUpdate(
-          expiresAt: null,
+          clearExpiresAt: true,
           category: memory.category == 'context' ? 'fact' : memory.category,
           sourceType: 'user_explicit',
           userVerified: true,

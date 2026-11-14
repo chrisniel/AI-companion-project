@@ -275,6 +275,177 @@ class GenerateTitleRequest {
       'GenerateTitleRequest(currentTitle: $currentTitle, fallbackTitle: $fallbackTitle)';
 }
 
+/// Active rolling episode summary preserving continuity across compacted conversation turns.
+class ConversationSummaryOut {
+  final String id;
+  final String conversationId;
+  final String summaryText;
+  final int fromSequenceNo;
+  final int toSequenceNo;
+  final int compactedMessageCount;
+  final int tokenEstimate;
+  final String source;
+  final bool isActive;
+  final String updatedAt;
+
+  const ConversationSummaryOut({
+    required this.id,
+    required this.conversationId,
+    required this.summaryText,
+    required this.fromSequenceNo,
+    required this.toSequenceNo,
+    required this.compactedMessageCount,
+    required this.tokenEstimate,
+    required this.source,
+    required this.isActive,
+    required this.updatedAt,
+  });
+
+  factory ConversationSummaryOut.fromJson(Map<String, dynamic> json) {
+    return ConversationSummaryOut(
+      id: json['id'] as String,
+      conversationId: json['conversation_id'] as String,
+      summaryText: json['summary_text'] as String,
+      fromSequenceNo: json['from_sequence_no'] as int,
+      toSequenceNo: json['to_sequence_no'] as int,
+      compactedMessageCount: json['compacted_message_count'] as int,
+      tokenEstimate: json['token_estimate'] as int,
+      source: json['source'] as String,
+      isActive: json['is_active'] as bool,
+      updatedAt: json['updated_at'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'conversation_id': conversationId,
+        'summary_text': summaryText,
+        'from_sequence_no': fromSequenceNo,
+        'to_sequence_no': toSequenceNo,
+        'compacted_message_count': compactedMessageCount,
+        'token_estimate': tokenEstimate,
+        'source': source,
+        'is_active': isActive,
+        'updated_at': updatedAt,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ConversationSummaryOut &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          conversationId == other.conversationId &&
+          summaryText == other.summaryText &&
+          fromSequenceNo == other.fromSequenceNo &&
+          toSequenceNo == other.toSequenceNo &&
+          compactedMessageCount == other.compactedMessageCount &&
+          tokenEstimate == other.tokenEstimate &&
+          source == other.source &&
+          isActive == other.isActive &&
+          updatedAt == other.updatedAt;
+
+  @override
+  int get hashCode => Object.hash(
+        id,
+        conversationId,
+        summaryText,
+        fromSequenceNo,
+        toSequenceNo,
+        compactedMessageCount,
+        tokenEstimate,
+        source,
+        isActive,
+        updatedAt,
+      );
+
+  @override
+  String toString() =>
+      'ConversationSummaryOut(id: $id, turns: $fromSequenceNo..$toSequenceNo, source: $source)';
+}
+
+/// Request payload for manual conversation context compaction.
+class ConversationCompactRequest {
+  final int? keepRecentMessages;
+  final bool force;
+
+  const ConversationCompactRequest({
+    this.keepRecentMessages,
+    this.force = true,
+  });
+
+  factory ConversationCompactRequest.fromJson(Map<String, dynamic> json) {
+    return ConversationCompactRequest(
+      keepRecentMessages: json['keep_recent_messages'] as int?,
+      force: (json['force'] as bool?) ?? true,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        if (keepRecentMessages != null)
+          'keep_recent_messages': keepRecentMessages,
+        'force': force,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ConversationCompactRequest &&
+          runtimeType == other.runtimeType &&
+          keepRecentMessages == other.keepRecentMessages &&
+          force == other.force;
+
+  @override
+  int get hashCode => Object.hash(keepRecentMessages, force);
+}
+
+/// Response envelope returned by manual context compaction.
+class ConversationCompactResponse {
+  final String conversationId;
+  final bool compacted;
+  final String reason;
+  final ConversationSummaryOut? summary;
+
+  const ConversationCompactResponse({
+    required this.conversationId,
+    required this.compacted,
+    required this.reason,
+    this.summary,
+  });
+
+  factory ConversationCompactResponse.fromJson(Map<String, dynamic> json) {
+    final rawSummary = json['summary'];
+    return ConversationCompactResponse(
+      conversationId: json['conversation_id'] as String,
+      compacted: json['compacted'] as bool,
+      reason: json['reason'] as String,
+      summary: rawSummary is Map<String, dynamic>
+          ? ConversationSummaryOut.fromJson(rawSummary)
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'conversation_id': conversationId,
+        'compacted': compacted,
+        'reason': reason,
+        'summary': summary?.toJson(),
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ConversationCompactResponse &&
+          runtimeType == other.runtimeType &&
+          conversationId == other.conversationId &&
+          compacted == other.compacted &&
+          reason == other.reason &&
+          summary == other.summary;
+
+  @override
+  int get hashCode => Object.hash(conversationId, compacted, reason, summary);
+}
+
 /// Derives a clean, concise deterministic fallback title from the initial user query.
 ///
 /// Matches Web Phase 8C deriveDeterministicTitle implementation:

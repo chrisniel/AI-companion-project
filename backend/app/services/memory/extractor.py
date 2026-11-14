@@ -180,6 +180,7 @@ async def extract_memory_candidates(
     user_text: str,
     assistant_text: Optional[str] = None,
     provider: Optional[BaseLLMProvider] = None,
+    emotion_event: Optional[str] = None,
 ) -> List[MemoryCandidate]:
     """Extract structured candidate facts from user turn using active LLM provider.
 
@@ -242,7 +243,8 @@ async def extract_memory_candidates(
         if not isinstance(item, dict):
             continue
 
-        content = item.get("content", "").strip()
+        raw_content = item.get("content")
+        content = raw_content.strip() if isinstance(raw_content, str) else ""
         if not content or contains_secrets(content):
             continue
 
@@ -251,8 +253,19 @@ async def extract_memory_candidates(
         raw_expires_at = item.get("expires_at")
 
         # Small Win: Explicit "Remember that..." immediately boosts verification and importance >= 1.5
-        confidence = 1.0 if is_explicit else float(item.get("confidence", 0.9))
-        importance = max(float(item.get("importance", confidence)), 1.5) if is_explicit else confidence
+        try:
+            confidence = 1.0 if is_explicit else float(item.get("confidence", 0.9))
+            importance = (
+                max(float(item.get("importance", confidence)), 1.5)
+                if is_explicit
+                else confidence
+            )
+        except (TypeError, ValueError):
+            continue
+
+        if emotion_event in ("user_distress", "user_gratitude"):
+            importance = min(2.0, round(importance + 0.3, 4))
+        importance = max(0.0, min(2.0, importance))
         user_verified_flag = True if is_explicit else False
 
         # M3 Batch E: Deterministic 72h TTL for temporary situational context when 2B LLM emits null

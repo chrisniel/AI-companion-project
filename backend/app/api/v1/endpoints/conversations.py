@@ -19,17 +19,25 @@ from app.core.config import settings
 from app.models.attachment import Attachment
 from app.models.base import utc_now
 from app.models.conversation import Conversation
+from app.models.conversation_summary import ConversationSummary
 from app.models.message import Message
 from app.schemas.attachment import AttachmentRef
 from app.schemas.conversation import (
+    ConversationCompactRequest,
+    ConversationCompactResponse,
     ConversationCreate,
     ConversationListOut,
     ConversationOut,
+    ConversationSummaryOut,
     ConversationUpdate,
     GenerateTitleRequest,
 )
 from app.schemas.llm import ChatMessage
 from app.schemas.message import MessageListOut, MessageOut, MessageSend
+from app.services.assistant.compactor import (
+    compact_conversation,
+    get_active_conversation_summary,
+)
 from app.services.assistant.orchestrator import (
     _get_lock,
     orchestrate_chat_stream,
@@ -486,6 +494,22 @@ async def delete_conversation(
     )
     await db.execute(cascade_stmt)
 
+    # 1b. Bulk soft-delete ALL active episode compaction summaries belonging to this conversation
+    summary_cascade_stmt = (
+        update(ConversationSummary)
+        .where(
+            ConversationSummary.conversation_id == conversation_id,
+            ConversationSummary.profile_id == session.profile_id,
+            ConversationSummary.is_deleted.is_(False),
+        )
+        .values(
+            is_deleted=True,
+            deleted_at=now,
+            is_active=False,
+        )
+    )
+    await db.execute(summary_cascade_stmt)
+
     # 2. Soft-delete parent conversation
     conversation.is_deleted = True
     conversation.deleted_at = now
@@ -674,3 +698,85 @@ async def send_message_stream(
         if not lock_transferred and lock.locked():
             lock.release()
         raise
+
+
+@router.get(
+    "/{conversation_id}/summary",
+    response_model=Optional[ConversationSummaryOut],
+)
+async def get_conversation_summary(
+    conversation_id: str,
+    session: ProfileSession = Depends(get_current_profile_session),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the active rolling episode summary for a conversation, or null if none exists."""
+    await validate_profile_session(db, session)
+    conversation = await db.scalar(
+        select(Conversation).where(
+            Conversation.id == conversation_id,
+            Conversation.profile_id == session.profile_id,
+            Conversation.is_deleted.is_(False),
+        )
+    )
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    summary = await get_active_conversation_summary(
+        db=db,
+        conversation_id=conversation_id,
+        profile_id=session.profile_id,
+    )
+    if summary is None:
+        return None
+    return ConversationSummaryOut.model_validate(summary)
+
+
+@router.post(
+    "/{conversation_id}/compact",
+    response_model=ConversationCompactResponse,
+)
+async def compact_conversation_endpoint(
+    conversation_id: str,
+    payload: Optional[ConversationCompactRequest] = None,
+    session: ProfileSession = Depends(get_current_profile_session),
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually compact older turns of a conversation into its active rolling episode digest."""
+    await validate_profile_session(db, session)
+    conversation = await db.scalar(
+        select(Conversation).where(
+            Conversation.id == conversation_id,
+            Conversation.profile_id == session.profile_id,
+            Conversation.is_deleted.is_(False),
+        )
+    )
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    req = payload or ConversationCompactRequest()
+    provider = get_llm_provider()
+    lock = _get_lock(conversation_id)
+    async with lock:
+        result = await compact_conversation(
+            db=db,
+            conversation_id=conversation_id,
+            profile_id=session.profile_id,
+            provider=provider,
+            force=req.force,
+            trigger="manual",
+            keep_recent_messages=req.keep_recent_messages,
+        )
+        await db.commit()
+        if result.active_summary is not None:
+            await db.refresh(result.active_summary)
+
+    return ConversationCompactResponse(
+        conversation_id=conversation_id,
+        compacted=result.compacted,
+        reason=result.reason,
+        summary=(
+            ConversationSummaryOut.model_validate(result.active_summary)
+            if result.active_summary is not None
+            else None
+        ),
+    )

@@ -24,7 +24,7 @@ from app.models.profile_session import ProfileSession
 
 logger = logging.getLogger("app.services.memory.retriever")
 
-FTS5_RESERVED = {"OR", "AND", "NOT"}
+FTS5_RESERVED = {"OR", "AND", "NOT", "NEAR"}
 _TOKEN_RE = re.compile(r"[a-zA-Z0-9\u3040-\u9FFF\uAC00-\uD7AF\u0080-\u024F]+")
 
 
@@ -45,13 +45,20 @@ def _sanitize_fts_prefix_query(raw: str) -> str:
     return " OR ".join(prefixed)
 
 
-async def _increment_recall_counts(db: AsyncSession, memory_ids: List[str]) -> None:
+async def _increment_recall_counts(
+    db: AsyncSession,
+    profile_id: str,
+    memory_ids: List[str],
+) -> None:
     """Atomically increment recall_count for memories surfaced into active conversation context."""
     if not memory_ids:
         return
     await db.execute(
         update(Memory)
-        .where(Memory.id.in_(memory_ids))
+        .where(
+            Memory.profile_id == profile_id,
+            Memory.id.in_(memory_ids),
+        )
         .values(recall_count=Memory.recall_count + 1)
     )
     await db.flush()
@@ -65,6 +72,8 @@ async def search_relevant_memories(
     limit: int = 5,
     now: Optional[datetime] = None,
     increment_recall: bool = False,
+    exclude_ids: Optional[set[str]] = None,
+    exclude_short_term: bool = False,
 ) -> List[Memory]:
     """Retrieve relevant long-term/episodic memories matching query tokens for a freshly validated Profile Session."""
     profile_session = await validate_profile_session(db, profile_session)
@@ -111,6 +120,10 @@ async def search_relevant_memories(
             row_dict = dict(r)
             row_dict.pop("fts_rank", None)
             mem = Memory(**row_dict)
+            if exclude_ids and mem.id in exclude_ids:
+                continue
+            if exclude_short_term and mem.is_short_term:
+                continue
             # Bounded recall-frequency + importance boost over base FTS ordering
             base_score = float(len(rows) - idx)
             freq_boost = 0.05 * min(int(mem.recall_count or 0), 10)
@@ -120,7 +133,11 @@ async def search_relevant_memories(
         memories = [mem for _, mem in scored[:limit]]
 
         if increment_recall and memories:
-            await _increment_recall_counts(db, [m.id for m in memories])
+            await _increment_recall_counts(
+                db,
+                profile_session.profile_id,
+                [m.id for m in memories],
+            )
             for m in memories:
                 m.recall_count = (m.recall_count or 0) + 1
 
@@ -241,7 +258,7 @@ async def get_triggered_knowledge(
     selected = [mem for _, mem in matched[:limit]]
 
     if increment_recall and selected:
-        await _increment_recall_counts(db, [m.id for m in selected])
+        await _increment_recall_counts(db, profile_session.profile_id, [m.id for m in selected])
 
     return selected
 
@@ -277,6 +294,11 @@ async def get_active_short_term_memories(
                     Memory.expires_at.is_(None),
                     Memory.category == "context",
                     Memory.is_core.is_(False),
+                    or_(
+                        Memory.trigger_keywords.is_(None),
+                        Memory.trigger_keywords == "",
+                        Memory.trigger_keywords == "[]",
+                    ),
                 ),
             ),
         )

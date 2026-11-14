@@ -183,7 +183,7 @@ void main() {
       expect(controller.activeConflicts.first.id, equals('mem-conflict-1'));
     });
 
-    test('approveMemory marks unverified memory as verified via PATCH', () async {
+    test('approveMemory marks unverified memory as verified via PATCH without wiping TTL', () async {
       await controller.loadMemories();
       final success = await controller.approveMemory('mem-2');
 
@@ -192,6 +192,23 @@ void main() {
         (r) => r['method'] == 'PATCH' && (r['url'] as String).contains('/memories/mem-2'),
       );
       expect(patchReq['body']['user_verified'], isTrue);
+      expect((patchReq['body'] as Map).containsKey('expires_at'), isFalse);
+      expect((patchReq['body'] as Map).containsKey('clear_expires_at'), isFalse);
+    });
+
+    test('promoteMemory sends clear_expires_at true without null expires_at', () async {
+      await controller.loadMemories();
+      final target = controller.memories.firstWhere((m) => m.id == 'mem-2');
+      final success = await controller.promoteMemory(target);
+
+      expect(success, isTrue);
+      final patchReq = recordedRequests.firstWhere(
+        (r) => r['method'] == 'PATCH' && (r['url'] as String).contains('/memories/mem-2'),
+      );
+      final body = patchReq['body'] as Map<String, dynamic>;
+      expect(body['user_verified'], isTrue);
+      expect(body['clear_expires_at'], isTrue);
+      expect(body.containsKey('expires_at'), isFalse);
     });
 
     test('deleteMemory calls DELETE /api/v1/memories/{id}', () async {

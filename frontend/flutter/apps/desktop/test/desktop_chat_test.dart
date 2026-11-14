@@ -131,6 +131,11 @@ class MockCompanionClient extends CompanionClient {
   final Map<String, CharacterInstanceOut> customCharacterInstances = {};
   String? customNextConversationId;
   String? lastCreatedWithCharacterId;
+  ConversationSummaryOut? customSummary;
+  ConversationCompactResponse? customCompactResponse;
+  String? lastCompactConversationId;
+  ConversationCompactRequest? lastCompactRequest;
+  final List<MemoryCreate> createdMemories = [];
 
   @override
   Future<ActiveCharacterStateOut> getActiveCharacterState() async {
@@ -365,6 +370,62 @@ class MockCompanionClient extends CompanionClient {
       yield const SseTokenEvent(' world!');
       yield const SseDoneEvent();
     }
+  }
+
+  @override
+  Future<ConversationSummaryOut?> getConversationSummary(String conversationId) async {
+    return customSummary;
+  }
+
+  @override
+  Future<ConversationCompactResponse> compactConversation(
+    String conversationId, [
+    ConversationCompactRequest? request,
+  ]) async {
+    lastCompactConversationId = conversationId;
+    lastCompactRequest = request;
+    final res = customCompactResponse ??
+        ConversationCompactResponse(
+          conversationId: conversationId,
+          compacted: true,
+          reason: 'compacted',
+          summary: ConversationSummaryOut(
+            id: 'sum-1',
+            conversationId: conversationId,
+            summaryText: 'Compacted summary covering turns 1 through 4.',
+            fromSequenceNo: 1,
+            toSequenceNo: 4,
+            compactedMessageCount: 4,
+            tokenEstimate: 14,
+            source: 'extractive_fallback',
+            isActive: true,
+            updatedAt: '2026-11-14T12:00:00Z',
+          ),
+        );
+    if (res.summary != null) {
+      customSummary = res.summary;
+    }
+    return res;
+  }
+
+  @override
+  Future<MemoryOut> createMemory(MemoryCreate payload) async {
+    createdMemories.add(payload);
+    return MemoryOut(
+      id: 'mem-${createdMemories.length}',
+      ownerId: 'mock-owner',
+      content: payload.content,
+      category: payload.category,
+      importance: payload.importance,
+      scope: payload.scope,
+      characterInstanceId: payload.characterInstanceId,
+      userVerified: true,
+      isCore: payload.isCore,
+      triggerKeywords: payload.triggerKeywords,
+      sourceType: payload.sourceType,
+      recallCount: 0,
+      createdAt: '2026-11-14T12:00:00Z',
+    );
   }
 }
 
@@ -2890,6 +2951,182 @@ void main() {
 
       expect(controller.modelStateCategory, equals(ModelRuntimeStateCategory.modelReady));
       expect(controller.activeModelName, equals('qwen3-vl-2b-instruct'));
+
+      controller.dispose();
+    });
+
+    testWidgets('Episode Digest badge opens summary dialog and Compact Context triggers compaction', (tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1280, 800);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final mockClient = MockCompanionClient();
+      const conv1 = ConversationOut(
+        id: 'conv-digest-1',
+        title: 'Long Thread',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: '2026-11-14T10:00:00Z',
+        updatedAt: '2026-11-14T12:00:00Z',
+        messageCount: 6,
+      );
+      mockClient.customConversations = [conv1];
+      mockClient.customMessages = List<MessageOut>.generate(
+        6,
+        (i) => MessageOut(
+          id: 'm-$i',
+          conversationId: 'conv-digest-1',
+          sender: i.isEven ? 'user' : 'assistant',
+          content: 'Turn ${i + 1} content',
+          status: 'completed',
+          sequenceNo: i + 1,
+          createdAt: '2026-11-14T12:00:00Z',
+        ),
+      );
+      mockClient.customSummary = const ConversationSummaryOut(
+        id: 'sum-initial',
+        conversationId: 'conv-digest-1',
+        summaryText: 'Discussed travel plans and espresso ratios.',
+        fromSequenceNo: 1,
+        toSequenceNo: 4,
+        compactedMessageCount: 4,
+        tokenEstimate: 14,
+        source: 'llm_summary',
+        isActive: true,
+        updatedAt: '2026-11-14T12:00:00Z',
+      );
+      mockClient.customCompactResponse = const ConversationCompactResponse(
+        conversationId: 'conv-digest-1',
+        compacted: true,
+        reason: 'compacted',
+        summary: ConversationSummaryOut(
+          id: 'sum-updated',
+          conversationId: 'conv-digest-1',
+          summaryText: 'Updated rolling summary up to turn 6.',
+          fromSequenceNo: 1,
+          toSequenceNo: 6,
+          compactedMessageCount: 6,
+          tokenEstimate: 18,
+          source: 'llm_summary',
+          isActive: true,
+          updatedAt: '2026-11-14T12:05:00Z',
+        ),
+      );
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('episode_digest_badge')), findsOneWidget);
+      expect(find.text('Digest: Turns 1–4'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('episode_digest_badge')));
+      await tester.pumpAndSettle();
+      expect(find.text('Episode Digest'), findsOneWidget);
+      expect(find.text('Discussed travel plans and espresso ratios.'), findsOneWidget);
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('compact_context_button')));
+      await tester.pumpAndSettle();
+
+      expect(mockClient.lastCompactConversationId, equals('conv-digest-1'));
+      expect(mockClient.lastCompactRequest?.force, isTrue);
+      expect(find.text('Digest: Turns 1–6'), findsOneWidget);
+
+      controller.dispose();
+    });
+
+    testWidgets('Message bubble Bookmark menu saves to Long-Term Memory or pins to Fixed Knowledge', (tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1280, 800);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final mockClient = MockCompanionClient();
+      const conv = ConversationOut(
+        id: 'conv-bookmark-1',
+        title: 'Memory Bookmark Chat',
+        characterId: 'default',
+        ownerId: 'mock-owner',
+        createdAt: '2026-11-14T10:00:00Z',
+        updatedAt: '2026-11-14T12:00:00Z',
+        messageCount: 2,
+      );
+      mockClient.customConversations = [conv];
+      mockClient.customMessages = const [
+        MessageOut(
+          id: 'msg-u-1',
+          conversationId: 'conv-bookmark-1',
+          sender: 'user',
+          content: 'My favorite tea is hojicha.',
+          status: 'completed',
+          sequenceNo: 1,
+          createdAt: '2026-11-14T12:00:00Z',
+        ),
+        MessageOut(
+          id: 'msg-a-1',
+          conversationId: 'conv-bookmark-1',
+          sender: 'assistant',
+          content: 'Your audio interface uses balanced TRS cables.',
+          status: 'completed',
+          sequenceNo: 2,
+          createdAt: '2026-11-14T12:01:00Z',
+        ),
+      ];
+
+      final controller = DesktopChatController(client: mockClient);
+      await controller.checkConnection();
+      await controller.loadConversations();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.light(),
+          home: Scaffold(
+            body: ChatScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Short conversation (< 3 messages) keeps Compact Context disabled.
+      final compactBtn = tester.widget<OutlinedButton>(
+        find.byKey(const Key('compact_context_button')),
+      );
+      expect(compactBtn.onPressed, isNull);
+
+      await tester.tap(find.byKey(const Key('bookmark_message_msg-u-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save to Long-Term Memory'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('bookmark_message_msg-a-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Pin to Fixed Knowledge'));
+      await tester.pumpAndSettle();
+
+      expect(mockClient.createdMemories, hasLength(2));
+      expect(mockClient.createdMemories[0].content, equals('My favorite tea is hojicha.'));
+      expect(mockClient.createdMemories[0].isCore, isFalse);
+      expect(mockClient.createdMemories[0].sourceType, equals('user_explicit'));
+      expect(mockClient.createdMemories[1].content, equals('Your audio interface uses balanced TRS cables.'));
+      expect(mockClient.createdMemories[1].isCore, isTrue);
+      expect(mockClient.createdMemories[1].sourceType, equals('user_explicit'));
 
       controller.dispose();
     });

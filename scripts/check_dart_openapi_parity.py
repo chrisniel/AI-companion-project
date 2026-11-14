@@ -108,6 +108,8 @@ M3_ROUTE_DART_METHODS: Dict[Tuple[str, str], Tuple[str, str]] = {
     ("GET", "/api/v1/memories/{memory_id}"): ("getMemory", "/api/v1/memories/$memoryId"),
     ("PATCH", "/api/v1/memories/{memory_id}"): ("updateMemory", "/api/v1/memories/$memoryId"),
     ("DELETE", "/api/v1/memories/{memory_id}"): ("deleteMemory", "/api/v1/memories/$memoryId"),
+    ("GET", "/api/v1/conversations/{conversation_id}/summary"): ("getConversationSummary", "/api/v1/conversations/$conversationId/summary"),
+    ("POST", "/api/v1/conversations/{conversation_id}/compact"): ("compactConversation", "/api/v1/conversations/$conversationId/compact"),
 }
 
 # Explicitly cataloged routes outside CompanionClient to prevent silent omissions.
@@ -146,6 +148,9 @@ SCHEMA_TO_DART_CLASS: Dict[str, Tuple[str, str]] = {
     "GenerateTitleRequest": ("conversation_dto.dart", "GenerateTitleRequest"),
     "ConversationOut": ("conversation_dto.dart", "ConversationOut"),
     "ConversationListOut": ("conversation_dto.dart", "ConversationListOut"),
+    "ConversationSummaryOut": ("conversation_dto.dart", "ConversationSummaryOut"),
+    "ConversationCompactRequest": ("conversation_dto.dart", "ConversationCompactRequest"),
+    "ConversationCompactResponse": ("conversation_dto.dart", "ConversationCompactResponse"),
     "MessageSend": ("message_dto.dart", "MessageSend"),
     "MessageOut": ("message_dto.dart", "MessageOut"),
     "MessageListOut": ("message_dto.dart", "MessageListOut"),

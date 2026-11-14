@@ -45,10 +45,10 @@
 - **`PC-CLIENT-003`**: SoftGlass / Neumorphic Desktop Design System, Dark/Light Themes & Typography.
 - **`PC-CLIENT-004`**: API Client Layer (OpenAPI-derived Dart client, SSE token stream consumer, WebSocket duplex client).
 - **`PC-CLIENT-005`**: Multi-Profile Navigation & Local Admin Switcher UI (Navigation Rail `ProfileSelectorHeader`, Settings `ProfileAccessCard`, Create & Rename Profile dialogs, Sign out, and persistent selection across restarts; Batch C implemented and verified on `feature/m2-profile-admin-c`; PIN / Windows Hello deferred).
-- **`PC-CLIENT-006`**: Conversation View & Multimodal Attachment Composer with Lightbox.
+- **`PC-CLIENT-006`**: Conversation View, Multimodal Attachment Composer, Episode Digest / Compact Context Controls & 1-Click Message Bookmarking (M3 Batch F added Episode Digest badge/dialog, responsive Compact Context button, and per-bubble memory/knowledge bookmark menu on `feature/m3-context-compaction-memory-f`).
 - **`PC-CLIENT-007`**: Character Studio & Personality Trait Editor (Immersive 2D showcase stage, 8 continuous sliders, presets, Illustrative Style Summary, sequential Save & Activate, chat dual-indicator visibility; implemented and independently approved for provisional closure on `feature/m3-character-studio-personality-b`, not yet merged into develop).
 - **`PC-CLIENT-008`**: Schedule, Reminder, Alarm & Routine Management View.
-- **`PC-CLIENT-009`**: Memory Inspection, Correction & Deletion Control Center.
+- **`PC-CLIENT-009`**: Memory Inspection, Correction & Deletion Control Center (Delivered via PR #37 `64ac521`, extended with Option 2A 3-tier inner sub-menu UI in M3 Batch E via PR #39 `ea4441c`, and updated with safe Short-Term `clear_expires_at` Promote contract in M3 Batch F on `feature/m3-context-compaction-memory-f`).
 - **`PC-CLIENT-010`**: Model Management UI (D6 manual scan trigger, bundle install confirmation, VRAM metrics).
 - **`PC-CLIENT-011`**: Settings, Remote Access & Backup/Reset UI.
 - **`PC-CLIENT-012`**: Windows Native Notification Presentation (Toasts/Action Center delivery).
@@ -91,11 +91,11 @@
 - **`PC-CHAR-005`**: Immutable Neutral Assistant Fallback Definition (Delivered via PR #29, commit `d22dd7e`).
 
 ### Stream: `PC-MEM` — Memory & Continuity
-- **`PC-MEM-001`**: Profile & Character Scoped Memory Schema Extension (Delivered via PR #35 `b3d31d7`; extended with `trigger_keywords`, `recall_count`, and 3-tier helpers via Migration 013 in M3 Batch E on `feature/m3-memory-knowledge-e`).
-- **`PC-MEM-002`**: Selective Automatic Memory Extraction Pipeline (Delivered via PR #36 `f7de198` & PR #37 `64ac521`; strengthened with explicit `"Remember that..."` priority boost, Fixed Knowledge write-protection, and cross-session promotion in M3 Batch E).
-- **`PC-MEM-003`**: Temporary Memory Lifecycle, Expiration Tracking & Natural Revalidation (Delivered via PR #35 `b3d31d7` & extended with deterministic 72h situational TTL and 1-click UI promotion in M3 Batch E).
-- **`PC-MEM-004`**: User Inspection, Correction, Deletion & Tombstone Propagation (Delivered via PR #37 `64ac521` and updated with Option 2A 3-tier inner sub-menu UI in M3 Batch E).
-- **`PC-MEM-005`**: Bounded Conversation History Recall & Context Assembly (Delivered via PR #35 `b3d31d7`; upgraded with stem/prefix lorebook matching, FTS5 prefix ranking + `recall_count`, and 4-section XML context assembly in M3 Batch E).
+- **`PC-MEM-001`**: Profile & Character Scoped Memory Schema Extension (Delivered via PR #35 `b3d31d7`; extended with `trigger_keywords`, `recall_count`, and 3-tier helpers via Migration 013 in M3 Batch E via PR #39 `ea4441c`; extended with `conversation_summaries` Migration 014 for rolling episode compaction in M3 Batch F on `feature/m3-context-compaction-memory-f`).
+- **`PC-MEM-002`**: Selective Automatic Memory Extraction Pipeline (Delivered via PR #36 `f7de198` & PR #37 `64ac521`; strengthened with explicit `"Remember that..."` priority boost, Fixed Knowledge write-protection, and cross-session promotion in M3 Batch E via PR #39 `ea4441c`; enhanced with emotion-weighted `+0.3` importance scoring, bounded `(previously: ... until YYYY-MM)` temporal evolution trail, and Batch E extraction/reconciler hardening in M3 Batch F on `feature/m3-context-compaction-memory-f`).
+- **`PC-MEM-003`**: Temporary Memory Lifecycle, Expiration Tracking & Natural Revalidation (Delivered via PR #35 `b3d31d7`; extended with deterministic 72h situational TTL and 1-click UI promotion in M3 Batch E via PR #39 `ea4441c`; hardened with explicit `MemoryUpdate.clear_expires_at` promote semantics in M3 Batch F on `feature/m3-context-compaction-memory-f`).
+- **`PC-MEM-004`**: User Inspection, Correction, Deletion & Tombstone Propagation (Delivered via PR #37 `64ac521`; updated with Option 2A 3-tier inner sub-menu UI in M3 Batch E via PR #39 `ea4441c`; extended with 1-click chat bubble memory/knowledge bookmarking in M3 Batch F on `feature/m3-context-compaction-memory-f`).
+- **`PC-MEM-005`**: Bounded Conversation History Recall & Context Assembly (Delivered via PR #35 `b3d31d7`; upgraded with stem/prefix lorebook matching, FTS5 prefix ranking + `recall_count`, and 4-section XML context assembly in M3 Batch E via PR #39 `ea4441c`; extended with pre-limit conversation compaction, rolling `<recent_episode_digest>` XML injection with delimiter escaping, `GET /summary` & `POST /compact`, and retrieval query hardening in M3 Batch F on `feature/m3-context-compaction-memory-f`).
 
 ### Stream: `PC-ACTION` — D9 Typed Action Engine
 - **`PC-ACTION-001`**: 5-Stage Deterministic Pipeline Implementation ($\text{Model} \rightarrow \text{Typed} \rightarrow \text{Policy} \rightarrow \text{Adapter} \rightarrow \text{Capability}$).

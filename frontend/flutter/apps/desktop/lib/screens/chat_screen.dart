@@ -494,9 +494,167 @@ class _ChatScreenState extends State<ChatScreen> {
     final newConvName = chatCtrl.getActiveProfileCharacterName();
     final bool sameCharacter = (thisConvName == newConvName);
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bool isWideHeader = constraints.maxWidth >= 900;
+        final Widget compactIcon = chatCtrl.isCompacting
+            ? const SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.compress_rounded, size: 14);
+        final List<Widget> compactionControls = [
+          const SizedBox(width: CompanionSpacing.xs),
+          Tooltip(
+            message: 'Compact older conversation turns into a rolling episode digest.',
+            child: OutlinedButton(
+              key: const Key('compact_context_button'),
+              style: OutlinedButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.symmetric(
+                  horizontal: isWideHeader ? 8 : 6,
+                  vertical: 4,
+                ),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              onPressed: (!chatCtrl.isGenerating &&
+                      !chatCtrl.isCompacting &&
+                      chatCtrl.messages.length >= 3)
+                  ? () async {
+                      final res = await chatCtrl.compactActiveConversation();
+                      if (!context.mounted) return;
+                      final messenger = ScaffoldMessenger.maybeOf(context);
+                      if (messenger == null) return;
+                      if (res == null) {
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              chatCtrl.errorMessage ?? 'Could not compact context.',
+                            ),
+                          ),
+                        );
+                      } else if (res.compacted && res.summary != null) {
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Compacted turns ${res.summary!.fromSequenceNo}–${res.summary!.toSequenceNo} '
+                              '(${res.summary!.compactedMessageCount} messages).',
+                            ),
+                          ),
+                        );
+                      } else {
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Conversation is already within the recent-turn window.',
+                            ),
+                          ),
+                        );
+                      }
+                    }
+                  : null,
+              child: isWideHeader
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        compactIcon,
+                        const SizedBox(width: 4),
+                        Text(
+                          chatCtrl.isCompacting ? 'Compacting...' : 'Compact Context',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    )
+                  : compactIcon,
+            ),
+          ),
+          if (chatCtrl.activeSummary != null) ...[
+            const SizedBox(width: CompanionSpacing.sm),
+            Tooltip(
+              message:
+                  'Inspect episode digest (${chatCtrl.activeSummary!.compactedMessageCount} messages, '
+                  '~${chatCtrl.activeSummary!.tokenEstimate} tokens)',
+              child: InkWell(
+                key: const Key('episode_digest_badge'),
+                borderRadius: CompanionRadius.borderSm,
+                onTap: () => _showSummaryDialog(context, chatCtrl.activeSummary!, ext),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: CompanionSpacing.sm,
+                    vertical: CompanionSpacing.xs,
+                  ),
+                  decoration: BoxDecoration(
+                    color: (ext?.accent ?? CompanionColors.lightAccent).withValues(alpha: 0.12),
+                    borderRadius: CompanionRadius.borderSm,
+                    border: Border.all(
+                      color: (ext?.accent ?? CompanionColors.lightAccent).withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.summarize_outlined,
+                        size: 12,
+                        color: ext?.accent ?? CompanionColors.lightAccent,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Digest: Turns ${chatCtrl.activeSummary!.fromSequenceNo}–${chatCtrl.activeSummary!.toSequenceNo}',
+                        style: CompanionTypography.caption.copyWith(
+                          color: ext?.accent ?? CompanionColors.lightAccent,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ];
+
+        final Widget connectionPill = Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: CompanionSpacing.md,
+            vertical: CompanionSpacing.xs,
+          ),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.04),
+            borderRadius: CompanionRadius.borderFull,
+            border: Border.all(
+              color: ext?.borderSubtle ?? Colors.transparent,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: statusColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: CompanionSpacing.sm),
+              Text(
+                chatCtrl.connectionStatusLabel,
+                style: CompanionTypography.caption.copyWith(
+                  color: ext?.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        );
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -527,6 +685,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     tooltip: 'New Conversation',
                     onPressed: () => chatCtrl.createNewConversation(),
                   ),
+                  if (chatCtrl.activeConversation != null) ...compactionControls,
                 ],
               ),
               const SizedBox(height: CompanionSpacing.xs),
@@ -757,42 +916,65 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           const SizedBox(width: CompanionSpacing.sm),
         ],
-        // Connection status pill
-        Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: CompanionSpacing.md,
-            vertical: CompanionSpacing.xs,
-          ),
-          decoration: BoxDecoration(
-            color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.04),
-            borderRadius: CompanionRadius.borderFull,
-            border: Border.all(
-              color: ext?.borderSubtle ?? Colors.transparent,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+        connectionPill,
+          ],
+        );
+      },
+    );
+  }
+
+  void _showSummaryDialog(
+    BuildContext context,
+    ConversationSummaryOut summary,
+    CompanionThemeExtension? ext,
+  ) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Row(
             children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: statusColor,
-                  shape: BoxShape.circle,
-                ),
+              Icon(
+                Icons.summarize_outlined,
+                size: 20,
+                color: ext?.accent ?? CompanionColors.lightAccent,
               ),
-              const SizedBox(width: CompanionSpacing.sm),
-              Text(
-                chatCtrl.connectionStatusLabel,
-                style: CompanionTypography.caption.copyWith(
-                  color: ext?.textSecondary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              const SizedBox(width: 8),
+              const Text('Episode Digest'),
             ],
           ),
-        ),
-      ],
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SelectableText(
+                    summary.summaryText,
+                    style: CompanionTypography.bodyMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Turns ${summary.fromSequenceNo}–${summary.toSequenceNo} • '
+                    '${summary.compactedMessageCount} messages • '
+                    '~${summary.tokenEstimate} tokens • Source: ${summary.source}',
+                    style: CompanionTypography.caption.copyWith(
+                      color: ext?.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -1158,8 +1340,58 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  Widget _buildBookmarkMenu(
+    BuildContext context,
+    MessageOut msg,
+    CompanionThemeExtension? ext,
+  ) {
+    return PopupMenuButton<String>(
+      key: Key('bookmark_message_${msg.id}'),
+      tooltip: 'Bookmark to Memory',
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+      iconSize: 16,
+      icon: Icon(
+        Icons.bookmark_add_outlined,
+        size: 16,
+        color: ext?.textMuted ?? CompanionColors.lightTextMuted,
+      ),
+      onSelected: (value) async {
+        final asKnowledge = value == 'knowledge';
+        final saved = await _effectiveController.bookmarkMessageToMemory(
+          msg.content,
+          asKnowledge: asKnowledge,
+        );
+        if (!context.mounted) return;
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        messenger?.showSnackBar(
+          SnackBar(
+            content: Text(
+              saved
+                  ? (asKnowledge
+                      ? 'Pinned to Fixed Knowledge.'
+                      : 'Saved to Long-Term Memory.')
+                  : (_effectiveController.errorMessage ?? 'Could not save bookmark.'),
+            ),
+          ),
+        );
+      },
+      itemBuilder: (context) => const [
+        PopupMenuItem<String>(
+          value: 'long_term',
+          child: Text('Save to Long-Term Memory'),
+        ),
+        PopupMenuItem<String>(
+          value: 'knowledge',
+          child: Text('Pin to Fixed Knowledge'),
+        ),
+      ],
+    );
+  }
+
   Widget _buildUserBubble(BuildContext context, MessageOut msg, CompanionThemeExtension? ext) {
-    return NeumorphicSurface(
+    final canBookmark = msg.status == 'completed' && msg.content.trim().isNotEmpty;
+    final bubble = NeumorphicSurface(
       surfaceType: NeumorphicSurfaceType.raised,
       borderRadius: CompanionRadius.borderLg,
       padding: const EdgeInsets.symmetric(
@@ -1178,6 +1410,22 @@ class _ChatScreenState extends State<ChatScreen> {
         ],
       ),
     );
+    if (!canBookmark) return bubble;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        bubble,
+        Positioned(
+          top: 2,
+          right: 4,
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: _buildBookmarkMenu(context, msg, ext),
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildAssistantBubble(
@@ -1190,25 +1438,8 @@ class _ChatScreenState extends State<ChatScreen> {
     final isCancelled = msg.status == 'cancelled';
     final isFailed = msg.status == 'failed';
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 32,
-          height: 32,
-          margin: const EdgeInsets.only(top: 4, right: 10),
-          decoration: BoxDecoration(
-            color: (ext?.accent ?? CompanionColors.lightAccent).withValues(alpha: 0.15),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            Icons.smart_toy_rounded,
-            size: 18,
-            color: ext?.accent ?? CompanionColors.lightAccent,
-          ),
-        ),
-        Expanded(
-          child: NeumorphicSurface(
+    final canBookmark = msg.status == 'completed' && msg.content.trim().isNotEmpty;
+    final bubble = NeumorphicSurface(
             surfaceType: NeumorphicSurfaceType.glass,
             borderRadius: CompanionRadius.borderLg,
             padding: const EdgeInsets.symmetric(
@@ -1346,7 +1577,43 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
               ],
             ),
+    );
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          margin: const EdgeInsets.only(top: 4, right: 10),
+          decoration: BoxDecoration(
+            color: (ext?.accent ?? CompanionColors.lightAccent).withValues(alpha: 0.15),
+            shape: BoxShape.circle,
           ),
+          child: Icon(
+            Icons.smart_toy_rounded,
+            size: 18,
+            color: ext?.accent ?? CompanionColors.lightAccent,
+          ),
+        ),
+        Expanded(
+          child: canBookmark
+              ? Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    bubble,
+                    Positioned(
+                      top: 2,
+                      right: 4,
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: _buildBookmarkMenu(context, msg, ext),
+                      ),
+                    ),
+                  ],
+                )
+              : bubble,
         ),
       ],
     );

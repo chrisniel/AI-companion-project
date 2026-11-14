@@ -24,6 +24,7 @@ from app.core.profile_sessions import now_utc
 from app.models.attachment import Attachment
 from app.models.character_instance import CharacterInstance
 from app.models.conversation import Conversation
+from app.models.conversation_summary import ConversationSummary
 from app.models.memory import Memory
 from app.models.message import Message
 from app.models.profile import Profile
@@ -260,6 +261,7 @@ class ProfilePurgeService:
         )
         # 2. Relational deletions (Memory before CharacterInstance to satisfy RESTRICT FK)
         await self.db.execute(delete(Attachment).where(Attachment.profile_id == profile_id))
+        await self.db.execute(delete(ConversationSummary).where(ConversationSummary.profile_id == profile_id))
         await self.db.execute(delete(Message).where(Message.profile_id == profile_id))
         await self.db.execute(delete(Conversation).where(Conversation.profile_id == profile_id))
         await self.db.execute(delete(Memory).where(Memory.profile_id == profile_id))
@@ -318,6 +320,12 @@ class ProfilePurgeService:
                 delete(Memory).where(
                     Memory.deleted_at.is_not(None),
                     Memory.deleted_at <= cutoff_date,
+                )
+            )
+            await self.db.execute(
+                delete(ConversationSummary).where(
+                    ConversationSummary.deleted_at.is_not(None),
+                    ConversationSummary.deleted_at <= cutoff_date,
                 )
             )
             await self.db.commit()

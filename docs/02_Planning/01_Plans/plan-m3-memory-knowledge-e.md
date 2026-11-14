@@ -4,7 +4,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - **Status:** Implemented & Verified on `feature/m3-memory-knowledge-e` (Phase 3 Closure Complete — Draft PR Ready for Phase 4 Review)
 - **Delivery Level:** Level B — Planned Autonomous (Core Architecture Feature Implementation under Approved Decision D7 & ADR-0018)
-- **Work Breakdown Structure IDs:** `PC-MEM-002` (guardrails & TTL), `PC-MEM-006` (3-tier memory & keyword lorebook), `PC-CLIENT-009` (Memory Control Center 3-tier inner sub-menu UI)
+- **Work Breakdown Structure IDs:** `PC-MEM-002` (guardrails & TTL), `PC-MEM-001`..`005` (3-tier memory & keyword lorebook), `PC-CLIENT-009` (Memory Control Center 3-tier inner sub-menu UI)
 - **Scope Mode:** New Feature & Architectural Revamp — 3-Tier memory model (Fixed Knowledge, Long-Term Memory, Short-Term Context), Alembic Migration 013 (`trigger_keywords` + `recall_count`), deterministic 72h Short-Term TTL decay, background AI overwrite protection for Fixed Knowledge, stem/prefix-aware keyword lorebook retrieval, explicit `"Remember that..."` instant verification & importance boost, structured multi-section prompt assembly, and Desktop UI revamp with Option 2A inner left sub-menu & context-aware creation CTA.
 - **Target Files:**
   - `backend/migrations/versions/013_memory_knowledge_and_triggers.py` (new)

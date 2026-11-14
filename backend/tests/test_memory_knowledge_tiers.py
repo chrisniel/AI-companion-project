@@ -378,3 +378,220 @@ def test_build_context_outputs_four_semantic_xml_sections_within_budgets():
     )
     assert "<triggered_knowledge_lore>" not in context_no_lore[0].content
     assert "<short_term_context>" not in context_no_lore[0].content
+
+
+@pytest.mark.anyio
+async def test_emotion_weighted_importance_boost_and_null_safe_extractor():
+    """Distress/gratitude emotion events add +0.3 importance (clamped <= 2.0) and null/bad fields skip safely."""
+
+    class _StubProvider:
+        def __init__(self, payload: str):
+            self.payload = payload
+
+        def is_loaded(self) -> bool:
+            return True
+
+        async def generate(self, *args, **kwargs):
+            return self.payload
+
+    raw = json.dumps([
+        {"category": "fact", "content": None, "confidence": 0.95},
+        {"category": "fact", "content": "Bad confidence item", "confidence": "not-a-number"},
+        {"category": "fact", "content": "User lost their job today and feels overwhelmed", "confidence": 0.9},
+    ])
+    provider = _StubProvider(raw)
+
+    distress_candidates = await extract_memory_candidates(
+        user_text="I lost my job today and I am really stressed",
+        provider=provider,
+        emotion_event="user_distress",
+    )
+    assert len(distress_candidates) == 1
+    assert distress_candidates[0].content == "User lost their job today and feels overwhelmed"
+    assert distress_candidates[0].importance == pytest.approx(1.2, abs=1e-4)
+
+    explicit_clamped = await extract_memory_candidates(
+        user_text="Remember that I love matcha lattes",
+        provider=_StubProvider(json.dumps([
+            {"category": "preference", "content": "Bad explicit importance", "importance": "bad-float"},
+            {"category": "preference", "content": "User loves matcha lattes", "confidence": 0.95, "importance": 1.85},
+        ])),
+        emotion_event="user_gratitude",
+    )
+    assert len(explicit_clamped) == 1
+    assert explicit_clamped[0].content == "User loves matcha lattes"
+    # 1.85 + 0.3 clamps cleanly at 2.0
+    assert explicit_clamped[0].importance == pytest.approx(2.0, abs=1e-4)
+
+    neutral_candidates = await extract_memory_candidates(
+        user_text="We were discussing my upcoming errands and appointments this Tuesday afternoon.",
+        provider=_StubProvider(json.dumps([
+            {"category": "fact", "content": "User has a dentist appointment Tuesday", "confidence": 0.9},
+        ])),
+        emotion_event="neutral_turn",
+    )
+    assert len(neutral_candidates) == 1
+    assert neutral_candidates[0].importance == pytest.approx(0.9, abs=1e-4)
+
+
+@pytest.mark.anyio
+async def test_temporal_supersession_preserves_bounded_single_step_history(
+    test_session: AsyncSession,
+    profile_id: str,
+):
+    """Durable memory updates retain one bounded (previously: ... until YYYY-MM) clause without nesting."""
+    session = await session_for_owner(test_session, "local_user")
+
+    first = Memory(
+        profile_id=session.profile_id,
+        owner_id=session.profile_id,
+        scope="profile",
+        category="fact",
+        content="User lives in Manila",
+        importance=1.0,
+        source_type="extracted",
+        valid_from=datetime(2026, 9, 1, tzinfo=timezone.utc),
+    )
+    test_session.add(first)
+    await test_session.flush()
+
+    t1 = datetime(2026, 10, 15, tzinfo=timezone.utc)
+    res1 = await reconcile_candidate(
+        db=test_session,
+        profile_id=session.profile_id,
+        candidate=MemoryCandidate(
+            category="fact",
+            content="User lives in Tokyo",
+            scope="profile",
+            confidence=0.95,
+            importance=1.0,
+        ),
+        source_type="extracted",
+        now=t1,
+    )
+    assert res1.id == first.id
+    assert first.content == "User lives in Tokyo (previously: User lives in Manila until 2026-10)"
+
+    # Subsequent update replaces prior supersession clause instead of nesting infinitely
+    t2 = datetime(2026, 11, 14, tzinfo=timezone.utc)
+    res2 = await reconcile_candidate(
+        db=test_session,
+        profile_id=session.profile_id,
+        candidate=MemoryCandidate(
+            category="fact",
+            content="User lives in Kyoto",
+            scope="profile",
+            confidence=0.95,
+            importance=1.0,
+        ),
+        source_type="extracted",
+        now=t2,
+    )
+    assert res2.id == first.id
+    assert first.content == "User lives in Kyoto (previously: User lives in Tokyo until 2026-11)"
+    assert first.content.count("(previously:") == 1
+
+
+@pytest.mark.anyio
+async def test_batch_e_hardening_fts_near_pre_slice_filtering_and_clear_expires_at(
+    client: AsyncClient,
+    auth_headers: dict,
+    test_session: AsyncSession,
+):
+    """Verify Batch E review fixes: NEAR quoting, pre-slice exclude_ids/short_term, trigger_keywords guard, clear_expires_at."""
+    session = await session_for_owner(test_session, "local_user")
+    now = datetime.now(timezone.utc)
+
+    core = Memory(
+        profile_id=session.profile_id,
+        scope="profile",
+        category="fact",
+        content="User lives near Tokyo station",
+        is_core=True,
+        source_type="manual",
+        importance=1.5,
+        valid_from=now,
+    )
+    lore_ctx = Memory(
+        profile_id=session.profile_id,
+        scope="profile",
+        category="context",
+        content="When Tokyo trip comes up, remind user about JR Pass",
+        is_core=False,
+        trigger_keywords=json.dumps(["tokyo"]),
+        source_type="manual",
+        importance=1.0,
+        valid_from=now,
+    )
+    long_term = Memory(
+        profile_id=session.profile_id,
+        scope="profile",
+        category="fact",
+        content="User enjoys walking near Tokyo Imperial Palace",
+        is_core=False,
+        source_type="extracted",
+        importance=1.0,
+        valid_from=now,
+    )
+    short_term = Memory(
+        profile_id=session.profile_id,
+        scope="profile",
+        category="context",
+        content="User is near Tokyo airport right now",
+        is_core=False,
+        source_type="extracted",
+        expires_at=now + timedelta(hours=24),
+        importance=0.9,
+        valid_from=now,
+    )
+    test_session.add_all([core, lore_ctx, long_term, short_term])
+    await test_session.commit()
+    core_id = core.id
+    lore_ctx_id = lore_ctx.id
+    long_term_id = long_term.id
+    short_term_id = short_term.id
+    prof_id = session.profile_id
+
+    # 1. FTS query containing reserved word NEAR must not fail, and pre-slice exclusions skip recall_count increments
+    hits = await search_relevant_memories(
+        db=test_session,
+        query="walking near Tokyo",
+        profile_session=session,
+        limit=5,
+        increment_recall=True,
+        exclude_ids={core_id, lore_ctx_id},
+        exclude_short_term=True,
+    )
+    hit_ids = [m.id for m in hits]
+    assert hit_ids == [long_term_id]
+
+    test_session.expire_all()
+    refreshed_core = await test_session.scalar(select(Memory).where(Memory.id == core_id))
+    refreshed_st = await test_session.scalar(select(Memory).where(Memory.id == short_term_id))
+    refreshed_lt = await test_session.scalar(select(Memory).where(Memory.id == long_term_id))
+    assert refreshed_core.recall_count == 0
+    assert refreshed_st.recall_count == 0
+    assert refreshed_lt.recall_count == 1
+
+    # 2. Keyword-triggered context memory without expires_at is NOT treated as ambient short-term context
+    st_list = await get_active_short_term_memories(db=test_session, profile_id=prof_id, now=now)
+    st_ids = {m.id for m in st_list}
+    assert short_term_id in st_ids
+    assert lore_ctx_id not in st_ids
+
+    # 3. PATCH omitting expires_at preserves existing TTL; clear_expires_at: true promotes/clears TTL
+    approve_res = await client.patch(
+        f"/api/v1/memories/{short_term_id}",
+        json={"user_verified": True},
+        headers=auth_headers,
+    )
+    assert approve_res.status_code == 200
+    assert approve_res.json()["expires_at"] is not None
+
+    promote_res = await client.patch(
+        f"/api/v1/memories/{short_term_id}",
+        json={"clear_expires_at": True, "category": "fact", "source_type": "user_explicit"},
+        headers=auth_headers,
+    )
+    assert promote_res.status_code == 200
+    assert promote_res.json()["expires_at"] is None

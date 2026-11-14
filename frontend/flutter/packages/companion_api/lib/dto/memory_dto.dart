@@ -109,6 +109,7 @@ class MemoryUpdate {
   final double? importance;
   final bool? isCore;
   final String? expiresAt;
+  final bool? clearExpiresAt;
   final bool? userVerified;
   final String? sourceType;
   final List<String>? triggerKeywords;
@@ -119,6 +120,7 @@ class MemoryUpdate {
     this.importance,
     this.isCore,
     this.expiresAt,
+    this.clearExpiresAt,
     this.userVerified,
     this.sourceType,
     this.triggerKeywords,
@@ -131,6 +133,7 @@ class MemoryUpdate {
       importance: (json['importance'] as num?)?.toDouble(),
       isCore: json['is_core'] as bool?,
       expiresAt: json['expires_at'] as String?,
+      clearExpiresAt: json['clear_expires_at'] as bool?,
       userVerified: json['user_verified'] as bool?,
       sourceType: json['source_type'] as String?,
       triggerKeywords: (json['trigger_keywords'] as List<dynamic>?)
@@ -144,7 +147,8 @@ class MemoryUpdate {
         if (category != null) 'category': category,
         if (importance != null) 'importance': importance,
         if (isCore != null) 'is_core': isCore,
-        'expires_at': expiresAt,
+        if (expiresAt != null) 'expires_at': expiresAt,
+        if (clearExpiresAt != null) 'clear_expires_at': clearExpiresAt,
         if (userVerified != null) 'user_verified': userVerified,
         if (sourceType != null) 'source_type': sourceType,
         if (triggerKeywords != null) 'trigger_keywords': triggerKeywords,
@@ -160,6 +164,7 @@ class MemoryUpdate {
           importance == other.importance &&
           isCore == other.isCore &&
           expiresAt == other.expiresAt &&
+          clearExpiresAt == other.clearExpiresAt &&
           userVerified == other.userVerified &&
           sourceType == other.sourceType &&
           _stringListEquals(triggerKeywords, other.triggerKeywords);
@@ -171,6 +176,7 @@ class MemoryUpdate {
         importance,
         isCore,
         expiresAt,
+        clearExpiresAt,
         userVerified,
         sourceType,
         triggerKeywords == null ? null : Object.hashAll(triggerKeywords!),
@@ -178,7 +184,7 @@ class MemoryUpdate {
 
   @override
   String toString() =>
-      'MemoryUpdate(content: $content, category: $category, isCore: $isCore, expiresAt: $expiresAt, userVerified: $userVerified, sourceType: $sourceType)';
+      'MemoryUpdate(content: $content, category: $category, isCore: $isCore, expiresAt: $expiresAt, clearExpiresAt: $clearExpiresAt, userVerified: $userVerified, sourceType: $sourceType)';
 }
 
 /// Authoritative memory record returned by the backend.

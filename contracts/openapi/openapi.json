@@ -947,6 +947,127 @@
         }
       }
     },
+    "/api/v1/conversations/{conversation_id}/summary": {
+      "get": {
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Get Conversation Summary",
+        "description": "Return the active rolling episode summary for a conversation, or null if none exists.",
+        "operationId": "get_conversation_summary_api_v1_conversations__conversation_id__summary_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ConversationSummaryOut"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Conversation Summary Api V1 Conversations  Conversation Id  Summary Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversation_id}/compact": {
+      "post": {
+        "tags": [
+          "Conversations"
+        ],
+        "summary": "Compact Conversation Endpoint",
+        "description": "Manually compact older turns of a conversation into its active rolling episode digest.",
+        "operationId": "compact_conversation_endpoint_api_v1_conversations__conversation_id__compact_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ConversationCompactRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationCompactResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/conversations/{conversation_id}/attachments": {
       "post": {
         "tags": [
@@ -4355,6 +4476,67 @@
         ],
         "title": "CompanionFile"
       },
+      "ConversationCompactRequest": {
+        "properties": {
+          "keep_recent_messages": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 50.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Recent Messages"
+          },
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ConversationCompactRequest",
+        "description": "Optional overrides when triggering manual conversation compaction."
+      },
+      "ConversationCompactResponse": {
+        "properties": {
+          "conversation_id": {
+            "type": "string",
+            "title": "Conversation Id"
+          },
+          "compacted": {
+            "type": "boolean",
+            "title": "Compacted"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationSummaryOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "conversation_id",
+          "compacted",
+          "reason"
+        ],
+        "title": "ConversationCompactResponse",
+        "description": "Result envelope for manual context compaction."
+      },
       "ConversationCreate": {
         "properties": {
           "title": {
@@ -4469,6 +4651,72 @@
         ],
         "title": "ConversationOut",
         "description": "Conversation summary output."
+      },
+      "ConversationSummaryOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "conversation_id": {
+            "type": "string",
+            "title": "Conversation Id"
+          },
+          "summary_text": {
+            "type": "string",
+            "title": "Summary Text"
+          },
+          "from_sequence_no": {
+            "type": "integer",
+            "title": "From Sequence No"
+          },
+          "to_sequence_no": {
+            "type": "integer",
+            "title": "To Sequence No"
+          },
+          "compacted_message_count": {
+            "type": "integer",
+            "title": "Compacted Message Count"
+          },
+          "token_estimate": {
+            "type": "integer",
+            "title": "Token Estimate"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "manual",
+              "extractive_fallback"
+            ],
+            "title": "Source"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "conversation_id",
+          "summary_text",
+          "from_sequence_no",
+          "to_sequence_no",
+          "compacted_message_count",
+          "token_estimate",
+          "source",
+          "is_active",
+          "updated_at"
+        ],
+        "title": "ConversationSummaryOut",
+        "description": "Serialized active rolling episode summary for a conversation."
       },
       "ConversationUpdate": {
         "properties": {
@@ -5072,6 +5320,17 @@
               }
             ],
             "title": "Expires At"
+          },
+          "clear_expires_at": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clear Expires At"
           },
           "user_verified": {
             "anyOf": [
