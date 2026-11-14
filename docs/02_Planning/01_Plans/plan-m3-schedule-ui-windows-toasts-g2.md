@@ -1,11 +1,17 @@
-# Implementation Plan: M3 Batch G2 — Desktop Schedule UI, Native Windows WinRT Toasts & Quiet Hours
+# Implementation Plan: M3 Batch G2 — Desktop Schedule UI, Native C++/WinRT Windows Toasts & Quiet Hours
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- **Status:** Phase 1 Plan Revised (Independent Review Findings Resolved) — Awaiting Human Owner Approval
+- **Status:** Phase 1 Plan Revised (Option B Native C++/WinRT MethodChannel — Awaiting Human Owner Approval)
 - **Delivery Level:** Level B — Planned Autonomous
-- **Scope Mode:** New Feature — Flutter Desktop Schedule & Routines Workspace (`PC-CLIENT-008`), Native Windows WinRT Toast Notifications & In-App Alerting (`PC-CLIENT-012` / `PC-HOST-003` client half / `DEBT-V1-02` presentation resolution), Quiet Hours Settings UI, and Batch G1 Review Fold-Ins (`NIT-01`, `NIT-02`)
+- **Scope Mode:** New Feature — Flutter Desktop Schedule & Routines Workspace (`PC-CLIENT-008`), Native In-Process C++/WinRT Windows Toast Notifications & Interactive Action Center Callbacks (`PC-CLIENT-012` / `PC-HOST-003` client half / `DEBT-V1-02`), Quiet Hours Settings UI, and Batch G1 Review Fold-Ins (`NIT-01`, `NIT-02`)
 - **Target Files:**
+  - `frontend/flutter/apps/desktop/windows/runner/windows_toast_channel.h` *(ADD)*
+  - `frontend/flutter/apps/desktop/windows/runner/windows_toast_channel.cpp` *(ADD)*
+  - `frontend/flutter/apps/desktop/windows/runner/CMakeLists.txt` *(MODIFY — compile `windows_toast_channel.cpp`, link `runtimeobject.lib` & `shlwapi.lib`)*
+  - `frontend/flutter/apps/desktop/windows/runner/flutter_window.h` *(MODIFY — own `std::unique_ptr<WindowsToastChannel>` & handle `kWmToastActivated` in `MessageHandler`)*
+  - `frontend/flutter/apps/desktop/windows/runner/flutter_window.cpp` *(MODIFY — initialize `WindowsToastChannel` on `flutter_controller_->engine()->messenger()` & `GetHandle()`)*
+  - `frontend/flutter/apps/desktop/windows/runner/main.cpp` *(MODIFY — call `SetCurrentProcessExplicitAppUserModelID(L"AICompanion.Desktop")` at startup)*
   - `frontend/flutter/apps/desktop/lib/platform/windows_toast_adapter.dart` *(ADD)*
   - `frontend/flutter/apps/desktop/lib/features/schedule/desktop_schedule_controller.dart` *(ADD)*
   - `frontend/flutter/apps/desktop/lib/features/schedule/schedule_sidebar.dart` *(ADD)*
@@ -35,7 +41,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 ## 1. Request Understanding & Goals
 
-- **Primary Objective:** Deliver the user-facing Flutter Desktop Schedule & Routines UI (`PC-CLIENT-008`), native Windows Action Center Toast notification adapter (`PC-CLIENT-012` / `PC-HOST-003` client half / `DEBT-V1-02` presentation resolved), in-app backlog drawer and urgent alert banner, Quiet Hours settings card, and the two non-blocking follow-up fixes from M3 Batch G1 (`NIT-01` & `NIT-02`) on top of PR `#41` (`fe1526e`).
+- **Primary Objective:** Deliver the user-facing Flutter Desktop Schedule & Routines UI (`PC-CLIENT-008`), native in-process C++/WinRT Windows Action Center Toast notifications with two-way interactive button callbacks & history sync (`PC-CLIENT-012` / `PC-HOST-003` client half / `DEBT-V1-02`), in-app backlog drawer and urgent alert banner, Quiet Hours settings card, and the two non-blocking follow-up fixes from M3 Batch G1 (`NIT-01` & `NIT-02`) on top of PR `#41` (`fe1526e`).
 - **Relevant Canonical Requirements:**
   - [`docs/04_Architecture/SYSTEM_BASELINE.md`](../../04_Architecture/SYSTEM_BASELINE.md) (Decision D2 decoupled runtime, Decision D10 scheduling & notifications)
   - [`docs/04_Architecture/decisions/ADR-0011-d10-scheduling-and-notification-semantics.md`](../../04_Architecture/decisions/ADR-0011-d10-scheduling-and-notification-semantics.md)
@@ -47,15 +53,19 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
   - [`docs/05_Design/01_PC_Desktop_Shell_and_Tray.md`](../../05_Design/01_PC_Desktop_Shell_and_Tray.md)
   - [`docs/02_Planning/00_Master/WBS.md`](../00_Master/WBS.md) & [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../00_Master/DECISION_DEBT.md)
 - **Concrete Deliverables:**
-  1. **Native Windows WinRT Toast Adapter (`DEBT-V1-02` Presentation Resolved):** Dependency-free `WindowsWinRtToastAdapter` invoking Windows 10/11 WinRT `ToastNotificationManager` via `ProcessLauncherAdapter` with idempotent `HKCU` AUMID registration (`AICompanion.Desktop`), pure Dart UTF-16LE byte emission for PowerShell `-EncodedCommand` wrapping UTF-8 Base64 toast XML, strict XML entity + XML 1.0 control-character sanitization, payload length guard, native OS `<actions>` (`snooze`/`dismiss`) on live alarms so Windows Action Center can silence looping alarm audio without a COM server, urgency-specific styling, Quiet Hours suppression, and consolidated sleep/offline catch-up summary toasts.
-  2. **`DesktopScheduleController` & Profile-Fenced Polling Engine:** Profile-scoped, epoch-fenced controller wrapping a live `CompanionClient Function()` resolver and `DesktopToastAdapter`, managing Tasks (+ Trash/Restore), Reminders, Alarms, Routines, Notifications backlog, Quiet Hours settings, opt-in background polling (`unreadOnly: true`, `limit: 50`), per-session toast deduplication (`_dispatchedToastEventIds`), and active `unread` in-app alert banners.
+  1. **Native In-Process C++/WinRT Toast Channel & Dart Adapter (`DEBT-V1-02` Resolved):** Zero-dependency C++ WRL/WinRT bridge (`WindowsToastChannel`) inside `windows/runner/` registered on `MethodChannel('ai_companion/windows_notifications')` using `ABI::Windows::UI::Notifications` + `ABI::Windows::Data::Xml::Dom` + `runtimeobject.lib` + `shlwapi.lib`:
+     - Instant (<5ms) native dispatch with **zero** subprocess spawns and **zero** console-window flash.
+     - Explicit process AppUserModelID (`SetCurrentProcessExplicitAppUserModelID(L"AICompanion.Desktop")`) and idempotent `HKCU\Software\Classes\AppUserModelId\AICompanion.Desktop` registration (`DisplayName = L"AI Companion"`).
+     - Two-way `Activated` callbacks marshaled safely via `PostMessage` to the Flutter UI thread, routing `[ Mark Done ]`, `[ Acknowledge ]`, `[ Snooze 10m ]`, `[ Dismiss ]`, `[ Open Chat ]`, and `[ Review Backlog ]` straight into `DesktopScheduleController`, plus window restore/focus on foreground actions.
+     - Action Center history synchronization (`removeToast`, `clearToasts`) so alerts handled inside the app vanish from Windows 11 Action Center immediately.
+  2. **`DesktopScheduleController` & Profile-Fenced Polling Engine:** Profile-scoped, epoch-fenced controller wrapping a dynamic `CompanionClient Function()` provider and `DesktopToastAdapter`, managing Tasks (+ Trash/Restore), Reminders, Alarms, Routines, Notifications backlog, Quiet Hours settings, opt-in background polling (`unreadOnly: true`, `limit: 50`), per-session toast deduplication (`_dispatchedToastEventIds`), interactive toast callback handling, and active `unread` in-app alert banners.
   3. **Flutter Desktop Schedule Workspace (`PC-CLIENT-008`):** Option 2A two-column replacement for the placeholder `ScheduleScreen` across Tasks, Reminders, Alarms, Routines, and Notifications sections with create/edit/delete/snooze/acknowledge/dismiss/restore/run-now actions, real OpenAPI enum status pills, and per-item `bypassQuietHours` override toggle.
   4. **Shell Top Utility Strip, Backlog Drawer & Settings Quiet Hours Card (`PC-CLIENT-012`):** Non-overlapping slim top utility strip in `DesktopShell` housing the active Profile scope indicator, Notification Bell badge button opening `NotificationBacklogDrawer` (with Missed Catch-up banner, chronological timeline, distinct `[ Mark Done ]` vs `[ Dismiss ]` / `[ Clear All ]` controls), urgent In-App Alert Banner above the workspace `Stack`, removal of `'M3'` badge on `DesktopNavDestination.schedule`, and reactive **Notifications & Quiet Hours** card in `SettingsScreen`.
   5. **Batch G1 Review Fold-Ins (`NIT-01` & `NIT-02`):** Separate recurring vs non-recurring recomputation + invalid `clear_time_of_day` / `recurrence_days` `422` guard in `PATCH /api/v1/alarms/{alarm_id}`, and fix duplicate `### 3.3` -> `### 3.4` subsection numbering in `tasks-reminders-alarms-and-routines.md`.
 - **Explicit Out-of-Scope:**
-  - External Flutter pub dependencies in `frontend/flutter/apps/desktop/pubspec.yaml` (keeps pub dependencies unchanged by using `ProcessLauncherAdapter` / Windows built-in WinRT bridge rather than adding WinRT NuGet/CMake plugins).
-  - Native C++ WinRT COM `ToastActivated` IPC callback server (`--toast-activated` deep-link invocation when the Flutter desktop app is closed or backgrounded). Batch G2 resolves `DEBT-V1-02` toast presentation + Windows Action Center OS system controls (`snooze` / `dismiss` on alarms) and delivers full `[ Mark Done ]` / `[ Snooze 10m ]` / `[ Dismiss ]` / `[ Open Chat ]` buttons inside the In-App Alert Banner and Backlog Drawer; custom C++ COM `ToastActivated` IPC remains explicitly documented as deferred optional post-G2 polish.
-  - Cross-Profile notification aggregation (`PC-IDENTITY-002` session isolation prohibits reading notifications from inactive Profiles; the drawer shows an active Profile scope chip instead).
+  - External Flutter pub dependencies in `frontend/flutter/apps/desktop/pubspec.yaml` (keeps `pubspec.yaml` unchanged by compiling directly against the Windows 10/11 SDK headers already used by `windows/runner/CMakeLists.txt`).
+  - Cold-start out-of-process COM `ToastActivated` activator (`--toast-activated` process relaunch when `ai_companion_desktop.exe` is completely terminated). In-process presentation, Action Center interactive buttons, history sync, and foreground restoration while the desktop app is running are fully delivered in Batch G2; out-of-process cold-start COM activation remains linked to `PC-HOST-002` autostart / installer packaging.
+  - Cross-Profile notification aggregation (`PC-IDENTITY-002` session isolation prohibits reading notifications across inactive Profiles; the drawer shows an active Profile scope chip instead).
   - Windows Task Scheduler dual autostart (`PC-HOST-002`) and MSI/self-contained installer (`PC-HOST-006`) — remain Milestone M2/M5 items.
   - D9 conversational tool-calling (`PC-ACTION-*`) and Voice pipeline (`PC-VOICE-*`) — remain Milestone M4.
   - New Alembic migrations or OpenAPI schema additions (`contracts/openapi/openapi.json` stays unchanged at `66` URL paths, `93` HTTP operations, and `82` native-covered routes).
@@ -67,59 +77,64 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 - **Current Findings & Technical Baseline:**
   | Observation / Evidence | Verified Interpretation |
   | --- | --- |
+  | `frontend/flutter/apps/desktop/windows/CMakeLists.txt` applies `/W4 /WX /wd"4100"`, `/EHsc`, and `_HAS_EXCEPTIONS=0` globally via `APPLY_STANDARD_SETTINGS`, and `windows/runner/CMakeLists.txt` links `dwmapi.lib` against standard Windows SDK libraries. | `WindowsToastChannel` (`windows_toast_channel.h/.cpp`) must be exception-free (using Microsoft WRL `Microsoft::WRL::ComPtr` / `ABI::Windows::*` C++ WinRT ABI interfaces and `HRESULT` error handling) and compile cleanly under `/W4 /WX` with `_HAS_EXCEPTIONS=0`, linking `runtimeobject.lib` and `shlwapi.lib` with zero third-party pub packages. |
   | PR `#41` (`fe1526e`) delivered Migration `015`, `SchedulerService`, all `/api/v1/{tasks,reminders,alarms,routines,notifications}*` + `/profiles/me/quiet-hours` endpoints, and 38 `CompanionClient` Dart SDK methods (`82/82` covered routes, `60/60` DTO schemas). | Backend runtime, persistence, REST endpoints, and typed Dart SDK already exist and are CI-verified. Zero DB migrations or OpenAPI changes are needed. |
   | Exact OpenAPI backend enums (`backend/app/schemas/scheduling.py`): `NotificationStatus` = `unread`, `read`, `acknowledged`, `dismissed`, `snoozed`, `suppressed_quiet_hours`, `missed_catchup`; `ReminderStatus` = `scheduled`, `fired`, `snoozed`, `acknowledged`, `dismissed`, `missed`, `cancelled`; `AlarmStatus` = `armed`, `ringing`, `snoozed`, `acknowledged`, `dismissed`, `missed`; `DeliveryPolicy` = `immediate`, `quiet_hours_suppressed`, `missed_catchup`. | UI badges, controller filters, toast dispatch eligibility, and alert banner filters must match these exact strings (`'unread'`, not `'pending'`, for notifications; `'scheduled'`/`'fired'` and `'armed'`/`'ringing'` for reminders/alarms). |
   | `TaskUpdate` (`task_dto.dart`) takes `clearNotes`, `clearDueDate`, `clearReminderMinutesBefore`, `clearReminderAt` as named parameters on `CompanionClient.updateTask(...)`, whereas `ReminderUpdate`, `AlarmUpdate`, and `RoutineUpdate` (`scheduling_dto.dart`) carry boolean `clear*` fields on the DTOs themselves. | `DesktopScheduleController` and `ScheduleEditDialogs` must respect that exact asymmetry instead of assuming identical DTO signatures. |
   | `DesktopChatController` connects asynchronously after `DesktopShell` mounts (`main.dart`) and may replace its `CompanionClient` in `updateConfiguration()` or switch/expire `authenticatedProfileId`; `DesktopShell._handleProfileChange` currently only listens to `profileController`. | `DesktopScheduleController` must observe **both** `chatController` (`isConnected`, `authenticatedProfileId`, `configEpoch`, `profileEpoch`, `client`) and `profileController`, resolve the current `CompanionClient` dynamically via callback/update, pause polling immediately when disconnected/switching (`!isConnected || profileId == null`), and guard default polling/toasts with `!Platform.environment.containsKey('FLUTTER_TEST')`. |
-  | `DesktopShell` places child screens full-bleed inside `Expanded(child: Stack(...))`, where `ChatScreen`, `MemoryScreen`, and `StudioScreen` own top-right header controls. | Overlaying a `Positioned` top-right Bell button inside `Stack` would collide with child headers. Placing the Bell badge and In-App Alert Banner in a dedicated non-overlapping top strip above `Expanded` eliminates collisions across every tab. |
+  | `DesktopShell` places child screens full-bleed inside `Expanded(child: Stack(...))`, where `ChatScreen`, `MemoryScreen`, and `StudioScreen` own top-right header controls. | Placing the Bell badge and In-App Alert Banner in a dedicated non-overlapping top strip above `Expanded` eliminates collisions across every tab. |
   | `desktop_shell_test.dart` currently checks `find.text('M3')` `findsNWidgets(2)` (line 51), `find.text('PLANNED MILESTONE M3')` (line 76), and mounts `DesktopShell(controller: ..., chatController: connectedChat, studioController: ...)` against a 404 `MockClient` (lines 114–175). | Updating `ScheduleScreen` and clearing `'M3'` on `DesktopNavDestination.schedule` requires updating lines `51` (`findsOneWidget`) and `76`, plus keeping `enableSchedulePolling` disabled in `FLUTTER_TEST` by default and `scheduleController` optional on `DesktopShell`/`SettingsScreen`. |
   | `backend/app/api/v1/endpoints/scheduling.py:510-563` only recomputes `Alarm.scheduled_at` when `(as_utc(alarm.scheduled_at) or now) <= now`, and `service.py:165-236` validates Quiet Hours timezones against `UTC`, `UTC±HH:MM`, and `_BUILTIN_IANA_ZONES` (~70 curated zones). | `NIT-01` must distinguish recurring vs non-recurring alarms on `enabled=True` and enforce `422` if `clear_time_of_day=True` leaves `recurrence_days` non-empty; Settings UI must present choices aligned with `_BUILTIN_IANA_ZONES` + `UTC` + `UTC±HH:MM` help text. |
 
 - **Architectural Approach:**
-  1. **WinRT Toast Presentation (`DEBT-V1-02` Presentation Resolved):**
-     - `DesktopToastAdapter` defines:
-       - `Future<bool> showNotificationToast(NotificationEventOut event)`
-       - `Future<bool> showMissedCatchupSummaryToast({required int missedCount, required List<NotificationEventOut> events})`
-     - `WindowsWinRtToastAdapter` checks `Platform.isWindows` (or injectable `isWindowsOverride` for headless cross-platform tests), sanitizes text with `sanitizeXmlText(...)` (stripping invalid XML 1.0 control chars `\x00-\x08`, `\x0B-\x0C`, `\x0E-\x1F`) and `escapeXml(...)` (`&`, `<`, `>`, `"`, `'`), and builds WinRT `ToastGeneric` XML via pure `buildToastXml(...)`:
-       - **Live Active Alarm** (`(event.sourceType == 'alarm' || event.urgency == 'high') && event.deliveryPolicy != 'quiet_hours_suppressed' && !event.isMissedCatchup`): emits `<toast scenario="alarm">` with `<audio src="ms-winsoundevent:Notification.Looping.Alarm" loop="true"/>` AND `<actions><action activationType="system" arguments="snooze" content=""/><action activationType="system" arguments="dismiss" content=""/></actions>` so Windows Action Center provides native OS snooze/dismiss controls to silence looping audio cleanly without requiring a COM server.
-       - **Reminder / Task Reminder** (`event.sourceType == 'reminder' || event.sourceType == 'task_reminder'`): emits `<toast scenario="reminder">` with `<audio src="ms-winsoundevent:Notification.Reminder"/>` when live active.
-       - **Routine** (`event.sourceType == 'routine'`): emits default `<toast>` with `<audio src="ms-winsoundevent:Notification.Default"/>` when live active.
-       - **Quiet-Hours Suppressed Reminders** (`deliveryPolicy == 'quiet_hours_suppressed'` on `reminder`/`task_reminder`): sets `<audio silent="true"/>` and PowerShell `$toast.SuppressPopup = $true` so it lands silently in Action Center without disturbing Quiet Hours. (Suppressed `routine` events are skipped completely from Windows toast dispatch.)
-       - **Consolidated Catch-up Summary** (`showMissedCatchupSummaryToast`): uses standard `<toast>` (never `scenario="alarm"`) and `<audio silent="true"/>` summarizing the missed count cleanly.
-     - **AUMID Registration, Encoding & Headless Invocation:**
-       - Inside the generated PowerShell script, performs an idempotent per-user HKCU registration for `HKCU:\Software\Classes\AppUserModelId\AICompanion.Desktop` (`DisplayName = "AI Companion"`) before calling `ToastNotificationManager::CreateToastNotifier('AICompanion.Desktop')` so unpackaged `ai_companion_desktop.exe` displays reliably on Windows 10/11.
-       - Emits UTF-16LE bytes manually from Dart string code units (`cu & 0xff`, `(cu >> 8) & 0xff`) for `-EncodedCommand` and embeds the toast XML as UTF-8 Base64 decoded inside a pure-ASCII outer PowerShell script (preserving Unicode emojis / surrogate pairs without Windows `powershell.exe` codepage corruption). Enforces an explicit payload length guard against the Windows `32,767`-char process command-line limit.
-       - Evaluates suppressing any `powershell.exe` console window flash on Windows desktop (`-WindowStyle Hidden` vs non-console headless Win32 `CREATE_NO_WINDOW` invocation in `WindowsWinRtToastAdapter` without adding external pub dependencies), and explicitly verifies zero visible console flash in the Phase 4 manual Windows UI checklist.
-       - Never throws out of `showNotificationToast` — logs failures via `debugPrint` and returns `false`.
-  2. **Schedule Controller & Polling Architecture (`DesktopScheduleController`):**
-     - Constructed with `{required CompanionClient Function() clientProvider, DesktopToastAdapter? toastAdapter, String? profileId, Duration pollInterval = const Duration(seconds: 15)}` (with convenience factory/named constructor for fixed `CompanionClient` in unit tests).
-     - Maintains `_scopeEpoch` integer incremented on `updateProfileScope(...)` / `clearForDisconnect()` so stale in-flight HTTP responses are discarded before mutating state. Also cancels/skips polling immediately when `!isConnected || profileId == null` (preventing mid-profile-switch or session-expiry `401` errors).
-     - `refreshAll()` loads `listTasks()`, `listReminders()`, `listAlarms()`, `listRoutines()`, `listNotifications()`, and `getQuietHours()` safely, exposing actionable `errorMessage` feedback without wiping healthy collections on transient partial errors.
+  1. **Native In-Process C++/WinRT Toast Channel (`WindowsToastChannel` + `WindowsWinRtToastAdapter`, `DEBT-V1-02`):**
+     - **AUMID & Process Identity (`main.cpp` & `windows_toast_channel.cpp`):**
+       - `wWinMain` calls `::SetCurrentProcessExplicitAppUserModelID(L"AICompanion.Desktop")` right after COM initialization.
+       - `WindowsToastChannel` performs idempotent Win32 registry setup under `HKCU\Software\Classes\AppUserModelId\AICompanion.Desktop` (`DisplayName = L"AI Companion"`) so unpackaged `ai_companion_desktop.exe` displays cleanly in Windows 10/11 Action Center.
+     - **Dart <-> C++ `MethodChannel('ai_companion/windows_notifications')` Contract:**
+       - `showToast({required String tag, required String group, required String xml, required bool suppressPopup})`:
+         - Loads UTF-16 `xml` into `ABI::Windows::Data::Xml::Dom::IXmlDocument` (`IXmlDocumentIO::LoadXml`), constructs `IToastNotification` (`CreateToastNotification`), sets `Tag` (clamped/hashed to <= 64 chars via `IToastNotification2::put_Tag`) and `Group` (`"ai_companion_alerts"` via `IToastNotification2::put_Group`), sets `SuppressPopup = true` (`IToastNotification4::put_SuppressPopup`) when `suppressPopup == true`, registers an in-process WRL `Activated` handler (`IToastNotification::add_Activated`), and calls `IToastNotifier::Show`.
+       - `removeToast({required String tag, required String group})`:
+         - Invokes `IToastNotificationManagerStatics2::get_History` -> `RemoveGroupedTagWithId(tag, group, L"AICompanion.Desktop")` when an event is completed, acknowledged, snoozed, or dismissed inside Flutter.
+       - `clearToasts({required String group})`:
+         - Invokes `RemoveGroupWithId(group, L"AICompanion.Desktop")` on `[ Clear All ]` or active Profile switch/disconnect so Action Center never retains stale alerts from another Profile.
+       - `onToastActivated` (Native C++ -> Dart):
+         - On Windows WinRT `Activated`, the background MTA/COM thread extracts `IToastActivatedEventArgs::get_Arguments` (`action=...&event_id=...`), allocates an owned payload, and calls `::PostMessageW(hwnd_, kWmToastActivated, ...)` onto the main Win32 UI thread handled by `FlutterWindow::MessageHandler` (never calling `MethodChannel` off the UI thread).
+         - On the UI thread, if the action navigates into the app (`open_chat`, `open_backlog`, `open_schedule`, or empty/body click), `WindowsToastChannel` restores (`ShowWindow(hwnd_, SW_RESTORE)` if minimized) and foregrounds `hwnd_` (`SetForegroundWindow(hwnd_)`), then sends `channel_->InvokeMethod("onToastActivated", EncodableValue(EncodableMap{{"arguments": args}}))` to Dart.
+     - **Dart `DesktopToastAdapter` & Rich `buildToastXml`:**
+       - `DesktopToastAdapter` exposes `showNotificationToast(NotificationEventOut event)`, `showMissedCatchupSummaryToast({required int missedCount, required List<NotificationEventOut> events})`, `removeNotificationToast(String eventId)`, `clearAllNotificationToasts()`, and `Stream<ToastActivationEvent> get activations`.
+       - `WindowsWinRtToastAdapter` uses `MethodChannel('ai_companion/windows_notifications')` (injectable via `MethodChannel` or test handler in Dart unit tests; automatically selects `NoOpDesktopToastAdapter` when `!Platform.isWindows` or `Platform.environment.containsKey('FLUTTER_TEST')` unless explicitly injected for tests).
+       - Sanitizes every title/body with `sanitizeXmlText(...)` (stripping invalid XML 1.0 control chars `\x00-\x08`, `\x0B-\x0C`, `\x0E-\x1F`) and `escapeXml(...)` (`&`, `<`, `>`, `"`, `'`).
+       - Generates interactive `<toast>` XML:
+         - **Live Active Alarm** (`(sourceType == 'alarm' || urgency == 'high') && deliveryPolicy != 'quiet_hours_suppressed' && !isMissedCatchup`): `<toast scenario="alarm" launch="action=open_schedule&amp;event_id=...">` with `<audio src="ms-winsoundevent:Notification.Looping.Alarm" loop="true"/>` and `<actions>`: `[ Acknowledge ]` (`action=acknowledge&event_id=...`), `[ Snooze 10m ]` (`action=snooze_10m&event_id=...`), `[ Dismiss ]` (`action=dismiss&event_id=...`).
+         - **Task-Linked Reminder** (`taskId != null`): `<toast scenario="reminder" launch="action=open_schedule&amp;event_id=...">` with `<actions>`: `[ Mark Done ]` (`action=mark_done&event_id=...`), `[ Snooze 10m ]` (`action=snooze_10m&event_id=...`), `[ Dismiss ]` (`action=dismiss&event_id=...`).
+         - **Standalone Reminder** (`sourceType == 'reminder' && taskId == null`): `<toast scenario="reminder" launch="action=open_schedule&amp;event_id=...">` with `<actions>`: `[ Acknowledge ]`, `[ Snooze 10m ]`, `[ Dismiss ]`.
+         - **Routine** (`sourceType == 'routine'`): default `<toast launch="action=open_chat&amp;event_id=...">` with `<actions>`: `[ Open Chat ]` (`action=open_chat&event_id=...`), `[ Acknowledge ]`, `[ Dismiss ]`.
+         - **Quiet-Hours Suppressed Reminders** (`deliveryPolicy == 'quiet_hours_suppressed'` on `reminder`/`task_reminder`): `<audio silent="true"/>` + `suppressPopup: true` (lands silently in Action Center without popup flash; suppressed `routine` events are skipped from OS toast dispatch).
+         - **Consolidated Catch-up Summary** (`showMissedCatchupSummaryToast`): standard `<toast launch="action=open_backlog">` (never `scenario="alarm"`) with `<audio silent="true"/>` and `<action content="Review Backlog" arguments="action=open_backlog" activationType="foreground"/>`.
+       - Every action button sets `activationType="foreground"` with URI query-encoded arguments (`Uri(queryParameters: ...).query`) so `Activated` callbacks fire deterministically in-process.
+  2. **Schedule Controller, Two-Way Callback Handling & Polling Architecture (`DesktopScheduleController`):**
+     - Constructed with `{required CompanionClient Function() clientProvider, DesktopToastAdapter? toastAdapter, String? profileId, Duration pollInterval = const Duration(seconds: 15), void Function(ToastNavigationTarget target)? onNavigateRequested}`.
+     - Listens to `toastAdapter.activations` and dispatches incoming OS Action Center button clicks safely inside the active `_scopeEpoch` guard:
+       - `mark_done` -> `acknowledgeNotification(eventId, completeTask: true)`
+       - `acknowledge` -> `acknowledgeNotification(eventId)`
+       - `snooze_10m` -> `snoozeNotification(eventId, minutes: 10)`
+       - `dismiss` -> `dismissNotification(eventId)`
+       - `open_chat` -> marks read/invokes navigation callback to `DesktopNavDestination.chat`
+       - `open_backlog` / `open_schedule` -> invokes navigation callback to open `NotificationBacklogDrawer` / `DesktopNavDestination.schedule`
+     - Maintains Action Center sync: whenever `acknowledgeNotification`, `snoozeNotification`, `dismissNotification`, `clearAllNotifications`, `completeTask` (linked reminders), or `updateProfileScope` / `clearForDisconnect` runs, calls `toastAdapter.removeNotificationToast(eventId)` or `clearAllNotificationToasts()` so Action Center stays clean.
      - `pollNotifications()` queries `clientProvider().listNotifications(unreadOnly: true, limit: 50)` so historical resolved items never crowd out newer unread or catch-up alerts:
        - Toast candidate statuses: `{'unread', 'suppressed_quiet_hours', 'missed_catchup'}`.
-       - Filters unseen items (`!_dispatchedToastEventIds.contains(event.id)`):
-         - Newly seen `isMissedCatchup == true` items (one or more in a poll batch) trigger **one** consolidated `showMissedCatchupSummaryToast(...)` and record their IDs in `_dispatchedToastEventIds`.
-         - Live unseen items: skips `sourceType == 'routine' && deliveryPolicy == 'quiet_hours_suppressed'`; dispatches `showNotificationToast(event)` for all remaining live candidates and records IDs in `_dispatchedToastEventIds`.
-         - Note on persistence across app restarts: unresolved notifications that still have status `unread` or `missed_catchup` intentionally re-surface once per desktop session on relaunch until acknowledged or dismissed.
-       - Computes `activeAlerts`: strictly items with `status == 'unread'` (never `suppressed_quiet_hours`, and leaving `missed_catchup` in the grouped Sleep Catch-up banner/drawer), sorted by urgency (`high` first, then newest first).
-     - Polling timer (`startPolling()` / `stopPolling()`): explicitly opt-in (started by `DesktopShell` only when connected, authenticated with a non-null `profileId`, `enableSchedulePolling != false`, and `!Platform.environment.containsKey('FLUTTER_TEST')`), and always cancelled cleanly in `dispose()`.
+       - Filters unseen items (`!_dispatchedToastEventIds.contains(event.id)`): aggregates unseen `isMissedCatchup == true` events into one silent catch-up summary toast; dispatches live non-suppressed items individually; records IDs in `_dispatchedToastEventIds` (unresolved `unread`/`missed_catchup` items intentionally re-surface once per desktop session on app relaunch).
+       - Computes `activeAlerts`: strictly `status == 'unread'` (excluding `suppressed_quiet_hours` and `missed_catchup`), sorted `high` urgency first, then newest first.
+     - Polling timer (`startPolling()` / `stopPolling()`) is opt-in (started by `DesktopShell` only when connected, authenticated with a non-null `profileId`, `enableSchedulePolling != false`, and `!Platform.environment.containsKey('FLUTTER_TEST')`), and cancelled cleanly in `dispose()`.
   3. **Option 2A Schedule Workspace & Backlog UX:**
      - Follows `MemoryScreen` / `MemoryTierSidebar` visual system (`SoftGlassPanel`, `NeumorphicSurface`, `CompanionThemeExtension`, `>= 720px` side-by-side vs `< 720px` compact horizontal bar).
-     - 5 workspace sections matching backend domains:
-       - **Tasks:** Priority badge (`low`/`medium`/`high`/`urgent`), category chip, due date / reminder indicator, checkbox toggle (`completed` <-> `pending` automatically triggering backend linked-reminder cancellation), edit/delete, and `"Trash"` view toggle with `Restore` and `Delete Forever`. Uses `CompanionClient.updateTask(...)` named clear flags (`clearNotes`, `clearDueDate`, `clearReminderMinutesBefore`, `clearReminderAt`) when clearing optional fields.
-       - **Reminders:** Local/UTC schedule display, linked Task indicator when `taskId != null`, `Quiet Hours Override` chip (`bypassQuietHours == true`), exact status pill (`scheduled`, `fired`, `snoozed`, `acknowledged`, `dismissed`, `missed`, `cancelled`), actions (`Snooze 10m`, `Acknowledge`, `Dismiss`, `Edit`, `Delete`).
-       - **Alarms:** Prominent `timeOfDay` / `scheduledAt` readout, weekday chips (`Mon..Sun`), `Enabled` toggle switch, Quiet Hours bypass badge, exact status pill (`armed`, `ringing`, `snoozed`, `acknowledged`, `dismissed`, `missed`), actions (`Snooze 10m`, `Acknowledge`, `Dismiss`, `Edit`, `Delete`). Editing schedule parameters on a `ringing`/`snoozed`/`missed` alarm in `ScheduleEditDialogs` explicitly passes `status: 'armed'` + `clearSnoozedUntil: true`. Switching from recurring to one-shot passes `clearRecurrenceDays: true`.
-       - **Routines:** Time + weekday recurrence chips, `fallbackMessage` preview, `Enabled` switch, `[ Run Now ]` button (`runRoutineNow()` + immediate poll refresh), `Edit`/`Delete`.
-       - **Notifications:** Full chronological backlog list (`Unread Only` filter), active Profile scope indicator chip, grouped **Missed Catch-up** callout banner, distinct `[ Mark Done ]` (`acknowledgeNotification(..., completeTask: true)`) vs `[ Acknowledge ]`, `[ Snooze 10m ]`, `[ Dismiss ]` (does **not** complete linked Tasks), `[ Mark Read ]`, `[ Open Chat ]` (navigates to `DesktopNavDestination.chat`), and `[ Clear All ]` (dismisses notifications without marking Tasks done).
+     - 5 workspace sections matching backend domains (**Tasks** + **Trash/Restore**, **Reminders**, **Alarms**, **Routines**, **Notifications**), respecting `CompanionClient.updateTask(...)` named clear flags vs DTO `clear*` fields, exact OpenAPI status pills, explicit re-arm (`status: 'armed'`, `clearSnoozedUntil: true`) + `clearRecurrenceDays: true` when converting Alarms to one-shot, and distinct `[ Mark Done ]` (`completeTask: true`) vs `[ Dismiss ]` / `[ Clear All ]` semantics.
   4. **Shell Top Utility Strip, Backlog Drawer & Settings Quiet Hours UI:**
-     - `DesktopShell` places a compact slim top utility strip (above `Expanded(child: Stack(...))` inside the main content `Column`) showing the active Profile scope pill (when connected) and the Notification Bell button with unread/missed badge, opening `NotificationBacklogDrawer` from the right edge (width capped safely to `min(420, viewportWidth * 0.92)` for `1024x640` safety).
-     - When `activeAlerts` (`status == 'unread'`) is non-empty, `DesktopShell` renders a compact `SoftGlassPanel` Active Alert Banner cleanly between the top utility strip and `Expanded(child: Stack(...))`, offering `[ Mark Done ]` (only when `taskId != null` or label `[ Acknowledge ]` otherwise), `[ Snooze 10m ]`, `[ Dismiss ]`, and `[ Open Chat ]`.
-     - `SettingsScreen` adds `_buildQuietHoursCard` observing `DesktopScheduleController` reactively (reloading immediately if profile changes while already in Settings), providing:
-       - `Enable Quiet Hours` switch
-       - `Start` & `End` `HH:MM` selectors/inputs
-       - `Timezone` selector curated directly from `_BUILTIN_IANA_ZONES` + `'UTC'` + `'UTC±HH:MM'` custom offset helper
-       - Save button surfacing inline validation / `422` errors (e.g., identical `start == end`)
-       - Required canonical notice: *"Alarms bypass quiet hours by default to ensure wakefulness."*
+     - `DesktopShell` renders a compact slim top utility strip (above `Expanded(child: Stack(...))` inside the main content `Column`) showing the active Profile scope pill (when connected) and the Notification Bell button with unread/missed badge, opening `NotificationBacklogDrawer` from the right edge (width capped safely for `1024x640` at `1.3x` text scale).
+     - When `activeAlerts` (`status == 'unread'`) is non-empty, `DesktopShell` renders a dismissible `SoftGlassPanel` Active Alert Banner between the top utility strip and `Expanded(child: Stack(...))`.
+     - `SettingsScreen` adds `_buildQuietHoursCard` observing `DesktopScheduleController` reactively (reloading immediately if profile changes while already in Settings), presenting `Enable Quiet Hours`, `Start`/`End` `HH:MM`, timezone selector backed by `_BUILTIN_IANA_ZONES` + `'UTC'` + `'UTC±HH:MM'`, Save `422` validation feedback, and `"Alarms bypass quiet hours by default to ensure wakefulness."`
 
 - **Contract & Schema Impact:**
   - Zero Alembic migrations and zero new REST routes or OpenAPI schema changes (`contracts/openapi/openapi.json` stays unchanged at `66` URL paths, `93` HTTP operations, and `82` native-covered routes; `scripts/check_openapi_contract.py --check` and `scripts/check_dart_openapi_parity.py --check` remain green).
@@ -129,66 +144,50 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 ## 3. Proposed File Changes & In-Place Logic
 
+### [ADD] `frontend/flutter/apps/desktop/windows/runner/windows_toast_channel.h` & `.cpp`
+- **Primary Responsibility:** Native C++ WRL/WinRT `ToastNotificationManager` bridge (`MethodChannel('ai_companion/windows_notifications')`) inside `ai_companion_desktop.exe` (`DEBT-V1-02`).
+- **Planned Change:**
+  - Register `HKCU\Software\Classes\AppUserModelId\AICompanion.Desktop` (`DisplayName = L"AI Companion"`) idempotently.
+  - Handle `showToast`, `removeToast`, and `clearToasts` via exception-free WRL (`ABI::Windows::UI::Notifications`, `ABI::Windows::Data::Xml::Dom`, `HRESULT` checks compatible with `/W4 /WX` and `_HAS_EXCEPTIONS=0`).
+  - Subscribe to `IToastNotification::add_Activated`, marshal `IToastActivatedEventArgs::get_Arguments` to the UI thread via `PostMessageW(hwnd_, kWmToastActivated, ...)`, restore/foreground `hwnd_` on foreground actions, and invoke `onToastActivated` on Dart.
+- **Invariants to Preserve:** Compile cleanly under `/W4 /WX /EHsc` + `_HAS_EXCEPTIONS=0`; never invoke Flutter `MethodChannel` from a WinRT/COM background thread; clamp toast `Tag` to `<= 64` chars and safely release message-posted allocations even on window teardown.
+
+### [MODIFY] `frontend/flutter/apps/desktop/windows/runner/{CMakeLists.txt, flutter_window.h, flutter_window.cpp, main.cpp}`
+- **Primary Responsibility:** Wire `WindowsToastChannel` and process AUMID into the Windows desktop runner.
+- **Planned Change:** Set process AUMID in `main.cpp`; compile `windows_toast_channel.cpp` and link `runtimeobject.lib` + `shlwapi.lib` in `runner/CMakeLists.txt`; initialize `WindowsToastChannel` in `FlutterWindow::OnCreate`, route `kWmToastActivated` in `FlutterWindow::MessageHandler`, and clean up in `FlutterWindow::OnDestroy`.
+- **Invariants to Preserve:** Preserve existing window sizing, dark-mode title bar behavior, and single-instance/console attachment behavior.
+
 ### [ADD] `frontend/flutter/apps/desktop/lib/platform/windows_toast_adapter.dart`
-- **Primary Responsibility:** Abstraction and Windows WinRT implementation for Action Center toast notifications (`DEBT-V1-02` presentation resolution).
-- **Planned Change:** Implement `DesktopToastAdapter`, `NoOpDesktopToastAdapter`, and `WindowsWinRtToastAdapter(ProcessLauncherAdapter)` with `sanitizeXmlText`, `escapeXml`, `buildToastXml` (`scenario="alarm"` + system `<actions>` only for live active alarms, silent/SuppressPopup Quiet Hours handling, consolidated silent catch-up summary toast), pure Dart UTF-16LE PowerShell `-EncodedCommand` encoding over UTF-8 Base64 XML, idempotent `HKCU` AUMID registration, payload-length bounding, and headless invocation safeguards.
-- **Invariants to Preserve:** Never throw uncaught exceptions on headless/restricted hosts; never shell-interpolate untrusted user strings unescaped; respect Quiet Hours suppression and catch-up aggregation rules.
+- **Primary Responsibility:** Dart `DesktopToastAdapter` interface, `NoOpDesktopToastAdapter`, `WindowsWinRtToastAdapter(MethodChannel)`, XML sanitization/escaping, and two-way activation stream.
+- **Planned Change:** Build interactive `ToastGeneric` XML payloads (`buildToastXml` with `sanitizeXmlText`, `escapeXml`, URL-encoded action arguments), invoke `showToast` / `removeToast` / `clearToasts`, parse incoming `onToastActivated` method calls into typed `ToastActivationEvent` values, and fail softly (`debugPrint` + `false`) on non-Windows/restricted environments.
+- **Invariants to Preserve:** Never throw uncaught exceptions on headless/test hosts; zero PowerShell subprocesses; gate live alarm `scenario="alarm"` + looping sound strictly to non-suppressed non-catch-up alarms.
 
 ### [ADD] `frontend/flutter/apps/desktop/lib/features/schedule/desktop_schedule_controller.dart`
-- **Primary Responsibility:** Profile-scoped, epoch-fenced state management, REST orchestration, opt-in notification polling (`unreadOnly: true`, `limit: 50`), and per-session toast deduplication.
-- **Planned Change:** Add `DesktopScheduleController` wrapping a dynamic `CompanionClient Function()` provider and `DesktopToastAdapter`, listening to connection/profile state, exposing `tasks`, `trashTasks`, `reminders`, `alarms`, `routines`, `notifications`, `unreadCount`, `missedCount`, `activeAlerts` (`status == 'unread'`), `quietHours`, full CRUD/action methods (using `CompanionClient.updateTask` named clear flags vs DTO `clear*` fields accurately), and opt-in polling lifecycle.
-- **Invariants to Preserve:** Clear cached data, `activeAlerts`, and `_dispatchedToastEventIds` immediately on profile switch or disconnect; never start periodic timers inside `FLUTTER_TEST` by default.
+- **Primary Responsibility:** Profile-scoped, epoch-fenced state management, REST orchestration, two-way OS toast callback execution, opt-in polling (`unreadOnly: true`, `limit: 50`), and Action Center history cleanup.
+- **Planned Change:** Wrap `CompanionClient Function()` provider and `DesktopToastAdapter`, listen to connection/profile state + `toastAdapter.activations`, sync Action Center removal on in-app actions/profile switches, expose `tasks`, `trashTasks`, `reminders`, `alarms`, `routines`, `notifications`, `unreadCount`, `missedCount`, `activeAlerts` (`status == 'unread'`), `quietHours`, full CRUD/action methods, and opt-in polling lifecycle.
+- **Invariants to Preserve:** Clear cached data, `activeAlerts`, `_dispatchedToastEventIds`, and OS Action Center group immediately on profile switch or disconnect; never start periodic timers inside `FLUTTER_TEST` by default.
 
-### [ADD] `frontend/flutter/apps/desktop/lib/features/schedule/schedule_sidebar.dart`
-- **Primary Responsibility:** Option 2A inner sub-navigation rail (`>= 720px` sidebar and `< 720px` compact horizontal bar) matching `MemoryTierSidebar`.
-- **Planned Change:** Render the 5 Schedule sub-sections (`Tasks`, `Reminders`, `Alarms`, `Routines`, `Notifications`) with counts, unread/missed notification badge, and Quiet Hours status indicator.
+### [ADD] `frontend/flutter/apps/desktop/lib/features/schedule/{schedule_sidebar.dart, schedule_edit_dialogs.dart, notification_backlog_drawer.dart}`
+- **Primary Responsibility:** Option 2A sub-navigation rail, validated create/edit modals, and right slide-out Notification Backlog Drawer.
+- **Planned Change:** Match `MemoryTierSidebar` & `SoftGlassPanel` conventions, support all Task/Reminder/Alarm/Routine fields & `clear*` rules cleanly, display active Profile scope chip + Missed Catch-up summary + chronological timeline + distinct `[ Mark Done ]` vs `[ Dismiss ]` / `[ Clear All ]`.
 - **Invariants to Preserve:** Zero layout overflow at `1024x640` minimum viewport and `1.3x` text scale factor.
 
-### [ADD] `frontend/flutter/apps/desktop/lib/features/schedule/schedule_edit_dialogs.dart`
-- **Primary Responsibility:** Validated modal dialogs for creating and editing Tasks, Reminders, Alarms, and Routines.
-- **Planned Change:** Convert local `DateTime` / `HH:MM` selections to ISO-8601 UTC (`toUtc().toIso8601String()`) and valid `HH:MM` + timezone strings; pass `clearRecurrenceDays: true` alongside `clearTimeOfDay: true` when converting Alarms to one-shot; explicitly re-arm (`status: 'armed'`, `clearSnoozedUntil: true`) when editing schedule timing on a `ringing`/`snoozed`/`missed` alarm; clearly surface `bypassQuietHours` controls and Quiet Hours alarm wakefulness note.
-- **Invariants to Preserve:** Never send ambiguous mixed `clearTimeOfDay` + non-empty `recurrenceDays`; display actionable validation errors cleanly.
-
-### [ADD] `frontend/flutter/apps/desktop/lib/features/schedule/notification_backlog_drawer.dart`
-- **Primary Responsibility:** In-app Notification Center & Backlog Activity slide-out drawer (`docs/05_Design/06_Notifications_and_Backlog_Activity.md` §3).
-- **Planned Change:** Render active Profile scope indicator chip, grouped **Missed Reminders (Sleep Catch-up)** summary banner when `missedCount > 0`, chronological timeline of events (`high`/alarm, `reminder`/`task_reminder`, `routine`), distinct action chips (`Mark Done` when linked task exists vs `Acknowledge`, `Snooze 10m`, `Dismiss`, `Open Chat`, `Mark Read`), and `Clear All` (dismiss-only semantic).
-- **Invariants to Preserve:** Safe responsive width capping on `1024x640` windows; no cross-Profile reads or stale state across profile switches.
-
-### [MODIFY] `frontend/flutter/apps/desktop/lib/screens/schedule_screen.dart`
-- **Primary Responsibility:** Main `PC-CLIENT-008` Schedule & Routines screen in `DesktopShell`.
-- **Planned Change:** Replace the static `'PLANNED MILESTONE M3'` placeholder with the live Option 2A two-column Schedule workspace backed by `DesktopScheduleController`, showing an informative offline/initializing fallback if `controller == null`, Trash toggle for Tasks, contextual `+ New` primary button, and domain-accurate status pills/cards.
+### [MODIFY] `frontend/flutter/apps/desktop/lib/screens/schedule_screen.dart` & `lib/controllers/desktop_settings_controller.dart`
+- **Primary Responsibility:** Live `PC-CLIENT-008` Schedule & Routines workspace and nav badge activation.
+- **Planned Change:** Replace the static `'PLANNED MILESTONE M3'` placeholder with the 5-tab Option 2A workspace and remove `badge: 'M3'` from `DesktopNavDestination.schedule` (leaving `studio` and `voice` badges untouched).
 - **Invariants to Preserve:** Keep `'Schedule & Routines'` heading and `'Proactive triggers, reminders, and daily habits'` subtitle; degrade gracefully when unauthenticated or disconnected.
 
-### [MODIFY] `frontend/flutter/apps/desktop/lib/controllers/desktop_settings_controller.dart`
-- **Primary Responsibility:** Navigation destinations enum and UI settings controller.
-- **Planned Change:** Remove `badge: 'M3'` from `DesktopNavDestination.schedule` so `schedule.isPlanned` becomes `false`, leaving `studio` and `voice` badges untouched.
-- **Invariants to Preserve:** Preserve existing enum ordering, icons, shortcuts (`Ctrl+,`, `Esc`), and settings controller API.
-
-### [MODIFY] `frontend/flutter/apps/desktop/lib/shell/desktop_shell.dart` & `frontend/flutter/apps/desktop/lib/main.dart`
-- **Primary Responsibility:** App-wide shell integration, top utility strip with Notification Bell badge, `NotificationBacklogDrawer`, In-App Active Alert Banner, and reactive connection/profile lifecycle orchestration.
-- **Planned Change:**
-  - Add optional `scheduleController` and `enableSchedulePolling` parameters to `DesktopShell` (plus `WindowsWinRtToastAdapter` when `!Platform.environment.containsKey('FLUTTER_TEST')`, else `NoOpDesktopToastAdapter`).
-  - Listen to **both** `chatController` and `profileController` so async startup connection, `updateConfiguration()` client replacements, `selectProfile()` transitions, and `_sessionExpiryTimer` expirations update or pause/clear `DesktopScheduleController` cleanly with zero mid-switch `401` races.
-  - Render the non-overlapping top utility strip (active Profile chip + Notification Bell badge) and urgent `unread` Active Alert Banner above `Expanded(child: Stack(...))`, wire `[ Open Chat ]` to `DesktopNavDestination.chat`, and pass `scheduleController` into `SettingsScreen`.
-- **Invariants to Preserve:** Existing constructors calling `DesktopShell(controller: ...)` or `SettingsScreen(controller: ...)` with no `scheduleController` or `chatController` keep compiling cleanly without starting orphan timers or spawning `powershell.exe`.
-
-### [MODIFY] `frontend/flutter/apps/desktop/lib/screens/settings_screen.dart`
-- **Primary Responsibility:** Add reactive **Notifications & Quiet Hours** card under Settings.
-- **Planned Change:** Add `_buildQuietHoursCard` accepting optional `DesktopScheduleController? scheduleController`, listening reactively so in-Settings profile switches refresh immediately, presenting `Enable Quiet Hours`, `Start`/`End` `HH:MM`, timezone selector backed by `_BUILTIN_IANA_ZONES` + `UTC` + `UTC±HH:MM` custom offset guidance, Save validation feedback, and the notice `"Alarms bypass quiet hours by default to ensure wakefulness."`
-- **Invariants to Preserve:** Standalone tests constructing `SettingsScreen(controller: ...)` without `scheduleController` render a clean disconnected/unavailable card state without network calls or exceptions.
+### [MODIFY] `frontend/flutter/apps/desktop/lib/shell/desktop_shell.dart` & `lib/main.dart` & `lib/screens/settings_screen.dart`
+- **Primary Responsibility:** App-wide shell top utility strip, Alert Banner, Drawer hosting, navigation callback wiring (`open_chat`, `open_backlog`, `open_schedule`), reactive profile/connection lifecycle, and Settings Quiet Hours card.
+- **Planned Change:** Wire `DesktopScheduleController` + `WindowsWinRtToastAdapter` cleanly (guarded by `!Platform.environment.containsKey('FLUTTER_TEST')`), render non-overlapping top strip + `unread` Alert Banner above `Expanded(child: Stack(...))`, and add `_buildQuietHoursCard` to `SettingsScreen`.
+- **Invariants to Preserve:** Existing constructors calling `DesktopShell(controller: ...)` or `SettingsScreen(controller: ...)` with no `scheduleController` or `chatController` keep compiling cleanly without orphan timers or native channel failures.
 
 ### [MODIFY] `backend/app/api/v1/endpoints/scheduling.py` & `backend/tests/test_scheduling_api.py` (`NIT-01`)
-- **Primary Responsibility:** Recompute `Alarm.scheduled_at` accurately on parameter updates and guard invalid recurrence combinations.
-- **Planned Change:**
-  - Distinguish recurring (`bool(days)`) vs non-recurring (`not days`) alarms when `enabled` transitions to `True` so a still-future non-recurring alarm's `scheduled_at` is NOT overwritten on disable -> re-enable unless `(as_utc(alarm.scheduled_at) or now) <= now` or `time_of_day`/`timezone`/`recurrence_days` explicitly changed.
-  - Recompute `alarm.scheduled_at = compute_next_occurrence(...)` when `alarm.enabled and alarm.time_of_day and payload.scheduled_at is None and alarm.status == AlarmStatus.armed.value` and schedule fields changed (or `(as_utc(alarm.scheduled_at) or now) <= now`).
-  - Raise HTTP `422` if `payload.clear_time_of_day` leaves `recurrence_days` non-empty without `clear_recurrence_days` / empty `recurrence_days`.
-  - Add regression tests in `backend/tests/test_scheduling_api.py` for recurring param edits, non-recurring re-enable preservation, and `clear_time_of_day` + `recurrence_days` `422`.
+- **Primary Responsibility:** Recompute `Alarm.scheduled_at` accurately on parameter updates and guard invalid recurrence combinations (`clear_time_of_day=True` with non-empty `recurrence_days` -> HTTP `422`), preserving non-recurring future alarms on disable->re-enable.
 - **Invariants to Preserve:** Explicit `payload.scheduled_at` always takes precedence; disabled/dismissed/acknowledged alarms are never unexpectedly re-armed.
 
 ### [MODIFY] `docs/04_Architecture/01_Domains/tasks-reminders-alarms-and-routines.md` (`NIT-02` + Phase 3)
-- **Primary Responsibility:** Canonical domain spec alignment.
-- **Planned Change:** Fix duplicate `### 3.3` heading (`NIT-02` -> `### 3.4`) and document delivered Batch G2 Desktop UI + WinRT Toast presentation scope during Phase 3.
+- **Primary Responsibility:** Fix duplicate `### 3.3` heading (`NIT-02` -> `### 3.4`) and document delivered Batch G2 Desktop UI + native C++/WinRT Toast capabilities during Phase 3.
 
 ---
 
@@ -197,19 +196,19 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 1. **Step 1 — Backend Review Fold-In (`NIT-01`) & Regression Tests:**
    - Write failing tests in `backend/tests/test_scheduling_api.py` covering future recurring param edits recomputing `scheduled_at`, non-recurring disable->re-enable preserving future `scheduled_at`, and `clear_time_of_day=True` with active `recurrence_days` returning `422` (RED).
    - Update `update_alarm` in `backend/app/api/v1/endpoints/scheduling.py` (GREEN) and run `backend/tests/test_scheduling_api.py` + `test_scheduler_service.py`.
-2. **Step 2 — Native Windows WinRT Toast Adapter (`DEBT-V1-02`) & Tests:**
-   - Write unit tests in `frontend/flutter/apps/desktop/test/windows_toast_adapter_test.dart` covering XML escaping + XML 1.0 control-char stripping, live alarm `<toast scenario="alarm">` + system `<actions>` (`snooze`/`dismiss`), quiet-hours `<audio silent="true"/>` + `SuppressPopup`, catch-up summary toast (non-alarm), HKCU AUMID registration script generation, UTF-16LE `-EncodedCommand` + Unicode preservation, payload length guard, and error resilience via mock `ProcessLauncherAdapter` (RED).
-   - Implement `frontend/flutter/apps/desktop/lib/platform/windows_toast_adapter.dart` (GREEN), evaluating headless Windows invocation (`-WindowStyle Hidden` vs non-console Win32 `CREATE_NO_WINDOW`) so live toasts do not flash console windows.
-3. **Step 3 — `DesktopScheduleController` & Polling/Deduplication Tests:**
-   - Write unit tests in `frontend/flutter/apps/desktop/test/desktop_schedule_controller_test.dart` covering initial load across Tasks/Trash/Reminders/Alarms/Routines/Notifications/QuietHours, `updateTask` clear flags vs DTO `clear*` fields, `unreadOnly: true` polling pagination, routine quiet-hours skip, missed catch-up consolidation, `activeAlerts` excluding `suppressed_quiet_hours` and `missed_catchup`, dynamic client updates + disconnect/profile-switch `_scopeEpoch` cancellation, and opt-in polling lifecycle (RED).
+2. **Step 2 — Native C++/WinRT Runner Channel & Dart Toast Adapter (`DEBT-V1-02`):**
+   - Write Dart unit tests in `frontend/flutter/apps/desktop/test/windows_toast_adapter_test.dart` covering XML escaping + XML 1.0 control-char stripping, live alarm `<toast scenario="alarm">` + interactive `<actions>`, task-linked `[ Mark Done ]` vs `[ Acknowledge ]` / `[ Snooze 10m ]` / `[ Dismiss ]` / `[ Open Chat ]` actions, Quiet Hours `suppressPopup: true` + `<audio silent="true"/>`, catch-up summary toast + `[ Review Backlog ]`, `removeToast` / `clearToasts` method channel calls, incoming `onToastActivated` parsing, and soft failure resilience via `TestDefaultBinaryMessenger` (RED).
+   - Implement `windows_toast_channel.h/.cpp`, runner CMake/window/main updates, and `windows_toast_adapter.dart` (GREEN), and verify native Windows compilation (`flutter build windows --debug`).
+3. **Step 3 — `DesktopScheduleController` & Callback/Polling/History Tests:**
+   - Write unit tests in `frontend/flutter/apps/desktop/test/desktop_schedule_controller_test.dart` covering initial load across Tasks/Trash/Reminders/Alarms/Routines/Notifications/QuietHours, `updateTask` clear flags vs DTO `clear*` fields, `unreadOnly: true` polling pagination, routine quiet-hours skip, missed catch-up consolidation, `activeAlerts` excluding `suppressed_quiet_hours` and `missed_catchup`, two-way `toastAdapter.activations` handling (`mark_done`, `acknowledge`, `snooze_10m`, `dismiss`, `open_chat`, `open_backlog`), `removeNotificationToast` / `clearAllNotificationToasts` Action Center sync, dynamic client updates + disconnect/profile-switch `_scopeEpoch` cancellation, and opt-in polling lifecycle (RED).
    - Implement `frontend/flutter/apps/desktop/lib/features/schedule/desktop_schedule_controller.dart` (GREEN).
 4. **Step 4 — Schedule Screen, Sub-Components, Drawer, Shell Utility Strip & Settings Quiet Hours UI:**
    - Write/update widget tests in `schedule_screen_test.dart`, `notification_backlog_drawer_test.dart`, `desktop_shell_test.dart` (updating line `51` `findsNWidgets(2)` -> `findsOneWidget` and line `76`), `desktop_settings_test.dart`, and `desktop_layout_responsive_test.dart` (verifying `1024x640` at `1.3x` text scale with Bell strip + Alert banner active and zero overflow) (RED).
    - Implement `schedule_sidebar.dart`, `schedule_edit_dialogs.dart`, `notification_backlog_drawer.dart`, updated `schedule_screen.dart`, `desktop_settings_controller.dart`, `desktop_shell.dart`, `main.dart`, and `settings_screen.dart` Quiet Hours card (GREEN).
 5. **Step 5 — Full Automated Verification Gate:**
-   - Run all contract parity checks (`check_openapi_contract.py --check`, `check_dart_openapi_parity.py --check`), backend `pytest backend/tests -q`, `dart test` (`companion_api`), `flutter analyze`, full `flutter test` (`apps/desktop`), and `frontend/web` lint/test/build.
+   - Run all contract parity checks (`check_openapi_contract.py --check`, `check_dart_openapi_parity.py --check`), backend `pytest backend/tests -q`, `dart test` (`companion_api`), `flutter analyze`, full `flutter test` (`apps/desktop`), native Windows runner compile check (`flutter build windows --debug` in `frontend/flutter/apps/desktop`), and `frontend/web` lint/test/build.
 6. **Step 6 — Phase 3 Documentation, Closure & Draft PR:**
-   - Sync `tasks-reminders-alarms-and-routines.md` (including `NIT-02`), `windows-host-and-notifications.md`, `WBS.md`, `MASTER_CHECKLIST.md`, `DECISION_DEBT.md` (`DEBT-V1-02` presentation resolved, optional COM activation deep-link polish documented), `DELIVERY_INDEX.md`, `docs/01_Tracking/task.md`, and `CHANGELOG.md`.
+   - Sync `tasks-reminders-alarms-and-routines.md` (including `NIT-02`), `windows-host-and-notifications.md`, `WBS.md`, `MASTER_CHECKLIST.md`, `DECISION_DEBT.md` (`DEBT-V1-02` marked resolved for presentation & in-process callbacks; optional cold-start COM server when terminated noted under `PC-HOST-002` / future polish), `DELIVERY_INDEX.md`, `docs/01_Tracking/task.md`, and `CHANGELOG.md`.
    - Author walkthrough `docs/03_Walkthroughs/walkthrough-m3-batch-g2-schedule-ui-windows-toasts.md`, archive `task-feature-m3-schedule-ui-windows-toasts-g2.md`, commit, push, and open a Draft PR against `develop`, supplying the interactive manual Windows UI checklist and plain-text squash merge summary when ready.
 
 ---
@@ -222,20 +221,22 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 - [ ] Dart SDK package tests: `dart test` in `frontend/flutter/packages/companion_api`
 - [ ] Flutter workspace static analysis: `flutter analyze` in `frontend/flutter`
 - [ ] Flutter Desktop full suite (unit + widget + responsive overflow): `flutter test` in `frontend/flutter/apps/desktop`
+- [ ] Native Windows C++ runner compile verification (`/W4 /WX`): `flutter build windows --debug` in `frontend/flutter/apps/desktop`
 - [ ] Web harness checks (regression check): `npm --prefix frontend/web run lint && npm --prefix frontend/web test -- --run && npm --prefix frontend/web run build`
 
 ### Manual & Host-Level Checks (Where Applicable — UI Implemented/Modified)
-- [ ] Interactive manual Windows desktop UI & Action Center WinRT Toast verification checklist (to be provided in full at Phase 3/4 handoff per user preference whenever UI changes: launching `ai_companion_desktop`, verifying Schedule 5-tab workspace, creating/editing Task/Reminder/Alarm/Routine, toggling Quiet Hours in Settings across timezones, verifying zero console-window flash on WinRT toast dispatch, verifying native OS `snooze`/`dismiss` buttons on live alarm toasts, and testing In-App Alert Banner + Bell Drawer `[ Mark Done ]` vs `[ Dismiss ]` / `[ Clear All ]` / `[ Open Chat ]`).
+- [ ] Interactive manual Windows desktop UI & Action Center C++/WinRT Toast verification checklist (to be provided in full at Phase 3/4 handoff per user preference whenever UI changes: launching `ai_companion_desktop`, verifying Schedule 5-tab workspace, creating/editing Task/Reminder/Alarm/Routine, toggling Quiet Hours in Settings across timezones, verifying instant native Windows 11 Action Center toasts with zero console flash, clicking interactive toast buttons `[ Mark Done ]` / `[ Snooze 10m ]` / `[ Dismiss ]` / `[ Open Chat ]` / `[ Review Backlog ]` to verify backend mutation + window focus restoration, and confirming alerts handled in-app disappear cleanly from Action Center).
 
 ---
 
 ## 6. Risks, Dependencies, Assumptions & Safeguards
 
 - **Risks & Mitigations:**
-  - *Widget tests hanging on background `Timer.periodic` or spawning `powershell.exe`:* Polling only starts when `startPolling()` is explicitly invoked, `DesktopShell` suppresses auto-polling + native PowerShell dispatch whenever `Platform.environment.containsKey('FLUTTER_TEST')` or `!isConnected || profileId == null`, and timers always cancel in `dispose()`.
-  - *Toast spam or console-window flash on Windows:* `pollNotifications()` queries `unreadOnly: true` (`limit: 50`), aggregates unseen `isMissedCatchup == true` events into a single silent catch-up summary toast per poll batch, tracks `_dispatchedToastEventIds` per desktop session, and evaluates headless windowless invocation + manual visual check for zero PowerShell console flash.
-  - *PowerShell / XML injection or encoding corruption:* All toast strings pass through XML 1.0 control-char stripping + `escapeXml()`, are UTF-8 Base64-encoded inside a pure-ASCII outer script, and dispatched via pure Dart UTF-16LE `-EncodedCommand` with payload-length bounds.
-  - *Mid-switch `401`s or cross-Profile leaks:* `DesktopScheduleController` listens dynamically to both `chatController` and `profileController`, clears state + `_dispatchedToastEventIds` immediately when `!isConnected || profileId == null`, and increments `_scopeEpoch` to discard stale responses.
-- **Dependencies & Assumptions:** Assumes Windows 10/11 built-in PowerShell and WinRT `ToastNotificationManager` assemblies are present on target PCs without adding pub dependencies (`pubspec.yaml` unchanged).
+  - *C++ `/W4 /WX` and `_HAS_EXCEPTIONS=0` compiler strictness in `windows/CMakeLists.txt`:* Implement `WindowsToastChannel` strictly with Microsoft WRL (`ComPtr`, `RoGetActivationFactory`, `WindowsCreateStringReference`) and explicit `HRESULT` checks instead of C++/WinRT throwing exceptions, verified with `flutter build windows --debug`.
+  - *Cross-thread callback crash on WinRT `Activated`:* WinRT fires `Activated` on a COM worker thread; marshal arguments strictly to the Win32 UI thread via `::PostMessageW(hwnd_, kWmToastActivated, ...)` before calling `flutter::MethodChannel::InvokeMethod`, and guard destroyed/null `hwnd_` cleanly on `OnDestroy`.
+  - *Widget tests hanging on `Timer.periodic` or touching Windows native channels:* Polling starts only via `startPolling()` when live connected outside `FLUTTER_TEST`, and `WindowsWinRtToastAdapter` / `DesktopShell` fall back to `NoOpDesktopToastAdapter` during `FLUTTER_TEST`.
+  - *Toast spam after PC sleep/hibernate:* `pollNotifications()` queries `unreadOnly: true` (`limit: 50`), aggregates unseen `isMissedCatchup == true` events into one consolidated catch-up summary toast per poll batch, and tracks `_dispatchedToastEventIds` per desktop session.
+  - *Mid-switch `401`s or cross-Profile leaks:* `DesktopScheduleController` listens dynamically to both `chatController` and `profileController`, clears state + `_dispatchedToastEventIds` + Windows Action Center toast group immediately when `!isConnected || profileId == null`, and increments `_scopeEpoch` to discard stale responses.
+- **Dependencies & Assumptions:** Uses built-in Windows 10/11 SDK WRL/WinRT headers and `runtimeobject.lib` / `shlwapi.lib` already available in the Windows Flutter toolchain (`pubspec.yaml` unchanged).
 - **Required Permissions:** Task-bounded feature branch (`feature/m3-schedule-ui-windows-toasts-g2`), commits, push, and Phase 3 Draft PR against `develop`. Human Owner retains exclusive merge authority.
-- **Genuine Stop Conditions:** Material scope expansion beyond Batch G2, unexpected need to add new external dependencies in `pubspec.yaml` / `requirements.txt`, API contract mismatches requiring DB/OpenAPI breaking changes, or unresolvable CI/test failures.
+- **Genuine Stop Conditions:** Material scope expansion beyond Batch G2, unexpected need to add external `pubspec.yaml` / `requirements.txt` dependencies, API contract mismatches requiring DB/OpenAPI breaking changes, or unresolvable C++/Flutter/CI failures.
