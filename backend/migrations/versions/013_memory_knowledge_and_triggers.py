@@ -4,7 +4,6 @@ Revision ID: 013_memory_knowledge_and_triggers
 Revises: 012_character_mood_and_emotion
 """
 
-import json
 from typing import Sequence, Union
 
 from alembic import op

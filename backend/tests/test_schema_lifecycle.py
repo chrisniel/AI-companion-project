@@ -15,7 +15,7 @@ from app.db.session import (
     get_engine,
 )
 
-HEAD_REVISION = "013_memory_knowledge_and_triggers"
+HEAD_REVISION = "014_conversation_summaries_and_compaction"
 
 
 def _create_legacy_v004_db(path: Path) -> None:
@@ -65,6 +65,7 @@ def test_fresh_install_runs_alembic_upgrade_to_head(tmp_path):
     assert "character_templates" in tables
     assert "character_instances" in tables
     assert "conversations" in tables
+    assert "conversation_summaries" in tables
     assert "messages" in tables
     assert "tasks" in tables
     assert "memories" in tables

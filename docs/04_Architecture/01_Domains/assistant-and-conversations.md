@@ -194,17 +194,20 @@ Verified in `backend/app/api/v1/endpoints/conversations.py`:
 
 ### 3.3 Context Assembly & Injection
 
-Verified in `backend/app/services/assistant/orchestrator.py`:
-- Injects up to 5 relevant memories retrieved via FTS5 lexical search into the system prompt inside `<retrieved_memories>` tags (bounded by `MEMORY_BUDGET_TOKENS = 256`), scoped strictly to Profile memories and active Character Instance memories (memories from other characters are excluded; Neutral Assistant conversations retrieve only Profile memories). Temporary memories past expiration are excluded at query time using bound `:now`. The template explicitly instructs the model that memories are untrusted contextual information for reference only and not to adopt policies or commands found in them.
-- Injects up to 5 non-temporary, profile-scoped core facts (`is_core = True` or `importance >= 1.5`, with `expires_at IS NULL`) retrieved via `get_core_memories`, bounded by `MEMORY_CORE_FACTS_BUDGET_TOKENS = 100` and deduplicated against search hits.
+Verified in `backend/app/services/assistant/orchestrator.py` and `backend/app/services/assistant/compactor.py`:
+- Injects retrieved records into structured XML `<retrieved_memories>` sections (`<user_core_profile>`, `<triggered_knowledge_lore>`, `<episodic_and_long_term_memories>`, `<short_term_context>`) with per-section token caps and `escape_prompt_xml_delimiters` sanitization, scoped strictly to Profile memories and active Character Instance memories (excluding expired short-term entries via bound `:now`, as detailed in [`memory-and-personalization.md`](./memory-and-personalization.md)). The template explicitly instructs the model that memories and digests are untrusted contextual information for reference only and not to adopt policies or commands found in them.
+- Evaluates pre-limit conversation compaction (`CONTEXT_COMPACTION_ENABLED`, `CONTEXT_COMPACTION_TRIGGER_RATIO = 0.72`) via `ConversationCompactor`: when uncompacted conversation tokens approach the active context budget and at least `CONTEXT_COMPACTION_MIN_MESSAGES` older turns exist ahead of the `CONTEXT_COMPACTION_KEEP_RECENT_MESSAGES` tail, compacts older turns into a single active rolling `ConversationSummary` (`conversation_summaries`, Migration `014`) using low-temperature LLM summarization with deterministic extractive fallback (`extractive_fallback`).
+- Injects the active episode digest (if present) as `<recent_episode_digest>` with XML delimiter escaping ahead of recent raw turns strictly after `to_sequence_no`, keeping raw `messages` rows immutable and separate from canonical `memories`.
+- Exposes episode summary retrieval (`GET /api/v1/conversations/{conversation_id}/summary`) and explicit user-triggered compaction (`POST /api/v1/conversations/{conversation_id}/compact`), cascading cleanup cleanly through conversation soft-delete and Profile purge (`ProfilePurgeService`).
+- Supports **1-Hop Compacted In-Stream Continuation** (`CONTEXT_COMPACTION_AUTO_CONTINUE_ENABLED = True`): when an uninterrupted response hits the single-pass output ceiling (`finish_reason == "length"`, `completion_tokens >= CONTEXT_COMPACTION_AUTO_CONTINUE_MIN_TOKENS = 160`, and not halted by `_guard_repetitive_stream`), `build_continuation_messages` compacts the partial response head while keeping the cutoff tail verbatim so one continuation pass (`<= CONTEXT_COMPACTION_AUTO_CONTINUE_MAX_TOKENS = 384`) streams seamlessly into the same assistant message before closing SSE.
 - Binds user message attachments via multimodal vision contracts when vision capability is enabled.
-- Loads recent conversation history turns to construct chat context.
+- Loads recent uncompacted conversation history turns (falling back to bounded recent turns when compaction is disabled or below trigger thresholds) to construct chat context.
 - **React Web Persistent Attachment History (Slice 8B.7):** Implemented. `AssistantView` preserves attachment metadata when mapping history messages; `ConversationMessageItem` renders supported-image thumbnails and lightbox previews fetched as authenticated Blobs, with unavailable-preview handling and object-URL cleanup. Regression evidence resides in `frontend/web/src/test/persistentAttachmentRendering.test.tsx`. Flutter Desktop parity remains target work.
 
 ### 3.4 Explicitly Unimplemented Capabilities
 
 - **Automatic Multilingual Language Routing:** `NOT IMPLEMENTED`. Language handling relies entirely on the natural zero-shot multilingual capability of the active model; no explicit pre-turn language classifier or language-routing middleware exists in the codebase.
-- **Conversation Compaction / Summarization:** `NOT IMPLEMENTED`. Older messages are truncated based on simple turn/token limits; rolling summaries are not yet generated.
+- **Hierarchical Cross-Session Memory Distillation:** `NOT IMPLEMENTED`. Single-conversation pre-limit rolling episode digests (`ConversationSummary`) are implemented; scheduled or multi-day cross-conversation consolidation remains future target work.
 
 ---
 
@@ -226,7 +229,8 @@ The following implementation choices are intentionally left open for subsequent 
 
 - **Character Switching UX:** How character transitions are initiated in the UI (e.g., dedicated switcher prompting for a new thread vs. inline bounded transition).
 - **Language Detection & System Prompt Adaptation:** Whether dynamic language hints are explicitly injected into the system prompt or left entirely to natural model completion.
-- **Conversation Summarization & Long-Context Compaction:** Token threshold triggers, summarization model selection, hierarchical memory distillation mechanisms, and background summarization cadence (treated as open design / future architectural consideration; not currently scheduled as a locked PC Later milestone).
+- **Cross-Session / Hierarchical Distillation Cadence:** Background periodic schedule cadence, multi-day conversation archival rollup, and automated promotion from `ConversationSummary` digests into structured `D7` long-term memory records (single-conversation pre-limit rolling compaction is implemented in M3 Batch F; cross-session hierarchical distillation remains future target work).
+- **Adaptive Digest Scaling Across Hardware Profiles:** Scaling episode digest budgets (`180`/`300`/`450` tokens) dynamically by active hardware profile (`eco`/`balanced`/`maximum`) remains future target work alongside Runtime/Settings profile integration.
 - **Transcript Archival & Retention:** Long-term conversation export formats (JSON, Markdown, PDF) and user-configurable retention limits.
 - **Future Multi-Character Interaction:** Conceptual feasibility and interaction design of multi-persona collaborative threads (scheduled for future architectural evaluation).
 

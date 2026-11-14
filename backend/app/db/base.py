@@ -5,6 +5,7 @@ from app.models.attachment import Attachment
 from app.models.character_instance import CharacterInstance
 from app.models.character_template import CharacterTemplate
 from app.models.conversation import Conversation
+from app.models.conversation_summary import ConversationSummary
 from app.models.memory import Memory
 from app.models.message import Message
 from app.models.profile import Profile
@@ -19,6 +20,7 @@ __all__ = [
     "SessionTicket",
     "Task",
     "Conversation",
+    "ConversationSummary",
     "Message",
     "Memory",
     "Attachment",

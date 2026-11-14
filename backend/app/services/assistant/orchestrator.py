@@ -26,8 +26,17 @@ from app.models.profile_session import ProfileSession
 from app.db.session import get_session_factory
 from app.models.attachment import Attachment
 from app.models.conversation import Conversation
+from app.models.conversation_summary import ConversationSummary
 from app.models.memory import Memory
 from app.models.message import Message
+from app.services.assistant.compactor import (
+    build_continuation_messages,
+    compact_conversation,
+    escape_prompt_xml_delimiters,
+    get_active_conversation_summary,
+    should_compact_conversation,
+)
+from app.services.emotion.appraisal import appraise_user_turn
 from app.schemas.llm import ChatMessage, ContentBlock, TextContent
 from app.schemas.model_registry import ModelCapability
 from app.services.assistant.media_resolver import resolve_image_content
@@ -119,7 +128,7 @@ def _pack_memory_section(
         mem_id = getattr(mem, "id", None)
         if mem_id and mem_id in seen_ids:
             continue
-        line = f"- [{mem.category}] {mem.content}"
+        line = f"- [{mem.category}] {escape_prompt_xml_delimiters(mem.content)}"
         cost = _estimate_tokens(line)
         if used + cost > cap:
             break
@@ -145,6 +154,7 @@ def _build_context(
     core_memories: Optional[List[Memory]] = None,
     triggered_lore: Optional[List[Memory]] = None,
     short_term_memories: Optional[List[Memory]] = None,
+    episode_summary: Optional[ConversationSummary] = None,
 ) -> List[ChatMessage]:
     """
     Construct context fitting within the token budget with semantic 3-tier XML partitioning.
@@ -199,7 +209,7 @@ def _build_context(
     )
 
     if conflicts:
-        conflict_lines = [f"- {c.content}" for c in conflicts]
+        conflict_lines = [f"- {escape_prompt_xml_delimiters(c.content)}" for c in conflicts]
         conflict_block = (
             "\n\n<memory_conflicts>\n"
             "The user has conflicting statements on record:\n"
@@ -209,6 +219,17 @@ def _build_context(
         )
         final_system += conflict_block
         mem_used += _estimate_tokens(conflict_block)
+
+    if episode_summary is not None and episode_summary.summary_text.strip():
+        digest_body = escape_prompt_xml_delimiters(episode_summary.summary_text.strip())
+        digest_block = (
+            f"\n\n<recent_episode_digest from_turn=\"{episode_summary.from_sequence_no}\" "
+            f"to_turn=\"{episode_summary.to_sequence_no}\">\n"
+            f"{digest_body}\n"
+            "</recent_episode_digest>"
+        )
+        final_system += digest_block
+        mem_used += _estimate_tokens(digest_block)
 
     used += mem_used
     budget = context_capacity - used
@@ -353,6 +374,53 @@ async def _authorized_tokens(db, profile_session, conversation_id, turn, tokens)
             pending.cancel()
             with suppress(asyncio.CancelledError, StopAsyncIteration):
                 await pending
+
+
+async def _stream_guarded_sse_pass(
+    *,
+    db: AsyncSession,
+    profile_session: ProfileSession,
+    conversation_id: str,
+    prepared_turn: Any,
+    provider: Any,
+    messages: List[ChatMessage],
+    max_tokens: int,
+    state: dict[str, Any],
+    existing_text: str = "",
+) -> AsyncGenerator[tuple[str, str], None]:
+    """Stream one guarded provider generation pass and emit `(token, sse_frame)` tuples."""
+    stream = provider.generate_stream(messages, max_tokens=max_tokens, conversation_id=conversation_id)
+    guard_state: dict[str, Any] = {}
+    need_spacer = bool(existing_text and not existing_text[-1].isspace())
+    first_non_empty_seen = False
+
+    async with aclosing(stream) as tokens:
+        authorized_stream = _authorized_tokens(db, profile_session, conversation_id, prepared_turn, tokens)
+        async with aclosing(_guard_repetitive_stream(authorized_stream, state=guard_state)) as guarded_tokens:
+            async for token in guarded_tokens:
+                if existing_text and not first_non_empty_seen and token:
+                    first_non_empty_seen = True
+                    if need_spacer and not token[0].isspace() and token[0] not in ".,!?;:)]}\"'-\n\r":
+                        token = f" {token}"
+                chunk_data = json.dumps({
+                    "type": "token",
+                    "content": token,
+                    "choices": [
+                        {
+                            "delta": {"content": token},
+                            "index": 0,
+                        }
+                    ],
+                })
+                yield token, f"data: {chunk_data}\n\n"
+
+    state["repetition_cutoff"] = bool(guard_state.get("repetition_cutoff"))
+    state["finish_reason"] = (
+        guard_state.get("finish_reason")
+        or getattr(stream, "finish_reason", None)
+        or getattr(provider, "last_finish_reason", "stop")
+        or "stop"
+    )
 
 
 async def prepare_turn(
@@ -510,6 +578,7 @@ async def _run_post_turn_memory_extraction(
     source_message_id: str,
     character_instance_id: Optional[str] = None,
     engine: Any = None,
+    emotion_event: Optional[str] = None,
 ) -> None:
     """Asynchronously extract and reconcile candidate memories in an isolated DB session.
 
@@ -551,6 +620,7 @@ async def _run_post_turn_memory_extraction(
                     user_text=user_text,
                     assistant_text=assistant_text,
                     provider=provider,
+                    emotion_event=emotion_event,
                 )
                 if not candidates:
                     return
@@ -643,6 +713,7 @@ async def orchestrate_chat_stream(
         )
 
         # Tier 2: Relevant Long-Term & Episodic Memories via prefix-aware FTS5 + recall frequency
+        seen_mem_ids = {m.id for m in core_memories} | {m.id for m in triggered_lore}
         recalled_memories = await search_relevant_memories(
             db=db,
             query=user_text,
@@ -650,12 +721,10 @@ async def orchestrate_chat_stream(
             character_instance_id=char_inst_id,
             limit=settings.MEMORY_SEARCH_LIMIT,
             increment_recall=True,
+            exclude_ids=seen_mem_ids,
+            exclude_short_term=True,
         )
-        seen_mem_ids = {m.id for m in core_memories} | {m.id for m in triggered_lore}
-        long_term_memories = [
-            m for m in recalled_memories
-            if m.id not in seen_mem_ids and not m.is_short_term
-        ]
+        long_term_memories = list(recalled_memories)
 
         # Tier 3: Active Short-Term Context (72h working state)
         short_term_memories = await get_active_short_term_memories(
@@ -680,6 +749,11 @@ async def orchestrate_chat_stream(
         conflicts = list((await db.execute(conflicts_query)).scalars().all())
 
         # Fetch recent conversation history strictly before this turn's user message
+        active_summary = await get_active_conversation_summary(
+            db=db,
+            conversation_id=conversation_id,
+            profile_id=profile_session.profile_id,
+        )
         hist_query = (
             select(Message)
             .where(
@@ -691,11 +765,14 @@ async def orchestrate_chat_stream(
             .order_by(Message.sequence_no.desc())
             .limit(settings.CONVERSATION_HISTORY_LIMIT)
         )
+        if active_summary is not None:
+            hist_query = hist_query.where(Message.sequence_no > active_summary.to_sequence_no)
         hist_result = await db.execute(hist_query)
         history = list(hist_result.scalars().all())
 
         status_resp = await provider.get_status()
         context_capacity = status_resp.context_size or 4096
+        emotion_event = appraise_user_turn(user_text).event_type
         if conv:
             await appraise_and_update_conversation_mood(db, profile_session, conv, user_text)
 
@@ -719,7 +796,48 @@ async def orchestrate_chat_stream(
             generation_reserve=settings.GENERATION_RESERVE_TOKENS,
             memory_budget=max(settings.MEMORY_BUDGET_TOKENS, 570),
             conflicts=conflicts,
+            episode_summary=active_summary,
         )
+
+        # Pre-limit context compaction: summarize older turns when approaching context capacity
+        estimated_prompt_tokens = sum(
+            _estimate_tokens(m.content) if isinstance(m.content, str) else 64
+            for m in prompt_messages
+        )
+        if conv and should_compact_conversation(
+            estimated_prompt_tokens=estimated_prompt_tokens,
+            context_capacity=context_capacity,
+            generation_reserve=settings.GENERATION_RESERVE_TOKENS,
+        ):
+            compact_res = await compact_conversation(
+                db=db,
+                conversation_id=conversation_id,
+                profile_id=profile_session.profile_id,
+                provider=provider,
+                force=False,
+                trigger="auto",
+                before_sequence_no=prepared_turn.user_sequence_no,
+            )
+            if compact_res.compacted and compact_res.active_summary is not None:
+                active_summary = compact_res.active_summary
+                await db.commit()
+                history = [
+                    m for m in history if m.sequence_no > active_summary.to_sequence_no
+                ]
+                prompt_messages = _build_context(
+                    history=history,
+                    system_prompt=active_persona,
+                    user_text=user_text,
+                    memories=long_term_memories,
+                    core_memories=core_memories,
+                    triggered_lore=triggered_lore,
+                    short_term_memories=short_term_memories,
+                    context_capacity=context_capacity,
+                    generation_reserve=settings.GENERATION_RESERVE_TOKENS,
+                    memory_budget=max(settings.MEMORY_BUDGET_TOKENS, 570),
+                    conflicts=conflicts,
+                    episode_summary=active_summary,
+                )
 
         # Query committed attachments bound to this user turn
         att_query = (
@@ -761,34 +879,61 @@ async def orchestrate_chat_stream(
         available_generation_tokens = max(1, context_capacity - prompt_tokens)
         max_tokens = min(1024, available_generation_tokens)
 
-        stream = provider.generate_stream(prompt_messages, max_tokens=max_tokens, conversation_id=conversation_id)
-        guard_state: dict[str, Any] = {}
-        async with aclosing(stream) as tokens:
-            authorized_stream = _authorized_tokens(db, profile_session, conversation_id, prepared_turn, tokens)
-            async with aclosing(_guard_repetitive_stream(authorized_stream, state=guard_state)) as guarded_tokens:
-                async for token in guarded_tokens:
-                    full_response_text += token
-                    chunk_data = json.dumps({
-                        "type": "token",
-                        "content": token,
-                        "choices": [
-                            {
-                                "delta": {"content": token},
-                                "index": 0,
-                            }
-                        ],
-                    })
-                    yield f"data: {chunk_data}\n\n"
+        pass1_state: dict[str, Any] = {}
+        async for token, sse_frame in _stream_guarded_sse_pass(
+            db=db,
+            profile_session=profile_session,
+            conversation_id=conversation_id,
+            prepared_turn=prepared_turn,
+            provider=provider,
+            messages=prompt_messages,
+            max_tokens=max_tokens,
+            state=pass1_state,
+        ):
+            full_response_text += token
+            yield sse_frame
 
         await _require_prepared_turn(db, profile_session, conversation_id, prepared_turn)
-        # Update assistant placeholder upon completion
+        # Update assistant placeholder upon completion (or execute 1 compacted continuation hop on length cutoff)
         completion_tokens = _estimate_tokens(full_response_text)
-        finish_reason = (
-            guard_state.get("finish_reason")
-            or getattr(stream, "finish_reason", None)
-            or getattr(provider, "last_finish_reason", "stop")
-            or "stop"
-        )
+        finish_reason = pass1_state.get("finish_reason", "stop")
+
+        if (
+            settings.CONTEXT_COMPACTION_AUTO_CONTINUE_ENABLED
+            and finish_reason == "length"
+            and not pass1_state.get("repetition_cutoff")
+            and completion_tokens >= settings.CONTEXT_COMPACTION_AUTO_CONTINUE_MIN_TOKENS
+        ):
+            continuation_messages = build_continuation_messages(
+                prompt_messages=prompt_messages,
+                partial_response_text=full_response_text,
+            )
+            cont_prompt_tokens = sum(_estimate_tokens(m.content) for m in continuation_messages)
+            cont_available = context_capacity - cont_prompt_tokens
+            if cont_available >= 64:
+                cont_max_tokens = min(settings.CONTEXT_COMPACTION_AUTO_CONTINUE_MAX_TOKENS, cont_available)
+                logger.info(
+                    f"Auto-continuing length-truncated reply (1 hop): conv_id={conversation_id}, "
+                    f"initial_tokens={completion_tokens}, cont_prompt_tokens={cont_prompt_tokens}, cont_max_tokens={cont_max_tokens}"
+                )
+                pass2_state: dict[str, Any] = {}
+                async for token, sse_frame in _stream_guarded_sse_pass(
+                    db=db,
+                    profile_session=profile_session,
+                    conversation_id=conversation_id,
+                    prepared_turn=prepared_turn,
+                    provider=provider,
+                    messages=continuation_messages,
+                    max_tokens=cont_max_tokens,
+                    state=pass2_state,
+                    existing_text=full_response_text,
+                ):
+                    full_response_text += token
+                    yield sse_frame
+
+                await _require_prepared_turn(db, profile_session, conversation_id, prepared_turn)
+                completion_tokens = _estimate_tokens(full_response_text)
+                finish_reason = pass2_state.get("finish_reason", "stop")
         asst_msg.content = full_response_text
         asst_msg.status = "length" if finish_reason == "length" else "completed"
         asst_msg.prompt_tokens = prompt_tokens
@@ -824,6 +969,7 @@ async def orchestrate_chat_stream(
                     source_message_id=prepared_turn.user_message.id,
                     character_instance_id=char_inst_id,
                     engine=db.bind,
+                    emotion_event=emotion_event,
                 )
             )
 
