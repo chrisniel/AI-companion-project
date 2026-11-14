@@ -116,6 +116,7 @@ def _create_new_memory(
     source_message_id: Optional[str],
     now: datetime,
     source_type_override: Optional[str] = None,
+    force_non_core: bool = False,
 ) -> Memory:
     effective_verified = True if (is_explicit or user_verified or candidate.user_verified) else False
     effective_importance = max(float(candidate.importance), float(candidate.confidence))
@@ -136,7 +137,7 @@ def _create_new_memory(
         valid_from=now,
         expires_at=candidate.expires_at,
         last_verified_at=now,
-        is_core=candidate.is_core,
+        is_core=False if (source_type_override == "conflict" or force_non_core) else candidate.is_core,
         recall_count=0,
     )
 
@@ -303,6 +304,7 @@ async def reconcile_candidate(
             user_verified=False,
             source_message_id=source_message_id,
             now=current_now,
+            force_non_core=True,
         )
         db.add(isolated_memory)
         await db.flush()

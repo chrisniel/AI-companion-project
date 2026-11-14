@@ -64,3 +64,28 @@ Batch F addresses long-conversation context overflow, rolling episode continuity
 3. Click the top-right bookmark menu on both a User bubble and an Assistant bubble, test **Save to Long-Term Memory** and **Pin to Fixed Knowledge**, and verify the newly created verified records appear under the corresponding tier in **Memory & Knowledge**.
 4. In **Memory & Knowledge -> Short-Term Context**, click **Promote** on an expiring entry and confirm it moves cleanly to **Long-Term Memories** without any remaining TTL badge.
 5. Delete a compacted conversation (or purge a test profile) and verify no orphaned `conversation_summaries` remain in SQLite.
+
+---
+
+## 5. Key Concepts
+
+- **Pre-Limit Episode Compaction (`ConversationSummary`):** Folds older raw `messages` (ahead of `CONTEXT_COMPACTION_KEEP_RECENT_MESSAGES = 8`) into a single active rolling digest when context approaches `CONTEXT_COMPACTION_TRIGGER_RATIO` (`0.72`), keeping raw messages intact and strictly separate from canonical `memories`.
+- **1-Hop Compacted In-Stream Continuation (`build_continuation_messages`):** Resumes uninterrupted long responses (`>= 160` tokens ending with `finish_reason == "length"`) once inside the same SSE turn by compacting the partial reply head while retaining the trailing `320` chars verbatim.
+- **Temporal Evolution Trail:** Updates mutable facts in-place with a single bounded `(previously: ... until YYYY-MM)` provenance suffix rather than unbounded history chains.
+
+---
+
+## 6. Safe Customization & Invariants
+
+- **Compaction Config (`config.py`):** `CONTEXT_COMPACTION_TRIGGER_RATIO = 0.72`, `CONTEXT_COMPACTION_KEEP_RECENT_MESSAGES = 8`, `CONTEXT_COMPACTION_MIN_MESSAGES = 4`, `CONTEXT_COMPACTION_SUMMARY_MAX_TOKENS = 180`, `CONTEXT_COMPACTION_AUTO_CONTINUE_MIN_TOKENS = 160`, `CONTEXT_COMPACTION_AUTO_CONTINUE_MAX_TOKENS = 384`.
+- **Invariants:** Raw `messages` rows are never updated or deleted by compaction; `uq_conversation_summaries_one_active` enforces at most one active summary per conversation; non-explicit updates never overwrite Fixed Knowledge and never inherit `is_core=True`; `MemoryUpdate.clear_expires_at` explicitly clears TTL on Promote while omitting it preserves existing TTLs.
+
+---
+
+## 7. Troubleshooting
+
+| Symptom | Likely Cause | Resolution |
+| :--- | :--- | :--- |
+| `Compact Context` returns without creating a digest | Conversation has fewer than `KEEP_RECENT_MESSAGES + MIN_MESSAGES` (`12`) turns | Continue chatting or pass explicit `keep_recent_messages` on `POST /compact`. |
+| Migration `014` downgrade aborts | Populated `conversation_summaries` rows exist | Clear/archive rows intentionally before downgrading past `014`. |
+| Short `"length"` reply or repetitive stream does not auto-continue | Reply hit `< 160` tokens or tripped `_guard_repetitive_stream` | Intended guardrail preventing runaway continuation loops on degeneracy or truncated short turns. |

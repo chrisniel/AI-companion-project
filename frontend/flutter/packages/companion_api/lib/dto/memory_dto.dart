@@ -133,6 +133,7 @@ class MemoryUpdate {
       importance: (json['importance'] as num?)?.toDouble(),
       isCore: json['is_core'] as bool?,
       expiresAt: json['expires_at'] as String?,
+      clearExpiresAt: json['clear_expires_at'] as bool?,
       userVerified: json['user_verified'] as bool?,
       sourceType: json['source_type'] as String?,
       triggerKeywords: (json['trigger_keywords'] as List<dynamic>?)
@@ -183,7 +184,7 @@ class MemoryUpdate {
 
   @override
   String toString() =>
-      'MemoryUpdate(content: $content, category: $category, isCore: $isCore, expiresAt: $expiresAt, userVerified: $userVerified, sourceType: $sourceType)';
+      'MemoryUpdate(content: $content, category: $category, isCore: $isCore, expiresAt: $expiresAt, clearExpiresAt: $clearExpiresAt, userVerified: $userVerified, sourceType: $sourceType)';
 }
 
 /// Authoritative memory record returned by the backend.

@@ -209,7 +209,7 @@ def _build_context(
     )
 
     if conflicts:
-        conflict_lines = [f"- {c.content}" for c in conflicts]
+        conflict_lines = [f"- {escape_prompt_xml_delimiters(c.content)}" for c in conflicts]
         conflict_block = (
             "\n\n<memory_conflicts>\n"
             "The user has conflicting statements on record:\n"

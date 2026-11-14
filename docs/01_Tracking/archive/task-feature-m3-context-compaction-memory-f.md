@@ -1,7 +1,7 @@
 # Active Execution Tracker — `feature/m3-context-compaction-memory-f`
 
 > **Delivery Branch:** `feature/m3-context-compaction-memory-f`
-> **Implementation Plan:** [`plan-m3-context-compaction-memory-f.md`](../02_Planning/01_Plans/plan-m3-context-compaction-memory-f.md)
+> **Implementation Plan:** [`plan-m3-context-compaction-memory-f.md`](../../02_Planning/01_Plans/plan-m3-context-compaction-memory-f.md)
 > **Delivery Level:** Level B — Planned Autonomous (with Level C Schema Migration `014_conversation_summaries_and_compaction`)
 > **Status:** Archived at Phase 3 Closure (Draft PR Opened — Awaiting Phase 4 Independent Review & Human Owner Merge)
 
@@ -38,4 +38,5 @@
 - [x] Follow-on Batch F enhancement: Added 1-hop compacted in-stream continuation (`build_continuation_messages`, `CONTEXT_COMPACTION_AUTO_CONTINUE_*`, `orchestrator.py` `_stream_guarded_sse_pass`) and verified (`pytest backend/tests/test_context_compaction.py backend/tests/test_assistant_orchestrator.py backend/tests/test_runtime_boundary_regressions.py`: `52 passed`; `check_openapi_contract.py --check`: `46 routes`).
 
 ## Phase 4: Independent Review & Human Merge
-- [ ] Present Draft PR URL, exact automated check outputs, and manual Windows acceptance checklist; **STOP** for Independent Reviewer and Human Owner approval.
+- [x] Phase 4 Independent Review completed (`APPROVED` by reviewer subagent; 4 P2/P3 polish observations resolved on `feature/m3-context-compaction-memory-f`).
+- [ ] Present Phase 4 review findings, verified checks, and final Draft PR state; **STOP** for Human Owner squash merge after CI passes.

@@ -516,7 +516,6 @@ class CompanionClient {
     _handleErrorResponse(response);
   }
 
-  /// Generates a model-assisted conversation title via POST /api/v1/conversations/{conversation_id}/generate-title.
   /// Fetches the active rolling episode summary via GET /api/v1/conversations/{conversation_id}/summary.
   Future<ConversationSummaryOut?> getConversationSummary(
     String conversationId,
@@ -560,6 +559,7 @@ class CompanionClient {
     _handleErrorResponse(response);
   }
 
+  /// Generates a model-assisted conversation title via POST /api/v1/conversations/{conversation_id}/generate-title.
   Future<ConversationOut> generateConversationTitle(
     String conversationId, {
     String? currentTitle,
