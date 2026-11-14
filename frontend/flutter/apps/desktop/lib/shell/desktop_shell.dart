@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:companion_api/companion_api.dart';
 import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
@@ -9,9 +12,12 @@ import '../dialogs/desktop_shutdown_dialogs.dart';
 import '../features/chat/desktop_chat_controller.dart';
 import '../features/profiles/desktop_profile_controller.dart';
 import '../features/memory/desktop_memory_controller.dart';
+import '../features/schedule/desktop_schedule_controller.dart';
+import '../features/schedule/notification_backlog_drawer.dart';
 import '../features/studio/desktop_studio_controller.dart';
 import '../lifecycle/desktop_lifecycle_coordinator.dart';
 import '../platform/desktop_client_settings.dart';
+import '../platform/windows_toast_adapter.dart';
 import '../screens/chat_screen.dart';
 import '../screens/memory_screen.dart';
 import '../screens/schedule_screen.dart';
@@ -40,6 +46,9 @@ class DesktopShell extends StatefulWidget {
     this.runtimeCoordinator,
     this.clientSettings,
     this.credentialStore,
+    this.scheduleController,
+    this.toastAdapter,
+    this.enableSchedulePolling,
   });
 
   final DesktopSettingsController controller;
@@ -51,6 +60,9 @@ class DesktopShell extends StatefulWidget {
   final DesktopRuntimeCoordinator? runtimeCoordinator;
   final DesktopClientSettings? clientSettings;
   final CredentialStore? credentialStore;
+  final DesktopScheduleController? scheduleController;
+  final DesktopToastAdapter? toastAdapter;
+  final bool? enableSchedulePolling;
 
   @override
   State<DesktopShell> createState() => _DesktopShellState();
@@ -62,6 +74,11 @@ class _DesktopShellState extends State<DesktopShell> {
   bool _ownsStudioController = false;
   late final DesktopMemoryController? _memoryController;
   bool _ownsMemoryController = false;
+  late final DesktopScheduleController? _scheduleController;
+  bool _ownsScheduleController = false;
+  DesktopToastAdapter? _toastAdapter;
+  bool _ownsToastAdapter = false;
+  bool _isBacklogDrawerOpen = false;
   DesktopNavDestination _lastDestination = DesktopNavDestination.chat;
 
   @override
@@ -93,10 +110,35 @@ class _DesktopShellState extends State<DesktopShell> {
       _memoryController = null;
     }
 
+    if (widget.scheduleController != null) {
+      _scheduleController = widget.scheduleController;
+      _ownsScheduleController = false;
+      _scheduleController!.onNavigateRequested ??= _handleToastNavigation;
+    } else if (widget.chatController != null) {
+      final isFlutterTest = Platform.environment.containsKey('FLUTTER_TEST');
+      _toastAdapter = widget.toastAdapter ??
+          (!isFlutterTest && Platform.isWindows
+              ? WindowsWinRtToastAdapter()
+              : NoOpDesktopToastAdapter());
+      _ownsToastAdapter = widget.toastAdapter == null;
+      _scheduleController = DesktopScheduleController(
+        clientProvider: () => widget.chatController!.client,
+        toastAdapter: _toastAdapter,
+        profileId: _resolveActiveProfileId(),
+        isConnected: widget.chatController!.isConnected,
+        onNavigateRequested: _handleToastNavigation,
+      );
+      _ownsScheduleController = true;
+    } else {
+      _scheduleController = null;
+    }
+
     _lastDestination = widget.controller.currentDestination;
     widget.controller.addListener(_handleDestinationChange);
     widget.profileController?.addListener(_handleProfileChange);
+    widget.chatController?.addListener(_handleProfileChange);
     widget.controller.navigationGuard = _handleNavigationGuard;
+    _initScheduleActivation();
     widget.coordinator?.onExitMenuTriggered = () async {
       if (mounted) {
         await _handleExitCompanion();
@@ -194,12 +236,86 @@ class _DesktopShellState extends State<DesktopShell> {
     }
   }
 
+  bool get _shouldPollSchedule =>
+      widget.enableSchedulePolling ??
+      !Platform.environment.containsKey('FLUTTER_TEST');
+
+  String? _resolveActiveProfileId() {
+    return widget.profileController?.activeProfileId ??
+        widget.chatController?.authenticatedProfileId;
+  }
+
+  String? _resolveActiveProfileName() {
+    return widget.profileController?.activeProfileName ??
+        widget.chatController?.authenticatedProfileName;
+  }
+
+  void _initScheduleActivation() {
+    final ctrl = _scheduleController;
+    if (ctrl == null) return;
+    final active = ctrl.isConnected &&
+        ctrl.profileId != null &&
+        ctrl.profileId!.isNotEmpty;
+    if (!active) return;
+
+    if (_ownsScheduleController) {
+      unawaited(ctrl.refreshAll());
+    }
+    if (_shouldPollSchedule) {
+      ctrl.startPolling();
+    }
+  }
+
+  void _handleToastNavigation(ToastNavigationTarget target) {
+    if (!mounted) return;
+    switch (target) {
+      case ToastNavigationTarget.chat:
+        widget.controller.requestDestination(DesktopNavDestination.chat);
+        break;
+      case ToastNavigationTarget.schedule:
+        widget.controller.requestDestination(DesktopNavDestination.schedule);
+        break;
+      case ToastNavigationTarget.backlogDrawer:
+        setState(() => _isBacklogDrawerOpen = true);
+        break;
+    }
+  }
+
+  void _syncScheduleScope() {
+    final ctrl = _scheduleController;
+    if (ctrl == null || !_ownsScheduleController) return;
+    final connected = widget.chatController?.isConnected ?? false;
+    final profileId = _resolveActiveProfileId();
+    final scopeChanged =
+        ctrl.profileId != profileId || ctrl.isConnected != connected;
+    if (!scopeChanged) return;
+
+    if (!connected || profileId == null || profileId.isEmpty) {
+      ctrl.clearForDisconnect();
+      if (_isBacklogDrawerOpen && mounted) {
+        setState(() => _isBacklogDrawerOpen = false);
+      }
+      return;
+    }
+
+    ctrl.updateProfileScope(profileId: profileId, isConnected: connected);
+    unawaited(ctrl.refreshAll());
+    if (_shouldPollSchedule) {
+      ctrl.startPolling();
+    }
+  }
+
   void _handleDestinationChange() {
     final dest = widget.controller.currentDestination;
     if (dest != _lastDestination) {
       _lastDestination = dest;
       if (dest == DesktopNavDestination.memory) {
         _memoryController?.loadMemories();
+      } else if (dest == DesktopNavDestination.schedule &&
+          (_scheduleController?.isConnected == true) &&
+          (_scheduleController?.profileId?.isNotEmpty == true) &&
+          _ownsScheduleController) {
+        unawaited(_scheduleController?.refreshAll());
       }
     }
   }
@@ -212,17 +328,25 @@ class _DesktopShellState extends State<DesktopShell> {
       profileId: profileId,
       memoryExtractionEnabled: extractionEnabled,
     );
+    _syncScheduleScope();
   }
 
   @override
   void dispose() {
     widget.controller.removeListener(_handleDestinationChange);
     widget.profileController?.removeListener(_handleProfileChange);
+    widget.chatController?.removeListener(_handleProfileChange);
     if (_ownsStudioController) {
       _studioController?.dispose();
     }
     if (_ownsMemoryController) {
       _memoryController?.dispose();
+    }
+    if (_ownsScheduleController) {
+      _scheduleController?.dispose();
+    }
+    if (_ownsToastAdapter) {
+      _toastAdapter?.dispose();
     }
     super.dispose();
   }
@@ -339,17 +463,77 @@ class _DesktopShellState extends State<DesktopShell> {
                             profileController: widget.profileController,
                           ),
                           Expanded(
-                            child: Stack(
-                              fit: StackFit.expand,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                for (final destination in _visitedDestinations)
-                                  Offstage(
-                                    offstage: currentDest != destination,
-                                    child: TickerMode(
-                                      enabled: currentDest == destination,
-                                      child: _buildActiveScreen(destination),
-                                    ),
+                                if (_scheduleController != null)
+                                  ListenableBuilder(
+                                    listenable: _scheduleController,
+                                    builder: (context, _) {
+                                      final sched = _scheduleController;
+                                      return Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          _buildTopUtilityStrip(
+                                            context,
+                                            sched,
+                                            ext,
+                                          ),
+                                          if (sched.activeAlerts.isNotEmpty)
+                                            _buildActiveAlertBanner(
+                                              context,
+                                              sched,
+                                              ext,
+                                            ),
+                                        ],
+                                      );
+                                    },
                                   ),
+                                Expanded(
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      for (final destination
+                                          in _visitedDestinations)
+                                        Offstage(
+                                          offstage: currentDest != destination,
+                                          child: TickerMode(
+                                            enabled: currentDest == destination,
+                                            child: _buildActiveScreen(
+                                              destination,
+                                            ),
+                                          ),
+                                        ),
+                                      if (_isBacklogDrawerOpen &&
+                                          _scheduleController != null)
+                                        Positioned(
+                                          top: 0,
+                                          bottom: 0,
+                                          right: 0,
+                                          child: NotificationBacklogDrawer(
+                                            controller: _scheduleController,
+                                            activeProfileName:
+                                                _resolveActiveProfileName(),
+                                            onClose: () => setState(
+                                              () => _isBacklogDrawerOpen = false,
+                                            ),
+                                            onOpenChat: () {
+                                              setState(
+                                                () =>
+                                                    _isBacklogDrawerOpen = false,
+                                              );
+                                              widget.controller
+                                                  .requestDestination(
+                                                DesktopNavDestination.chat,
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -377,7 +561,16 @@ class _DesktopShellState extends State<DesktopShell> {
       case DesktopNavDestination.voice:
         return const VoiceScreen(key: ValueKey('voice_screen'));
       case DesktopNavDestination.schedule:
-        return const ScheduleScreen(key: ValueKey('schedule_screen'));
+        return ScheduleScreen(
+          key: const ValueKey('schedule_screen'),
+          controller: _scheduleController,
+          onNavigateToSettings: () => widget.controller.requestDestination(
+            DesktopNavDestination.settings,
+          ),
+          onNavigateToChat: () => widget.controller.requestDestination(
+            DesktopNavDestination.chat,
+          ),
+        );
       case DesktopNavDestination.memory:
         return MemoryScreen(
           key: const ValueKey('memory_screen'),
@@ -403,7 +596,258 @@ class _DesktopShellState extends State<DesktopShell> {
           runtimeCoordinator: widget.runtimeCoordinator,
           clientSettings: widget.clientSettings,
           credentialStore: widget.credentialStore,
+          scheduleController: _scheduleController,
         );
     }
+  }
+
+  Widget _buildTopUtilityStrip(
+    BuildContext context,
+    DesktopScheduleController ctrl,
+    CompanionThemeExtension? ext,
+  ) {
+    final profileLabel = _resolveActiveProfileName() ?? ctrl.profileId;
+    final totalAttention = ctrl.unreadCount + ctrl.missedCount;
+    final hasUnread = ctrl.unreadCount > 0;
+    final hasMissedOnly = !hasUnread && ctrl.missedCount > 0;
+    final bellColor = hasUnread
+        ? (ext?.accent ?? CompanionColors.lightAccent)
+        : hasMissedOnly
+            ? (ext?.warning ?? CompanionColors.warning)
+            : ext?.textSecondary;
+
+    final badgeText = hasUnread
+        ? 'Alerts (${ctrl.unreadCount})'
+        : hasMissedOnly
+            ? 'Alerts (${ctrl.missedCount} missed)'
+            : 'Alerts';
+
+    return Padding(
+      key: const Key('shell_top_utility_strip'),
+      padding: const EdgeInsets.fromLTRB(
+        CompanionSpacing.xl,
+        CompanionSpacing.sm,
+        CompanionSpacing.xl,
+        0,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Wrap(
+              spacing: CompanionSpacing.sm,
+              runSpacing: CompanionSpacing.xs,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (profileLabel != null && profileLabel.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: (ext?.accent ?? CompanionColors.lightAccent)
+                          .withValues(alpha: 0.12),
+                      borderRadius: CompanionRadius.borderFull,
+                    ),
+                    child: Text(
+                      'Profile Scope: $profileLabel',
+                      style: CompanionTypography.caption.copyWith(
+                        color: ext?.accent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                if (ctrl.quietHours.quietHoursEnabled)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: (ext?.textMuted ?? CompanionColors.lightTextMuted)
+                          .withValues(alpha: 0.12),
+                      borderRadius: CompanionRadius.borderFull,
+                    ),
+                    child: Text(
+                      'Quiet ${ctrl.quietHours.quietHoursStart}-${ctrl.quietHours.quietHoursEnd}',
+                      style: CompanionTypography.caption.copyWith(
+                        color: ext?.textSecondary,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: CompanionSpacing.sm),
+          OutlinedButton.icon(
+            key: const Key('shell_notification_bell_button'),
+            onPressed: () =>
+                setState(() => _isBacklogDrawerOpen = !_isBacklogDrawerOpen),
+            icon: Icon(
+              totalAttention > 0
+                  ? Icons.notifications_active_rounded
+                  : Icons.notifications_none_rounded,
+              size: 16,
+              color: bellColor,
+            ),
+            label: Text(
+              badgeText,
+              style: CompanionTypography.caption.copyWith(
+                color: hasUnread ? ext?.accent : ext?.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActiveAlertBanner(
+    BuildContext context,
+    DesktopScheduleController ctrl,
+    CompanionThemeExtension? ext,
+  ) {
+    final alerts = ctrl.activeAlerts;
+    if (alerts.isEmpty) return const SizedBox.shrink();
+
+    final topAlert = alerts.first;
+    final isUrgent =
+        topAlert.urgency == 'high' || topAlert.sourceType == 'alarm';
+    final isTaskReminder = topAlert.sourceType == 'task_reminder';
+    final isRoutine = topAlert.sourceType == 'routine';
+    final accentColor = isUrgent
+        ? (ext?.danger ?? CompanionColors.danger)
+        : (ext?.accent ?? CompanionColors.lightAccent);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        CompanionSpacing.xl,
+        CompanionSpacing.sm,
+        CompanionSpacing.xl,
+        0,
+      ),
+      child: SoftGlassPanel(
+        key: const Key('shell_active_alert_banner'),
+        padding: const EdgeInsets.symmetric(
+          horizontal: CompanionSpacing.md,
+          vertical: CompanionSpacing.sm,
+        ),
+        child: Wrap(
+          spacing: CompanionSpacing.md,
+          runSpacing: CompanionSpacing.xs,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isUrgent
+                        ? Icons.alarm_on_rounded
+                        : Icons.notifications_active_rounded,
+                    size: 20,
+                    color: accentColor,
+                  ),
+                  const SizedBox(width: CompanionSpacing.sm),
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Wrap(
+                          spacing: CompanionSpacing.xs,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              topAlert.title,
+                              style: CompanionTypography.bodyMedium.copyWith(
+                                color: ext?.textPrimary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            if (alerts.length > 1)
+                              Text(
+                                '(+${alerts.length - 1} more)',
+                                style: CompanionTypography.caption.copyWith(
+                                  color: accentColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                          ],
+                        ),
+                        if (topAlert.body != null &&
+                            topAlert.body!.trim().isNotEmpty)
+                          Text(
+                            topAlert.body!,
+                            style: CompanionTypography.caption.copyWith(
+                              color: ext?.textSecondary,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Wrap(
+              spacing: CompanionSpacing.xs,
+              runSpacing: CompanionSpacing.xs,
+              children: [
+                FilledButton.tonal(
+                  key: const Key('banner_acknowledge_button'),
+                  onPressed: ctrl.isMutating
+                      ? null
+                      : () => ctrl.acknowledgeNotification(
+                            topAlert.id,
+                            completeTask: isTaskReminder,
+                          ),
+                  child: Text(isTaskReminder ? 'Mark Done' : 'Acknowledge'),
+                ),
+                if (!isRoutine)
+                  OutlinedButton(
+                    key: const Key('banner_snooze_button'),
+                    onPressed: ctrl.isMutating
+                        ? null
+                        : () => ctrl.snoozeNotification(topAlert.id),
+                    child: const Text('Snooze 10m'),
+                  ),
+                if (isRoutine)
+                  OutlinedButton(
+                    key: const Key('banner_open_chat_button'),
+                    onPressed: ctrl.isMutating
+                        ? null
+                        : () async {
+                            await ctrl.markNotificationRead(topAlert.id);
+                            widget.controller.requestDestination(
+                              DesktopNavDestination.chat,
+                            );
+                          },
+                    child: const Text('Open Chat'),
+                  ),
+                TextButton(
+                  key: const Key('banner_dismiss_button'),
+                  onPressed: ctrl.isMutating
+                      ? null
+                      : () => ctrl.dismissNotification(topAlert.id),
+                  child: const Text('Dismiss'),
+                ),
+                TextButton(
+                  key: const Key('banner_view_all_button'),
+                  onPressed: () =>
+                      setState(() => _isBacklogDrawerOpen = true),
+                  child: const Text('View All'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

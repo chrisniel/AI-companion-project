@@ -12,6 +12,8 @@ import '../dialogs/desktop_shutdown_dialogs.dart';
 import '../features/chat/desktop_chat_controller.dart';
 import '../features/profiles/desktop_profile_controller.dart';
 import '../features/profiles/profile_access_card.dart';
+import '../features/schedule/desktop_schedule_controller.dart';
+import '../features/schedule/quiet_hours_card.dart';
 import '../lifecycle/desktop_lifecycle_coordinator.dart';
 import '../platform/desktop_client_settings.dart';
 import '../platform/windows_dpapi_credential_store.dart';
@@ -27,6 +29,7 @@ class SettingsScreen extends StatefulWidget {
     this.clientSettings,
     this.credentialStore,
     this.client,
+    this.scheduleController,
   });
 
   final DesktopSettingsController controller;
@@ -37,6 +40,7 @@ class SettingsScreen extends StatefulWidget {
   final DesktopClientSettings? clientSettings;
   final CredentialStore? credentialStore;
   final CompanionClient? client;
+  final DesktopScheduleController? scheduleController;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -157,6 +161,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           if (widget.profileController != null) ...[
             ProfileAccessCard(controller:widget.profileController!),
             const SizedBox(height:CompanionSpacing.lg),
+          ],
+
+          // 2A. Notifications & Quiet Hours Section
+          if (widget.scheduleController != null) ...[
+            _buildQuietHoursCard(context, ext, isDark),
+            const SizedBox(height: CompanionSpacing.lg),
           ],
 
           // 2B. Runtime Process Supervision Section
@@ -1380,6 +1390,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _modelActionMessage = 'Failed to unload model: $e';
       });
     }
+  }
+
+  Widget _buildQuietHoursCard(
+    BuildContext context,
+    CompanionThemeExtension? ext,
+    bool isDark,
+  ) {
+    final ctrl = widget.scheduleController;
+    if (ctrl == null) return const SizedBox.shrink();
+    return QuietHoursSettingsCard(controller: ctrl);
   }
 
   Widget _buildModelSelectionCard(

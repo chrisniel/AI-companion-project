@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:ai_companion_desktop/controllers/desktop_settings_controller.dart';
 import 'package:ai_companion_desktop/features/chat/desktop_chat_controller.dart';
+import 'package:ai_companion_desktop/features/schedule/desktop_schedule_controller.dart';
 import 'package:ai_companion_desktop/features/studio/desktop_studio_controller.dart';
+import 'package:ai_companion_desktop/platform/windows_toast_adapter.dart';
 import 'package:ai_companion_desktop/shell/desktop_shell.dart';
 import 'package:companion_api/companion_api.dart';
 import 'package:companion_design/companion_design.dart';
@@ -48,7 +50,7 @@ void main() {
 
       // Verify planned milestone badges
       expect(find.text('M4'), findsOneWidget);
-      expect(find.text('M3'), findsNWidgets(2)); // Schedule and Studio (Memory is active in M3)
+      expect(find.text('M3'), findsOneWidget); // Studio only (Memory & Schedule active in M3)
     });
 
     testWidgets('navigates between destinations when clicking rail items', (tester) async {
@@ -73,7 +75,7 @@ void main() {
       await tester.tap(find.text('Schedule'));
       await tester.pumpAndSettle();
       expect(find.text('Schedule & Routines'), findsOneWidget);
-      expect(find.text('PLANNED MILESTONE M3'), findsOneWidget);
+      expect(find.text('Schedule workspace unavailable'), findsOneWidget);
 
       // Navigate to Settings
       await tester.tap(find.text('Settings'));
@@ -216,5 +218,147 @@ void main() {
       studio.dispose();
       chat.dispose();
     });
+
+    testWidgets(
+      'surfaces unread Active Alert Banner (excluding suppressed events) and opens NotificationBacklogDrawer from bell button',
+      (tester) async {
+        setupDesktopViewport(tester);
+
+        var acknowledged = false;
+        final mockClient = MockClient((req) async {
+          if (req.url.path == '/api/v1/notifications') {
+            final items = <Map<String, dynamic>>[
+              if (!acknowledged)
+                {
+                  'id': 'evt-alarm',
+                  'profile_id': 'prof-1',
+                  'source_type': 'alarm',
+                  'source_id': 'a1',
+                  'urgency': 'high',
+                  'title': 'Wake Up Now',
+                  'body': 'Morning alarm firing',
+                  'status': 'unread',
+                  'delivery_policy': 'immediate',
+                  'is_missed_catchup': false,
+                  'triggered_at': '2026-11-15T07:00:00Z',
+                  'read_at': null,
+                  'resolved_at': null,
+                  'created_at': '2026-11-15T07:00:00Z',
+                  'updated_at': '2026-11-15T07:00:00Z',
+                },
+              {
+                'id': 'evt-suppressed',
+                'profile_id': 'prof-1',
+                'source_type': 'routine',
+                'source_id': 'r1',
+                'urgency': 'informational',
+                'title': 'Suppressed Check-in',
+                'body': 'Suppressed during quiet hours',
+                'status': 'suppressed_quiet_hours',
+                'delivery_policy': 'quiet_hours_suppressed',
+                'is_missed_catchup': false,
+                'triggered_at': '2026-11-15T01:00:00Z',
+                'read_at': null,
+                'resolved_at': null,
+                'created_at': '2026-11-15T01:00:00Z',
+                'updated_at': '2026-11-15T01:00:00Z',
+              },
+            ];
+            return http.Response(
+              jsonEncode({
+                'items': items,
+                'total': items.length,
+                'unread_count': acknowledged ? 0 : 1,
+                'missed_count': 0,
+              }),
+              200,
+            );
+          }
+          if (req.url.path == '/api/v1/notifications/evt-alarm/acknowledge') {
+            acknowledged = true;
+            return http.Response(
+              jsonEncode({
+                'id': 'evt-alarm',
+                'profile_id': 'prof-1',
+                'source_type': 'alarm',
+                'source_id': 'a1',
+                'urgency': 'high',
+                'title': 'Wake Up Now',
+                'body': 'Morning alarm firing',
+                'status': 'acknowledged',
+                'delivery_policy': 'immediate',
+                'is_missed_catchup': false,
+                'triggered_at': '2026-11-15T07:00:00Z',
+                'read_at': '2026-11-15T07:01:00Z',
+                'resolved_at': '2026-11-15T07:01:00Z',
+                'created_at': '2026-11-15T07:00:00Z',
+                'updated_at': '2026-11-15T07:01:00Z',
+              }),
+              200,
+            );
+          }
+          if (req.url.path == '/api/v1/profiles/me/quiet-hours') {
+            return http.Response(
+              jsonEncode({
+                'quiet_hours_enabled': true,
+                'quiet_hours_start': '22:00',
+                'quiet_hours_end': '07:00',
+                'quiet_hours_timezone': 'UTC',
+              }),
+              200,
+            );
+          }
+          return http.Response(
+            jsonEncode({'items': <dynamic>[], 'total': 0}),
+            200,
+          );
+        });
+
+        final client = CompanionClient(
+          baseUrl: 'http://127.0.0.1:8000',
+          httpClient: mockClient,
+        );
+        final schedCtrl = DesktopScheduleController(
+          client: client,
+          toastAdapter: NoOpDesktopToastAdapter(),
+          profileId: 'prof-1',
+        );
+        addTearDown(schedCtrl.dispose);
+        addTearDown(client.close);
+        await schedCtrl.refreshAll();
+
+        final settingsController = DesktopSettingsController();
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: CompanionTheme.dark(),
+            home: DesktopShell(
+              controller: settingsController,
+              scheduleController: schedCtrl,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Active Alert Banner surfaces unread alarm, excludes suppressed_quiet_hours
+        expect(find.byKey(const Key('shell_active_alert_banner')), findsOneWidget);
+        expect(find.text('Wake Up Now'), findsOneWidget);
+        expect(find.text('Suppressed Check-in'), findsNothing);
+
+        // Acknowledge dismisses banner cleanly
+        await tester.tap(find.byKey(const Key('banner_acknowledge_button')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('shell_active_alert_banner')), findsNothing);
+
+        // Bell button toggles NotificationBacklogDrawer showing history including suppressed event
+        await tester.tap(find.byKey(const Key('shell_notification_bell_button')));
+        await tester.pumpAndSettle();
+        expect(find.text('Notification Center'), findsOneWidget);
+        expect(find.text('Suppressed Check-in'), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('backlog_drawer_close_button')));
+        await tester.pumpAndSettle();
+        expect(find.text('Notification Center'), findsNothing);
+      },
+    );
   });
 }

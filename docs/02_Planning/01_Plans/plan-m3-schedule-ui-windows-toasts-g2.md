@@ -2,7 +2,7 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- **Status:** Phase 1 Plan Revised (Option B Native C++/WinRT MethodChannel — Awaiting Human Owner Approval)
+- **Status:** Implemented & Verified — Ready for Review (Draft PR on `feature/m3-schedule-ui-windows-toasts-g2`; Manual Windows GUI & Action Center Checks Pending)
 - **Delivery Level:** Level B — Planned Autonomous
 - **Scope Mode:** New Feature — Flutter Desktop Schedule & Routines Workspace (`PC-CLIENT-008`), Native In-Process C++/WinRT Windows Toast Notifications & Interactive Action Center Callbacks (`PC-CLIENT-012` / `PC-HOST-003` client half / `DEBT-V1-02`), Quiet Hours Settings UI, and Batch G1 Review Fold-Ins (`NIT-01`, `NIT-02`)
 - **Target Files:**

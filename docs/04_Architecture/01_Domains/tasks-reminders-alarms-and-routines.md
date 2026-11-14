@@ -205,10 +205,17 @@ Delivered on branch `feature/m3-scheduler-notifications-g1` (Alembic Migration `
   - Updating a `Task` to `completed`/`cancelled` or soft-deleting it cancels open linked `Reminder` rows and resolves active task/reminder `NotificationEvent` backlog entries.
 - **OpenAPI & `companion_api` Dart SDK Parity:** All 38 Task, Quiet Hours, Reminder, Alarm, Routine, and Notification Backlog routes plus 25 Dart DTO schemas (`task_dto.dart`, `scheduling_dto.dart`) are verified against `contracts/openapi/openapi.json` via `scripts/check_dart_openapi_parity.py`.
 
-### 3.3 Explicitly Unimplemented Capabilities (Remaining Batch G2 / M4+)
+- **Batch G1 Review Follow-Up Folded Into M3 Batch G2:** `update_alarm` in `backend/app/api/v1/endpoints/scheduling.py` recomputes `scheduled_at` on `time_of_day`, `recurrence_days`, `timezone`, or re-arm `enabled` updates for armed recurring alarms and enforces `422 Unprocessable Content` when `recurrence_days` is non-empty without `time_of_day` (`NIT-01`).
 
-The following capabilities remain outside Batch G1 runtime implementation:
-- **Flutter Desktop Schedule View (`PC-CLIENT-008`) & Native Windows WinRT Toast Adapter (`PC-CLIENT-012` / `DEBT-V1-02`):** **NOT IMPLEMENTED** (Batch G2 target).
+### 3.4 Implemented Desktop Schedule Workspace & Native Windows Toasts (M3 Batch G2)
+
+Implemented and verified on branch `feature/m3-schedule-ui-windows-toasts-g2`:
+- **Flutter Desktop Schedule & Routines Workspace (`PC-CLIENT-008`):** Replaced the `ScheduleScreen` placeholder and removed the `'M3'` planned badge on `DesktopNavDestination.schedule`. Implemented the responsive Option 2A 5-section workspace (`Tasks` + `Trash` 30-day restore/permanent delete view, `Reminders`, `Alarms`, `Routines` with deterministic `[ Run Now ]`, and `Notifications` backlog history) backed by `DesktopScheduleController`, `ScheduleSidebar`, `ScheduleEditDialogs`, and `QuietHoursSettingsCard` inside `SettingsScreen`.
+- **Native In-Process C++/WRL WinRT Toast Channel & Two-Way Interactive Sync (`PC-CLIENT-012` / `DEBT-V1-02`):** Implemented `WindowsToastChannel` (`frontend/flutter/apps/desktop/windows/runner/windows_toast_channel.h/.cpp`, explicit AUMID `AICompanion.Desktop`) wired into `FlutterWindow` (`MethodChannel('ai_companion/windows_notifications')`) and `WindowsWinRtToastAdapter` (`windows_toast_adapter.dart`). Dispatches interactive Windows Action Center toasts (`Mark Done`, `Acknowledge`, `Snooze 10m`, `Dismiss`, `Open Chat`, `Review Backlog`) with UI-thread `Activated` message handling, window foreground restore, `suppressPopup` Quiet Hours compliance, consolidated Sleep Catch-up summary toast, and bidirectional Action Center toast removal (`removeToast`/`clearToasts`) synchronized with Profile switching/disconnects, in-app `DesktopShell` top utility strip & urgent `unread` alert banner, and slide-out `NotificationBacklogDrawer`.
+
+### 3.5 Explicitly Unimplemented Capabilities (Remaining M4+)
+
+The following capabilities remain outside Batch G1/G2 runtime and desktop implementation:
 - **Alarm Acoustic Playback Ramping & Windows Waitable Wake Timers (`CreateWaitableTimerExW`):** **NOT IMPLEMENTED** (best-effort timer wake remains future host enhancement).
 - **LLM Conversational Scheduling Tool-Calling (Decision D9 Pipeline):** **NOT IMPLEMENTED** (Milestone M4).
 - **Mobile Offline Outbox & Cross-Device Alert Arbitration (`D-SHARED-SCHED-02`):** **NOT IMPLEMENTED** (Mobile V1 follow-on track).
@@ -249,9 +256,9 @@ The following target capabilities are approved across PC V1 and Mobile Companion
 The normative architecture for D10 is frozen. The following implementation-level details are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
 
 - **Scheduler Engine Selection (`DEBT-V1-009`):** Batch G1 implemented the lightweight in-process `asyncio` `SchedulerService` in `backend/app/services/scheduler/service.py` wired into FastAPI `lifespan` (OS wake waitable timers remain unimplemented).
-- **Catch-Up & Stale Event Mechanics (`DEBT-V1-010`):** Batch G1 implemented configurable startup missed-event reconciliation (`SCHEDULER_MISSED_GRACE_SECONDS`), `[start, end)` Quiet Hours suppression tracking, and dedup-indexed `notification_events` persistence; multi-day summary batching UI remains open for Batch G2.
+- **Catch-Up & Stale Event Mechanics (`DEBT-V1-010`):** Batch G1 implemented configurable startup missed-event reconciliation (`SCHEDULER_MISSED_GRACE_SECONDS`), `[start, end)` Quiet Hours suppression tracking, and dedup-indexed `notification_events` persistence; Batch G2 added consolidated Sleep Catch-up summary toast grouping (`WindowsToastAdapter`) and the slide-out `NotificationBacklogDrawer`.
 - **Entity Persistence Schemas & Lifecycle State Machines:** Batch G1 delivered Alembic Migration `015_scheduler_notifications_and_routines` (`reminders`, `alarms`, `routines`, `notification_events`, and `profiles.quiet_hours_*`) plus snooze/acknowledge/dismiss/re-arm REST state transitions.
-- **Audio & Escalation Patterns:** Alarm ringtone selection, acoustic playback mechanisms, volume ramping, and visual alert overlays remain open for Batch G2.
+- **Audio & Escalation Patterns:** Batch G2 delivered urgent `unread` in-app alert banners (`DesktopShell`) and interactive Action Center toast cards (`WindowsToastChannel`), while custom alarm ringtone selection, acoustic playback mechanisms, and volume ramping remain open.
 - **Host Sleep & Wake Primitives:** Feasibility and mechanism of Windows waitable timers (`CreateWaitableTimerEx`) for best-effort wake remain open.
 
 ---

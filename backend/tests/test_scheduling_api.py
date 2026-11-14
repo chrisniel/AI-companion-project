@@ -280,3 +280,64 @@ async def test_routines_and_notification_backlog_lifecycle(
     assert cleared.status_code == 200
     assert cleared.json()["cleared_count"] == 1
     assert (await client.get("/api/v1/notifications?unread_only=true", headers=auth_headers)).json()["total"] == 0
+
+
+async def test_alarm_update_recomputes_schedule_and_guards_recurrence(
+    client: AsyncClient,
+    auth_headers: dict,
+):
+    # 1. Create an enabled recurring alarm -> PATCH time_of_day without scheduled_at recomputes scheduled_at
+    rec_resp = await client.post(
+        "/api/v1/alarms",
+        headers=auth_headers,
+        json={
+            "label": "Morning Workout",
+            "time_of_day": "09:30",
+            "recurrence_days": [0, 1, 2, 3, 4, 5, 6],
+            "timezone": "UTC",
+        },
+    )
+    assert rec_resp.status_code == 201
+    rec = rec_resp.json()
+    orig_dt = datetime.fromisoformat(rec["scheduled_at"].replace("Z", "+00:00"))
+    assert orig_dt.hour == 9 and orig_dt.minute == 30
+
+    patch_resp = await client.patch(
+        f"/api/v1/alarms/{rec['id']}",
+        headers=auth_headers,
+        json={"time_of_day": "11:45"},
+    )
+    assert patch_resp.status_code == 200
+    patched = patch_resp.json()
+    patched_dt = datetime.fromisoformat(patched["scheduled_at"].replace("Z", "+00:00"))
+    assert patched["time_of_day"] == "11:45"
+    assert patched_dt.hour == 11 and patched_dt.minute == 45
+
+    # 2. Disabling -> re-enabling a future non-recurring alarm preserves its future scheduled_at
+    future_at = (datetime.now(timezone.utc) + timedelta(hours=6)).replace(microsecond=0)
+    one_resp = await client.post(
+        "/api/v1/alarms",
+        headers=auth_headers,
+        json={
+            "label": "Airport Pickup",
+            "scheduled_at": future_at.isoformat(),
+            "time_of_day": "10:00",
+            "timezone": "UTC",
+        },
+    )
+    assert one_resp.status_code == 201
+    one_id = one_resp.json()["id"]
+    orig_one_at = one_resp.json()["scheduled_at"]
+
+    assert (await client.patch(f"/api/v1/alarms/{one_id}", headers=auth_headers, json={"enabled": False})).status_code == 200
+    re_enabled = await client.patch(f"/api/v1/alarms/{one_id}", headers=auth_headers, json={"enabled": True})
+    assert re_enabled.status_code == 200
+    assert re_enabled.json()["scheduled_at"] == orig_one_at
+
+    # 3. Clearing time_of_day while recurrence_days remains non-empty must fail with 422
+    invalid_clear = await client.patch(
+        f"/api/v1/alarms/{rec['id']}",
+        headers=auth_headers,
+        json={"clear_time_of_day": True},
+    )
+    assert invalid_clear.status_code == 422

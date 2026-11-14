@@ -516,19 +516,30 @@ async def update_alarm(
 ) -> AlarmOut:
     alarm = await _get_owned_entity(db, Alarm, alarm_id, session.profile_id, "Alarm")
     now = datetime.now(timezone.utc)
+    was_enabled = bool(alarm.enabled)
+    recompute_scheduled = False
 
     if payload.label is not None:
         alarm.label = payload.label
-    if payload.timezone is not None:
+    if payload.timezone is not None and payload.timezone != alarm.timezone:
         alarm.timezone = payload.timezone
+        recompute_scheduled = True
     if payload.clear_time_of_day:
+        if alarm.time_of_day is not None:
+            recompute_scheduled = True
         alarm.time_of_day = None
-    elif payload.time_of_day is not None:
+    elif payload.time_of_day is not None and payload.time_of_day != alarm.time_of_day:
         alarm.time_of_day = payload.time_of_day
+        recompute_scheduled = True
     if payload.clear_recurrence_days:
+        if alarm.recurrence_days is not None:
+            recompute_scheduled = True
         alarm.recurrence_days = None
     elif payload.recurrence_days is not None:
-        alarm.recurrence_days = format_recurrence_days(payload.recurrence_days)
+        formatted_days = format_recurrence_days(payload.recurrence_days)
+        if formatted_days != alarm.recurrence_days:
+            alarm.recurrence_days = formatted_days
+            recompute_scheduled = True
     if payload.scheduled_at is not None:
         alarm.scheduled_at = as_utc(payload.scheduled_at) or payload.scheduled_at
     if payload.enabled is not None:
@@ -545,13 +556,25 @@ async def update_alarm(
         alarm.bypass_quiet_hours = payload.bypass_quiet_hours
 
     days = alarm.recurrence_days_list
+    if days and not alarm.time_of_day:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Recurring alarms require time_of_day (cannot clear time_of_day while recurrence_days is set).",
+        )
+
+    enabled_transitioned_to_true = (not was_enabled) and bool(alarm.enabled)
+    is_past_or_due = (as_utc(alarm.scheduled_at) or now) <= now
+    should_recompute = (
+        recompute_scheduled
+        or (bool(days) and is_past_or_due)
+        or (enabled_transitioned_to_true and bool(days))
+    )
     if (
         alarm.enabled
-        and days
         and alarm.time_of_day
         and payload.scheduled_at is None
-        and (as_utc(alarm.scheduled_at) or now) <= now
         and alarm.status == AlarmStatus.armed.value
+        and should_recompute
     ):
         alarm.scheduled_at = compute_next_occurrence(alarm.time_of_day, days, alarm.timezone, now)
 

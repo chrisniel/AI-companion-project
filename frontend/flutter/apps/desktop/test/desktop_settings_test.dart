@@ -1,20 +1,25 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:ai_companion_desktop/controllers/desktop_settings_controller.dart';
 import 'package:ai_companion_desktop/coordinator/desktop_runtime_coordinator.dart';
 import 'package:ai_companion_desktop/diagnostics/windows_storage_diagnostic_reader.dart';
 import 'package:ai_companion_desktop/features/chat/desktop_chat_controller.dart';
+import 'package:ai_companion_desktop/features/schedule/desktop_schedule_controller.dart';
 import 'package:ai_companion_desktop/lifecycle/desktop_lifecycle_coordinator.dart';
 import 'package:ai_companion_desktop/lifecycle/desktop_tray_adapter.dart';
 import 'package:ai_companion_desktop/lifecycle/desktop_window_adapter.dart';
 import 'package:ai_companion_desktop/platform/desktop_client_settings.dart';
 import 'package:ai_companion_desktop/platform/windows_runtime_process_supervisor.dart';
+import 'package:ai_companion_desktop/platform/windows_toast_adapter.dart';
 import 'package:ai_companion_desktop/screens/settings_screen.dart';
 import 'package:companion_api/companion_api.dart';
 import 'package:companion_core/companion_core.dart';
 import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -523,6 +528,122 @@ void main() {
       // 3. Settings UI remains rendered
       expect(find.text('Settings'), findsWidgets);
     });
+
+    testWidgets(
+      'Notifications & Quiet Hours card populates reactively, saves updates, and surfaces 422 validation errors',
+      (tester) async {
+        setupDesktopViewport(tester);
+        var patchCount = 0;
+        Map<String, dynamic>? lastPatchBody;
+
+        final mockClient = MockClient((req) async {
+          if (req.url.path == '/api/v1/profiles/me/quiet-hours' &&
+              req.method == 'GET') {
+            return http.Response(
+              jsonEncode({
+                'quiet_hours_enabled': true,
+                'quiet_hours_start': '22:30',
+                'quiet_hours_end': '06:30',
+                'quiet_hours_timezone': 'Asia/Manila',
+              }),
+              200,
+            );
+          }
+          if (req.url.path == '/api/v1/profiles/me/quiet-hours' &&
+              req.method == 'PATCH') {
+            patchCount++;
+            lastPatchBody =
+                Map<String, dynamic>.from(jsonDecode(req.body) as Map);
+            if (patchCount == 1) {
+              return http.Response(
+                jsonEncode(lastPatchBody),
+                200,
+              );
+            }
+            return http.Response(
+              jsonEncode({'detail': 'Unsupported timezone override'}),
+              422,
+            );
+          }
+          return http.Response(
+            jsonEncode({'items': <dynamic>[], 'total': 0}),
+            200,
+          );
+        });
+
+        final client = CompanionClient(
+          baseUrl: 'http://127.0.0.1:8000',
+          httpClient: mockClient,
+        );
+        final schedCtrl = DesktopScheduleController(
+          client: client,
+          toastAdapter: NoOpDesktopToastAdapter(),
+          profileId: 'prof-1',
+        );
+        addTearDown(schedCtrl.dispose);
+        addTearDown(client.close);
+
+        final settingsCtrl = DesktopSettingsController();
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: CompanionTheme.dark(),
+            home: Scaffold(
+              body: SettingsScreen(
+                controller: settingsCtrl,
+                scheduleController: schedCtrl,
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Populate reactively after initial mount
+        await schedCtrl.refreshAll();
+        await tester.pumpAndSettle();
+
+        await tester.scrollUntilVisible(
+          find.byKey(const Key('save_quiet_hours_button')),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Notifications & Quiet Hours'), findsOneWidget);
+        expect(
+          find.text('Alarms bypass quiet hours by default to ensure wakefulness.'),
+          findsOneWidget,
+        );
+        expect(find.text('22:30'), findsOneWidget);
+        expect(find.text('06:30'), findsOneWidget);
+        expect(find.text('Asia/Manila'), findsOneWidget);
+
+        // Toggle switch off and save (200)
+        final switchFinder = find.byKey(const Key('quiet_hours_enabled_switch'));
+        await tester.ensureVisible(switchFinder);
+        await tester.pumpAndSettle();
+        await tester.tap(switchFinder);
+        await tester.pump();
+        final saveBtnFinder = find.byKey(const Key('save_quiet_hours_button'));
+        await tester.ensureVisible(saveBtnFinder);
+        await tester.pumpAndSettle();
+        await tester.tap(saveBtnFinder);
+        await tester.pumpAndSettle();
+
+        expect(lastPatchBody?['quiet_hours_enabled'], isFalse);
+        expect(find.text('Quiet hours saved.'), findsOneWidget);
+
+        // Trigger second save returning 422 -> surfaces validation error
+        await tester.ensureVisible(saveBtnFinder);
+        await tester.pumpAndSettle();
+        await tester.tap(saveBtnFinder);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('quiet_hours_feedback_text')), findsOneWidget);
+        expect(
+          find.textContaining('Unsupported timezone override'),
+          findsOneWidget,
+        );
+      },
+    );
   });
 }
 
