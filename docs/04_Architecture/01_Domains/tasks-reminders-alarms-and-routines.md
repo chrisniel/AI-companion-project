@@ -175,26 +175,43 @@ Tasks are persisted in SQLite via SQLAlchemy ORM (`app.models.task.Task`) and ex
 - **Current Priority Ratings:** `low`, `medium`, `high`, `urgent`.
 - **Current Categories:** `general`, `work`, `personal`, `dev`, `shopping`, `health`.
 
-### 3.2 Implemented Endpoints & Operations
+### 3.2 Implemented Task Endpoints & Operations
 
 Verified in `backend/app/api/v1/endpoints/tasks.py`:
-- `GET /api/v1/tasks`: Lists active (non-deleted) tasks for the authenticated owner with optional status, priority, and category filters.
+- `GET /api/v1/tasks`: Lists active (non-deleted) tasks for the authenticated profile with optional status, priority, and category filters.
 - `POST /api/v1/tasks`: Creates a new task.
 - `GET /api/v1/tasks/trash`: Lists soft-deleted tasks residing in the Recycle Bin with dynamic `expires_in_days` calculation based on `DATA_RETENTION_DAYS = 30`.
 - `GET /api/v1/tasks/{task_id}`: Retrieves a single active task by ID.
-- `PATCH /api/v1/tasks/{task_id}`: Partially updates an active task.
-- `DELETE /api/v1/tasks/{task_id}`: Soft-deletes a task (`is_deleted = True`, `deleted_at = now()`).
+- `PATCH /api/v1/tasks/{task_id}`: Partially updates an active task (cancels open linked Reminders and active task/reminder notifications when transitioned to `completed` or `cancelled`).
+- `DELETE /api/v1/tasks/{task_id}`: Soft-deletes a task (`is_deleted = True`, `deleted_at = now()`) and cancels open linked Reminders and active task/reminder notifications.
 - `POST /api/v1/tasks/{task_id}/restore`: Restores a soft-deleted task back to active status.
 - `DELETE /api/v1/tasks/{task_id}/permanent`: Permanently deletes a single soft-deleted task from the database.
-- **Retention Purge Runner:** A standalone purge runner exists in `backend/app/services/retention.py` (`run_retention_purge_job` / `purge_expired_trash` callable via script or CLI); it is not automatically periodically scheduled by the application runtime.
+- **Retention & Memory Expiration Sweeps:** `backend/app/services/retention.py` (`run_retention_purge_job` / `purge_expired_trash`) provides standalone retention purging, while `SchedulerService.sweep_expired_memories()` periodically soft-deletes expired temporary memories (`DEBT-V1-08`).
 
-### 3.3 Explicitly Unimplemented Capabilities
+### 3.3 Implemented Reminders, Alarms, Routines, Quiet Hours & `SchedulerService` (M3 Batch G1)
 
-The following features have zero codebase runtime implementation:
-- **Standalone Reminder Model & Runtime:** `NOT IMPLEMENTED` (reminders currently exist only as optional fields on `Task`).
-- **Alarm Runtime & Acoustic Alert Engine:** `NOT IMPLEMENTED`.
-- **Routine Scheduler & Bounded Proactive Triggers:** `NOT IMPLEMENTED`.
-- **Native Windows Notification Adapter:** `NOT IMPLEMENTED` (alerts do not yet dispatch to Windows OS notification infrastructure).
+Delivered on branch `feature/m3-scheduler-notifications-g1` (Alembic Migration `015_scheduler_notifications_and_routines`):
+- **ORM Persistence & Profile Purge:** `Reminder` (`app.models.reminder`), `Alarm` (`app.models.alarm`), `Routine` (`app.models.routine`), `NotificationEvent` (`app.models.notification_event`), and per-Profile Quiet Hours columns (`quiet_hours_enabled`, `quiet_hours_start`, `quiet_hours_end`, `quiet_hours_timezone`) on `Profile` (`app.models.profile`). `ProfilePurgeService` deletes all scheduling and notification entities in FK dependency order and applies `DATA_RETENTION_DAYS` retention cleanup.
+- **Deterministic Runtime Engine (`app.services.scheduler.service.SchedulerService`):**
+  - Zero-dependency `resolve_timezone()` / `_RuleBasedTzInfo` fallback supporting standard IANA timezones (e.g., `UTC`, `Asia/Manila`, `America/*`, `Europe/*`) on Windows Python builds lacking the optional `tzdata` package.
+  - Half-open `[start, end)` Quiet Hours evaluation (supporting both same-day and overnight spans): Reminders and Routines suppress delivery notifications (`suppressed_quiet_hours`) unless `bypass_quiet_hours=True`, while Alarms bypass quiet hours by default (`bypass_quiet_hours=True`).
+  - Startup missed-event catch-up reconciliation (`reconcile_missed_events`) distinguishing bounded grace windows from expired missed items (`missed` / `missed_catchup`), recurring Alarm next-occurrence auto-re-arming (`compute_next_occurrence`), Snooze re-triggering (`snoozed_until`), deterministic Routine `fallback_message` emission with zero LLM trigger delay, `Task.reminder_at` due-reminder notification bridging with deduplication (`ix_notification_events_dedup`), and `DEBT-V1-08` expired temporary memory soft-deletion sweeps wired into FastAPI `lifespan` (`app/main.py`).
+- **Profile-Scoped REST API & Task Synchronization (`app/api/v1/endpoints/scheduling.py`, `profiles.py`, `tasks.py`):**
+  - `GET`/`PATCH /api/v1/profiles/me/quiet-hours`
+  - Reminders CRUD + lifecycle (`/api/v1/reminders`, `/{id}`, `/{id}/snooze`, `/{id}/acknowledge`, `/{id}/dismiss`), supporting explicit client-generated UUIDv4 IDs (`409 Conflict` on duplicate ID) and `[ Mark Done ]` (`complete_task=True`) Task completion sync.
+  - Alarms CRUD + lifecycle (`/api/v1/alarms`, `/{id}`, `/{id}/snooze`, `/{id}/acknowledge`, `/{id}/dismiss`), re-arming enabled recurring weekday alarms after acknowledge/dismiss.
+  - Routines CRUD + immediate manual trigger (`/api/v1/routines`, `/{id}`, `/{id}/run`).
+  - Notification Backlog CRUD + lifecycle (`/api/v1/notifications`, `/clear-all`, `/{event_id}/read`, `/{event_id}/acknowledge`, `/{event_id}/dismiss`, `/{event_id}/snooze`) syncing action resolution back to source Reminders, Alarms, and Task reminders.
+  - Updating a `Task` to `completed`/`cancelled` or soft-deleting it cancels open linked `Reminder` rows and resolves active task/reminder `NotificationEvent` backlog entries.
+- **OpenAPI & `companion_api` Dart SDK Parity:** All 38 Task, Quiet Hours, Reminder, Alarm, Routine, and Notification Backlog routes plus 25 Dart DTO schemas (`task_dto.dart`, `scheduling_dto.dart`) are verified against `contracts/openapi/openapi.json` via `scripts/check_dart_openapi_parity.py`.
+
+### 3.3 Explicitly Unimplemented Capabilities (Remaining Batch G2 / M4+)
+
+The following capabilities remain outside Batch G1 runtime implementation:
+- **Flutter Desktop Schedule View (`PC-CLIENT-008`) & Native Windows WinRT Toast Adapter (`PC-CLIENT-012` / `DEBT-V1-02`):** **NOT IMPLEMENTED** (Batch G2 target).
+- **Alarm Acoustic Playback Ramping & Windows Waitable Wake Timers (`CreateWaitableTimerExW`):** **NOT IMPLEMENTED** (best-effort timer wake remains future host enhancement).
+- **LLM Conversational Scheduling Tool-Calling (Decision D9 Pipeline):** **NOT IMPLEMENTED** (Milestone M4).
+- **Mobile Offline Outbox & Cross-Device Alert Arbitration (`D-SHARED-SCHED-02`):** **NOT IMPLEMENTED** (Mobile V1 follow-on track).
 
 ---
 
@@ -231,12 +248,11 @@ The following target capabilities are approved across PC V1 and Mobile Companion
 
 The normative architecture for D10 is frozen. The following implementation-level details are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
 
-- **Scheduler Engine Selection:** Choice between lightweight in-process scheduler (`APScheduler`, asyncio task loop) versus OS-native timers (`DEBT-V1-009`).
-- **Catch-Up & Stale Event Mechanics:** Batching, deduplication, summary aggregation, suppression windows, and expiration thresholds for missed events (`DEBT-V1-010`).
-- **Entity Persistence Schemas:** Relational table structures, foreign keys, or unified scheduling models for independent Reminders, Alarms, and Routines.
-- **Lifecycle State Machines:** Exact transition graphs, event triggers, and states for acknowledgment, dismissal, snooze, and re-arm.
-- **Audio & Escalation Patterns:** Alarm ringtone selection, acoustic playback mechanisms, volume ramping, and visual alert overlays.
-- **Host Sleep & Wake Primitives:** Feasibility and mechanism of Windows waitable timers (`CreateWaitableTimerEx`) for best-effort wake.
+- **Scheduler Engine Selection (`DEBT-V1-009`):** Batch G1 implemented the lightweight in-process `asyncio` `SchedulerService` in `backend/app/services/scheduler/service.py` wired into FastAPI `lifespan` (OS wake waitable timers remain unimplemented).
+- **Catch-Up & Stale Event Mechanics (`DEBT-V1-010`):** Batch G1 implemented configurable startup missed-event reconciliation (`SCHEDULER_MISSED_GRACE_SECONDS`), `[start, end)` Quiet Hours suppression tracking, and dedup-indexed `notification_events` persistence; multi-day summary batching UI remains open for Batch G2.
+- **Entity Persistence Schemas & Lifecycle State Machines:** Batch G1 delivered Alembic Migration `015_scheduler_notifications_and_routines` (`reminders`, `alarms`, `routines`, `notification_events`, and `profiles.quiet_hours_*`) plus snooze/acknowledge/dismiss/re-arm REST state transitions.
+- **Audio & Escalation Patterns:** Alarm ringtone selection, acoustic playback mechanisms, volume ramping, and visual alert overlays remain open for Batch G2.
+- **Host Sleep & Wake Primitives:** Feasibility and mechanism of Windows waitable timers (`CreateWaitableTimerEx`) for best-effort wake remain open.
 
 ---
 

@@ -3,7 +3,7 @@
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - **Plan ID:** `PLAN-M3-SCHEDULER-NOTIFICATIONS-G1`
-- **Status:** Phase 1 Plan Revised (Independent Plan Review Findings Incorporated) — Awaiting Human Owner Approval
+- **Status:** Phase 2 Implemented & Verified; Phase 3 Closure Prepared (`feature/m3-scheduler-notifications-g1` — Ready for Phase 4 Review)
 - **Delivery Level:** Level B — Planned Autonomous (with Level C database schema migration `015_scheduler_notifications_and_routines`)
 - **Target Milestone:** M3 — Intelligence & Productivity & M2 — Native Host & Multi-Profile (`PC-SCHED-001`..`005`, `PC-HOST-003`, `PC-API-001`, `DEBT-V1-08`)
 - **Work Breakdown Structure IDs:** `PC-SCHED-001` (`SchedulerService` in-process asyncio tick & lifecycle), `PC-SCHED-002` (Reminders & Alarms distinct entities & CRUD), `PC-SCHED-003` (Quiet Hours Policy Engine), `PC-SCHED-004` (Missed-Event Reconciliation & Snooze/Acknowledge/Dismiss Semantics), `PC-SCHED-005` (Routines & Check-Ins with deterministic fallback & zero trigger delay), `PC-HOST-003` (Runtime-owned durable Notification Backlog & lifecycle APIs), `PC-API-001` (OpenAPI 3.1 + `companion_api` Dart SDK parity for Tasks, Reminders, Alarms, Routines, Notifications & Quiet Hours), `DEBT-V1-08` (Periodic sweep of expired short-term memories in `SchedulerService` / maintenance worker)
@@ -42,7 +42,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
   - `frontend/flutter/packages/companion_api/test/companion_client_test.dart`
   - Canonical docs & tracking synced in Phase 3 (`docs/04_Architecture/01_Domains/tasks-reminders-alarms-and-routines.md`, `docs/04_Architecture/04_Infrastructure/windows-host-and-notifications.md`, `docs/02_Planning/00_Master/`, `docs/01_Tracking/`, `CHANGELOG.md`, `docs/03_Walkthroughs/`)
 - **Branch:** `feature/m3-scheduler-notifications-g1`
-- **Active Branch Tracker:** `docs/01_Tracking/active/task-feature-m3-scheduler-notifications-g1.md`
+- **Archived Branch Tracker:** `docs/01_Tracking/archive/task-feature-m3-scheduler-notifications-g1.md`
 
 > Notice: Update this plan in place during planning. After Phase 1 approval, track execution in `docs/01_Tracking/active/task-feature-m3-scheduler-notifications-g1.md` and reopen this plan only when revising scope or architecture.
 

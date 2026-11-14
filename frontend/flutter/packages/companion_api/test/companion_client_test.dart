@@ -944,5 +944,287 @@ void main() {
         expect(CharacterInstanceOut.fromJson(inst.toJson()), equals(inst));
       });
     });
+
+    group('M3 Scheduling, Notifications, Quiet Hours & Tasks Contract', () {
+      test('TaskUpdate.toJson omits null non-nullable fields and clears only explicit clear flags', () {
+        const update = TaskUpdate(title: 'Updated title');
+        final patch = update.toJson(clearNotes: true);
+        expect(patch['title'], 'Updated title');
+        expect(patch.containsKey('notes'), isTrue);
+        expect(patch['notes'], isNull);
+        expect(patch.containsKey('category'), isFalse);
+        expect(patch.containsKey('status'), isFalse);
+        expect(patch.containsKey('priority'), isFalse);
+        expect(patch.containsKey('due_date'), isFalse);
+      });
+
+      test('createTask, listTasks, and restoreTask round-trip Task DTOs cleanly', () async {
+        var callCount = 0;
+        final mock = MockClient((request) async {
+          callCount += 1;
+          if (request.url.path == '/api/v1/tasks' && request.method == 'POST') {
+            return http.Response(
+              jsonEncode({
+                'id': 'task-1',
+                'owner_id': 'local_user',
+                'title': 'Pay rent',
+                'notes': null,
+                'category': 'personal',
+                'status': 'pending',
+                'priority': 'high',
+                'due_date': null,
+                'reminder_minutes_before': null,
+                'reminder_at': null,
+                'is_deleted': false,
+                'deleted_at': null,
+                'created_at': '2026-11-14T10:00:00Z',
+                'updated_at': '2026-11-14T10:00:00Z',
+              }),
+              201,
+            );
+          }
+          if (request.url.path == '/api/v1/tasks' && request.method == 'GET') {
+            expect(request.url.queryParameters['status'], 'pending');
+            return http.Response(
+              jsonEncode({
+                'items': [
+                  {
+                    'id': 'task-1',
+                    'owner_id': 'local_user',
+                    'title': 'Pay rent',
+                    'notes': null,
+                    'category': 'personal',
+                    'status': 'pending',
+                    'priority': 'high',
+                    'due_date': null,
+                    'reminder_minutes_before': null,
+                    'reminder_at': null,
+                    'is_deleted': false,
+                    'deleted_at': null,
+                    'created_at': '2026-11-14T10:00:00Z',
+                    'updated_at': '2026-11-14T10:00:00Z',
+                  },
+                ],
+                'total': 1,
+              }),
+              200,
+            );
+          }
+          if (request.url.path == '/api/v1/tasks/task-1/restore' && request.method == 'POST') {
+            return http.Response(
+              jsonEncode({
+                'id': 'task-1',
+                'owner_id': 'local_user',
+                'title': 'Pay rent',
+                'notes': null,
+                'category': 'personal',
+                'status': 'pending',
+                'priority': 'high',
+                'due_date': null,
+                'reminder_minutes_before': null,
+                'reminder_at': null,
+                'is_deleted': false,
+                'deleted_at': null,
+                'created_at': '2026-11-14T10:00:00Z',
+                'updated_at': '2026-11-14T10:05:00Z',
+              }),
+              200,
+            );
+          }
+          return http.Response('{}', 404);
+        });
+
+        final client = CompanionClient(
+          httpClient: mock,
+          sessionStore: InMemoryCredentialStore('test_session'),
+        );
+        final created = await client.createTask(const TaskCreate(title: 'Pay rent', category: 'personal', priority: 'high'));
+        expect(created.id, 'task-1');
+        final list = await client.listTasks(status: 'pending');
+        expect(list.total, 1);
+        final restored = await client.restoreTask('task-1');
+        expect(restored.isDeleted, isFalse);
+        expect(callCount, 3);
+      });
+
+      test('getQuietHours and updateQuietHours round-trip settings', () async {
+        final mock = MockClient((request) async {
+          expect(request.url.path, '/api/v1/profiles/me/quiet-hours');
+          if (request.method == 'PATCH') {
+            final body = jsonDecode(request.body) as Map<String, dynamic>;
+            expect(body['quiet_hours_enabled'], isTrue);
+            expect(body['quiet_hours_timezone'], 'Asia/Manila');
+            return http.Response(
+              jsonEncode({
+                'quiet_hours_enabled': true,
+                'quiet_hours_start': '22:00',
+                'quiet_hours_end': '07:00',
+                'quiet_hours_timezone': 'Asia/Manila',
+              }),
+              200,
+            );
+          }
+          return http.Response(
+            jsonEncode({
+              'quiet_hours_enabled': false,
+              'quiet_hours_start': '22:00',
+              'quiet_hours_end': '07:00',
+              'quiet_hours_timezone': 'UTC',
+            }),
+            200,
+          );
+        });
+
+        final client = CompanionClient(
+          httpClient: mock,
+          sessionStore: InMemoryCredentialStore('test_session'),
+        );
+        final current = await client.getQuietHours();
+        expect(current.quietHoursEnabled, isFalse);
+        final updated = await client.updateQuietHours(
+          const QuietHoursUpdate(quietHoursEnabled: true, quietHoursTimezone: 'Asia/Manila'),
+        );
+        expect(updated.quietHoursEnabled, isTrue);
+        expect(updated.quietHoursTimezone, 'Asia/Manila');
+      });
+
+      test('Reminders, Alarms, Routines, and Notifications endpoints encode payloads cleanly', () async {
+        final mock = MockClient((request) async {
+          if (request.url.path == '/api/v1/reminders' && request.method == 'POST') {
+            return http.Response(
+              jsonEncode({
+                'id': 'rem-1',
+                'profile_id': 'prof-1',
+                'task_id': null,
+                'title': 'Drink water',
+                'notes': null,
+                'scheduled_at': '2026-11-14T15:00:00Z',
+                'timezone': 'UTC',
+                'status': 'scheduled',
+                'snoozed_until': null,
+                'bypass_quiet_hours': false,
+                'origin': 'host',
+                'fired_at': null,
+                'acknowledged_at': null,
+                'created_at': '2026-11-14T14:00:00Z',
+                'updated_at': '2026-11-14T14:00:00Z',
+              }),
+              201,
+            );
+          }
+          if (request.url.path == '/api/v1/reminders/rem-1/snooze' && request.method == 'POST') {
+            final body = jsonDecode(request.body) as Map<String, dynamic>;
+            expect(body['minutes'], 15);
+            return http.Response(
+              jsonEncode({
+                'id': 'rem-1',
+                'profile_id': 'prof-1',
+                'task_id': null,
+                'title': 'Drink water',
+                'notes': null,
+                'scheduled_at': '2026-11-14T15:00:00Z',
+                'timezone': 'UTC',
+                'status': 'snoozed',
+                'snoozed_until': '2026-11-14T15:15:00Z',
+                'bypass_quiet_hours': false,
+                'origin': 'host',
+                'fired_at': null,
+                'acknowledged_at': null,
+                'created_at': '2026-11-14T14:00:00Z',
+                'updated_at': '2026-11-14T14:05:00Z',
+              }),
+              200,
+            );
+          }
+          if (request.url.path == '/api/v1/alarms' && request.method == 'POST') {
+            return http.Response(
+              jsonEncode({
+                'id': 'alm-1',
+                'profile_id': 'prof-1',
+                'label': 'Wake up',
+                'scheduled_at': '2026-11-15T07:00:00Z',
+                'time_of_day': '07:00',
+                'recurrence_days': [0, 1, 2, 3, 4],
+                'timezone': 'Asia/Manila',
+                'enabled': true,
+                'status': 'armed',
+                'snoozed_until': null,
+                'bypass_quiet_hours': true,
+                'origin': 'host',
+                'last_fired_at': null,
+                'acknowledged_at': null,
+                'created_at': '2026-11-14T14:00:00Z',
+                'updated_at': '2026-11-14T14:00:00Z',
+              }),
+              201,
+            );
+          }
+          if (request.url.path == '/api/v1/routines/rt-1/run' && request.method == 'POST') {
+            return http.Response(
+              jsonEncode({
+                'id': 'nev-1',
+                'profile_id': 'prof-1',
+                'source_type': 'routine',
+                'source_id': 'rt-1',
+                'urgency': 'informational',
+                'title': 'Evening Check-in',
+                'body': 'How did your day go?',
+                'status': 'unread',
+                'delivery_policy': 'immediate',
+                'is_missed_catchup': false,
+                'triggered_at': '2026-11-14T20:00:00Z',
+                'read_at': null,
+                'resolved_at': null,
+                'created_at': '2026-11-14T20:00:00Z',
+                'updated_at': '2026-11-14T20:00:00Z',
+              }),
+              200,
+            );
+          }
+          if (request.url.path == '/api/v1/notifications' && request.method == 'GET') {
+            return http.Response(
+              jsonEncode({
+                'items': <dynamic>[],
+                'total': 0,
+                'unread_count': 2,
+                'missed_count': 1,
+              }),
+              200,
+            );
+          }
+          if (request.url.path == '/api/v1/notifications/clear-all' && request.method == 'POST') {
+            return http.Response(jsonEncode({'cleared_count': 3}), 200);
+          }
+          return http.Response('{}', 404);
+        });
+
+        final client = CompanionClient(
+          httpClient: mock,
+          sessionStore: InMemoryCredentialStore('test_session'),
+        );
+        final rem = await client.createReminder(
+          const ReminderCreate(title: 'Drink water', scheduledAt: '2026-11-14T15:00:00Z'),
+        );
+        expect(rem.status, 'scheduled');
+        final snoozed = await client.snoozeReminder('rem-1', payload: const SnoozeRequest(minutes: 15));
+        expect(snoozed.status, 'snoozed');
+        final alarm = await client.createAlarm(
+          const AlarmCreate(
+            label: 'Wake up',
+            timeOfDay: '07:00',
+            recurrenceDays: [0, 1, 2, 3, 4],
+            timezone: 'Asia/Manila',
+          ),
+        );
+        expect(alarm.recurrenceDays, [0, 1, 2, 3, 4]);
+        final ev = await client.runRoutineNow('rt-1');
+        expect(ev.sourceType, 'routine');
+        final notifList = await client.listNotifications(unreadOnly: true);
+        expect(notifList.unreadCount, 2);
+        expect(notifList.missedCount, 1);
+        final cleared = await client.clearAllNotifications();
+        expect(cleared.clearedCount, 3);
+      });
+    });
   });
 }

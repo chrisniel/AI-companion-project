@@ -22,13 +22,17 @@ from app.api.v1.endpoints.attachments import (
 from app.core.config import settings
 from app.core.profile_sessions import now_utc
 from app.models.attachment import Attachment
+from app.models.alarm import Alarm
 from app.models.character_instance import CharacterInstance
 from app.models.conversation import Conversation
 from app.models.conversation_summary import ConversationSummary
 from app.models.memory import Memory
 from app.models.message import Message
+from app.models.notification_event import NotificationEvent
 from app.models.profile import Profile
 from app.models.profile_session import ProfileSession
+from app.models.reminder import Reminder
+from app.models.routine import Routine
 from app.models.session_ticket import SessionTicket
 from app.models.task import Task
 
@@ -266,6 +270,10 @@ class ProfilePurgeService:
         await self.db.execute(delete(Conversation).where(Conversation.profile_id == profile_id))
         await self.db.execute(delete(Memory).where(Memory.profile_id == profile_id))
         await self.db.execute(delete(CharacterInstance).where(CharacterInstance.profile_id == profile_id))
+        await self.db.execute(delete(NotificationEvent).where(NotificationEvent.profile_id == profile_id))
+        await self.db.execute(delete(Reminder).where(Reminder.profile_id == profile_id))
+        await self.db.execute(delete(Alarm).where(Alarm.profile_id == profile_id))
+        await self.db.execute(delete(Routine).where(Routine.profile_id == profile_id))
         await self.db.execute(delete(Task).where(Task.profile_id == profile_id))
         await self.db.execute(delete(SessionTicket).where(SessionTicket.profile_id == profile_id))
         await self.db.execute(delete(ProfileSession).where(ProfileSession.profile_id == profile_id))
@@ -311,27 +319,34 @@ class ProfilePurgeService:
                 logger.error("Failed to purge profile '%s': %s", pid, exc, exc_info=True)
                 failed_ids.append(pid)
 
-        # Retention cleanup: purge soft-deleted memories older than retention window
+        # Retention & temporary-memory expiration sweep (DEBT-V1-08)
         try:
             from datetime import timedelta
             from app.core.config import settings
+            from app.services.scheduler import SchedulerService
+
+            await SchedulerService(self.db).sweep_expired_memories(now=now, commit=False)
             cutoff_date = now - timedelta(days=settings.DATA_RETENTION_DAYS)
-            await self.db.execute(
-                delete(Memory).where(
-                    Memory.deleted_at.is_not(None),
-                    Memory.deleted_at <= cutoff_date,
+            for model_cls in (
+                Memory,
+                ConversationSummary,
+                NotificationEvent,
+                Reminder,
+                Alarm,
+                Routine,
+            ):
+                await self.db.execute(
+                    delete(model_cls)
+                    .where(
+                        model_cls.deleted_at.is_not(None),
+                        model_cls.deleted_at <= cutoff_date,
+                    )
+                    .execution_options(synchronize_session=False)
                 )
-            )
-            await self.db.execute(
-                delete(ConversationSummary).where(
-                    ConversationSummary.deleted_at.is_not(None),
-                    ConversationSummary.deleted_at <= cutoff_date,
-                )
-            )
             await self.db.commit()
         except Exception as exc:
             await self.db.rollback()
-            logger.warning("Failed to purge expired soft-deleted memories: %s", exc)
+            logger.warning("Failed to run retention and expired memory sweep: %s", exc)
 
         return PurgeMaintenanceResult(purged_profile_ids=purged_ids, failed_profile_ids=failed_ids)
 

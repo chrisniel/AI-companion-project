@@ -57,11 +57,9 @@
   - *Open Detail:* Configuration storage in `settings.json` vs. database; executable process name matching vs. window title matching; hysteresis cooldown timeout (e.g., 30–60s).
   - *Resolution Point:* Milestone M5 implementation plan.
 
-- **`DEBT-V1-08`: Temporary Memory Expiration Sweep Frequency**
+- **`DEBT-V1-08`: Temporary Memory Expiration Sweep Frequency [RESOLVED IN M3 BATCH G1]**
   - *Context:* Temporary memories have `valid_from` and `expires_at` metadata.
-  - *Status:* Query-time temporal exclusion implemented in M3 Batch C1 (`or_(expires_at.is_(None), expires_at > :now)` using bound UTC timestamp parameter in `search_relevant_memories` and `list_memories`).
-  - *Open Detail:* Background periodic soft-delete expiration sweeper in `SchedulerService` / periodic maintenance worker.
-  - *Resolution Point:* Periodic maintenance / Scheduler milestone.
+  - *Resolution:* Query-time temporal exclusion (`or_(expires_at.is_(None), expires_at > :now)`) was delivered in M3 Batch C1; M3 Batch G1 (`feature/m3-scheduler-notifications-g1`) delivered the periodic soft-delete expiration sweeper (`SchedulerService.sweep_expired_memories`, configurable via `MEMORY_EXPIRATION_SWEEP_INTERVAL_SECONDS`), executed at startup, on periodic scheduler ticks, and inside `ProfilePurgeService.execute_maintenance_purge()`.
 
 - **`DEBT-V1-09`: Self-Contained Windows Installer & Bundled Runtime Packaging (`PC-HOST-006`)**
   - *Context:* End-user PC V1 distribution requires a self-contained Windows installer bundling private Python runtime, application dependencies, Flutter Desktop, and native inference binaries without requiring developer setup, manual Python installation, or global PATH modifications.

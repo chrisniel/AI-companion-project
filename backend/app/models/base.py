@@ -94,3 +94,18 @@ class SoftDeleteMixin:
         index=True,
     )
 
+
+def parse_recurrence_days_string(raw: Optional[str]) -> list[int]:
+    """Parse a comma-separated weekday string ('0..6', Monday=0..Sunday=6) into a sorted unique list."""
+    if not raw:
+        return []
+    result: list[int] = []
+    for token in raw.split(","):
+        cleaned = token.strip()
+        if not cleaned:
+            continue
+        day = int(cleaned)
+        if 0 <= day <= 6 and day not in result:
+            result.append(day)
+    return sorted(result)
+

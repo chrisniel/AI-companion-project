@@ -775,3 +775,70 @@ async def test_del_20_orphaned_promoted_attachment_cleanup(test_session):
     assert not temp_file.exists()
     assert not (settings.ATTACHMENT_DIR / profile.id).exists()
     assert (await test_session.get(Profile, profile.id)) is None
+
+
+@pytest.mark.asyncio
+async def test_purge_profile_deletes_scheduling_and_notification_entities(
+    test_session: AsyncSession,
+):
+    """Purging a profile hard-deletes its notifications, reminders, alarms, routines, and tasks while isolating other profiles."""
+    from datetime import datetime, timezone
+    import uuid
+    from app.models.alarm import Alarm
+    from app.models.notification_event import NotificationEvent
+    from app.models.reminder import Reminder
+    from app.models.routine import Routine
+    from app.models.task import Task
+
+    now = datetime.now(timezone.utc)
+    p1 = Profile(
+        id=str(uuid.uuid4()),
+        name="PurgeSched1",
+        status="deleted",
+        is_deleted=True,
+        deleted_at=now,
+        is_default=False,
+    )
+    p2 = Profile(id=str(uuid.uuid4()), name="PurgeSched2", status="active", is_default=False)
+    test_session.add_all([p1, p2])
+    await test_session.flush()
+
+    t1 = Task(id=str(uuid.uuid4()), owner_id="local_user", profile_id=p1.id, title="T1", category="general", priority="medium", status="pending")
+    t2 = Task(id=str(uuid.uuid4()), owner_id="local_user", profile_id=p2.id, title="T2", category="general", priority="medium", status="pending")
+    test_session.add_all([t1, t2])
+    await test_session.flush()
+
+    r1 = Reminder(id=str(uuid.uuid4()), owner_id="local_user", profile_id=p1.id, task_id=t1.id, title="R1", scheduled_at=now)
+    r2 = Reminder(id=str(uuid.uuid4()), owner_id="local_user", profile_id=p2.id, task_id=t2.id, title="R2", scheduled_at=now)
+    a1 = Alarm(id=str(uuid.uuid4()), owner_id="local_user", profile_id=p1.id, label="A1", scheduled_at=now)
+    a2 = Alarm(id=str(uuid.uuid4()), owner_id="local_user", profile_id=p2.id, label="A2", scheduled_at=now)
+    rt1 = Routine(id=str(uuid.uuid4()), owner_id="local_user", profile_id=p1.id, title="RT1", fallback_message="Ping 1", time_of_day="09:00")
+    rt2 = Routine(id=str(uuid.uuid4()), owner_id="local_user", profile_id=p2.id, title="RT2", fallback_message="Ping 2", time_of_day="09:00")
+    n1 = NotificationEvent(id=str(uuid.uuid4()), owner_id="local_user", profile_id=p1.id, source_type="reminder", source_id=r1.id, title="N1", triggered_at=now)
+    n2 = NotificationEvent(id=str(uuid.uuid4()), owner_id="local_user", profile_id=p2.id, source_type="reminder", source_id=r2.id, title="N2", triggered_at=now)
+    test_session.add_all([r1, r2, a1, a2, rt1, rt2, n1, n2])
+    p1_id, p2_id = p1.id, p2.id
+    t1_id, t2_id = t1.id, t2.id
+    r1_id, r2_id = r1.id, r2.id
+    a1_id, a2_id = a1.id, a2.id
+    rt1_id, rt2_id = rt1.id, rt2.id
+    n1_id, n2_id = n1.id, n2.id
+    await test_session.commit()
+
+    service = ProfilePurgeService(test_session)
+    await service.purge_profile(p1_id, allow_unexpired=True)
+    test_session.expire_all()
+
+    assert (await test_session.get(Profile, p1_id)) is None
+    assert (await test_session.get(NotificationEvent, n1_id)) is None
+    assert (await test_session.get(Reminder, r1_id)) is None
+    assert (await test_session.get(Alarm, a1_id)) is None
+    assert (await test_session.get(Routine, rt1_id)) is None
+    assert (await test_session.get(Task, t1_id)) is None
+
+    assert (await test_session.get(Profile, p2_id)) is not None
+    assert (await test_session.get(NotificationEvent, n2_id)) is not None
+    assert (await test_session.get(Reminder, r2_id)) is not None
+    assert (await test_session.get(Alarm, a2_id)) is not None
+    assert (await test_session.get(Routine, rt2_id)) is not None
+    assert (await test_session.get(Task, t2_id)) is not None

@@ -11,6 +11,7 @@ from app.api.v1.endpoints.health import public_health_router, system_router
 from app.api.v1.endpoints.llm import router as llm_router
 from app.api.v1.endpoints.memories import router as memories_router
 from app.api.v1.endpoints.profiles import router as profiles_router
+from app.api.v1.endpoints.scheduling import router as scheduling_router
 from app.api.v1.endpoints.tasks import router as tasks_router
 
 api_v1_router = APIRouter()
@@ -26,6 +27,7 @@ protected_router.include_router(conversations_router, prefix="/conversations", t
 protected_router.include_router(attachments_router, prefix="/conversations", tags=["Attachments"])
 protected_router.include_router(memories_router, prefix="/memories", tags=["Memories"])
 protected_router.include_router(characters_router)
+protected_router.include_router(scheduling_router)
 
 # Mount both routers under V1 prefix
 api_v1_router.include_router(public_router)
