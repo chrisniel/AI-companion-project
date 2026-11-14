@@ -3,21 +3,22 @@
 > **Delivery Branch:** `feature/m3-scheduler-notifications-g1`
 > **Implementation Plan:** [`plan-m3-scheduler-notifications-g1.md`](../../02_Planning/01_Plans/plan-m3-scheduler-notifications-g1.md)
 > **Delivery Level:** Level B — Planned Autonomous (with Level C Schema Migration `015_scheduler_notifications_and_routines`)
-> **Status:** Phase 1 Plan Published — Awaiting Human Owner Approval
+> **Status:** Phase 1 Plan Revised (Independent Review Findings Resolved) — Awaiting Human Owner Approval
 
 ---
 
 ## Phase 1: Plan & Authorization
 - [x] Verify clean `develop` baseline (`280922b`) and create dedicated feature branch `feature/m3-scheduler-notifications-g1`.
-- [x] Author implementation plan (`plan-m3-scheduler-notifications-g1.md`) for Batch G1 (Migration `015`, `SchedulerService`, Reminders/Alarms/Routines, Quiet Hours, Missed-Event Catch-Up, Durable Notification Backlog, `DEBT-V1-08` expired memory sweep, OpenAPI + `companion_api` Dart SDK parity).
-- [x] Publish Phase 1 planning commit to `origin/feature/m3-scheduler-notifications-g1`.
+- [x] Author initial implementation plan (`plan-m3-scheduler-notifications-g1.md`) and publish commit `3545ae4`.
+- [x] Run thorough Independent Phase 1 Plan Review (`f18595df-17d1-489d-9081-132917c45c21`) and incorporate all 8 findings (`P1-1` zero-dependency timezone resolution without `tzdata`, `P1-2` Migration `015` trigger cycling + `Profile.__init__` defaults + fail-closed `downgrade()`, `P1-3` `check_dart_openapi_parity.py` flat `TrashTaskResponse` & `TaskUpdate` omission rules, `P2-1` full 38-route + DTO parity table, `P2-2` recurring Alarm re-arm semantics, `P2-3` `Task.reminder_at` deduplication & `[ Mark Done ]` synchronization, `P2-4` `[start, end)` half-open Quiet Hours & client UUIDv4 support, `P3-1` target test filename + retention cleanup order).
+- [x] Publish revised Phase 1 planning commit to `origin/feature/m3-scheduler-notifications-g1`.
 - [ ] **STOP GATE:** Receive Human Owner Plan Approval before touching any production code, migrations, or opening a PR.
 
 ## Phase 2: Autonomous Implementation & Verification *(Locked until Human Approval)*
-- [ ] Step 1: Add ORM models (`Reminder`, `Alarm`, `Routine`, `NotificationEvent`, `Profile` quiet hours), Alembic Migration `015_scheduler_notifications_and_routines`, and `ProfilePurgeService` cascade.
-- [ ] Step 2: Implement `SchedulerService` (Quiet Hours engine, missed-event reconciliation, snooze re-trigger, deterministic Routine emission, Task due-reminder bridge, `DEBT-V1-08` temporary memory sweep) and wire into FastAPI `lifespan`.
-- [ ] Step 3: Implement Profile-scoped REST endpoints & schemas (`reminders`, `alarms`, `routines`, `notifications`, `/profiles/me/quiet-hours`) and fail-closed router wiring.
-- [ ] Step 4: Regenerate `contracts/openapi/openapi.json`, add `task_dto.dart` + `scheduling_dto.dart` + `CompanionClient` methods, and update `scripts/check_dart_openapi_parity.py` + `companion_client_test.dart`.
+- [ ] Step 1: Add ORM models (`Reminder`, `Alarm`, `Routine`, `NotificationEvent`, `Profile` quiet hours + `__init__`), Alembic Migration `015_scheduler_notifications_and_routines` (with trigger cycling and fail-closed `downgrade()`), and `ProfilePurgeService` cascade/retention.
+- [ ] Step 2: Implement `SchedulerService` (zero-dependency `resolve_timezone`, `[start, end)` Quiet Hours engine, missed-event reconciliation, recurring alarm re-arm, snooze re-trigger, deterministic Routine emission, Task due-reminder bridge, `DEBT-V1-08` temporary memory sweep) and wire into FastAPI `lifespan`.
+- [ ] Step 3: Implement Profile-scoped REST endpoints & schemas (`reminders`, `alarms`, `routines`, `notifications`, `/profiles/me/quiet-hours`, `tasks.py` cancellation/completion sync) and fail-closed router wiring.
+- [ ] Step 4: Regenerate `contracts/openapi/openapi.json`, add flat `task_dto.dart` + `scheduling_dto.dart` + 38 `CompanionClient` methods, and update `scripts/check_dart_openapi_parity.py` + `companion_client_test.dart`.
 - [ ] Step 5: Run full Phase 2 Verification Gate (`pytest backend/tests`, `check_openapi_contract.py --check`, `check_dart_openapi_parity.py --check`, `test_check_dart_openapi_parity.py`, `dart test`, `flutter analyze`, `flutter test`, `frontend/web` checks).
 
 ## Phase 3: Documentation, Closure & Draft PR *(Locked until Phase 2 Passes)*
