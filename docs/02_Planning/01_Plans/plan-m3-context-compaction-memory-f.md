@@ -277,6 +277,7 @@ Mark prior active ConversationSummary is_active=False, superseded_by_id=new_summ
 
 ### Automated Repository Checks
 - [x] Backend compaction & memory tests (`test_context_compaction.py`, `test_memory_knowledge_tiers.py`, `test_schema_lifecycle.py`, `test_prepare_database_schema_backup.py`) verified via full backend test run (`796 passed` — direct exit `0`)
+- [x] 1-hop compacted in-stream continuation (`build_continuation_messages`, `orchestrator.py` continuation pass & guards) verified via targeted suite: `pytest backend/tests/test_context_compaction.py backend/tests/test_assistant_orchestrator.py backend/tests/test_runtime_boundary_regressions.py` (`52 passed`) + `scripts/check_openapi_contract.py --check` (`46 routes`)
 - [x] Full backend test suite: `pytest backend/tests` (`796 passed, 77 warnings in 377.63s`)
 - [x] Contract & Dart parity checks (matching `.github/workflows/ci.yml`):
   - `python scripts/check_openapi_contract.py --check` (`46 routes` — passed)

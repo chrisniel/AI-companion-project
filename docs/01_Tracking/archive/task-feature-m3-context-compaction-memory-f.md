@@ -34,7 +34,8 @@
 - [x] Sync canonical architecture specs (`assistant-and-conversations.md`, `memory-and-personalization.md`), plan files (`plan-m3-memory-knowledge-e.md`, `plan-m3-context-compaction-memory-f.md`), master planning (`WBS.md`, `MASTER_CHECKLIST.md`, `DELIVERY_INDEX.md`), shared tracking (`docs/01_Tracking/task.md`), and `CHANGELOG.md`.
 - [x] Author walkthrough (`docs/03_Walkthroughs/walkthrough-m3-batch-f-context-compaction-memory.md`).
 - [x] Archive branch tracker to `docs/01_Tracking/archive/task-feature-m3-context-compaction-memory-f.md` and remove active tracker copy.
-- [ ] Run `git diff --check`, commit Phase 2 & Phase 3 changes, push `origin/feature/m3-context-compaction-memory-f`, and open Draft PR against `develop`.
+- [x] Run `git diff --check`, commit Phase 2 & Phase 3 changes, push `origin/feature/m3-context-compaction-memory-f`, and open Draft PR #40 against `develop`.
+- [x] Follow-on Batch F enhancement: Added 1-hop compacted in-stream continuation (`build_continuation_messages`, `CONTEXT_COMPACTION_AUTO_CONTINUE_*`, `orchestrator.py` `_stream_guarded_sse_pass`) and verified (`pytest backend/tests/test_context_compaction.py backend/tests/test_assistant_orchestrator.py backend/tests/test_runtime_boundary_regressions.py`: `52 passed`; `check_openapi_contract.py --check`: `46 routes`).
 
 ## Phase 4: Independent Review & Human Merge
 - [ ] Present Draft PR URL, exact automated check outputs, and manual Windows acceptance checklist; **STOP** for Independent Reviewer and Human Owner approval.

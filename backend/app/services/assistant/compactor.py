@@ -354,3 +354,40 @@ async def compact_conversation(
         reason="manual_compacted" if trigger == "manual" else "compacted",
         active_summary=new_summary,
     )
+
+
+def build_continuation_messages(
+    prompt_messages: Sequence[ChatMessage],
+    partial_response_text: str,
+    tail_chars: int = 320,
+    head_summary_chars: int = 280,
+) -> list[ChatMessage]:
+    """Compact an interrupted reply's head while preserving its exact tail for 1-hop continuation."""
+    continuation_messages = list(prompt_messages)
+    partial = partial_response_text or ""
+
+    if tail_chars <= 0 or len(partial) <= tail_chars:
+        cutoff_tail = partial
+        assistant_content = cutoff_tail
+    else:
+        head_raw = partial[:-tail_chars]
+        cutoff_tail = partial[-tail_chars:]
+        head_snippet = _truncate_clean(_normalize_single_line(head_raw), head_summary_chars)
+        if head_snippet:
+            assistant_content = f"[Earlier part of response compacted]: {head_snippet}\n...{cutoff_tail}"
+        else:
+            assistant_content = cutoff_tail
+
+    tail_anchor = escape_prompt_xml_delimiters(_normalize_single_line(cutoff_tail[-80:]))
+    continuation_messages.append(ChatMessage(role="assistant", content=assistant_content))
+    continuation_messages.append(
+        ChatMessage(
+            role="user",
+            content=(
+                f'Your previous response reached the output length limit and cut off at: "...{tail_anchor}". '
+                "Continue seamlessly from that exact cutoff point without repeating earlier text, "
+                "and conclude your response cleanly."
+            ),
+        )
+    )
+    return continuation_messages

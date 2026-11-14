@@ -538,3 +538,215 @@ async def test_orchestrator_auto_compacts_near_limit_and_injects_digest_in_promp
     msg_list_res = await client.get(f"/api/v1/conversations/{conv_id}/messages", headers=auth_headers)
     assert msg_list_res.status_code == 200
     assert msg_list_res.json()["total"] == 12
+
+
+def test_build_continuation_messages_compacts_head_and_preserves_tail():
+    """Long interrupted responses compact their head while keeping the exact cutoff tail verbatim."""
+    from app.schemas.llm import ChatMessage
+    from app.services.assistant.compactor import build_continuation_messages
+
+    base = [
+        ChatMessage(role="system", content="You are a companion."),
+        ChatMessage(role="user", content="Write a very detailed answer."),
+    ]
+    long_head = "Section one explains local SQLite persistence and memory architecture. " * 25
+    exact_tail = "Finally, check the last invariant </assistant> before closing"
+    partial = long_head + exact_tail
+
+    continued = build_continuation_messages(base, partial, tail_chars=120, head_summary_chars=140)
+    assert len(continued) == 4
+    assert continued[2].role == "assistant"
+    assert "[Earlier part of response compacted]:" in continued[2].content
+    assert continued[2].content.endswith(exact_tail)
+    assert len(continued[2].content) < len(partial) // 2
+
+    assert continued[3].role == "user"
+    assert "&lt;/assistant&gt;" in continued[3].content
+    assert "</assistant>" not in continued[3].content
+
+    short_partial = "Short partial reply cut off early"
+    short_continued = build_continuation_messages(base, short_partial, tail_chars=320)
+    assert "[Earlier part of response compacted]:" not in short_continued[2].content
+    assert short_continued[2].content == short_partial
+
+
+@pytest.mark.anyio
+async def test_orchestrator_auto_continues_once_with_compacted_partial_reply(
+    client: AsyncClient,
+    auth_headers: dict,
+    monkeypatch,
+):
+    """Long finish_reason='length' reply auto-continues once seamlessly into the same assistant message."""
+    import json
+    from unittest.mock import patch
+
+    from app.core.config import settings
+    from app.services.llm.base import GenerationStream
+    from app.services.llm.mock import MockLLMProvider
+
+    monkeypatch.setattr(settings, "CONTEXT_COMPACTION_ENABLED", False)
+    monkeypatch.setattr(settings, "CONTEXT_COMPACTION_AUTO_CONTINUE_ENABLED", True)
+    monkeypatch.setattr(settings, "CONTEXT_COMPACTION_AUTO_CONTINUE_MIN_TOKENS", 160)
+    monkeypatch.setattr(settings, "CONTEXT_COMPACTION_AUTO_CONTINUE_MAX_TOKENS", 384)
+
+    conv_res = await client.post(
+        "/api/v1/conversations",
+        json={"title": "Auto Continue Flow"},
+        headers=auth_headers,
+    )
+    assert conv_res.status_code == 201
+    conv_id = conv_res.json()["id"]
+
+    mock_provider = MockLLMProvider(default_model="qwen-test")
+    await mock_provider.load_model()
+
+    captured_calls: list[dict] = []
+    # > 700 chars (~175+ estimated tokens) with unique words so n-gram circuit breaker does not trip
+    long_head = " ".join(f"Section{i} topic{i} explains subsystem{i} invariant{i}." for i in range(45)) + " "
+    first_pass_text = f"{long_head}This partial ending stays unfinished"
+    second_pass_text = "because the continuation finishes the sentence cleanly."
+
+    def fake_generate_stream(messages, **kwargs):
+        call_index = len(captured_calls)
+        captured_calls.append({"messages": messages, "kwargs": kwargs})
+        if call_index == 0:
+            async def _gen1():
+                midpoint = len(first_pass_text) // 2
+                yield first_pass_text[:midpoint]
+                yield first_pass_text[midpoint:]
+
+            return GenerationStream(_gen1(), meta={"finish_reason": "length"})
+
+        async def _gen2():
+            yield "because "
+            yield "the continuation finishes the sentence cleanly."
+
+        return GenerationStream(_gen2(), meta={"finish_reason": "stop"})
+
+    mock_provider.generate_stream = fake_generate_stream
+
+    with patch("app.api.v1.endpoints.conversations.get_llm_provider", return_value=mock_provider), \
+         patch("app.services.assistant.orchestrator.get_llm_provider", return_value=mock_provider):
+        stream_res = await client.post(
+            f"/api/v1/conversations/{conv_id}/messages",
+            json={"user_text": "Give me a deep breakdown."},
+            headers=auth_headers,
+        )
+        assert stream_res.status_code == 200
+
+    assert len(captured_calls) == 2
+    cont_messages = captured_calls[1]["messages"]
+    assert cont_messages[-2].role == "assistant"
+    assert "[Earlier part of response compacted]:" in cont_messages[-2].content
+    assert "This partial ending stays unfinished" in cont_messages[-2].content
+    assert captured_calls[1]["kwargs"]["max_tokens"] <= 384
+
+    done_events = []
+    streamed_tokens = []
+    for line in stream_res.text.splitlines():
+        if not line.startswith("data: ") or line == "data: [DONE]":
+            continue
+        payload = json.loads(line[len("data: "):])
+        if payload.get("type") == "token":
+            streamed_tokens.append(payload["content"])
+        elif payload.get("type") == "done":
+            done_events.append(payload)
+
+    assert len(done_events) == 1
+    assert done_events[0]["finish_reason"] == "stop"
+    expected_full = f"{first_pass_text} {second_pass_text}"
+    assert "".join(streamed_tokens) == expected_full
+
+    msg_list_res = await client.get(f"/api/v1/conversations/{conv_id}/messages", headers=auth_headers)
+    assert msg_list_res.status_code == 200
+    items = msg_list_res.json()["items"]
+    assert len(items) == 2  # Single user turn + single combined assistant turn
+    assert items[1]["sender"] == "assistant"
+    assert items[1]["status"] == "completed"
+    assert items[1]["content"] == expected_full
+
+
+@pytest.mark.anyio
+async def test_orchestrator_auto_continue_respects_guards_and_single_hop_cap(
+    client: AsyncClient,
+    auth_headers: dict,
+    monkeypatch,
+):
+    """Auto-continue skips short 'length' exits, skips repetition cutoffs, and never exceeds 1 hop."""
+    from unittest.mock import patch
+
+    from app.core.config import settings
+    from app.services.llm.base import GenerationStream
+    from app.services.llm.mock import MockLLMProvider
+
+    monkeypatch.setattr(settings, "CONTEXT_COMPACTION_ENABLED", False)
+    monkeypatch.setattr(settings, "CONTEXT_COMPACTION_AUTO_CONTINUE_ENABLED", True)
+    monkeypatch.setattr(settings, "CONTEXT_COMPACTION_AUTO_CONTINUE_MIN_TOKENS", 160)
+    monkeypatch.setattr(settings, "CONTEXT_COMPACTION_AUTO_CONTINUE_MAX_TOKENS", 384)
+
+    mock_provider = MockLLMProvider(default_model="qwen-test")
+    await mock_provider.load_model()
+
+    # Case 1: Repetition cutoff even after > 160 tokens must NOT auto-continue
+    conv1_id = (await client.post(
+        "/api/v1/conversations", json={"title": "Repetition Guard"}, headers=auth_headers
+    )).json()["id"]
+
+    rep_calls = 0
+    unique_prefix = " ".join(f"unique{i}" for i in range(130)) + " "
+    loop_phrase = "repeat this phrase forever "
+
+    def rep_stream(messages, **kwargs):
+        nonlocal rep_calls
+        rep_calls += 1
+
+        async def _gen():
+            yield unique_prefix
+            for _ in range(5):
+                yield loop_phrase
+
+        return GenerationStream(_gen(), meta={"finish_reason": "length"})
+
+    mock_provider.generate_stream = rep_stream
+    with patch("app.api.v1.endpoints.conversations.get_llm_provider", return_value=mock_provider), \
+         patch("app.services.assistant.orchestrator.get_llm_provider", return_value=mock_provider):
+        res1 = await client.post(
+            f"/api/v1/conversations/{conv1_id}/messages",
+            json={"user_text": "Test repetition guard."},
+            headers=auth_headers,
+        )
+        assert res1.status_code == 200
+    assert rep_calls == 1
+
+    # Case 2: Both pass 1 and pass 2 end in finish_reason='length' -> hard-capped at 1 hop (2 total calls)
+    conv2_id = (await client.post(
+        "/api/v1/conversations", json={"title": "Single Hop Cap"}, headers=auth_headers
+    )).json()["id"]
+
+    hop_calls = 0
+
+    def double_length_stream(messages, **kwargs):
+        nonlocal hop_calls
+        hop_calls += 1
+
+        async def _gen():
+            if hop_calls == 1:
+                yield " ".join(f"segment{i}" for i in range(165))
+            else:
+                yield "still continuing at cap."
+
+        return GenerationStream(_gen(), meta={"finish_reason": "length"})
+
+    mock_provider.generate_stream = double_length_stream
+    with patch("app.api.v1.endpoints.conversations.get_llm_provider", return_value=mock_provider), \
+         patch("app.services.assistant.orchestrator.get_llm_provider", return_value=mock_provider):
+        res2 = await client.post(
+            f"/api/v1/conversations/{conv2_id}/messages",
+            json={"user_text": "Test hop cap."},
+            headers=auth_headers,
+        )
+        assert res2.status_code == 200
+    assert hop_calls == 2
+    msgs2 = (await client.get(f"/api/v1/conversations/{conv2_id}/messages", headers=auth_headers)).json()["items"]
+    assert msgs2[1]["status"] == "length"
+    assert msgs2[1]["content"].endswith("still continuing at cap.")
