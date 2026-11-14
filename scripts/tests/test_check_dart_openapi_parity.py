@@ -81,7 +81,7 @@ class TestCheckDartOpenApiParity(unittest.TestCase):
         """CompanionClient must implement all 15 M1/Host+Compaction, 13 native identity, 11 character, and 5 memory routes."""
         errors, verified = checker.verify_companion_client_implementations(checker.CLIENT_PATH)
         self.assertEqual(errors, [])
-        self.assertEqual(len(verified), 44)
+        self.assertEqual(len(verified), 82)
 
     def test_native_identity_routes_cannot_silently_disappear(self):
         import json

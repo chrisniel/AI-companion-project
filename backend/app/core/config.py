@@ -196,6 +196,12 @@ class Settings(BaseSettings):
     CONTEXT_COMPACTION_AUTO_CONTINUE_MIN_TOKENS: int = 160
     CONTEXT_COMPACTION_AUTO_CONTINUE_MAX_TOKENS: int = 384
 
+    # M3 Batch G1: SchedulerService & Notification Backlog
+    SCHEDULER_ENABLED: bool = True
+    SCHEDULER_POLL_INTERVAL_SECONDS: float = 15.0
+    SCHEDULER_MISSED_GRACE_SECONDS: int = 300
+    MEMORY_EXPIRATION_SWEEP_INTERVAL_SECONDS: int = 300
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:

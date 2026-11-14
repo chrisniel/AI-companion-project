@@ -10,6 +10,8 @@ from app.api.deps import get_current_profile_session, get_db
 from app.core.profile_sessions import validate_profile_session
 from app.models.profile_session import ProfileSession
 from app.core.errors import CompanionNotFoundError
+from app.models.notification_event import NotificationEvent
+from app.models.reminder import Reminder
 from app.models.task import Task
 from app.schemas.task import (
     TaskCategory,
@@ -25,6 +27,52 @@ from app.schemas.task import (
 from app.services.retention import calculate_remaining_days
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
+
+
+async def _cancel_task_reminders_and_notifications(
+    db: AsyncSession,
+    profile_id: str,
+    task_id: str,
+    now: datetime,
+) -> None:
+    """Cancel pending task-linked reminders and resolve unread task/reminder alerts."""
+    rem_rows = (
+        await db.execute(
+            select(Reminder).where(
+                Reminder.profile_id == profile_id,
+                Reminder.task_id == task_id,
+                Reminder.is_deleted.is_(False),
+            )
+        )
+    ).scalars().all()
+    reminder_ids: list[str] = []
+    for rem in rem_rows:
+        reminder_ids.append(rem.id)
+        if rem.status in ("scheduled", "snoozed"):
+            rem.status = "cancelled"
+            rem.snoozed_until = None
+            rem.updated_at = now
+
+    active_statuses = ("unread", "read", "suppressed_quiet_hours", "missed_catchup")
+    notif_rows = (
+        await db.execute(
+            select(NotificationEvent).where(
+                NotificationEvent.profile_id == profile_id,
+                NotificationEvent.is_deleted.is_(False),
+                NotificationEvent.status.in_(active_statuses),
+                NotificationEvent.source_type.in_(("task_reminder", "reminder")),
+            )
+        )
+    ).scalars().all()
+    for ev in notif_rows:
+        is_match = (ev.source_type == "task_reminder" and ev.source_id == task_id) or (
+            ev.source_type == "reminder" and ev.source_id in reminder_ids
+        )
+        if is_match:
+            ev.status = "dismissed"
+            ev.read_at = ev.read_at or now
+            ev.resolved_at = now
+            ev.updated_at = now
 
 
 @router.get("", response_model=TaskListResponse, summary="List Tasks")
@@ -180,6 +228,14 @@ async def update_task(
         else:
             task.reminder_at = None
 
+    if task.status in (TaskStatus.completed.value, TaskStatus.cancelled.value):
+        await _cancel_task_reminders_and_notifications(
+            db,
+            session.profile_id,
+            task.id,
+            datetime.now(timezone.utc),
+        )
+
     await validate_profile_session(db, session)
 
     await db.commit()
@@ -205,8 +261,10 @@ async def delete_task(
     if not task:
         raise CompanionNotFoundError(message=f"Task with ID {task_id!r} not found.")
 
+    now = datetime.now(timezone.utc)
     task.is_deleted = True
-    task.deleted_at = datetime.now(timezone.utc)
+    task.deleted_at = now
+    await _cancel_task_reminders_and_notifications(db, session.profile_id, task.id, now)
     await validate_profile_session(db, session)
     await db.commit()
 

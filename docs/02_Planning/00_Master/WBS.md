@@ -56,7 +56,7 @@
 ### Stream: `PC-HOST` — Windows Host Infrastructure
 - **`PC-HOST-001`**: Local AI Runtime Process Supervision, Launch & Single-Instance Attach Coordinator (Kernel locking, detached rotating logging, double-checked recheck, safe failure behavior without client shutdown authority).
 - **`PC-HOST-002`**: Windows Task Scheduler Dual Autostart at User Login (Starts Local AI Runtime & Flutter Desktop minimized to tray; intentional-exit restart suppression).
-- **`PC-HOST-003`**: Runtime Notification-Event & Durable Backlog Responsibility.
+- **`PC-HOST-003`**: Runtime Notification-Event & Durable Backlog Responsibility (`NotificationEvent` ORM, Migration `015`, `/api/v1/notifications*` REST endpoints, `companion_api` Dart SDK, and `ProfilePurgeService` cascade delivered in M3 Batch G1 on `feature/m3-scheduler-notifications-g1`; Flutter WinRT Toast presentation UI deferred to Batch G2).
 - **`PC-HOST-004`**: Storage Roots Manager (Resolves `APP_INSTALL_ROOT`, `DATA_ROOT`, `LIBRARY_ROOT`, `CACHE_ROOT`, `LOG_ROOT`).
 - **`PC-HOST-005`**: Host Administration Separation & Secure Lifecycle Authority (Dedicated local host admin control, loopback-only authenticated `POST /api/v1/system/shutdown`, graceful runtime termination, provider lock ownership & router cleanup, handle-bound Windows OS process fallback, tray & settings "Exit Companion" with confirmed warning, and bounded 4-state model-loading reliability; implemented and verified on `feature/m2-secure-host-lifecycle`).
 - **`PC-HOST-006`**: Self-Contained Windows Installer & Bundled Runtime (Provisional deferred PC V1 packaging: bundle private Python execution environment, dependencies, Flutter Desktop, and native inference binaries without manual Python installation or global PATH changes; three distinct and identifiable supervised components transparently visible in Windows Task Manager for crash isolation and diagnostic accountability: `AI Companion.exe` UI, `AI Companion Runtime.exe` Python host, `AI Companion Inference.exe` llama.cpp engine; no console windows in normal use, no intentional concealment from Task Manager; preserve DATA_ROOT and LIBRARY_ROOT across updates, safe install/update/repair/uninstall; packaging technology and distribution format OPEN DESIGN; not implemented in M2-H1).
@@ -106,11 +106,11 @@
 - **`PC-ACTION-006`**: Generic Shell / OS Admin Execution Blocker & Rejection Guard.
 
 ### Stream: `PC-SCHED` — Productivity & Routines
-- **`PC-SCHED-001`**: Runtime `SchedulerService` Engine (Timezone aware, persistent state, SQLite WAL).
-- **`PC-SCHED-002`**: Distinct Task, Standalone/Task-Associated Reminder & Alarm Lifecycles.
-- **`PC-SCHED-003`**: Quiet Hours Policy Engine (Alarms bypass default, Reminders/Routines respect default).
-- **`PC-SCHED-004`**: Missed Event Reconciliation & Late Alarm Grace Window Evaluation.
-- **`PC-SCHED-005`**: Bounded Companion Routines Engine (Deterministic trigger, Risk 2 create/expand policy).
+- **`PC-SCHED-001`**: Runtime `SchedulerService` Engine (Timezone aware with zero-dependency `resolve_timezone()` Windows fallback, persistent SQLite state, FastAPI `lifespan` background tick, `DEBT-V1-08` expired memory sweep; backend runtime delivered in M3 Batch G1 on `feature/m3-scheduler-notifications-g1`).
+- **`PC-SCHED-002`**: Distinct Task, Standalone/Task-Associated Reminder & Alarm Lifecycles (ORM models, Migration `015`, UUIDv4 + REST CRUD, snooze/acknowledge/dismiss, recurring weekday alarm re-arm, `[ Mark Done ]` & soft-delete Task synchronization, and `companion_api` Dart SDK delivered in M3 Batch G1 on `feature/m3-scheduler-notifications-g1`; Desktop Schedule UI deferred to Batch G2).
+- **`PC-SCHED-003`**: Quiet Hours Policy Engine (Half-open `[start, end)` window across same-day and overnight spans, per-Profile settings on `/api/v1/profiles/me/quiet-hours`, Alarms bypass default, Reminders/Routines respect default; backend delivered in M3 Batch G1 on `feature/m3-scheduler-notifications-g1`).
+- **`PC-SCHED-004`**: Missed Event Reconciliation & Late Alarm Grace Window Evaluation (`reconcile_missed_events` startup catch-up, bounded grace window evaluation, and durable `missed_catchup` backlog notifications delivered in M3 Batch G1 on `feature/m3-scheduler-notifications-g1`).
+- **`PC-SCHED-005`**: Bounded Companion Routines Engine (Deterministic `fallback_message` trigger with zero LLM delay and manual `/run` endpoint delivered in M3 Batch G1 on `feature/m3-scheduler-notifications-g1`; Risk 2 D9 conversational creation remains Milestone M4).
 
 ### Stream: `PC-VOICE` — Conversational Voice Pipeline
 - **`PC-VOICE-001`**: Flutter Native Audio Capture & Playback Hardware Controller.

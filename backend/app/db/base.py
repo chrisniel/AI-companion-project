@@ -12,6 +12,10 @@ from app.models.profile import Profile
 from app.models.profile_session import ProfileSession
 from app.models.session_ticket import SessionTicket
 from app.models.task import Task
+from app.models.reminder import Reminder
+from app.models.alarm import Alarm
+from app.models.routine import Routine
+from app.models.notification_event import NotificationEvent
 
 __all__ = [
     "Base",
@@ -26,4 +30,8 @@ __all__ = [
     "Attachment",
     "CharacterTemplate",
     "CharacterInstance",
+    "Reminder",
+    "Alarm",
+    "Routine",
+    "NotificationEvent",
 ]

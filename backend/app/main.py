@@ -252,8 +252,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Pairing credential initialized using selected local configuration.")
     logger.info("==================================================================")
 
-    # Step 4: Maintenance startup sweep & background periodic purge worker
+    # Step 4: Maintenance startup sweep, scheduler reconciliation & periodic background workers
     periodic_task = None
+    scheduler_task = None
     try:
         from app.db.session import _session_factory
         if _session_factory is not None:
@@ -265,17 +266,40 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     logger.info("Startup Profile purge maintenance: purged %d profiles", len(sweep_res.purged_profile_ids))
             interval = getattr(settings, "PROFILE_PURGE_INTERVAL_SECONDS", 3600)
             periodic_task = asyncio.create_task(run_periodic_profile_purge(_session_factory, interval_seconds=interval))
+
+            if getattr(settings, "SCHEDULER_ENABLED", True):
+                from app.services.scheduler import SchedulerService, run_periodic_scheduler
+                async with _session_factory() as session:
+                    sched = SchedulerService(session)
+                    catchup_events = await sched.reconcile_missed_events()
+                    expired_swept = await sched.sweep_expired_memories()
+                    if catchup_events or expired_swept:
+                        logger.info(
+                            "Startup scheduler reconciliation: %d catch-up notifications, %d expired memories swept",
+                            len(catchup_events),
+                            expired_swept,
+                        )
+                sched_interval = getattr(settings, "SCHEDULER_POLL_INTERVAL_SECONDS", 15.0)
+                mem_sweep_interval = getattr(settings, "MEMORY_EXPIRATION_SWEEP_INTERVAL_SECONDS", 300.0)
+                scheduler_task = asyncio.create_task(
+                    run_periodic_scheduler(
+                        _session_factory,
+                        interval_seconds=sched_interval,
+                        memory_sweep_interval_seconds=mem_sweep_interval,
+                    )
+                )
     except Exception as exc:
-        logger.warning(f"Error initializing profile purge maintenance: {exc}")
+        logger.warning(f"Error initializing startup maintenance or scheduler: {exc}")
 
     yield
 
-    if periodic_task is not None:
-        periodic_task.cancel()
-        try:
-            await periodic_task
-        except asyncio.CancelledError:
-            pass
+    for bg_task in (scheduler_task, periodic_task):
+        if bg_task is not None:
+            bg_task.cancel()
+            try:
+                await bg_task
+            except asyncio.CancelledError:
+                pass
 
     logger.info("Shutting down Local AI Runtime, draining LLM and disposing database...")
     try:

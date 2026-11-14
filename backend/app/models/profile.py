@@ -57,6 +57,30 @@ class Profile(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
         default=True,
         server_default="1",
     )
+    quiet_hours_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="0",
+    )
+    quiet_hours_start: Mapped[str] = mapped_column(
+        String(5),
+        nullable=False,
+        default="22:00",
+        server_default="22:00",
+    )
+    quiet_hours_end: Mapped[str] = mapped_column(
+        String(5),
+        nullable=False,
+        default="07:00",
+        server_default="07:00",
+    )
+    quiet_hours_timezone: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default="UTC",
+        server_default="UTC",
+    )
 
     def __init__(
         self,
@@ -68,6 +92,10 @@ class Profile(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
         status: str = "active",
         active_character_instance_id: Optional[str] = None,
         memory_extraction_enabled: bool = True,
+        quiet_hours_enabled: bool = False,
+        quiet_hours_start: str = "22:00",
+        quiet_hours_end: str = "07:00",
+        quiet_hours_timezone: str = "UTC",
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -80,6 +108,10 @@ class Profile(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
         self.status = status
         self.active_character_instance_id = active_character_instance_id
         self.memory_extraction_enabled = memory_extraction_enabled
+        self.quiet_hours_enabled = quiet_hours_enabled
+        self.quiet_hours_start = quiet_hours_start
+        self.quiet_hours_end = quiet_hours_end
+        self.quiet_hours_timezone = quiet_hours_timezone
         self.is_deleted = kwargs.get("is_deleted", False)
         self.deleted_at = kwargs.get("deleted_at", None)
         self.purge_after = kwargs.get("purge_after", None)

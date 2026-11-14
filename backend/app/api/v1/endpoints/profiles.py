@@ -9,8 +9,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_profile_session, get_db, require_host_admin
-from app.core.profile_sessions import now_utc
+from app.core.profile_sessions import now_utc, validate_profile_session
 from app.models.profile import Profile
+from app.models.profile_session import ProfileSession
+from app.schemas.scheduling import QuietHoursOut, QuietHoursUpdate
 from app.services.profile_purge_service import ProfilePurgeService
 
 router = APIRouter(prefix="/profiles", tags=["Profiles"])
@@ -116,6 +118,77 @@ async def profile_create(payload: ProfileCreateRequest, db: AsyncSession = Depen
     await db.commit()
     await db.refresh(profile)
     return profile_metadata(profile)
+
+
+@router.get("/me/quiet-hours", response_model=QuietHoursOut, summary="Get Active Profile Quiet Hours")
+async def get_own_quiet_hours(
+    session: ProfileSession = Depends(get_current_profile_session),
+    db: AsyncSession = Depends(get_db),
+) -> QuietHoursOut:
+    profile = (
+        await db.execute(
+            select(Profile).where(
+                Profile.id == session.profile_id,
+                Profile.is_deleted.is_(False),
+                Profile.deleted_at.is_(None),
+                Profile.status == "active",
+            )
+        )
+    ).scalar_one_or_none()
+    if profile is None:
+        raise HTTPException(404, "Profile unavailable")
+    return QuietHoursOut(
+        quiet_hours_enabled=profile.quiet_hours_enabled,
+        quiet_hours_start=profile.quiet_hours_start,
+        quiet_hours_end=profile.quiet_hours_end,
+        quiet_hours_timezone=profile.quiet_hours_timezone,
+    )
+
+
+@router.patch("/me/quiet-hours", response_model=QuietHoursOut, summary="Update Active Profile Quiet Hours")
+async def update_own_quiet_hours(
+    payload: QuietHoursUpdate,
+    session: ProfileSession = Depends(get_current_profile_session),
+    db: AsyncSession = Depends(get_db),
+) -> QuietHoursOut:
+    profile = (
+        await db.execute(
+            select(Profile).where(
+                Profile.id == session.profile_id,
+                Profile.is_deleted.is_(False),
+                Profile.deleted_at.is_(None),
+                Profile.status == "active",
+            )
+        )
+    ).scalar_one_or_none()
+    if profile is None:
+        raise HTTPException(404, "Profile unavailable")
+
+    new_enabled = payload.quiet_hours_enabled if payload.quiet_hours_enabled is not None else profile.quiet_hours_enabled
+    new_start = payload.quiet_hours_start if payload.quiet_hours_start is not None else profile.quiet_hours_start
+    new_end = payload.quiet_hours_end if payload.quiet_hours_end is not None else profile.quiet_hours_end
+    new_tz = payload.quiet_hours_timezone if payload.quiet_hours_timezone is not None else profile.quiet_hours_timezone
+
+    if new_enabled and new_start == new_end:
+        raise HTTPException(
+            status_code=422,
+            detail="quiet_hours_start and quiet_hours_end cannot be identical when quiet hours are enabled",
+        )
+
+    profile.quiet_hours_enabled = new_enabled
+    profile.quiet_hours_start = new_start
+    profile.quiet_hours_end = new_end
+    profile.quiet_hours_timezone = new_tz
+    profile.updated_at = now_utc()
+    await validate_profile_session(db, session)
+    await db.commit()
+    await db.refresh(profile)
+    return QuietHoursOut(
+        quiet_hours_enabled=profile.quiet_hours_enabled,
+        quiet_hours_start=profile.quiet_hours_start,
+        quiet_hours_end=profile.quiet_hours_end,
+        quiet_hours_timezone=profile.quiet_hours_timezone,
+    )
 
 
 @router.patch("/{profile_id}", response_model=ProfileMetadata, dependencies=[Depends(require_host_admin)])

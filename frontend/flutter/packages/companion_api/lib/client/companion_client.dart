@@ -13,8 +13,10 @@ import '../dto/message_dto.dart';
 import '../dto/model_registry_dto.dart';
 import '../dto/model_status_dto.dart';
 import '../dto/profile_dto.dart';
+import '../dto/scheduling_dto.dart';
 import '../dto/sse_event_dto.dart';
 import '../dto/system_status_dto.dart';
+import '../dto/task_dto.dart';
 import '../transport/sse_parser.dart';
 import 'companion_api_exception.dart';
 
@@ -990,6 +992,488 @@ class CompanionClient {
       return;
     }
     _handleErrorResponse(response);
+  }
+
+  Future<Map<String, dynamic>> _requestJson(
+    String method,
+    String fullPath, {
+    Map<String, String>? queryParameters,
+    Map<String, dynamic>? body,
+    int expectedStatus = 200,
+  }) async {
+    final uri = baseUri.replace(
+      path: '${baseUri.path}$fullPath',
+      queryParameters:
+          queryParameters == null || queryParameters.isEmpty ? null : queryParameters,
+    );
+    final headers = await _buildHeaders(requiresAuth: true);
+    final encoded = body == null ? null : jsonEncode(body);
+    late final http.Response response;
+    switch (method) {
+      case 'GET':
+        response = await _httpClient.get(uri, headers: headers);
+        break;
+      case 'POST':
+        response = await _httpClient.post(uri, headers: headers, body: encoded);
+        break;
+      case 'PATCH':
+        response = await _httpClient.patch(uri, headers: headers, body: encoded);
+        break;
+      default:
+        throw ArgumentError.value(method, 'method', 'Unsupported HTTP method');
+    }
+    if (response.statusCode == expectedStatus) {
+      final dynamic json = jsonDecode(response.body);
+      return Map<String, dynamic>.from(json as Map);
+    }
+    _handleErrorResponse(response);
+  }
+
+  Future<void> _deleteNoContent(String fullPath) async {
+    final uri = baseUri.replace(path: '${baseUri.path}$fullPath');
+    final headers = await _buildHeaders(requiresAuth: true);
+    final response = await _httpClient.delete(uri, headers: headers);
+    if (response.statusCode == 200 || response.statusCode == 204) {
+      return;
+    }
+    _handleErrorResponse(response);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tasks (/api/v1/tasks)
+  // ---------------------------------------------------------------------------
+
+  /// Lists active tasks via GET /api/v1/tasks.
+  Future<TaskListResponse> listTasks({
+    String? status,
+    String? priority,
+    String? category,
+    int skip = 0,
+    int limit = 50,
+  }) async {
+    final json = await _requestJson(
+      'GET',
+      '/api/v1/tasks',
+      queryParameters: {
+        if (status != null) 'status': status,
+        if (priority != null) 'priority': priority,
+        if (category != null) 'category': category,
+        'skip': skip.toString(),
+        'limit': limit.toString(),
+      },
+    );
+    return TaskListResponse.fromJson(json);
+  }
+
+  /// Creates a task via POST /api/v1/tasks.
+  Future<TaskResponse> createTask(TaskCreate payload) async {
+    final json = await _requestJson(
+      'POST',
+      '/api/v1/tasks',
+      body: payload.toJson(),
+      expectedStatus: 201,
+    );
+    return TaskResponse.fromJson(json);
+  }
+
+  /// Lists soft-deleted tasks in trash via GET /api/v1/tasks/trash.
+  Future<TrashListResponse> listTrashTasks({
+    int skip = 0,
+    int limit = 50,
+  }) async {
+    final json = await _requestJson(
+      'GET',
+      '/api/v1/tasks/trash',
+      queryParameters: {
+        'skip': skip.toString(),
+        'limit': limit.toString(),
+      },
+    );
+    return TrashListResponse.fromJson(json);
+  }
+
+  /// Fetches a task by ID via GET /api/v1/tasks/{task_id}.
+  Future<TaskResponse> getTask(String taskId) async {
+    final json = await _requestJson('GET', '/api/v1/tasks/$taskId');
+    return TaskResponse.fromJson(json);
+  }
+
+  /// Partially updates a task via PATCH /api/v1/tasks/{task_id}.
+  Future<TaskResponse> updateTask(
+    String taskId,
+    TaskUpdate payload, {
+    bool clearNotes = false,
+    bool clearDueDate = false,
+    bool clearReminderMinutesBefore = false,
+    bool clearReminderAt = false,
+  }) async {
+    final json = await _requestJson(
+      'PATCH',
+      '/api/v1/tasks/$taskId',
+      body: payload.toJson(
+        clearNotes: clearNotes,
+        clearDueDate: clearDueDate,
+        clearReminderMinutesBefore: clearReminderMinutesBefore,
+        clearReminderAt: clearReminderAt,
+      ),
+    );
+    return TaskResponse.fromJson(json);
+  }
+
+  /// Soft-deletes a task via DELETE /api/v1/tasks/{task_id}.
+  Future<void> deleteTask(String taskId) async {
+    await _deleteNoContent('/api/v1/tasks/$taskId');
+  }
+
+  /// Restores a soft-deleted task via POST /api/v1/tasks/{task_id}/restore.
+  Future<TaskResponse> restoreTask(String taskId) async {
+    final json = await _requestJson('POST', '/api/v1/tasks/$taskId/restore');
+    return TaskResponse.fromJson(json);
+  }
+
+  /// Permanently purges a soft-deleted task via DELETE /api/v1/tasks/{task_id}/permanent.
+  Future<void> permanentDeleteTask(String taskId) async {
+    await _deleteNoContent('/api/v1/tasks/$taskId/permanent');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Quiet Hours (/api/v1/profiles/me/quiet-hours)
+  // ---------------------------------------------------------------------------
+
+  /// Retrieves the active profile Quiet Hours configuration.
+  Future<QuietHoursOut> getQuietHours() async {
+    final json = await _requestJson('GET', '/api/v1/profiles/me/quiet-hours');
+    return QuietHoursOut.fromJson(json);
+  }
+
+  /// Updates the active profile Quiet Hours configuration.
+  Future<QuietHoursOut> updateQuietHours(QuietHoursUpdate payload) async {
+    final json = await _requestJson(
+      'PATCH',
+      '/api/v1/profiles/me/quiet-hours',
+      body: payload.toJson(),
+    );
+    return QuietHoursOut.fromJson(json);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Reminders (/api/v1/reminders)
+  // ---------------------------------------------------------------------------
+
+  /// Lists reminders via GET /api/v1/reminders.
+  Future<ReminderListOut> listReminders({
+    String? status,
+    String? taskId,
+    int skip = 0,
+    int limit = 50,
+  }) async {
+    final json = await _requestJson(
+      'GET',
+      '/api/v1/reminders',
+      queryParameters: {
+        if (status != null) 'status': status,
+        if (taskId != null) 'task_id': taskId,
+        'skip': skip.toString(),
+        'limit': limit.toString(),
+      },
+    );
+    return ReminderListOut.fromJson(json);
+  }
+
+  /// Creates a reminder via POST /api/v1/reminders.
+  Future<ReminderOut> createReminder(ReminderCreate payload) async {
+    final json = await _requestJson(
+      'POST',
+      '/api/v1/reminders',
+      body: payload.toJson(),
+      expectedStatus: 201,
+    );
+    return ReminderOut.fromJson(json);
+  }
+
+  /// Fetches a reminder by ID via GET /api/v1/reminders/{reminder_id}.
+  Future<ReminderOut> getReminder(String reminderId) async {
+    final json = await _requestJson('GET', '/api/v1/reminders/$reminderId');
+    return ReminderOut.fromJson(json);
+  }
+
+  /// Updates a reminder via PATCH /api/v1/reminders/{reminder_id}.
+  Future<ReminderOut> updateReminder(
+    String reminderId,
+    ReminderUpdate payload,
+  ) async {
+    final json = await _requestJson(
+      'PATCH',
+      '/api/v1/reminders/$reminderId',
+      body: payload.toJson(),
+    );
+    return ReminderOut.fromJson(json);
+  }
+
+  /// Soft-deletes a reminder via DELETE /api/v1/reminders/{reminder_id}.
+  Future<void> deleteReminder(String reminderId) async {
+    await _deleteNoContent('/api/v1/reminders/$reminderId');
+  }
+
+  /// Snoozes a reminder via POST /api/v1/reminders/{reminder_id}/snooze.
+  Future<ReminderOut> snoozeReminder(
+    String reminderId, {
+    SnoozeRequest? payload,
+  }) async {
+    final json = await _requestJson(
+      'POST',
+      '/api/v1/reminders/$reminderId/snooze',
+      body: (payload ?? const SnoozeRequest()).toJson(),
+    );
+    return ReminderOut.fromJson(json);
+  }
+
+  /// Acknowledges a reminder via POST /api/v1/reminders/{reminder_id}/acknowledge.
+  Future<ReminderOut> acknowledgeReminder(
+    String reminderId, {
+    AcknowledgeRequest? payload,
+  }) async {
+    final json = await _requestJson(
+      'POST',
+      '/api/v1/reminders/$reminderId/acknowledge',
+      body: (payload ?? const AcknowledgeRequest()).toJson(),
+    );
+    return ReminderOut.fromJson(json);
+  }
+
+  /// Dismisses a reminder via POST /api/v1/reminders/{reminder_id}/dismiss.
+  Future<ReminderOut> dismissReminder(String reminderId) async {
+    final json = await _requestJson(
+      'POST',
+      '/api/v1/reminders/$reminderId/dismiss',
+    );
+    return ReminderOut.fromJson(json);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Alarms (/api/v1/alarms)
+  // ---------------------------------------------------------------------------
+
+  /// Lists alarms via GET /api/v1/alarms.
+  Future<AlarmListOut> listAlarms({
+    bool? enabled,
+    String? status,
+    int skip = 0,
+    int limit = 50,
+  }) async {
+    final json = await _requestJson(
+      'GET',
+      '/api/v1/alarms',
+      queryParameters: {
+        if (enabled != null) 'enabled': enabled.toString(),
+        if (status != null) 'status': status,
+        'skip': skip.toString(),
+        'limit': limit.toString(),
+      },
+    );
+    return AlarmListOut.fromJson(json);
+  }
+
+  /// Creates an alarm via POST /api/v1/alarms.
+  Future<AlarmOut> createAlarm(AlarmCreate payload) async {
+    final json = await _requestJson(
+      'POST',
+      '/api/v1/alarms',
+      body: payload.toJson(),
+      expectedStatus: 201,
+    );
+    return AlarmOut.fromJson(json);
+  }
+
+  /// Fetches an alarm by ID via GET /api/v1/alarms/{alarm_id}.
+  Future<AlarmOut> getAlarm(String alarmId) async {
+    final json = await _requestJson('GET', '/api/v1/alarms/$alarmId');
+    return AlarmOut.fromJson(json);
+  }
+
+  /// Updates an alarm via PATCH /api/v1/alarms/{alarm_id}.
+  Future<AlarmOut> updateAlarm(String alarmId, AlarmUpdate payload) async {
+    final json = await _requestJson(
+      'PATCH',
+      '/api/v1/alarms/$alarmId',
+      body: payload.toJson(),
+    );
+    return AlarmOut.fromJson(json);
+  }
+
+  /// Soft-deletes an alarm via DELETE /api/v1/alarms/{alarm_id}.
+  Future<void> deleteAlarm(String alarmId) async {
+    await _deleteNoContent('/api/v1/alarms/$alarmId');
+  }
+
+  /// Snoozes an alarm via POST /api/v1/alarms/{alarm_id}/snooze.
+  Future<AlarmOut> snoozeAlarm(
+    String alarmId, {
+    SnoozeRequest? payload,
+  }) async {
+    final json = await _requestJson(
+      'POST',
+      '/api/v1/alarms/$alarmId/snooze',
+      body: (payload ?? const SnoozeRequest()).toJson(),
+    );
+    return AlarmOut.fromJson(json);
+  }
+
+  /// Acknowledges an alarm via POST /api/v1/alarms/{alarm_id}/acknowledge.
+  Future<AlarmOut> acknowledgeAlarm(String alarmId) async {
+    final json = await _requestJson(
+      'POST',
+      '/api/v1/alarms/$alarmId/acknowledge',
+    );
+    return AlarmOut.fromJson(json);
+  }
+
+  /// Dismisses an alarm via POST /api/v1/alarms/{alarm_id}/dismiss.
+  Future<AlarmOut> dismissAlarm(String alarmId) async {
+    final json = await _requestJson(
+      'POST',
+      '/api/v1/alarms/$alarmId/dismiss',
+    );
+    return AlarmOut.fromJson(json);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Routines (/api/v1/routines)
+  // ---------------------------------------------------------------------------
+
+  /// Lists routines via GET /api/v1/routines.
+  Future<RoutineListOut> listRoutines({
+    bool? enabled,
+    int skip = 0,
+    int limit = 50,
+  }) async {
+    final json = await _requestJson(
+      'GET',
+      '/api/v1/routines',
+      queryParameters: {
+        if (enabled != null) 'enabled': enabled.toString(),
+        'skip': skip.toString(),
+        'limit': limit.toString(),
+      },
+    );
+    return RoutineListOut.fromJson(json);
+  }
+
+  /// Creates a routine via POST /api/v1/routines.
+  Future<RoutineOut> createRoutine(RoutineCreate payload) async {
+    final json = await _requestJson(
+      'POST',
+      '/api/v1/routines',
+      body: payload.toJson(),
+      expectedStatus: 201,
+    );
+    return RoutineOut.fromJson(json);
+  }
+
+  /// Fetches a routine by ID via GET /api/v1/routines/{routine_id}.
+  Future<RoutineOut> getRoutine(String routineId) async {
+    final json = await _requestJson('GET', '/api/v1/routines/$routineId');
+    return RoutineOut.fromJson(json);
+  }
+
+  /// Updates a routine via PATCH /api/v1/routines/{routine_id}.
+  Future<RoutineOut> updateRoutine(
+    String routineId,
+    RoutineUpdate payload,
+  ) async {
+    final json = await _requestJson(
+      'PATCH',
+      '/api/v1/routines/$routineId',
+      body: payload.toJson(),
+    );
+    return RoutineOut.fromJson(json);
+  }
+
+  /// Soft-deletes a routine via DELETE /api/v1/routines/{routine_id}.
+  Future<void> deleteRoutine(String routineId) async {
+    await _deleteNoContent('/api/v1/routines/$routineId');
+  }
+
+  /// Manually triggers a routine via POST /api/v1/routines/{routine_id}/run.
+  Future<NotificationEventOut> runRoutineNow(String routineId) async {
+    final json = await _requestJson(
+      'POST',
+      '/api/v1/routines/$routineId/run',
+    );
+    return NotificationEventOut.fromJson(json);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Notifications Backlog (/api/v1/notifications)
+  // ---------------------------------------------------------------------------
+
+  /// Lists notification backlog events via GET /api/v1/notifications.
+  Future<NotificationListOut> listNotifications({
+    String? status,
+    String? sourceType,
+    bool unreadOnly = false,
+    int skip = 0,
+    int limit = 50,
+  }) async {
+    final json = await _requestJson(
+      'GET',
+      '/api/v1/notifications',
+      queryParameters: {
+        if (status != null) 'status': status,
+        if (sourceType != null) 'source_type': sourceType,
+        'unread_only': unreadOnly.toString(),
+        'skip': skip.toString(),
+        'limit': limit.toString(),
+      },
+    );
+    return NotificationListOut.fromJson(json);
+  }
+
+  /// Clears all active notifications via POST /api/v1/notifications/clear-all.
+  Future<NotificationClearResponse> clearAllNotifications() async {
+    final json = await _requestJson('POST', '/api/v1/notifications/clear-all');
+    return NotificationClearResponse.fromJson(json);
+  }
+
+  /// Marks a notification read via POST /api/v1/notifications/{event_id}/read.
+  Future<NotificationEventOut> markNotificationRead(String eventId) async {
+    final json = await _requestJson('POST', '/api/v1/notifications/$eventId/read');
+    return NotificationEventOut.fromJson(json);
+  }
+
+  /// Acknowledges a notification via POST /api/v1/notifications/{event_id}/acknowledge.
+  Future<NotificationEventOut> acknowledgeNotification(
+    String eventId, {
+    AcknowledgeRequest? payload,
+  }) async {
+    final json = await _requestJson(
+      'POST',
+      '/api/v1/notifications/$eventId/acknowledge',
+      body: (payload ?? const AcknowledgeRequest()).toJson(),
+    );
+    return NotificationEventOut.fromJson(json);
+  }
+
+  /// Dismisses a notification via POST /api/v1/notifications/{event_id}/dismiss.
+  Future<NotificationEventOut> dismissNotification(String eventId) async {
+    final json = await _requestJson(
+      'POST',
+      '/api/v1/notifications/$eventId/dismiss',
+    );
+    return NotificationEventOut.fromJson(json);
+  }
+
+  /// Snoozes a notification via POST /api/v1/notifications/{event_id}/snooze.
+  Future<NotificationEventOut> snoozeNotification(
+    String eventId, {
+    SnoozeRequest? payload,
+  }) async {
+    final json = await _requestJson(
+      'POST',
+      '/api/v1/notifications/$eventId/snooze',
+      body: (payload ?? const SnoozeRequest()).toJson(),
+    );
+    return NotificationEventOut.fromJson(json);
   }
 
   void close() {

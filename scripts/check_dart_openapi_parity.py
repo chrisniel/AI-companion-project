@@ -110,20 +110,56 @@ M3_ROUTE_DART_METHODS: Dict[Tuple[str, str], Tuple[str, str]] = {
     ("DELETE", "/api/v1/memories/{memory_id}"): ("deleteMemory", "/api/v1/memories/$memoryId"),
     ("GET", "/api/v1/conversations/{conversation_id}/summary"): ("getConversationSummary", "/api/v1/conversations/$conversationId/summary"),
     ("POST", "/api/v1/conversations/{conversation_id}/compact"): ("compactConversation", "/api/v1/conversations/$conversationId/compact"),
+    # Tasks (8 routes promoted from M2 deferred)
+    ("GET", "/api/v1/tasks"): ("listTasks", "/api/v1/tasks"),
+    ("POST", "/api/v1/tasks"): ("createTask", "/api/v1/tasks"),
+    ("GET", "/api/v1/tasks/trash"): ("listTrashTasks", "/api/v1/tasks/trash"),
+    ("GET", "/api/v1/tasks/{task_id}"): ("getTask", "/api/v1/tasks/$taskId"),
+    ("PATCH", "/api/v1/tasks/{task_id}"): ("updateTask", "/api/v1/tasks/$taskId"),
+    ("DELETE", "/api/v1/tasks/{task_id}"): ("deleteTask", "/api/v1/tasks/$taskId"),
+    ("POST", "/api/v1/tasks/{task_id}/restore"): ("restoreTask", "/api/v1/tasks/$taskId/restore"),
+    ("DELETE", "/api/v1/tasks/{task_id}/permanent"): ("permanentDeleteTask", "/api/v1/tasks/$taskId/permanent"),
+    # Quiet Hours (2 routes)
+    ("GET", "/api/v1/profiles/me/quiet-hours"): ("getQuietHours", "/api/v1/profiles/me/quiet-hours"),
+    ("PATCH", "/api/v1/profiles/me/quiet-hours"): ("updateQuietHours", "/api/v1/profiles/me/quiet-hours"),
+    # Reminders (8 routes)
+    ("GET", "/api/v1/reminders"): ("listReminders", "/api/v1/reminders"),
+    ("POST", "/api/v1/reminders"): ("createReminder", "/api/v1/reminders"),
+    ("GET", "/api/v1/reminders/{reminder_id}"): ("getReminder", "/api/v1/reminders/$reminderId"),
+    ("PATCH", "/api/v1/reminders/{reminder_id}"): ("updateReminder", "/api/v1/reminders/$reminderId"),
+    ("DELETE", "/api/v1/reminders/{reminder_id}"): ("deleteReminder", "/api/v1/reminders/$reminderId"),
+    ("POST", "/api/v1/reminders/{reminder_id}/snooze"): ("snoozeReminder", "/api/v1/reminders/$reminderId/snooze"),
+    ("POST", "/api/v1/reminders/{reminder_id}/acknowledge"): ("acknowledgeReminder", "/api/v1/reminders/$reminderId/acknowledge"),
+    ("POST", "/api/v1/reminders/{reminder_id}/dismiss"): ("dismissReminder", "/api/v1/reminders/$reminderId/dismiss"),
+    # Alarms (8 routes)
+    ("GET", "/api/v1/alarms"): ("listAlarms", "/api/v1/alarms"),
+    ("POST", "/api/v1/alarms"): ("createAlarm", "/api/v1/alarms"),
+    ("GET", "/api/v1/alarms/{alarm_id}"): ("getAlarm", "/api/v1/alarms/$alarmId"),
+    ("PATCH", "/api/v1/alarms/{alarm_id}"): ("updateAlarm", "/api/v1/alarms/$alarmId"),
+    ("DELETE", "/api/v1/alarms/{alarm_id}"): ("deleteAlarm", "/api/v1/alarms/$alarmId"),
+    ("POST", "/api/v1/alarms/{alarm_id}/snooze"): ("snoozeAlarm", "/api/v1/alarms/$alarmId/snooze"),
+    ("POST", "/api/v1/alarms/{alarm_id}/acknowledge"): ("acknowledgeAlarm", "/api/v1/alarms/$alarmId/acknowledge"),
+    ("POST", "/api/v1/alarms/{alarm_id}/dismiss"): ("dismissAlarm", "/api/v1/alarms/$alarmId/dismiss"),
+    # Routines (6 routes)
+    ("GET", "/api/v1/routines"): ("listRoutines", "/api/v1/routines"),
+    ("POST", "/api/v1/routines"): ("createRoutine", "/api/v1/routines"),
+    ("GET", "/api/v1/routines/{routine_id}"): ("getRoutine", "/api/v1/routines/$routineId"),
+    ("PATCH", "/api/v1/routines/{routine_id}"): ("updateRoutine", "/api/v1/routines/$routineId"),
+    ("DELETE", "/api/v1/routines/{routine_id}"): ("deleteRoutine", "/api/v1/routines/$routineId"),
+    ("POST", "/api/v1/routines/{routine_id}/run"): ("runRoutineNow", "/api/v1/routines/$routineId/run"),
+    # Notifications Backlog (6 routes)
+    ("GET", "/api/v1/notifications"): ("listNotifications", "/api/v1/notifications"),
+    ("POST", "/api/v1/notifications/clear-all"): ("clearAllNotifications", "/api/v1/notifications/clear-all"),
+    ("POST", "/api/v1/notifications/{event_id}/read"): ("markNotificationRead", "/api/v1/notifications/$eventId/read"),
+    ("POST", "/api/v1/notifications/{event_id}/acknowledge"): ("acknowledgeNotification", "/api/v1/notifications/$eventId/acknowledge"),
+    ("POST", "/api/v1/notifications/{event_id}/dismiss"): ("dismissNotification", "/api/v1/notifications/$eventId/dismiss"),
+    ("POST", "/api/v1/notifications/{event_id}/snooze"): ("snoozeNotification", "/api/v1/notifications/$eventId/snooze"),
 }
 
 # Explicitly cataloged routes outside CompanionClient to prevent silent omissions.
 UNMAPPED_FUTURE_ROUTES: Dict[Tuple[str, str], str] = {
     ("POST", "/api/v1/auth/session/claim"): "M2 browser-only authorization initiation",
     ("GET", "/api/v1/profiles/{profile_id}"): "M2 scoped metadata; native client uses session/me",
-    ("GET", "/api/v1/tasks"): "M2 Tasks / Task Management",
-    ("POST", "/api/v1/tasks"): "M2 Tasks / Task Management",
-    ("GET", "/api/v1/tasks/trash"): "M2 Tasks / Trash Management",
-    ("GET", "/api/v1/tasks/{task_id}"): "M2 Tasks / Task Detail",
-    ("PATCH", "/api/v1/tasks/{task_id}"): "M2 Tasks / Task Update",
-    ("DELETE", "/api/v1/tasks/{task_id}"): "M2 Tasks / Task Deletion",
-    ("POST", "/api/v1/tasks/{task_id}/restore"): "M2 Tasks / Task Restoration",
-    ("DELETE", "/api/v1/tasks/{task_id}/permanent"): "M2 Tasks / Permanent Task Purge",
     ("GET", "/api/v1/models/registry"): "M2/M3 Model Registry & Downloader",
     ("POST", "/api/v1/models/select"): "M2/M3 Model Selection Management",
     ("POST", "/api/v1/models/load"): "M2/M3 Model Lifecycle Management",
@@ -172,6 +208,31 @@ SCHEMA_TO_DART_CLASS: Dict[str, Tuple[str, str]] = {
     "MemoryUpdate": ("memory_dto.dart", "MemoryUpdate"),
     "MemoryOut": ("memory_dto.dart", "MemoryOut"),
     "MemoryListOut": ("memory_dto.dart", "MemoryListOut"),
+    "TaskCreate": ("task_dto.dart", "TaskCreate"),
+    "TaskUpdate": ("task_dto.dart", "TaskUpdate"),
+    "TaskResponse": ("task_dto.dart", "TaskResponse"),
+    "TaskListResponse": ("task_dto.dart", "TaskListResponse"),
+    "TrashTaskResponse": ("task_dto.dart", "TrashTaskResponse"),
+    "TrashListResponse": ("task_dto.dart", "TrashListResponse"),
+    "QuietHoursOut": ("scheduling_dto.dart", "QuietHoursOut"),
+    "QuietHoursUpdate": ("scheduling_dto.dart", "QuietHoursUpdate"),
+    "SnoozeRequest": ("scheduling_dto.dart", "SnoozeRequest"),
+    "AcknowledgeRequest": ("scheduling_dto.dart", "AcknowledgeRequest"),
+    "ReminderCreate": ("scheduling_dto.dart", "ReminderCreate"),
+    "ReminderUpdate": ("scheduling_dto.dart", "ReminderUpdate"),
+    "ReminderOut": ("scheduling_dto.dart", "ReminderOut"),
+    "ReminderListOut": ("scheduling_dto.dart", "ReminderListOut"),
+    "AlarmCreate": ("scheduling_dto.dart", "AlarmCreate"),
+    "AlarmUpdate": ("scheduling_dto.dart", "AlarmUpdate"),
+    "AlarmOut": ("scheduling_dto.dart", "AlarmOut"),
+    "AlarmListOut": ("scheduling_dto.dart", "AlarmListOut"),
+    "RoutineCreate": ("scheduling_dto.dart", "RoutineCreate"),
+    "RoutineUpdate": ("scheduling_dto.dart", "RoutineUpdate"),
+    "RoutineOut": ("scheduling_dto.dart", "RoutineOut"),
+    "RoutineListOut": ("scheduling_dto.dart", "RoutineListOut"),
+    "NotificationEventOut": ("scheduling_dto.dart", "NotificationEventOut"),
+    "NotificationListOut": ("scheduling_dto.dart", "NotificationListOut"),
+    "NotificationClearResponse": ("scheduling_dto.dart", "NotificationClearResponse"),
 }
 
 
@@ -500,7 +561,7 @@ def run_checks() -> Tuple[bool, str]:
     if route_errors:
         all_errors.extend(route_errors)
 
-    report_lines.append(f"\n[M1 + M2 Native Covered Routes: {len(verified_m1)}/{len(M1_COVERED_ROUTES) + len(M2_ROUTE_DART_METHODS)}]")
+    report_lines.append(f"\n[M1 + M2 + M3 Native Covered Routes: {len(verified_m1)}/{len(M1_COVERED_ROUTES) + len(M2_ROUTE_DART_METHODS) + len(M3_ROUTE_DART_METHODS)}]")
     for method, path in verified_m1:
         report_lines.append(f"  [OK] {method:<6} {path}")
 
@@ -513,7 +574,7 @@ def run_checks() -> Tuple[bool, str]:
     if client_errors:
         all_errors.extend(client_errors)
 
-    report_lines.append(f"\n[Verified CompanionClient Route Methods: {len(verified_impls)}/{len(M1_ROUTE_DART_METHODS) + len(M2_ROUTE_DART_METHODS)}]")
+    report_lines.append(f"\n[Verified CompanionClient Route Methods: {len(verified_impls)}/{len(M1_ROUTE_DART_METHODS) + len(M2_ROUTE_DART_METHODS) + len(M3_ROUTE_DART_METHODS)}]")
     for method, path, dart_method in verified_impls:
         report_lines.append(f"  [OK] {method:<6} {path:<48} -> {dart_method}()")
 
