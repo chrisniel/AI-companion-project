@@ -1,7 +1,7 @@
 """Pydantic schemas for Conversation management."""
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 from pydantic import Field
 from app.schemas.common import BaseSchema
 
@@ -39,3 +39,34 @@ class ConversationListOut(BaseSchema):
     """Paginated or listed conversation response."""
     items: List[ConversationOut]
     total: int
+
+
+class ConversationSummaryOut(BaseSchema):
+    """Serialized active rolling episode summary for a conversation."""
+
+    id: str
+    conversation_id: str
+    summary_text: str
+    from_sequence_no: int
+    to_sequence_no: int
+    compacted_message_count: int
+    token_estimate: int
+    source: Literal["auto", "manual", "extractive_fallback"]
+    is_active: bool
+    updated_at: datetime
+
+
+class ConversationCompactRequest(BaseSchema):
+    """Optional overrides when triggering manual conversation compaction."""
+
+    keep_recent_messages: Optional[int] = Field(default=None, ge=0, le=50)
+    force: bool = True
+
+
+class ConversationCompactResponse(BaseSchema):
+    """Result envelope for manual context compaction."""
+
+    conversation_id: str
+    compacted: bool
+    reason: str
+    summary: Optional[ConversationSummaryOut] = None

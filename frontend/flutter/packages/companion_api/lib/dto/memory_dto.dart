@@ -109,6 +109,7 @@ class MemoryUpdate {
   final double? importance;
   final bool? isCore;
   final String? expiresAt;
+  final bool? clearExpiresAt;
   final bool? userVerified;
   final String? sourceType;
   final List<String>? triggerKeywords;
@@ -119,6 +120,7 @@ class MemoryUpdate {
     this.importance,
     this.isCore,
     this.expiresAt,
+    this.clearExpiresAt,
     this.userVerified,
     this.sourceType,
     this.triggerKeywords,
@@ -144,7 +146,8 @@ class MemoryUpdate {
         if (category != null) 'category': category,
         if (importance != null) 'importance': importance,
         if (isCore != null) 'is_core': isCore,
-        'expires_at': expiresAt,
+        if (expiresAt != null) 'expires_at': expiresAt,
+        if (clearExpiresAt != null) 'clear_expires_at': clearExpiresAt,
         if (userVerified != null) 'user_verified': userVerified,
         if (sourceType != null) 'source_type': sourceType,
         if (triggerKeywords != null) 'trigger_keywords': triggerKeywords,
@@ -160,6 +163,7 @@ class MemoryUpdate {
           importance == other.importance &&
           isCore == other.isCore &&
           expiresAt == other.expiresAt &&
+          clearExpiresAt == other.clearExpiresAt &&
           userVerified == other.userVerified &&
           sourceType == other.sourceType &&
           _stringListEquals(triggerKeywords, other.triggerKeywords);
@@ -171,6 +175,7 @@ class MemoryUpdate {
         importance,
         isCore,
         expiresAt,
+        clearExpiresAt,
         userVerified,
         sourceType,
         triggerKeywords == null ? null : Object.hashAll(triggerKeywords!),

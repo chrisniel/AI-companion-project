@@ -248,7 +248,11 @@ async def update_memory(
         memory.importance = update_dict["importance"]
     if "is_core" in update_dict and update_dict["is_core"] is not None:
         memory.is_core = update_dict["is_core"]
-    if "expires_at" in update_dict:
+    clear_expires = update_dict.pop("clear_expires_at", None)
+    if clear_expires is True:
+        memory.expires_at = None
+        memory.last_verified_at = datetime.now(timezone.utc)
+    elif "expires_at" in update_dict:
         # None explicitly passed clears expiry and updates last_verified_at
         memory.expires_at = update_dict["expires_at"]
         memory.last_verified_at = datetime.now(timezone.utc)

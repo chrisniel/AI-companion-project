@@ -3,7 +3,7 @@
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 - **Plan ID:** `PLAN-M3-CONTEXT-COMPACTION-MEMORY-F`
-- **Status:** Draft — Awaiting Phase 1 Human Plan Approval
+- **Status:** Implemented & Verified on `feature/m3-context-compaction-memory-f` (Phase 3 Closure Complete — Draft PR Ready for Phase 4 Review)
 - **Delivery Level:** Level B — Planned Autonomous (with Level C database schema migration `014_conversation_summaries_and_compaction`)
 - **Target Milestone:** M3 — Intelligence & Productivity (`Local Intelligence, Memory & Persona Core`)
 - **Work Breakdown Structure IDs:** `PC-MEM-005` (Pre-Limit Context Compaction & Rolling Conversation Summaries), `PC-MEM-002` / `PC-MEM-003` / `PC-MEM-004` (Emotion-Weighted Memory Importance & Temporal Fact Evolution), `PC-CLIENT-006` & `PC-CLIENT-009` (1-Click Chat Bubble Bookmark & Manual Compaction UI), plus Batch E Phase 4 Independent Review Hardening items
@@ -276,20 +276,20 @@ Mark prior active ConversationSummary is_active=False, superseded_by_id=new_summ
 ## 5. Acceptance Criteria & Verification Strategy
 
 ### Automated Repository Checks
-- [ ] Backend compaction & memory tests: `pytest backend/tests/test_context_compaction.py backend/tests/test_memory_knowledge_tiers.py backend/tests/test_schema_lifecycle.py backend/tests/test_prepare_database_schema_backup.py`
-- [ ] Full backend test suite: `pytest backend/tests`
-- [ ] Contract & Dart parity checks (matching `.github/workflows/ci.yml`):
-  - `python scripts/check_openapi_contract.py --check`
-  - `python scripts/check_dart_openapi_parity.py --check`
-  - `python -B -m unittest scripts/tests/test_check_dart_openapi_parity.py`
-- [ ] Web frontend typecheck, tests & build:
-  - `npm --prefix frontend/web run lint`
-  - `npm --prefix frontend/web test -- --run`
-  - `npm --prefix frontend/web run build`
-- [ ] Flutter Dart package & Desktop app checks:
-  - `dart test` in `frontend/flutter/packages/companion_api`
-  - `flutter analyze` across `frontend/flutter`
-  - `flutter test` in `frontend/flutter/apps/desktop`
+- [x] Backend compaction & memory tests (`test_context_compaction.py`, `test_memory_knowledge_tiers.py`, `test_schema_lifecycle.py`, `test_prepare_database_schema_backup.py`) verified via full backend test run (`796 passed` — direct exit `0`)
+- [x] Full backend test suite: `pytest backend/tests` (`796 passed, 77 warnings in 377.63s`)
+- [x] Contract & Dart parity checks (matching `.github/workflows/ci.yml`):
+  - `python scripts/check_openapi_contract.py --check` (`46 routes` — passed)
+  - `python scripts/check_dart_openapi_parity.py --check` (`35/35 schemas`, `44/26 routes` — passed)
+  - `python -B -m unittest scripts/tests/test_check_dart_openapi_parity.py` (`8 tests` — OK)
+- [x] Web frontend typecheck, tests & build:
+  - `npm --prefix frontend/web run lint` (`tsc --noEmit` — passed)
+  - `npm --prefix frontend/web test -- --run` (`16 files, 248 tests passed`)
+  - `npm --prefix frontend/web run build` (`vite build` — succeeded)
+- [x] Flutter Dart package & Desktop app checks:
+  - `dart test` in `frontend/flutter/packages/companion_api` (`99 tests` — passed)
+  - `flutter analyze` across `frontend/flutter` (`No issues found!`)
+  - `flutter test` in `frontend/flutter/apps/desktop` (`356 tests` — passed)
 
 ### Manual & Host-Level Checks (Where Applicable)
 - [ ] On Windows Flutter Desktop app, hold a 10+ turn conversation or click `Compact Context` in the chat header and verify the Episode Digest pill (`Digest: Turns 1–N`) displays accurately while raw conversation transcript remains completely intact in SQLite.

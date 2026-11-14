@@ -60,6 +60,9 @@ class DesktopChatController extends ChangeNotifier {
   String? _errorMessage;
   bool _isLoadingConversations = false;
   String? _conversationError;
+  ConversationSummaryOut? _activeSummary;
+  bool _isCompacting = false;
+  int _summarySequenceToken = 0;
 
   ActiveCharacterStateOut? _activeCharacterState;
   final Map<String, CharacterInstanceOut> _characterCache = <String, CharacterInstanceOut>{};
@@ -129,10 +132,13 @@ class DesktopChatController extends ChangeNotifier {
     _authenticatedSessionExpiry = null;
     ++_configEpoch;
     ++_loadSequenceToken;
+    ++_summarySequenceToken;
     _conversations = [];
     _activeConversation = null;
     _messages = [];
     _streamingText = '';
+    _activeSummary = null;
+    _isCompacting = false;
     _errorMessage = null;
     _conversationError = null;
     _conversationDrafts.clear();
@@ -226,6 +232,8 @@ class DesktopChatController extends ChangeNotifier {
   bool get isCreatingConversation => _isCreatingConversation;
   bool get isAwaitingAcceptance => _isAwaitingAcceptance;
   String? get conversationError => _conversationError;
+  ConversationSummaryOut? get activeSummary => _activeSummary;
+  bool get isCompacting => _isCompacting;
   ActiveCharacterStateOut? get activeCharacterState => _activeCharacterState;
 
   /// Explicitly updates or sets the active character state for the active profile.
@@ -606,6 +614,9 @@ class DesktopChatController extends ChangeNotifier {
     _messages = [];
     _streamingText = '';
     _errorMessage = null;
+    _activeSummary = null;
+    _isCompacting = false;
+    ++_summarySequenceToken;
     if (restoreSavedSession) {
       _authenticatedProfileId = null;
       _authenticatedProfileName = null;
@@ -775,6 +786,9 @@ class DesktopChatController extends ChangeNotifier {
     _messages = [];
     _streamingText = '';
     _generationState = ChatGenerationState.idle;
+    _activeSummary = null;
+    _isCompacting = false;
+    ++_summarySequenceToken;
 
     if (conversation.characterInstanceId != null &&
         !_characterCache.containsKey(conversation.characterInstanceId) &&
@@ -784,7 +798,10 @@ class DesktopChatController extends ChangeNotifier {
 
     notifyListeners();
 
-    await loadMessages(conversation.id);
+    await Future.wait([
+      loadMessages(conversation.id),
+      loadConversationSummary(conversationId: conversation.id),
+    ]);
   }
 
   /// Creates a new persistent conversation thread and selects it.
@@ -882,6 +899,9 @@ class DesktopChatController extends ChangeNotifier {
           _messages = [];
           _streamingText = '';
           _generationState = ChatGenerationState.idle;
+          _activeSummary = null;
+          _isCompacting = false;
+          ++_summarySequenceToken;
           notifyListeners();
         }
       } else {
@@ -892,6 +912,104 @@ class DesktopChatController extends ChangeNotifier {
       _errorMessage = 'Failed to delete conversation: $e';
       if (!_isDisposed) notifyListeners();
       rethrow;
+    }
+  }
+
+  /// Loads the latest active episode digest summary for the selected thread.
+  Future<void> loadConversationSummary({String? conversationId}) async {
+    final targetId = conversationId ?? _activeConversation?.id;
+    if (_isDisposed || !isConnected || targetId == null) return;
+    final epoch = _configEpoch;
+    final summaryToken = ++_summarySequenceToken;
+    try {
+      final summary = await _client.getConversationSummary(targetId);
+      if (_isDisposed ||
+          epoch != _configEpoch ||
+          summaryToken != _summarySequenceToken ||
+          _activeConversation?.id != targetId) {
+        return;
+      }
+      _activeSummary = summary;
+      notifyListeners();
+    } catch (_) {
+      // Summary lookup is non-fatal so chat selection and unmocked tests stay resilient.
+    }
+  }
+
+  /// Requests manual context compaction for the currently active conversation.
+  Future<ConversationCompactResponse?> compactActiveConversation({
+    int? keepRecentMessages,
+  }) async {
+    if (_isDisposed) return null;
+    final activeConv = _activeConversation;
+    if (!isConnected || activeConv == null || isGenerating || _isCompacting) {
+      return null;
+    }
+    final epoch = _configEpoch;
+    final targetId = activeConv.id;
+    _isCompacting = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final response = await _client.compactConversation(
+        targetId,
+        ConversationCompactRequest(
+          keepRecentMessages: keepRecentMessages,
+          force: true,
+        ),
+      );
+      if (_isDisposed ||
+          epoch != _configEpoch ||
+          _activeConversation?.id != targetId) {
+        return null;
+      }
+      ++_summarySequenceToken;
+      if (response.summary != null) {
+        _activeSummary = response.summary;
+      }
+      return response;
+    } catch (e) {
+      if (_isDisposed || epoch != _configEpoch) return null;
+      _errorMessage = 'Failed to compact context: $e';
+      return null;
+    } finally {
+      if (!_isDisposed && epoch == _configEpoch) {
+        _isCompacting = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  /// Bookmarks a chat message snippet into long-term memory or fixed knowledge.
+  Future<bool> bookmarkMessageToMemory(
+    String content, {
+    required bool asKnowledge,
+  }) async {
+    if (_isDisposed || !isConnected) return false;
+    var trimmed = content.trim();
+    if (trimmed.isEmpty) return false;
+    if (trimmed.length > 1000) {
+      trimmed = '${trimmed.substring(0, 997).trimRight()}...';
+    }
+    final epoch = _configEpoch;
+    try {
+      await _client.createMemory(
+        MemoryCreate(
+          content: trimmed,
+          category: 'fact',
+          importance: asKnowledge ? 1.5 : 1.0,
+          scope: 'profile',
+          isCore: asKnowledge,
+          sourceType: 'user_explicit',
+        ),
+      );
+      return !_isDisposed && epoch == _configEpoch;
+    } catch (e) {
+      if (_isDisposed || epoch != _configEpoch) return false;
+      _errorMessage = 'Failed to bookmark message: $e';
+      notifyListeners();
+      return false;
     }
   }
 
@@ -1222,6 +1340,7 @@ class DesktopChatController extends ChangeNotifier {
     }
     if (hasBeenAccepted) {
       loadMessages(conversationId, expectedTurnToken: turnToken);
+      unawaited(loadConversationSummary(conversationId: conversationId));
     }
   }
 

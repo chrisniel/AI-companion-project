@@ -779,13 +779,13 @@ void main() {
         expect(created.isCore, isTrue);
       });
 
-      test('updateMemory serializes update and returns MemoryOut', () async {
+      test('updateMemory omits expires_at when null and serializes clear_expires_at when promoting', () async {
         final mock = MockClient((request) async {
           expect(request.url.path, '/api/v1/memories/mem-123');
           expect(request.method, 'PATCH');
           final body = jsonDecode(request.body) as Map<String, dynamic>;
-          expect(body.containsKey('expires_at'), isTrue);
-          expect(body['expires_at'], isNull);
+          expect(body.containsKey('expires_at'), isFalse);
+          expect(body['clear_expires_at'], isTrue);
           return http.Response(
             jsonEncode({
               'id': 'mem-123',
@@ -810,10 +810,96 @@ void main() {
         );
         final updated = await client.updateMemory(
           'mem-123',
-          const MemoryUpdate(expiresAt: null, isCore: true),
+          const MemoryUpdate(clearExpiresAt: true, isCore: true),
         );
         expect(updated.expiresAt, isNull);
         expect(updated.isCore, isTrue);
+
+        // Star/approve update without clearExpiresAt must omit expires_at completely
+        final approvePayload = const MemoryUpdate(userVerified: true).toJson();
+        expect(approvePayload.containsKey('expires_at'), isFalse);
+        expect(approvePayload.containsKey('clear_expires_at'), isFalse);
+      });
+
+      test('getConversationSummary returns null when server returns null and parses summary when active', () async {
+        var callCount = 0;
+        final mock = MockClient((request) async {
+          callCount += 1;
+          expect(request.url.path, '/api/v1/conversations/conv-1/summary');
+          expect(request.method, 'GET');
+          if (callCount == 1) {
+            return http.Response('null', 200);
+          }
+          return http.Response(
+            jsonEncode({
+              'id': 'sum-1',
+              'conversation_id': 'conv-1',
+              'summary_text': 'User planned M3 release and tested compaction.',
+              'from_sequence_no': 1,
+              'to_sequence_no': 6,
+              'compacted_message_count': 6,
+              'token_estimate': 12,
+              'source': 'manual',
+              'is_active': true,
+              'updated_at': '2026-11-14T12:00:00Z',
+            }),
+            200,
+          );
+        });
+
+        final client = CompanionClient(
+          httpClient: mock,
+          sessionStore: InMemoryCredentialStore('test_session'),
+        );
+        expect(await client.getConversationSummary('conv-1'), isNull);
+        final active = await client.getConversationSummary('conv-1');
+        expect(active, isNotNull);
+        expect(active!.id, 'sum-1');
+        expect(active.fromSequenceNo, 1);
+        expect(active.toSequenceNo, 6);
+        expect(active.source, 'manual');
+      });
+
+      test('compactConversation posts request and parses ConversationCompactResponse', () async {
+        final mock = MockClient((request) async {
+          expect(request.url.path, '/api/v1/conversations/conv-1/compact');
+          expect(request.method, 'POST');
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          expect(body['force'], isTrue);
+          expect(body['keep_recent_messages'], 4);
+          return http.Response(
+            jsonEncode({
+              'conversation_id': 'conv-1',
+              'compacted': true,
+              'reason': 'manual_compacted',
+              'summary': {
+                'id': 'sum-2',
+                'conversation_id': 'conv-1',
+                'summary_text': 'Compact episode summary',
+                'from_sequence_no': 1,
+                'to_sequence_no': 8,
+                'compacted_message_count': 8,
+                'token_estimate': 8,
+                'source': 'extractive_fallback',
+                'is_active': true,
+                'updated_at': '2026-11-14T12:05:00Z',
+              },
+            }),
+            200,
+          );
+        });
+
+        final client = CompanionClient(
+          httpClient: mock,
+          sessionStore: InMemoryCredentialStore('test_session'),
+        );
+        final res = await client.compactConversation(
+          'conv-1',
+          const ConversationCompactRequest(keepRecentMessages: 4, force: true),
+        );
+        expect(res.compacted, isTrue);
+        expect(res.reason, 'manual_compacted');
+        expect(res.summary?.toSequenceNo, 8);
       });
 
       test('deleteMemory succeeds on 200 or 204', () async {

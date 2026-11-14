@@ -141,6 +141,38 @@ def _create_new_memory(
     )
 
 
+_PREVIOUSLY_SUFFIX_RE = re.compile(
+    r"\s*\(previously:\s*.*?\s+until\s+\d{4}-\d{2}\)\s*$"
+)
+
+
+def _format_temporal_supersession(
+    old_content: str,
+    new_content: str,
+    now: datetime,
+    max_length: int = 1000,
+) -> str:
+    """Append a bounded single-step supersession note preserving prior state with YYYY-MM."""
+    old_base = _PREVIOUSLY_SUFFIX_RE.sub("", old_content or "").strip()
+    new_base = _PREVIOUSLY_SUFFIX_RE.sub("", new_content or "").strip()
+
+    if not old_base or old_base.rstrip(".").lower() == new_base.rstrip(".").lower():
+        return new_base[:max_length]
+
+    month_label = now.strftime("%Y-%m")
+    prefix = f"{new_base} (previously: "
+    tail = f" until {month_label})"
+    overhead = len(prefix) + len(tail)
+    if overhead >= max_length - 10:
+        return new_base[:max_length]
+
+    avail_old = max_length - overhead
+    if len(old_base) > avail_old:
+        old_base = f"{old_base[: max(1, avail_old - 1)].rstrip()}…"
+
+    return f"{prefix}{old_base}{tail}"
+
+
 async def reconcile_candidate(
     db: AsyncSession,
     profile_id: str,
@@ -328,7 +360,18 @@ async def reconcile_candidate(
 
     # Slot: UPDATE (explicit update signal or single-attribute replacement)
     if _is_update(best_match.content, candidate.content):
-        best_match.content = candidate.content
+        if not best_match.is_short_term and candidate.category in (
+            "fact",
+            "preference",
+            "context",
+        ):
+            best_match.content = _format_temporal_supersession(
+                best_match.content,
+                candidate.content,
+                current_now,
+            )
+        else:
+            best_match.content = candidate.content
         best_match.category = candidate.category
         best_match.last_verified_at = current_now
         if is_explicit or user_verified or candidate.user_verified:

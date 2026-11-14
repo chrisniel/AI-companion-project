@@ -184,6 +184,15 @@ class Settings(BaseSettings):
     MEMORY_EXTRACTION_TEMPERATURE: float = 0.1
     MEMORY_EXTRACTION_MAX_TOKENS: int = 256
 
+    # M3 Batch F: Pre-Limit Context Compaction & Rolling Conversation Summaries
+    CONTEXT_COMPACTION_ENABLED: bool = True
+    CONTEXT_COMPACTION_TRIGGER_RATIO: float = 0.72
+    CONTEXT_COMPACTION_KEEP_RECENT_MESSAGES: int = 8
+    CONTEXT_COMPACTION_MIN_MESSAGES: int = 4
+    CONTEXT_COMPACTION_SUMMARY_MAX_TOKENS: int = 180
+    CONTEXT_COMPACTION_LLM_MAX_TOKENS: int = 240
+    CONTEXT_COMPACTION_TEMPERATURE: float = 0.2
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:

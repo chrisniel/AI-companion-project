@@ -517,6 +517,49 @@ class CompanionClient {
   }
 
   /// Generates a model-assisted conversation title via POST /api/v1/conversations/{conversation_id}/generate-title.
+  /// Fetches the active rolling episode summary via GET /api/v1/conversations/{conversation_id}/summary.
+  Future<ConversationSummaryOut?> getConversationSummary(
+    String conversationId,
+  ) async {
+    final uri = baseUri.replace(
+      path: '${baseUri.path}/api/v1/conversations/$conversationId/summary',
+    );
+    final headers = await _buildHeaders(requiresAuth: true);
+    final response = await _httpClient.get(uri, headers: headers);
+    if (response.statusCode == 200) {
+      final dynamic decoded = jsonDecode(response.body);
+      if (decoded == null) return null;
+      return ConversationSummaryOut.fromJson(
+        Map<String, dynamic>.from(decoded as Map),
+      );
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Triggers manual episode context compaction via POST /api/v1/conversations/{conversation_id}/compact.
+  Future<ConversationCompactResponse> compactConversation(
+    String conversationId, [
+    ConversationCompactRequest? request,
+  ]) async {
+    final uri = baseUri.replace(
+      path: '${baseUri.path}/api/v1/conversations/$conversationId/compact',
+    );
+    final headers = await _buildHeaders(requiresAuth: true);
+    final payload = request ?? const ConversationCompactRequest();
+    final response = await _httpClient.post(
+      uri,
+      headers: headers,
+      body: jsonEncode(payload.toJson()),
+    );
+    if (response.statusCode == 200) {
+      final dynamic decoded = jsonDecode(response.body);
+      return ConversationCompactResponse.fromJson(
+        Map<String, dynamic>.from(decoded as Map),
+      );
+    }
+    _handleErrorResponse(response);
+  }
+
   Future<ConversationOut> generateConversationTitle(
     String conversationId, {
     String? currentTitle,

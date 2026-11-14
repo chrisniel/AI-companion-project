@@ -184,7 +184,15 @@ Verified across `backend/migrations/versions/013_memory_knowledge_and_triggers.p
 - **Multi-Section XML Context Injection (`orchestrator.py`):** `_build_context` partitions `<retrieved_memories>` into semantically labeled XML sections with strict token caps: `<user_core_profile>` ($\le 120$), `<triggered_knowledge_lore>` ($\le 150$), `<episodic_and_long_term_memories>` ($\le 200$), and `<short_term_context>` ($\le 100$).
 - **API, Contract Parity & Option 2A Desktop UI:** `GET /api/v1/memories` supports `?tier=knowledge|long_term|short_term`, searches across `trigger_keywords`, and returns profile-wide counts (`knowledge_count`, `long_term_count`, `short_term_count`). Desktop `MemoryScreen` implements Option 2A (`MemoryTierSidebar` inner left sub-menu with compact narrow fallback), context-aware `+ Add Knowledge`/`Add Memory`/`Add Context` creation defaults, trigger keyword pills (`#keyword`), `RECALLED N×` badges, remaining TTL indicators, and 1-click **Promote**.
 
-### 3.6 Explicitly Unimplemented Capabilities
+### 3.6 M3 Batch F Follow-On Enhancements & Hardening (`2026-11`)
+
+- **Emotion-Weighted Importance Scoring (`extractor.py`):** Extraction applies an importance adjustment (`+0.3`, clamped to `<= 2.0`) when significant emotional weight accompanies a user statement, prioritizing emotionally salient memories for long-term retention.
+- **Temporal Fact Evolution Trail (`reconciler.py`):** When reconciling conflicting slot updates (preserving Fixed Knowledge write-protection), replaces the mutable memory value while appending a bounded single-step provenance suffix (`(previously: ... until YYYY-MM)`) without chaining stale history repeatedly.
+- **Short-Term Promote & Edit Contract (`schemas/memory.py`, `endpoints/memories.py`, `desktop_memory_controller.dart`):** `MemoryUpdate` supports explicit `clear_expires_at: bool` so partial `PATCH` updates omitting `expires_at` preserve existing TTLs while Desktop 1-click **Promote** clears `expires_at` cleanly without serializing `null` fields unintentionally.
+- **1-Click Chat Bubble Bookmarking (`chat_screen.dart`, `desktop_chat_controller.dart`):** Each user and assistant bubble exposes `bookmark_message_<id>` (`Save to Long-Term Memory` / `Pin to Fixed Knowledge`), persisting directly via `POST /api/v1/memories` as verified user-explicit records while keeping chat layout metrics unchanged.
+- **Batch E Retrieval & Extraction Hardening (`retriever.py`, `extractor.py`, `reconciler.py`, `endpoints/memories.py`):** Applied pre-slice `exclude_ids` filtering before core-memory query caps, scoped `recall_count` increments strictly by `profile_id`, excluded keyword-gated lorebooks (`trigger_keywords IS NOT NULL`) from legacy short-term fallback queries, stripped non-core flags defensively during background updates, reserved the FTS5 `NEAR` operator during query sanitization, and hardened JSON parsing against `null` payload fields.
+
+### 3.7 Explicitly Unimplemented Capabilities
 
 - **Semantic / Vector Memory:** `NOT IMPLEMENTED / NOT STARTED` (post-PC-V1 enhancement).
 
