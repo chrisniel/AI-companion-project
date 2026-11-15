@@ -341,3 +341,5 @@ async def test_alarm_update_recomputes_schedule_and_guards_recurrence(
         json={"clear_time_of_day": True},
     )
     assert invalid_clear.status_code == 422
+    assert patched["scheduled_at"].endswith("Z") or patched["scheduled_at"].endswith("+00:00")
+    assert patched["created_at"].endswith("Z") or patched["created_at"].endswith("+00:00")

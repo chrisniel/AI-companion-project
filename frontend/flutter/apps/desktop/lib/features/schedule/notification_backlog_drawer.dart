@@ -250,9 +250,19 @@ class NotificationBacklogDrawer extends StatelessWidget {
             ),
           ],
           const SizedBox(height: CompanionSpacing.xs),
-          Text(
-            '${event.sourceType} · ${event.deliveryPolicy}',
-            style: CompanionTypography.caption.copyWith(color: ext?.textMuted),
+          Builder(
+            builder: (_) {
+              final triggeredLocal = parseServerUtcDateTime(event.triggeredAt);
+              final whenLabel = triggeredLocal != null
+                  ? '${formatDateTime12h(triggeredLocal)} · '
+                  : '';
+              return Text(
+                '$whenLabel${event.sourceType} · ${event.deliveryPolicy}',
+                style: CompanionTypography.caption.copyWith(
+                  color: ext?.textMuted,
+                ),
+              );
+            },
           ),
           if (!isResolved) ...[
             const SizedBox(height: CompanionSpacing.sm),

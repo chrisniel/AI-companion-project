@@ -24,6 +24,7 @@ class _TrackingToastAdapter implements DesktopToastAdapter {
   Future<bool> showNotificationToast(
     NotificationEventOut event, {
     bool hasLinkedTask = false,
+    bool playSound = true,
   }) async =>
       true;
 
@@ -45,6 +46,12 @@ class _TrackingToastAdapter implements DesktopToastAdapter {
     clearCalls++;
     return true;
   }
+
+  @override
+  Future<String?> getDeviceTimezone() async => null;
+
+  @override
+  Future<bool> playAlertSound({bool isAlarm = false}) async => false;
 
   @override
   void dispose() {

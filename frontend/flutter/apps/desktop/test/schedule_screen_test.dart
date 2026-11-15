@@ -328,19 +328,21 @@ void main() {
         await tester.pumpAndSettle();
         expect(recordedCalls, contains('POST /api/v1/reminders/rem-1/snooze'));
 
-        // 3. Alarms + Acknowledge
+        // 3. Alarms + Acknowledge (12-hour AM/PM formatting)
         await tester.tap(find.byKey(const Key('schedule_nav_alarms')));
         await tester.pumpAndSettle();
         expect(find.text('Morning Wakeup'), findsOneWidget);
+        expect(find.textContaining('6:30 AM'), findsOneWidget);
         expect(find.text('BYPASS QUIET'), findsOneWidget);
         await tester.tap(find.byKey(const Key('alarm_ack_button_alarm-1')));
         await tester.pumpAndSettle();
         expect(recordedCalls, contains('POST /api/v1/alarms/alarm-1/acknowledge'));
 
-        // 4. Routines + Run Now
+        // 4. Routines + Run Now (12-hour AM/PM formatting)
         await tester.tap(find.byKey(const Key('schedule_nav_routines')));
         await tester.pumpAndSettle();
         expect(find.text('Evening Check-in'), findsOneWidget);
+        expect(find.textContaining('8:00 PM'), findsOneWidget);
         expect(find.text('How did today go?'), findsOneWidget);
         await tester.tap(find.byKey(const Key('routine_run_now_rout-1')));
         await tester.pumpAndSettle();
@@ -473,5 +475,130 @@ void main() {
       await tester.pump();
       expect(settingsClicked, isTrue);
     });
+
+    testWidgets(
+      'revamped Task and Alarm dialogs support 12-hour AM/PM quick presets and device timezone default',
+      (tester) async {
+        setupViewport(tester);
+        Map<String, dynamic>? postedTask;
+        Map<String, dynamic>? postedAlarm;
+
+        final mockClient = MockClient((req) async {
+          if (req.method == 'POST' && req.url.path == '/api/v1/tasks') {
+            postedTask = Map<String, dynamic>.from(jsonDecode(req.body) as Map);
+            return http.Response(
+              jsonEncode({
+                'id': 'task-q1',
+                'owner_id': 'prof-1',
+                'title': postedTask!['title'],
+                'notes': null,
+                'category': postedTask!['category'] ?? 'general',
+                'status': 'pending',
+                'priority': postedTask!['priority'] ?? 'medium',
+                'due_date': postedTask!['due_date'],
+                'reminder_minutes_before': postedTask!['reminder_minutes_before'],
+                'reminder_at': null,
+                'is_deleted': false,
+                'deleted_at': null,
+                'created_at': '2026-11-15T10:00:00Z',
+                'updated_at': '2026-11-15T10:00:00Z',
+              }),
+              201,
+            );
+          }
+          if (req.method == 'POST' && req.url.path == '/api/v1/alarms') {
+            postedAlarm = Map<String, dynamic>.from(jsonDecode(req.body) as Map);
+            return http.Response(
+              jsonEncode({
+                'id': 'alarm-q1',
+                'profile_id': 'prof-1',
+                'label': postedAlarm!['label'],
+                'scheduled_at': null,
+                'time_of_day': postedAlarm!['time_of_day'],
+                'recurrence_days': postedAlarm!['recurrence_days'] ?? [0, 1, 2, 3, 4],
+                'timezone': postedAlarm!['timezone'],
+                'enabled': true,
+                'status': 'armed',
+                'snoozed_until': null,
+                'bypass_quiet_hours': true,
+                'origin': 'host',
+                'last_fired_at': null,
+                'acknowledged_at': null,
+                'created_at': '2026-11-15T10:00:00Z',
+                'updated_at': '2026-11-15T10:00:00Z',
+              }),
+              201,
+            );
+          }
+          return http.Response(
+            jsonEncode({'items': <dynamic>[], 'total': 0}),
+            200,
+          );
+        });
+
+        final client = CompanionClient(
+          baseUrl: 'http://127.0.0.1:8000',
+          httpClient: mockClient,
+        );
+        final controller = DesktopScheduleController(
+          client: client,
+          toastAdapter: NoOpDesktopToastAdapter(),
+          profileId: 'prof-1',
+        );
+        addTearDown(controller.dispose);
+        addTearDown(client.close);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: CompanionTheme.dark(),
+            home: Scaffold(
+              body: ScheduleScreen(controller: controller),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Create Task using quick due + 15m before chips
+        await tester.tap(find.byKey(const Key('schedule_create_button')));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('task_dialog_title_field')),
+          'Take vitamins',
+        );
+        await tester.tap(find.text('Today 6:00 PM'));
+        await tester.pump();
+        await tester.tap(find.text('15m before'));
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('task_dialog_save_button')));
+        await tester.pumpAndSettle();
+
+        expect(postedTask, isNotNull);
+        expect(postedTask!['due_date'], isNotNull);
+        expect(postedTask!['due_date'] as String, endsWith('Z'));
+        expect(postedTask!['reminder_minutes_before'], 15);
+
+        // Switch to Alarms and create Alarm with 12h 9:00 PM preset + PC timezone
+        await tester.tap(find.byKey(const Key('schedule_nav_alarms')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('schedule_create_button')));
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining('Using PC timezone: ${controller.deviceTimezone}'),
+          findsOneWidget,
+        );
+        await tester.enterText(
+          find.byKey(const Key('alarm_dialog_label_field')),
+          'Wind Down',
+        );
+        await tester.tap(find.text('9:00 PM'));
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('alarm_dialog_save_button')));
+        await tester.pumpAndSettle();
+
+        expect(postedAlarm, isNotNull);
+        expect(postedAlarm!['time_of_day'], '21:00');
+        expect(postedAlarm!['timezone'], controller.deviceTimezone);
+      },
+    );
   });
 }

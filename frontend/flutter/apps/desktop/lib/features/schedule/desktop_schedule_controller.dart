@@ -53,6 +53,101 @@ const List<String> kSupportedScheduleTimezones = <String>[
   'Africa/Cairo',
 ];
 
+const List<String> _kMonthAbbreviations = <String>[
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+final RegExp _kTrailingOffsetPattern = RegExp(
+  r'(?:[zZ]|[+-]\d{2}:?\d{2})$',
+);
+final RegExp _kFixedOffsetTimezonePattern = RegExp(
+  r'^(?:UTC|GMT)?([+-])(\d{1,2})(?::?(\d{2}))?$',
+);
+
+/// Computes a canonical fixed-offset timezone string accepted by backend
+/// `SchedulerService.resolve_timezone()` from a local offset (for example
+/// `UTC+08:00` or `UTC`).
+String computeDeviceOffsetTimezone([Duration? offset]) {
+  final effective = offset ?? DateTime.now().timeZoneOffset;
+  final totalMinutes = effective.inMinutes;
+  if (totalMinutes == 0) {
+    return 'UTC';
+  }
+  final sign = totalMinutes >= 0 ? '+' : '-';
+  final absMinutes = totalMinutes.abs();
+  final hours = (absMinutes ~/ 60).toString().padLeft(2, '0');
+  final mins = (absMinutes % 60).toString().padLeft(2, '0');
+  return 'UTC$sign$hours:$mins';
+}
+
+/// Returns true when [tz] is either in [kSupportedScheduleTimezones] or matches
+/// the backend fixed-offset pattern (`UTC+HH:MM` / `UTC-HH:MM`).
+bool isSupportedScheduleTimezone(String tz) {
+  final trimmed = tz.trim();
+  if (trimmed.isEmpty) return false;
+  return kSupportedScheduleTimezones.contains(trimmed) ||
+      _kFixedOffsetTimezonePattern.hasMatch(trimmed);
+}
+
+/// Parses a server ISO-8601 timestamp into local [DateTime].
+///
+/// Naive ISO strings without an explicit trailing `Z` or numeric offset are
+/// treated as UTC before converting to `.toLocal()` so SQLite naive UTC
+/// datetimes never shift by the local timezone offset.
+DateTime? parseServerUtcDateTime(String? raw) {
+  if (raw == null) return null;
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return null;
+  final normalized =
+      _kTrailingOffsetPattern.hasMatch(trimmed) ? trimmed : '${trimmed}Z';
+  return DateTime.tryParse(normalized)?.toLocal();
+}
+
+/// Formats an hour/minute pair in crisp 12-hour AM/PM clock form (e.g. `7:00 AM`, `10:30 PM`).
+String formatTimeOfDay12h(int hour, int minute) {
+  final period = hour >= 12 ? 'PM' : 'AM';
+  final hour12 = hour % 12 == 0 ? 12 : hour % 12;
+  final minStr = minute.toString().padLeft(2, '0');
+  return '$hour12:$minStr $period';
+}
+
+/// Formats a wire `HH:MM` 24-hour clock string for 12-hour AM/PM display.
+String formatHhMm12h(String? hhmm) {
+  if (hhmm == null || hhmm.trim().isEmpty) return '';
+  final parts = hhmm.trim().split(':');
+  if (parts.length != 2) return hhmm.trim();
+  final h = int.tryParse(parts[0]);
+  final m = int.tryParse(parts[1]);
+  if (h == null || m == null || h < 0 || h > 23 || m < 0 || m > 59) {
+    return hhmm.trim();
+  }
+  return formatTimeOfDay12h(h, m);
+}
+
+/// Formats a local [DateTime] date portion as `Nov 15, 2026`.
+String formatDate12h(DateTime local) {
+  final dt = local.toLocal();
+  final month = _kMonthAbbreviations[dt.month - 1];
+  return '$month ${dt.day}, ${dt.year}';
+}
+
+/// Formats a local [DateTime] as `Nov 15, 2026 · 6:30 PM`.
+String formatDateTime12h(DateTime local) {
+  final dt = local.toLocal();
+  return '${formatDate12h(dt)} · ${formatTimeOfDay12h(dt.hour, dt.minute)}';
+}
+
 /// Profile-scoped, epoch-fenced state controller for Tasks, Reminders, Alarms,
 /// Routines, Notification Backlog, Quiet Hours, and native Windows Toasts.
 class DesktopScheduleController extends ChangeNotifier {
@@ -72,8 +167,10 @@ class DesktopScheduleController extends ChangeNotifier {
         _toastAdapter = toastAdapter ?? NoOpDesktopToastAdapter(),
         _profileId = profileId,
         _isConnected = isConnected,
-        _pollInterval = pollInterval {
+        _pollInterval = pollInterval,
+        _deviceTimezone = computeDeviceOffsetTimezone() {
     _toastActivationSub = _toastAdapter.activations.listen(_handleToastActivation);
+    unawaited(_resolveDeviceTimezone());
   }
 
   final CompanionClient Function() _clientProvider;
@@ -88,6 +185,9 @@ class DesktopScheduleController extends ChangeNotifier {
   bool _isConnected;
   int _scopeEpoch = 0;
   bool _disposed = false;
+
+  String _deviceTimezone;
+  bool _alertSoundEnabled = true;
 
   ScheduleSection _selectedSection = ScheduleSection.tasks;
   bool _showTrashTasks = false;
@@ -114,6 +214,23 @@ class DesktopScheduleController extends ChangeNotifier {
   DesktopToastAdapter get toastAdapter => _toastAdapter;
   String? get profileId => _profileId;
   bool get isConnected => _isConnected;
+
+  /// Windows/device timezone string (IANA zone from OS when available, else
+  /// deterministic `UTC+HH:MM` offset) used as the automatic default across
+  /// scheduling dialogs and Quiet Hours.
+  String get deviceTimezone => _deviceTimezone;
+
+  /// Effective default timezone for new items: follows device timezone unless
+  /// Quiet Hours has been explicitly customized away from `'UTC'`.
+  String get effectiveDefaultTimezone {
+    final qhTz = _quietHours.quietHoursTimezone.trim();
+    if (qhTz.isNotEmpty && qhTz != 'UTC') {
+      return qhTz;
+    }
+    return _deviceTimezone;
+  }
+
+  bool get alertSoundEnabled => _alertSoundEnabled;
 
   ScheduleSection get selectedSection => _selectedSection;
   bool get showTrashTasks => _showTrashTasks;
@@ -236,6 +353,30 @@ class DesktopScheduleController extends ChangeNotifier {
     _pollTimer = null;
   }
 
+  Future<void> _resolveDeviceTimezone() async {
+    try {
+      final nativeTz = await _toastAdapter.getDeviceTimezone();
+      if (_disposed || nativeTz == null) return;
+      final trimmed = nativeTz.trim();
+      if (isSupportedScheduleTimezone(trimmed) && _deviceTimezone != trimmed) {
+        _deviceTimezone = trimmed;
+        _safeNotify();
+      }
+    } catch (e) {
+      debugPrint('DesktopScheduleController._resolveDeviceTimezone failed: $e');
+    }
+  }
+
+  void setAlertSoundEnabled(bool enabled) {
+    if (_alertSoundEnabled == enabled) return;
+    _alertSoundEnabled = enabled;
+    _safeNotify();
+  }
+
+  Future<bool> playTestAlertSound({bool isAlarm = false}) {
+    return _toastAdapter.playAlertSound(isAlarm: isAlarm);
+  }
+
   Future<void> refreshAll() async {
     if (!_hasActiveScope) return;
     final epoch = _scopeEpoch;
@@ -252,6 +393,17 @@ class DesktopScheduleController extends ChangeNotifier {
         _loadNotificationsInternal(epoch),
         _loadQuietHoursInternal(epoch),
       ]);
+      if (_isCurrentEpoch(epoch)) {
+        _unreadNotifications = _notifications
+            .where(
+              (e) =>
+                  e.status == 'unread' ||
+                  e.status == 'suppressed_quiet_hours' ||
+                  e.status == 'missed_catchup',
+            )
+            .toList();
+        await _dispatchPendingToasts(_unreadNotifications, epoch);
+      }
     } catch (e) {
       if (_isCurrentEpoch(epoch)) {
         _errorMessage = _formatError(e);
@@ -486,6 +638,7 @@ class DesktopScheduleController extends ChangeNotifier {
       await _toastAdapter.showNotificationToast(
         event,
         hasLinkedTask: hasLinkedTask,
+        playSound: _alertSoundEnabled,
       );
     }
   }

@@ -2,22 +2,25 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- **Status:** Implemented & Verified — Ready for Review (Draft PR on `feature/m3-schedule-ui-windows-toasts-g2`; Manual Windows GUI & Action Center Checks Pending)
+- **Status:** Phase 2 Implemented & Post-Manual-QA Revision Verified — Phase 3 Closure Prepared on `feature/m3-schedule-ui-windows-toasts-g2` (Draft PR #42 Updated, Ready for Final Review & Manual Acceptance)
 - **Delivery Level:** Level B — Planned Autonomous
-- **Scope Mode:** New Feature — Flutter Desktop Schedule & Routines Workspace (`PC-CLIENT-008`), Native In-Process C++/WinRT Windows Toast Notifications & Interactive Action Center Callbacks (`PC-CLIENT-012` / `PC-HOST-003` client half / `DEBT-V1-02`), Quiet Hours Settings UI, and Batch G1 Review Fold-Ins (`NIT-01`, `NIT-02`)
+- **Scope Mode:** New Feature + Live QA Revision — Flutter Desktop Schedule & Routines Workspace (`PC-CLIENT-008`), Native In-Process C++/WinRT Windows Toast Notifications with Start Menu `.lnk`, `INotificationActivationCallback` COM Activator & Audio Hardening (`PC-CLIENT-012` / `PC-HOST-003` client half / `DEBT-V1-02`), Device Timezone & 12-Hour AM/PM Picker UX Revamp, UTC Serialization Fix, Quiet Hours Settings UI, and Batch G1 Review Fold-Ins (`NIT-01`, `NIT-02`)
 - **Target Files:**
-  - `frontend/flutter/apps/desktop/windows/runner/windows_toast_channel.h` *(ADD)*
-  - `frontend/flutter/apps/desktop/windows/runner/windows_toast_channel.cpp` *(ADD)*
-  - `frontend/flutter/apps/desktop/windows/runner/CMakeLists.txt` *(MODIFY — compile `windows_toast_channel.cpp`, link `runtimeobject.lib` & `shlwapi.lib`)*
+  - `backend/app/schemas/common.py` & `backend/app/api/v1/endpoints/tasks.py` *(MODIFY — ensure UTC-aware `datetime` validation/JSON serialization on `BaseSchema` with explicit `Z`/`+00:00` even when SQLite returns naive UTC datetimes, and normalize `due_date`/`reminder_at` via `as_utc`)*
+  - `backend/tests/test_tasks.py`, `backend/tests/test_task_update_contract.py`, & `backend/tests/test_scheduling_api.py` *(MODIFY — `NIT-01` + UTC `Z` serialization regression tests)*
+  - `frontend/flutter/apps/desktop/windows/runner/windows_toast_channel.h` *(ADD / UPGRADE — add Start Menu `.lnk` provisioning, `INotificationActivationCallback` COM registration via `CoRegisterClassObject`, native Windows timezone query, & sound helper)*
+  - `frontend/flutter/apps/desktop/windows/runner/windows_toast_channel.cpp` *(ADD / UPGRADE)*
+  - `frontend/flutter/apps/desktop/windows/runner/CMakeLists.txt` *(MODIFY — compile `windows_toast_channel.cpp`, link `runtimeobject.lib`, `shlwapi.lib`, `propsys.lib`, `ole32.lib`, & `winmm.lib`)*
   - `frontend/flutter/apps/desktop/windows/runner/flutter_window.h` *(MODIFY — own `std::unique_ptr<WindowsToastChannel>` & handle `kWmToastActivated` in `MessageHandler`)*
   - `frontend/flutter/apps/desktop/windows/runner/flutter_window.cpp` *(MODIFY — initialize `WindowsToastChannel` on `flutter_controller_->engine()->messenger()` & `GetHandle()`)*
   - `frontend/flutter/apps/desktop/windows/runner/main.cpp` *(MODIFY — call `SetCurrentProcessExplicitAppUserModelID(L"AICompanion.Desktop")` at startup)*
-  - `frontend/flutter/apps/desktop/lib/platform/windows_toast_adapter.dart` *(ADD)*
-  - `frontend/flutter/apps/desktop/lib/features/schedule/desktop_schedule_controller.dart` *(ADD)*
+  - `frontend/flutter/apps/desktop/lib/platform/windows_toast_adapter.dart` *(ADD / UPGRADE — interactive XML actions, `getDeviceTimezone`, Windows notification sound support)*
+  - `frontend/flutter/apps/desktop/lib/features/schedule/desktop_schedule_controller.dart` *(ADD / UPGRADE — device local timezone resolution, immediate toast dispatch in `refreshAll()`, defensive UTC parsing)*
   - `frontend/flutter/apps/desktop/lib/features/schedule/schedule_sidebar.dart` *(ADD)*
-  - `frontend/flutter/apps/desktop/lib/features/schedule/schedule_edit_dialogs.dart` *(ADD)*
-  - `frontend/flutter/apps/desktop/lib/features/schedule/notification_backlog_drawer.dart` *(ADD)*
-  - `frontend/flutter/apps/desktop/lib/screens/schedule_screen.dart` *(MODIFY)*
+  - `frontend/flutter/apps/desktop/lib/features/schedule/schedule_edit_dialogs.dart` *(ADD / UPGRADE — 12h AM/PM date/time pickers, quick-pick chips, device timezone default + collapsed advanced custom timezone)*
+  - `frontend/flutter/apps/desktop/lib/features/schedule/quiet_hours_card.dart` *(ADD / UPGRADE — 12h AM/PM time pickers, device timezone default + collapsed advanced custom timezone, alert sound preference)*
+  - `frontend/flutter/apps/desktop/lib/features/schedule/notification_backlog_drawer.dart` *(ADD / UPGRADE — 12h local timestamp formatting)*
+  - `frontend/flutter/apps/desktop/lib/screens/schedule_screen.dart` *(MODIFY — 12h local AM/PM display formatting & defensive UTC parser)*
   - `frontend/flutter/apps/desktop/lib/screens/settings_screen.dart` *(MODIFY)*
   - `frontend/flutter/apps/desktop/lib/controllers/desktop_settings_controller.dart` *(MODIFY)*
   - `frontend/flutter/apps/desktop/lib/shell/desktop_shell.dart` *(MODIFY)*
@@ -216,13 +219,13 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 ## 5. Acceptance Criteria & Verification Strategy
 
 ### Automated Repository Checks
-- [ ] Contract & Dart SDK parity checks: `.\backend\.venv\Scripts\python.exe scripts/check_openapi_contract.py --check` and `.\backend\.venv\Scripts\python.exe scripts/check_dart_openapi_parity.py --check`
-- [ ] Backend full suite: `.\backend\.venv\Scripts\python.exe -m pytest backend/tests -q`
-- [ ] Dart SDK package tests: `dart test` in `frontend/flutter/packages/companion_api`
-- [ ] Flutter workspace static analysis: `flutter analyze` in `frontend/flutter`
-- [ ] Flutter Desktop full suite (unit + widget + responsive overflow): `flutter test` in `frontend/flutter/apps/desktop`
-- [ ] Native Windows C++ runner compile verification (`/W4 /WX`): `flutter build windows --debug` in `frontend/flutter/apps/desktop`
-- [ ] Web harness checks (regression check): `npm --prefix frontend/web run lint && npm --prefix frontend/web test -- --run && npm --prefix frontend/web run build`
+- [x] Contract & Dart SDK parity checks: `.\backend\.venv\Scripts\python.exe scripts/check_openapi_contract.py --check` and `.\backend\.venv\Scripts\python.exe scripts/check_dart_openapi_parity.py --check` (`66` routes, `60/60` DTO schemas, `82/82` covered routes)
+- [x] Backend full suite: `.\backend\.venv\Scripts\python.exe -m pytest backend/tests -q` (`814 passed, 80 warnings`)
+- [x] Dart SDK package tests: `dart test` in `frontend/flutter/packages/companion_api` (`+103: All tests passed!`)
+- [x] Flutter workspace static analysis: `flutter analyze` in `frontend/flutter` (`No issues found!`)
+- [x] Flutter Desktop full suite (unit + widget + responsive overflow): `flutter test` in `frontend/flutter/apps/desktop` (`+379: All tests passed!`)
+- [x] Native Windows C++ runner compile verification (`/W4 /WX`): `flutter build windows --debug` in `frontend/flutter/apps/desktop` (`ai_companion_desktop.exe`, exit `0`)
+- [x] Web harness checks (regression check): `npm --prefix frontend/web run lint && npm --prefix frontend/web run build` (`✓ built in 24.64s`) and `npm --prefix frontend/web test -- --run --maxWorkers=2` (`Test Files 16 passed (16), Tests 248 passed (248)`)
 
 ### Manual & Host-Level Checks (Where Applicable — UI Implemented/Modified)
 - [ ] Interactive manual Windows desktop UI & Action Center C++/WinRT Toast verification checklist (to be provided in full at Phase 3/4 handoff per user preference whenever UI changes: launching `ai_companion_desktop`, verifying Schedule 5-tab workspace, creating/editing Task/Reminder/Alarm/Routine, toggling Quiet Hours in Settings across timezones, verifying instant native Windows 11 Action Center toasts with zero console flash, clicking interactive toast buttons `[ Mark Done ]` / `[ Snooze 10m ]` / `[ Dismiss ]` / `[ Open Chat ]` / `[ Review Backlog ]` to verify backend mutation + window focus restoration, and confirming alerts handled in-app disappear cleanly from Action Center).
@@ -240,3 +243,25 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 - **Dependencies & Assumptions:** Uses built-in Windows 10/11 SDK WRL/WinRT headers and `runtimeobject.lib` / `shlwapi.lib` already available in the Windows Flutter toolchain (`pubspec.yaml` unchanged).
 - **Required Permissions:** Task-bounded feature branch (`feature/m3-schedule-ui-windows-toasts-g2`), commits, push, and Phase 3 Draft PR against `develop`. Human Owner retains exclusive merge authority.
 - **Genuine Stop Conditions:** Material scope expansion beyond Batch G2, unexpected need to add external `pubspec.yaml` / `requirements.txt` dependencies, API contract mismatches requiring DB/OpenAPI breaking changes, or unresolvable C++/Flutter/CI failures.
+
+---
+
+## 7. Post-Manual-QA Revision Scope (Human-Approved on 2026-11-15)
+
+Live Windows desktop QA by the Human Owner identified four concrete UX/host defects on `0878f52`. This section documents the approved in-branch revision on `feature/m3-schedule-ui-windows-toasts-g2`:
+
+1. **UTC Timestamp Serialization & Defensive Parsing Fix:**
+   - **Root Cause:** SQLite `DateTime(timezone=True)` columns strip `tzinfo` when read back by SQLAlchemy (`datetime(2026, 11, 15, 10, 30)`), causing FastAPI to emit `"2026-11-15T10:30:00"` without trailing `Z`. Dart `DateTime.tryParse` interprets strings lacking `Z`/`±HH:MM` as local time, shifting Task/Reminder/Alarm/Notification timestamps by `-localOffset` (`-8h` in UTC+8) between Create, list display, and Re-Edit.
+   - **Fix:** Normalize naive ORM `datetime` values to `timezone.utc` during response schema validation/serialization (`TaskResponse`, `TrashTaskResponse`, `ReminderOut`, `AlarmOut`, `RoutineOut`, `NotificationEventOut`), plus defensive UTC normalization in Dart timestamp parsing (`parseServerUtcDateTime`) before `.toLocal()`.
+2. **Device Timezone Default & 12-Hour AM/PM UX Revamp:**
+   - **Root Cause:** Dialogs defaulted `timezone` to `controller.quietHours.quietHoursTimezone` (`'UTC'`), scheduling alarms/reminders/routines in UTC rather than the PC's local timezone; dialogs also forced manual typing of `YYYY-MM-DD HH:MM` and 24-hour `HH:MM` text strings.
+   - **Fix:**
+     - Automatically detect device timezone (`WindowsToastChannel::getDeviceTimezone` via `Windows.Globalization.Calendar` mapped into supported IANA zones or exact `DateTime.now().timeZoneOffset` `UTC±HH:MM` accepted by backend `resolve_timezone()`) and use it as the default for new Reminders, Alarms, Routines, and Quiet Hours instead of `'UTC'`. Move manual Timezone selection behind an optional collapsed *"Custom timezone (advanced)"* toggle.
+     - Replace manual 24-hour text inputs across Task, Reminder, Alarm, Routine dialogs and Quiet Hours Settings with visual **Date Picker (`showDatePicker`) + 12-hour AM/PM Time Picker (`showTimePicker`)** buttons, one-tap quick presets (`In 15m`, `In 1h`, `Tonight 8:00 PM`, `Tomorrow 9:00 AM`, alarm time presets, task `Remind me` offset chips `At due time` / `15m before` / `1h before`), and display all schedule/backlog/quiet-hours timestamps in clean **12-hour AM/PM** format while continuing to send OpenAPI-compliant ISO-8601 UTC / `HH:MM` payloads internally.
+3. **Windows Start Menu `.lnk` + `INotificationActivationCallback` COM Activator + Sound Hardening & Immediate Toast Dispatch:**
+   - **Root Cause:** Inspection on Windows confirmed `HKCU\Software\Classes\AppUserModelId\AICompanion.Desktop` had only `DisplayName` (no `CustomActivator` COM CLSID and no `%APPDATA%\Microsoft\Windows\Start Menu\Programs\AI Companion.lnk`). Without the Start Menu `.lnk` and `INotificationActivationCallback` COM registration, Windows 11 drops Action Center side-panel button clicks after popup dismissal and frequently silences WinRT `<audio ms-winsoundevent:...>` sounds. Furthermore, `DesktopScheduleController.refreshAll()` did not dispatch pending toasts immediately.
+   - **Fix:**
+     - Register an in-process `INotificationActivationCallback` COM class factory (`CoRegisterClassObject`) + `HKCU\Software\Classes\CLSID\{...}\LocalServer32` + `CustomActivator` + idempotent Start Menu `.lnk` (`IShellLinkW`/`IPersistFile`/`IPropertyStore` with `PKEY_AppUserModel_ID` & `PKEY_AppUserModel_ToastActivatorCLSID`) in `WindowsToastChannel` so action buttons (`Mark Done`, `Acknowledge`, `Snooze 10m`, `Dismiss`, `Open Chat`, `Review Backlog`) work directly from both floating popups and the right-side Windows Notification Center without opening the app first.
+     - Link `winmm.lib` for reliable alert sound fallback (`PlaySoundW` async Windows notification/alarm alias or chime, configurable via an **"Alert Sound"** toggle and silenced cleanly during Quiet Hours / Catch-up summaries) alongside native `.lnk`-enabled WinRT `<audio>`.
+     - Trigger `_dispatchPendingToasts()` from `refreshAll()` as well as `pollNotifications()` so due/triggered alerts appear without waiting for the 15s poll interval.
+4. **Revision Verification Plan:** Re-run backend (`pytest`), `companion_api` (`dart test`), `flutter analyze`, full `flutter test`, MSVC `/W4 /WX` `flutter build windows --debug`, OpenAPI/Dart parity checks, and `frontend/web` lint/test/build after completing the revision edits, then update Draft PR #42 and re-present the updated Manual Checklist.

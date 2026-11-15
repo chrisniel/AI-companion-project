@@ -282,3 +282,33 @@ async def test_retention_purge_service(test_session: AsyncSession):
 
     result_recent = await test_session.execute(select(Task).where(Task.id == recent_task.id))
     assert result_recent.scalar_one_or_none() is not None
+
+
+@pytest.mark.asyncio
+async def test_task_datetimes_serialize_explicit_utc_across_create_get_and_patch(
+    client: AsyncClient,
+    auth_headers: dict,
+):
+    """Ensure SQLite-backed Task responses always preserve explicit UTC offset/Z."""
+    create_resp = await client.post(
+        "/api/v1/tasks",
+        headers=auth_headers,
+        json={
+            "title": "Evening Standup Prep",
+            "due_date": "2026-11-15T18:30:00+08:00",
+            "reminder_minutes_before": 15,
+        },
+    )
+    assert create_resp.status_code == 201
+    created = create_resp.json()
+    assert created["due_date"].endswith("Z") or created["due_date"].endswith("+00:00")
+    assert created["reminder_at"].endswith("Z") or created["reminder_at"].endswith("+00:00")
+    assert datetime.fromisoformat(created["due_date"].replace("Z", "+00:00")).hour == 10
+    assert datetime.fromisoformat(created["reminder_at"].replace("Z", "+00:00")).hour == 10
+    assert datetime.fromisoformat(created["reminder_at"].replace("Z", "+00:00")).minute == 15
+
+    get_resp = await client.get(f"/api/v1/tasks/{created['id']}", headers=auth_headers)
+    assert get_resp.status_code == 200
+    fetched = get_resp.json()
+    assert fetched["due_date"].endswith("Z") or fetched["due_date"].endswith("+00:00")
+    assert fetched["created_at"].endswith("Z") or fetched["created_at"].endswith("+00:00")

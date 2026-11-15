@@ -47,7 +47,7 @@ void main() {
       expect(escaped, 'A &amp; B &lt;tag&gt; &quot;quote&quot; &apos;single&apos;  ok');
     });
 
-    test('builds live alarm XML with scenario=alarm, looping chime, and interactive buttons', () {
+    test('builds live alarm XML with scenario=alarm, single-source silent XML audio by default, and interactive buttons', () {
       final event = _makeEvent(
         id: 'alarm-evt-1',
         sourceType: 'alarm',
@@ -60,14 +60,20 @@ void main() {
 
       final xml = WindowsWinRtToastAdapter.buildToastXml(event);
       expect(xml, contains('scenario="alarm"'));
-      expect(xml, contains('ms-winsoundevent:Notification.Looping.Alarm'));
-      expect(xml, contains('loop="true"'));
+      expect(xml, contains('<audio silent="true"/>'));
       expect(xml, contains('Wake Up &lt;6:30&gt;'));
       expect(xml, contains('Morning alarm &amp; commute'));
       expect(xml, contains('content="Acknowledge"'));
       expect(xml, contains('content="Snooze 10m"'));
       expect(xml, contains('content="Dismiss"'));
       expect(xml, contains('action=snooze_10m&amp;event_id=alarm-evt-1'));
+
+      final legacyXml = WindowsWinRtToastAdapter.buildToastXml(
+        event,
+        silenceXmlAudio: false,
+      );
+      expect(legacyXml, contains('ms-winsoundevent:Notification.Looping.Alarm'));
+      expect(legacyXml, contains('loop="true"'));
     });
 
     test('builds task-linked reminder XML with Mark Done button instead of Acknowledge', () {
@@ -79,14 +85,21 @@ void main() {
 
       final xml = WindowsWinRtToastAdapter.buildToastXml(event, hasLinkedTask: true);
       expect(xml, contains('scenario="reminder"'));
-      expect(xml, contains('ms-winsoundevent:Notification.Reminder'));
+      expect(xml, contains('<audio silent="true"/>'));
       expect(xml, contains('content="Mark Done"'));
       expect(xml, contains('action=mark_done&amp;event_id=task-evt-1'));
       expect(xml, contains('content="Snooze 10m"'));
       expect(xml, contains('content="Dismiss"'));
+
+      final legacyXml = WindowsWinRtToastAdapter.buildToastXml(
+        event,
+        hasLinkedTask: true,
+        silenceXmlAudio: false,
+      );
+      expect(legacyXml, contains('ms-winsoundevent:Notification.Reminder'));
     });
 
-    test('builds routine XML with Open Chat button and default chime', () {
+    test('builds routine XML with Open Chat button and supports legacy XML chime toggle', () {
       final event = _makeEvent(
         id: 'rout-evt-1',
         sourceType: 'routine',
@@ -97,10 +110,16 @@ void main() {
 
       final xml = WindowsWinRtToastAdapter.buildToastXml(event);
       expect(xml.contains('scenario="alarm"'), isFalse);
-      expect(xml, contains('ms-winsoundevent:Notification.Default'));
+      expect(xml, contains('<audio silent="true"/>'));
       expect(xml, contains('content="Open Chat"'));
       expect(xml, contains('action=open_chat&amp;event_id=rout-evt-1'));
       expect(xml, contains('content="Acknowledge"'));
+
+      final legacyXml = WindowsWinRtToastAdapter.buildToastXml(
+        event,
+        silenceXmlAudio: false,
+      );
+      expect(legacyXml, contains('ms-winsoundevent:Notification.Default'));
     });
 
     test('suppressed alarm or missed catch-up never emits scenario=alarm and uses silent audio', () {
@@ -154,11 +173,14 @@ void main() {
           .setMockMethodCallHandler(channel, null);
     });
 
-    test('invokes showToast, removeToast, and clearToasts with expected args', () async {
+    test('invokes showToast (with playSound/isAlarm), getDeviceTimezone, playAlertSound, removeToast, and clearToasts', () async {
       final calls = <MethodCall>[];
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
         calls.add(call);
+        if (call.method == 'getDeviceTimezone') {
+          return 'Asia/Manila';
+        }
         return true;
       });
 
@@ -178,20 +200,40 @@ void main() {
       expect(showArgs['tag'], 'evt_rem-quiet-1');
       expect(showArgs['group'], WindowsWinRtToastAdapter.defaultToastGroup);
       expect(showArgs['suppressPopup'], isTrue);
+      expect(showArgs['playSound'], isFalse);
+      expect(showArgs['isAlarm'], isFalse);
       expect(showArgs['xml'] as String, contains('<audio silent="true"/>'));
+
+      final liveAlarm = _makeEvent(
+        id: 'alarm-live-1',
+        sourceType: 'alarm',
+        urgency: 'high',
+      );
+      expect(await adapter.showNotificationToast(liveAlarm, playSound: true), isTrue);
+      final liveArgs = Map<String, dynamic>.from(calls[1].arguments as Map);
+      expect(liveArgs['suppressPopup'], isFalse);
+      expect(liveArgs['playSound'], isTrue);
+      expect(liveArgs['isAlarm'], isTrue);
 
       final removed = await adapter.removeNotificationToast('rem-quiet-1');
       expect(removed, isTrue);
-      expect(calls[1].method, 'removeToast');
-      expect(Map<String, dynamic>.from(calls[1].arguments as Map)['tag'], 'evt_rem-quiet-1');
+      expect(calls[2].method, 'removeToast');
+      expect(Map<String, dynamic>.from(calls[2].arguments as Map)['tag'], 'evt_rem-quiet-1');
 
       final cleared = await adapter.clearAllNotificationToasts();
       expect(cleared, isTrue);
-      expect(calls[2].method, 'clearToasts');
+      expect(calls[3].method, 'clearToasts');
       expect(
-        Map<String, dynamic>.from(calls[2].arguments as Map)['group'],
+        Map<String, dynamic>.from(calls[3].arguments as Map)['group'],
         WindowsWinRtToastAdapter.defaultToastGroup,
       );
+
+      expect(await adapter.getDeviceTimezone(), 'Asia/Manila');
+      expect(calls[4].method, 'getDeviceTimezone');
+
+      expect(await adapter.playAlertSound(isAlarm: true), isTrue);
+      expect(calls[5].method, 'playAlertSound');
+      expect(Map<String, dynamic>.from(calls[5].arguments as Map)['isAlarm'], isTrue);
     });
 
     test('emits ToastActivationEvent when native runner invokes onToastActivated', () async {

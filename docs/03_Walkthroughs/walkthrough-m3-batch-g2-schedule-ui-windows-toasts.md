@@ -44,20 +44,25 @@ M3 Batch G2 completes Milestone M3's local-first scheduling and notification use
 - `frontend/flutter/apps/desktop/lib/shell/desktop_shell.dart`: Added optional `scheduleController`, `toastAdapter`, and `enableSchedulePolling` constructor parameters (owning `_scheduleController` lifecycle when `chatController` is present without requiring edits to `main.dart`), right-aligned `shell_top_utility_strip` with `shell_notification_bell_button`, urgent `unread` `shell_active_alert_banner`, slide-out `NotificationBacklogDrawer`, and automatic toast clearing on disconnect or Profile switch.
 - Tests (`frontend/flutter/apps/desktop/test/`): Created `desktop_schedule_controller_test.dart`, `schedule_screen_test.dart`, `notification_backlog_drawer_test.dart`; updated `desktop_shell_test.dart`, `desktop_settings_test.dart`, and `desktop_layout_responsive_test.dart`.
 
+### 2.4 Post-Manual-QA Revision (UTC Serialization, Device Timezone, 12-Hour AM/PM UX & Windows COM/Sound)
+- `backend/app/schemas/common.py` & `backend/app/api/v1/endpoints/tasks.py`: Added `@model_validator(mode="after")` on `BaseSchema` attaching `timezone.utc` when SQLite returns naive `datetime` values (emitting explicit `Z`/`+00:00` in JSON responses) and normalized Task `due_date`/`reminder_at` via `as_utc`, with regression tests in `test_tasks.py`, `test_task_update_contract.py`, and `test_scheduling_api.py`.
+- `frontend/flutter/apps/desktop/windows/runner/windows_toast_channel.h/.cpp` & `CMakeLists.txt`: Provisioned Start Menu `.lnk` (`IShellLinkW` + `IPropertyStore` `PKEY_AppUserModel_ID` & `PKEY_AppUserModel_ToastActivatorCLSID`), registered `INotificationActivationCallback` via `CoRegisterClassObject` + `HKCU\Software\Classes\CLSID\...\LocalServer32` & `CustomActivator` (enabling direct action-button clicks from both floating popups and the Windows Notification Center side pane), added `PlaySoundW` (`winmm.lib`) alert chime playback with single-source `<audio silent="true"/>` coordination, and exposed `getDeviceTimezone` (`Windows.Globalization.Calendar`) + `playAlertSound` handlers.
+- `frontend/flutter/apps/desktop/lib/features/schedule/desktop_schedule_controller.dart`, `schedule_edit_dialogs.dart`, `quiet_hours_card.dart`, `notification_backlog_drawer.dart`, `schedule_screen.dart`, & `windows_toast_adapter.dart`: Added `parseServerUtcDateTime`, `formatDateTime12h`/`formatHhMm12h`, automatic PC timezone defaulting with collapsed *"Custom timezone (advanced)"* toggle, graphical Date + 12h AM/PM Time pickers (`showDatePicker` / `show12HourTimePicker`) with quick-pick chips and Task *"Remind me"* offset chips, Alert Sound toggle + `Test Sound` button in `QuietHoursSettingsCard`, and immediate `_dispatchPendingToasts()` on `refreshAll()`.
+
 ---
 
 ## 3. Verification Evidence
 
-All automated verification checks ran after all code and test edits completed and passed with exit code `0`:
+All automated verification checks ran after final code and test edits and passed with exit code `0`:
 
 - **OpenAPI Contract Check:** `.\backend\.venv\Scripts\python.exe scripts/check_openapi_contract.py --check` -> `OpenAPI contract is up-to-date (66 routes, all required model routes present).` (exit `0`)
 - **Dart–OpenAPI Parity Check:** `.\backend\.venv\Scripts\python.exe scripts/check_dart_openapi_parity.py --check` -> `[Verified DTO Schemas: 60/60]`, `[M1 + M2 + M3 Native Covered Routes: 82/82]`, `RESULT: ALL CONTRACT PARITY AND ROUTE COVERAGE CHECKS PASSED.` (exit `0`)
-- **Backend Full Test Suite:** `.\backend\.venv\Scripts\python.exe -m pytest backend/tests -q` -> `813 passed, 80 warnings in 288.59s (0:04:48)` (exit `0`; warnings are pre-existing aiosqlite/Starlette deprecation notices)
+- **Backend Full Test Suite:** `.\backend\.venv\Scripts\python.exe -m pytest backend/tests -q` -> `814 passed, 80 warnings in 364.32s (0:06:04)` (exit `0`; warnings are pre-existing aiosqlite/Starlette deprecation notices)
 - **Flutter `companion_api` Package Tests:** `dart test` in `frontend/flutter/packages/companion_api` -> `+103: All tests passed!` (exit `0`)
-- **Flutter Static Analysis:** `flutter analyze` in `frontend/flutter` -> `No issues found! (ran in 4.5s)` (exit `0`)
-- **Flutter Desktop Test Suite:** `flutter test` in `frontend/flutter/apps/desktop` -> `01:24 +377: All tests passed!` (exit `0`)
-- **Windows Native C++ Debug Build (MSVC `/W4 /WX`):** `flutter build windows --debug` in `frontend/flutter/apps/desktop` -> `√ Built build\windows\x64\runner\Debug\ai_companion_desktop.exe` (exit `0`; `12.7s`)
-- **Web Frontend Lint, Tests & Build:** `npm --prefix frontend/web run lint && npm --prefix frontend/web test -- --run && npm --prefix frontend/web run build` -> `tsc --noEmit` clean, `Test Files 16 passed (16), Tests 248 passed (248)`, `✓ built in 3.49s` (exit `0`)
+- **Flutter Static Analysis:** `flutter analyze` in `frontend/flutter` -> `No issues found! (ran in 10.4s)` (exit `0`)
+- **Flutter Desktop Test Suite:** `flutter test` in `frontend/flutter/apps/desktop` -> `01:52 +379: All tests passed!` (exit `0`)
+- **Windows Native C++ Debug Build (MSVC `/W4 /WX`):** `flutter build windows --debug` in `frontend/flutter/apps/desktop` -> `√ Built build\windows\x64\runner\Debug\ai_companion_desktop.exe` (exit `0`; `21.7s`)
+- **Web Frontend Lint, Tests & Build:** `npm --prefix frontend/web run lint && npm --prefix frontend/web run build` (`✓ built in 24.64s`, exit `0`) and `npm --prefix frontend/web test -- --run --maxWorkers=2` (`Test Files 16 passed (16), Tests 248 passed (248)`, exit `0`)
 
 ---
 
@@ -65,10 +70,10 @@ All automated verification checks ran after all code and test edits completed an
 
 Because automated headless widget tests cannot interact with the live Windows 10/11 Shell Action Center COM service, the following manual verification steps remain for Human Owner execution before squash merge:
 
-- Visual layout & CRUD verification across all 5 `ScheduleScreen` sections (`Tasks` + `Trash` restore/permanent delete, `Reminders`, `Alarms` toggle/recurrence, `Routines` `[ Run Now ]`, `Notifications` backlog history) at desktop & narrow responsive widths.
-- `SettingsScreen` Quiet Hours save persistence and `422` invalid range validation UX.
+- Visual layout, 12-hour AM/PM date/time pickers + quick chips, UTC/local round-trip consistency across Create -> Display -> Edit (no `-8h` shift), and CRUD verification across all 5 `ScheduleScreen` sections (`Tasks` + `Trash` restore/permanent delete, `Reminders`, `Alarms` toggle/recurrence, `Routines` `[ Run Now ]`, `Notifications` backlog history) at desktop & narrow responsive widths.
+- `SettingsScreen` Quiet Hours 12-hour time pickers, PC timezone default (and optional `"Custom timezone (advanced)"` override), Alert Sound mute switch + `"Test Sound"` button, save persistence, and `422` validation UX.
 - `DesktopShell` top utility strip Bell badge updates, slide-out `NotificationBacklogDrawer` actions, and urgent `unread` Active Alert Banner dismissal.
-- Live Windows 10/11 Action Center toast presentation, interactive toast button callbacks (`Mark Done`, `Acknowledge`, `Snooze 10m`, `Dismiss`, `Open Chat`, `Review Backlog`) restoring the desktop window, two-way Action Center toast removal when acted on inside the app, Quiet Hours `suppressPopup`, and Sleep Catch-up summary grouping.
+- Live Windows 10/11 Action Center toast presentation + chime sound playback, interactive toast button callbacks (`Mark Done`, `Acknowledge`, `Snooze 10m`, `Dismiss`, `Open Chat`, `Review Backlog`) from BOTH floating popups and the right-side Windows Notification Center (`Win+N`) restoring the desktop window, two-way Action Center toast removal when acted on inside the app, Quiet Hours `suppressPopup` silence, and Sleep Catch-up summary grouping.
 
 ---
 

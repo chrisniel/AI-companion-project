@@ -17,15 +17,9 @@ const List<String> _kWeekdayShort = [
 
 String _formatLocalDateTime(String? isoUtc) {
   if (isoUtc == null || isoUtc.isEmpty) return 'Not set';
-  final parsed = DateTime.tryParse(isoUtc);
+  final parsed = parseServerUtcDateTime(isoUtc);
   if (parsed == null) return isoUtc;
-  final local = parsed.toLocal();
-  final y = local.year.toString().padLeft(4, '0');
-  final m = local.month.toString().padLeft(2, '0');
-  final d = local.day.toString().padLeft(2, '0');
-  final hh = local.hour.toString().padLeft(2, '0');
-  final mm = local.minute.toString().padLeft(2, '0');
-  return '$y-$m-$d $hh:$mm';
+  return formatDateTime12h(parsed);
 }
 
 String _formatRecurrenceDays(List<int> days) {
@@ -871,7 +865,7 @@ class ScheduleScreen extends StatelessWidget {
                     final isRinging =
                         a.status == 'ringing' || a.status == 'snoozed';
                     final scheduleSummary = a.recurrenceDays.isNotEmpty
-                        ? '${a.timeOfDay ?? ''} · ${_formatRecurrenceDays(a.recurrenceDays)} (${a.timezone})'
+                        ? '${formatHhMm12h(a.timeOfDay)} · ${_formatRecurrenceDays(a.recurrenceDays)} (${a.timezone})'
                         : 'One-shot · ${_formatLocalDateTime(a.scheduledAt)} (${a.timezone})';
 
                     return NeumorphicSurface(
@@ -1079,7 +1073,7 @@ class ScheduleScreen extends StatelessWidget {
                               _MetaChip(
                                 icon: Icons.repeat_rounded,
                                 text:
-                                    '${r.timeOfDay} · ${_formatRecurrenceDays(r.recurrenceDays)} (${r.timezone})',
+                                    '${formatHhMm12h(r.timeOfDay)} · ${_formatRecurrenceDays(r.recurrenceDays)} (${r.timezone})',
                                 ext: ext,
                               ),
                               if (r.nextRunAt != null)

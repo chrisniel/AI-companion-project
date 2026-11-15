@@ -53,6 +53,7 @@ abstract class DesktopToastAdapter {
   Future<bool> showNotificationToast(
     NotificationEventOut event, {
     bool hasLinkedTask = false,
+    bool playSound = true,
   });
 
   Future<bool> showMissedCatchupSummaryToast({
@@ -63,6 +64,10 @@ abstract class DesktopToastAdapter {
   Future<bool> removeNotificationToast(String eventId);
 
   Future<bool> clearAllNotificationToasts();
+
+  Future<String?> getDeviceTimezone();
+
+  Future<bool> playAlertSound({bool isAlarm = false});
 
   void dispose() {}
 }
@@ -79,6 +84,7 @@ class NoOpDesktopToastAdapter implements DesktopToastAdapter {
   Future<bool> showNotificationToast(
     NotificationEventOut event, {
     bool hasLinkedTask = false,
+    bool playSound = true,
   }) async =>
       false;
 
@@ -94,6 +100,12 @@ class NoOpDesktopToastAdapter implements DesktopToastAdapter {
 
   @override
   Future<bool> clearAllNotificationToasts() async => false;
+
+  @override
+  Future<String?> getDeviceTimezone() async => null;
+
+  @override
+  Future<bool> playAlertSound({bool isAlarm = false}) async => false;
 
   @override
   void dispose() {
@@ -198,9 +210,14 @@ class WindowsWinRtToastAdapter implements DesktopToastAdapter {
   }
 
   /// Builds WinRT `ToastGeneric` XML payload for an individual notification.
+  ///
+  /// When [silenceXmlAudio] is true (default), audio playback is delegated to
+  /// the native runner's `PlayAlertChime` path so shortcut-backed Windows toast
+  /// audio never double-chimes with the runner chime.
   static String buildToastXml(
     NotificationEventOut event, {
     bool hasLinkedTask = false,
+    bool silenceXmlAudio = true,
   }) {
     final isSuppressed = event.deliveryPolicy == 'quiet_hours_suppressed' ||
         event.status == 'suppressed_quiet_hours';
@@ -220,7 +237,7 @@ class WindowsWinRtToastAdapter implements DesktopToastAdapter {
         ? ' scenario="alarm"'
         : (isReminder ? ' scenario="reminder"' : '');
 
-    final audioXml = (isSuppressed || isCatchup)
+    final audioXml = (silenceXmlAudio || isSuppressed || isCatchup)
         ? '<audio silent="true"/>'
         : isLiveAlarm
             ? '<audio src="ms-winsoundevent:Notification.Looping.Alarm" loop="true"/>'
@@ -351,14 +368,48 @@ class WindowsWinRtToastAdapter implements DesktopToastAdapter {
   Future<bool> showNotificationToast(
     NotificationEventOut event, {
     bool hasLinkedTask = false,
+    bool playSound = true,
   }) {
     final isSuppressed = event.deliveryPolicy == 'quiet_hours_suppressed' ||
         event.status == 'suppressed_quiet_hours';
+    final isCatchup =
+        event.isMissedCatchup || event.status == 'missed_catchup';
+    final isLiveAlarm =
+        (event.sourceType == 'alarm' || event.urgency == 'high') &&
+            !isSuppressed &&
+            !isCatchup;
     return _invokeBool('showToast', {
       'tag': toastTagForEvent(event.id),
       'group': defaultToastGroup,
       'xml': buildToastXml(event, hasLinkedTask: hasLinkedTask),
       'suppressPopup': isSuppressed,
+      'playSound': playSound && !isSuppressed && !isCatchup,
+      'isAlarm': isLiveAlarm,
+    });
+  }
+
+  @override
+  Future<String?> getDeviceTimezone() async {
+    if (!_isWindowsPlatform) {
+      return null;
+    }
+    try {
+      final result = await _channel.invokeMethod<String>('getDeviceTimezone');
+      final trimmed = result?.trim();
+      if (trimmed == null || trimmed.isEmpty) {
+        return null;
+      }
+      return trimmed;
+    } catch (e) {
+      debugPrint('WindowsWinRtToastAdapter.getDeviceTimezone skipped/failed: $e');
+      return null;
+    }
+  }
+
+  @override
+  Future<bool> playAlertSound({bool isAlarm = false}) {
+    return _invokeBool('playAlertSound', {
+      'isAlarm': isAlarm,
     });
   }
 

@@ -613,11 +613,22 @@ void main() {
           find.text('Alarms bypass quiet hours by default to ensure wakefulness.'),
           findsOneWidget,
         );
-        expect(find.text('22:30'), findsOneWidget);
-        expect(find.text('06:30'), findsOneWidget);
+        expect(find.text('10:30 PM'), findsOneWidget);
+        expect(find.text('6:30 AM'), findsOneWidget);
         expect(find.text('Asia/Manila'), findsOneWidget);
+        expect(find.byKey(const Key('alert_sound_enabled_switch')), findsOneWidget);
+        expect(find.byKey(const Key('test_alert_sound_button')), findsOneWidget);
 
-        // Toggle switch off and save (200)
+        // Toggle alert sound switch updates controller setting
+        final soundSwitchFinder =
+            find.byKey(const Key('alert_sound_enabled_switch'));
+        await tester.ensureVisible(soundSwitchFinder);
+        await tester.pumpAndSettle();
+        await tester.tap(soundSwitchFinder);
+        await tester.pump();
+        expect(schedCtrl.alertSoundEnabled, isFalse);
+
+        // Toggle quiet hours switch off and save (200)
         final switchFinder = find.byKey(const Key('quiet_hours_enabled_switch'));
         await tester.ensureVisible(switchFinder);
         await tester.pumpAndSettle();

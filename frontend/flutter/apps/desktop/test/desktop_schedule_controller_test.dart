@@ -10,15 +10,19 @@ import 'package:ai_companion_desktop/features/schedule/desktop_schedule_controll
 import 'package:ai_companion_desktop/platform/windows_toast_adapter.dart';
 
 class _FakeToastAdapter implements DesktopToastAdapter {
+  _FakeToastAdapter({this.deviceTimezoneResponse});
+
   final StreamController<ToastActivationEvent> _controller =
       StreamController<ToastActivationEvent>.broadcast();
 
-  final List<({NotificationEventOut event, bool hasLinkedTask})> shownToasts =
-      [];
+  final String? deviceTimezoneResponse;
+  final List<({NotificationEventOut event, bool hasLinkedTask, bool playSound})>
+      shownToasts = [];
   final List<({int missedCount, List<NotificationEventOut> events})>
       shownCatchups = [];
   final List<String> removedTags = [];
   int clearCount = 0;
+  int testSoundCount = 0;
 
   @override
   Stream<ToastActivationEvent> get activations => _controller.stream;
@@ -31,8 +35,11 @@ class _FakeToastAdapter implements DesktopToastAdapter {
   Future<bool> showNotificationToast(
     NotificationEventOut event, {
     bool hasLinkedTask = false,
+    bool playSound = true,
   }) async {
-    shownToasts.add((event: event, hasLinkedTask: hasLinkedTask));
+    shownToasts.add(
+      (event: event, hasLinkedTask: hasLinkedTask, playSound: playSound),
+    );
     return true;
   }
 
@@ -54,6 +61,15 @@ class _FakeToastAdapter implements DesktopToastAdapter {
   @override
   Future<bool> clearAllNotificationToasts() async {
     clearCount++;
+    return true;
+  }
+
+  @override
+  Future<String?> getDeviceTimezone() async => deviceTimezoneResponse;
+
+  @override
+  Future<bool> playAlertSound({bool isAlarm = false}) async {
+    testSoundCount++;
     return true;
   }
 
@@ -479,6 +495,76 @@ void main() {
       expect(controller.tasks, isEmpty);
       expect(controller.activeAlerts, isEmpty);
       expect(toastAdapter.clearCount, greaterThanOrEqualTo(1));
+    });
+
+    test('parses naive and UTC ISO strings consistently, formats 12h clock, resolves device timezone, and forwards alertSoundEnabled', () async {
+      // Both naive (legacy SQLite) and Z-suffixed ISO strings parse as identical UTC instant -> local
+      final parsedNaive = parseServerUtcDateTime('2026-11-15T10:30:00');
+      final parsedUtc = parseServerUtcDateTime('2026-11-15T10:30:00Z');
+      expect(parsedNaive, isNotNull);
+      expect(parsedUtc, isNotNull);
+      expect(parsedNaive!.toUtc(), parsedUtc!.toUtc());
+
+      expect(formatTimeOfDay12h(0, 5), '12:05 AM');
+      expect(formatTimeOfDay12h(12, 0), '12:00 PM');
+      expect(formatHhMm12h('06:30'), '6:30 AM');
+      expect(formatHhMm12h('18:45'), '6:45 PM');
+      expect(computeDeviceOffsetTimezone(Duration.zero), 'UTC');
+      expect(computeDeviceOffsetTimezone(const Duration(hours: 8)), 'UTC+08:00');
+      expect(
+        computeDeviceOffsetTimezone(const Duration(hours: -5, minutes: -30)),
+        'UTC-05:30',
+      );
+
+      final mockClient = MockClient((req) async {
+        if (req.url.path == '/api/v1/notifications') {
+          return http.Response(
+            jsonEncode({
+              'items': [_notificationJson(id: 'evt-imm', title: 'Immediate check')],
+              'total': 1,
+              'unread_count': 1,
+              'missed_count': 0,
+            }),
+            200,
+          );
+        }
+        if (req.url.path == '/api/v1/profiles/me/quiet-hours') {
+          return http.Response(
+            jsonEncode({
+              'quiet_hours_enabled': true,
+              'quiet_hours_start': '22:00',
+              'quiet_hours_end': '07:00',
+              'quiet_hours_timezone': 'UTC',
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode({'items': <dynamic>[], 'total': 0}), 200);
+      });
+
+      final client = CompanionClient(baseUrl: 'http://127.0.0.1:8000', httpClient: mockClient);
+      final toastAdapter = _FakeToastAdapter(deviceTimezoneResponse: 'Asia/Manila');
+      final controller = DesktopScheduleController(
+        clientProvider: () => client,
+        toastAdapter: toastAdapter,
+        profileId: 'prof-1',
+      );
+      addTearDown(controller.dispose);
+      addTearDown(client.close);
+
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.deviceTimezone, 'Asia/Manila');
+      expect(controller.effectiveDefaultTimezone, 'Asia/Manila');
+
+      // Muting alert sound propagates to dispatched toasts
+      controller.setAlertSoundEnabled(false);
+      await controller.refreshAll();
+      expect(toastAdapter.shownToasts.length, 1);
+      expect(toastAdapter.shownToasts.first.event.id, 'evt-imm');
+      expect(toastAdapter.shownToasts.first.playSound, isFalse);
+
+      expect(await controller.playTestAlertSound(isAlarm: true), isTrue);
+      expect(toastAdapter.testSoundCount, 1);
     });
   });
 }

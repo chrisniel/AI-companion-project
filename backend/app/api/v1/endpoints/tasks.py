@@ -25,6 +25,7 @@ from app.schemas.task import (
     TrashTaskResponse,
 )
 from app.services.retention import calculate_remaining_days
+from app.services.scheduler.service import as_utc
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
@@ -122,9 +123,10 @@ async def create_task(
 ) -> TaskResponse:
     """Create a new action item or reminder strictly scoped to the authenticated owner."""
     # Automatically compute reminder_at if reminder offset and due_date are supplied
-    reminder_at = payload.reminder_at
-    if reminder_at is None and payload.reminder_minutes_before is not None and payload.due_date is not None:
-        reminder_at = payload.due_date - timedelta(minutes=payload.reminder_minutes_before)
+    due_date = as_utc(payload.due_date)
+    reminder_at = as_utc(payload.reminder_at)
+    if reminder_at is None and payload.reminder_minutes_before is not None and due_date is not None:
+        reminder_at = due_date - timedelta(minutes=payload.reminder_minutes_before)
 
     task = Task(
         profile_id=session.profile_id,
@@ -132,7 +134,7 @@ async def create_task(
         notes=payload.notes,
         category=payload.category.value,
         priority=payload.priority.value,
-        due_date=payload.due_date,
+        due_date=due_date,
         reminder_minutes_before=payload.reminder_minutes_before,
         reminder_at=reminder_at,
         status=TaskStatus.pending.value,
@@ -219,12 +221,17 @@ async def update_task(
     update_data = payload.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         if hasattr(task, field):
-            setattr(task, field, value.value if hasattr(value, "value") else value)
+            raw_val = value.value if hasattr(value, "value") else value
+            if field in ("due_date", "reminder_at") and raw_val is not None:
+                raw_val = as_utc(raw_val)
+            setattr(task, field, raw_val)
 
     # Recompute reminder_at if reminder offset or due_date changed and reminder_at wasn't explicitly supplied
     if "reminder_at" not in update_data and {"due_date", "reminder_minutes_before"} & update_data.keys():
         if task.reminder_minutes_before is not None and task.due_date is not None:
-            task.reminder_at = task.due_date - timedelta(minutes=task.reminder_minutes_before)
+            due_utc = as_utc(task.due_date)
+            assert due_utc is not None
+            task.reminder_at = due_utc - timedelta(minutes=task.reminder_minutes_before)
         else:
             task.reminder_at = None
 

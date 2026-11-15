@@ -4,7 +4,43 @@ import 'package:flutter/material.dart';
 
 import 'desktop_schedule_controller.dart';
 
-/// Reactive Quiet Hours configuration card rendered in SettingsScreen.
+/// Shared helper to launch Flutter's TimePicker consistently in 12-hour AM/PM mode.
+Future<TimeOfDay?> show12HourTimePicker(
+  BuildContext context, {
+  required TimeOfDay initialTime,
+  String? helpText,
+}) {
+  return showTimePicker(
+    context: context,
+    initialTime: initialTime,
+    helpText: helpText,
+    builder: (ctx, child) {
+      return MediaQuery(
+        data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: false),
+        child: child ?? const SizedBox.shrink(),
+      );
+    },
+  );
+}
+
+TimeOfDay _parseHhMmOrDefault(String raw, TimeOfDay fallback) {
+  final parts = raw.trim().split(':');
+  if (parts.length != 2) return fallback;
+  final h = int.tryParse(parts[0]);
+  final m = int.tryParse(parts[1]);
+  if (h == null || m == null || h < 0 || h > 23 || m < 0 || m > 59) {
+    return fallback;
+  }
+  return TimeOfDay(hour: h, minute: m);
+}
+
+String _toWireHhMm(TimeOfDay tod) {
+  final h = tod.hour.toString().padLeft(2, '0');
+  final m = tod.minute.toString().padLeft(2, '0');
+  return '$h:$m';
+}
+
+/// Reactive Quiet Hours & Alert Sound configuration card rendered in SettingsScreen.
 class QuietHoursSettingsCard extends StatefulWidget {
   const QuietHoursSettingsCard({
     super.key,
@@ -19,13 +55,16 @@ class QuietHoursSettingsCard extends StatefulWidget {
 
 class _QuietHoursSettingsCardState extends State<QuietHoursSettingsCard> {
   late bool _qhEnabled;
-  late TextEditingController _qhStartCtrl;
-  late TextEditingController _qhEndCtrl;
+  late TimeOfDay _qhStartTime;
+  late TimeOfDay _qhEndTime;
   late String _qhTimezone;
+  late bool _useCustomTimezone;
   String? _qhFeedback;
   bool _qhIsError = false;
   bool _qhSaving = false;
+  bool _testingSound = false;
   QuietHoursOut? _lastSyncedQuietHours;
+  String? _lastKnownDeviceTz;
   final GlobalKey<FormFieldState<String>> _tzFieldKey =
       GlobalKey<FormFieldState<String>>();
 
@@ -33,10 +72,21 @@ class _QuietHoursSettingsCardState extends State<QuietHoursSettingsCard> {
   void initState() {
     super.initState();
     final qh = widget.controller.quietHours;
+    final devTz = widget.controller.deviceTimezone;
+    _lastKnownDeviceTz = devTz;
     _qhEnabled = qh.quietHoursEnabled;
-    _qhStartCtrl = TextEditingController(text: qh.quietHoursStart);
-    _qhEndCtrl = TextEditingController(text: qh.quietHoursEnd);
-    _qhTimezone = qh.quietHoursTimezone;
+    _qhStartTime = _parseHhMmOrDefault(
+      qh.quietHoursStart,
+      const TimeOfDay(hour: 22, minute: 0),
+    );
+    _qhEndTime = _parseHhMmOrDefault(
+      qh.quietHoursEnd,
+      const TimeOfDay(hour: 7, minute: 0),
+    );
+    final rawTz = qh.quietHoursTimezone.trim();
+    final hasCustom = rawTz.isNotEmpty && rawTz != 'UTC' && rawTz != devTz;
+    _useCustomTimezone = hasCustom;
+    _qhTimezone = (rawTz.isEmpty || rawTz == 'UTC') ? devTz : rawTz;
     _lastSyncedQuietHours = qh;
     widget.controller.addListener(_handleControllerChanged);
   }
@@ -57,8 +107,6 @@ class _QuietHoursSettingsCardState extends State<QuietHoursSettingsCard> {
   @override
   void dispose() {
     widget.controller.removeListener(_handleControllerChanged);
-    _qhStartCtrl.dispose();
-    _qhEndCtrl.dispose();
     super.dispose();
   }
 
@@ -70,46 +118,70 @@ class _QuietHoursSettingsCardState extends State<QuietHoursSettingsCard> {
   void _syncFromController() {
     if (_qhSaving) return;
     final next = widget.controller.quietHours;
+    final devTz = widget.controller.deviceTimezone;
     final prev = _lastSyncedQuietHours;
-    final changed = prev == null ||
+    final qhChanged = prev == null ||
         prev.quietHoursEnabled != next.quietHoursEnabled ||
         prev.quietHoursStart != next.quietHoursStart ||
         prev.quietHoursEnd != next.quietHoursEnd ||
         prev.quietHoursTimezone != next.quietHoursTimezone;
-    if (!changed) return;
+    final devTzChanged = _lastKnownDeviceTz != devTz;
+    if (!qhChanged && !devTzChanged) return;
 
     setState(() {
-      _qhEnabled = next.quietHoursEnabled;
-      _qhStartCtrl.text = next.quietHoursStart;
-      _qhEndCtrl.text = next.quietHoursEnd;
-      _qhTimezone = next.quietHoursTimezone;
-      _lastSyncedQuietHours = next;
+      _lastKnownDeviceTz = devTz;
+      if (qhChanged) {
+        _qhEnabled = next.quietHoursEnabled;
+        _qhStartTime = _parseHhMmOrDefault(next.quietHoursStart, _qhStartTime);
+        _qhEndTime = _parseHhMmOrDefault(next.quietHoursEnd, _qhEndTime);
+        final rawTz = next.quietHoursTimezone.trim();
+        final hasCustom = rawTz.isNotEmpty && rawTz != 'UTC' && rawTz != devTz;
+        _useCustomTimezone = hasCustom;
+        _qhTimezone = (rawTz.isEmpty || rawTz == 'UTC') ? devTz : rawTz;
+        _lastSyncedQuietHours = next;
+      } else if (!_useCustomTimezone) {
+        _qhTimezone = devTz;
+      }
     });
     _tzFieldKey.currentState?.didChange(_qhTimezone);
   }
 
-  bool _isValidHhMm(String raw) {
-    return RegExp(r'^([01]?\d|2[0-3]):([0-5]\d)$').hasMatch(raw.trim());
+  Future<void> _pickStartTime() async {
+    final picked = await show12HourTimePicker(
+      context,
+      initialTime: _qhStartTime,
+      helpText: 'Quiet Hours Start Time',
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _qhStartTime = picked);
   }
 
-  String _normalizeHhMm(String raw) {
-    final m = RegExp(r'^([01]?\d|2[0-3]):([0-5]\d)$').firstMatch(raw.trim())!;
-    return '${m.group(1)!.padLeft(2, '0')}:${m.group(2)!}';
+  Future<void> _pickEndTime() async {
+    final picked = await show12HourTimePicker(
+      context,
+      initialTime: _qhEndTime,
+      helpText: 'Quiet Hours End Time',
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _qhEndTime = picked);
+  }
+
+  Future<void> _playTestSound() async {
+    setState(() => _testingSound = true);
+    final ok = await widget.controller.playTestAlertSound(isAlarm: false);
+    if (!mounted) return;
+    setState(() {
+      _testingSound = false;
+      _qhFeedback = ok
+          ? 'Played test notification chime.'
+          : 'Sound playback is available on the Windows desktop app.';
+      _qhIsError = false;
+    });
   }
 
   Future<void> _saveQuietHours() async {
-    final startRaw = _qhStartCtrl.text.trim();
-    final endRaw = _qhEndCtrl.text.trim();
-    if (!_isValidHhMm(startRaw) || !_isValidHhMm(endRaw)) {
-      setState(() {
-        _qhFeedback = 'Use 24-hour HH:MM format (e.g. 22:00 and 07:00).';
-        _qhIsError = true;
-      });
-      return;
-    }
-
-    final normStart = _normalizeHhMm(startRaw);
-    final normEnd = _normalizeHhMm(endRaw);
+    final targetTz =
+        _useCustomTimezone ? _qhTimezone : widget.controller.deviceTimezone;
     setState(() {
       _qhSaving = true;
       _qhFeedback = null;
@@ -119,9 +191,9 @@ class _QuietHoursSettingsCardState extends State<QuietHoursSettingsCard> {
     final ok = await widget.controller.updateQuietHours(
       QuietHoursUpdate(
         quietHoursEnabled: _qhEnabled,
-        quietHoursStart: normStart,
-        quietHoursEnd: normEnd,
-        quietHoursTimezone: _qhTimezone,
+        quietHoursStart: _toWireHhMm(_qhStartTime),
+        quietHoursEnd: _toWireHhMm(_qhEndTime),
+        quietHoursTimezone: targetTz,
       ),
     );
 
@@ -129,9 +201,8 @@ class _QuietHoursSettingsCardState extends State<QuietHoursSettingsCard> {
     setState(() {
       _qhSaving = false;
       if (ok) {
-        _qhStartCtrl.text = normStart;
-        _qhEndCtrl.text = normEnd;
         _lastSyncedQuietHours = widget.controller.quietHours;
+        _qhTimezone = widget.controller.quietHours.quietHoursTimezone;
         _qhFeedback = 'Quiet hours saved.';
         _qhIsError = false;
       } else {
@@ -153,9 +224,14 @@ class _QuietHoursSettingsCardState extends State<QuietHoursSettingsCard> {
         final canEdit = widget.controller.isConnected &&
             widget.controller.profileId != null &&
             widget.controller.profileId!.isNotEmpty;
+        final deviceTz = widget.controller.deviceTimezone;
         final timezoneOptions = kSupportedScheduleTimezones.contains(_qhTimezone)
             ? kSupportedScheduleTimezones
             : <String>[_qhTimezone, ...kSupportedScheduleTimezones];
+        final startDisplay =
+            formatTimeOfDay12h(_qhStartTime.hour, _qhStartTime.minute);
+        final endDisplay =
+            formatTimeOfDay12h(_qhEndTime.hour, _qhEndTime.minute);
 
         return SoftGlassPanel(
           key: const Key('quiet_hours_settings_card'),
@@ -254,59 +330,133 @@ class _QuietHoursSettingsCardState extends State<QuietHoursSettingsCard> {
               ),
               const SizedBox(height: CompanionSpacing.sm),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
-                    child: TextField(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Notification Alert Sound',
+                          style: CompanionTypography.bodyLarge.copyWith(
+                            color: ext?.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Play Windows chime on live alarms, reminders, and routine alerts.',
+                          style: CompanionTypography.bodySmall.copyWith(
+                            color: ext?.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: CompanionSpacing.sm),
+                  OutlinedButton.icon(
+                    key: const Key('test_alert_sound_button'),
+                    onPressed: _testingSound ? null : _playTestSound,
+                    icon: const Icon(Icons.volume_up_outlined, size: 16),
+                    label: Text(_testingSound ? 'Playing...' : 'Test Sound'),
+                  ),
+                  const SizedBox(width: CompanionSpacing.sm),
+                  Switch(
+                    key: const Key('alert_sound_enabled_switch'),
+                    value: widget.controller.alertSoundEnabled,
+                    onChanged: widget.controller.setAlertSoundEnabled,
+                  ),
+                ],
+              ),
+              const SizedBox(height: CompanionSpacing.md),
+              Row(
+                children: [
+                  Expanded(
+                    child: _TimePickerTile(
                       key: const Key('quiet_hours_start_field'),
-                      controller: _qhStartCtrl,
+                      label: 'Quiet Starts',
+                      value: startDisplay,
                       enabled: canEdit && !_qhSaving,
-                      decoration: const InputDecoration(
-                        labelText: 'Start Time (HH:MM)',
-                        border: OutlineInputBorder(),
-                      ),
+                      onTap: _pickStartTime,
+                      ext: ext,
                     ),
                   ),
                   const SizedBox(width: CompanionSpacing.md),
                   Expanded(
-                    child: TextField(
+                    child: _TimePickerTile(
                       key: const Key('quiet_hours_end_field'),
-                      controller: _qhEndCtrl,
+                      label: 'Quiet Ends',
+                      value: endDisplay,
                       enabled: canEdit && !_qhSaving,
-                      decoration: const InputDecoration(
-                        labelText: 'End Time (HH:MM)',
-                        border: OutlineInputBorder(),
-                      ),
+                      onTap: _pickEndTime,
+                      ext: ext,
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: CompanionSpacing.md),
-              KeyedSubtree(
-                key: const Key('quiet_hours_timezone_dropdown'),
-                child: DropdownButtonFormField<String>(
-                  key: _tzFieldKey,
-                  initialValue: _qhTimezone,
-                  decoration: const InputDecoration(
-                    labelText: 'Timezone',
-                    border: OutlineInputBorder(),
+              Row(
+                children: [
+                  Icon(Icons.public_rounded, size: 16, color: ext?.textMuted),
+                  const SizedBox(width: CompanionSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      _useCustomTimezone
+                          ? 'Custom timezone active'
+                          : 'Following PC timezone: $deviceTz',
+                      key: const Key('quiet_hours_device_timezone_label'),
+                      style: CompanionTypography.bodySmall.copyWith(
+                        color: ext?.textSecondary,
+                      ),
+                    ),
                   ),
-                  items: timezoneOptions
-                      .map(
-                        (tz) => DropdownMenuItem(
-                          value: tz,
-                          child: Text(tz),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: canEdit && !_qhSaving
-                      ? (v) {
-                          if (v != null) {
-                            setState(() => _qhTimezone = v);
-                          }
-                        }
-                      : null,
-                ),
+                  TextButton(
+                    key: const Key('quiet_hours_custom_timezone_toggle'),
+                    onPressed: canEdit && !_qhSaving
+                        ? () => setState(() {
+                              _useCustomTimezone = !_useCustomTimezone;
+                              if (!_useCustomTimezone) {
+                                _qhTimezone = deviceTz;
+                              }
+                            })
+                        : null,
+                    child: Text(
+                      _useCustomTimezone
+                          ? 'Use PC timezone'
+                          : 'Custom timezone (advanced)',
+                    ),
+                  ),
+                ],
               ),
+              if (_useCustomTimezone) ...[
+                const SizedBox(height: CompanionSpacing.sm),
+                KeyedSubtree(
+                  key: const Key('quiet_hours_timezone_dropdown'),
+                  child: DropdownButtonFormField<String>(
+                    key: _tzFieldKey,
+                    initialValue: _qhTimezone,
+                    decoration: const InputDecoration(
+                      labelText: 'Timezone',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: timezoneOptions
+                        .map(
+                          (tz) => DropdownMenuItem(
+                            value: tz,
+                            child: Text(tz),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: canEdit && !_qhSaving
+                        ? (v) {
+                            if (v != null) {
+                              setState(() => _qhTimezone = v);
+                            }
+                          }
+                        : null,
+                  ),
+                ),
+              ],
               if (_qhFeedback != null) ...[
                 const SizedBox(height: CompanionSpacing.md),
                 Text(
@@ -340,6 +490,45 @@ class _QuietHoursSettingsCardState extends State<QuietHoursSettingsCard> {
           ),
         );
       },
+    );
+  }
+}
+
+class _TimePickerTile extends StatelessWidget {
+  const _TimePickerTile({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.enabled,
+    required this.onTap,
+    this.ext,
+  });
+
+  final String label;
+  final String value;
+  final bool enabled;
+  final VoidCallback onTap;
+  final CompanionThemeExtension? ext;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      borderRadius: CompanionRadius.borderMd,
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          suffixIcon: const Icon(Icons.schedule_rounded, size: 18),
+        ),
+        child: Text(
+          value,
+          style: CompanionTypography.bodyLarge.copyWith(
+            color: enabled ? ext?.textPrimary : ext?.textMuted,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
     );
   }
 }
