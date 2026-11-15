@@ -1,6 +1,6 @@
 """F05: actual Task PATCH validation, omission, derivation and ORM persistence."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 from pydantic import ValidationError
@@ -74,9 +74,9 @@ async def test_nullable_fields_clear_and_impossible_derivation_clears_reminder(c
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("patch,expected", [
-    ({"due_date": "2031-06-01T12:00:00"}, datetime(2031, 6, 1, 11, 30)),
-    ({"reminder_minutes_before": 5}, datetime(2030, 6, 1, 11, 55)),
-    ({"due_date": None, "reminder_at": "2032-01-01T08:00:00"}, datetime(2032, 1, 1, 8)),
+    ({"due_date": "2031-06-01T12:00:00"}, datetime(2031, 6, 1, 11, 30, tzinfo=timezone.utc)),
+    ({"reminder_minutes_before": 5}, datetime(2030, 6, 1, 11, 55, tzinfo=timezone.utc)),
+    ({"due_date": None, "reminder_at": "2032-01-01T08:00:00"}, datetime(2032, 1, 1, 8, tzinfo=timezone.utc)),
     ({"due_date": "2031-06-01T12:00:00", "reminder_minutes_before": 5, "reminder_at": None}, None),
 ])
 async def test_reminder_derivation_and_explicit_timestamp_precedence(client, auth_headers, patch, expected):

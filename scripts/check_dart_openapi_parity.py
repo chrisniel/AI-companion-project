@@ -147,9 +147,10 @@ M3_ROUTE_DART_METHODS: Dict[Tuple[str, str], Tuple[str, str]] = {
     ("PATCH", "/api/v1/routines/{routine_id}"): ("updateRoutine", "/api/v1/routines/$routineId"),
     ("DELETE", "/api/v1/routines/{routine_id}"): ("deleteRoutine", "/api/v1/routines/$routineId"),
     ("POST", "/api/v1/routines/{routine_id}/run"): ("runRoutineNow", "/api/v1/routines/$routineId/run"),
-    # Notifications Backlog (6 routes)
+    # Notifications Backlog (7 routes)
     ("GET", "/api/v1/notifications"): ("listNotifications", "/api/v1/notifications"),
     ("POST", "/api/v1/notifications/clear-all"): ("clearAllNotifications", "/api/v1/notifications/clear-all"),
+    ("POST", "/api/v1/notifications/mark-all-read"): ("markAllNotificationsRead", "/api/v1/notifications/mark-all-read"),
     ("POST", "/api/v1/notifications/{event_id}/read"): ("markNotificationRead", "/api/v1/notifications/$eventId/read"),
     ("POST", "/api/v1/notifications/{event_id}/acknowledge"): ("acknowledgeNotification", "/api/v1/notifications/$eventId/acknowledge"),
     ("POST", "/api/v1/notifications/{event_id}/dismiss"): ("dismissNotification", "/api/v1/notifications/$eventId/dismiss"),
@@ -233,6 +234,7 @@ SCHEMA_TO_DART_CLASS: Dict[str, Tuple[str, str]] = {
     "NotificationEventOut": ("scheduling_dto.dart", "NotificationEventOut"),
     "NotificationListOut": ("scheduling_dto.dart", "NotificationListOut"),
     "NotificationClearResponse": ("scheduling_dto.dart", "NotificationClearResponse"),
+    "NotificationMarkReadResponse": ("scheduling_dto.dart", "NotificationMarkReadResponse"),
 }
 
 

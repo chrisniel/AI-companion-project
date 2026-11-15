@@ -10,6 +10,7 @@ class TaskCreate {
   final String? dueDate;
   final int? reminderMinutesBefore;
   final String? reminderAt;
+  final bool reminderCenterPopup;
 
   const TaskCreate({
     required this.title,
@@ -19,6 +20,7 @@ class TaskCreate {
     this.dueDate,
     this.reminderMinutesBefore,
     this.reminderAt,
+    this.reminderCenterPopup = true,
   });
 
   factory TaskCreate.fromJson(Map<String, dynamic> json) {
@@ -30,6 +32,7 @@ class TaskCreate {
       dueDate: json['due_date'] as String?,
       reminderMinutesBefore: (json['reminder_minutes_before'] as num?)?.toInt(),
       reminderAt: json['reminder_at'] as String?,
+      reminderCenterPopup: json['reminder_center_popup'] as bool? ?? true,
     );
   }
 
@@ -42,6 +45,7 @@ class TaskCreate {
         if (reminderMinutesBefore != null)
           'reminder_minutes_before': reminderMinutesBefore,
         if (reminderAt != null) 'reminder_at': reminderAt,
+        'reminder_center_popup': reminderCenterPopup,
       };
 
   @override
@@ -55,7 +59,8 @@ class TaskCreate {
           priority == other.priority &&
           dueDate == other.dueDate &&
           reminderMinutesBefore == other.reminderMinutesBefore &&
-          reminderAt == other.reminderAt;
+          reminderAt == other.reminderAt &&
+          reminderCenterPopup == other.reminderCenterPopup;
 
   @override
   int get hashCode => Object.hash(
@@ -66,6 +71,7 @@ class TaskCreate {
         dueDate,
         reminderMinutesBefore,
         reminderAt,
+        reminderCenterPopup,
       );
 }
 
@@ -84,6 +90,7 @@ class TaskUpdate {
   final String? dueDate;
   final int? reminderMinutesBefore;
   final String? reminderAt;
+  final bool? reminderCenterPopup;
 
   const TaskUpdate({
     this.title,
@@ -94,6 +101,7 @@ class TaskUpdate {
     this.dueDate,
     this.reminderMinutesBefore,
     this.reminderAt,
+    this.reminderCenterPopup,
   });
 
   factory TaskUpdate.fromJson(Map<String, dynamic> json) {
@@ -106,6 +114,7 @@ class TaskUpdate {
       dueDate: json['due_date'] as String?,
       reminderMinutesBefore: (json['reminder_minutes_before'] as num?)?.toInt(),
       reminderAt: json['reminder_at'] as String?,
+      reminderCenterPopup: json['reminder_center_popup'] as bool?,
     );
   }
 
@@ -133,6 +142,8 @@ class TaskUpdate {
           'reminder_at': null
         else if (reminderAt != null)
           'reminder_at': reminderAt,
+        if (reminderCenterPopup != null)
+          'reminder_center_popup': reminderCenterPopup,
       };
 
   @override
@@ -147,7 +158,8 @@ class TaskUpdate {
           priority == other.priority &&
           dueDate == other.dueDate &&
           reminderMinutesBefore == other.reminderMinutesBefore &&
-          reminderAt == other.reminderAt;
+          reminderAt == other.reminderAt &&
+          reminderCenterPopup == other.reminderCenterPopup;
 
   @override
   int get hashCode => Object.hash(
@@ -159,6 +171,7 @@ class TaskUpdate {
         dueDate,
         reminderMinutesBefore,
         reminderAt,
+        reminderCenterPopup,
       );
 }
 
@@ -175,6 +188,7 @@ class TaskResponse {
   final String? dueDate;
   final int? reminderMinutesBefore;
   final String? reminderAt;
+  final bool reminderCenterPopup;
   final bool isDeleted;
   final String? deletedAt;
   final String createdAt;
@@ -191,6 +205,7 @@ class TaskResponse {
     this.dueDate,
     this.reminderMinutesBefore,
     this.reminderAt,
+    this.reminderCenterPopup = true,
     this.isDeleted = false,
     this.deletedAt,
     required this.createdAt,
@@ -209,6 +224,7 @@ class TaskResponse {
       dueDate: json['due_date'] as String?,
       reminderMinutesBefore: (json['reminder_minutes_before'] as num?)?.toInt(),
       reminderAt: json['reminder_at'] as String?,
+      reminderCenterPopup: json['reminder_center_popup'] as bool? ?? true,
       isDeleted: json['is_deleted'] as bool? ?? false,
       deletedAt: json['deleted_at'] as String?,
       createdAt: json['created_at'] as String,
@@ -227,6 +243,7 @@ class TaskResponse {
         'due_date': dueDate,
         'reminder_minutes_before': reminderMinutesBefore,
         'reminder_at': reminderAt,
+        'reminder_center_popup': reminderCenterPopup,
         'is_deleted': isDeleted,
         'deleted_at': deletedAt,
         'created_at': createdAt,
@@ -248,6 +265,7 @@ class TaskResponse {
           dueDate == other.dueDate &&
           reminderMinutesBefore == other.reminderMinutesBefore &&
           reminderAt == other.reminderAt &&
+          reminderCenterPopup == other.reminderCenterPopup &&
           isDeleted == other.isDeleted &&
           deletedAt == other.deletedAt &&
           createdAt == other.createdAt &&
@@ -265,6 +283,7 @@ class TaskResponse {
         dueDate,
         reminderMinutesBefore,
         reminderAt,
+        reminderCenterPopup,
         isDeleted,
         deletedAt,
         createdAt,
@@ -315,6 +334,7 @@ class TrashTaskResponse {
   final String? dueDate;
   final int? reminderMinutesBefore;
   final String? reminderAt;
+  final bool reminderCenterPopup;
   final bool isDeleted;
   final String? deletedAt;
   final String createdAt;
@@ -332,6 +352,7 @@ class TrashTaskResponse {
     this.dueDate,
     this.reminderMinutesBefore,
     this.reminderAt,
+    this.reminderCenterPopup = true,
     this.isDeleted = true,
     this.deletedAt,
     required this.createdAt,
@@ -351,6 +372,7 @@ class TrashTaskResponse {
       dueDate: json['due_date'] as String?,
       reminderMinutesBefore: (json['reminder_minutes_before'] as num?)?.toInt(),
       reminderAt: json['reminder_at'] as String?,
+      reminderCenterPopup: json['reminder_center_popup'] as bool? ?? true,
       isDeleted: json['is_deleted'] as bool? ?? true,
       deletedAt: json['deleted_at'] as String?,
       createdAt: json['created_at'] as String,
@@ -370,6 +392,7 @@ class TrashTaskResponse {
         'due_date': dueDate,
         'reminder_minutes_before': reminderMinutesBefore,
         'reminder_at': reminderAt,
+        'reminder_center_popup': reminderCenterPopup,
         'is_deleted': isDeleted,
         'deleted_at': deletedAt,
         'created_at': createdAt,

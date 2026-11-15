@@ -297,4 +297,38 @@ void main() {
       expect(e1, equals(e2));
     });
   });
+
+  group('Scheduling & Task center_popup DTO parity', () {
+    test('Task and Reminder DTOs default center_popup to true and round-trip false', () {
+      const taskCreateDefault = TaskCreate(title: 'Test');
+      expect(taskCreateDefault.reminderCenterPopup, isTrue);
+      expect(taskCreateDefault.toJson()['reminder_center_popup'], isTrue);
+
+      const remCreateOptOut = ReminderCreate(
+        title: 'Gentle',
+        scheduledAt: '2026-11-16T09:00:00Z',
+        centerPopup: false,
+      );
+      expect(remCreateOptOut.toJson()['center_popup'], isFalse);
+
+      final remOut = ReminderOut.fromJson({
+        'id': 'r1',
+        'profile_id': 'p1',
+        'title': 'Gentle',
+        'scheduled_at': '2026-11-16T09:00:00Z',
+        'timezone': 'UTC',
+        'status': 'scheduled',
+        'bypass_quiet_hours': false,
+        'center_popup': false,
+        'origin': 'host',
+        'created_at': '2026-11-15T10:00:00Z',
+        'updated_at': '2026-11-15T10:00:00Z',
+      });
+      expect(remOut.centerPopup, isFalse);
+
+      final markResp = NotificationMarkReadResponse.fromJson({'updated_count': 5});
+      expect(markResp.updatedCount, 5);
+      expect(markResp.toJson(), {'updated_count': 5});
+    });
+  });
 }

@@ -1,7 +1,8 @@
 """Common response models and standardized error envelope definitions."""
 
+from datetime import datetime, timezone
 from typing import Any, Generic, Optional, TypeVar
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 T = TypeVar("T")
 
@@ -13,6 +14,15 @@ class BaseSchema(BaseModel):
         extra="forbid",
         from_attributes=True,
     )
+
+    @model_validator(mode="after")
+    def _attach_utc_to_naive_datetimes(self) -> "BaseSchema":
+        """Normalize SQLite-stripped naive datetimes back to explicit UTC for JSON serialization."""
+        for field_name in type(self).model_fields:
+            val = getattr(self, field_name, None)
+            if isinstance(val, datetime) and val.tzinfo is None:
+                setattr(self, field_name, val.replace(tzinfo=timezone.utc))
+        return self
 
 
 class ErrorDetail(BaseModel):

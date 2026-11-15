@@ -276,3 +276,49 @@ async def test_task_reminder_bridge_deduplication_and_debt_v1_08_sweep(test_sess
     await purge_svc.execute_maintenance_purge()
     await test_session.refresh(expired2)
     assert expired2.is_deleted is True
+
+
+async def test_per_reminder_center_popup_drives_notification_urgency(
+    test_session: AsyncSession,
+    profile_id: str,
+):
+    now = datetime(2026, 11, 15, 14, 0, tzinfo=timezone.utc)
+    due = now - timedelta(seconds=10)
+
+    rem_center = Reminder(
+        profile_id=profile_id,
+        title="Important Reminder",
+        scheduled_at=due,
+        center_popup=True,
+    )
+    rem_banner = Reminder(
+        profile_id=profile_id,
+        title="Gentle Reminder",
+        scheduled_at=due,
+        center_popup=False,
+    )
+    task_center = Task(
+        profile_id=profile_id,
+        title="Urgent Task Due",
+        status="pending",
+        reminder_at=due,
+        reminder_center_popup=True,
+    )
+    task_banner = Task(
+        profile_id=profile_id,
+        title="Quiet Task Due",
+        status="pending",
+        reminder_at=due,
+        reminder_center_popup=False,
+    )
+    test_session.add_all([rem_center, rem_banner, task_center, task_banner])
+    await test_session.commit()
+
+    svc = SchedulerService(test_session)
+    events = await svc.run_tick(now=now, grace_seconds=300)
+    by_title = {e.title: e for e in events}
+
+    assert by_title["Important Reminder"].urgency == "high"
+    assert by_title["Gentle Reminder"].urgency == "standard"
+    assert by_title["Task Reminder: Urgent Task Due"].urgency == "high"
+    assert by_title["Task Reminder: Quiet Task Due"].urgency == "standard"

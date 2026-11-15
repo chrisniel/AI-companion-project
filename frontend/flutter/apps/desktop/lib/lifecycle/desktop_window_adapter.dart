@@ -42,6 +42,9 @@ abstract class DesktopWindowAdapter {
   /// Requests input focus for the window.
   Future<void> focus();
 
+  /// Maximizes the window to fill the active display work area.
+  Future<void> maximize();
+
   /// Disposes native window resources.
   Future<void> destroy();
 

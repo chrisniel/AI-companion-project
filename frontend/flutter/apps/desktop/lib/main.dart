@@ -64,9 +64,13 @@ void main(List<String> args) async {
     },
   );
 
-  final coordinatorInit = coordinator.initialize(initialWindowSize: initialSize);
+  final isVisualEvidenceMode = kDebugMode && args.contains('--capture-visual-evidence');
+  final coordinatorInit = coordinator.initialize(
+    initialWindowSize: initialSize,
+    maximizeOnStart: initialSize == null && !isVisualEvidenceMode,
+  );
 
-  if (kDebugMode && args.contains('--capture-visual-evidence')) {
+  if (isVisualEvidenceMode) {
     await coordinatorInit;
     final outputDirArg = args.firstWhere(
       (a) => a.startsWith('--output-dir='),

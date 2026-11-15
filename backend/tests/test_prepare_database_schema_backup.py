@@ -19,7 +19,7 @@ from app.core.storage import prepare_database_schema, StorageError
 from app.db.backup import SQLiteBackupError
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-HEAD_REVISION = "015_scheduler_notifications_and_routines"
+HEAD_REVISION = "016_reminder_center_popup"
 
 
 def _get_alembic_config(db_path: Path) -> Config:

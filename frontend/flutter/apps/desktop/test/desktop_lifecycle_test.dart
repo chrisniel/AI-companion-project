@@ -14,9 +14,11 @@ class FakeDesktopWindowAdapter implements DesktopWindowAdapter {
   bool preventClose = false;
   bool visible = false;
   bool focused = false;
+  bool isMaximized = false;
   bool isDestroyed = false;
   int showCallCount = 0;
   int hideCallCount = 0;
+  int maximizeCallCount = 0;
   WindowOptions? capturedOptions;
   final List<WindowListener> listeners = [];
 
@@ -82,6 +84,12 @@ class FakeDesktopWindowAdapter implements DesktopWindowAdapter {
   @override
   Future<void> focus() async {
     focused = true;
+  }
+
+  @override
+  Future<void> maximize() async {
+    isMaximized = true;
+    maximizeCallCount++;
   }
 
   @override
@@ -212,6 +220,15 @@ void main() {
       expect(windowAdapter.size, const Size(1024, 640));
       expect(windowAdapter.capturedOptions?.size, const Size(1024, 640));
       expect(windowAdapter.title, DesktopLifecycleCoordinator.defaultWindowTitle);
+      expect(windowAdapter.maximizeCallCount, 0);
+    });
+
+    test('maximizes window on boot when maximizeOnStart is true', () async {
+      await coordinator.initialize(maximizeOnStart: true);
+
+      expect(windowAdapter.visible, isTrue);
+      expect(windowAdapter.isMaximized, isTrue);
+      expect(windowAdapter.maximizeCallCount, 1);
     });
 
     test('initializes system tray with icon, tooltip, and required menu actions', () async {

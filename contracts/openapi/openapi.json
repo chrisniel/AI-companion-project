@@ -3385,6 +3385,32 @@
         ]
       }
     },
+    "/api/v1/notifications/mark-all-read": {
+      "post": {
+        "tags": [
+          "Scheduling"
+        ],
+        "summary": "Mark All Notifications Read",
+        "operationId": "mark_all_notifications_read_api_v1_notifications_mark_all_read_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationMarkReadResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/notifications/{event_id}/read": {
       "post": {
         "tags": [
@@ -8327,6 +8353,21 @@
         "title": "NotificationListOut",
         "description": "Paginated collection of Notification Backlog events plus summary counts."
       },
+      "NotificationMarkReadResponse": {
+        "properties": {
+          "updated_count": {
+            "type": "integer",
+            "title": "Updated Count"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "updated_count"
+        ],
+        "title": "NotificationMarkReadResponse",
+        "description": "Result summary after marking unread notifications read."
+      },
       "NotificationSourceType": {
         "type": "string",
         "enum": [
@@ -8668,6 +8709,11 @@
             "title": "Bypass Quiet Hours",
             "default": false
           },
+          "center_popup": {
+            "type": "boolean",
+            "title": "Center Popup",
+            "default": true
+          },
           "origin": {
             "type": "string",
             "enum": [
@@ -8773,6 +8819,10 @@
             "type": "boolean",
             "title": "Bypass Quiet Hours"
           },
+          "center_popup": {
+            "type": "boolean",
+            "title": "Center Popup"
+          },
           "origin": {
             "type": "string",
             "title": "Origin"
@@ -8822,6 +8872,7 @@
           "timezone",
           "status",
           "bypass_quiet_hours",
+          "center_popup",
           "origin",
           "created_at",
           "updated_at"
@@ -8950,6 +9001,17 @@
               }
             ],
             "title": "Bypass Quiet Hours"
+          },
+          "center_popup": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Center Popup"
           }
         },
         "additionalProperties": false,
@@ -9688,6 +9750,12 @@
             ],
             "title": "Reminder At",
             "description": "Explicit alert timestamp in ISO-8601."
+          },
+          "reminder_center_popup": {
+            "type": "boolean",
+            "title": "Reminder Center Popup",
+            "description": "Whether due reminders for this task surface as centered high-priority pop-up modals.",
+            "default": true
           }
         },
         "additionalProperties": false,
@@ -9813,6 +9881,12 @@
             "title": "Reminder At",
             "description": "Alert trigger timestamp."
           },
+          "reminder_center_popup": {
+            "type": "boolean",
+            "title": "Reminder Center Popup",
+            "description": "Whether due reminders for this task surface as centered high-priority pop-up modals.",
+            "default": true
+          },
           "is_deleted": {
             "type": "boolean",
             "title": "Is Deleted",
@@ -9933,6 +10007,10 @@
               }
             ],
             "title": "Reminder At"
+          },
+          "reminder_center_popup": {
+            "type": "boolean",
+            "title": "Reminder Center Popup"
           }
         },
         "additionalProperties": false,
@@ -10072,6 +10150,12 @@
             ],
             "title": "Reminder At",
             "description": "Alert trigger timestamp."
+          },
+          "reminder_center_popup": {
+            "type": "boolean",
+            "title": "Reminder Center Popup",
+            "description": "Whether due reminders for this task surface as centered high-priority pop-up modals.",
+            "default": true
           },
           "is_deleted": {
             "type": "boolean",

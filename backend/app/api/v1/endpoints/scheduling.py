@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Type, TypeVar
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_profile_session, get_db
@@ -25,6 +25,7 @@ from app.schemas.scheduling import (
     NotificationClearResponse,
     NotificationEventOut,
     NotificationListOut,
+    NotificationMarkReadResponse,
     NotificationSourceType,
     NotificationStatus,
     ReminderCreate,
@@ -256,6 +257,7 @@ async def create_reminder(
         timezone=payload.timezone,
         status=ReminderStatus.scheduled.value,
         bypass_quiet_hours=payload.bypass_quiet_hours,
+        center_popup=payload.center_popup,
         origin=payload.origin,
         is_deleted=False,
         deleted_at=None,
@@ -309,6 +311,8 @@ async def update_reminder(
         reminder.snoozed_until = as_utc(payload.snoozed_until)
     if payload.bypass_quiet_hours is not None:
         reminder.bypass_quiet_hours = payload.bypass_quiet_hours
+    if payload.center_popup is not None:
+        reminder.center_popup = payload.center_popup
     reminder.updated_at = datetime.now(timezone.utc)
 
     await validate_profile_session(db, session)
@@ -516,19 +520,30 @@ async def update_alarm(
 ) -> AlarmOut:
     alarm = await _get_owned_entity(db, Alarm, alarm_id, session.profile_id, "Alarm")
     now = datetime.now(timezone.utc)
+    was_enabled = bool(alarm.enabled)
+    recompute_scheduled = False
 
     if payload.label is not None:
         alarm.label = payload.label
-    if payload.timezone is not None:
+    if payload.timezone is not None and payload.timezone != alarm.timezone:
         alarm.timezone = payload.timezone
+        recompute_scheduled = True
     if payload.clear_time_of_day:
+        if alarm.time_of_day is not None:
+            recompute_scheduled = True
         alarm.time_of_day = None
-    elif payload.time_of_day is not None:
+    elif payload.time_of_day is not None and payload.time_of_day != alarm.time_of_day:
         alarm.time_of_day = payload.time_of_day
+        recompute_scheduled = True
     if payload.clear_recurrence_days:
+        if alarm.recurrence_days is not None:
+            recompute_scheduled = True
         alarm.recurrence_days = None
     elif payload.recurrence_days is not None:
-        alarm.recurrence_days = format_recurrence_days(payload.recurrence_days)
+        formatted_days = format_recurrence_days(payload.recurrence_days)
+        if formatted_days != alarm.recurrence_days:
+            alarm.recurrence_days = formatted_days
+            recompute_scheduled = True
     if payload.scheduled_at is not None:
         alarm.scheduled_at = as_utc(payload.scheduled_at) or payload.scheduled_at
     if payload.enabled is not None:
@@ -545,13 +560,25 @@ async def update_alarm(
         alarm.bypass_quiet_hours = payload.bypass_quiet_hours
 
     days = alarm.recurrence_days_list
+    if days and not alarm.time_of_day:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Recurring alarms require time_of_day (cannot clear time_of_day while recurrence_days is set).",
+        )
+
+    enabled_transitioned_to_true = (not was_enabled) and bool(alarm.enabled)
+    is_past_or_due = (as_utc(alarm.scheduled_at) or now) <= now
+    should_recompute = (
+        recompute_scheduled
+        or (bool(days) and is_past_or_due)
+        or (enabled_transitioned_to_true and bool(days))
+    )
     if (
         alarm.enabled
-        and days
         and alarm.time_of_day
         and payload.scheduled_at is None
-        and (as_utc(alarm.scheduled_at) or now) <= now
         and alarm.status == AlarmStatus.armed.value
+        and should_recompute
     ):
         alarm.scheduled_at = compute_next_occurrence(alarm.time_of_day, days, alarm.timezone, now)
 
@@ -891,6 +918,36 @@ async def clear_all_notifications(
     await validate_profile_session(db, session)
     await db.commit()
     return NotificationClearResponse(cleared_count=len(rows))
+
+
+@router.post("/notifications/mark-all-read", response_model=NotificationMarkReadResponse, summary="Mark All Notifications Read")
+async def mark_all_notifications_read(
+    session: ProfileSession = Depends(get_current_profile_session),
+    db: AsyncSession = Depends(get_db),
+) -> NotificationMarkReadResponse:
+    now = datetime.now(timezone.utc)
+    stmt = select(NotificationEvent).where(
+        NotificationEvent.profile_id == session.profile_id,
+        NotificationEvent.is_deleted.is_(False),
+        or_(
+            NotificationEvent.status.in_(UNREAD_BACKLOG_STATUSES),
+            NotificationEvent.read_at.is_(None),
+        ),
+    )
+    rows = (await db.execute(stmt)).scalars().all()
+    for ev in rows:
+        ev.read_at = ev.read_at or now
+        # Keep active ringing alarms in unread status so they remain prominent
+        # until explicitly stopped, snoozed, or dismissed.
+        if (
+            ev.status in UNREAD_BACKLOG_STATUSES
+            and ev.source_type != NotificationSourceType.alarm.value
+        ):
+            ev.status = NotificationStatus.read.value
+        ev.updated_at = now
+    await validate_profile_session(db, session)
+    await db.commit()
+    return NotificationMarkReadResponse(updated_count=len(rows))
 
 
 @router.post("/notifications/{event_id}/read", response_model=NotificationEventOut, summary="Mark Notification Read")

@@ -2,7 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:ai_companion_desktop/controllers/desktop_settings_controller.dart';
 import 'package:ai_companion_desktop/features/chat/desktop_chat_controller.dart';
+import 'package:ai_companion_desktop/features/schedule/desktop_schedule_controller.dart';
 import 'package:ai_companion_desktop/features/studio/desktop_studio_controller.dart';
+import 'package:ai_companion_desktop/lifecycle/desktop_lifecycle_coordinator.dart';
+import 'package:ai_companion_desktop/platform/windows_toast_adapter.dart';
 import 'package:ai_companion_desktop/shell/desktop_shell.dart';
 import 'package:companion_api/companion_api.dart';
 import 'package:companion_design/companion_design.dart';
@@ -48,7 +51,7 @@ void main() {
 
       // Verify planned milestone badges
       expect(find.text('M4'), findsOneWidget);
-      expect(find.text('M3'), findsNWidgets(2)); // Schedule and Studio (Memory is active in M3)
+      expect(find.text('M3'), findsOneWidget); // Studio only (Memory & Schedule active in M3)
     });
 
     testWidgets('navigates between destinations when clicking rail items', (tester) async {
@@ -73,7 +76,7 @@ void main() {
       await tester.tap(find.text('Schedule'));
       await tester.pumpAndSettle();
       expect(find.text('Schedule & Routines'), findsOneWidget);
-      expect(find.text('PLANNED MILESTONE M3'), findsOneWidget);
+      expect(find.text('Schedule workspace unavailable'), findsOneWidget);
 
       // Navigate to Settings
       await tester.tap(find.text('Settings'));
@@ -216,5 +219,532 @@ void main() {
       studio.dispose();
       chat.dispose();
     });
+
+    testWidgets(
+      'surfaces unread Active Alert Banner (excluding suppressed events) and opens NotificationBacklogDrawer from bell button',
+      (tester) async {
+        setupDesktopViewport(tester);
+
+        var acknowledged = false;
+        final mockClient = MockClient((req) async {
+          if (req.url.path == '/api/v1/notifications') {
+            final items = <Map<String, dynamic>>[
+              if (!acknowledged)
+                {
+                  'id': 'evt-alarm',
+                  'profile_id': 'prof-1',
+                  'source_type': 'alarm',
+                  'source_id': 'a1',
+                  'urgency': 'high',
+                  'title': 'Wake Up Now',
+                  'body': 'Morning alarm firing',
+                  'status': 'unread',
+                  'delivery_policy': 'immediate',
+                  'is_missed_catchup': false,
+                  'triggered_at': '2026-11-15T07:00:00Z',
+                  'read_at': null,
+                  'resolved_at': null,
+                  'created_at': '2026-11-15T07:00:00Z',
+                  'updated_at': '2026-11-15T07:00:00Z',
+                },
+              {
+                'id': 'evt-suppressed',
+                'profile_id': 'prof-1',
+                'source_type': 'routine',
+                'source_id': 'r1',
+                'urgency': 'informational',
+                'title': 'Suppressed Check-in',
+                'body': 'Suppressed during quiet hours',
+                'status': 'suppressed_quiet_hours',
+                'delivery_policy': 'quiet_hours_suppressed',
+                'is_missed_catchup': false,
+                'triggered_at': '2026-11-15T01:00:00Z',
+                'read_at': null,
+                'resolved_at': null,
+                'created_at': '2026-11-15T01:00:00Z',
+                'updated_at': '2026-11-15T01:00:00Z',
+              },
+            ];
+            return http.Response(
+              jsonEncode({
+                'items': items,
+                'total': items.length,
+                'unread_count': acknowledged ? 0 : 1,
+                'missed_count': 0,
+              }),
+              200,
+            );
+          }
+          if (req.url.path == '/api/v1/notifications/evt-alarm/acknowledge') {
+            acknowledged = true;
+            return http.Response(
+              jsonEncode({
+                'id': 'evt-alarm',
+                'profile_id': 'prof-1',
+                'source_type': 'alarm',
+                'source_id': 'a1',
+                'urgency': 'high',
+                'title': 'Wake Up Now',
+                'body': 'Morning alarm firing',
+                'status': 'acknowledged',
+                'delivery_policy': 'immediate',
+                'is_missed_catchup': false,
+                'triggered_at': '2026-11-15T07:00:00Z',
+                'read_at': '2026-11-15T07:01:00Z',
+                'resolved_at': '2026-11-15T07:01:00Z',
+                'created_at': '2026-11-15T07:00:00Z',
+                'updated_at': '2026-11-15T07:01:00Z',
+              }),
+              200,
+            );
+          }
+          if (req.url.path == '/api/v1/profiles/me/quiet-hours') {
+            return http.Response(
+              jsonEncode({
+                'quiet_hours_enabled': true,
+                'quiet_hours_start': '22:00',
+                'quiet_hours_end': '07:00',
+                'quiet_hours_timezone': 'UTC',
+              }),
+              200,
+            );
+          }
+          return http.Response(
+            jsonEncode({'items': <dynamic>[], 'total': 0}),
+            200,
+          );
+        });
+
+        final client = CompanionClient(
+          baseUrl: 'http://127.0.0.1:8000',
+          httpClient: mockClient,
+        );
+        final schedCtrl = DesktopScheduleController(
+          client: client,
+          toastAdapter: NoOpDesktopToastAdapter(),
+          profileId: 'prof-1',
+        );
+        addTearDown(schedCtrl.dispose);
+        addTearDown(client.close);
+        await schedCtrl.refreshAll();
+
+        final settingsController = DesktopSettingsController();
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: CompanionTheme.dark(),
+            home: DesktopShell(
+              controller: settingsController,
+              scheduleController: schedCtrl,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Alarms always surface in centered modal with crisp 'Stop' primary action;
+        // quiet-hours suppressed check-ins never show in floating or center cards.
+        expect(find.byKey(const Key('shell_center_alert_modal')), findsOneWidget);
+        expect(find.byKey(const Key('shell_active_alert_banner')), findsNothing);
+        expect(find.text('Wake Up Now'), findsOneWidget);
+        expect(find.text('Stop'), findsOneWidget);
+        expect(find.text('Suppressed Check-in'), findsNothing);
+
+        // Tapping Stop clears the centered modal cleanly
+        await tester.tap(find.byKey(const Key('center_alert_primary_button')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('shell_center_alert_modal')), findsNothing);
+
+        // Bell button toggles NotificationBacklogDrawer showing history including suppressed event
+        await tester.tap(find.byKey(const Key('shell_notification_bell_button')));
+        await tester.pumpAndSettle();
+        expect(find.text('Notification Center'), findsOneWidget);
+        expect(find.text('Suppressed Check-in'), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('backlog_drawer_close_button')));
+        await tester.pumpAndSettle();
+        expect(find.text('Notification Center'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'routes routines to floating top card and supports selectable center popup toggle for reminders',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1280, 820));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        var resolvedRoutine = false;
+        var resolvedReminder = false;
+
+        final mockClient = MockClient((req) async {
+          if (req.url.path == '/api/v1/notifications') {
+            final items = <Map<String, dynamic>>[
+              {
+                'id': 'evt-rem',
+                'profile_id': 'prof-1',
+                'source_type': 'reminder',
+                'source_id': 'r1',
+                'urgency': 'high',
+                'title': 'Drink Water',
+                'body': 'Hydration check',
+                'status': resolvedReminder ? 'acknowledged' : 'unread',
+                'delivery_policy': 'immediate',
+                'is_missed_catchup': false,
+                'triggered_at': '2026-11-15T09:00:00Z',
+                'created_at': '2026-11-15T09:00:00Z',
+                'updated_at': '2026-11-15T09:00:00Z',
+              },
+              {
+                'id': 'evt-rout',
+                'profile_id': 'prof-1',
+                'source_type': 'routine',
+                'source_id': 'rt1',
+                'urgency': 'informational',
+                'title': 'Morning Brief',
+                'body': 'Daily standup summary',
+                'status': resolvedRoutine ? 'acknowledged' : 'unread',
+                'delivery_policy': 'immediate',
+                'is_missed_catchup': false,
+                'triggered_at': '2026-11-15T08:00:00Z',
+                'created_at': '2026-11-15T08:00:00Z',
+                'updated_at': '2026-11-15T08:00:00Z',
+              },
+            ];
+            final unreadCount = (resolvedReminder ? 0 : 1) + (resolvedRoutine ? 0 : 1);
+            return http.Response(
+              jsonEncode({
+                'items': items,
+                'total': items.length,
+                'unread_count': unreadCount,
+                'missed_count': 0,
+              }),
+              200,
+            );
+          }
+          if (req.url.path == '/api/v1/notifications/evt-rout/acknowledge') {
+            resolvedRoutine = true;
+            return http.Response(
+              jsonEncode({
+                'id': 'evt-rout',
+                'profile_id': 'prof-1',
+                'source_type': 'routine',
+                'source_id': 'rt1',
+                'urgency': 'informational',
+                'title': 'Morning Brief',
+                'status': 'acknowledged',
+                'delivery_policy': 'immediate',
+                'is_missed_catchup': false,
+                'triggered_at': '2026-11-15T08:00:00Z',
+                'created_at': '2026-11-15T08:00:00Z',
+                'updated_at': '2026-11-15T08:01:00Z',
+              }),
+              200,
+            );
+          }
+          if (req.url.path == '/api/v1/notifications/evt-rem/acknowledge') {
+            resolvedReminder = true;
+            return http.Response(
+              jsonEncode({
+                'id': 'evt-rem',
+                'profile_id': 'prof-1',
+                'source_type': 'reminder',
+                'source_id': 'r1',
+                'urgency': 'high',
+                'title': 'Drink Water',
+                'status': 'acknowledged',
+                'delivery_policy': 'immediate',
+                'is_missed_catchup': false,
+                'triggered_at': '2026-11-15T09:00:00Z',
+                'created_at': '2026-11-15T09:00:00Z',
+                'updated_at': '2026-11-15T09:01:00Z',
+              }),
+              200,
+            );
+          }
+          if (req.url.path == '/api/v1/profiles/me/quiet-hours') {
+            return http.Response(
+              jsonEncode({
+                'quiet_hours_enabled': false,
+                'quiet_hours_start': '22:00',
+                'quiet_hours_end': '07:00',
+                'quiet_hours_timezone': 'UTC',
+              }),
+              200,
+            );
+          }
+          return http.Response(
+            jsonEncode({'items': <dynamic>[], 'total': 0}),
+            200,
+          );
+        });
+
+        final client = CompanionClient(
+          baseUrl: 'http://127.0.0.1:8000',
+          httpClient: mockClient,
+        );
+        final schedCtrl = DesktopScheduleController(
+          client: client,
+          toastAdapter: NoOpDesktopToastAdapter(),
+          profileId: 'prof-1',
+        );
+        addTearDown(schedCtrl.dispose);
+        addTearDown(client.close);
+        await schedCtrl.refreshAll();
+
+        final settingsController = DesktopSettingsController();
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: CompanionTheme.dark(),
+            home: DesktopShell(
+              controller: settingsController,
+              scheduleController: schedCtrl,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Default: high-urgency reminder in center modal, routine simultaneously in floating top card
+        expect(find.byKey(const Key('shell_center_alert_modal')), findsOneWidget);
+        expect(find.text('Drink Water'), findsOneWidget);
+        expect(find.byKey(const Key('shell_active_alert_banner')), findsOneWidget);
+        expect(find.text('Morning Brief'), findsOneWidget);
+
+        // Dismiss routine and high-urgency reminder
+        await tester.tap(find.byKey(const Key('banner_acknowledge_button')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('shell_active_alert_banner')), findsNothing);
+
+        await tester.tap(find.byKey(const Key('center_alert_primary_button')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('shell_center_alert_modal')), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'Notification drawer closes on click-outside barrier or Escape, and History opens Schedule Notifications',
+      (tester) async {
+        tester.view.devicePixelRatio = 1.0;
+        tester.view.physicalSize = const Size(1280, 800);
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
+
+        final mockClient = MockClient((req) async {
+          if (req.url.path == '/api/v1/notifications') {
+            return http.Response(
+              jsonEncode({
+                'items': [
+                  {
+                    'id': 'evt-1',
+                    'profile_id': 'prof-1',
+                    'source_type': 'reminder',
+                    'source_id': 'r1',
+                    'urgency': 'high',
+                    'title': 'Take Medication',
+                    'status': 'read',
+                    'delivery_policy': 'immediate',
+                    'is_missed_catchup': false,
+                    'triggered_at': '2026-11-15T09:00:00Z',
+                    'read_at': '2026-11-15T09:01:00Z',
+                    'created_at': '2026-11-15T09:00:00Z',
+                    'updated_at': '2026-11-15T09:01:00Z',
+                  },
+                ],
+                'total': 1,
+                'unread_count': 0,
+                'missed_count': 0,
+              }),
+              200,
+            );
+          }
+          if (req.url.path == '/api/v1/profiles/me/quiet-hours') {
+            return http.Response(
+              jsonEncode({
+                'quiet_hours_enabled': false,
+                'quiet_hours_start': '22:00',
+                'quiet_hours_end': '07:00',
+                'quiet_hours_timezone': 'UTC',
+              }),
+              200,
+            );
+          }
+          return http.Response(
+            jsonEncode({'items': <dynamic>[], 'total': 0}),
+            200,
+          );
+        });
+
+        final client = CompanionClient(
+          baseUrl: 'http://127.0.0.1:8000',
+          httpClient: mockClient,
+        );
+        final schedCtrl = DesktopScheduleController(
+          client: client,
+          toastAdapter: NoOpDesktopToastAdapter(),
+          profileId: 'prof-1',
+        );
+        addTearDown(schedCtrl.dispose);
+        addTearDown(client.close);
+        await schedCtrl.refreshAll();
+
+        final settingsController = DesktopSettingsController();
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: CompanionTheme.dark(),
+            home: DesktopShell(
+              controller: settingsController,
+              scheduleController: schedCtrl,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Open Notification Center drawer via bell button
+        await tester.tap(find.byKey(const Key('shell_notification_bell_button')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('backlog_drawer_close_button')), findsOneWidget);
+
+        // Tap outside on the click-outside barrier -> drawer closes
+        await tester.tap(find.byKey(const Key('backlog_drawer_dismiss_barrier')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('backlog_drawer_close_button')), findsNothing);
+
+        // Open again and tap History -> closes drawer and opens Schedule -> Notifications
+        await tester.tap(find.byKey(const Key('shell_notification_bell_button')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('backlog_open_history_button')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('backlog_drawer_close_button')), findsNothing);
+        expect(settingsController.currentDestination, DesktopNavDestination.schedule);
+        expect(schedCtrl.selectedSection, ScheduleSection.notifications);
+      },
+    );
+
+    testWidgets(
+      'displays (+1 more) on top banner when two non-modal alerts are active and restores coordinator on toast navigation',
+      (tester) async {
+        setupDesktopViewport(tester);
+
+        final mockClient = MockClient((req) async {
+          if (req.url.path == '/api/v1/notifications') {
+            return http.Response(
+              jsonEncode({
+                'items': [
+                  {
+                    'id': 'evt-routine-1',
+                    'profile_id': 'prof-1',
+                    'source_type': 'routine',
+                    'source_id': 'rt-1',
+                    'urgency': 'standard',
+                    'title': 'Hydration Check',
+                    'body': 'Drink water',
+                    'status': 'unread',
+                    'delivery_policy': 'immediate',
+                    'is_missed_catchup': false,
+                    'triggered_at': '2026-11-15T10:00:00Z',
+                    'read_at': null,
+                    'resolved_at': null,
+                    'created_at': '2026-11-15T10:00:00Z',
+                    'updated_at': '2026-11-15T10:00:00Z',
+                  },
+                  {
+                    'id': 'evt-routine-2',
+                    'profile_id': 'prof-1',
+                    'source_type': 'routine',
+                    'source_id': 'rt-2',
+                    'urgency': 'standard',
+                    'title': 'Posture Check',
+                    'body': 'Stretch shoulders',
+                    'status': 'unread',
+                    'delivery_policy': 'immediate',
+                    'is_missed_catchup': false,
+                    'triggered_at': '2026-11-15T09:55:00Z',
+                    'read_at': null,
+                    'resolved_at': null,
+                    'created_at': '2026-11-15T09:55:00Z',
+                    'updated_at': '2026-11-15T09:55:00Z',
+                  },
+                ],
+                'total': 2,
+                'unread_count': 2,
+                'missed_count': 0,
+              }),
+              200,
+            );
+          }
+          if (req.url.path == '/api/v1/profiles/me/quiet-hours') {
+            return http.Response(
+              jsonEncode({
+                'quiet_hours_enabled': false,
+                'quiet_hours_start': '22:00',
+                'quiet_hours_end': '07:00',
+                'quiet_hours_timezone': 'UTC',
+              }),
+              200,
+            );
+          }
+          return http.Response(
+            jsonEncode({'items': <dynamic>[], 'total': 0}),
+            200,
+          );
+        });
+
+        final client = CompanionClient(
+          baseUrl: 'http://127.0.0.1:8000',
+          httpClient: mockClient,
+        );
+        final schedCtrl = DesktopScheduleController(
+          client: client,
+          toastAdapter: NoOpDesktopToastAdapter(),
+          profileId: 'prof-1',
+        );
+        final recordingCoordinator = _RecordingCoordinator();
+        addTearDown(schedCtrl.dispose);
+        addTearDown(client.close);
+        await schedCtrl.refreshAll();
+
+        final settingsController = DesktopSettingsController(
+          initialDestination: DesktopNavDestination.settings,
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: CompanionTheme.dark(),
+            home: DesktopShell(
+              controller: settingsController,
+              scheduleController: schedCtrl,
+              coordinator: recordingCoordinator,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('(+1 more)'), findsOneWidget);
+        expect(find.text('(+2)'), findsNothing);
+
+        schedCtrl.onNavigateRequested?.call(ToastNavigationTarget.chat);
+        await tester.pumpAndSettle();
+
+        expect(recordingCoordinator.restoreCalls, 1);
+        expect(
+          settingsController.currentDestination,
+          DesktopNavDestination.chat,
+        );
+      },
+    );
   });
+}
+
+class _RecordingCoordinator extends Fake implements DesktopLifecycleCoordinator {
+  int restoreCalls = 0;
+
+  @override
+  bool get isTrayAvailable => false;
+
+  @override
+  set onExitMenuTriggered(Future<void> Function()? callback) {}
+
+  @override
+  Future<void> restoreAndFocusWindow() async {
+    restoreCalls++;
+  }
 }

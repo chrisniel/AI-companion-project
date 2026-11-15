@@ -42,6 +42,8 @@ class MockWindowAdapter implements DesktopWindowAdapter {
   @override
   Future<void> focus() async {}
   @override
+  Future<void> maximize() async {}
+  @override
   Future<void> destroy() async { isDestroyed = true; }
   @override
   void addListener(WindowListener listener) { listeners.add(listener); }
