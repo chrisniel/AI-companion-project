@@ -3,6 +3,7 @@ import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
 
 import '../diagnostics/windows_storage_diagnostic_reader.dart';
+import '../features/settings/settings_section.dart';
 
 /// Navigation destinations available within the desktop navigation rail.
 enum DesktopNavDestination {
@@ -35,6 +36,7 @@ class DesktopSettingsController extends ChangeNotifier {
     AccentPreset initialAccentPreset = AccentPreset.oceanSky,
     bool initialRailCollapsed = false,
     DesktopNavDestination initialDestination = DesktopNavDestination.chat,
+    SettingsSectionId initialSettingsSection = SettingsSectionId.appearance,
     bool initialScrollToDiagnostics = false,
     StorageDiagnosticReader? diagnosticReader,
     RuntimeProcessState? initialRuntimeProcessState,
@@ -43,6 +45,9 @@ class DesktopSettingsController extends ChangeNotifier {
         _accentPreset = initialAccentPreset,
         _isRailCollapsed = initialRailCollapsed,
         _currentDestination = initialDestination,
+        _selectedSettingsSection = initialScrollToDiagnostics
+            ? SettingsSectionId.storage
+            : initialSettingsSection,
         _scrollToDiagnostics = initialScrollToDiagnostics,
         _diagnosticReader = diagnosticReader ?? WindowsStorageDiagnosticReader(),
         _runtimeProcessState = initialRuntimeProcessState,
@@ -52,6 +57,7 @@ class DesktopSettingsController extends ChangeNotifier {
   AccentPreset _accentPreset;
   bool _isRailCollapsed;
   DesktopNavDestination _currentDestination;
+  SettingsSectionId _selectedSettingsSection;
   bool _scrollToDiagnostics;
   final StorageDiagnosticReader _diagnosticReader;
   RuntimeProcessState? _runtimeProcessState;
@@ -61,6 +67,7 @@ class DesktopSettingsController extends ChangeNotifier {
   AccentPreset get accentPreset => _accentPreset;
   bool get isRailCollapsed => _isRailCollapsed;
   DesktopNavDestination get currentDestination => _currentDestination;
+  SettingsSectionId get selectedSettingsSection => _selectedSettingsSection;
   bool get scrollToDiagnostics => _scrollToDiagnostics;
   StorageDiagnosticReader get diagnosticReader => _diagnosticReader;
   RuntimeProcessState? get runtimeProcessState => _runtimeProcessState;
@@ -78,10 +85,33 @@ class DesktopSettingsController extends ChangeNotifier {
 
 
   void setScrollToDiagnostics(bool scroll) {
-    if (_scrollToDiagnostics != scroll) {
+    final sectionChanged =
+        scroll && _selectedSettingsSection != SettingsSectionId.storage;
+    if (sectionChanged) {
+      _selectedSettingsSection = SettingsSectionId.storage;
+    }
+    if (_scrollToDiagnostics != scroll || sectionChanged) {
       _scrollToDiagnostics = scroll;
       notifyListeners();
     }
+  }
+
+  /// Selects an active category tab inside [SettingsScreen].
+  void setSettingsSection(SettingsSectionId section) {
+    if (_selectedSettingsSection != section) {
+      _selectedSettingsSection = section;
+      notifyListeners();
+    }
+  }
+
+  /// Switches to [DesktopNavDestination.settings] and focuses [section].
+  void openSettingsSection(SettingsSectionId section) {
+    final destChanged = _currentDestination != DesktopNavDestination.settings;
+    final sectionChanged = _selectedSettingsSection != section;
+    if (!destChanged && !sectionChanged) return;
+    _currentDestination = DesktopNavDestination.settings;
+    _selectedSettingsSection = section;
+    notifyListeners();
   }
 
   void setThemeMode(ThemeMode mode) {

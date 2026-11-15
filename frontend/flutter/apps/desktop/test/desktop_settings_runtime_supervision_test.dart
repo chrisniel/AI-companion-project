@@ -54,6 +54,10 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('settings_nav_runtime')));
+      await tester.pumpAndSettle();
 
       expect(find.text('Runtime Process Supervision'), findsOneWidget);
       expect(find.textContaining('Local Loopback'), findsOneWidget);

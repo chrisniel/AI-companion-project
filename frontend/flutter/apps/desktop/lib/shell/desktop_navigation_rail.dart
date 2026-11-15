@@ -2,9 +2,17 @@ import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
 
 import '../controllers/desktop_settings_controller.dart';
+import '../dialogs/desktop_shutdown_dialogs.dart';
 import '../features/profiles/desktop_profile_controller.dart';
 import '../features/profiles/profile_selector_header.dart';
+import '../features/settings/settings_section.dart';
 import '../lifecycle/desktop_lifecycle_coordinator.dart';
+
+enum _RailPowerAction {
+  hideToTray,
+  lifecycleSettings,
+  exitCompanion,
+}
 
 class DesktopNavigationRail extends StatelessWidget {
   const DesktopNavigationRail({
@@ -12,11 +20,17 @@ class DesktopNavigationRail extends StatelessWidget {
     required this.controller,
     this.coordinator,
     this.profileController,
+    this.onHideToTrayRequested,
+    this.onExitRequested,
+    this.onOpenLifecycleSettings,
   });
 
   final DesktopSettingsController controller;
   final DesktopLifecycleCoordinator? coordinator;
   final DesktopProfileController? profileController;
+  final VoidCallback? onHideToTrayRequested;
+  final VoidCallback? onExitRequested;
+  final VoidCallback? onOpenLifecycleSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -143,19 +157,34 @@ class DesktopNavigationRail extends StatelessWidget {
     bool isDark,
     bool isCollapsed,
   ) {
+    final isTrayAvailable = coordinator?.isTrayAvailable ?? false;
+
     if (isCollapsed) {
-      return Tooltip(
-        message: 'Runtime: Standalone (Unconnected)',
-        child: Padding(
-          padding: const EdgeInsets.all(CompanionSpacing.md),
-          child: Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              color: ext?.warning ?? CompanionColors.warning,
-              shape: BoxShape.circle,
+      return Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: CompanionSpacing.sm,
+          vertical: CompanionSpacing.sm,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Tooltip(
+              message: 'Runtime: Standalone (Unconnected)',
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: ext?.warning ?? CompanionColors.warning,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
             ),
-          ),
+            const SizedBox(height: CompanionSpacing.xs),
+            _buildPowerMenuButton(context, ext, isDark, isTrayAvailable),
+          ],
         ),
       );
     }
@@ -163,9 +192,11 @@ class DesktopNavigationRail extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.all(CompanionSpacing.md),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: isDark ? Colors.white.withValues(alpha: 0.03) : Colors.black.withValues(alpha: 0.02),
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.03)
+              : Colors.black.withValues(alpha: 0.02),
           borderRadius: CompanionRadius.borderMd,
           border: Border.all(color: ext?.borderSubtle ?? Colors.transparent),
         ),
@@ -191,10 +222,180 @@ class DesktopNavigationRail extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            const SizedBox(width: CompanionSpacing.xs),
+            _buildPowerMenuButton(context, ext, isDark, isTrayAvailable),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildPowerMenuButton(
+    BuildContext context,
+    CompanionThemeExtension? ext,
+    bool isDark,
+    bool isTrayAvailable,
+  ) {
+    final menuBg = ext?.surfaceElevated ??
+        (isDark
+            ? CompanionColors.darkSurfaceElevated
+            : CompanionColors.lightSurfaceElevated);
+    final dangerColor = ext?.danger ?? CompanionColors.danger;
+
+    return PopupMenuButton<_RailPowerAction>(
+      key: const Key('rail_power_menu_button'),
+      tooltip: 'Window & Companion Actions',
+      position: PopupMenuPosition.over,
+      offset: const Offset(0, -8),
+      color: menuBg,
+      shape: RoundedRectangleBorder(
+        borderRadius: CompanionRadius.borderMd,
+        side: BorderSide(
+          color: ext?.borderSubtle ?? (isDark ? Colors.white12 : Colors.black12),
+        ),
+      ),
+      onSelected: (action) => _handlePowerAction(context, action, isTrayAvailable),
+      itemBuilder: (popupContext) => <PopupMenuEntry<_RailPowerAction>>[
+        PopupMenuItem<_RailPowerAction>(
+          value: _RailPowerAction.hideToTray,
+          enabled: isTrayAvailable,
+          child: Row(
+            children: [
+              Icon(
+                Icons.vertical_align_bottom_rounded,
+                size: 18,
+                color: isTrayAvailable ? ext?.textPrimary : ext?.textMuted,
+              ),
+              const SizedBox(width: CompanionSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Minimize to System Tray',
+                      style: CompanionTypography.bodySmall.copyWith(
+                        color: isTrayAvailable ? ext?.textPrimary : ext?.textMuted,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      isTrayAvailable
+                          ? 'Keep alarms & runtime active'
+                          : 'System tray unavailable',
+                      style: CompanionTypography.caption.copyWith(
+                        color: ext?.textMuted,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        PopupMenuItem<_RailPowerAction>(
+          value: _RailPowerAction.lifecycleSettings,
+          child: Row(
+            children: [
+              Icon(
+                Icons.tune_rounded,
+                size: 18,
+                color: ext?.textPrimary,
+              ),
+              const SizedBox(width: CompanionSpacing.sm),
+              Expanded(
+                child: Text(
+                  'Close & Startup Settings...',
+                  style: CompanionTypography.bodySmall.copyWith(
+                    color: ext?.textPrimary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(height: 8),
+        PopupMenuItem<_RailPowerAction>(
+          value: _RailPowerAction.exitCompanion,
+          child: Row(
+            children: [
+              Icon(
+                Icons.power_settings_new_rounded,
+                size: 18,
+                color: dangerColor,
+              ),
+              const SizedBox(width: CompanionSpacing.sm),
+              Expanded(
+                child: Text(
+                  'Exit Companion',
+                  style: CompanionTypography.bodySmall.copyWith(
+                    color: dangerColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.06)
+              : Colors.black.withValues(alpha: 0.04),
+          borderRadius: CompanionRadius.borderSm,
+          border: Border.all(
+            color: ext?.borderSubtle ??
+                (isDark ? Colors.white12 : Colors.black12),
+          ),
+        ),
+        child: Icon(
+          Icons.power_settings_new_rounded,
+          size: 17,
+          color: ext?.textPrimary ??
+              (isDark ? Colors.white : Colors.black87),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handlePowerAction(
+    BuildContext context,
+    _RailPowerAction action,
+    bool isTrayAvailable,
+  ) async {
+    switch (action) {
+      case _RailPowerAction.hideToTray:
+        if (!isTrayAvailable) return;
+        if (onHideToTrayRequested != null) {
+          onHideToTrayRequested!();
+        } else {
+          await coordinator?.hideToTray();
+        }
+        return;
+      case _RailPowerAction.lifecycleSettings:
+        if (onOpenLifecycleSettings != null) {
+          onOpenLifecycleSettings!();
+        } else {
+          controller.openSettingsSection(SettingsSectionId.general);
+        }
+        return;
+      case _RailPowerAction.exitCompanion:
+        if (onExitRequested != null) {
+          onExitRequested!();
+          return;
+        }
+        final confirmed =
+            await DesktopShutdownDialogs.showExitConfirmationDialog(context);
+        if (confirmed) {
+          coordinator?.handleExitRequested();
+        }
+        return;
+    }
   }
 }
 

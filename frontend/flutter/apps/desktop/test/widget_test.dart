@@ -28,7 +28,7 @@ void main() {
     expect(find.text('Runtime: Standalone (Unconnected)'), findsWidgets);
   });
 
-  testWidgets('routes UI action buttons through DesktopLifecycleCoordinator on Settings screen when tray is active', (tester) async {
+  testWidgets('routes lifecycle actions through DesktopNavigationRail power menu and General Settings shows tray status', (tester) async {
     setupDesktopViewport(tester);
 
     final windowAdapter = FakeDesktopWindowAdapter();
@@ -57,17 +57,28 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // No duplicate lifecycle action buttons inside Settings
+    expect(find.text('Hide to Tray'), findsNothing);
+    expect(find.text('Exit Companion'), findsNothing);
+
+    // Navigate to General & Lifecycle via Rail power menu item
+    await tester.tap(find.byKey(const Key('rail_power_menu_button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Close & Startup Settings...'));
+    await tester.pumpAndSettle();
     expect(find.text('System Tray: Active (Close-to-Tray Active)'), findsOneWidget);
 
-    // Tap "Hide to Tray"
-    await tester.ensureVisible(find.text('Hide to Tray'));
-    await tester.tap(find.text('Hide to Tray'));
-    await tester.pump();
+    // Tap "Minimize to System Tray" from Rail power menu
+    await tester.tap(find.byKey(const Key('rail_power_menu_button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Minimize to System Tray'));
+    await tester.pumpAndSettle();
     expect(windowAdapter.visible, isFalse);
     expect(windowAdapter.hideCallCount, equals(1));
 
-    // Tap "Exit Companion"
-    await tester.ensureVisible(find.text('Exit Companion'));
+    // Tap "Exit Companion" from Rail power menu
+    await tester.tap(find.byKey(const Key('rail_power_menu_button')));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Exit Companion'));
     await tester.pumpAndSettle();
     expect(find.text('Exit AI Companion?'), findsOneWidget);
@@ -83,7 +94,7 @@ void main() {
     expect(windowAdapter.isDestroyed, isTrue);
   });
 
-  testWidgets('disables Hide to Tray button on Settings screen when tray is unavailable', (tester) async {
+  testWidgets('disables Minimize to System Tray in Rail power menu when tray is unavailable', (tester) async {
     setupDesktopViewport(tester);
 
     final windowAdapter = FakeDesktopWindowAdapter();
@@ -113,16 +124,22 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // Check General & Lifecycle section reports tray unavailability without duplicate buttons
+    await tester.tap(find.byKey(const Key('settings_nav_general')));
+    await tester.pumpAndSettle();
     expect(find.text('System Tray: Unavailable (Close Exits App)'), findsOneWidget);
+    expect(find.text('Hide to Tray'), findsNothing);
+    expect(find.text('Exit Companion'), findsNothing);
 
-    // Verify Hide to Tray button is disabled
-    final hideButton = tester.widget<OutlinedButton>(
-      find.widgetWithText(OutlinedButton, 'Hide to Tray'),
-    );
-    expect(hideButton.onPressed, isNull);
+    // Verify Minimize to System Tray is disabled in Rail power menu
+    await tester.tap(find.byKey(const Key('rail_power_menu_button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Minimize to System Tray'));
+    await tester.pump();
+    // Menu stays open because item was disabled
+    expect(find.text('Exit Companion'), findsOneWidget);
 
-    // Tap Exit Companion (should remain enabled)
-    await tester.ensureVisible(find.text('Exit Companion'));
+    // Tap Exit Companion (remains enabled)
     await tester.tap(find.text('Exit Companion'));
     await tester.pumpAndSettle();
     expect(find.text('Exit AI Companion?'), findsOneWidget);

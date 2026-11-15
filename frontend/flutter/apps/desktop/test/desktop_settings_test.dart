@@ -13,6 +13,7 @@ import 'package:ai_companion_desktop/platform/desktop_client_settings.dart';
 import 'package:ai_companion_desktop/platform/windows_runtime_process_supervisor.dart';
 import 'package:ai_companion_desktop/platform/windows_toast_adapter.dart';
 import 'package:ai_companion_desktop/screens/settings_screen.dart';
+import 'package:ai_companion_desktop/shell/desktop_shell.dart';
 import 'package:companion_api/companion_api.dart';
 import 'package:companion_core/companion_core.dart';
 import 'package:companion_design/companion_design.dart';
@@ -87,6 +88,9 @@ void main() {
 
       await tester.pumpAndSettle();
 
+      await tester.tap(find.byKey(const Key('settings_nav_storage')));
+      await tester.pumpAndSettle();
+
       expect(find.text('Storage Diagnostics'), findsOneWidget);
       expect(find.text('Client Fail-Closed Inspection'), findsOneWidget);
       expect(find.text('Bootstrap Locator'), findsOneWidget);
@@ -125,6 +129,9 @@ void main() {
         ),
       );
 
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('settings_nav_runtime')));
       await tester.pumpAndSettle();
 
       expect(find.text('Local LLM Model Selection'), findsOneWidget);
@@ -181,6 +188,9 @@ void main() {
 
       await tester.pumpAndSettle();
 
+      await tester.tap(find.byKey(const Key('settings_nav_runtime')));
+      await tester.pumpAndSettle();
+
       final unloadButtons = find.widgetWithText(OutlinedButton, 'Unload Model / Free VRAM');
       expect(unloadButtons, findsWidgets);
 
@@ -231,6 +241,9 @@ void main() {
         ),
       );
 
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('settings_nav_runtime')));
       await tester.pumpAndSettle();
 
       final unloadButtons = find.widgetWithText(OutlinedButton, 'Unload Model / Free VRAM');
@@ -288,6 +301,9 @@ void main() {
 
       await tester.pumpAndSettle();
 
+      await tester.tap(find.byKey(const Key('settings_nav_runtime')));
+      await tester.pumpAndSettle();
+
       final unloadButtons = find.widgetWithText(OutlinedButton, 'Unload Model / Free VRAM');
       await tester.ensureVisible(unloadButtons.first);
       await tester.pumpAndSettle();
@@ -334,6 +350,9 @@ void main() {
         ),
       );
 
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('settings_nav_runtime')));
       await tester.pumpAndSettle();
 
       final unloadButtons = find.widgetWithText(OutlinedButton, 'Unload Model / Free VRAM');
@@ -393,6 +412,9 @@ void main() {
 
       await tester.pumpAndSettle();
 
+      await tester.tap(find.byKey(const Key('settings_nav_runtime')));
+      await tester.pumpAndSettle();
+
       final loadButtons = find.widgetWithText(FilledButton, 'Load Model');
       expect(loadButtons, findsWidgets);
 
@@ -416,6 +438,8 @@ void main() {
         modelLoaded: true,
       );
 
+      await tester.ensureVisible(find.text('Refresh Model Status'));
+      await tester.pump();
       await tester.tap(find.text('Refresh Model Status'));
       await tester.pump();
       await tester.pumpAndSettle();
@@ -423,27 +447,28 @@ void main() {
       expect(find.textContaining('Model is ready: qwen3-vl-2b-instruct'), findsOneWidget);
     });
 
-    testWidgets('Exit Companion button opens exit confirmation dialog and respects Cancel', (tester) async {
+    testWidgets('Rail power menu Exit Companion opens exit confirmation dialog and respects Cancel', (tester) async {
       setupDesktopViewport(tester);
 
-      final controller = DesktopSettingsController();
+      final controller = DesktopSettingsController(
+        initialDestination: DesktopNavDestination.settings,
+      );
 
       await tester.pumpWidget(
         MaterialApp(
           theme: CompanionTheme.dark(),
-          home: Scaffold(
-            body: SettingsScreen(controller: controller),
-          ),
+          home: DesktopShell(controller: controller),
         ),
       );
 
       await tester.pumpAndSettle();
 
-      final exitButtons = find.widgetWithText(FilledButton, 'Exit Companion');
-      expect(exitButtons, findsOneWidget);
+      // SettingsScreen itself no longer duplicates Exit Companion buttons
+      expect(find.widgetWithText(FilledButton, 'Exit Companion'), findsNothing);
 
-      await tester.ensureVisible(exitButtons);
-      await tester.tap(exitButtons);
+      await tester.tap(find.byKey(const Key('rail_power_menu_button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Exit Companion'));
       await tester.pumpAndSettle();
 
       expect(find.text('Exit AI Companion?'), findsOneWidget);
@@ -458,7 +483,9 @@ void main() {
     testWidgets('failed forceEmergencyStopLocalRuntime preserves SettingsScreen UI and shows error SnackBar', (tester) async {
       setupDesktopViewport(tester);
 
-      final controller = DesktopSettingsController();
+      final controller = DesktopSettingsController(
+        initialDestination: DesktopNavDestination.settings,
+      );
       final supervisor = FakeEmergencyFailingSupervisor();
       supervisor.storedDescriptor = RuntimeLockfileData(
         schemaVersion: 1,
@@ -488,26 +515,27 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: CompanionTheme.dark(),
-          home: Scaffold(
-            body: SettingsScreen(
-              controller: controller,
-              runtimeCoordinator: runtimeCoordinator,
-              coordinator: lifecycleCoordinator,
-            ),
+          home: DesktopShell(
+            controller: controller,
+            runtimeCoordinator: runtimeCoordinator,
+            coordinator: lifecycleCoordinator,
           ),
         ),
       );
 
       await tester.pumpAndSettle();
 
-      final exitButtons = find.widgetWithText(FilledButton, 'Exit Companion');
-      await tester.ensureVisible(exitButtons);
-      await tester.tap(exitButtons);
+      await tester.tap(find.byKey(const Key('rail_power_menu_button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Exit Companion'));
       await tester.pumpAndSettle();
 
       // Confirm exit
       expect(find.text('Exit AI Companion?'), findsOneWidget);
-      await tester.tap(find.widgetWithText(FilledButton, 'Exit Companion').last);
+      await tester.tap(find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('Exit Companion'),
+      ));
       await tester.pumpAndSettle();
 
       // Incomplete shutdown dialog appears due to incomplete_db_quiescence_timeout
@@ -601,14 +629,21 @@ void main() {
         await schedCtrl.refreshAll();
         await tester.pumpAndSettle();
 
-        await tester.scrollUntilVisible(
+        await tester.tap(find.byKey(const Key('settings_nav_notifications')));
+        await tester.pumpAndSettle();
+
+        await tester.ensureVisible(
           find.byKey(const Key('save_quiet_hours_button')),
-          300,
-          scrollable: find.byType(Scrollable).first,
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('Notifications & Quiet Hours'), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('settings_pane_notifications')),
+            matching: find.text('Notifications & Quiet Hours'),
+          ),
+          findsOneWidget,
+        );
         expect(
           find.text('Alarms bypass quiet hours by default to ensure wakefulness.'),
           findsOneWidget,

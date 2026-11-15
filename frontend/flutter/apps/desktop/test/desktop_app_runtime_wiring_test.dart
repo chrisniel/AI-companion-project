@@ -307,15 +307,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final urlFinder = find.byType(TextField).first;
+      await tester.tap(find.byKey(const Key('settings_nav_runtime')));
+      await tester.pumpAndSettle();
+
+      final urlFinder = find.byKey(const Key('runtime_host_url_input'));
       expect(urlFinder, findsOneWidget);
 
       await tester.enterText(urlFinder, 'http://127.0.0.1:8765');
       await tester.pump();
-
-      // Drag settings scrollable up to bring Apply & Save into view
-      await tester.drag(find.byType(SingleChildScrollView), const Offset(0, -600));
-      await tester.pumpAndSettle();
 
       final saveFinder = find.widgetWithText(NeumorphicButton, 'Apply & Save');
       expect(saveFinder, findsOneWidget);
