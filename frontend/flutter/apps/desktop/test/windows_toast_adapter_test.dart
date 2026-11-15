@@ -63,9 +63,10 @@ void main() {
       expect(xml, contains('<audio silent="true"/>'));
       expect(xml, contains('Wake Up &lt;6:30&gt;'));
       expect(xml, contains('Morning alarm &amp; commute'));
-      expect(xml, contains('content="Acknowledge"'));
+      expect(xml, contains('content="Stop"'));
       expect(xml, contains('content="Snooze 10m"'));
       expect(xml, contains('content="Dismiss"'));
+      expect(xml, isNot(contains('content="Acknowledge"')));
       expect(xml, contains('action=snooze_10m&amp;event_id=alarm-evt-1'));
 
       final legacyXml = WindowsWinRtToastAdapter.buildToastXml(
@@ -76,7 +77,7 @@ void main() {
       expect(legacyXml, contains('loop="true"'));
     });
 
-    test('builds task-linked reminder XML with Mark Done button instead of Acknowledge', () {
+    test('builds task-linked reminder XML with Mark Done button instead of Got it', () {
       final event = _makeEvent(
         id: 'task-evt-1',
         sourceType: 'task_reminder',
@@ -90,6 +91,7 @@ void main() {
       expect(xml, contains('action=mark_done&amp;event_id=task-evt-1'));
       expect(xml, contains('content="Snooze 10m"'));
       expect(xml, contains('content="Dismiss"'));
+      expect(xml, isNot(contains('content="Acknowledge"')));
 
       final legacyXml = WindowsWinRtToastAdapter.buildToastXml(
         event,
@@ -99,7 +101,7 @@ void main() {
       expect(legacyXml, contains('ms-winsoundevent:Notification.Reminder'));
     });
 
-    test('builds routine XML with Open Chat button and supports legacy XML chime toggle', () {
+    test('builds routine XML with Open Chat and Got it buttons and supports legacy XML chime toggle', () {
       final event = _makeEvent(
         id: 'rout-evt-1',
         sourceType: 'routine',
@@ -113,13 +115,30 @@ void main() {
       expect(xml, contains('<audio silent="true"/>'));
       expect(xml, contains('content="Open Chat"'));
       expect(xml, contains('action=open_chat&amp;event_id=rout-evt-1'));
-      expect(xml, contains('content="Acknowledge"'));
+      expect(xml, contains('content="Got it"'));
+      expect(xml, isNot(contains('content="Acknowledge"')));
 
       final legacyXml = WindowsWinRtToastAdapter.buildToastXml(
         event,
         silenceXmlAudio: false,
       );
       expect(legacyXml, contains('ms-winsoundevent:Notification.Default'));
+    });
+
+    test('builds standalone reminder XML with Got it, Snooze 10m, and Dismiss', () {
+      final event = _makeEvent(
+        id: 'rem-evt-1',
+        sourceType: 'reminder',
+        urgency: 'normal',
+        title: 'Drink water',
+      );
+
+      final xml = WindowsWinRtToastAdapter.buildToastXml(event);
+      expect(xml, contains('scenario="reminder"'));
+      expect(xml, contains('content="Got it"'));
+      expect(xml, contains('content="Snooze 10m"'));
+      expect(xml, contains('content="Dismiss"'));
+      expect(xml, isNot(contains('content="Acknowledge"')));
     });
 
     test('suppressed alarm or missed catch-up never emits scenario=alarm and uses silent audio', () {

@@ -52,6 +52,9 @@ class LiveDesktopWindowAdapter implements DesktopWindowAdapter {
   Future<void> focus() => windowManager.focus();
 
   @override
+  Future<void> maximize() => windowManager.maximize();
+
+  @override
   Future<void> destroy() => windowManager.destroy();
 
   @override

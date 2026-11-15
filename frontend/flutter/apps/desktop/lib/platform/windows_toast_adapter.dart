@@ -256,6 +256,7 @@ class WindowsWinRtToastAdapter implements DesktopToastAdapter {
     final bodyEscaped = escapeXml(event.body ?? '');
 
     final actions = StringBuffer('<actions>');
+    final isAlarmEvent = event.sourceType == 'alarm';
     if (isRoutine) {
       actions.write(
         _actionButtonXml(
@@ -265,7 +266,7 @@ class WindowsWinRtToastAdapter implements DesktopToastAdapter {
       );
       actions.write(
         _actionButtonXml(
-          'Acknowledge',
+          'Got it',
           _buildQueryArgs('acknowledge', eventId: event.id),
         ),
       );
@@ -276,7 +277,14 @@ class WindowsWinRtToastAdapter implements DesktopToastAdapter {
         ),
       );
     } else {
-      if (taskLinked) {
+      if (isAlarmEvent) {
+        actions.write(
+          _actionButtonXml(
+            'Stop',
+            _buildQueryArgs('acknowledge', eventId: event.id),
+          ),
+        );
+      } else if (taskLinked) {
         actions.write(
           _actionButtonXml(
             'Mark Done',
@@ -286,7 +294,7 @@ class WindowsWinRtToastAdapter implements DesktopToastAdapter {
       } else {
         actions.write(
           _actionButtonXml(
-            'Acknowledge',
+            'Got it',
             _buildQueryArgs('acknowledge', eventId: event.id),
           ),
         );

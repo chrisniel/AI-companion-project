@@ -565,6 +565,67 @@ void main() {
 
       expect(await controller.playTestAlertSound(isAlarm: true), isTrue);
       expect(toastAdapter.testSoundCount, 1);
+
+      expect(controller.effectivePollInterval, const Duration(seconds: 5));
+      expect(controller.centerPopupForReminders, isTrue);
+    });
+
+    test('schedules adaptive next-due wakeup timer only while live polling is active', () async {
+      final upcomingAt = DateTime.now().toUtc().add(const Duration(seconds: 25));
+      final mockClient = MockClient((req) async {
+        if (req.url.path == '/api/v1/alarms') {
+          return http.Response(
+            jsonEncode({
+              'items': [
+                {
+                  'id': 'alarm-soon',
+                  'profile_id': 'prof-1',
+                  'label': 'Soon Alarm',
+                  'scheduled_at': upcomingAt.toIso8601String(),
+                  'time_of_day': null,
+                  'recurrence_days': <int>[],
+                  'timezone': 'UTC',
+                  'enabled': true,
+                  'status': 'armed',
+                  'snoozed_until': null,
+                  'bypass_quiet_hours': true,
+                  'origin': 'host',
+                  'last_fired_at': null,
+                  'acknowledged_at': null,
+                  'created_at': DateTime.now().toUtc().toIso8601String(),
+                  'updated_at': DateTime.now().toUtc().toIso8601String(),
+                },
+              ],
+              'total': 1,
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode({'items': <dynamic>[], 'total': 0}), 200);
+      });
+
+      final client = CompanionClient(baseUrl: 'http://127.0.0.1:8000', httpClient: mockClient);
+      final controller = DesktopScheduleController(
+        clientProvider: () => client,
+        toastAdapter: _FakeToastAdapter(),
+        profileId: 'prof-1',
+      );
+      addTearDown(controller.dispose);
+      addTearDown(client.close);
+
+      await controller.loadAlarms();
+      expect(controller.scheduledNextWakeupAt, isNull);
+
+      controller.startPolling();
+      expect(controller.scheduledNextWakeupAt, isNotNull);
+      final deltaMs = controller.scheduledNextWakeupAt!
+          .difference(upcomingAt.toLocal().add(const Duration(seconds: 2)))
+          .inMilliseconds
+          .abs();
+      expect(deltaMs, lessThan(2000));
+
+      controller.stopPolling();
+      expect(controller.scheduledNextWakeupAt, isNull);
     });
   });
 }

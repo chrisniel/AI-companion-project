@@ -771,7 +771,7 @@ class ScheduleScreen extends StatelessWidget {
                                             completeTask: r.taskId != null,
                                           ),
                                   child: Text(
-                                    r.taskId != null ? 'Mark Done' : 'Acknowledge',
+                                    r.taskId != null ? 'Mark Done' : 'Got it',
                                   ),
                                 ),
                               if (canSnooze)
@@ -936,7 +936,7 @@ class ScheduleScreen extends StatelessWidget {
                                   onPressed: ctrl.isMutating
                                       ? null
                                       : () => ctrl.acknowledgeAlarm(a.id),
-                                  child: const Text('Acknowledge'),
+                                  child: const Text('Stop'),
                                 ),
                                 OutlinedButton(
                                   key: Key('alarm_snooze_button_${a.id}'),
@@ -1302,7 +1302,11 @@ class ScheduleScreen extends StatelessWidget {
                                             completeTask: isTaskReminder,
                                           ),
                                   child: Text(
-                                    isTaskReminder ? 'Mark Done' : 'Acknowledge',
+                                    ev.sourceType == 'alarm'
+                                        ? 'Stop'
+                                        : (isTaskReminder
+                                            ? 'Mark Done'
+                                            : 'Got it'),
                                   ),
                                 ),
                                 if (!isRoutine)

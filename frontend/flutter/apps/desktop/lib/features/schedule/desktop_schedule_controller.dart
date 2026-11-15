@@ -157,7 +157,7 @@ class DesktopScheduleController extends ChangeNotifier {
     DesktopToastAdapter? toastAdapter,
     String? profileId,
     bool isConnected = true,
-    Duration pollInterval = const Duration(seconds: 15),
+    Duration pollInterval = const Duration(seconds: 5),
     this.onNavigateRequested,
   })  : assert(
           client != null || clientProvider != null,
@@ -180,6 +180,8 @@ class DesktopScheduleController extends ChangeNotifier {
 
   StreamSubscription<ToastActivationEvent>? _toastActivationSub;
   Timer? _pollTimer;
+  Timer? _nextDueTimer;
+  DateTime? _scheduledWakeupAt;
 
   String? _profileId;
   bool _isConnected;
@@ -188,6 +190,7 @@ class DesktopScheduleController extends ChangeNotifier {
 
   String _deviceTimezone;
   bool _alertSoundEnabled = true;
+  bool _centerPopupForReminders = true;
 
   ScheduleSection _selectedSection = ScheduleSection.tasks;
   bool _showTrashTasks = false;
@@ -231,6 +234,11 @@ class DesktopScheduleController extends ChangeNotifier {
   }
 
   bool get alertSoundEnabled => _alertSoundEnabled;
+  bool get centerPopupForReminders => _centerPopupForReminders;
+  @visibleForTesting
+  DateTime? get scheduledNextWakeupAt => _scheduledWakeupAt;
+  @visibleForTesting
+  Duration get effectivePollInterval => _pollInterval;
 
   ScheduleSection get selectedSection => _selectedSection;
   bool get showTrashTasks => _showTrashTasks;
@@ -265,6 +273,48 @@ class DesktopScheduleController extends ChangeNotifier {
       return b.triggeredAt.compareTo(a.triggeredAt);
     });
     return List.unmodifiable(active);
+  }
+
+  bool isUrgentAlert(NotificationEventOut event) =>
+      event.urgency == 'high' || event.sourceType == 'alarm';
+
+  bool isTaskReminderAlert(NotificationEventOut event) =>
+      event.sourceType == 'task_reminder' ||
+      _reminders.any((r) => r.id == event.sourceId && r.taskId != null);
+
+  bool usesCenterPopup(NotificationEventOut event) {
+    if (isUrgentAlert(event)) return true;
+    if (_centerPopupForReminders &&
+        (event.sourceType == 'reminder' ||
+            event.sourceType == 'task_reminder')) {
+      return true;
+    }
+    return false;
+  }
+
+  /// Highest-priority active unread alert designated for the centered modal.
+  NotificationEventOut? get centerPopupAlert {
+    for (final alert in activeAlerts) {
+      if (usesCenterPopup(alert)) return alert;
+    }
+    return null;
+  }
+
+  /// Highest-priority active unread alert designated for the compact floating
+  /// top-right notification card (routines, plus reminders when center pop-ups
+  /// for reminders are turned off).
+  NotificationEventOut? get topBannerAlert {
+    for (final alert in activeAlerts) {
+      if (!usesCenterPopup(alert)) return alert;
+    }
+    return null;
+  }
+
+  /// Crisp non-truncated primary action button label across Toast / Modal / Card.
+  String primaryActionLabel(NotificationEventOut event) {
+    if (event.sourceType == 'alarm') return 'Stop';
+    if (isTaskReminderAlert(event)) return 'Mark Done';
+    return 'Got it';
   }
 
   bool get _hasActiveScope =>
@@ -345,12 +395,72 @@ class DesktopScheduleController extends ChangeNotifier {
     _pollTimer = Timer.periodic(_pollInterval, (_) {
       unawaited(pollNotifications());
     });
+    _scheduleNextDueWakeup();
     _safeNotify();
   }
 
   void stopPolling() {
     _pollTimer?.cancel();
     _pollTimer = null;
+    _nextDueTimer?.cancel();
+    _nextDueTimer = null;
+    _scheduledWakeupAt = null;
+  }
+
+  void _scheduleNextDueWakeup() {
+    _nextDueTimer?.cancel();
+    _nextDueTimer = null;
+    _scheduledWakeupAt = null;
+    if (_disposed || !_hasActiveScope || _pollTimer == null) return;
+
+    final now = DateTime.now();
+    DateTime? earliestWakeup;
+
+    void considerUtcIso(String? rawIso) {
+      final parsed = parseServerUtcDateTime(rawIso);
+      if (parsed == null) return;
+      final wakeupAt = parsed.add(const Duration(seconds: 2));
+      if (!wakeupAt.isAfter(now)) return;
+      if (wakeupAt.difference(now) > const Duration(days: 1)) return;
+      if (earliestWakeup == null || wakeupAt.isBefore(earliestWakeup!)) {
+        earliestWakeup = wakeupAt;
+      }
+    }
+
+    for (final alarm in _alarms) {
+      if (alarm.enabled &&
+          (alarm.status == 'armed' || alarm.status == 'snoozed')) {
+        considerUtcIso(alarm.snoozedUntil ?? alarm.scheduledAt);
+      }
+    }
+    for (final rem in _reminders) {
+      if (rem.status == 'scheduled' || rem.status == 'snoozed') {
+        considerUtcIso(rem.snoozedUntil ?? rem.scheduledAt);
+      }
+    }
+    for (final task in _tasks) {
+      if (!task.isDeleted &&
+          task.status != 'completed' &&
+          task.reminderAt != null) {
+        considerUtcIso(task.reminderAt);
+      }
+    }
+    for (final routine in _routines) {
+      if (routine.enabled && routine.nextRunAt != null) {
+        considerUtcIso(routine.nextRunAt);
+      }
+    }
+
+    if (earliestWakeup == null) return;
+    final delay = earliestWakeup!.difference(now);
+    _scheduledWakeupAt = earliestWakeup;
+    final epoch = _scopeEpoch;
+    _nextDueTimer = Timer(delay, () {
+      _nextDueTimer = null;
+      _scheduledWakeupAt = null;
+      if (!_isCurrentEpoch(epoch) || _pollTimer == null) return;
+      unawaited(pollNotifications());
+    });
   }
 
   Future<void> _resolveDeviceTimezone() async {
@@ -370,6 +480,12 @@ class DesktopScheduleController extends ChangeNotifier {
   void setAlertSoundEnabled(bool enabled) {
     if (_alertSoundEnabled == enabled) return;
     _alertSoundEnabled = enabled;
+    _safeNotify();
+  }
+
+  void setCenterPopupForReminders(bool enabled) {
+    if (_centerPopupForReminders == enabled) return;
+    _centerPopupForReminders = enabled;
     _safeNotify();
   }
 
@@ -436,6 +552,7 @@ class DesktopScheduleController extends ChangeNotifier {
     if (!_isCurrentEpoch(epoch)) return;
     _tasks = activeRes.items;
     _trashTasks = trashRes.items;
+    _scheduleNextDueWakeup();
   }
 
   Future<void> loadReminders() async {
@@ -456,6 +573,7 @@ class DesktopScheduleController extends ChangeNotifier {
     final res = await client.listReminders(limit: 100);
     if (!_isCurrentEpoch(epoch)) return;
     _reminders = res.items;
+    _scheduleNextDueWakeup();
   }
 
   Future<void> loadAlarms() async {
@@ -476,6 +594,7 @@ class DesktopScheduleController extends ChangeNotifier {
     final res = await client.listAlarms(limit: 100);
     if (!_isCurrentEpoch(epoch)) return;
     _alarms = res.items;
+    _scheduleNextDueWakeup();
   }
 
   Future<void> loadRoutines() async {
@@ -496,6 +615,7 @@ class DesktopScheduleController extends ChangeNotifier {
     final res = await client.listRoutines(limit: 100);
     if (!_isCurrentEpoch(epoch)) return;
     _routines = res.items;
+    _scheduleNextDueWakeup();
   }
 
   Future<void> loadNotifications() async {

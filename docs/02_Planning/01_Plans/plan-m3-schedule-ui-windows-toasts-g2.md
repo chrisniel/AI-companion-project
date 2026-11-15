@@ -2,9 +2,9 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- **Status:** Phase 2 Implemented & Post-Manual-QA Revision Verified — Phase 3 Closure Prepared on `feature/m3-schedule-ui-windows-toasts-g2` (Draft PR #42 Updated, Ready for Final Review & Manual Acceptance)
+- **Status:** Plan Revised (Live-QA Latency, Toast Labels, Tiered In-App Pop-Up & Maximized First-Boot Update) — Executing Scope on `feature/m3-schedule-ui-windows-toasts-g2`
 - **Delivery Level:** Level B — Planned Autonomous
-- **Scope Mode:** New Feature + Live QA Revision — Flutter Desktop Schedule & Routines Workspace (`PC-CLIENT-008`), Native In-Process C++/WinRT Windows Toast Notifications with Start Menu `.lnk`, `INotificationActivationCallback` COM Activator & Audio Hardening (`PC-CLIENT-012` / `PC-HOST-003` client half / `DEBT-V1-02`), Device Timezone & 12-Hour AM/PM Picker UX Revamp, UTC Serialization Fix, Quiet Hours Settings UI, and Batch G1 Review Fold-Ins (`NIT-01`, `NIT-02`)
+- **Scope Mode:** New Feature + Live QA Revision 2 — Flutter Desktop Schedule & Routines Workspace (`PC-CLIENT-008`), Native In-Process C++/WinRT Windows Toast Notifications (`PC-CLIENT-012` / `PC-HOST-003` client half / `DEBT-V1-02`), Sub-2s Adaptive Scheduler & Desktop Dispatch Timing, Short Non-Truncated Toast Action Labels (`Stop`, `Got it`, `Mark Done`), Tiered In-App Alert Presentation (Center Pop-Up Modal for Alarms + Selectable Reminders; Floating Top Card for Routines/Standard), First-Boot Maximized Window, UTC Serialization Fix, Device Timezone & 12-Hour AM/PM UX Revamp, Quiet Hours Settings UI, and Batch G1 Review Fold-Ins (`NIT-01`, `NIT-02`)
 - **Target Files:**
   - `backend/app/schemas/common.py` & `backend/app/api/v1/endpoints/tasks.py` *(MODIFY — ensure UTC-aware `datetime` validation/JSON serialization on `BaseSchema` with explicit `Z`/`+00:00` even when SQLite returns naive UTC datetimes, and normalize `due_date`/`reminder_at` via `as_utc`)*
   - `backend/tests/test_tasks.py`, `backend/tests/test_task_update_contract.py`, & `backend/tests/test_scheduling_api.py` *(MODIFY — `NIT-01` + UTC `Z` serialization regression tests)*
@@ -265,3 +265,28 @@ Live Windows desktop QA by the Human Owner identified four concrete UX/host defe
      - Link `winmm.lib` for reliable alert sound fallback (`PlaySoundW` async Windows notification/alarm alias or chime, configurable via an **"Alert Sound"** toggle and silenced cleanly during Quiet Hours / Catch-up summaries) alongside native `.lnk`-enabled WinRT `<audio>`.
      - Trigger `_dispatchPendingToasts()` from `refreshAll()` as well as `pollNotifications()` so due/triggered alerts appear without waiting for the 15s poll interval.
 4. **Revision Verification Plan:** Re-run backend (`pytest`), `companion_api` (`dart test`), `flutter analyze`, full `flutter test`, MSVC `/W4 /WX` `flutter build windows --debug`, OpenAPI/Dart parity checks, and `frontend/web` lint/test/build after completing the revision edits, then update Draft PR #42 and re-present the updated Manual Checklist.
+
+---
+
+## 8. Second Live-QA Revision Scope (Human-Approved on 2026-11-15)
+
+Live Windows desktop QA on `e4491cb` confirmed timezone, 12-hour AM/PM pickers, Windows sound, and side-panel `Win+N` toast buttons work end-to-end, while surfacing four remaining UX improvements approved for in-branch implementation before merge:
+
+1. **Sub-2s Adaptive Triggering Latency (Replacing 15s + 15s Staggered Delay):**
+   - **Root Cause:** Backend `SCHEDULER_POLL_INTERVAL_SECONDS` (`15.0s`) and desktop `DesktopScheduleController.pollInterval` (`15s`) ran as two unsynchronized 15-second sleep/poll loops in series, causing 10–30 second trigger lag.
+   - **Fix:** Lower `SCHEDULER_POLL_INTERVAL_SECONDS` default to `2.0s` in `backend/app/core/config.py`, and add a lightweight one-shot `_nextDueTimer` in `DesktopScheduleController` (guarded by live polling state so widget tests never leave dangling timers) that computes the earliest upcoming `scheduledAt`/`nextRunAt`/`snoozedUntil`/`reminderAt` across loaded alarms, reminders, tasks, and routines and triggers `pollNotifications()` at `dueTime + 2s` alongside a 5s baseline poll interval.
+2. **Non-Truncated Windows Toast Action Button Labels (`Stop`, `Got it`, `Mark Done`):**
+   - **Root Cause:** In 3-button horizontal rows on Windows 11 Toasts (`364px` max width), `'Acknowledge'` (11 chars) ellipsized (`Acknow...`).
+   - **Fix:** Update primary toast button labels in `WindowsWinRtToastAdapter.buildToastXml` (and aligned drawer/banner action wording):
+     - **Alarms:** **`Stop`** | **`Snooze 10m`** | **`Dismiss`**
+     - **Task Reminders:** **`Mark Done`** | **`Snooze 10m`** | **`Dismiss`**
+     - **Standalone Reminders:** **`Got it`** | **`Snooze 10m`** | **`Dismiss`**
+     - **Routines:** **`Open Chat`** | **`Got it`** | **`Dismiss`**
+3. **Tiered In-App Alert Presentation (Center Modal for Alarms / Selectable Reminders vs. Floating Top Notification Card):**
+   - **Root Cause:** `shell_active_alert_banner` rendered all active alerts as a stretched full-width header strip inside `DesktopShell`, rather than giving important ringing alarms prominent center attention while keeping routine check-ins as compact controllable toast cards.
+   - **Fix:**
+     - **Important Center Pop-Up Card (`shell_center_alert_modal`):** Displayed as a centered modal card with subtle backdrop for **Alarms** (always) and **Reminders / Task Reminders** when selectable Settings option **"Center Pop-Up for Reminders"** (`DesktopScheduleController.centerPopupForReminders`, toggled via `Switch` in `QuietHoursSettingsCard`, default `true`) is enabled. Provides full interactive controls (`Stop` / `Mark Done` / `Got it`, `Snooze 10m`, `Dismiss`, `View All`).
+     - **Compact Top Notification Card (`shell_active_alert_banner` / floating card):** Shown at the top-right inside `DesktopShell` (`maxWidth: 420`, layered cleanly in the workspace `Stack` above any backdrop scrim and not blocking workspace clicks) for **Routines** and for **Reminders** when center-popup mode is toggled off, with interactive Windows-toast-style controls (`Open Chat`, `Got it`, `Snooze 10m`, `Dismiss`, `View All`).
+4. **First-Boot Maximized Desktop Window:**
+   - **Root Cause:** `DesktopLifecycleCoordinator.initialize()` opened the desktop app at fixed `1280x800` instead of filling the user's screen on initial launch.
+   - **Fix:** Add `maximize()` to `DesktopWindowAdapter` / `LiveDesktopWindowAdapter` (`windowManager.maximize()`) and enable `maximizeOnStart` in `main.dart` / `DesktopLifecycleCoordinator.initialize()` when no explicit debug test override (`--size-1024x640` or `--capture-visual-evidence`) is provided, preserving Windows titlebar, close-to-tray, and taskbar ergonomics.

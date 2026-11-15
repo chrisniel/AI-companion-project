@@ -53,6 +53,7 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
   Future<void> initialize({
     bool showImmediately = true,
     Size? initialWindowSize,
+    bool maximizeOnStart = false,
   }) async {
     if (_isInitialized || _isDisposed) return;
 
@@ -89,6 +90,9 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
 
     if (showImmediately && !_isDisposed) {
       await restoreAndFocusWindow();
+      if (maximizeOnStart && !_isDisposed) {
+        await windowAdapter.maximize();
+      }
     }
 
     _isInitialized = true;

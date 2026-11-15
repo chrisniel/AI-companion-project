@@ -198,7 +198,7 @@ class Settings(BaseSettings):
 
     # M3 Batch G1: SchedulerService & Notification Backlog
     SCHEDULER_ENABLED: bool = True
-    SCHEDULER_POLL_INTERVAL_SECONDS: float = 15.0
+    SCHEDULER_POLL_INTERVAL_SECONDS: float = 2.0
     SCHEDULER_MISSED_GRACE_SECONDS: int = 300
     MEMORY_EXPIRATION_SWEEP_INTERVAL_SECONDS: int = 300
 

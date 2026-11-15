@@ -279,7 +279,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                             len(catchup_events),
                             expired_swept,
                         )
-                sched_interval = getattr(settings, "SCHEDULER_POLL_INTERVAL_SECONDS", 15.0)
+                sched_interval = getattr(settings, "SCHEDULER_POLL_INTERVAL_SECONDS", 2.0)
                 mem_sweep_interval = getattr(settings, "MEMORY_EXPIRATION_SWEEP_INTERVAL_SECONDS", 300.0)
                 scheduler_task = asyncio.create_task(
                     run_periodic_scheduler(

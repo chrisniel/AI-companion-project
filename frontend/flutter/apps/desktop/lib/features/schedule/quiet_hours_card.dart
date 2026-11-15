@@ -368,6 +368,39 @@ class _QuietHoursSettingsCardState extends State<QuietHoursSettingsCard> {
                   ),
                 ],
               ),
+              const SizedBox(height: CompanionSpacing.sm),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Center Pop-Up for Reminders',
+                          style: CompanionTypography.bodyLarge.copyWith(
+                            color: ext?.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Show a centered pop-up card for reminders; otherwise use a compact top notification card.',
+                          style: CompanionTypography.bodySmall.copyWith(
+                            color: ext?.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: CompanionSpacing.md),
+                  Switch(
+                    key: const Key('center_popup_reminders_switch'),
+                    value: widget.controller.centerPopupForReminders,
+                    onChanged: widget.controller.setCenterPopupForReminders,
+                  ),
+                ],
+              ),
               const SizedBox(height: CompanionSpacing.md),
               Row(
                 children: [

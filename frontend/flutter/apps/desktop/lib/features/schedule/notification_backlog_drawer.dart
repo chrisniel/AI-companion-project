@@ -288,7 +288,7 @@ class NotificationBacklogDrawer extends StatelessWidget {
                               event.id,
                               completeTask: false,
                             ),
-                    child: const Text('Acknowledge'),
+                    child: Text(event.sourceType == 'alarm' ? 'Stop' : 'Got it'),
                   ),
                 if (!isRoutine)
                   OutlinedButton(

@@ -470,24 +470,10 @@ class _DesktopShellState extends State<DesktopShell> {
                                   ListenableBuilder(
                                     listenable: _scheduleController,
                                     builder: (context, _) {
-                                      final sched = _scheduleController;
-                                      return Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.stretch,
-                                        children: [
-                                          _buildTopUtilityStrip(
-                                            context,
-                                            sched,
-                                            ext,
-                                          ),
-                                          if (sched.activeAlerts.isNotEmpty)
-                                            _buildActiveAlertBanner(
-                                              context,
-                                              sched,
-                                              ext,
-                                            ),
-                                        ],
+                                      return _buildTopUtilityStrip(
+                                        context,
+                                        _scheduleController,
+                                        ext,
                                       );
                                     },
                                   ),
@@ -504,6 +490,54 @@ class _DesktopShellState extends State<DesktopShell> {
                                             child: _buildActiveScreen(
                                               destination,
                                             ),
+                                          ),
+                                        ),
+                                      if (_scheduleController != null)
+                                        Positioned.fill(
+                                          child: ListenableBuilder(
+                                            listenable: _scheduleController,
+                                            builder: (context, _) {
+                                              final centerAlert =
+                                                  _scheduleController
+                                                      .centerPopupAlert;
+                                              return IgnorePointer(
+                                                ignoring: centerAlert == null,
+                                                child: centerAlert == null
+                                                    ? const SizedBox.shrink()
+                                                    : _buildCenterAlertModal(
+                                                        context,
+                                                        _scheduleController,
+                                                        centerAlert,
+                                                        ext,
+                                                      ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      if (_scheduleController != null)
+                                        Positioned(
+                                          top: CompanionSpacing.md,
+                                          left: CompanionSpacing.xl,
+                                          right: CompanionSpacing.xl,
+                                          child: ListenableBuilder(
+                                            listenable: _scheduleController,
+                                            builder: (context, _) {
+                                              final topAlert =
+                                                  _scheduleController
+                                                      .topBannerAlert;
+                                              if (topAlert == null) {
+                                                return const SizedBox.shrink();
+                                              }
+                                              return Align(
+                                                alignment: Alignment.topRight,
+                                                child: _buildActiveAlertBanner(
+                                                  context,
+                                                  _scheduleController,
+                                                  topAlert,
+                                                  ext,
+                                                ),
+                                              );
+                                            },
                                           ),
                                         ),
                                       if (_isBacklogDrawerOpen &&
@@ -707,94 +741,105 @@ class _DesktopShellState extends State<DesktopShell> {
   Widget _buildActiveAlertBanner(
     BuildContext context,
     DesktopScheduleController ctrl,
+    NotificationEventOut alert,
     CompanionThemeExtension? ext,
   ) {
-    final alerts = ctrl.activeAlerts;
-    if (alerts.isEmpty) return const SizedBox.shrink();
-
-    final topAlert = alerts.first;
-    final isUrgent =
-        topAlert.urgency == 'high' || topAlert.sourceType == 'alarm';
-    final isTaskReminder = topAlert.sourceType == 'task_reminder';
-    final isRoutine = topAlert.sourceType == 'routine';
+    final isUrgent = ctrl.isUrgentAlert(alert);
+    final isTaskReminder = ctrl.isTaskReminderAlert(alert);
+    final isRoutine = alert.sourceType == 'routine';
     final accentColor = isUrgent
         ? (ext?.danger ?? CompanionColors.danger)
         : (ext?.accent ?? CompanionColors.lightAccent);
+    final nonModalCount =
+        ctrl.activeAlerts.where((e) => !ctrl.usesCenterPopup(e)).length;
+    final kindLabel = switch (alert.sourceType) {
+      'routine' => 'ROUTINE',
+      'task_reminder' => 'TASK REMINDER',
+      'alarm' => 'ALARM',
+      _ => 'REMINDER',
+    };
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        CompanionSpacing.xl,
-        CompanionSpacing.sm,
-        CompanionSpacing.xl,
-        0,
-      ),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 420),
       child: SoftGlassPanel(
         key: const Key('shell_active_alert_banner'),
-        padding: const EdgeInsets.symmetric(
-          horizontal: CompanionSpacing.md,
-          vertical: CompanionSpacing.sm,
-        ),
-        child: Wrap(
-          spacing: CompanionSpacing.md,
-          runSpacing: CompanionSpacing.xs,
-          alignment: WrapAlignment.spaceBetween,
-          crossAxisAlignment: WrapCrossAlignment.center,
+        padding: const EdgeInsets.all(CompanionSpacing.md),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    isUrgent
-                        ? Icons.alarm_on_rounded
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: accentColor.withValues(alpha: 0.14),
+                    borderRadius: CompanionRadius.borderSm,
+                  ),
+                  child: Icon(
+                    isRoutine
+                        ? Icons.auto_awesome_rounded
                         : Icons.notifications_active_rounded,
-                    size: 20,
+                    size: 18,
                     color: accentColor,
                   ),
-                  const SizedBox(width: CompanionSpacing.sm),
-                  Flexible(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Wrap(
-                          spacing: CompanionSpacing.xs,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            Text(
-                              topAlert.title,
-                              style: CompanionTypography.bodyMedium.copyWith(
-                                color: ext?.textPrimary,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            if (alerts.length > 1)
-                              Text(
-                                '(+${alerts.length - 1} more)',
-                                style: CompanionTypography.caption.copyWith(
-                                  color: accentColor,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                          ],
-                        ),
-                        if (topAlert.body != null &&
-                            topAlert.body!.trim().isNotEmpty)
+                ),
+                const SizedBox(width: CompanionSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
                           Text(
-                            topAlert.body!,
+                            kindLabel,
                             style: CompanionTypography.caption.copyWith(
-                              color: ext?.textSecondary,
+                              color: accentColor,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.6,
                             ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
                           ),
+                          if (nonModalCount > 1) ...[
+                            const SizedBox(width: CompanionSpacing.xs),
+                            Text(
+                              '(+$nonModalCount)',
+                              style: CompanionTypography.caption.copyWith(
+                                color: ext?.textMuted,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        alert.title,
+                        style: CompanionTypography.bodyMedium.copyWith(
+                          color: ext?.textPrimary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (alert.body != null &&
+                          alert.body!.trim().isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          alert.body!,
+                          style: CompanionTypography.bodySmall.copyWith(
+                            color: ext?.textSecondary,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ],
-                    ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
+            const SizedBox(height: CompanionSpacing.sm),
             Wrap(
               spacing: CompanionSpacing.xs,
               runSpacing: CompanionSpacing.xs,
@@ -804,17 +849,17 @@ class _DesktopShellState extends State<DesktopShell> {
                   onPressed: ctrl.isMutating
                       ? null
                       : () => ctrl.acknowledgeNotification(
-                            topAlert.id,
+                            alert.id,
                             completeTask: isTaskReminder,
                           ),
-                  child: Text(isTaskReminder ? 'Mark Done' : 'Acknowledge'),
+                  child: Text(ctrl.primaryActionLabel(alert)),
                 ),
                 if (!isRoutine)
                   OutlinedButton(
                     key: const Key('banner_snooze_button'),
                     onPressed: ctrl.isMutating
                         ? null
-                        : () => ctrl.snoozeNotification(topAlert.id),
+                        : () => ctrl.snoozeNotification(alert.id),
                     child: const Text('Snooze 10m'),
                   ),
                 if (isRoutine)
@@ -823,7 +868,7 @@ class _DesktopShellState extends State<DesktopShell> {
                     onPressed: ctrl.isMutating
                         ? null
                         : () async {
-                            await ctrl.markNotificationRead(topAlert.id);
+                            await ctrl.markNotificationRead(alert.id);
                             widget.controller.requestDestination(
                               DesktopNavDestination.chat,
                             );
@@ -834,7 +879,7 @@ class _DesktopShellState extends State<DesktopShell> {
                   key: const Key('banner_dismiss_button'),
                   onPressed: ctrl.isMutating
                       ? null
-                      : () => ctrl.dismissNotification(topAlert.id),
+                      : () => ctrl.dismissNotification(alert.id),
                   child: const Text('Dismiss'),
                 ),
                 TextButton(
@@ -846,6 +891,153 @@ class _DesktopShellState extends State<DesktopShell> {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCenterAlertModal(
+    BuildContext context,
+    DesktopScheduleController ctrl,
+    NotificationEventOut alert,
+    CompanionThemeExtension? ext,
+  ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isUrgent = ctrl.isUrgentAlert(alert);
+    final isTaskReminder = ctrl.isTaskReminderAlert(alert);
+    final accentColor = isUrgent
+        ? (ext?.danger ?? CompanionColors.danger)
+        : (ext?.accent ?? CompanionColors.lightAccent);
+    final modalCount =
+        ctrl.activeAlerts.where((e) => ctrl.usesCenterPopup(e)).length;
+    final triggeredLocal = parseServerUtcDateTime(alert.triggeredAt);
+    final headerLabel = switch (alert.sourceType) {
+      'alarm' => 'ALARM RINGING',
+      'task_reminder' => 'TASK REMINDER',
+      _ => 'REMINDER DUE',
+    };
+
+    return Container(
+      color: Colors.black.withValues(alpha: isDark ? 0.56 : 0.34),
+      padding: const EdgeInsets.all(CompanionSpacing.lg),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: SoftGlassPanel(
+            key: const Key('shell_center_alert_modal'),
+            padding: const EdgeInsets.all(CompanionSpacing.lg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: accentColor.withValues(alpha: 0.16),
+                        borderRadius: CompanionRadius.borderMd,
+                      ),
+                      child: Icon(
+                        isUrgent
+                            ? Icons.alarm_on_rounded
+                            : Icons.notifications_active_rounded,
+                        size: 24,
+                        color: accentColor,
+                      ),
+                    ),
+                    const SizedBox(width: CompanionSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            modalCount > 1
+                                ? '$headerLabel (+${modalCount - 1} more)'
+                                : headerLabel,
+                            style: CompanionTypography.caption.copyWith(
+                              color: accentColor,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.7,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            alert.title,
+                            style: CompanionTypography.titleMedium.copyWith(
+                              color: ext?.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (triggeredLocal != null) ...[
+                  const SizedBox(height: CompanionSpacing.sm),
+                  Text(
+                    formatDateTime12h(triggeredLocal),
+                    style: CompanionTypography.caption.copyWith(
+                      color: ext?.textMuted,
+                    ),
+                  ),
+                ],
+                if (alert.body != null && alert.body!.trim().isNotEmpty) ...[
+                  const SizedBox(height: CompanionSpacing.sm),
+                  Text(
+                    alert.body!,
+                    style: CompanionTypography.bodyMedium.copyWith(
+                      color: ext?.textSecondary,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: CompanionSpacing.lg),
+                Wrap(
+                  spacing: CompanionSpacing.sm,
+                  runSpacing: CompanionSpacing.sm,
+                  alignment: WrapAlignment.end,
+                  children: [
+                    TextButton(
+                      key: const Key('center_alert_view_all_button'),
+                      onPressed: () =>
+                          setState(() => _isBacklogDrawerOpen = true),
+                      child: const Text('View All'),
+                    ),
+                    TextButton(
+                      key: const Key('center_alert_dismiss_button'),
+                      onPressed: ctrl.isMutating
+                          ? null
+                          : () => ctrl.dismissNotification(alert.id),
+                      child: const Text('Dismiss'),
+                    ),
+                    OutlinedButton(
+                      key: const Key('center_alert_snooze_button'),
+                      onPressed: ctrl.isMutating
+                          ? null
+                          : () => ctrl.snoozeNotification(alert.id),
+                      child: const Text('Snooze 10m'),
+                    ),
+                    FilledButton(
+                      key: const Key('center_alert_primary_button'),
+                      style: isUrgent
+                          ? FilledButton.styleFrom(
+                              backgroundColor: accentColor,
+                              foregroundColor: Colors.white,
+                            )
+                          : null,
+                      onPressed: ctrl.isMutating
+                          ? null
+                          : () => ctrl.acknowledgeNotification(
+                                alert.id,
+                                completeTask: isTaskReminder,
+                              ),
+                      child: Text(ctrl.primaryActionLabel(alert)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

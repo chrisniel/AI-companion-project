@@ -339,15 +339,18 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // Active Alert Banner surfaces unread alarm, excludes suppressed_quiet_hours
-        expect(find.byKey(const Key('shell_active_alert_banner')), findsOneWidget);
+        // Alarms always surface in centered modal with crisp 'Stop' primary action;
+        // quiet-hours suppressed check-ins never show in floating or center cards.
+        expect(find.byKey(const Key('shell_center_alert_modal')), findsOneWidget);
+        expect(find.byKey(const Key('shell_active_alert_banner')), findsNothing);
         expect(find.text('Wake Up Now'), findsOneWidget);
+        expect(find.text('Stop'), findsOneWidget);
         expect(find.text('Suppressed Check-in'), findsNothing);
 
-        // Acknowledge dismisses banner cleanly
-        await tester.tap(find.byKey(const Key('banner_acknowledge_button')));
+        // Tapping Stop clears the centered modal cleanly
+        await tester.tap(find.byKey(const Key('center_alert_primary_button')));
         await tester.pumpAndSettle();
-        expect(find.byKey(const Key('shell_active_alert_banner')), findsNothing);
+        expect(find.byKey(const Key('shell_center_alert_modal')), findsNothing);
 
         // Bell button toggles NotificationBacklogDrawer showing history including suppressed event
         await tester.tap(find.byKey(const Key('shell_notification_bell_button')));
@@ -358,6 +361,166 @@ void main() {
         await tester.tap(find.byKey(const Key('backlog_drawer_close_button')));
         await tester.pumpAndSettle();
         expect(find.text('Notification Center'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'routes routines to floating top card and supports selectable center popup toggle for reminders',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1280, 820));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        var resolvedRoutine = false;
+        var resolvedReminder = false;
+
+        final mockClient = MockClient((req) async {
+          if (req.url.path == '/api/v1/notifications') {
+            final items = <Map<String, dynamic>>[
+              {
+                'id': 'evt-rem',
+                'profile_id': 'prof-1',
+                'source_type': 'reminder',
+                'source_id': 'r1',
+                'urgency': 'normal',
+                'title': 'Drink Water',
+                'body': 'Hydration check',
+                'status': resolvedReminder ? 'acknowledged' : 'unread',
+                'delivery_policy': 'immediate',
+                'is_missed_catchup': false,
+                'triggered_at': '2026-11-15T09:00:00Z',
+                'created_at': '2026-11-15T09:00:00Z',
+                'updated_at': '2026-11-15T09:00:00Z',
+              },
+              {
+                'id': 'evt-rout',
+                'profile_id': 'prof-1',
+                'source_type': 'routine',
+                'source_id': 'rt1',
+                'urgency': 'informational',
+                'title': 'Morning Brief',
+                'body': 'Daily standup summary',
+                'status': resolvedRoutine ? 'acknowledged' : 'unread',
+                'delivery_policy': 'immediate',
+                'is_missed_catchup': false,
+                'triggered_at': '2026-11-15T08:00:00Z',
+                'created_at': '2026-11-15T08:00:00Z',
+                'updated_at': '2026-11-15T08:00:00Z',
+              },
+            ];
+            final unreadCount = (resolvedReminder ? 0 : 1) + (resolvedRoutine ? 0 : 1);
+            return http.Response(
+              jsonEncode({
+                'items': items,
+                'total': items.length,
+                'unread_count': unreadCount,
+                'missed_count': 0,
+              }),
+              200,
+            );
+          }
+          if (req.url.path == '/api/v1/notifications/evt-rout/acknowledge') {
+            resolvedRoutine = true;
+            return http.Response(
+              jsonEncode({
+                'id': 'evt-rout',
+                'profile_id': 'prof-1',
+                'source_type': 'routine',
+                'source_id': 'rt1',
+                'urgency': 'informational',
+                'title': 'Morning Brief',
+                'status': 'acknowledged',
+                'delivery_policy': 'immediate',
+                'is_missed_catchup': false,
+                'triggered_at': '2026-11-15T08:00:00Z',
+                'created_at': '2026-11-15T08:00:00Z',
+                'updated_at': '2026-11-15T08:01:00Z',
+              }),
+              200,
+            );
+          }
+          if (req.url.path == '/api/v1/notifications/evt-rem/acknowledge') {
+            resolvedReminder = true;
+            return http.Response(
+              jsonEncode({
+                'id': 'evt-rem',
+                'profile_id': 'prof-1',
+                'source_type': 'reminder',
+                'source_id': 'r1',
+                'urgency': 'normal',
+                'title': 'Drink Water',
+                'status': 'acknowledged',
+                'delivery_policy': 'immediate',
+                'is_missed_catchup': false,
+                'triggered_at': '2026-11-15T09:00:00Z',
+                'created_at': '2026-11-15T09:00:00Z',
+                'updated_at': '2026-11-15T09:01:00Z',
+              }),
+              200,
+            );
+          }
+          if (req.url.path == '/api/v1/profiles/me/quiet-hours') {
+            return http.Response(
+              jsonEncode({
+                'quiet_hours_enabled': false,
+                'quiet_hours_start': '22:00',
+                'quiet_hours_end': '07:00',
+                'quiet_hours_timezone': 'UTC',
+              }),
+              200,
+            );
+          }
+          return http.Response(
+            jsonEncode({'items': <dynamic>[], 'total': 0}),
+            200,
+          );
+        });
+
+        final client = CompanionClient(
+          baseUrl: 'http://127.0.0.1:8000',
+          httpClient: mockClient,
+        );
+        final schedCtrl = DesktopScheduleController(
+          client: client,
+          toastAdapter: NoOpDesktopToastAdapter(),
+          profileId: 'prof-1',
+        );
+        addTearDown(schedCtrl.dispose);
+        addTearDown(client.close);
+        await schedCtrl.refreshAll();
+
+        final settingsController = DesktopSettingsController();
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: CompanionTheme.dark(),
+            home: DesktopShell(
+              controller: settingsController,
+              scheduleController: schedCtrl,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Default: reminder in center modal, routine simultaneously in floating top card
+        expect(find.byKey(const Key('shell_center_alert_modal')), findsOneWidget);
+        expect(find.text('Drink Water'), findsOneWidget);
+        expect(find.byKey(const Key('shell_active_alert_banner')), findsOneWidget);
+        expect(find.text('Morning Brief'), findsOneWidget);
+
+        // Dismiss routine from floating card using Got it
+        await tester.tap(find.byKey(const Key('banner_acknowledge_button')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('shell_active_alert_banner')), findsNothing);
+
+        // Toggling centerPopupForReminders to false demotes reminder to floating top card
+        schedCtrl.setCenterPopupForReminders(false);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('shell_center_alert_modal')), findsNothing);
+        expect(find.byKey(const Key('shell_active_alert_banner')), findsOneWidget);
+        expect(find.text('Drink Water'), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('banner_acknowledge_button')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('shell_active_alert_banner')), findsNothing);
       },
     );
   });

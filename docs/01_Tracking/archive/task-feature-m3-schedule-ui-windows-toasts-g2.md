@@ -26,10 +26,11 @@
   - `pytest backend/tests -q` (`814 passed, 80 warnings`) — passed
   - `companion_api` `dart test` (`+103: All tests passed!`) — passed
   - `flutter analyze` (`No issues found!`) — passed
-  - `flutter test` (`+379: All tests passed!`) — passed
+  - `flutter test` (`+383: All tests passed!`) — passed
   - `flutter build windows --debug` (`ai_companion_desktop.exe`, MSVC `/W4 /WX`) — passed
   - `frontend/web` `lint`, `test -- --run --maxWorkers=2` (`16 files / 248 tests`), `build` — passed
 - [x] Post-Manual-QA Revision (Human-Approved on 2026-11-15): Implemented backend `BaseSchema` UTC serialization fix, C++ Start Menu `.lnk` + `INotificationActivationCallback` COM class factory + `PlaySoundW` sound fallback + OS timezone detection, Dart 12-hour AM/PM date/time pickers & quick chips, PC timezone default + collapsed advanced custom timezone toggle, immediate `refreshAll()` toast dispatch, Quiet Hours Alert Sound toggle + `Test Sound`, and re-verified full gate.
+- [x] Second Live-QA Revision (Human-Approved on 2026-11-15): Lowered backend `SCHEDULER_POLL_INTERVAL_SECONDS` default to `2.0s` + desktop baseline poll `5s` with adaptive `_nextDueTimer` wake-up, replaced truncated `Acknowledge` toast/in-app buttons with crisp labels (`Stop`, `Got it`, `Mark Done`), split in-app alerts into centered modal (`shell_center_alert_modal` for Alarms always and Reminders when `"Center Pop-Up for Reminders"` is enabled) vs. compact floating top-right notification card (`shell_active_alert_banner`), added `DesktopWindowAdapter.maximize()` first-boot window maximization, and re-verified full gate.
 
 ## Phase 3: Documentation, Closure & Draft PR
 - [x] Sync canonical docs (`tasks-reminders-alarms-and-routines.md` including `NIT-02`, `windows-host-and-notifications.md`), master planning (`WBS.md`, `MASTER_CHECKLIST.md`, `DECISION_DEBT.md`, `DELIVERY_INDEX.md`), `docs/01_Tracking/task.md`, and `CHANGELOG.md`.

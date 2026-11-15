@@ -337,7 +337,7 @@ void main() {
                     'source_id': 'a1',
                     'urgency': 'high',
                     'title': 'High Urgency Wakeup Alarm',
-                    'body': 'Tap acknowledge to silence alarm.',
+                    'body': 'Tap stop to silence alarm.',
                     'status': 'unread',
                     'delivery_policy': 'immediate',
                     'is_missed_catchup': false,
@@ -347,9 +347,26 @@ void main() {
                     'created_at': '2026-11-15T06:30:00Z',
                     'updated_at': '2026-11-15T06:30:00Z',
                   },
+                  {
+                    'id': 'evt-2',
+                    'profile_id': 'prof-1',
+                    'source_type': 'routine',
+                    'source_id': 'rt1',
+                    'urgency': 'informational',
+                    'title': 'Evening Reflection Routine',
+                    'body': 'Compact top notification card at 1.3x text scale.',
+                    'status': 'unread',
+                    'delivery_policy': 'immediate',
+                    'is_missed_catchup': false,
+                    'triggered_at': '2026-11-15T20:00:00Z',
+                    'read_at': null,
+                    'resolved_at': null,
+                    'created_at': '2026-11-15T20:00:00Z',
+                    'updated_at': '2026-11-15T20:00:00Z',
+                  },
                 ],
-                'total': 1,
-                'unread_count': 1,
+                'total': 2,
+                'unread_count': 2,
                 'missed_count': 1,
               }),
               200,
@@ -404,6 +421,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(tester.takeException(), isNull);
+        expect(find.byKey(const Key('shell_center_alert_modal')), findsOneWidget);
         expect(find.byKey(const Key('shell_active_alert_banner')), findsOneWidget);
 
         await tester.tap(find.byKey(const Key('shell_notification_bell_button')));
