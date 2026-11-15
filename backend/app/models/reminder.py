@@ -45,6 +45,12 @@ class Reminder(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, ProfileMix
         server_default=sa.text("0"),
         nullable=False,
     )
+    center_popup: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        server_default=sa.text("1"),
+        nullable=False,
+    )
     origin: Mapped[str] = mapped_column(
         String(32),
         default="host",

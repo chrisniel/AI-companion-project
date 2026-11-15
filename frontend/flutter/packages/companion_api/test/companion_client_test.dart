@@ -1195,6 +1195,9 @@ void main() {
           if (request.url.path == '/api/v1/notifications/clear-all' && request.method == 'POST') {
             return http.Response(jsonEncode({'cleared_count': 3}), 200);
           }
+          if (request.url.path == '/api/v1/notifications/mark-all-read' && request.method == 'POST') {
+            return http.Response(jsonEncode({'updated_count': 4}), 200);
+          }
           return http.Response('{}', 404);
         });
 
@@ -1206,6 +1209,7 @@ void main() {
           const ReminderCreate(title: 'Drink water', scheduledAt: '2026-11-14T15:00:00Z'),
         );
         expect(rem.status, 'scheduled');
+        expect(rem.centerPopup, isTrue);
         final snoozed = await client.snoozeReminder('rem-1', payload: const SnoozeRequest(minutes: 15));
         expect(snoozed.status, 'snoozed');
         final alarm = await client.createAlarm(
@@ -1224,6 +1228,8 @@ void main() {
         expect(notifList.missedCount, 1);
         final cleared = await client.clearAllNotifications();
         expect(cleared.clearedCount, 3);
+        final marked = await client.markAllNotificationsRead();
+        expect(marked.updatedCount, 4);
       });
     });
   });

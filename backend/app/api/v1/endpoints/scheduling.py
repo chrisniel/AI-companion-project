@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Type, TypeVar
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_profile_session, get_db
@@ -25,6 +25,7 @@ from app.schemas.scheduling import (
     NotificationClearResponse,
     NotificationEventOut,
     NotificationListOut,
+    NotificationMarkReadResponse,
     NotificationSourceType,
     NotificationStatus,
     ReminderCreate,
@@ -256,6 +257,7 @@ async def create_reminder(
         timezone=payload.timezone,
         status=ReminderStatus.scheduled.value,
         bypass_quiet_hours=payload.bypass_quiet_hours,
+        center_popup=payload.center_popup,
         origin=payload.origin,
         is_deleted=False,
         deleted_at=None,
@@ -309,6 +311,8 @@ async def update_reminder(
         reminder.snoozed_until = as_utc(payload.snoozed_until)
     if payload.bypass_quiet_hours is not None:
         reminder.bypass_quiet_hours = payload.bypass_quiet_hours
+    if payload.center_popup is not None:
+        reminder.center_popup = payload.center_popup
     reminder.updated_at = datetime.now(timezone.utc)
 
     await validate_profile_session(db, session)
@@ -914,6 +918,36 @@ async def clear_all_notifications(
     await validate_profile_session(db, session)
     await db.commit()
     return NotificationClearResponse(cleared_count=len(rows))
+
+
+@router.post("/notifications/mark-all-read", response_model=NotificationMarkReadResponse, summary="Mark All Notifications Read")
+async def mark_all_notifications_read(
+    session: ProfileSession = Depends(get_current_profile_session),
+    db: AsyncSession = Depends(get_db),
+) -> NotificationMarkReadResponse:
+    now = datetime.now(timezone.utc)
+    stmt = select(NotificationEvent).where(
+        NotificationEvent.profile_id == session.profile_id,
+        NotificationEvent.is_deleted.is_(False),
+        or_(
+            NotificationEvent.status.in_(UNREAD_BACKLOG_STATUSES),
+            NotificationEvent.read_at.is_(None),
+        ),
+    )
+    rows = (await db.execute(stmt)).scalars().all()
+    for ev in rows:
+        ev.read_at = ev.read_at or now
+        # Keep active ringing alarms in unread status so they remain prominent
+        # until explicitly stopped, snoozed, or dismissed.
+        if (
+            ev.status in UNREAD_BACKLOG_STATUSES
+            and ev.source_type != NotificationSourceType.alarm.value
+        ):
+            ev.status = NotificationStatus.read.value
+        ev.updated_at = now
+    await validate_profile_session(db, session)
+    await db.commit()
+    return NotificationMarkReadResponse(updated_count=len(rows))
 
 
 @router.post("/notifications/{event_id}/read", response_model=NotificationEventOut, summary="Mark Notification Read")

@@ -1435,6 +1435,13 @@ class CompanionClient {
     return NotificationClearResponse.fromJson(json);
   }
 
+  /// Marks unread notifications read via POST /api/v1/notifications/mark-all-read.
+  Future<NotificationMarkReadResponse> markAllNotificationsRead() async {
+    final json =
+        await _requestJson('POST', '/api/v1/notifications/mark-all-read');
+    return NotificationMarkReadResponse.fromJson(json);
+  }
+
   /// Marks a notification read via POST /api/v1/notifications/{event_id}/read.
   Future<NotificationEventOut> markNotificationRead(String eventId) async {
     final json = await _requestJson('POST', '/api/v1/notifications/$eventId/read');

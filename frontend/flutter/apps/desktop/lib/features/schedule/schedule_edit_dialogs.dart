@@ -100,6 +100,7 @@ class ScheduleEditDialogs {
 
     var priority = existing?.priority ?? 'medium';
     var category = existing?.category ?? 'general';
+    var reminderCenterPopup = existing?.reminderCenterPopup ?? true;
     String? validationError;
 
     await showDialog<void>(
@@ -309,6 +310,20 @@ class ScheduleEditDialogs {
                       }),
                     ),
                   ],
+                  if (reminderMode != _TaskReminderMode.none) ...[
+                    const SizedBox(height: CompanionSpacing.xs),
+                    SwitchListTile(
+                      key: const Key('task_dialog_center_popup_switch'),
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Center Pop-Up Alert'),
+                      subtitle: const Text(
+                        'Show a centered pop-up card when due; turn off for a compact top banner.',
+                      ),
+                      value: reminderCenterPopup,
+                      onChanged: (v) =>
+                          setModalState(() => reminderCenterPopup = v),
+                    ),
+                  ],
                   if (validationError != null) ...[
                     const SizedBox(height: CompanionSpacing.sm),
                     Text(
@@ -377,6 +392,7 @@ class ScheduleEditDialogs {
                           dueDate: dueIso,
                           reminderMinutesBefore: minutesBefore,
                           reminderAt: remIso,
+                          reminderCenterPopup: reminderCenterPopup,
                         ),
                       )
                     : await controller.updateTask(
@@ -389,6 +405,7 @@ class ScheduleEditDialogs {
                           dueDate: dueIso,
                           reminderMinutesBefore: minutesBefore,
                           reminderAt: remIso,
+                          reminderCenterPopup: reminderCenterPopup,
                         ),
                         clearNotes: notes.isEmpty && existing.notes != null,
                         clearDueDate:
@@ -435,6 +452,7 @@ class ScheduleEditDialogs {
     var showCustomTimezone =
         existing != null && existing.timezone != deviceTz;
     var bypassQuietHours = existing?.bypassQuietHours ?? false;
+    var centerPopup = existing?.centerPopup ?? true;
     String? validationError;
 
     await showDialog<void>(
@@ -530,6 +548,17 @@ class ScheduleEditDialogs {
                   ),
                   const SizedBox(height: CompanionSpacing.xs),
                   SwitchListTile(
+                    key: const Key('reminder_dialog_center_popup_switch'),
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Center Pop-Up Alert'),
+                    subtitle: const Text(
+                      'Show a centered pop-up card when due; turn off for a compact top banner.',
+                    ),
+                    value: centerPopup,
+                    onChanged: (v) => setModalState(() => centerPopup = v),
+                  ),
+                  const SizedBox(height: CompanionSpacing.xs),
+                  SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Bypass Quiet Hours'),
                     value: bypassQuietHours,
@@ -569,6 +598,7 @@ class ScheduleEditDialogs {
                           scheduledAt: utcIso,
                           timezone: timezone,
                           bypassQuietHours: bypassQuietHours,
+                          centerPopup: centerPopup,
                         ),
                       )
                     : await controller.updateReminder(
@@ -580,6 +610,7 @@ class ScheduleEditDialogs {
                           scheduledAt: utcIso,
                           timezone: timezone,
                           bypassQuietHours: bypassQuietHours,
+                          centerPopup: centerPopup,
                         ),
                       );
                 if (!ctx.mounted) return;

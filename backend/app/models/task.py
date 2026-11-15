@@ -2,7 +2,8 @@
 
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import DateTime, Integer, String, Text
+import sqlalchemy as sa
+from sqlalchemy import Boolean, DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -28,6 +29,12 @@ class Task(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, ProfileMixin, 
     due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     reminder_minutes_before: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     reminder_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    reminder_center_popup: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        server_default=sa.text("1"),
+        nullable=False,
+    )
 
     def __repr__(self) -> str:
         return f"<Task id={self.id} title={self.title!r} category={self.category} status={self.status} is_deleted={self.is_deleted}>"

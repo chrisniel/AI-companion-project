@@ -253,6 +253,22 @@ void main() {
       expect(await adapter.playAlertSound(isAlarm: true), isTrue);
       expect(calls[5].method, 'playAlertSound');
       expect(Map<String, dynamic>.from(calls[5].arguments as Map)['isAlarm'], isTrue);
+
+      expect(await adapter.isWindowFocused(), isTrue);
+      expect(calls[6].method, 'isWindowFocused');
+
+      final highUrgencyReminder = _makeEvent(
+        id: 'rem-center-1',
+        sourceType: 'reminder',
+        urgency: 'high',
+        title: 'Center Reminder',
+      );
+      final remXml = WindowsWinRtToastAdapter.buildToastXml(highUrgencyReminder);
+      expect(remXml, contains('scenario="reminder"'));
+      expect(remXml, isNot(contains('scenario="alarm"')));
+      expect(await adapter.showNotificationToast(highUrgencyReminder), isTrue);
+      final remArgs = Map<String, dynamic>.from(calls[7].arguments as Map);
+      expect(remArgs['isAlarm'], isFalse);
     });
 
     test('emits ToastActivationEvent when native runner invokes onToastActivated', () async {

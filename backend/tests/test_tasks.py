@@ -312,3 +312,27 @@ async def test_task_datetimes_serialize_explicit_utc_across_create_get_and_patch
     fetched = get_resp.json()
     assert fetched["due_date"].endswith("Z") or fetched["due_date"].endswith("+00:00")
     assert fetched["created_at"].endswith("Z") or fetched["created_at"].endswith("+00:00")
+
+
+@pytest.mark.asyncio
+async def test_task_reminder_center_popup_defaults_true_and_updates(
+    client: AsyncClient,
+    auth_headers: dict,
+):
+    """Task reminder_center_popup defaults to True and supports opting out per task."""
+    created_default = await client.post(
+        "/api/v1/tasks",
+        headers=auth_headers,
+        json={"title": "Default Popup Task", "reminder_at": "2026-11-16T09:00:00Z"},
+    )
+    assert created_default.status_code == 201
+    task = created_default.json()
+    assert task["reminder_center_popup"] is True
+
+    updated = await client.patch(
+        f"/api/v1/tasks/{task['id']}",
+        headers=auth_headers,
+        json={"reminder_center_popup": False},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["reminder_center_popup"] is False

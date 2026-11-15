@@ -524,6 +524,18 @@ void WindowsToastChannel::HandleMethodCall(
     return;
   }
 
+  if (method_call.method_name() == "isWindowFocused") {
+    const HWND foreground = ::GetForegroundWindow();
+    const bool is_focused =
+        hwnd_ != nullptr &&
+        ::IsWindowVisible(hwnd_) &&
+        !::IsIconic(hwnd_) &&
+        foreground != nullptr &&
+        (foreground == hwnd_ || ::IsChild(hwnd_, foreground));
+    result->Success(flutter::EncodableValue(is_focused));
+    return;
+  }
+
   if (method_call.method_name() == "playAlertSound") {
     bool is_alarm = false;
     if (args != nullptr) {

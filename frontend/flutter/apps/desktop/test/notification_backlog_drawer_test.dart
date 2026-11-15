@@ -51,6 +51,9 @@ class _TrackingToastAdapter implements DesktopToastAdapter {
   Future<String?> getDeviceTimezone() async => null;
 
   @override
+  Future<bool> isWindowFocused() async => false;
+
+  @override
   Future<bool> playAlertSound({bool isAlarm = false}) async => false;
 
   @override
@@ -113,23 +116,14 @@ void main() {
         apiCalls.add('${req.method} ${req.url.path}');
         if (req.url.path == '/api/v1/notifications') {
           queriedParams.add(req.url.query);
+          final unreadRemaining =
+              notificationsList.where((n) => n['status'] == 'unread').length;
           return http.Response(
             jsonEncode({
               'items': notificationsList,
               'total': notificationsList.length,
-              'unread_count': 1,
+              'unread_count': unreadRemaining,
               'missed_count': 1,
-            }),
-            200,
-          );
-        }
-        if (req.url.path == '/api/v1/notifications/evt-task-1/acknowledge') {
-          final body = jsonDecode(req.body) as Map<String, dynamic>;
-          expect(body['complete_task'], isTrue);
-          return http.Response(
-            jsonEncode({
-              ...notificationsList.first,
-              'status': 'acknowledged',
             }),
             200,
           );
@@ -143,9 +137,28 @@ void main() {
             200,
           );
         }
-        if (req.url.path == '/api/v1/notifications/clear-all') {
-          notificationsList = [];
-          return http.Response(jsonEncode({'cleared_count': 2}), 200);
+        if (req.url.path == '/api/v1/notifications/evt-task-1/acknowledge') {
+          final body = jsonDecode(req.body) as Map<String, dynamic>;
+          expect(body['complete_task'], isTrue);
+          notificationsList[0] = {
+            ...notificationsList[0],
+            'status': 'acknowledged',
+          };
+          return http.Response(jsonEncode(notificationsList[0]), 200);
+        }
+        if (req.url.path == '/api/v1/notifications/mark-all-read') {
+          notificationsList = [
+            for (final n in notificationsList)
+              if (n['status'] == 'acknowledged' || n['status'] == 'dismissed')
+                n
+              else
+                {
+                  ...n,
+                  'status': 'read',
+                  'read_at': '2026-11-15T09:05:00Z',
+                },
+          ];
+          return http.Response(jsonEncode({'updated_count': 1}), 200);
         }
         return http.Response(jsonEncode({'items': <dynamic>[], 'total': 0}), 200);
       });
@@ -167,6 +180,7 @@ void main() {
 
       var closed = false;
       var openedChat = false;
+      var openedHistory = false;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -179,6 +193,7 @@ void main() {
                 activeProfileName: 'Chris',
                 onClose: () => closed = true,
                 onOpenChat: () => openedChat = true,
+                onOpenHistory: () => openedHistory = true,
               ),
             ),
           ),
@@ -191,7 +206,7 @@ void main() {
       expect(find.text('Finish report'), findsOneWidget);
       expect(find.text('Morning check-in'), findsOneWidget);
 
-      // Mark Done on task reminder event
+      // Mark Done on task reminder event -> acknowledges and removes from Active Inbox while keeping history in Schedule
       await tester.tap(find.text('Mark Done'));
       await tester.pumpAndSettle();
       expect(
@@ -199,6 +214,7 @@ void main() {
         contains('POST /api/v1/notifications/evt-task-1/acknowledge'),
       );
       expect(toastAdapter.removedIds, contains('evt-task-1'));
+      expect(find.text('Finish report'), findsNothing);
 
       // Open Chat on routine event
       await tester.tap(find.text('Open Chat'));
@@ -212,11 +228,18 @@ void main() {
       await tester.pumpAndSettle();
       expect(queriedParams.any((q) => q.contains('unread_only=true')), isTrue);
 
-      // Clear All removes backend + Action Center toast group
-      await tester.tap(find.byKey(const Key('backlog_clear_all_button')));
+      // Toggle back off to show unresolved active inbox items, then Mark All Read
+      await tester.tap(find.byKey(const Key('backlog_unread_only_chip')));
       await tester.pumpAndSettle();
-      expect(apiCalls, contains('POST /api/v1/notifications/clear-all'));
-      expect(toastAdapter.clearCalls, greaterThanOrEqualTo(1));
+      await tester.tap(find.byKey(const Key('backlog_mark_all_read_button')));
+      await tester.pumpAndSettle();
+      expect(apiCalls, contains('POST /api/v1/notifications/mark-all-read'));
+      expect(controller.unreadCount, 0);
+
+      // History button opens Schedule -> Notifications
+      await tester.tap(find.byKey(const Key('backlog_open_history_button')));
+      await tester.pumpAndSettle();
+      expect(openedHistory, isTrue);
     },
   );
 }

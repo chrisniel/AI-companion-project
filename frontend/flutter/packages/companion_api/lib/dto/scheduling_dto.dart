@@ -152,6 +152,7 @@ class ReminderCreate {
   final String scheduledAt;
   final String timezone;
   final bool bypassQuietHours;
+  final bool centerPopup;
   final String origin;
 
   const ReminderCreate({
@@ -162,6 +163,7 @@ class ReminderCreate {
     required this.scheduledAt,
     this.timezone = 'UTC',
     this.bypassQuietHours = false,
+    this.centerPopup = true,
     this.origin = 'host',
   });
 
@@ -174,6 +176,7 @@ class ReminderCreate {
       scheduledAt: json['scheduled_at'] as String,
       timezone: json['timezone'] as String? ?? 'UTC',
       bypassQuietHours: json['bypass_quiet_hours'] as bool? ?? false,
+      centerPopup: json['center_popup'] as bool? ?? true,
       origin: json['origin'] as String? ?? 'host',
     );
   }
@@ -186,6 +189,7 @@ class ReminderCreate {
         'scheduled_at': scheduledAt,
         'timezone': timezone,
         'bypass_quiet_hours': bypassQuietHours,
+        'center_popup': centerPopup,
         'origin': origin,
       };
 }
@@ -204,6 +208,7 @@ class ReminderUpdate {
   final String? snoozedUntil;
   final bool clearSnoozedUntil;
   final bool? bypassQuietHours;
+  final bool? centerPopup;
 
   const ReminderUpdate({
     this.taskId,
@@ -217,6 +222,7 @@ class ReminderUpdate {
     this.snoozedUntil,
     this.clearSnoozedUntil = false,
     this.bypassQuietHours,
+    this.centerPopup,
   });
 
   factory ReminderUpdate.fromJson(Map<String, dynamic> json) {
@@ -232,6 +238,7 @@ class ReminderUpdate {
       snoozedUntil: json['snoozed_until'] as String?,
       clearSnoozedUntil: json['clear_snoozed_until'] as bool? ?? false,
       bypassQuietHours: json['bypass_quiet_hours'] as bool?,
+      centerPopup: json['center_popup'] as bool?,
     );
   }
 
@@ -247,6 +254,7 @@ class ReminderUpdate {
         if (snoozedUntil != null) 'snoozed_until': snoozedUntil,
         if (clearSnoozedUntil) 'clear_snoozed_until': true,
         if (bypassQuietHours != null) 'bypass_quiet_hours': bypassQuietHours,
+        if (centerPopup != null) 'center_popup': centerPopup,
       };
 }
 
@@ -263,6 +271,7 @@ class ReminderOut {
   final String status;
   final String? snoozedUntil;
   final bool bypassQuietHours;
+  final bool centerPopup;
   final String origin;
   final String? firedAt;
   final String? acknowledgedAt;
@@ -280,6 +289,7 @@ class ReminderOut {
     required this.status,
     this.snoozedUntil,
     required this.bypassQuietHours,
+    this.centerPopup = true,
     required this.origin,
     this.firedAt,
     this.acknowledgedAt,
@@ -299,6 +309,7 @@ class ReminderOut {
       status: json['status'] as String,
       snoozedUntil: json['snoozed_until'] as String?,
       bypassQuietHours: json['bypass_quiet_hours'] as bool,
+      centerPopup: json['center_popup'] as bool? ?? true,
       origin: json['origin'] as String,
       firedAt: json['fired_at'] as String?,
       acknowledgedAt: json['acknowledged_at'] as String?,
@@ -318,6 +329,7 @@ class ReminderOut {
         'status': status,
         'snoozed_until': snoozedUntil,
         'bypass_quiet_hours': bypassQuietHours,
+        'center_popup': centerPopup,
         'origin': origin,
         'fired_at': firedAt,
         'acknowledged_at': acknowledgedAt,
@@ -962,5 +974,25 @@ class NotificationClearResponse {
 
   Map<String, dynamic> toJson() => {
         'cleared_count': clearedCount,
+      };
+}
+
+/// Result summary after marking unread notifications read.
+@immutable
+class NotificationMarkReadResponse {
+  final int updatedCount;
+
+  const NotificationMarkReadResponse({
+    required this.updatedCount,
+  });
+
+  factory NotificationMarkReadResponse.fromJson(Map<String, dynamic> json) {
+    return NotificationMarkReadResponse(
+      updatedCount: (json['updated_count'] as num).toInt(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'updated_count': updatedCount,
       };
 }

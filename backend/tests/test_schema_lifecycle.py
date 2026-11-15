@@ -15,7 +15,7 @@ from app.db.session import (
     get_engine,
 )
 
-HEAD_REVISION = "015_scheduler_notifications_and_routines"
+HEAD_REVISION = "016_reminder_center_popup"
 
 
 def _create_legacy_v004_db(path: Path) -> None:

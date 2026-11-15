@@ -1190,12 +1190,20 @@ class ScheduleScreen extends StatelessWidget {
                   selected: ctrl.unreadOnlyFilter,
                   onSelected: ctrl.setUnreadOnlyFilter,
                 ),
-                if (items.isNotEmpty)
+                if (ctrl.unreadCount > 0 ||
+                    ctrl.missedCount > 0 ||
+                    items.any(
+                      (e) =>
+                          e.status == 'unread' ||
+                          e.status == 'suppressed_quiet_hours' ||
+                          e.status == 'missed_catchup',
+                    ))
                   TextButton.icon(
-                    key: const Key('notifications_clear_all_button'),
-                    onPressed: ctrl.isMutating ? null : ctrl.clearAllNotifications,
-                    icon: const Icon(Icons.clear_all_rounded, size: 16),
-                    label: const Text('Clear All'),
+                    key: const Key('notifications_mark_all_read_button'),
+                    onPressed:
+                        ctrl.isMutating ? null : ctrl.markAllNotificationsRead,
+                    icon: const Icon(Icons.done_all_rounded, size: 16),
+                    label: const Text('Mark All Read'),
                   ),
               ],
             ),

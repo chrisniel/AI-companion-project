@@ -12,12 +12,14 @@ class NotificationBacklogDrawer extends StatelessWidget {
     required this.controller,
     required this.onClose,
     required this.onOpenChat,
+    this.onOpenHistory,
     this.activeProfileName,
   });
 
   final DesktopScheduleController controller;
   final VoidCallback onClose;
   final VoidCallback onOpenChat;
+  final VoidCallback? onOpenHistory;
   final String? activeProfileName;
 
   @override
@@ -39,7 +41,15 @@ class NotificationBacklogDrawer extends StatelessWidget {
           child: ListenableBuilder(
             listenable: controller,
             builder: (context, _) {
-              final items = controller.notifications;
+              final items = controller.bellInboxAlerts;
+              final hasUnreadActions = controller.unreadCount > 0 ||
+                  controller.missedCount > 0 ||
+                  items.any(
+                    (e) =>
+                        e.status == 'unread' ||
+                        e.status == 'suppressed_quiet_hours' ||
+                        e.status == 'missed_catchup',
+                  );
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -98,14 +108,24 @@ class NotificationBacklogDrawer extends StatelessWidget {
                         selected: controller.unreadOnlyFilter,
                         onSelected: controller.setUnreadOnlyFilter,
                       ),
-                      if (items.isNotEmpty)
+                      if (hasUnreadActions)
                         TextButton.icon(
-                          key: const Key('backlog_clear_all_button'),
+                          key: const Key('backlog_mark_all_read_button'),
                           onPressed: controller.isMutating
                               ? null
-                              : controller.clearAllNotifications,
-                          icon: const Icon(Icons.clear_all_rounded, size: 16),
-                          label: const Text('Clear All'),
+                              : controller.markAllNotificationsRead,
+                          icon: const Icon(Icons.done_all_rounded, size: 16),
+                          label: const Text('Mark All Read'),
+                        ),
+                      if (onOpenHistory != null)
+                        TextButton.icon(
+                          key: const Key('backlog_open_history_button'),
+                          onPressed: () {
+                            onClose();
+                            onOpenHistory?.call();
+                          },
+                          icon: const Icon(Icons.history_rounded, size: 16),
+                          label: const Text('History'),
                         ),
                     ],
                   ),
@@ -149,7 +169,7 @@ class NotificationBacklogDrawer extends StatelessWidget {
                     child: items.isEmpty
                         ? Center(
                             child: Text(
-                              'No notifications in this backlog view.',
+                              'All caught up. Resolved notifications remain in Schedule → Notifications.',
                               style: CompanionTypography.bodyMedium.copyWith(
                                 color: ext?.textMuted,
                               ),

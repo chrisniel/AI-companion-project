@@ -309,6 +309,9 @@ class _DesktopShellState extends State<DesktopShell> {
     final dest = widget.controller.currentDestination;
     if (dest != _lastDestination) {
       _lastDestination = dest;
+      if (_isBacklogDrawerOpen && mounted) {
+        setState(() => _isBacklogDrawerOpen = false);
+      }
       if (dest == DesktopNavDestination.memory) {
         _memoryController?.loadMemories();
       } else if (dest == DesktopNavDestination.schedule &&
@@ -417,6 +420,10 @@ class _DesktopShellState extends State<DesktopShell> {
           ),
           HideToTrayIntent: CallbackAction<HideToTrayIntent>(
             onInvoke: (_) {
+              if (_isBacklogDrawerOpen) {
+                setState(() => _isBacklogDrawerOpen = false);
+                return null;
+              }
               if (widget.coordinator?.isTrayAvailable == true) {
                 widget.coordinator?.hideToTray();
               }
@@ -541,7 +548,19 @@ class _DesktopShellState extends State<DesktopShell> {
                                           ),
                                         ),
                                       if (_isBacklogDrawerOpen &&
-                                          _scheduleController != null)
+                                          _scheduleController != null) ...[
+                                        Positioned.fill(
+                                          child: GestureDetector(
+                                            key: const Key(
+                                              'backlog_drawer_dismiss_barrier',
+                                            ),
+                                            behavior:
+                                                HitTestBehavior.translucent,
+                                            onTap: () => setState(
+                                              () => _isBacklogDrawerOpen = false,
+                                            ),
+                                          ),
+                                        ),
                                         Positioned(
                                           top: 0,
                                           bottom: 0,
@@ -563,8 +582,22 @@ class _DesktopShellState extends State<DesktopShell> {
                                                 DesktopNavDestination.chat,
                                               );
                                             },
+                                            onOpenHistory: () {
+                                              setState(
+                                                () =>
+                                                    _isBacklogDrawerOpen = false,
+                                              );
+                                              _scheduleController.selectSection(
+                                                ScheduleSection.notifications,
+                                              );
+                                              widget.controller
+                                                  .requestDestination(
+                                                DesktopNavDestination.schedule,
+                                              );
+                                            },
                                           ),
                                         ),
+                                      ],
                                     ],
                                   ),
                                 ),

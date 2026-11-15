@@ -381,7 +381,7 @@ void main() {
                 'profile_id': 'prof-1',
                 'source_type': 'reminder',
                 'source_id': 'r1',
-                'urgency': 'normal',
+                'urgency': 'high',
                 'title': 'Drink Water',
                 'body': 'Hydration check',
                 'status': resolvedReminder ? 'acknowledged' : 'unread',
@@ -446,7 +446,7 @@ void main() {
                 'profile_id': 'prof-1',
                 'source_type': 'reminder',
                 'source_id': 'r1',
-                'urgency': 'normal',
+                'urgency': 'high',
                 'title': 'Drink Water',
                 'status': 'acknowledged',
                 'delivery_policy': 'immediate',
@@ -500,27 +500,121 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // Default: reminder in center modal, routine simultaneously in floating top card
+        // Default: high-urgency reminder in center modal, routine simultaneously in floating top card
         expect(find.byKey(const Key('shell_center_alert_modal')), findsOneWidget);
         expect(find.text('Drink Water'), findsOneWidget);
         expect(find.byKey(const Key('shell_active_alert_banner')), findsOneWidget);
         expect(find.text('Morning Brief'), findsOneWidget);
 
-        // Dismiss routine from floating card using Got it
+        // Dismiss routine and high-urgency reminder
         await tester.tap(find.byKey(const Key('banner_acknowledge_button')));
         await tester.pumpAndSettle();
         expect(find.byKey(const Key('shell_active_alert_banner')), findsNothing);
 
-        // Toggling centerPopupForReminders to false demotes reminder to floating top card
-        schedCtrl.setCenterPopupForReminders(false);
+        await tester.tap(find.byKey(const Key('center_alert_primary_button')));
         await tester.pumpAndSettle();
         expect(find.byKey(const Key('shell_center_alert_modal')), findsNothing);
-        expect(find.byKey(const Key('shell_active_alert_banner')), findsOneWidget);
-        expect(find.text('Drink Water'), findsOneWidget);
+      },
+    );
 
-        await tester.tap(find.byKey(const Key('banner_acknowledge_button')));
+    testWidgets(
+      'Notification drawer closes on click-outside barrier or Escape, and History opens Schedule Notifications',
+      (tester) async {
+        tester.view.devicePixelRatio = 1.0;
+        tester.view.physicalSize = const Size(1280, 800);
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
+
+        final mockClient = MockClient((req) async {
+          if (req.url.path == '/api/v1/notifications') {
+            return http.Response(
+              jsonEncode({
+                'items': [
+                  {
+                    'id': 'evt-1',
+                    'profile_id': 'prof-1',
+                    'source_type': 'reminder',
+                    'source_id': 'r1',
+                    'urgency': 'high',
+                    'title': 'Take Medication',
+                    'status': 'read',
+                    'delivery_policy': 'immediate',
+                    'is_missed_catchup': false,
+                    'triggered_at': '2026-11-15T09:00:00Z',
+                    'read_at': '2026-11-15T09:01:00Z',
+                    'created_at': '2026-11-15T09:00:00Z',
+                    'updated_at': '2026-11-15T09:01:00Z',
+                  },
+                ],
+                'total': 1,
+                'unread_count': 0,
+                'missed_count': 0,
+              }),
+              200,
+            );
+          }
+          if (req.url.path == '/api/v1/profiles/me/quiet-hours') {
+            return http.Response(
+              jsonEncode({
+                'quiet_hours_enabled': false,
+                'quiet_hours_start': '22:00',
+                'quiet_hours_end': '07:00',
+                'quiet_hours_timezone': 'UTC',
+              }),
+              200,
+            );
+          }
+          return http.Response(
+            jsonEncode({'items': <dynamic>[], 'total': 0}),
+            200,
+          );
+        });
+
+        final client = CompanionClient(
+          baseUrl: 'http://127.0.0.1:8000',
+          httpClient: mockClient,
+        );
+        final schedCtrl = DesktopScheduleController(
+          client: client,
+          toastAdapter: NoOpDesktopToastAdapter(),
+          profileId: 'prof-1',
+        );
+        addTearDown(schedCtrl.dispose);
+        addTearDown(client.close);
+        await schedCtrl.refreshAll();
+
+        final settingsController = DesktopSettingsController();
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: CompanionTheme.dark(),
+            home: DesktopShell(
+              controller: settingsController,
+              scheduleController: schedCtrl,
+            ),
+          ),
+        );
         await tester.pumpAndSettle();
-        expect(find.byKey(const Key('shell_active_alert_banner')), findsNothing);
+
+        // Open Notification Center drawer via bell button
+        await tester.tap(find.byKey(const Key('shell_notification_bell_button')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('backlog_drawer_close_button')), findsOneWidget);
+
+        // Tap outside on the click-outside barrier -> drawer closes
+        await tester.tap(find.byKey(const Key('backlog_drawer_dismiss_barrier')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('backlog_drawer_close_button')), findsNothing);
+
+        // Open again and tap History -> closes drawer and opens Schedule -> Notifications
+        await tester.tap(find.byKey(const Key('shell_notification_bell_button')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('backlog_open_history_button')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('backlog_drawer_close_button')), findsNothing);
+        expect(settingsController.currentDestination, DesktopNavDestination.schedule);
+        expect(schedCtrl.selectedSection, ScheduleSection.notifications);
       },
     );
   });

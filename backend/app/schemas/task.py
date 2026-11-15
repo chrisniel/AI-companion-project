@@ -47,6 +47,10 @@ class TaskCreate(BaseSchema):
     due_date: Optional[datetime] = Field(default=None, description="Target completion timestamp in ISO-8601.")
     reminder_minutes_before: Optional[int] = Field(default=None, ge=0, description="Minutes before due date to alert.")
     reminder_at: Optional[datetime] = Field(default=None, description="Explicit alert timestamp in ISO-8601.")
+    reminder_center_popup: bool = Field(
+        default=True,
+        description="Whether due reminders for this task surface as centered high-priority pop-up modals.",
+    )
 
 
 class TaskUpdate(BaseSchema):
@@ -62,6 +66,7 @@ class TaskUpdate(BaseSchema):
     due_date: Optional[datetime] = Field(default=None)
     reminder_minutes_before: Optional[int] = Field(default=None, ge=0)
     reminder_at: Optional[datetime] = Field(default=None)
+    reminder_center_popup: bool = Field(default_factory=lambda: None)
 
 
 class TaskResponse(BaseSchema):
@@ -77,6 +82,10 @@ class TaskResponse(BaseSchema):
     due_date: Optional[datetime] = Field(default=None, description="Due date timestamp.")
     reminder_minutes_before: Optional[int] = Field(default=None, description="Minutes before due date to alert.")
     reminder_at: Optional[datetime] = Field(default=None, description="Alert trigger timestamp.")
+    reminder_center_popup: bool = Field(
+        default=True,
+        description="Whether due reminders for this task surface as centered high-priority pop-up modals.",
+    )
     is_deleted: bool = Field(default=False, description="Soft-deletion flag.")
     deleted_at: Optional[datetime] = Field(default=None, description="Soft-deletion timestamp.")
     created_at: datetime = Field(..., description="Creation timestamp in UTC.")

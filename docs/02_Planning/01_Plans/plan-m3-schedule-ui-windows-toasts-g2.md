@@ -2,14 +2,21 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- **Status:** Plan Revised (Live-QA Latency, Toast Labels, Tiered In-App Pop-Up & Maximized First-Boot Update) — Executing Scope on `feature/m3-schedule-ui-windows-toasts-g2`
-- **Delivery Level:** Level B — Planned Autonomous
-- **Scope Mode:** New Feature + Live QA Revision 2 — Flutter Desktop Schedule & Routines Workspace (`PC-CLIENT-008`), Native In-Process C++/WinRT Windows Toast Notifications (`PC-CLIENT-012` / `PC-HOST-003` client half / `DEBT-V1-02`), Sub-2s Adaptive Scheduler & Desktop Dispatch Timing, Short Non-Truncated Toast Action Labels (`Stop`, `Got it`, `Mark Done`), Tiered In-App Alert Presentation (Center Pop-Up Modal for Alarms + Selectable Reminders; Floating Top Card for Routines/Standard), First-Boot Maximized Window, UTC Serialization Fix, Device Timezone & 12-Hour AM/PM UX Revamp, Quiet Hours Settings UI, and Batch G1 Review Fold-Ins (`NIT-01`, `NIT-02`)
+- **Status:** Plan Approved (Third Live-QA Revision Approved — Implementing on `feature/m3-schedule-ui-windows-toasts-g2`)
+- **Delivery Level:** Level C (Item 1 SQLite Schema Migration `016` + OpenAPI/Dart Sync, Human-Approved on 2026-11-15); Level B for Items 2–4
+- **Scope Mode:** New Feature + Live QA Revision 3 Proposal — Notification Bell Click-Outside Dismiss, Notification Bell Active Inbox vs. Preserved History (`Clear All` Replacement), Focus-Aware Multi-Monitor OS Toast Suppression, and Per-Reminder Center Pop-Up (`center_popup` / `urgency` Propagation) Replacing Global Settings Toggle
 - **Target Files:**
   - `backend/app/schemas/common.py` & `backend/app/api/v1/endpoints/tasks.py` *(MODIFY — ensure UTC-aware `datetime` validation/JSON serialization on `BaseSchema` with explicit `Z`/`+00:00` even when SQLite returns naive UTC datetimes, and normalize `due_date`/`reminder_at` via `as_utc`)*
   - `backend/tests/test_tasks.py`, `backend/tests/test_task_update_contract.py`, & `backend/tests/test_scheduling_api.py` *(MODIFY — `NIT-01` + UTC `Z` serialization regression tests)*
-  - `frontend/flutter/apps/desktop/windows/runner/windows_toast_channel.h` *(ADD / UPGRADE — add Start Menu `.lnk` provisioning, `INotificationActivationCallback` COM registration via `CoRegisterClassObject`, native Windows timezone query, & sound helper)*
-  - `frontend/flutter/apps/desktop/windows/runner/windows_toast_channel.cpp` *(ADD / UPGRADE)*
+  - `backend/migrations/versions/016_reminder_center_popup.py` *(ADD — add `center_popup` (`BOOLEAN NOT NULL DEFAULT 1`) on `reminders` and `reminder_center_popup` (`BOOLEAN NOT NULL DEFAULT 1`) on `tasks`)*
+  - `backend/app/models/reminder.py` & `backend/app/models/task.py` *(MODIFY — add `center_popup` / `reminder_center_popup` mapped booleans defaulting to `True`)*
+  - `backend/app/schemas/scheduling.py` & `backend/app/schemas/task.py` *(MODIFY — expose per-reminder center pop-up fields and `NotificationMarkReadResponse`)*
+  - `backend/app/api/v1/endpoints/scheduling.py` & `backend/app/api/v1/endpoints/tasks.py` *(MODIFY — persist per-item `center_popup`, add `POST /api/v1/notifications/mark-all-read`)*
+  - `backend/app/services/scheduler/service.py` *(MODIFY — propagate `center_popup` / `reminder_center_popup` into `NotificationEvent.urgency`)*
+  - `contracts/openapi/openapi.json` *(REGENERATE)*
+  - `frontend/flutter/packages/companion_api/lib/dto/scheduling_dto.dart`, `task_dto.dart`, & `lib/client/companion_client.dart` *(MODIFY — parity fields + `markAllNotificationsRead`)*
+  - `scripts/check_dart_openapi_parity.py` *(MODIFY — register `mark-all-read` route and `NotificationMarkReadResponse`)*
+  - `frontend/flutter/apps/desktop/windows/runner/windows_toast_channel.h` & `.cpp` *(MODIFY — add `isWindowFocused` multi-monitor Win32 foreground check + Start Menu `.lnk` provisioning + COM activation + native timezone query + chime helper)*
   - `frontend/flutter/apps/desktop/windows/runner/CMakeLists.txt` *(MODIFY — compile `windows_toast_channel.cpp`, link `runtimeobject.lib`, `shlwapi.lib`, `propsys.lib`, `ole32.lib`, & `winmm.lib`)*
   - `frontend/flutter/apps/desktop/windows/runner/flutter_window.h` *(MODIFY — own `std::unique_ptr<WindowsToastChannel>` & handle `kWmToastActivated` in `MessageHandler`)*
   - `frontend/flutter/apps/desktop/windows/runner/flutter_window.cpp` *(MODIFY — initialize `WindowsToastChannel` on `flutter_controller_->engine()->messenger()` & `GetHandle()`)*
@@ -290,3 +297,27 @@ Live Windows desktop QA on `e4491cb` confirmed timezone, 12-hour AM/PM pickers, 
 4. **First-Boot Maximized Desktop Window:**
    - **Root Cause:** `DesktopLifecycleCoordinator.initialize()` opened the desktop app at fixed `1280x800` instead of filling the user's screen on initial launch.
    - **Fix:** Add `maximize()` to `DesktopWindowAdapter` / `LiveDesktopWindowAdapter` (`windowManager.maximize()`) and enable `maximizeOnStart` in `main.dart` / `DesktopLifecycleCoordinator.initialize()` when no explicit debug test override (`--size-1024x640` or `--capture-visual-evidence`) is provided, preserving Windows titlebar, close-to-tray, and taskbar ergonomics.
+
+---
+
+## 9. Third Live-QA Revision Scope (Human-Approved on 2026-11-15 — Option A & Center Pop-Up Default ON)
+
+Live Windows desktop QA on `0c4b6c5` verified sub-5s firing, non-truncated Windows toast labels, tiered in-app alerts, and maximized boot, and surfaced four final refinements approved for implementation on `feature/m3-schedule-ui-windows-toasts-g2`:
+
+1. **Per-Reminder Center Pop-Up (`center_popup` DB Field + `urgency` Propagation, Default `True`) Replacing Global Settings Switch *(Level C — Approved)*:**
+   - **Approved Default:** Both standalone `reminders.center_popup` and task-linked `tasks.reminder_center_popup` default to **`True`** (`Center Pop-Up` enabled by default), while allowing per-item opt-out (`False` -> compact floating `Top Card`).
+   - **Backend Schema & Migration (`016_reminder_center_popup.py`):** Add `center_popup` (`BOOLEAN NOT NULL DEFAULT 1`) on `reminders` and `reminder_center_popup` (`BOOLEAN NOT NULL DEFAULT 1`) on `tasks`; update `HEAD_REVISION` assertions and add migration `016` upgrade/downgrade/default tests; expose fields on `ReminderCreate` (default `True`), `ReminderUpdate` (optional `bool`), `ReminderOut`, `TaskCreate` (default `True`), `TaskUpdate` (optional `bool`), `TaskResponse`, and `TrashTaskResponse`; emit `urgency="high"` in `SchedulerService` when `reminder.center_popup` or `task.reminder_center_popup` is `True` (and `"standard"` when `False`).
+   - **Contract & Parity Sync:** Regenerate `contracts/openapi/openapi.json` (`scripts/export_openapi.py`), update Dart `companion_api` DTOs (`scheduling_dto.dart`, `task_dto.dart`) + `CompanionClient.markAllNotificationsRead()`, register the new route/schema in `scripts/check_dart_openapi_parity.py`, and verify `check_openapi_contract.py --check` + `check_dart_openapi_parity.py --check`.
+   - **Desktop UI:** Remove `"Center Pop-Up for Reminders"` from `QuietHoursSettingsCard` (`Settings`), remove global toggle from `DesktopScheduleController`, add a **`Center Pop-Up` switch** (`"Show centered pop-up modal when due"`, defaulting `true` on create) inside Create/Edit Reminder and Create/Edit Task dialogs (`schedule_edit_dialogs.dart`, shown for Tasks when a reminder mode is selected), and route `DesktopScheduleController.usesCenterPopup(event)` cleanly via `event.sourceType == 'alarm' || event.urgency == 'high'`.
+
+2. **Click-Outside & `Escape` Dismissal for Notification Center Drawer (`DesktopShell`):**
+   - **Approved Change:** Wrap the open `NotificationBacklogDrawer` overlay with a full-workspace translucent dismiss barrier (`GestureDetector(key: Key('backlog_drawer_dismiss_barrier'), behavior: HitTestBehavior.translucent, onTap: ...)` inside `DesktopShell`) and close the drawer first on `Escape` (before hide-to-tray) and destination navigation, so tapping anywhere outside the panel closes it immediately.
+
+3. **Multi-Monitor Focus-Aware Windows OS Toast Suppression (`WindowsToastChannel` + `DesktopScheduleController`):**
+   - **Approved Change:** Expose `isWindowFocused` on `MethodChannel('ai_companion/windows_notifications')` using Win32 `::IsWindowVisible(hwnd_) && !::IsIconic(hwnd_) && (::GetForegroundWindow() == hwnd_ || ::IsChild(hwnd_, ::GetForegroundWindow()))`. Because `GetForegroundWindow()` evaluates OS focus across **all attached displays**, when AI Companion is focused on *any* screen, `_dispatchPendingToasts()` suppresses redundant Windows OS toasts for live events and plays the in-app chime once (`_toastAdapter.playAlertSound`) when sound is enabled. When unfocused, minimized, or in the tray, full native Windows OS toasts dispatch normally.
+
+4. **Option A Approved — Bell Notification Center Active Inbox + Safe `Mark All Read` + Preserved History:**
+   - **Approved Change:**
+     - **Backend Endpoint (`POST /api/v1/notifications/mark-all-read`):** Sets `read_at` across unread notification backlog rows and marks non-alarm `UNREAD_BACKLOG_STATUSES` rows (`unread`, `suppressed_quiet_hours`, `missed_catchup`) as `read`—zeroing the Bell unread counter without silencing active ringing `alarm` events or deleting notification history (while keeping `POST /api/v1/notifications/clear-all` intact at the API layer).
+     - **Bell Popup (`NotificationBacklogDrawer`):** Shows **Active Inbox** items (`bellInboxAlerts` — filtering out resolved `acknowledged` and `dismissed` events once handled), replaces `"Clear All"` with **`Mark All Read`**, and provides a **`History`** button navigating straight to `Schedule → Notifications`.
+     - **Full History (`Schedule → Notifications`):** Preserves all triggered/resolved notification events (`NotificationEvent` log) and replaces `"Clear All"` with **`Mark All Read`** in the header so history is never accidentally wiped or left seeming unresponsive.

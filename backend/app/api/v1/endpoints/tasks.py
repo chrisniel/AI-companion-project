@@ -137,6 +137,7 @@ async def create_task(
         due_date=due_date,
         reminder_minutes_before=payload.reminder_minutes_before,
         reminder_at=reminder_at,
+        reminder_center_popup=payload.reminder_center_popup,
         status=TaskStatus.pending.value,
         is_deleted=False,
         deleted_at=None,

@@ -148,6 +148,7 @@ class ReminderCreate(BaseSchema):
     scheduled_at: datetime
     timezone: str = Field(default="UTC", max_length=64)
     bypass_quiet_hours: bool = False
+    center_popup: bool = True
     origin: Literal["host", "mobile"] = "host"
 
     @field_validator("id")
@@ -175,6 +176,7 @@ class ReminderUpdate(BaseSchema):
     snoozed_until: Optional[datetime] = None
     clear_snoozed_until: bool = False
     bypass_quiet_hours: Optional[bool] = None
+    center_popup: Optional[bool] = None
 
     @field_validator("timezone")
     @classmethod
@@ -197,6 +199,7 @@ class ReminderOut(BaseSchema):
     status: ReminderStatus
     snoozed_until: Optional[datetime] = None
     bypass_quiet_hours: bool
+    center_popup: bool
     origin: str
     fired_at: Optional[datetime] = None
     acknowledged_at: Optional[datetime] = None
@@ -457,3 +460,9 @@ class NotificationClearResponse(BaseSchema):
     """Result summary after clearing active notifications."""
 
     cleared_count: int
+
+
+class NotificationMarkReadResponse(BaseSchema):
+    """Result summary after marking unread notifications read."""
+
+    updated_count: int

@@ -10,17 +10,22 @@ import 'package:ai_companion_desktop/features/schedule/desktop_schedule_controll
 import 'package:ai_companion_desktop/platform/windows_toast_adapter.dart';
 
 class _FakeToastAdapter implements DesktopToastAdapter {
-  _FakeToastAdapter({this.deviceTimezoneResponse});
+  _FakeToastAdapter({
+    this.deviceTimezoneResponse,
+    this.windowFocusedResponse = false,
+  });
 
   final StreamController<ToastActivationEvent> _controller =
       StreamController<ToastActivationEvent>.broadcast();
 
   final String? deviceTimezoneResponse;
+  bool windowFocusedResponse;
   final List<({NotificationEventOut event, bool hasLinkedTask, bool playSound})>
       shownToasts = [];
   final List<({int missedCount, List<NotificationEventOut> events})>
       shownCatchups = [];
   final List<String> removedTags = [];
+  final List<bool> playedSoundAlarms = [];
   int clearCount = 0;
   int testSoundCount = 0;
 
@@ -68,8 +73,12 @@ class _FakeToastAdapter implements DesktopToastAdapter {
   Future<String?> getDeviceTimezone() async => deviceTimezoneResponse;
 
   @override
+  Future<bool> isWindowFocused() async => windowFocusedResponse;
+
+  @override
   Future<bool> playAlertSound({bool isAlarm = false}) async {
     testSoundCount++;
+    playedSoundAlarms.add(isAlarm);
     return true;
   }
 
@@ -567,7 +576,135 @@ void main() {
       expect(toastAdapter.testSoundCount, 1);
 
       expect(controller.effectivePollInterval, const Duration(seconds: 5));
-      expect(controller.centerPopupForReminders, isTrue);
+      expect(
+        controller.usesCenterPopup(
+          const NotificationEventOut(
+            id: 'e-hi',
+            profileId: 'prof-1',
+            sourceType: 'reminder',
+            sourceId: 'r-hi',
+            urgency: 'high',
+            title: 'Important',
+            status: 'unread',
+            deliveryPolicy: 'immediate',
+            isMissedCatchup: false,
+            triggeredAt: '2026-11-15T10:00:00Z',
+            createdAt: '2026-11-15T10:00:00Z',
+            updatedAt: '2026-11-15T10:00:00Z',
+          ),
+        ),
+        isTrue,
+      );
+      expect(
+        controller.usesCenterPopup(
+          const NotificationEventOut(
+            id: 'e-std',
+            profileId: 'prof-1',
+            sourceType: 'reminder',
+            sourceId: 'r-std',
+            urgency: 'standard',
+            title: 'Light',
+            status: 'unread',
+            deliveryPolicy: 'immediate',
+            isMissedCatchup: false,
+            triggeredAt: '2026-11-15T10:00:00Z',
+            createdAt: '2026-11-15T10:00:00Z',
+            updatedAt: '2026-11-15T10:00:00Z',
+          ),
+        ),
+        isFalse,
+      );
+    });
+
+    test('suppresses Windows OS toasts and chimes once in-app when window is focused across screens, and supports markAllNotificationsRead', () async {
+      final eventsPayload = [
+        {
+          'id': 'evt-live-1',
+          'profile_id': 'prof-1',
+          'source_type': 'reminder',
+          'source_id': 'r-1',
+          'urgency': 'high',
+          'title': 'Focused Reminder',
+          'body': null,
+          'status': 'unread',
+          'delivery_policy': 'immediate',
+          'is_missed_catchup': false,
+          'triggered_at': '2026-11-15T10:00:00Z',
+          'read_at': null,
+          'resolved_at': null,
+          'created_at': '2026-11-15T10:00:00Z',
+          'updated_at': '2026-11-15T10:00:00Z',
+        },
+        {
+          'id': 'evt-ack-1',
+          'profile_id': 'prof-1',
+          'source_type': 'reminder',
+          'source_id': 'r-2',
+          'urgency': 'high',
+          'title': 'Already Handled',
+          'body': null,
+          'status': 'acknowledged',
+          'delivery_policy': 'immediate',
+          'is_missed_catchup': false,
+          'triggered_at': '2026-11-15T09:00:00Z',
+          'read_at': '2026-11-15T09:01:00Z',
+          'resolved_at': '2026-11-15T09:01:00Z',
+          'created_at': '2026-11-15T09:00:00Z',
+          'updated_at': '2026-11-15T09:01:00Z',
+        },
+      ];
+      var unreadCount = 1;
+
+      final mockClient = MockClient((req) async {
+        if (req.url.path == '/api/v1/notifications') {
+          final unreadOnly = req.url.queryParameters['unread_only'] == 'true';
+          final filtered = unreadOnly
+              ? eventsPayload.where((e) => e['status'] == 'unread').toList()
+              : eventsPayload;
+          return http.Response(
+            jsonEncode({
+              'items': filtered,
+              'total': filtered.length,
+              'unread_count': unreadCount,
+              'missed_count': 0,
+            }),
+            200,
+          );
+        }
+        if (req.url.path == '/api/v1/notifications/mark-all-read' && req.method == 'POST') {
+          eventsPayload[0] = {
+            ...eventsPayload[0],
+            'status': 'read',
+            'read_at': '2026-11-15T10:01:00Z',
+          };
+          unreadCount = 0;
+          return http.Response(jsonEncode({'updated_count': 1}), 200);
+        }
+        return http.Response(jsonEncode({'items': <dynamic>[], 'total': 0}), 200);
+      });
+
+      final client = CompanionClient(baseUrl: 'http://127.0.0.1:8000', httpClient: mockClient);
+      final toastAdapter = _FakeToastAdapter(windowFocusedResponse: true);
+      final controller = DesktopScheduleController(
+        clientProvider: () => client,
+        toastAdapter: toastAdapter,
+        profileId: 'prof-1',
+      );
+      addTearDown(controller.dispose);
+      addTearDown(client.close);
+
+      await controller.refreshAll();
+      // Focused window suppresses OS toast but plays in-app chime once
+      expect(toastAdapter.shownToasts, isEmpty);
+      expect(toastAdapter.playedSoundAlarms, [false]);
+      // Bell Active Inbox excludes acknowledged history while full history keeps both
+      expect(controller.notifications.length, 2);
+      expect(controller.bellInboxAlerts.map((e) => e.id).toList(), ['evt-live-1']);
+
+      final ok = await controller.markAllNotificationsRead();
+      expect(ok, isTrue);
+      expect(controller.unreadCount, 0);
+      expect(toastAdapter.removedTags, contains('evt-live-1'));
     });
 
     test('schedules adaptive next-due wakeup timer only while live polling is active', () async {

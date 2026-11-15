@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 import uuid
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.profile_sessions import new_profile_session
@@ -343,3 +344,85 @@ async def test_alarm_update_recomputes_schedule_and_guards_recurrence(
     assert invalid_clear.status_code == 422
     assert patched["scheduled_at"].endswith("Z") or patched["scheduled_at"].endswith("+00:00")
     assert patched["created_at"].endswith("Z") or patched["created_at"].endswith("+00:00")
+
+
+async def test_reminder_center_popup_and_mark_all_notifications_read(
+    client: AsyncClient,
+    auth_headers: dict,
+    test_session: AsyncSession,
+):
+    """Per-reminder center_popup defaults True, supports PATCH false, and mark-all-read zeroes unread while preserving alarms & history."""
+    future = (datetime.now(timezone.utc) + timedelta(hours=2)).replace(microsecond=0).isoformat()
+    create_default = await client.post(
+        "/api/v1/reminders",
+        headers=auth_headers,
+        json={"title": "Center By Default", "scheduled_at": future, "timezone": "UTC"},
+    )
+    assert create_default.status_code == 201
+    assert create_default.json()["center_popup"] is True
+
+    patched = await client.patch(
+        f"/api/v1/reminders/{create_default.json()['id']}",
+        headers=auth_headers,
+        json={"center_popup": False},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["center_popup"] is False
+
+    # Seed an active unread reminder, a missed catch-up reminder, and an active ringing alarm
+    from app.models.notification_event import NotificationEvent
+    from app.models.profile import Profile
+
+    profile_id = (await test_session.execute(select(Profile.id).where(Profile.is_default.is_(True)))).scalar_one()
+    now = datetime.now(timezone.utc)
+    rem_ev = NotificationEvent(
+        profile_id=profile_id,
+        source_type="reminder",
+        source_id=create_default.json()["id"],
+        urgency="standard",
+        title="Unread Reminder",
+        status="unread",
+        delivery_policy="immediate",
+        triggered_at=now - timedelta(seconds=10),
+    )
+    catchup_ev = NotificationEvent(
+        profile_id=profile_id,
+        source_type="routine",
+        source_id=str(uuid.uuid4()),
+        urgency="standard",
+        title="Catchup Routine",
+        status="missed_catchup",
+        delivery_policy="missed_catchup",
+        is_missed_catchup=True,
+        triggered_at=now - timedelta(minutes=20),
+    )
+    alarm_ev = NotificationEvent(
+        profile_id=profile_id,
+        source_type="alarm",
+        source_id=str(uuid.uuid4()),
+        urgency="high",
+        title="Ringing Alarm",
+        status="unread",
+        delivery_policy="immediate",
+        triggered_at=now - timedelta(seconds=5),
+    )
+    test_session.add_all([rem_ev, catchup_ev, alarm_ev])
+    await test_session.commit()
+
+    before = (await client.get("/api/v1/notifications", headers=auth_headers)).json()
+    assert before["unread_count"] == 3
+    assert before["missed_count"] == 1
+
+    marked = await client.post("/api/v1/notifications/mark-all-read", headers=auth_headers)
+    assert marked.status_code == 200
+    assert marked.json()["updated_count"] == 3
+
+    after = (await client.get("/api/v1/notifications", headers=auth_headers)).json()
+    assert after["unread_count"] == 0
+    assert after["missed_count"] == 0
+    assert after["total"] == 3
+    statuses = {item["title"]: item["status"] for item in after["items"]}
+    assert statuses["Unread Reminder"] == "read"
+    assert statuses["Catchup Routine"] == "read"
+    # Active ringing alarm remains unread until explicitly Stopped/Snoozed/Dismissed
+    assert statuses["Ringing Alarm"] == "unread"

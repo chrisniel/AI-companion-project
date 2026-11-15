@@ -190,7 +190,6 @@ class DesktopScheduleController extends ChangeNotifier {
 
   String _deviceTimezone;
   bool _alertSoundEnabled = true;
-  bool _centerPopupForReminders = true;
 
   ScheduleSection _selectedSection = ScheduleSection.tasks;
   bool _showTrashTasks = false;
@@ -234,7 +233,6 @@ class DesktopScheduleController extends ChangeNotifier {
   }
 
   bool get alertSoundEnabled => _alertSoundEnabled;
-  bool get centerPopupForReminders => _centerPopupForReminders;
   @visibleForTesting
   DateTime? get scheduledNextWakeupAt => _scheduledWakeupAt;
   @visibleForTesting
@@ -255,6 +253,17 @@ class DesktopScheduleController extends ChangeNotifier {
   List<RoutineOut> get routines => List.unmodifiable(_routines);
   List<NotificationEventOut> get notifications =>
       List.unmodifiable(_notifications);
+
+  /// Active Inbox surfaced inside the Bell Notification Center drawer.
+  ///
+  /// Excludes resolved (`acknowledged`, `dismissed`) items so the Bell remains a
+  /// clean inbox while full notification history stays preserved in
+  /// `Schedule -> Notifications`.
+  List<NotificationEventOut> get bellInboxAlerts => List.unmodifiable(
+        _notifications.where(
+          (e) => e.status != 'acknowledged' && e.status != 'dismissed',
+        ),
+      );
   int get unreadCount => _unreadCount;
   int get missedCount => _missedCount;
   QuietHoursOut get quietHours => _quietHours;
@@ -282,15 +291,7 @@ class DesktopScheduleController extends ChangeNotifier {
       event.sourceType == 'task_reminder' ||
       _reminders.any((r) => r.id == event.sourceId && r.taskId != null);
 
-  bool usesCenterPopup(NotificationEventOut event) {
-    if (isUrgentAlert(event)) return true;
-    if (_centerPopupForReminders &&
-        (event.sourceType == 'reminder' ||
-            event.sourceType == 'task_reminder')) {
-      return true;
-    }
-    return false;
-  }
+  bool usesCenterPopup(NotificationEventOut event) => isUrgentAlert(event);
 
   /// Highest-priority active unread alert designated for the centered modal.
   NotificationEventOut? get centerPopupAlert {
@@ -301,8 +302,8 @@ class DesktopScheduleController extends ChangeNotifier {
   }
 
   /// Highest-priority active unread alert designated for the compact floating
-  /// top-right notification card (routines, plus reminders when center pop-ups
-  /// for reminders are turned off).
+  /// top-right notification card (routines, plus reminders configured to show
+  /// as lightweight banners rather than center pop-ups).
   NotificationEventOut? get topBannerAlert {
     for (final alert in activeAlerts) {
       if (!usesCenterPopup(alert)) return alert;
@@ -480,12 +481,6 @@ class DesktopScheduleController extends ChangeNotifier {
   void setAlertSoundEnabled(bool enabled) {
     if (_alertSoundEnabled == enabled) return;
     _alertSoundEnabled = enabled;
-    _safeNotify();
-  }
-
-  void setCenterPopupForReminders(bool enabled) {
-    if (_centerPopupForReminders == enabled) return;
-    _centerPopupForReminders = enabled;
     _safeNotify();
   }
 
@@ -736,6 +731,23 @@ class DesktopScheduleController extends ChangeNotifier {
 
     for (final item in unseen) {
       _dispatchedToastEventIds.add(item.id);
+    }
+
+    final appFocused = await _toastAdapter.isWindowFocused();
+    if (!_isCurrentEpoch(epoch)) return;
+
+    if (appFocused) {
+      final hasLiveUnSuppressed = live.any(
+        (e) =>
+            !(e.sourceType == 'routine' &&
+                (e.deliveryPolicy == 'quiet_hours_suppressed' ||
+                    e.status == 'suppressed_quiet_hours')),
+      );
+      if (hasLiveUnSuppressed && _alertSoundEnabled) {
+        final hasLiveAlarm = live.any((e) => e.sourceType == 'alarm');
+        await _toastAdapter.playAlertSound(isAlarm: hasLiveAlarm);
+      }
+      return;
     }
 
     if (catchups.isNotEmpty) {
@@ -1086,6 +1098,21 @@ class DesktopScheduleController extends ChangeNotifier {
     final cleared = await _runMutation(() => client.clearAllNotifications());
     if (cleared == null) return false;
     await _toastAdapter.clearAllNotificationToasts();
+    await Future.wait([
+      loadNotifications(),
+      pollNotifications(),
+    ]);
+    return true;
+  }
+
+  Future<bool> markAllNotificationsRead() async {
+    final res = await _runMutation(() => client.markAllNotificationsRead());
+    if (res == null) return false;
+    for (final ev in _unreadNotifications) {
+      if (ev.sourceType != 'alarm') {
+        unawaited(_toastAdapter.removeNotificationToast(ev.id));
+      }
+    }
     await Future.wait([
       loadNotifications(),
       pollNotifications(),

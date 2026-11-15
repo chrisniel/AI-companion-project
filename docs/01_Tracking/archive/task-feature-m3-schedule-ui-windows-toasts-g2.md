@@ -22,15 +22,17 @@
 - [x] Step 4: Implement `ScheduleScreen` Option 2A workspace, `ScheduleSidebar`, `ScheduleEditDialogs`, `NotificationBacklogDrawer`, `QuietHoursSettingsCard` (`quiet_hours_card.dart`), `SettingsScreen` Quiet Hours integration, `DesktopShell` top utility strip & urgent alert banner (`DesktopShell` owns `_scheduleController` cleanly so `main.dart` needed no modification), remove `'M3'` planned badge on `schedule`, and add widget/responsive tests (`schedule_screen_test.dart`, `notification_backlog_drawer_test.dart`, `desktop_shell_test.dart`, `desktop_settings_test.dart`, `desktop_layout_responsive_test.dart`).
 - [x] Step 5: Run full Phase 2 & Post-Manual-QA Verification Gate:
   - `check_openapi_contract.py --check` (`66` routes) — passed
-  - `check_dart_openapi_parity.py --check` (`60/60` DTO schemas, `82/82` covered routes) — passed
-  - `pytest backend/tests -q` (`814 passed, 80 warnings`) — passed
-  - `companion_api` `dart test` (`+103: All tests passed!`) — passed
-  - `flutter analyze` (`No issues found!`) — passed
-  - `flutter test` (`+383: All tests passed!`) — passed
+  - `check_openapi_contract.py --check` (`67 routes`) — passed
+  - `check_dart_openapi_parity.py --check` (`61/61` DTO schemas, `83/83` covered routes) — passed
+  - `pytest backend/tests -q` (`820 passed, 80 warnings`) — passed
+  - `companion_api` `dart test` (`+104: All tests passed!`) — passed
+  - `flutter analyze --no-pub` (`No issues found!`) — passed
+  - `flutter test` (`+385: All tests passed!`) — passed
   - `flutter build windows --debug` (`ai_companion_desktop.exe`, MSVC `/W4 /WX`) — passed
   - `frontend/web` `lint`, `test -- --run --maxWorkers=2` (`16 files / 248 tests`), `build` — passed
 - [x] Post-Manual-QA Revision (Human-Approved on 2026-11-15): Implemented backend `BaseSchema` UTC serialization fix, C++ Start Menu `.lnk` + `INotificationActivationCallback` COM class factory + `PlaySoundW` sound fallback + OS timezone detection, Dart 12-hour AM/PM date/time pickers & quick chips, PC timezone default + collapsed advanced custom timezone toggle, immediate `refreshAll()` toast dispatch, Quiet Hours Alert Sound toggle + `Test Sound`, and re-verified full gate.
 - [x] Second Live-QA Revision (Human-Approved on 2026-11-15): Lowered backend `SCHEDULER_POLL_INTERVAL_SECONDS` default to `2.0s` + desktop baseline poll `5s` with adaptive `_nextDueTimer` wake-up, replaced truncated `Acknowledge` toast/in-app buttons with crisp labels (`Stop`, `Got it`, `Mark Done`), split in-app alerts into centered modal (`shell_center_alert_modal` for Alarms always and Reminders when `"Center Pop-Up for Reminders"` is enabled) vs. compact floating top-right notification card (`shell_active_alert_banner`), added `DesktopWindowAdapter.maximize()` first-boot window maximization, and re-verified full gate.
+- [x] Third Live-QA Revision (Human-Approved on 2026-11-15 — Option A & Center Pop-Up Default ON): Added Migration `016_reminder_center_popup` (`reminders.center_popup` & `tasks.reminder_center_popup`, default `True`) driving `NotificationEvent.urgency`, moved center pop-up toggles into Task & Reminder dialogs while removing the global Settings switch, added `POST /api/v1/notifications/mark-all-read` + Bell Active Inbox (`bellInboxAlerts`) + `Mark All Read` + `History` button (preserving ringing alarms & backlog history), added click-outside barrier & `Escape`/destination dismissal for `NotificationBacklogDrawer`, added Win32 `isWindowFocused` multi-monitor OS toast suppression with in-app chime fallback, synced OpenAPI (`67` routes) + `companion_api` (`61/61` DTO schemas, `83/83` routes), and re-verified full automated + MSVC Windows build gate.
 
 ## Phase 3: Documentation, Closure & Draft PR
 - [x] Sync canonical docs (`tasks-reminders-alarms-and-routines.md` including `NIT-02`, `windows-host-and-notifications.md`), master planning (`WBS.md`, `MASTER_CHECKLIST.md`, `DECISION_DEBT.md`, `DELIVERY_INDEX.md`), `docs/01_Tracking/task.md`, and `CHANGELOG.md`.

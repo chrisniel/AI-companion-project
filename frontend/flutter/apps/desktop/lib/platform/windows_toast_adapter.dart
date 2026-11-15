@@ -67,6 +67,8 @@ abstract class DesktopToastAdapter {
 
   Future<String?> getDeviceTimezone();
 
+  Future<bool> isWindowFocused();
+
   Future<bool> playAlertSound({bool isAlarm = false});
 
   void dispose() {}
@@ -103,6 +105,9 @@ class NoOpDesktopToastAdapter implements DesktopToastAdapter {
 
   @override
   Future<String?> getDeviceTimezone() async => null;
+
+  @override
+  Future<bool> isWindowFocused() async => false;
 
   @override
   Future<bool> playAlertSound({bool isAlarm = false}) async => false;
@@ -223,7 +228,7 @@ class WindowsWinRtToastAdapter implements DesktopToastAdapter {
         event.status == 'suppressed_quiet_hours';
     final isCatchup =
         event.isMissedCatchup || event.status == 'missed_catchup';
-    final isAlarm = event.sourceType == 'alarm' || event.urgency == 'high';
+    final isAlarm = event.sourceType == 'alarm';
     final isLiveAlarm = isAlarm && !isSuppressed && !isCatchup;
     final isReminder =
         event.sourceType == 'reminder' || event.sourceType == 'task_reminder';
@@ -383,9 +388,7 @@ class WindowsWinRtToastAdapter implements DesktopToastAdapter {
     final isCatchup =
         event.isMissedCatchup || event.status == 'missed_catchup';
     final isLiveAlarm =
-        (event.sourceType == 'alarm' || event.urgency == 'high') &&
-            !isSuppressed &&
-            !isCatchup;
+        event.sourceType == 'alarm' && !isSuppressed && !isCatchup;
     return _invokeBool('showToast', {
       'tag': toastTagForEvent(event.id),
       'group': defaultToastGroup,
@@ -395,6 +398,9 @@ class WindowsWinRtToastAdapter implements DesktopToastAdapter {
       'isAlarm': isLiveAlarm,
     });
   }
+
+  @override
+  Future<bool> isWindowFocused() => _invokeBool('isWindowFocused', const {});
 
   @override
   Future<String?> getDeviceTimezone() async {

@@ -57,20 +57,28 @@ M3 Batch G2 completes Milestone M3's local-first scheduling and notification use
 - `frontend/flutter/apps/desktop/lib/lifecycle/desktop_window_adapter.dart`, `live_desktop_adapters.dart`, `desktop_lifecycle_coordinator.dart`, & `main.dart`: Added `DesktopWindowAdapter.maximize()` (`windowManager.maximize()`) and `maximizeOnStart` in `DesktopLifecycleCoordinator.initialize()` enabled on standard desktop startup (omitted for explicit `--size-1024x640` / `--capture-visual-evidence` runs).
 - Tests (`frontend/flutter/apps/desktop/test/`): Expanded `windows_toast_adapter_test.dart`, `desktop_schedule_controller_test.dart`, `desktop_shell_test.dart`, `desktop_settings_test.dart`, `desktop_layout_responsive_test.dart`, and `desktop_lifecycle_test.dart` (plus mock adapters across test harnesses).
 
+### 2.6 Third Live-QA Revision (Per-Reminder Center Pop-Up, Active Bell Inbox, Click-Outside Dismissal & Focus-Aware Toast Suppression)
+
+Following third-round Windows live QA feedback and Human Owner approval of Option A and `center_popup` default ON:
+- **Migration `016_reminder_center_popup` & Per-Item Center Pop-Up (`reminders.center_popup`, `tasks.reminder_center_popup`, default `True`):** Replaced the global Settings `"Center Pop-Up for Reminders"` toggle with per-item `Center Pop-Up Alert` switches inside Create/Edit Reminder and Task dialogs (`schedule_edit_dialogs.dart`). `SchedulerService` propagates `center_popup` / `reminder_center_popup` into `NotificationEvent.urgency` (`"high"` when `True`, `"standard"` when `False`), while keeping Windows toast XML scenarios decoupled strictly on `source_type == 'alarm'`.
+- **Safe `POST /api/v1/notifications/mark-all-read` & Option A Bell Active Inbox:** Added `POST /api/v1/notifications/mark-all-read` (backend + `companion_api` + parity gate `67` routes / `61` DTO schemas / `83` covered routes) to stamp `read_at` and transition non-alarm unread/suppressed/catchup rows to `read` while preserving active ringing alarms and full notification audit history. Replaced the Bell drawer and `Schedule -> Notifications` `"Clear All"` action with `Mark All Read`, scoped the Bell drawer (`bellInboxAlerts`) to unresolved alerts only, and added a `History` button jumping straight to `Schedule -> Notifications`.
+- **Click-Outside & `Escape` Dismissal:** Added a modal dismiss barrier (`backlog_drawer_dismiss_barrier`) behind `NotificationBacklogDrawer`, prioritized `Escape` closing the drawer before hide-to-tray, and closed the drawer on navigation destination changes.
+- **Multi-Monitor Focus-Aware OS Toast Suppression:** Added Win32 `isWindowFocused` on `WindowsToastChannel` (`::IsWindowVisible && !::IsIconic && (foreground == hwnd_ || ::IsChild)` across all monitors). When the desktop app is focused, redundant Windows OS toasts are skipped while still playing the in-app alert chime once when sound is enabled.
+
 ---
 
 ## 3. Verification Evidence
 
 All automated verification checks ran after final code and test edits and passed with exit code `0`:
 
-- **OpenAPI Contract Check:** `.\backend\.venv\Scripts\python.exe scripts/check_openapi_contract.py --check` -> `OpenAPI contract is up-to-date (66 routes, all required model routes present).` (exit `0`)
-- **Dart–OpenAPI Parity Check:** `.\backend\.venv\Scripts\python.exe scripts/check_dart_openapi_parity.py --check` -> `[Verified DTO Schemas: 60/60]`, `[M1 + M2 + M3 Native Covered Routes: 82/82]`, `RESULT: ALL CONTRACT PARITY AND ROUTE COVERAGE CHECKS PASSED.` (exit `0`)
-- **Backend Full Test Suite:** `.\backend\.venv\Scripts\python.exe -m pytest backend/tests -q` -> `814 passed, 80 warnings in 456.88s (0:07:36)` (exit `0`; warnings are pre-existing aiosqlite/Starlette deprecation notices)
-- **Flutter `companion_api` Package Tests:** `dart test` in `frontend/flutter/packages/companion_api` -> `+103: All tests passed!` (exit `0`)
-- **Flutter Static Analysis:** `flutter analyze` in `frontend/flutter` -> `No issues found! (ran in 8.1s)` (exit `0`)
-- **Flutter Desktop Test Suite:** `flutter test` in `frontend/flutter/apps/desktop` -> `02:02 +383: All tests passed!` (exit `0`)
-- **Windows Native C++ Debug Build (MSVC `/W4 /WX`):** `flutter build windows --debug` in `frontend/flutter/apps/desktop` -> `√ Built build\windows\x64\runner\Debug\ai_companion_desktop.exe` (exit `0`; `19.1s`)
-- **Web Frontend Lint, Tests & Build:** `npm --prefix frontend/web run lint && npm --prefix frontend/web run build` (`✓ built in 11.04s`, exit `0`) and `npm --prefix frontend/web test -- --run --maxWorkers=2` (`Test Files 16 passed (16), Tests 248 passed (248)`, exit `0`)
+- **OpenAPI Contract Check:** `.\backend\.venv\Scripts\python.exe scripts/check_openapi_contract.py --check` -> `OpenAPI contract is up-to-date (67 routes, all required model routes present).` (exit `0`)
+- **Dart–OpenAPI Parity Check:** `.\backend\.venv\Scripts\python.exe scripts/check_dart_openapi_parity.py --check` -> `[Verified DTO Schemas: 61/61]`, `[M1 + M2 + M3 Native Covered Routes: 83/83]`, `RESULT: ALL CONTRACT PARITY AND ROUTE COVERAGE CHECKS PASSED.` (exit `0`)
+- **Backend Full Test Suite:** `.\backend\.venv\Scripts\python.exe -m pytest backend/tests -q` -> `820 passed, 80 warnings in 440.18s (0:07:20)` (exit `0`; warnings are pre-existing aiosqlite/Starlette deprecation notices)
+- **Flutter `companion_api` Package Tests:** `dart test` in `frontend/flutter/packages/companion_api` -> `+104: All tests passed!` (exit `0`)
+- **Flutter Static Analysis:** `flutter analyze --no-pub` in `frontend/flutter/apps/desktop` -> `No issues found! (ran in 5.0s)` (exit `0`)
+- **Flutter Desktop Test Suite:** `flutter test` in `frontend/flutter/apps/desktop` -> `+385: All tests passed!` (exit `0`)
+- **Windows Native C++ Debug Build (MSVC `/W4 /WX`):** `flutter build windows --debug` in `frontend/flutter/apps/desktop` -> `√ Built build\windows\x64\runner\Debug\ai_companion_desktop.exe` (exit `0`; `27.0s`)
+- **Web Frontend Lint, Tests & Build:** `npm --prefix frontend/web run lint && npm --prefix frontend/web run build` (`✓ built in 5.73s`, exit `0`) and `npm --prefix frontend/web test -- --run --maxWorkers=2` (`Test Files 16 passed (16), Tests 248 passed (248)`, exit `0`)
 
 ---
 
@@ -80,10 +88,10 @@ Because automated headless widget tests cannot interact with the live Windows 10
 
 - First-boot maximized desktop window launch (while retaining native Windows close-to-tray, maximize/restore toggle, and taskbar icon ergonomics).
 - Sub-5s triggering accuracy (~2s–4s from due time) for upcoming Alarms, Reminders, and Routines without manual refresh.
-- Visual layout, 12-hour AM/PM date/time pickers + quick chips, UTC/local round-trip consistency across Create -> Display -> Edit (no `-8h` shift), and CRUD verification across all 5 `ScheduleScreen` sections (`Tasks` + `Trash` restore/permanent delete, `Reminders`, `Alarms` (`Stop` / `Snooze 10m` / `Dismiss`) + recurrence, `Routines` `[ Run Now ]`, `Notifications` backlog history) at maximized & narrow widths.
-- `SettingsScreen` Quiet Hours 12-hour time pickers, PC timezone default (and optional `"Custom timezone (advanced)"` override), Alert Sound mute switch + `"Test Sound"` button, `"Center Pop-Up for Reminders"` selectable toggle, save persistence, and `422` validation UX.
-- `DesktopShell` tiered in-app alerts (`shell_center_alert_modal` centered modal for ringing Alarms + Reminders when enabled; compact floating top-right `shell_active_alert_banner` card for Routines or non-modal Reminders), top utility strip Bell badge updates, and slide-out `NotificationBacklogDrawer` actions.
-- Live Windows 10/11 Action Center toast presentation + chime sound playback, non-truncated interactive toast buttons (`Stop`, `Got it`, `Mark Done`, `Open Chat`, `Snooze 10m`, `Dismiss`, `Review Backlog`) from BOTH floating popups and the right-side Windows Notification Center (`Win+N`) restoring the desktop window, two-way Action Center toast removal when acted on inside the app, Quiet Hours `suppressPopup` silence, and Sleep Catch-up summary grouping.
+- Visual layout, 12-hour AM/PM date/time pickers + quick chips, UTC/local round-trip consistency across Create -> Display -> Edit (no `-8h` shift), per-item `Center Pop-Up Alert` switches (default ON) in Task & Reminder dialogs, and CRUD verification across all 5 `ScheduleScreen` sections (`Tasks` + `Trash` restore/permanent delete, `Reminders`, `Alarms` (`Stop` / `Snooze 10m` / `Dismiss`) + recurrence, `Routines` `[ Run Now ]`, `Notifications` backlog history + `Mark All Read`) at maximized & narrow widths.
+- `SettingsScreen` Quiet Hours 12-hour time pickers, PC timezone default (and optional `"Custom timezone (advanced)"` override), Alert Sound mute switch + `"Test Sound"` button, save persistence, and `422` validation UX.
+- `DesktopShell` tiered in-app alerts (`shell_center_alert_modal` centered modal for ringing Alarms + Reminders with per-item `Center Pop-Up Alert` ON; compact floating top-right `shell_active_alert_banner` card for Routines or Reminders with `Center Pop-Up Alert` OFF), top utility strip Bell badge updates, click-outside & `Escape` dismissal of `NotificationBacklogDrawer`, Active Inbox showing unresolved alerts only, `Mark All Read` clearing badge without silencing ringing alarms or deleting history, and `History` jumping to `Schedule -> Notifications`.
+- Multi-monitor focus-aware Windows toast suppression: when the desktop app is focused on any monitor, due alerts play the in-app chime without spawning redundant OS toasts; when minimized/tray/unfocused, live Windows 10/11 Action Center toasts appear with chime sound, non-truncated interactive buttons (`Stop`, `Got it`, `Mark Done`, `Open Chat`, `Snooze 10m`, `Dismiss`, `Review Backlog`) from BOTH floating popups and the right-side Windows Notification Center (`Win+N`) restoring the desktop window, two-way Action Center toast removal when acted on inside the app, Quiet Hours `suppressPopup` silence, and Sleep Catch-up summary grouping.
 
 ---
 

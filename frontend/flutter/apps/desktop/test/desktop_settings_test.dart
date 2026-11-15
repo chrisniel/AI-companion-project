@@ -617,7 +617,8 @@ void main() {
         expect(find.text('6:30 AM'), findsOneWidget);
         expect(find.text('Asia/Manila'), findsOneWidget);
         expect(find.byKey(const Key('alert_sound_enabled_switch')), findsOneWidget);
-        expect(find.byKey(const Key('center_popup_reminders_switch')), findsOneWidget);
+        expect(find.byKey(const Key('alert_sound_enabled_switch')), findsOneWidget);
+        expect(find.byKey(const Key('center_popup_reminders_switch')), findsNothing);
         expect(find.byKey(const Key('test_alert_sound_button')), findsOneWidget);
 
         // Toggle alert sound switch updates controller setting
@@ -628,15 +629,6 @@ void main() {
         await tester.tap(soundSwitchFinder);
         await tester.pump();
         expect(schedCtrl.alertSoundEnabled, isFalse);
-
-        // Toggle center popup reminders switch updates controller setting
-        final centerPopupSwitchFinder =
-            find.byKey(const Key('center_popup_reminders_switch'));
-        await tester.ensureVisible(centerPopupSwitchFinder);
-        await tester.pumpAndSettle();
-        await tester.tap(centerPopupSwitchFinder);
-        await tester.pump();
-        expect(schedCtrl.centerPopupForReminders, isFalse);
 
         // Toggle quiet hours switch off and save (200)
         final switchFinder = find.byKey(const Key('quiet_hours_enabled_switch'));

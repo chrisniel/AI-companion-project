@@ -481,9 +481,36 @@ void main() {
       (tester) async {
         setupViewport(tester);
         Map<String, dynamic>? postedTask;
+        Map<String, dynamic>? postedReminder;
         Map<String, dynamic>? postedAlarm;
 
         final mockClient = MockClient((req) async {
+          if (req.method == 'POST' && req.url.path == '/api/v1/reminders') {
+            postedReminder =
+                Map<String, dynamic>.from(jsonDecode(req.body) as Map);
+            return http.Response(
+              jsonEncode({
+                'id': 'rem-q1',
+                'profile_id': 'prof-1',
+                'task_id': null,
+                'title': postedReminder!['title'],
+                'notes': null,
+                'scheduled_at': postedReminder!['scheduled_at'],
+                'timezone': postedReminder!['timezone'] ?? 'UTC',
+                'status': 'scheduled',
+                'snoozed_until': null,
+                'bypass_quiet_hours':
+                    postedReminder!['bypass_quiet_hours'] ?? false,
+                'center_popup': postedReminder!['center_popup'] ?? true,
+                'origin': 'host',
+                'fired_at': null,
+                'acknowledged_at': null,
+                'created_at': '2026-11-15T10:00:00Z',
+                'updated_at': '2026-11-15T10:00:00Z',
+              }),
+              201,
+            );
+          }
           if (req.method == 'POST' && req.url.path == '/api/v1/tasks') {
             postedTask = Map<String, dynamic>.from(jsonDecode(req.body) as Map);
             return http.Response(
@@ -513,7 +540,7 @@ void main() {
                 'id': 'alarm-q1',
                 'profile_id': 'prof-1',
                 'label': postedAlarm!['label'],
-                'scheduled_at': null,
+                'scheduled_at': '2026-11-16T05:00:00Z',
                 'time_of_day': postedAlarm!['time_of_day'],
                 'recurrence_days': postedAlarm!['recurrence_days'] ?? [0, 1, 2, 3, 4],
                 'timezone': postedAlarm!['timezone'],
@@ -569,6 +596,7 @@ void main() {
         await tester.pump();
         await tester.tap(find.text('15m before'));
         await tester.pump();
+        expect(find.byKey(const Key('task_dialog_center_popup_switch')), findsOneWidget);
         await tester.tap(find.byKey(const Key('task_dialog_save_button')));
         await tester.pumpAndSettle();
 
@@ -576,6 +604,7 @@ void main() {
         expect(postedTask!['due_date'], isNotNull);
         expect(postedTask!['due_date'] as String, endsWith('Z'));
         expect(postedTask!['reminder_minutes_before'], 15);
+        expect(postedTask!['reminder_center_popup'], isTrue);
 
         // Switch to Alarms and create Alarm with 12h 9:00 PM preset + PC timezone
         await tester.tap(find.byKey(const Key('schedule_nav_alarms')));
@@ -598,6 +627,36 @@ void main() {
         expect(postedAlarm, isNotNull);
         expect(postedAlarm!['time_of_day'], '21:00');
         expect(postedAlarm!['timezone'], controller.deviceTimezone);
+
+        // Switch to Reminders and create a Reminder opting out of Center Pop-Up
+        await tester.tap(find.byKey(const Key('schedule_nav_reminders')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('schedule_create_button')));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('reminder_dialog_title_field')),
+          'Gentle Check',
+        );
+        final remCenterSwitch =
+            find.byKey(const Key('reminder_dialog_center_popup_switch'));
+        expect(remCenterSwitch, findsOneWidget);
+        await tester.drag(
+          find.byType(SingleChildScrollView).last,
+          const Offset(0, -300),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.descendant(
+            of: remCenterSwitch,
+            matching: find.byType(Switch),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('reminder_dialog_save_button')));
+        await tester.pumpAndSettle();
+
+        expect(postedReminder, isNotNull);
+        expect(postedReminder!['center_popup'], isFalse);
       },
     );
   });
