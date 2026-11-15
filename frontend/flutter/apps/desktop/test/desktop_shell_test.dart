@@ -4,6 +4,7 @@ import 'package:ai_companion_desktop/controllers/desktop_settings_controller.dar
 import 'package:ai_companion_desktop/features/chat/desktop_chat_controller.dart';
 import 'package:ai_companion_desktop/features/schedule/desktop_schedule_controller.dart';
 import 'package:ai_companion_desktop/features/studio/desktop_studio_controller.dart';
+import 'package:ai_companion_desktop/lifecycle/desktop_lifecycle_coordinator.dart';
 import 'package:ai_companion_desktop/platform/windows_toast_adapter.dart';
 import 'package:ai_companion_desktop/shell/desktop_shell.dart';
 import 'package:companion_api/companion_api.dart';
@@ -617,5 +618,133 @@ void main() {
         expect(schedCtrl.selectedSection, ScheduleSection.notifications);
       },
     );
+
+    testWidgets(
+      'displays (+1 more) on top banner when two non-modal alerts are active and restores coordinator on toast navigation',
+      (tester) async {
+        setupDesktopViewport(tester);
+
+        final mockClient = MockClient((req) async {
+          if (req.url.path == '/api/v1/notifications') {
+            return http.Response(
+              jsonEncode({
+                'items': [
+                  {
+                    'id': 'evt-routine-1',
+                    'profile_id': 'prof-1',
+                    'source_type': 'routine',
+                    'source_id': 'rt-1',
+                    'urgency': 'standard',
+                    'title': 'Hydration Check',
+                    'body': 'Drink water',
+                    'status': 'unread',
+                    'delivery_policy': 'immediate',
+                    'is_missed_catchup': false,
+                    'triggered_at': '2026-11-15T10:00:00Z',
+                    'read_at': null,
+                    'resolved_at': null,
+                    'created_at': '2026-11-15T10:00:00Z',
+                    'updated_at': '2026-11-15T10:00:00Z',
+                  },
+                  {
+                    'id': 'evt-routine-2',
+                    'profile_id': 'prof-1',
+                    'source_type': 'routine',
+                    'source_id': 'rt-2',
+                    'urgency': 'standard',
+                    'title': 'Posture Check',
+                    'body': 'Stretch shoulders',
+                    'status': 'unread',
+                    'delivery_policy': 'immediate',
+                    'is_missed_catchup': false,
+                    'triggered_at': '2026-11-15T09:55:00Z',
+                    'read_at': null,
+                    'resolved_at': null,
+                    'created_at': '2026-11-15T09:55:00Z',
+                    'updated_at': '2026-11-15T09:55:00Z',
+                  },
+                ],
+                'total': 2,
+                'unread_count': 2,
+                'missed_count': 0,
+              }),
+              200,
+            );
+          }
+          if (req.url.path == '/api/v1/profiles/me/quiet-hours') {
+            return http.Response(
+              jsonEncode({
+                'quiet_hours_enabled': false,
+                'quiet_hours_start': '22:00',
+                'quiet_hours_end': '07:00',
+                'quiet_hours_timezone': 'UTC',
+              }),
+              200,
+            );
+          }
+          return http.Response(
+            jsonEncode({'items': <dynamic>[], 'total': 0}),
+            200,
+          );
+        });
+
+        final client = CompanionClient(
+          baseUrl: 'http://127.0.0.1:8000',
+          httpClient: mockClient,
+        );
+        final schedCtrl = DesktopScheduleController(
+          client: client,
+          toastAdapter: NoOpDesktopToastAdapter(),
+          profileId: 'prof-1',
+        );
+        final recordingCoordinator = _RecordingCoordinator();
+        addTearDown(schedCtrl.dispose);
+        addTearDown(client.close);
+        await schedCtrl.refreshAll();
+
+        final settingsController = DesktopSettingsController(
+          initialDestination: DesktopNavDestination.settings,
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: CompanionTheme.dark(),
+            home: DesktopShell(
+              controller: settingsController,
+              scheduleController: schedCtrl,
+              coordinator: recordingCoordinator,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('(+1 more)'), findsOneWidget);
+        expect(find.text('(+2)'), findsNothing);
+
+        schedCtrl.onNavigateRequested?.call(ToastNavigationTarget.chat);
+        await tester.pumpAndSettle();
+
+        expect(recordingCoordinator.restoreCalls, 1);
+        expect(
+          settingsController.currentDestination,
+          DesktopNavDestination.chat,
+        );
+      },
+    );
   });
+}
+
+class _RecordingCoordinator extends Fake implements DesktopLifecycleCoordinator {
+  int restoreCalls = 0;
+
+  @override
+  bool get isTrayAvailable => false;
+
+  @override
+  set onExitMenuTriggered(Future<void> Function()? callback) {}
+
+  @override
+  Future<void> restoreAndFocusWindow() async {
+    restoreCalls++;
+  }
 }

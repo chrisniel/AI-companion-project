@@ -102,6 +102,7 @@ class ScheduleEditDialogs {
     var category = existing?.category ?? 'general';
     var reminderCenterPopup = existing?.reminderCenterPopup ?? true;
     String? validationError;
+    var isSubmitting = false;
 
     await showDialog<void>(
       context: context,
@@ -342,90 +343,102 @@ class ScheduleEditDialogs {
             ),
             FilledButton(
               key: const Key('task_dialog_save_button'),
-              onPressed: () async {
-                final title = titleCtrl.text.trim();
-                if (title.isEmpty) {
-                  setModalState(() => validationError = 'Title is required.');
-                  return;
-                }
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      final title = titleCtrl.text.trim();
+                      if (title.isEmpty) {
+                        setModalState(
+                          () => validationError = 'Title is required.',
+                        );
+                        return;
+                      }
 
-                int? minutesBefore;
-                DateTime? reminderDt;
-                switch (reminderMode) {
-                  case _TaskReminderMode.none:
-                    break;
-                  case _TaskReminderMode.atDue:
-                    minutesBefore = 0;
-                  case _TaskReminderMode.min15:
-                    minutesBefore = 15;
-                  case _TaskReminderMode.hour1:
-                    minutesBefore = 60;
-                  case _TaskReminderMode.custom:
-                    if (customReminderLocal == null) {
-                      setModalState(
-                        () => validationError =
-                            'Pick a custom reminder date and time.',
-                      );
-                      return;
-                    }
-                    reminderDt = customReminderLocal;
-                }
+                      int? minutesBefore;
+                      DateTime? reminderDt;
+                      switch (reminderMode) {
+                        case _TaskReminderMode.none:
+                          break;
+                        case _TaskReminderMode.atDue:
+                          minutesBefore = 0;
+                        case _TaskReminderMode.min15:
+                          minutesBefore = 15;
+                        case _TaskReminderMode.hour1:
+                          minutesBefore = 60;
+                        case _TaskReminderMode.custom:
+                          if (customReminderLocal == null) {
+                            setModalState(
+                              () => validationError =
+                                  'Pick a custom reminder date and time.',
+                            );
+                            return;
+                          }
+                          reminderDt = customReminderLocal;
+                      }
 
-                if (minutesBefore != null && dueLocal == null) {
-                  setModalState(
-                    () => validationError =
-                        'Set a Due Date first, or pick Custom reminder time.',
-                  );
-                  return;
-                }
+                      if (minutesBefore != null && dueLocal == null) {
+                        setModalState(
+                          () => validationError =
+                              'Set a Due Date first, or pick Custom reminder time.',
+                        );
+                        return;
+                      }
 
-                final notes = notesCtrl.text.trim();
-                final dueIso = dueLocal?.toUtc().toIso8601String();
-                final remIso = reminderDt?.toUtc().toIso8601String();
-                final ok = existing == null
-                    ? await controller.createTask(
-                        TaskCreate(
-                          title: title,
-                          notes: notes.isEmpty ? null : notes,
-                          category: category,
-                          priority: priority,
-                          dueDate: dueIso,
-                          reminderMinutesBefore: minutesBefore,
-                          reminderAt: remIso,
-                          reminderCenterPopup: reminderCenterPopup,
-                        ),
-                      )
-                    : await controller.updateTask(
-                        existing.id,
-                        TaskUpdate(
-                          title: title,
-                          notes: notes.isEmpty ? null : notes,
-                          category: category,
-                          priority: priority,
-                          dueDate: dueIso,
-                          reminderMinutesBefore: minutesBefore,
-                          reminderAt: remIso,
-                          reminderCenterPopup: reminderCenterPopup,
-                        ),
-                        clearNotes: notes.isEmpty && existing.notes != null,
-                        clearDueDate:
-                            dueIso == null && existing.dueDate != null,
-                        clearReminderMinutesBefore: minutesBefore == null &&
-                            existing.reminderMinutesBefore != null,
-                        clearReminderAt: remIso == null &&
-                            minutesBefore == null &&
-                            existing.reminderAt != null,
-                      );
-                if (!ctx.mounted) return;
-                if (ok) {
-                  Navigator.of(ctx).pop();
-                } else {
-                  setModalState(
-                    () => validationError =
-                        controller.errorMessage ?? 'Unable to save task.',
-                  );
-                }
-              },
+                      setModalState(() {
+                        isSubmitting = true;
+                        validationError = null;
+                      });
+
+                      final notes = notesCtrl.text.trim();
+                      final dueIso = dueLocal?.toUtc().toIso8601String();
+                      final remIso = reminderDt?.toUtc().toIso8601String();
+                      final ok = existing == null
+                          ? await controller.createTask(
+                              TaskCreate(
+                                title: title,
+                                notes: notes.isEmpty ? null : notes,
+                                category: category,
+                                priority: priority,
+                                dueDate: dueIso,
+                                reminderMinutesBefore: minutesBefore,
+                                reminderAt: remIso,
+                                reminderCenterPopup: reminderCenterPopup,
+                              ),
+                            )
+                          : await controller.updateTask(
+                              existing.id,
+                              TaskUpdate(
+                                title: title,
+                                notes: notes.isEmpty ? null : notes,
+                                category: category,
+                                priority: priority,
+                                dueDate: dueIso,
+                                reminderMinutesBefore: minutesBefore,
+                                reminderAt: remIso,
+                                reminderCenterPopup: reminderCenterPopup,
+                              ),
+                              clearNotes:
+                                  notes.isEmpty && existing.notes != null,
+                              clearDueDate:
+                                  dueIso == null && existing.dueDate != null,
+                              clearReminderMinutesBefore:
+                                  minutesBefore == null &&
+                                      existing.reminderMinutesBefore != null,
+                              clearReminderAt: remIso == null &&
+                                  minutesBefore == null &&
+                                  existing.reminderAt != null,
+                            );
+                      if (!ctx.mounted) return;
+                      if (ok) {
+                        Navigator.of(ctx).pop();
+                      } else {
+                        setModalState(() {
+                          isSubmitting = false;
+                          validationError =
+                              controller.errorMessage ?? 'Unable to save task.';
+                        });
+                      }
+                    },
               child: Text(existing == null ? 'Create Task' : 'Save Changes'),
             ),
           ],
@@ -454,6 +467,7 @@ class ScheduleEditDialogs {
     var bypassQuietHours = existing?.bypassQuietHours ?? false;
     var centerPopup = existing?.centerPopup ?? true;
     String? validationError;
+    var isSubmitting = false;
 
     await showDialog<void>(
       context: context,
@@ -582,47 +596,57 @@ class ScheduleEditDialogs {
             ),
             FilledButton(
               key: const Key('reminder_dialog_save_button'),
-              onPressed: () async {
-                final title = titleCtrl.text.trim();
-                if (title.isEmpty) {
-                  setModalState(() => validationError = 'Title is required.');
-                  return;
-                }
-                final notes = notesCtrl.text.trim();
-                final utcIso = scheduledLocal.toUtc().toIso8601String();
-                final ok = existing == null
-                    ? await controller.createReminder(
-                        ReminderCreate(
-                          title: title,
-                          notes: notes.isEmpty ? null : notes,
-                          scheduledAt: utcIso,
-                          timezone: timezone,
-                          bypassQuietHours: bypassQuietHours,
-                          centerPopup: centerPopup,
-                        ),
-                      )
-                    : await controller.updateReminder(
-                        existing.id,
-                        ReminderUpdate(
-                          title: title,
-                          notes: notes.isEmpty ? null : notes,
-                          clearNotes: notes.isEmpty && existing.notes != null,
-                          scheduledAt: utcIso,
-                          timezone: timezone,
-                          bypassQuietHours: bypassQuietHours,
-                          centerPopup: centerPopup,
-                        ),
-                      );
-                if (!ctx.mounted) return;
-                if (ok) {
-                  Navigator.of(ctx).pop();
-                } else {
-                  setModalState(
-                    () => validationError =
-                        controller.errorMessage ?? 'Unable to save reminder.',
-                  );
-                }
-              },
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      final title = titleCtrl.text.trim();
+                      if (title.isEmpty) {
+                        setModalState(
+                          () => validationError = 'Title is required.',
+                        );
+                        return;
+                      }
+                      setModalState(() {
+                        isSubmitting = true;
+                        validationError = null;
+                      });
+                      final notes = notesCtrl.text.trim();
+                      final utcIso = scheduledLocal.toUtc().toIso8601String();
+                      final ok = existing == null
+                          ? await controller.createReminder(
+                              ReminderCreate(
+                                title: title,
+                                notes: notes.isEmpty ? null : notes,
+                                scheduledAt: utcIso,
+                                timezone: timezone,
+                                bypassQuietHours: bypassQuietHours,
+                                centerPopup: centerPopup,
+                              ),
+                            )
+                          : await controller.updateReminder(
+                              existing.id,
+                              ReminderUpdate(
+                                title: title,
+                                notes: notes.isEmpty ? null : notes,
+                                clearNotes:
+                                    notes.isEmpty && existing.notes != null,
+                                scheduledAt: utcIso,
+                                timezone: timezone,
+                                bypassQuietHours: bypassQuietHours,
+                                centerPopup: centerPopup,
+                              ),
+                            );
+                      if (!ctx.mounted) return;
+                      if (ok) {
+                        Navigator.of(ctx).pop();
+                      } else {
+                        setModalState(() {
+                          isSubmitting = false;
+                          validationError = controller.errorMessage ??
+                              'Unable to save reminder.';
+                        });
+                      }
+                    },
               child: Text(existing == null ? 'Create Reminder' : 'Save Changes'),
             ),
           ],
@@ -658,6 +682,7 @@ class ScheduleEditDialogs {
         existing != null && existing.timezone != deviceTz;
     var bypassQuietHours = existing?.bypassQuietHours ?? true;
     String? validationError;
+    var isSubmitting = false;
 
     await showDialog<void>(
       context: context,
@@ -880,75 +905,84 @@ class ScheduleEditDialogs {
             ),
             FilledButton(
               key: const Key('alarm_dialog_save_button'),
-              onPressed: () async {
-                final label = labelCtrl.text.trim();
-                if (label.isEmpty) {
-                  setModalState(
-                    () => validationError = 'Alarm label is required.',
-                  );
-                  return;
-                }
-                List<int>? sortedDays;
-                String? hhmm;
-                String? oneShotIso;
-                if (isRecurring) {
-                  if (selectedDays.isEmpty) {
-                    setModalState(
-                      () => validationError = 'Select at least one weekday.',
-                    );
-                    return;
-                  }
-                  hhmm = _toWireHhMm(recurringTime);
-                  sortedDays = selectedDays.toList()..sort();
-                } else {
-                  oneShotIso = oneShotLocal.toUtc().toIso8601String();
-                }
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      final label = labelCtrl.text.trim();
+                      if (label.isEmpty) {
+                        setModalState(
+                          () => validationError = 'Alarm label is required.',
+                        );
+                        return;
+                      }
+                      List<int>? sortedDays;
+                      String? hhmm;
+                      String? oneShotIso;
+                      if (isRecurring) {
+                        if (selectedDays.isEmpty) {
+                          setModalState(
+                            () =>
+                                validationError = 'Select at least one weekday.',
+                          );
+                          return;
+                        }
+                        hhmm = _toWireHhMm(recurringTime);
+                        sortedDays = selectedDays.toList()..sort();
+                      } else {
+                        oneShotIso = oneShotLocal.toUtc().toIso8601String();
+                      }
 
-                final bool shouldRearm = existing != null &&
-                    (existing.status == 'ringing' ||
-                        existing.status == 'snoozed' ||
-                        existing.status == 'missed');
+                      setModalState(() {
+                        isSubmitting = true;
+                        validationError = null;
+                      });
 
-                final ok = existing == null
-                    ? await controller.createAlarm(
-                        AlarmCreate(
-                          label: label,
-                          scheduledAt: oneShotIso,
-                          timeOfDay: hhmm,
-                          recurrenceDays: sortedDays,
-                          timezone: timezone,
-                          enabled: true,
-                          bypassQuietHours: bypassQuietHours,
-                        ),
-                      )
-                    : await controller.updateAlarm(
-                        existing.id,
-                        AlarmUpdate(
-                          label: label,
-                          scheduledAt: isRecurring ? null : oneShotIso,
-                          timeOfDay: isRecurring ? hhmm : null,
-                          clearTimeOfDay:
-                              !isRecurring && existing.timeOfDay != null,
-                          recurrenceDays: isRecurring ? sortedDays : null,
-                          clearRecurrenceDays:
-                              !isRecurring && existing.recurrenceDays.isNotEmpty,
-                          timezone: timezone,
-                          enabled: true,
-                          status: shouldRearm ? 'armed' : null,
-                          clearSnoozedUntil: shouldRearm,
-                          bypassQuietHours: bypassQuietHours,
-                        ),
-                      );
-                if (!ctx.mounted) return;
-                if (ok) {
-                  Navigator.of(ctx).pop();
-                } else {
-                  setModalState(
-                    () => validationError =
-                        controller.errorMessage ?? 'Unable to save alarm.',
-                  );
-                }
-              },
+                      final bool shouldRearm = existing != null &&
+                          (existing.status == 'ringing' ||
+                              existing.status == 'snoozed' ||
+                              existing.status == 'missed');
+
+                      final ok = existing == null
+                          ? await controller.createAlarm(
+                              AlarmCreate(
+                                label: label,
+                                scheduledAt: oneShotIso,
+                                timeOfDay: hhmm,
+                                recurrenceDays: sortedDays,
+                                timezone: timezone,
+                                enabled: true,
+                                bypassQuietHours: bypassQuietHours,
+                              ),
+                            )
+                          : await controller.updateAlarm(
+                              existing.id,
+                              AlarmUpdate(
+                                label: label,
+                                scheduledAt: isRecurring ? null : oneShotIso,
+                                timeOfDay: isRecurring ? hhmm : null,
+                                clearTimeOfDay:
+                                    !isRecurring && existing.timeOfDay != null,
+                                recurrenceDays: isRecurring ? sortedDays : null,
+                                clearRecurrenceDays: !isRecurring &&
+                                    existing.recurrenceDays.isNotEmpty,
+                                timezone: timezone,
+                                enabled: shouldRearm ? true : existing.enabled,
+                                status: shouldRearm ? 'armed' : null,
+                                clearSnoozedUntil: shouldRearm,
+                                bypassQuietHours: bypassQuietHours,
+                              ),
+                            );
+                      if (!ctx.mounted) return;
+                      if (ok) {
+                        Navigator.of(ctx).pop();
+                      } else {
+                        setModalState(() {
+                          isSubmitting = false;
+                          validationError =
+                              controller.errorMessage ?? 'Unable to save alarm.';
+                        });
+                      }
+                    },
               child: Text(existing == null ? 'Create Alarm' : 'Save Changes'),
             ),
           ],
@@ -979,6 +1013,7 @@ class ScheduleEditDialogs {
         existing != null && existing.timezone != deviceTz;
     var bypassQuietHours = existing?.bypassQuietHours ?? false;
     String? validationError;
+    var isSubmitting = false;
 
     await showDialog<void>(
       context: context,
@@ -1143,53 +1178,60 @@ class ScheduleEditDialogs {
             ),
             FilledButton(
               key: const Key('routine_dialog_save_button'),
-              onPressed: () async {
-                final title = titleCtrl.text.trim();
-                final fallback = fallbackCtrl.text.trim();
-                if (title.isEmpty || fallback.isEmpty) {
-                  setModalState(
-                    () => validationError =
-                        'Title and deterministic check-in message are required.',
-                  );
-                  return;
-                }
-                final days = selectedDays.toList()..sort();
-                final hhmm = _toWireHhMm(routineTime);
-                final ok = existing == null
-                    ? await controller.createRoutine(
-                        RoutineCreate(
-                          title: title,
-                          fallbackMessage: fallback,
-                          timeOfDay: hhmm,
-                          recurrenceDays: days.isEmpty ? null : days,
-                          timezone: timezone,
-                          enabled: true,
-                          bypassQuietHours: bypassQuietHours,
-                        ),
-                      )
-                    : await controller.updateRoutine(
-                        existing.id,
-                        RoutineUpdate(
-                          title: title,
-                          fallbackMessage: fallback,
-                          timeOfDay: hhmm,
-                          recurrenceDays: days.isEmpty ? null : days,
-                          clearRecurrenceDays:
-                              days.isEmpty && existing.recurrenceDays.isNotEmpty,
-                          timezone: timezone,
-                          bypassQuietHours: bypassQuietHours,
-                        ),
-                      );
-                if (!ctx.mounted) return;
-                if (ok) {
-                  Navigator.of(ctx).pop();
-                } else {
-                  setModalState(
-                    () => validationError =
-                        controller.errorMessage ?? 'Unable to save routine.',
-                  );
-                }
-              },
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      final title = titleCtrl.text.trim();
+                      final fallback = fallbackCtrl.text.trim();
+                      if (title.isEmpty || fallback.isEmpty) {
+                        setModalState(
+                          () => validationError =
+                              'Title and deterministic check-in message are required.',
+                        );
+                        return;
+                      }
+                      setModalState(() {
+                        isSubmitting = true;
+                        validationError = null;
+                      });
+                      final days = selectedDays.toList()..sort();
+                      final hhmm = _toWireHhMm(routineTime);
+                      final ok = existing == null
+                          ? await controller.createRoutine(
+                              RoutineCreate(
+                                title: title,
+                                fallbackMessage: fallback,
+                                timeOfDay: hhmm,
+                                recurrenceDays: days.isEmpty ? null : days,
+                                timezone: timezone,
+                                enabled: true,
+                                bypassQuietHours: bypassQuietHours,
+                              ),
+                            )
+                          : await controller.updateRoutine(
+                              existing.id,
+                              RoutineUpdate(
+                                title: title,
+                                fallbackMessage: fallback,
+                                timeOfDay: hhmm,
+                                recurrenceDays: days.isEmpty ? null : days,
+                                clearRecurrenceDays: days.isEmpty &&
+                                    existing.recurrenceDays.isNotEmpty,
+                                timezone: timezone,
+                                bypassQuietHours: bypassQuietHours,
+                              ),
+                            );
+                      if (!ctx.mounted) return;
+                      if (ok) {
+                        Navigator.of(ctx).pop();
+                      } else {
+                        setModalState(() {
+                          isSubmitting = false;
+                          validationError = controller.errorMessage ??
+                              'Unable to save routine.';
+                        });
+                      }
+                    },
               child: Text(existing == null ? 'Create Routine' : 'Save Changes'),
             ),
           ],

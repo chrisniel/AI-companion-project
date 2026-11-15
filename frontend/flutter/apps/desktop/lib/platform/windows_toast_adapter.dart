@@ -63,6 +63,8 @@ abstract class DesktopToastAdapter {
 
   Future<bool> removeNotificationToast(String eventId);
 
+  Future<bool> removeMissedCatchupSummaryToast();
+
   Future<bool> clearAllNotificationToasts();
 
   Future<String?> getDeviceTimezone();
@@ -99,6 +101,9 @@ class NoOpDesktopToastAdapter implements DesktopToastAdapter {
 
   @override
   Future<bool> removeNotificationToast(String eventId) async => false;
+
+  @override
+  Future<bool> removeMissedCatchupSummaryToast() async => false;
 
   @override
   Future<bool> clearAllNotificationToasts() async => false;
@@ -440,6 +445,8 @@ class WindowsWinRtToastAdapter implements DesktopToastAdapter {
         events: events,
       ),
       'suppressPopup': false,
+      'playSound': false,
+      'isAlarm': false,
     });
   }
 
@@ -447,6 +454,14 @@ class WindowsWinRtToastAdapter implements DesktopToastAdapter {
   Future<bool> removeNotificationToast(String eventId) {
     return _invokeBool('removeToast', {
       'tag': toastTagForEvent(eventId),
+      'group': defaultToastGroup,
+    });
+  }
+
+  @override
+  Future<bool> removeMissedCatchupSummaryToast() {
+    return _invokeBool('removeToast', {
+      'tag': catchupSummaryTag,
       'group': defaultToastGroup,
     });
   }

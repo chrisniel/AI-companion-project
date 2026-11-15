@@ -25,6 +25,7 @@ class _FakeToastAdapter implements DesktopToastAdapter {
   final List<({int missedCount, List<NotificationEventOut> events})>
       shownCatchups = [];
   final List<String> removedTags = [];
+  int removedCatchupSummaryCount = 0;
   final List<bool> playedSoundAlarms = [];
   int clearCount = 0;
   int testSoundCount = 0;
@@ -60,6 +61,12 @@ class _FakeToastAdapter implements DesktopToastAdapter {
   @override
   Future<bool> removeNotificationToast(String eventId) async {
     removedTags.add(eventId);
+    return true;
+  }
+
+  @override
+  Future<bool> removeMissedCatchupSummaryToast() async {
+    removedCatchupSummaryCount++;
     return true;
   }
 
@@ -763,6 +770,182 @@ void main() {
 
       controller.stopPolling();
       expect(controller.scheduledNextWakeupAt, isNull);
+    });
+
+    test('discards stale in-flight poll responses after mutation and clears activeAlerts on deleteAlarm', () async {
+      final slowPollCompleter = Completer<void>();
+      var pollCallCount = 0;
+      var unreadAlarmPresent = true;
+
+      final alarmEventJson = {
+        'id': 'evt-race-1',
+        'profile_id': 'prof-1',
+        'source_type': 'alarm',
+        'source_id': 'alarm-race-1',
+        'urgency': 'high',
+        'title': 'Race Alarm',
+        'body': null,
+        'status': 'unread',
+        'delivery_policy': 'immediate',
+        'is_missed_catchup': false,
+        'triggered_at': '2026-11-15T10:00:00Z',
+        'read_at': null,
+        'resolved_at': null,
+        'created_at': '2026-11-15T10:00:00Z',
+        'updated_at': '2026-11-15T10:00:00Z',
+      };
+
+      final mockClient = MockClient((req) async {
+        if (req.url.path == '/api/v1/notifications') {
+          pollCallCount++;
+          if (pollCallCount == 1) {
+            await slowPollCompleter.future;
+            return http.Response(
+              jsonEncode({
+                'items': [alarmEventJson],
+                'total': 1,
+                'unread_count': 1,
+                'missed_count': 0,
+              }),
+              200,
+            );
+          }
+          final items = unreadAlarmPresent ? [alarmEventJson] : <dynamic>[];
+          return http.Response(
+            jsonEncode({
+              'items': items,
+              'total': items.length,
+              'unread_count': items.length,
+              'missed_count': 0,
+            }),
+            200,
+          );
+        }
+        if (req.url.path == '/api/v1/alarms/alarm-race-1' && req.method == 'DELETE') {
+          unreadAlarmPresent = false;
+          return http.Response('', 204);
+        }
+        return http.Response(jsonEncode({'items': <dynamic>[], 'total': 0}), 200);
+      });
+
+      final client = CompanionClient(baseUrl: 'http://127.0.0.1:8000', httpClient: mockClient);
+      final toastAdapter = _FakeToastAdapter();
+      final controller = DesktopScheduleController(
+        clientProvider: () => client,
+        toastAdapter: toastAdapter,
+        profileId: 'prof-1',
+      );
+      addTearDown(controller.dispose);
+      addTearDown(client.close);
+
+      // Start an in-flight poll that will lag behind a deleteAlarm mutation.
+      final stalePollFuture = controller.pollNotifications();
+      await Future<void>.delayed(Duration.zero);
+
+      final deleted = await controller.deleteAlarm('alarm-race-1');
+      expect(deleted, isTrue);
+      expect(controller.activeAlerts, isEmpty);
+
+      // Now let the pre-mutation poll complete; it must be discarded.
+      slowPollCompleter.complete();
+      await stalePollFuture;
+
+      expect(controller.activeAlerts, isEmpty);
+      expect(controller.unreadCount, 0);
+      expect(toastAdapter.shownToasts, isEmpty);
+    });
+
+    test('removes catch-up summary toast when markAllNotificationsRead clears non-alarm catchups and ignores cancelled task wakeups', () async {
+      final catchupReminder = {
+        'id': 'evt-catchup-rem',
+        'profile_id': 'prof-1',
+        'source_type': 'reminder',
+        'source_id': 'r-catch-1',
+        'urgency': 'normal',
+        'title': 'Missed Reminder',
+        'body': null,
+        'status': 'missed_catchup',
+        'delivery_policy': 'immediate',
+        'is_missed_catchup': true,
+        'triggered_at': '2026-11-15T08:00:00Z',
+        'read_at': null,
+        'resolved_at': null,
+        'created_at': '2026-11-15T08:00:00Z',
+        'updated_at': '2026-11-15T08:00:00Z',
+      };
+      var catchupActive = true;
+      final soonCancelledAt = DateTime.now().toUtc().add(const Duration(seconds: 20));
+
+      final mockClient = MockClient((req) async {
+        if (req.url.path == '/api/v1/tasks') {
+          return http.Response(
+            jsonEncode({
+              'items': [
+                {
+                  'id': 'task-cancelled-1',
+                  'owner_id': 'prof-1',
+                  'title': 'Cancelled Task',
+                  'notes': null,
+                  'category': 'general',
+                  'priority': 'medium',
+                  'status': 'cancelled',
+                  'due_date': null,
+                  'reminder_minutes_before': null,
+                  'reminder_at': soonCancelledAt.toIso8601String(),
+                  'reminder_center_popup': true,
+                  'completed_at': null,
+                  'is_deleted': false,
+                  'deleted_at': null,
+                  'created_at': '2026-11-15T08:00:00Z',
+                  'updated_at': '2026-11-15T08:00:00Z',
+                },
+              ],
+              'total': 1,
+            }),
+            200,
+          );
+        }
+        if (req.url.path == '/api/v1/notifications') {
+          final items = catchupActive ? [catchupReminder] : <dynamic>[];
+          return http.Response(
+            jsonEncode({
+              'items': items,
+              'total': items.length,
+              'unread_count': items.length,
+              'missed_count': items.length,
+            }),
+            200,
+          );
+        }
+        if (req.url.path == '/api/v1/notifications/mark-all-read' && req.method == 'POST') {
+          catchupActive = false;
+          return http.Response(jsonEncode({'updated_count': 1}), 200);
+        }
+        return http.Response(jsonEncode({'items': <dynamic>[], 'total': 0}), 200);
+      });
+
+      final client = CompanionClient(baseUrl: 'http://127.0.0.1:8000', httpClient: mockClient);
+      final toastAdapter = _FakeToastAdapter();
+      final controller = DesktopScheduleController(
+        clientProvider: () => client,
+        toastAdapter: toastAdapter,
+        profileId: 'prof-1',
+      );
+      addTearDown(controller.dispose);
+      addTearDown(client.close);
+
+      await controller.refreshAll();
+      controller.startPolling();
+      expect(controller.scheduledNextWakeupAt, isNull);
+      expect(
+        toastAdapter.shownCatchups.map((c) => c.missedCount).toList(),
+        [1],
+      );
+
+      final ok = await controller.markAllNotificationsRead();
+      expect(ok, isTrue);
+      expect(toastAdapter.removedCatchupSummaryCount, greaterThanOrEqualTo(1));
+      controller.stopPolling();
     });
   });
 }

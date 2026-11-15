@@ -299,7 +299,43 @@ void main() {
       final ok = await adapter.showNotificationToast(_makeEvent());
       expect(ok, isFalse);
       expect(await adapter.removeNotificationToast('evt-1'), isFalse);
+      expect(await adapter.removeMissedCatchupSummaryToast(), isFalse);
       expect(await adapter.clearAllNotificationToasts(), isFalse);
+    });
+
+    test('showMissedCatchupSummaryToast suppresses sound/alarm and removeMissedCatchupSummaryToast targets catchup tag', () async {
+      final calls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        return true;
+      });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+      });
+
+      final adapter = WindowsWinRtToastAdapter(isWindowsOverride: true);
+      addTearDown(adapter.dispose);
+
+      final shown = await adapter.showMissedCatchupSummaryToast(
+        missedCount: 2,
+        events: [_makeEvent(id: 'catchup-1', isMissedCatchup: true)],
+      );
+      expect(shown, isTrue);
+      final showArgs = Map<String, dynamic>.from(calls[0].arguments as Map);
+      expect(showArgs['tag'], WindowsWinRtToastAdapter.catchupSummaryTag);
+      expect(showArgs['group'], WindowsWinRtToastAdapter.defaultToastGroup);
+      expect(showArgs['suppressPopup'], isFalse);
+      expect(showArgs['playSound'], isFalse);
+      expect(showArgs['isAlarm'], isFalse);
+
+      final removed = await adapter.removeMissedCatchupSummaryToast();
+      expect(removed, isTrue);
+      expect(calls[1].method, 'removeToast');
+      final removeArgs = Map<String, dynamic>.from(calls[1].arguments as Map);
+      expect(removeArgs['tag'], WindowsWinRtToastAdapter.catchupSummaryTag);
+      expect(removeArgs['group'], WindowsWinRtToastAdapter.defaultToastGroup);
     });
   });
 }

@@ -105,8 +105,8 @@ When implemented for PC V1, the remaining Windows host infrastructure will provi
 
 1. **Task Scheduler Autostart at User Login (`PC-HOST-002`):** Dual startup of Local AI Runtime and Flutter Desktop (minimized to system tray) at user login via Windows Task Scheduler, respecting intentional-exit suppression.
 2. **Self-Contained Windows Installer & Bundled Runtime (`PC-HOST-006` / `DEBT-V1-09`):** Bundled private Python execution environment, dependencies, Flutter Desktop, and native inference binaries (`AI Companion.exe`, `AI Companion Runtime.exe`, `AI Companion Inference.exe`) with transparent Task Manager visibility and zero console windows.
-5. **Runtime Durable Turn Queue (`ADR-0019` / `PC-API-004`):** Server-side turn queue persisting request processing across client disconnects.
-6. **Resilient Scheduling & Wake Catch-up:** Persistent `SchedulerService` requesting OS timer wake for scheduled alarms and reconciling missed events upon wake.
+3. **Runtime Durable Turn Queue (`ADR-0019` / `PC-API-004`):** Server-side turn queue persisting request processing across client disconnects.
+4. **Resilient Scheduling & Wake Catch-up:** Persistent `SchedulerService` requesting OS timer wake for scheduled alarms and reconciling missed events upon wake.
 
 ---
 
@@ -114,7 +114,7 @@ When implemented for PC V1, the remaining Windows host infrastructure will provi
 
 Detailed implementation choices for future planning are tracked in [`docs/02_Planning/00_Master/DECISION_DEBT.md`](../../02_Planning/00_Master/DECISION_DEBT.md):
 
-- **Toast Interaction Actions (`[RESOLVED IN M3 BATCH G2]`):** Native Action Center toast actions (`Mark Done`, `Acknowledge`, `Snooze 10m`, `Dismiss`, `Open Chat`, `Review Backlog`) and bidirectional history removal are implemented in `WindowsToastChannel` and `DesktopScheduleController`.
+- **Toast Interaction Actions (`[RESOLVED IN M3 BATCH G2]`):** Native Action Center toast actions (`Mark Done`, `Got it`, `Stop`, `Snooze 10m`, `Dismiss`, `Open Chat`, `Review Backlog`) and bidirectional history removal are implemented in `WindowsToastChannel` and `DesktopScheduleController`.
 - **Wake Timer API Binding:** Evaluation of Windows kernel waitable timers (`CreateWaitableTimerExW` with `TIMER_ALL_ACCESS`) vs. power request APIs remains open for future host enhancement.
 - **Notification Catch-up Aggregation Algorithm:** Sleep Catch-up consolidated summary toast and backlog banner are implemented in M3 Batch G2; advanced multi-day priority-clustering heuristics remain open enhancement.
 - **Pause Companion Mechanism:** Detailed state machine for pausing proactive/optional AI routines while keeping essential alarms active.

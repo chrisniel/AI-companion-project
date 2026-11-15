@@ -42,6 +42,9 @@ class _TrackingToastAdapter implements DesktopToastAdapter {
   }
 
   @override
+  Future<bool> removeMissedCatchupSummaryToast() async => true;
+
+  @override
   Future<bool> clearAllNotificationToasts() async {
     clearCalls++;
     return true;

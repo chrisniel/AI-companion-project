@@ -3,8 +3,8 @@
 > **Delivery Branch:** `feature/m3-schedule-ui-windows-toasts-g2`
 > **Implementation Plan:** [`plan-m3-schedule-ui-windows-toasts-g2.md`](../../02_Planning/01_Plans/plan-m3-schedule-ui-windows-toasts-g2.md)
 > **Walkthrough:** [`walkthrough-m3-batch-g2-schedule-ui-windows-toasts.md`](../../03_Walkthroughs/walkthrough-m3-batch-g2-schedule-ui-windows-toasts.md)
-> **Delivery Level:** Level B — Planned Autonomous
-> **Status:** Phase 2 Implemented & Verified; Phase 3 Closure Prepared (Ready for Phase 4 Independent Review & Human Manual Acceptance)
+> **Delivery Level:** Level C — Sensitive Design (initially planned Level B; elevated upon Human-Approved Migration `016` schema/urgency change)
+> **Status:** Phase 2 Implemented & Verified; Phase 3 Closure Prepared (Phase 4 Independent Review Remediation Applied; Ready for Final Merge Decision & Manual Windows QA)
 
 ---
 
@@ -19,15 +19,14 @@
 - [x] Step 1: Fold in Batch G1 review finding `NIT-01` in `backend/app/api/v1/endpoints/scheduling.py` (`update_alarm`) with regression tests in `backend/tests/test_scheduling_api.py`.
 - [x] Step 2: Implement native C++/WRL WinRT `WindowsToastChannel` (`windows_toast_channel.h/.cpp` in `windows/runner/`, `flutter_window.h/.cpp`, `main.cpp`, `CMakeLists.txt`, `MethodChannel('ai_companion/windows_notifications')`) & Dart `DesktopToastAdapter` / `WindowsWinRtToastAdapter` (`windows_toast_adapter.dart`) with unit tests (`windows_toast_adapter_test.dart`).
 - [x] Step 3: Implement profile-scoped `DesktopScheduleController` (`desktop_schedule_controller.dart`) with interactive toast callback routing, Action Center history sync, and polling/catch-up/dedup unit tests (`desktop_schedule_controller_test.dart`).
-- [x] Step 4: Implement `ScheduleScreen` Option 2A workspace, `ScheduleSidebar`, `ScheduleEditDialogs`, `NotificationBacklogDrawer`, `QuietHoursSettingsCard` (`quiet_hours_card.dart`), `SettingsScreen` Quiet Hours integration, `DesktopShell` top utility strip & urgent alert banner (`DesktopShell` owns `_scheduleController` cleanly so `main.dart` needed no modification), remove `'M3'` planned badge on `schedule`, and add widget/responsive tests (`schedule_screen_test.dart`, `notification_backlog_drawer_test.dart`, `desktop_shell_test.dart`, `desktop_settings_test.dart`, `desktop_layout_responsive_test.dart`).
+- [x] Step 4: Implement `ScheduleScreen` Option 2A workspace, `ScheduleSidebar`, `ScheduleEditDialogs`, `NotificationBacklogDrawer`, `QuietHoursSettingsCard` (`quiet_hours_card.dart`), `SettingsScreen` Quiet Hours integration, `DesktopShell` top utility strip & urgent alert banner (`DesktopShell` owns `_scheduleController` cleanly when `chatController` is present), remove `'M3'` planned badge on `schedule`, and add widget/responsive tests (`schedule_screen_test.dart`, `notification_backlog_drawer_test.dart`, `desktop_shell_test.dart`, `desktop_settings_test.dart`, `desktop_layout_responsive_test.dart`).
 - [x] Step 5: Run full Phase 2 & Post-Manual-QA Verification Gate:
-  - `check_openapi_contract.py --check` (`66` routes) — passed
-  - `check_openapi_contract.py --check` (`67 routes`) — passed
+  - `check_openapi_contract.py --check` (`67` routes) — passed
   - `check_dart_openapi_parity.py --check` (`61/61` DTO schemas, `83/83` covered routes) — passed
   - `pytest backend/tests -q` (`820 passed, 80 warnings`) — passed
   - `companion_api` `dart test` (`+104: All tests passed!`) — passed
-  - `flutter analyze --no-pub` (`No issues found!`) — passed
-  - `flutter test` (`+385: All tests passed!`) — passed
+  - `flutter analyze --no-pub` / `dart analyze .` (`No issues found!`) — passed
+  - `flutter test --concurrency=1` (`+390: All tests passed!`) — passed
   - `flutter build windows --debug` (`ai_companion_desktop.exe`, MSVC `/W4 /WX`) — passed
   - `frontend/web` `lint`, `test -- --run --maxWorkers=2` (`16 files / 248 tests`), `build` — passed
 - [x] Post-Manual-QA Revision (Human-Approved on 2026-11-15): Implemented backend `BaseSchema` UTC serialization fix, C++ Start Menu `.lnk` + `INotificationActivationCallback` COM class factory + `PlaySoundW` sound fallback + OS timezone detection, Dart 12-hour AM/PM date/time pickers & quick chips, PC timezone default + collapsed advanced custom timezone toggle, immediate `refreshAll()` toast dispatch, Quiet Hours Alert Sound toggle + `Test Sound`, and re-verified full gate.

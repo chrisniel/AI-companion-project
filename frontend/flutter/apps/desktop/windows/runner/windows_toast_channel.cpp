@@ -873,6 +873,8 @@ void WindowsToastChannel::HandleToastActivatedMessage(WPARAM /*wparam*/,
   if (should_focus && hwnd_ != nullptr && ::IsWindow(hwnd_)) {
     if (::IsIconic(hwnd_)) {
       ::ShowWindow(hwnd_, SW_RESTORE);
+    } else if (!::IsWindowVisible(hwnd_)) {
+      ::ShowWindow(hwnd_, SW_SHOW);
     }
     ::SetForegroundWindow(hwnd_);
   }

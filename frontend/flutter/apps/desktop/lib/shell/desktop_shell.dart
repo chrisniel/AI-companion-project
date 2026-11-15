@@ -268,6 +268,9 @@ class _DesktopShellState extends State<DesktopShell> {
 
   void _handleToastNavigation(ToastNavigationTarget target) {
     if (!mounted) return;
+    unawaited(
+      widget.coordinator?.restoreAndFocusWindow() ?? Future<void>.value(),
+    );
     switch (target) {
       case ToastNavigationTarget.chat:
         widget.controller.requestDestination(DesktopNavDestination.chat);
@@ -347,6 +350,9 @@ class _DesktopShellState extends State<DesktopShell> {
     }
     if (_ownsScheduleController) {
       _scheduleController?.dispose();
+    } else if (_scheduleController?.onNavigateRequested ==
+        _handleToastNavigation) {
+      _scheduleController?.onNavigateRequested = null;
     }
     if (_ownsToastAdapter) {
       _toastAdapter?.dispose();
@@ -837,7 +843,7 @@ class _DesktopShellState extends State<DesktopShell> {
                           if (nonModalCount > 1) ...[
                             const SizedBox(width: CompanionSpacing.xs),
                             Text(
-                              '(+$nonModalCount)',
+                              '(+${nonModalCount - 1} more)',
                               style: CompanionTypography.caption.copyWith(
                                 color: ext?.textMuted,
                               ),

@@ -1,5 +1,6 @@
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
+#include <roapi.h>
 #include <shobjidl.h>
 #include <windows.h>
 
@@ -14,9 +15,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     CreateAndAttachConsole();
   }
 
-  // Initialize COM, so that it is available for use in the library and/or
-  // plugins.
-  ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+  // Initialize Windows Runtime (which also initializes a COM STA apartment)
+  // so both Shell/Win32 plugins and WRL WinRT toast calls share a valid apartment.
+  const HRESULT ro_hr = ::RoInitialize(RO_INIT_SINGLETHREADED);
+  bool co_initialized_fallback = false;
+  if (FAILED(ro_hr) && ro_hr != RPC_E_CHANGED_MODE) {
+    co_initialized_fallback =
+        SUCCEEDED(::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED));
+  }
   ::SetCurrentProcessExplicitAppUserModelID(L"AICompanion.Desktop");
 
   flutter::DartProject project(L"data");
@@ -30,6 +36,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
   if (!window.Create(L"AI Companion", origin, size)) {
+    if (SUCCEEDED(ro_hr)) {
+      ::RoUninitialize();
+    } else if (co_initialized_fallback) {
+      ::CoUninitialize();
+    }
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);
@@ -40,6 +51,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     ::DispatchMessage(&msg);
   }
 
-  ::CoUninitialize();
+  if (SUCCEEDED(ro_hr)) {
+    ::RoUninitialize();
+  } else if (co_initialized_fallback) {
+    ::CoUninitialize();
+  }
   return EXIT_SUCCESS;
 }

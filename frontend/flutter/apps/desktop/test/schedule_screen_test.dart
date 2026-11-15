@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:ai_companion_desktop/features/schedule/desktop_schedule_controller.dart';
@@ -332,7 +333,7 @@ void main() {
         await tester.tap(find.byKey(const Key('schedule_nav_alarms')));
         await tester.pumpAndSettle();
         expect(find.text('Morning Wakeup'), findsOneWidget);
-        expect(find.textContaining('6:30 AM'), findsOneWidget);
+        expect(find.textContaining('6:30 AM · Mon–Fri (UTC)'), findsOneWidget);
         expect(find.text('BYPASS QUIET'), findsOneWidget);
         await tester.tap(find.byKey(const Key('alarm_ack_button_alarm-1')));
         await tester.pumpAndSettle();
@@ -342,7 +343,7 @@ void main() {
         await tester.tap(find.byKey(const Key('schedule_nav_routines')));
         await tester.pumpAndSettle();
         expect(find.text('Evening Check-in'), findsOneWidget);
-        expect(find.textContaining('8:00 PM'), findsOneWidget);
+        expect(find.textContaining('8:00 PM · Daily (UTC)'), findsOneWidget);
         expect(find.text('How did today go?'), findsOneWidget);
         await tester.tap(find.byKey(const Key('routine_run_now_rout-1')));
         await tester.pumpAndSettle();
@@ -657,6 +658,176 @@ void main() {
 
         expect(postedReminder, isNotNull);
         expect(postedReminder!['center_popup'], isFalse);
+      },
+    );
+
+    testWidgets(
+      'editing a disabled alarm preserves enabled: false and Save guards duplicate submits',
+      (tester) async {
+        setupViewport(tester);
+        Map<String, dynamic>? patchedAlarm;
+        var postTaskCount = 0;
+        final taskPostCompleter = Completer<void>();
+
+        final mockClient = MockClient((req) async {
+          if (req.method == 'GET' && req.url.path == '/api/v1/alarms') {
+            return http.Response(
+              jsonEncode({
+                'items': [
+                  {
+                    'id': 'alarm-disabled-1',
+                    'profile_id': 'prof-1',
+                    'label': 'Paused Morning Alarm',
+                    'scheduled_at': '2026-11-16T07:30:00Z',
+                    'time_of_day': '07:30',
+                    'recurrence_days': [0, 1, 2, 3, 4],
+                    'timezone': 'UTC',
+                    'enabled': false,
+                    'status': 'disabled',
+                    'snoozed_until': null,
+                    'bypass_quiet_hours': true,
+                    'origin': 'host',
+                    'last_fired_at': null,
+                    'acknowledged_at': null,
+                    'created_at': '2026-11-15T06:00:00Z',
+                    'updated_at': '2026-11-15T06:00:00Z',
+                  },
+                ],
+                'total': 1,
+              }),
+              200,
+            );
+          }
+          if (req.method == 'PATCH' &&
+              req.url.path == '/api/v1/alarms/alarm-disabled-1') {
+            patchedAlarm =
+                Map<String, dynamic>.from(jsonDecode(req.body) as Map);
+            return http.Response(
+              jsonEncode({
+                'id': 'alarm-disabled-1',
+                'profile_id': 'prof-1',
+                'label': patchedAlarm!['label'] ?? 'Paused Morning Alarm',
+                'scheduled_at': '2026-11-16T07:30:00Z',
+                'time_of_day': '07:30',
+                'recurrence_days': [0, 1, 2, 3, 4],
+                'timezone': 'UTC',
+                'enabled': patchedAlarm!['enabled'] ?? false,
+                'status': 'disabled',
+                'snoozed_until': null,
+                'bypass_quiet_hours': true,
+                'origin': 'host',
+                'last_fired_at': null,
+                'acknowledged_at': null,
+                'created_at': '2026-11-15T06:00:00Z',
+                'updated_at': '2026-11-15T06:01:00Z',
+              }),
+              200,
+            );
+          }
+          if (req.method == 'POST' && req.url.path == '/api/v1/tasks') {
+            postTaskCount++;
+            await taskPostCompleter.future;
+            final body = Map<String, dynamic>.from(jsonDecode(req.body) as Map);
+            return http.Response(
+              jsonEncode({
+                'id': 'task-dup-1',
+                'owner_id': 'prof-1',
+                'title': body['title'],
+                'notes': null,
+                'category': 'general',
+                'priority': 'medium',
+                'status': 'pending',
+                'due_date': null,
+                'reminder_minutes_before': null,
+                'reminder_at': null,
+                'reminder_center_popup': true,
+                'completed_at': null,
+                'is_deleted': false,
+                'deleted_at': null,
+                'created_at': '2026-11-15T06:01:00Z',
+                'updated_at': '2026-11-15T06:01:00Z',
+              }),
+              201,
+            );
+          }
+          if (req.url.path == '/api/v1/profiles/me/quiet-hours') {
+            return http.Response(
+              jsonEncode({
+                'quiet_hours_enabled': false,
+                'quiet_hours_start': '22:00',
+                'quiet_hours_end': '07:00',
+                'quiet_hours_timezone': 'UTC',
+              }),
+              200,
+            );
+          }
+          if (req.url.path == '/api/v1/notifications') {
+            return http.Response(
+              jsonEncode({
+                'items': <dynamic>[],
+                'total': 0,
+                'unread_count': 0,
+                'missed_count': 0,
+              }),
+              200,
+            );
+          }
+          return http.Response(
+            jsonEncode({'items': <dynamic>[], 'total': 0}),
+            200,
+          );
+        });
+
+        final client = CompanionClient(
+          baseUrl: 'http://127.0.0.1:8000',
+          httpClient: mockClient,
+        );
+        final controller = DesktopScheduleController(
+          client: client,
+          toastAdapter: NoOpDesktopToastAdapter(),
+          profileId: 'prof-1',
+        );
+        addTearDown(controller.dispose);
+        addTearDown(client.close);
+        await controller.refreshAll();
+        expect(controller.alarms.length, 1);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: CompanionTheme.dark(),
+            home: Scaffold(body: ScheduleScreen(controller: controller)),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Edit disabled alarm and save -> enabled must stay false
+        await tester.tap(find.byKey(const Key('schedule_nav_alarms')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Edit').first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('alarm_dialog_save_button')));
+        await tester.pumpAndSettle();
+
+        expect(patchedAlarm, isNotNull);
+        expect(patchedAlarm!['enabled'], isFalse);
+
+        // Double-tap Save on New Task while request is in flight -> only 1 POST
+        await tester.tap(find.byKey(const Key('schedule_nav_tasks')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('schedule_create_button')));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('task_dialog_title_field')),
+          'Single Submit',
+        );
+        await tester.tap(find.byKey(const Key('task_dialog_save_button')));
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('task_dialog_save_button')));
+        await tester.pump();
+
+        expect(postTaskCount, 1);
+        taskPostCompleter.complete();
+        await tester.pumpAndSettle();
       },
     );
   });

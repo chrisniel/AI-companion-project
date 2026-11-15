@@ -186,6 +186,8 @@ class DesktopScheduleController extends ChangeNotifier {
   String? _profileId;
   bool _isConnected;
   int _scopeEpoch = 0;
+  int _pollGeneration = 0;
+  int _activePollCount = 0;
   bool _disposed = false;
 
   String _deviceTimezone;
@@ -196,7 +198,7 @@ class DesktopScheduleController extends ChangeNotifier {
   bool _unreadOnlyFilter = false;
   bool _isLoading = false;
   bool _isMutating = false;
-  bool _isPolling = false;
+  bool get _isPolling => _activePollCount > 0;
   String? _errorMessage;
 
   List<TaskResponse> _tasks = const [];
@@ -377,6 +379,7 @@ class DesktopScheduleController extends ChangeNotifier {
   }
 
   void _clearInMemoryState() {
+    _pollGeneration++;
     _errorMessage = null;
     _tasks = const [];
     _trashTasks = const [];
@@ -442,6 +445,7 @@ class DesktopScheduleController extends ChangeNotifier {
     for (final task in _tasks) {
       if (!task.isDeleted &&
           task.status != 'completed' &&
+          task.status != 'cancelled' &&
           task.reminderAt != null) {
         considerUtcIso(task.reminderAt);
       }
@@ -628,14 +632,46 @@ class DesktopScheduleController extends ChangeNotifier {
   }
 
   Future<void> _loadNotificationsInternal(int epoch) async {
+    final pollGen = _pollGeneration;
     final res = await client.listNotifications(
       unreadOnly: _unreadOnlyFilter,
       limit: 50,
     );
-    if (!_isCurrentEpoch(epoch)) return;
+    if (!_isCurrentEpoch(epoch) || pollGen != _pollGeneration) return;
     _notifications = res.items;
     _unreadCount = res.unreadCount;
     _missedCount = res.missedCount;
+    if (_unreadOnlyFilter) {
+      _unreadNotifications = res.items;
+    } else {
+      _reconcileUnreadNotifications(res.items);
+    }
+  }
+
+  void _reconcileUnreadNotifications(List<NotificationEventOut> freshItems) {
+    if (_unreadNotifications.isEmpty) return;
+    const resolvedStatuses = <String>{
+      'read',
+      'acknowledged',
+      'dismissed',
+      'snoozed',
+    };
+    final byId = <String, NotificationEventOut>{
+      for (final item in freshItems) item.id: item,
+    };
+    final reconciled = <NotificationEventOut>[];
+    for (final existing in _unreadNotifications) {
+      final updated = byId[existing.id];
+      if (updated == null) {
+        if (freshItems.length < 50 || _unreadCount == 0) {
+          continue;
+        }
+        reconciled.add(existing);
+      } else if (!resolvedStatuses.contains(updated.status)) {
+        reconciled.add(updated);
+      }
+    }
+    _unreadNotifications = reconciled;
   }
 
   Future<void> loadQuietHours() async {
@@ -661,13 +697,14 @@ class DesktopScheduleController extends ChangeNotifier {
   /// Polls `unread_only=true` notifications so historical resolved entries
   /// never crowd out active or missed catch-up alerts, and dispatches native
   /// Windows Action Center toasts once per unseen event per session.
-  Future<void> pollNotifications() async {
-    if (!_hasActiveScope || _isPolling) return;
-    _isPolling = true;
+  Future<void> pollNotifications({bool force = false}) async {
+    if (!_hasActiveScope || (!force && _isPolling)) return;
     final epoch = _scopeEpoch;
+    final pollGen = _pollGeneration;
+    _activePollCount++;
     try {
       final res = await client.listNotifications(unreadOnly: true, limit: 50);
-      if (!_isCurrentEpoch(epoch)) return;
+      if (!_isCurrentEpoch(epoch) || pollGen != _pollGeneration) return;
 
       _unreadNotifications = res.items;
       _unreadCount = res.unreadCount;
@@ -680,13 +717,13 @@ class DesktopScheduleController extends ChangeNotifier {
       }
 
       await _dispatchPendingToasts(res.items, epoch);
-      if (_isCurrentEpoch(epoch)) {
+      if (_isCurrentEpoch(epoch) && pollGen == _pollGeneration) {
         _safeNotify();
       }
     } catch (e) {
       debugPrint('DesktopScheduleController.pollNotifications failed: $e');
     } finally {
-      _isPolling = false;
+      _activePollCount = _activePollCount > 0 ? _activePollCount - 1 : 0;
     }
   }
 
@@ -783,7 +820,11 @@ class DesktopScheduleController extends ChangeNotifier {
     _safeNotify();
     try {
       final res = await op();
-      return _isCurrentEpoch(epoch) ? res : null;
+      if (!_isCurrentEpoch(epoch)) return null;
+      if (res != null) {
+        _pollGeneration++;
+      }
+      return res;
     } catch (e) {
       if (_isCurrentEpoch(epoch)) {
         _errorMessage = _formatError(e);
@@ -794,6 +835,31 @@ class DesktopScheduleController extends ChangeNotifier {
         _isMutating = false;
         _safeNotify();
       }
+    }
+  }
+
+  bool get _hasUnreadCatchup => _unreadNotifications.any(
+        (e) => e.isMissedCatchup || e.status == 'missed_catchup',
+      );
+
+  Future<void> _refreshAfterAlertMutation({
+    bool includeTasks = false,
+    bool includeReminders = false,
+    bool includeAlarms = false,
+    bool includeRoutines = false,
+  }) async {
+    final hadCatchup = _hasUnreadCatchup;
+    final refreshes = <Future<void>>[
+      loadNotifications(),
+      pollNotifications(force: true),
+      if (includeTasks) loadTasks(),
+      if (includeReminders) loadReminders(),
+      if (includeAlarms) loadAlarms(),
+      if (includeRoutines) loadRoutines(),
+    ];
+    await Future.wait(refreshes);
+    if (hadCatchup && !_hasUnreadCatchup) {
+      unawaited(_toastAdapter.removeMissedCatchupSummaryToast());
     }
   }
 
@@ -827,7 +893,10 @@ class DesktopScheduleController extends ChangeNotifier {
       ),
     );
     if (updated == null) return false;
-    await Future.wait([loadTasks(), loadReminders(), loadNotifications()]);
+    await _refreshAfterAlertMutation(
+      includeTasks: true,
+      includeReminders: true,
+    );
     return true;
   }
 
@@ -842,7 +911,10 @@ class DesktopScheduleController extends ChangeNotifier {
       return true;
     });
     if (ok != true) return false;
-    await Future.wait([loadTasks(), loadReminders(), loadNotifications()]);
+    await _refreshAfterAlertMutation(
+      includeTasks: true,
+      includeReminders: true,
+    );
     return true;
   }
 
@@ -888,7 +960,7 @@ class DesktopScheduleController extends ChangeNotifier {
       return true;
     });
     if (ok != true) return false;
-    await Future.wait([loadReminders(), loadNotifications()]);
+    await _refreshAfterAlertMutation(includeReminders: true);
     return true;
   }
 
@@ -900,7 +972,7 @@ class DesktopScheduleController extends ChangeNotifier {
       ),
     );
     if (res == null) return false;
-    await Future.wait([loadReminders(), pollNotifications()]);
+    await _refreshAfterAlertMutation(includeReminders: true);
     return true;
   }
 
@@ -915,14 +987,17 @@ class DesktopScheduleController extends ChangeNotifier {
       ),
     );
     if (res == null) return false;
-    await Future.wait([loadReminders(), loadTasks(), pollNotifications()]);
+    await _refreshAfterAlertMutation(
+      includeReminders: true,
+      includeTasks: completeTask,
+    );
     return true;
   }
 
   Future<bool> dismissReminder(String reminderId) async {
     final res = await _runMutation(() => client.dismissReminder(reminderId));
     if (res == null) return false;
-    await Future.wait([loadReminders(), pollNotifications()]);
+    await _refreshAfterAlertMutation(includeReminders: true);
     return true;
   }
 
@@ -955,7 +1030,7 @@ class DesktopScheduleController extends ChangeNotifier {
       return true;
     });
     if (ok != true) return false;
-    await Future.wait([loadAlarms(), loadNotifications()]);
+    await _refreshAfterAlertMutation(includeAlarms: true);
     return true;
   }
 
@@ -967,21 +1042,21 @@ class DesktopScheduleController extends ChangeNotifier {
       ),
     );
     if (res == null) return false;
-    await Future.wait([loadAlarms(), pollNotifications()]);
+    await _refreshAfterAlertMutation(includeAlarms: true);
     return true;
   }
 
   Future<bool> acknowledgeAlarm(String alarmId) async {
     final res = await _runMutation(() => client.acknowledgeAlarm(alarmId));
     if (res == null) return false;
-    await Future.wait([loadAlarms(), pollNotifications()]);
+    await _refreshAfterAlertMutation(includeAlarms: true);
     return true;
   }
 
   Future<bool> dismissAlarm(String alarmId) async {
     final res = await _runMutation(() => client.dismissAlarm(alarmId));
     if (res == null) return false;
-    await Future.wait([loadAlarms(), pollNotifications()]);
+    await _refreshAfterAlertMutation(includeAlarms: true);
     return true;
   }
 
@@ -1014,14 +1089,14 @@ class DesktopScheduleController extends ChangeNotifier {
       return true;
     });
     if (ok != true) return false;
-    await Future.wait([loadRoutines(), loadNotifications()]);
+    await _refreshAfterAlertMutation(includeRoutines: true);
     return true;
   }
 
   Future<NotificationEventOut?> runRoutineNow(String routineId) async {
     final ev = await _runMutation(() => client.runRoutineNow(routineId));
     if (ev == null) return null;
-    await Future.wait([loadRoutines(), pollNotifications()]);
+    await _refreshAfterAlertMutation(includeRoutines: true);
     return ev;
   }
 
@@ -1033,7 +1108,7 @@ class DesktopScheduleController extends ChangeNotifier {
     final updated =
         await _runMutation(() => client.markNotificationRead(eventId));
     if (updated == null) return false;
-    await pollNotifications();
+    await _refreshAfterAlertMutation();
     return true;
   }
 
@@ -1049,16 +1124,11 @@ class DesktopScheduleController extends ChangeNotifier {
     );
     if (updated == null) return false;
     await _toastAdapter.removeNotificationToast(eventId);
-    final refreshes = <Future<void>>[
-      loadNotifications(),
-      pollNotifications(),
-      loadReminders(),
-      loadAlarms(),
-    ];
-    if (completeTask) {
-      refreshes.add(loadTasks());
-    }
-    await Future.wait(refreshes);
+    await _refreshAfterAlertMutation(
+      includeReminders: true,
+      includeAlarms: true,
+      includeTasks: completeTask,
+    );
     return true;
   }
 
@@ -1071,12 +1141,10 @@ class DesktopScheduleController extends ChangeNotifier {
     );
     if (updated == null) return false;
     await _toastAdapter.removeNotificationToast(eventId);
-    await Future.wait([
-      loadNotifications(),
-      pollNotifications(),
-      loadReminders(),
-      loadAlarms(),
-    ]);
+    await _refreshAfterAlertMutation(
+      includeReminders: true,
+      includeAlarms: true,
+    );
     return true;
   }
 
@@ -1085,12 +1153,10 @@ class DesktopScheduleController extends ChangeNotifier {
         await _runMutation(() => client.dismissNotification(eventId));
     if (updated == null) return false;
     await _toastAdapter.removeNotificationToast(eventId);
-    await Future.wait([
-      loadNotifications(),
-      pollNotifications(),
-      loadReminders(),
-      loadAlarms(),
-    ]);
+    await _refreshAfterAlertMutation(
+      includeReminders: true,
+      includeAlarms: true,
+    );
     return true;
   }
 
@@ -1098,25 +1164,27 @@ class DesktopScheduleController extends ChangeNotifier {
     final cleared = await _runMutation(() => client.clearAllNotifications());
     if (cleared == null) return false;
     await _toastAdapter.clearAllNotificationToasts();
-    await Future.wait([
-      loadNotifications(),
-      pollNotifications(),
-    ]);
+    await _refreshAfterAlertMutation();
     return true;
   }
 
   Future<bool> markAllNotificationsRead() async {
     final res = await _runMutation(() => client.markAllNotificationsRead());
     if (res == null) return false;
+    final hadAlarmCatchup = _unreadNotifications.any(
+      (e) =>
+          e.sourceType == 'alarm' &&
+          (e.isMissedCatchup || e.status == 'missed_catchup'),
+    );
     for (final ev in _unreadNotifications) {
       if (ev.sourceType != 'alarm') {
         unawaited(_toastAdapter.removeNotificationToast(ev.id));
       }
     }
-    await Future.wait([
-      loadNotifications(),
-      pollNotifications(),
-    ]);
+    if (_hasUnreadCatchup && !hadAlarmCatchup) {
+      unawaited(_toastAdapter.removeMissedCatchupSummaryToast());
+    }
+    await _refreshAfterAlertMutation();
     return true;
   }
 
