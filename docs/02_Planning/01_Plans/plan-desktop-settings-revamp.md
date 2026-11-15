@@ -2,17 +2,19 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- **Status:** Awaiting Approval
+- **Status:** Approved
 - **Delivery Level:** Level B — Planned Autonomous
 - **Scope Mode:** New Feature / UI Refactor — Categorized two-column Desktop Settings workspace, truthful Planned M4+ tabs, modular `features/settings/` decomposition, and Navigation Rail `⏻` Power/Tray menu (no backend/schema changes; Appearance Batch 2 sliders/wallpapers deferred).
 - **Target Files:**
   - `frontend/flutter/apps/desktop/lib/controllers/desktop_settings_controller.dart`
   - `frontend/flutter/apps/desktop/lib/screens/settings_screen.dart`
   - `frontend/flutter/apps/desktop/lib/features/settings/` *(new modular section/sidebar files)*
+  - `frontend/flutter/apps/desktop/lib/features/profiles/profile_access_card.dart` *(wrap safeguard if needed at `1024x640` `1.3x`)*
+  - `frontend/flutter/apps/desktop/lib/features/schedule/quiet_hours_card.dart` *(wrap safeguard if needed at `1024x640` `1.3x`)*
   - `frontend/flutter/apps/desktop/lib/shell/desktop_navigation_rail.dart`
   - `frontend/flutter/apps/desktop/lib/shell/desktop_shell.dart`
-  - `frontend/flutter/apps/desktop/test/` *(Settings, Rail, Shell, and widget tests)*
-  - `docs/05_Design/01_PC_Desktop_Shell_and_Tray.md` *(Phase 3 doc sync after verification)*
+  - `frontend/flutter/apps/desktop/test/` *(Settings, Rail, Shell, Responsive, and widget tests)*
+  - `docs/05_Design/01_PC_Desktop_Shell_and_Tray.md` & `docs/04_Architecture/04_Infrastructure/windows-host-and-notifications.md` *(Phase 3 doc sync after verification)*
 - **Branch:** `feat/desktop-settings-revamp`
 - **Active Branch Tracker:** `docs/01_Tracking/active/task-feat-desktop-settings-revamp.md`
 
@@ -47,12 +49,12 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
   | Observation / Evidence | Verified Interpretation |
   | --- | --- |
-  | `frontend/flutter/apps/desktop/lib/screens/settings_screen.dart` is 1,848 lines stacking all 8 cards in one `SingleChildScrollView`, placing `Hide to Tray` and `Exit Companion` at the bottom (`lines 538–600`). | Forces excessive scrolling before reaching everyday controls and blocks clean insertion of M4 Voice/Tool settings. |
-  | `frontend/web/src/components/workspace/SettingsView.tsx` uses a top header banner + sticky left category sidebar (`lg:col-span-4`, Search input + `AVAILABLE`/`PLANNED` badges) + right active section pane (`lg:col-span-8`). | Provides the canonical visual and structural reference for Desktop parity. |
-  | Desktop `MemoryScreen` (`memory_screen.dart:120-157`) and `ScheduleScreen` (`schedule_screen.dart:84-116`) use the Option 2A two-column sidebar (`>= 720px` sidebar vs compact horizontal chips below `720px`). | Gives an established project-native responsive Flutter Desktop pattern to mirror. |
-  | `DesktopShell` (`desktop_shell.dart:142-237`) and `SettingsScreen` (`settings_screen.dart:602-690`) duplicate the `_handleExitCompanion` confirmation -> `shutdownLocalRuntime` -> recovery dialog -> `handleExitRequested` state machine. | Consolidating exit orchestration via `DesktopShell` (or shared helper) when removing `Hide to Tray` / `Exit Companion` from Settings eliminates both UI button duplication and code duplication. |
+  | `frontend/flutter/apps/desktop/lib/screens/settings_screen.dart` is 1,848 lines stacking all 8 cards in one `SingleChildScrollView`, placing `Hide to Tray` and `Exit Companion` at the bottom (`lines 538–600`). | Forces excessive scrolling before reaching everyday controls and blocks clean insertion of M4 Voice/Tool settings. Also currently relies on ancestor `ListenableBuilder` (`desktop_shell.dart:406`), so standalone `SettingsScreen` must wrap its own `build` in `ListenableBuilder(listenable: widget.controller)`. |
+  | `frontend/web/src/components/workspace/SettingsView.tsx` uses a top header banner + sticky left category sidebar (`lg:col-span-4`, Search input + `AVAILABLE`/`PLANNED` badges) + right active section pane (`lg:col-span-8`). | Provides the canonical visual and structural reference for Desktop parity. Keeps right pane showing active section even if search returns 0 matches (`SettingsView.tsx:155`). |
+  | Desktop `MemoryScreen` (`memory_screen.dart:120-157`) and `ScheduleScreen` (`schedule_screen.dart:84-116`) use the Option 2A two-column sidebar (`>= 720px` sidebar vs compact horizontal chips below `720px`). | Gives an established project-native responsive Flutter Desktop pattern to mirror. At `1024x640` + expanded rail (`240px`) + `1.3x` text scale, right pane width is `~428px` and height `< 640px`, requiring `Expanded(child: ListView)` in `SettingsSidebar` and `Wrap` instead of `Row` in `_buildModelEntryCard` (`settings_screen.dart:1743`). |
+  | `DesktopShell` (`desktop_shell.dart:142-237`) and `SettingsScreen` (`settings_screen.dart:602-690`) duplicate the `_handleExitCompanion` confirmation -> `shutdownLocalRuntime` -> recovery dialog -> `handleExitRequested` state machine. | Consolidating exit orchestration via `DesktopShell` when removing `Hide to Tray` / `Exit Companion` from Settings eliminates both UI button duplication and code duplication. |
   | `DesktopSettingsController.scrollToDiagnostics` is used by `main.dart` and `visual_evidence_runner.dart` (`04_dark_settings_diagnostics_1280x800.png`) to jump straight to diagnostics. | Updating `DesktopSettingsController` so `initialScrollToDiagnostics: true` / `setScrollToDiagnostics(true)` selects `SettingsSectionId.storage` preserves all existing harness & CLI entry points. |
-  | `widget_test.dart` (`lines 31-138`) and `desktop_settings_test.dart` (`lines 66-630`) assert against single-scroll Settings layout and `Hide to Tray` / `Exit Companion` inside `SettingsScreen`. | Must be updated deliberately under TDD to test the new rail `⏻` power menu and section-based `SettingsScreen` interactions. |
+  | `widget_test.dart` (`lines 31-138`), `desktop_settings_test.dart` (`lines 66-630`), `desktop_layout_responsive_test.dart` (`lines 113-166`), and `desktop_app_runtime_wiring_test.dart` (`lines 280-347`) assert against single-scroll Settings layout, `TextField.first`, and `Hide to Tray` / `Exit Companion` inside `SettingsScreen`. | Must be updated deliberately under TDD to test the new rail `⏻` power menu, keyed inputs, and section-based `SettingsScreen` interactions. |
 
 - **Architectural Approach:**
   1. **Settings Category State (`DesktopSettingsController` + `SettingsSectionMeta`):**
@@ -60,13 +62,15 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
      - Add `SettingsSectionId selectedSettingsSection` (default `SettingsSectionId.appearance`; overridden to `SettingsSectionId.storage` when `initialScrollToDiagnostics == true` or `setScrollToDiagnostics(true)`).
      - Add `setSettingsSection(SettingsSectionId)` and `openSettingsSection(SettingsSectionId)` (updates active tab AND switches `currentDestination` to `DesktopNavDestination.settings`, notifying listeners once).
   2. **Clean Two-Column Layout & Modular Decomposition (`lib/features/settings/`):**
+     - `SettingsScreen` wraps its `build` in `ListenableBuilder(listenable: widget.controller, ...)` so standalone mounts rebuild reliably on section changes. Holds a persistent search `TextEditingController` across layout transitions (`>= 720px` <-> `< 720px`).
      - `SettingsScreen` renders a compact header banner (`Preferences & System Configuration`, Desktop truth badges — **no** `Hide to Tray` / `Exit` buttons) above a responsive `LayoutBuilder` (`>= 720px` Row with `SettingsSidebar(width: 244)` + expanded right scroll pane; `< 720px` Column with compact search/chips + expanded right scroll pane).
+     - **State Preservation Across Tab Switches:** Keep `SettingsRuntimeSection` (and its `_urlController`, `_tokenController`, `_registryEntries`, `_modelStatus`, `_selectedModelId`, `_isStillLoading`, `_modelActionMessage`, and DPAPI async state) preserved via `IndexedStack` so switching tabs mid-edit or during `MODEL_LOADING` polling (`_pollModelStatusUntilReady`) never drops state or cancels timers, and `_loadModelData()` runs on Settings entry and Runtime tab entry.
      - Extract existing sections cleanly out of `settings_screen.dart` while keeping all existing controller/API/DPAPI/model/supervision/quiet-hours logic intact:
        - `SettingsAppearanceSection` (Color Mode + Accent Preset + truthful Batch 2 note)
        - `SettingsGeneralSection` (Window Bounds `1280x800 (1024x640 min)`, System Tray active/unavailable status, helpful guidance pointing to `⏻` in the bottom navigation rail for `Minimize to Tray` / `Exit Companion` without repeating buttons, plus truthful `PC-HOST-002` Startup slot)
-       - Notifications section (`QuietHoursCard` when `scheduleController != null`, plus clean standalone fallback message if unwired)
-       - Profiles section (`ProfileAccessCard` when `profileController != null` + truthful `PC-IDENTITY-003` PIN/Enrollment planned card)
-       - `SettingsRuntimeSection` (Local LLM Model Selection/Load/Unload + Runtime Process Supervision + Runtime Connection & DPAPI Pairing; preserves async model loading, polling, `isGenerating` unload guard, and DPAPI token logic)
+       - Notifications section (`QuietHoursSettingsCard` when `scheduleController != null`, plus clean standalone fallback message if unwired, with responsive `Wrap` safeguard for narrow panes)
+       - Profiles section (`ProfileAccessCard` when `profileController != null`, plus standalone fallback note when `profileController == null`, responsive `Wrap` safeguard for deleted-profile actions, and truthful `PC-IDENTITY-003` PIN/Enrollment planned card)
+       - `SettingsRuntimeSection` (Local LLM Model Selection/Load/Unload with `Wrap` action buttons, Runtime Process Supervision, Runtime Connection & DPAPI Pairing with explicit Keys `runtime_host_url_input` and `runtime_pairing_token_input`; preserves `updateConfiguration(...)` calls, `MODEL_LOADING` polling, `isGenerating` unload guard, and truthful `Model unloaded successfully.` feedback)
        - `SettingsStorageSection` (Storage Diagnostics inspection + truthful `PC-HOST-004` Storage Roots Relocation note)
        - `SettingsPlannedSection` (Shared parameterized widget for `Voice & Audio` [`M4`], `Tools & Safety` [`M4`], `Health & Context` [`M5+`], and `Network & Mesh` [`M5+`])
   3. **Navigation Rail `⏻` Power Menu (`DesktopNavigationRail` + `DesktopShell`):**
@@ -100,8 +104,8 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 ### [ADD] `frontend/flutter/apps/desktop/lib/features/settings/settings_sidebar.dart`
 - **Primary Responsibility:** Left Settings sub-navigation sidebar with search input and compact responsive chip strip.
-- **Planned Change:** Implement `SettingsSidebar` supporting expanded (`width: 244`) SoftGlass panel mode with search field + vertical category tiles (icon, title, subtitle, `AVAILABLE` / `M4` / `PLANNED` badge) and compact (`< 720px`) horizontal chip bar + search input.
-- **Invariants to Preserve:** Full keyboard/mouse accessibility, clear active highlight, non-clipping text truncation, and clean empty-search state.
+- **Planned Change:** Implement `SettingsSidebar` supporting expanded (`width: 244`) SoftGlass panel mode with search field (`Key('settings_search_input')`) + internally scrollable (`Expanded(child: ListView(...))`) vertical category tiles (icon, title, subtitle, `AVAILABLE` / `M4` / `PLANNED` badge) + empty-search state with Reset/Clear button, and compact (`< 720px`) horizontal chip bar + search input.
+- **Invariants to Preserve:** Full keyboard/mouse accessibility, clear active highlight, non-clipping text truncation, and right pane continuing to show active section even if search filters out sidebar tiles.
 
 ### [ADD] `frontend/flutter/apps/desktop/lib/features/settings/sections/settings_appearance_section.dart`
 - **Primary Responsibility:** Render Color Mode (`System`/`Light`/`Dark`), Accent Color Presets, and truthful Batch 2 deferral note.
@@ -115,8 +119,8 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 ### [ADD] `frontend/flutter/apps/desktop/lib/features/settings/sections/settings_runtime_section.dart`
 - **Primary Responsibility:** Encapsulate Local LLM Model Selection/Unload/Status, Runtime Process Supervision diagnostics, and Runtime Connection / DPAPI Pairing into modular stateful/stateless section widgets.
-- **Planned Change:** Move runtime/model/connection state & HTTP calls cleanly out of `SettingsScreen` while preserving controller-driven refreshes when navigating to `DesktopNavDestination.settings`.
-- **Invariants to Preserve:** All DPAPI token storage, URL persistence (`DesktopClientSettings`), `runtimeCoordinator.reconfigureConnection`, `MODEL_LOADING` background polling & `Refresh Model Status`, `isGenerating` unload guard, and truthful `Model unloaded successfully.` feedback.
+- **Planned Change:** Move runtime/model/connection state & HTTP calls cleanly out of `settings_screen.dart` while keeping state alive across Settings tab switches (via `IndexedStack` or lifted state) and refreshing model status on Settings/Runtime entry. Convert `_buildModelEntryCard` 3-button `Row` (`settings_screen.dart:1743`) to `Wrap` so `1024x640` `1.3x` never overflows, and add explicit Keys on host URL & token inputs.
+- **Invariants to Preserve:** All DPAPI token storage, URL persistence (`DesktopClientSettings`), `runtimeCoordinator.updateConfiguration(...)` & `chatController.updateConfiguration(...)` calls, `MODEL_LOADING` background polling & `Refresh Model Status`, `isGenerating` unload guard, and truthful `Model unloaded successfully.` feedback.
 
 ### [ADD] `frontend/flutter/apps/desktop/lib/features/settings/sections/settings_storage_section.dart` & `settings_planned_section.dart`
 - **Primary Responsibility:** Storage diagnostics panel (`WindowsStorageDiagnosticReader` inspect cards + `PC-HOST-004` planned note) and unified parameterized `SettingsPlannedSection` card for `Voice & Audio` (`M4`), `Tools & Safety` (`M4`), `Health & Context`, and `Network & Mesh`.
@@ -138,13 +142,13 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 ### [MODIFY / ADD] Desktop Test Suite (`frontend/flutter/apps/desktop/test/`)
 - **Primary Responsibility:** Update tests for removed Settings action buttons and categorized section navigation, and add comprehensive new unit & widget coverage.
 - **Planned Change:**
-  - Update `widget_test.dart`, `desktop_settings_test.dart`, `desktop_settings_runtime_supervision_test.dart`, and `desktop_app_runtime_wiring_test.dart` to interact with the categorized Settings sidebar and test the new `⏻` rail power menu (including tray active/unavailable disabling, `Exit Companion` confirmation + runtime emergency failure handling via Shell, `Close & Startup Settings...` jump).
-  - Add dedicated unit/widget tests (e.g., `test/desktop_settings_revamp_test.dart`) covering category search filtering, `PLANNED` vs `AVAILABLE` badges/panels (`Voice & Audio`, `Tools & Safety`), `scrollToDiagnostics` opening `Storage & Diagnostics`, responsive `< 720px` compact mode, zero duplicate `Hide to Tray` / `Exit Companion` buttons inside Settings, and collapsed rail `⏻` footer layout (`no overflow`).
+  - Update `widget_test.dart`, `desktop_settings_test.dart`, `desktop_settings_runtime_supervision_test.dart`, `desktop_app_runtime_wiring_test.dart`, and `desktop_layout_responsive_test.dart` to interact with the categorized Settings sidebar, use explicit input Keys (`runtime_host_url_input`, etc.), verify responsive `1024x640` `1.2x`/`1.3x` layout across tabs & rail `⏻` footer, and test the new `⏻` rail power menu (including tray active/unavailable disabling, `Exit Companion` confirmation + runtime emergency failure handling via Shell, `Close & Startup Settings...` jump).
+  - Add dedicated unit/widget tests (`test/desktop_settings_revamp_test.dart`) covering category search filtering (including empty search preserving active pane), `PLANNED` vs `AVAILABLE` badges/panels (`Voice & Audio`, `Tools & Safety`), `scrollToDiagnostics` opening `Storage & Diagnostics`, preserved runtime/model edits across tab switches, responsive `< 720px` compact mode, zero duplicate `Hide to Tray` / `Exit Companion` buttons inside Settings, and collapsed `72px` rail `⏻` footer layout (`no overflow`).
 
-### [MODIFY] `docs/05_Design/01_PC_Desktop_Shell_and_Tray.md` *(Phase 3)*
-- **Primary Responsibility:** Keep desktop shell UX documentation synchronized after implementation & verification pass.
-- **Planned Change:** Document the categorized two-column Settings layout and the bottom-of-rail `⏻` Power / Tray popover menu under Section 2.2 / Visual Parity notes.
-- **Invariants to Preserve:** Historical and normative D2 lifecycle invariants remain intact.
+### [MODIFY] `docs/05_Design/01_PC_Desktop_Shell_and_Tray.md` & `docs/04_Architecture/04_Infrastructure/windows-host-and-notifications.md` *(Phase 3)*
+- **Primary Responsibility:** Keep desktop shell UX and host lifecycle documentation synchronized after implementation & verification pass.
+- **Planned Change:** Update Section 2.2 / Visual Parity in `01_PC_Desktop_Shell_and_Tray.md` for the categorized Settings layout and bottom-of-rail `⏻` Power / Tray popover menu, and update `windows-host-and-notifications.md` (`lines 32, 89`) where `"Exit Companion"` moved from Settings screen into the Navigation Rail `⏻` menu alongside System Tray.
+- **Invariants to Preserve:** Historical and normative D2 / PC-HOST-005 lifecycle invariants remain intact.
 
 ---
 
@@ -160,7 +164,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 2. **Integration & Wiring:**
    - Verify `VisualEvidenceViewSpec` (`visual_evidence_runner.dart`), `main.dart` shortcuts (`Ctrl+,`), and tray menu + rail `⏻` menu + `DesktopShell._handleExitCompanion` integration work seamlessly together.
 3. **Phase 3 Documentation & Packaging:**
-   - Update `docs/05_Design/01_PC_Desktop_Shell_and_Tray.md`, `CHANGELOG.md`, and archive `docs/01_Tracking/active/task-feat-desktop-settings-revamp.md` to `docs/01_Tracking/archive/`, then push and open one Draft PR against `develop`.
+   - Update `docs/05_Design/01_PC_Desktop_Shell_and_Tray.md`, `docs/04_Architecture/04_Infrastructure/windows-host-and-notifications.md`, and `CHANGELOG.md`, archive `docs/01_Tracking/active/task-feat-desktop-settings-revamp.md` to `docs/01_Tracking/archive/`, then push and open a Ready-for-Review PR (non-draft, as explicitly requested by Human Owner) against `develop` and await CI pass.
 
 ---
 
