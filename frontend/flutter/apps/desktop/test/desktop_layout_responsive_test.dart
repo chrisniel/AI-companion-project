@@ -128,6 +128,9 @@ void main() {
         await tester.tap(find.text('Settings'));
         await tester.pumpAndSettle();
 
+        await tester.tap(find.byKey(const Key('settings_nav_storage')));
+        await tester.pumpAndSettle();
+
         expect(tester.takeException(), isNull);
         expect(find.text('Storage Diagnostics'), findsOneWidget);
         expect(find.text('Client Fail-Closed Inspection'), findsOneWidget);
@@ -154,14 +157,28 @@ void main() {
         expect(tester.takeException(), isNull);
         expect(find.text('Chat'), findsWidgets);
 
-        // 2. Settings screen with scaled text
+        // 2. Settings screen tabs & rail power menu with scaled text
         await tester.tap(find.text('Settings'));
         await tester.pumpAndSettle();
 
         expect(tester.takeException(), isNull);
+        expect(find.byKey(const Key('rail_power_menu_button')), findsOneWidget);
         expect(find.text('Appearance & Theme'), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('settings_nav_storage')));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
         expect(find.text('Storage Diagnostics'), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('settings_nav_general')));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
         expect(find.text('Window & Tray Lifecycle'), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('settings_nav_runtime')));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        expect(find.text('Runtime Connection & Pairing'), findsOneWidget);
       }
     });
 

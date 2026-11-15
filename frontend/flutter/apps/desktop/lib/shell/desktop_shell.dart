@@ -14,6 +14,7 @@ import '../features/profiles/desktop_profile_controller.dart';
 import '../features/memory/desktop_memory_controller.dart';
 import '../features/schedule/desktop_schedule_controller.dart';
 import '../features/schedule/notification_backlog_drawer.dart';
+import '../features/settings/settings_section.dart';
 import '../features/studio/desktop_studio_controller.dart';
 import '../lifecycle/desktop_lifecycle_coordinator.dart';
 import '../platform/desktop_client_settings.dart';
@@ -474,6 +475,12 @@ class _DesktopShellState extends State<DesktopShell> {
                             controller: widget.controller,
                             coordinator: widget.coordinator,
                             profileController: widget.profileController,
+                            onHideToTrayRequested: () => widget.coordinator?.hideToTray(),
+                            onExitRequested: _handleExitCompanion,
+                            onOpenLifecycleSettings: () => widget.controller
+                                .requestOpenSettingsSection(
+                              SettingsSectionId.general,
+                            ),
                           ),
                           Expanded(
                             child: Column(
