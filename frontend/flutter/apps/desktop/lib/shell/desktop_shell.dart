@@ -478,7 +478,9 @@ class _DesktopShellState extends State<DesktopShell> {
                             onHideToTrayRequested: () => widget.coordinator?.hideToTray(),
                             onExitRequested: _handleExitCompanion,
                             onOpenLifecycleSettings: () => widget.controller
-                                .openSettingsSection(SettingsSectionId.general),
+                                .requestOpenSettingsSection(
+                              SettingsSectionId.general,
+                            ),
                           ),
                           Expanded(
                             child: Column(

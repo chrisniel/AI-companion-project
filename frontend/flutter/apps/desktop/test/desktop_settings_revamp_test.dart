@@ -1,9 +1,14 @@
 import 'package:ai_companion_desktop/controllers/desktop_settings_controller.dart';
 import 'package:ai_companion_desktop/diagnostics/windows_storage_diagnostic_reader.dart';
+import 'package:ai_companion_desktop/features/chat/desktop_chat_controller.dart';
+import 'package:ai_companion_desktop/features/profiles/desktop_profile_controller.dart';
 import 'package:ai_companion_desktop/features/settings/settings_section.dart';
 import 'package:ai_companion_desktop/lifecycle/desktop_lifecycle_coordinator.dart';
+import 'package:ai_companion_desktop/platform/desktop_client_settings.dart';
 import 'package:ai_companion_desktop/screens/settings_screen.dart';
 import 'package:ai_companion_desktop/shell/desktop_navigation_rail.dart';
+import 'package:companion_api/companion_api.dart';
+import 'package:companion_core/companion_core.dart';
 import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -95,6 +100,32 @@ void main() {
       expect(ctrl.currentDestination, equals(DesktopNavDestination.settings));
       expect(ctrl.selectedSettingsSection, equals(SettingsSectionId.general));
       expect(notifications, equals(3));
+    });
+
+    test('requestOpenSettingsSection respects navigationGuard', () async {
+      final ctrl = DesktopSettingsController(
+        initialDestination: DesktopNavDestination.studio,
+        initialSettingsSection: SettingsSectionId.appearance,
+      );
+      var guardInvocations = 0;
+      ctrl.navigationGuard = (from, to) async {
+        guardInvocations++;
+        expect(from, equals(DesktopNavDestination.studio));
+        expect(to, equals(DesktopNavDestination.settings));
+        return false;
+      };
+
+      final blocked = await ctrl.requestOpenSettingsSection(SettingsSectionId.general);
+      expect(blocked, isFalse);
+      expect(guardInvocations, equals(1));
+      expect(ctrl.currentDestination, equals(DesktopNavDestination.studio));
+      expect(ctrl.selectedSettingsSection, equals(SettingsSectionId.appearance));
+
+      ctrl.navigationGuard = (_, __) async => true;
+      final allowed = await ctrl.requestOpenSettingsSection(SettingsSectionId.general);
+      expect(allowed, isTrue);
+      expect(ctrl.currentDestination, equals(DesktopNavDestination.settings));
+      expect(ctrl.selectedSettingsSection, equals(SettingsSectionId.general));
     });
   });
 
@@ -383,5 +414,177 @@ void main() {
       expect(find.text('Window & Tray Lifecycle'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('caches storage diagnostic reads across search rebuilds', (tester) async {
+      setupViewport(tester);
+      final reader = _CountingStorageDiagnosticReader();
+      final controller = DesktopSettingsController(diagnosticReader: reader);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: SettingsScreen(controller: controller),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(reader.readCount, equals(1));
+
+      await tester.enterText(find.byKey(const Key('settings_search_input')), 'storage');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('settings_nav_storage')));
+      await tester.pumpAndSettle();
+
+      expect(reader.readCount, equals(1));
+    });
+
+    testWidgets('refreshes model data on intra-Settings runtime tab switch and preserves cleared dirty token', (tester) async {
+      setupViewport(tester);
+      final fakeClient = _FakeRuntimeRefreshClient();
+      final controller = DesktopSettingsController(
+        initialDestination: DesktopNavDestination.settings,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: SettingsScreen(
+              controller: controller,
+              client: fakeClient,
+              clientSettings: _InMemoryDesktopClientSettings(),
+              credentialStore: InMemoryCredentialStore('saved-secret-token'),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final initialCalls = fakeClient.registryCalls;
+      expect(initialCalls, greaterThanOrEqualTo(1));
+
+      // Enter Runtime tab -> triggers refresh
+      await tester.tap(find.byKey(const Key('settings_nav_runtime')));
+      await tester.pumpAndSettle();
+      expect(fakeClient.registryCalls, equals(initialCalls + 1));
+
+      // Clear pairing token (marks dirty), switch away and back -> cleared token is not overwritten
+      final tokenField = find.byKey(const Key('runtime_pairing_token_input'));
+      await tester.enterText(tokenField, '');
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('settings_nav_appearance')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('settings_nav_runtime')));
+      await tester.pumpAndSettle();
+
+      expect(fakeClient.registryCalls, equals(initialCalls + 2));
+      expect(tester.widget<TextField>(tokenField).controller?.text, isEmpty);
+    });
+
+    testWidgets('ProfileAccessCard deleted profiles wrap cleanly at 1024x640 with 1.3x text scale', (tester) async {
+      setupViewport(tester, const Size(1024, 640));
+      final chatController = DesktopChatController(
+        client: CompanionClient(credentialStore: InMemoryCredentialStore('t')),
+      );
+      final profileController = DesktopProfileController(chat: chatController)
+        ..deletedProfiles = [
+          <String, dynamic>{
+            'id': 'deleted-1',
+            'name': 'Archived Work Workspace Profile With Very Long Name',
+            'purge_after': DateTime.now().toUtc().add(const Duration(days: 14)).toIso8601String(),
+          },
+        ];
+      addTearDown(() {
+        profileController.dispose();
+        chatController.dispose();
+      });
+
+      final controller = DesktopSettingsController(
+        initialDestination: DesktopNavDestination.settings,
+        initialSettingsSection: SettingsSectionId.profiles,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(1.3)),
+            child: Scaffold(
+              body: SettingsScreen(
+                controller: controller,
+                profileController: profileController,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Restore'), findsOneWidget);
+      expect(find.text('Permanently Delete'), findsOneWidget);
+    });
   });
+}
+
+class _CountingStorageDiagnosticReader implements StorageDiagnosticReader {
+  int readCount = 0;
+
+  @override
+  Future<List<StorageDiagnosticInfo>> readDiagnosticRoots() async {
+    readCount++;
+    return const [
+      StorageDiagnosticInfo(
+        rootType: StorageRootType.data,
+        locatorStatus: LocatorStatus.absent,
+        source: StorageRootSource.localDiagnostic,
+        resolvedPath: r'C:\Mock\AppData\Local\AI Companion',
+        details: 'Mocked diagnostic root',
+      ),
+    ];
+  }
+}
+
+class _FakeRuntimeRefreshClient extends CompanionClient {
+  int registryCalls = 0;
+
+  _FakeRuntimeRefreshClient()
+      : super(credentialStore: InMemoryCredentialStore('saved-secret-token'));
+
+  @override
+  Future<List<ModelRegistryEntry>> getModelRegistry() async {
+    registryCalls++;
+    return const [];
+  }
+
+  @override
+  Future<ModelStatusResponse> getModelStatus({
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
+    return const ModelStatusResponse(provider: 'llama.cpp');
+  }
+}
+
+class _InMemoryDesktopClientSettings extends DesktopClientSettings {
+  String _hostUrl = 'http://127.0.0.1:8000';
+  String? _selectedModel;
+
+  @override
+  Future<String> readHostUrl({
+    String defaultValue = 'http://127.0.0.1:8000',
+  }) async =>
+      _hostUrl;
+
+  @override
+  Future<void> writeHostUrl(String hostUrl) async {
+    _hostUrl = hostUrl;
+  }
+
+  @override
+  Future<String?> readSelectedModel() async => _selectedModel;
+
+  @override
+  Future<void> writeSelectedModel(String? modelId) async {
+    _selectedModel = modelId;
+  }
 }

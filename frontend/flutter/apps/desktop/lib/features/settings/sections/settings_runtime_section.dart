@@ -11,6 +11,7 @@ import '../../../coordinator/desktop_runtime_coordinator.dart';
 import '../../../platform/desktop_client_settings.dart';
 import '../../../platform/windows_dpapi_credential_store.dart';
 import '../../chat/desktop_chat_controller.dart';
+import '../settings_section.dart';
 
 /// Settings category section for Local AI Runtime connection, DPAPI pairing,
 /// Windows process supervision diagnostics, and local LLM model selection.
@@ -58,14 +59,21 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
   String? _selectedModelId;
   String? _modelActionMessage;
   DesktopNavDestination _lastDestination = DesktopNavDestination.chat;
+  SettingsSectionId _lastSection = SettingsSectionId.appearance;
 
-  void _handleDestinationChange() {
+  void _handleControllerChange() {
     final dest = widget.controller.currentDestination;
-    if (dest == DesktopNavDestination.settings &&
-        _lastDestination != DesktopNavDestination.settings) {
+    final section = widget.controller.selectedSettingsSection;
+    final enteredSettings = dest == DesktopNavDestination.settings &&
+        _lastDestination != DesktopNavDestination.settings;
+    final enteredRuntimeSection =
+        section == SettingsSectionId.runtime &&
+        _lastSection != SettingsSectionId.runtime;
+    if (enteredSettings || enteredRuntimeSection) {
       _loadModelData();
     }
     _lastDestination = dest;
+    _lastSection = section;
   }
 
   @override
@@ -79,6 +87,7 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
     );
     _tokenController = TextEditingController();
     _lastDestination = widget.controller.currentDestination;
+    _lastSection = widget.controller.selectedSettingsSection;
 
     _clientSettings.readHostUrl().then((saved) {
       if (mounted && !_urlDirty && saved.isNotEmpty) {
@@ -98,13 +107,13 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
       });
     } catch (_) {}
 
-    widget.controller.addListener(_handleDestinationChange);
+    widget.controller.addListener(_handleControllerChange);
     _loadModelData();
   }
 
   @override
   void dispose() {
-    widget.controller.removeListener(_handleDestinationChange);
+    widget.controller.removeListener(_handleControllerChange);
     _urlController.dispose();
     _tokenController.dispose();
     super.dispose();
@@ -565,10 +574,13 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
     });
 
     try {
-      if (_tokenController.text.isEmpty) {
+      if (!_tokenDirty && _tokenController.text.isEmpty) {
         try {
           final t = await _credentialStore.readToken();
-          if (mounted && t != null && _tokenController.text.isEmpty) {
+          if (mounted &&
+              !_tokenDirty &&
+              t != null &&
+              _tokenController.text.isEmpty) {
             _tokenController.text = t;
           }
         } catch (_) {}

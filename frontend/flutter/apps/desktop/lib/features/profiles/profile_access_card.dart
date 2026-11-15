@@ -196,54 +196,61 @@ class ProfileAccessCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
                       ),
-                      child: Row(
+                      child: Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 6,
                         children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  dp['name']?.toString() ?? 'Profile',
-                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                dp['name']?.toString() ?? 'Profile',
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                              ),
+                              const SizedBox(height: 2),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(4),
                                 ),
-                                const SizedBox(height: 2),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                  decoration: BoxDecoration(
-                                    color: Colors.orange.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    DesktopProfileController.formatRemainingRecovery(dp['purge_after']),
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.orange.shade900,
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                                child: Text(
+                                  DesktopProfileController.formatRemainingRecovery(dp['purge_after']),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.orange.shade900,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                          TextButton.icon(
-                            onPressed: controller.busy
-                                ? null
-                                : () => controller.restoreProfile(dp['id'] as String),
-                            icon: const Icon(Icons.restore_rounded, size: 16),
-                            label: const Text('Restore'),
-                          ),
-                          const SizedBox(width: 4),
-                          TextButton.icon(
-                            onPressed: controller.busy
-                                ? null
-                                : () => showPermanentDeleteProfileDialog(
-                                      context,
-                                      controller,
-                                      profileId: dp['id'] as String,
-                                      profileName: dp['name'] as String,
-                                    ),
-                            icon: const Icon(Icons.delete_forever_rounded, size: 16, color: Colors.red),
-                            label: const Text('Permanently Delete', style: TextStyle(color: Colors.red)),
+                          Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
+                            children: [
+                              TextButton.icon(
+                                onPressed: controller.busy
+                                    ? null
+                                    : () => controller.restoreProfile(dp['id'] as String),
+                                icon: const Icon(Icons.restore_rounded, size: 16),
+                                label: const Text('Restore'),
+                              ),
+                              TextButton.icon(
+                                onPressed: controller.busy
+                                    ? null
+                                    : () => showPermanentDeleteProfileDialog(
+                                          context,
+                                          controller,
+                                          profileId: dp['id'] as String,
+                                          profileName: dp['name'] as String,
+                                        ),
+                                icon: const Icon(Icons.delete_forever_rounded, size: 16, color: Colors.red),
+                                label: const Text('Permanently Delete', style: TextStyle(color: Colors.red)),
+                              ),
+                            ],
                           ),
                         ],
                       ),

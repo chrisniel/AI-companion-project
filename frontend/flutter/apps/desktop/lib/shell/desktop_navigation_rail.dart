@@ -381,7 +381,9 @@ class DesktopNavigationRail extends StatelessWidget {
         if (onOpenLifecycleSettings != null) {
           onOpenLifecycleSettings!();
         } else {
-          controller.openSettingsSection(SettingsSectionId.general);
+          await controller.requestOpenSettingsSection(
+            SettingsSectionId.general,
+          );
         }
         return;
       case _RailPowerAction.exitCompanion:

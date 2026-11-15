@@ -5,13 +5,34 @@ import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
 
 /// Fail-closed Windows storage root inspection and diagnostics section.
-class SettingsStorageSection extends StatelessWidget {
+class SettingsStorageSection extends StatefulWidget {
   const SettingsStorageSection({
     super.key,
     required this.diagnosticReader,
   });
 
   final StorageDiagnosticReader diagnosticReader;
+
+  @override
+  State<SettingsStorageSection> createState() => _SettingsStorageSectionState();
+}
+
+class _SettingsStorageSectionState extends State<SettingsStorageSection> {
+  late Future<List<StorageDiagnosticInfo>> _rootsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _rootsFuture = widget.diagnosticReader.readDiagnosticRoots();
+  }
+
+  @override
+  void didUpdateWidget(covariant SettingsStorageSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.diagnosticReader != oldWidget.diagnosticReader) {
+      _rootsFuture = widget.diagnosticReader.readDiagnosticRoots();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +43,7 @@ class SettingsStorageSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         FutureBuilder<List<StorageDiagnosticInfo>>(
-          future: diagnosticReader.readDiagnosticRoots(),
+          future: _rootsFuture,
           builder: (context, snapshot) {
             final roots = snapshot.data ?? [];
             final locatorInfo = roots.isNotEmpty ? roots.first : null;

@@ -55,13 +55,11 @@ class SettingsSidebar extends StatelessWidget {
       );
     }
 
-    return SizedBox(
-      width: 244,
-      child: SoftGlassPanel(
-        padding: const EdgeInsets.all(CompanionSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+    return SoftGlassPanel(
+      padding: const EdgeInsets.all(CompanionSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
             _buildSearchField(ext, isDark),
             const SizedBox(height: CompanionSpacing.sm),
             Text(
@@ -86,8 +84,7 @@ class SettingsSidebar extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
+      );
   }
 
   Widget _buildSearchField(CompanionThemeExtension? ext, bool isDark) {
@@ -224,7 +221,7 @@ class SettingsSidebar extends StatelessWidget {
     bool isSelected,
   ) {
     final isPlanned = meta.status == SettingsSectionStatus.planned;
-    final badgeText = isPlanned ? (meta.milestoneHint ?? 'PLANNED') : 'ACTIVE';
+    final badgeText = isPlanned ? (meta.milestoneHint ?? 'PLANNED') : 'AVAILABLE';
     final Color bgColor;
     final Color fgColor;
 

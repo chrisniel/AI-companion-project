@@ -114,6 +114,15 @@ class DesktopSettingsController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Switches to [DesktopNavDestination.settings] via [navigationGuard] and
+  /// focuses [section] when allowed.
+  Future<bool> requestOpenSettingsSection(SettingsSectionId section) async {
+    final allowed = await requestDestination(DesktopNavDestination.settings);
+    if (!allowed) return false;
+    setSettingsSection(section);
+    return true;
+  }
+
   void setThemeMode(ThemeMode mode) {
     if (_themeMode != mode) {
       _themeMode = mode;
