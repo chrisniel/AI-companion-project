@@ -31,8 +31,8 @@ The desktop shell utilizes a compact, collapsible left navigation rail:
   3. **Schedule:** Tasks, Reminders, Alarms, and daily Routines.
   4. **Memory:** User-visible memory browser, fact verification, and forgetting controls.
   5. **Studio:** Character Studio (traits, lore, avatar, voice selection).
-  6. **Settings:** Hardware profile, remote pairing, backup/reset, and performance toggles.
-- **Bottom:** System runtime health indicator (Green = Connected, Yellow = Reconnecting, Red = Stopped) and quick Performance Mode icon (Normal / Low-Impact).
+  6. **Settings:** Responsive two-column categorized settings workspace (aligned with Web preferences) featuring live sidebar search, active `AVAILABLE` sections (*Appearance*, *General & Lifecycle*, *Notifications & Quiet Hours*, *Profiles & Privacy*, *AI Runtime & Models*, *Storage & Diagnostics*), and truthful `PLANNED` milestone tabs (*Voice & Audio*, *Tools & Safety*, *Health & Context*, *Network & Mesh*), without duplicating window-exit or hide-to-tray action buttons inside Settings.
+- **Bottom:** System runtime health indicator (Green = Connected, Yellow = Reconnecting, Red = Stopped), quick Performance Mode / rail collapse controls, and a persistent **`⏻` Power Menu** providing global access to **Minimize to System Tray**, **Close & Startup Settings...** (deep-linking to `Settings -> General & Lifecycle`), and **Exit Companion**.
 
 ---
 
