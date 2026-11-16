@@ -97,13 +97,13 @@
 - **`PC-MEM-004`**: User Inspection, Correction, Deletion & Tombstone Propagation (Delivered via PR #37 `64ac521`; updated with Option 2A 3-tier inner sub-menu UI in M3 Batch E via PR #39 `ea4441c`; extended with 1-click chat bubble memory/knowledge bookmarking in M3 Batch F on `feature/m3-context-compaction-memory-f`).
 - **`PC-MEM-005`**: Bounded Conversation History Recall & Context Assembly (Delivered via PR #35 `b3d31d7`; upgraded with stem/prefix lorebook matching, FTS5 prefix ranking + `recall_count`, and 4-section XML context assembly in M3 Batch E via PR #39 `ea4441c`; extended with pre-limit conversation compaction, rolling `<recent_episode_digest>` XML injection with delimiter escaping, `GET /summary` & `POST /compact`, and retrieval query hardening in M3 Batch F on `feature/m3-context-compaction-memory-f`).
 
-### Stream: `PC-ACTION` — D9 Typed Action Engine
-- **`PC-ACTION-001`**: 5-Stage Deterministic Pipeline Implementation ($\text{Model} \rightarrow \text{Typed} \rightarrow \text{Policy} \rightarrow \text{Adapter} \rightarrow \text{Capability}$).
-- **`PC-ACTION-002`**: DEFAULT DENY Policy Matrix Engine (Risk 0/1/2 evaluation, Profile permission rules).
-- **`PC-ACTION-003`**: Explicit Confirmation Token & Parameter Fingerprint Binding.
-- **`PC-ACTION-004`**: Emergency Action Controls (Stop Generation, Stop Action, Stop Queue, Persistent Kill Switch).
-- **`PC-ACTION-005`**: Structured Audit Logging with Sensitive Data Redaction.
-- **`PC-ACTION-006`**: Generic Shell / OS Admin Execution Blocker & Rejection Guard.
+### Stream: `PC-ACTION` — D9 Typed Action Engine *(M4 Batch A Delivered on `feature/m4-d9-tools-and-web-a`)*
+- **`PC-ACTION-001`**: 5-Stage Deterministic Pipeline Implementation ($\text{Model} \rightarrow \text{Typed} \rightarrow \text{Policy} \rightarrow \text{Adapter} \rightarrow \text{Capability}$) — Delivered in M4 Batch A (`backend/app/services/tools/registry.py`, `executor.py`, bounded orchestrator loop).
+- **`PC-ACTION-002`**: DEFAULT DENY Policy Matrix Engine (Risk 0/1/2 evaluation, Profile permission rules, Quiet Hours check, `EXTERNAL_CONTENT` deny) — Delivered in M4 Batch A (`backend/app/services/tools/policy.py`).
+- **`PC-ACTION-003`**: Explicit Confirmation Token & Parameter Fingerprint Binding (`ToolConfirmation`, 120s TTL, atomic single-winner CAS claim, unambiguous conversational confirmation) — Delivered in M4 Batch A.
+- **`PC-ACTION-004`**: Emergency Action Controls (Stop Generation + persistent Global Tool Kill Switch with Host-Admin-only unlock across top bar, tray, and Settings) — Delivered in M4 Batch A.
+- **`PC-ACTION-005`**: Structured Audit Logging with Sensitive Data Redaction (`tool_audit_logs`, Migration `017`, `ProfilePurgeService` cascade) — Delivered in M4 Batch A.
+- **`PC-ACTION-006`**: Generic Shell / OS Admin Execution Blocker & Rejection Guard (`PROHIBITED_RISK3_CATEGORIES`) — Enforced & verified in M4 Batch A.
 
 ### Stream: `PC-SCHED` — Productivity & Routines
 - **`PC-SCHED-001`**: Runtime `SchedulerService` Engine (Timezone aware with zero-dependency `resolve_timezone()` Windows fallback, persistent SQLite state, FastAPI `lifespan` background tick, `DEBT-V1-08` expired memory sweep; backend runtime delivered in M3 Batch G1 on `feature/m3-scheduler-notifications-g1`).
@@ -119,11 +119,11 @@
 - **`PC-VOICE-004`**: Mandatory Voice Barge-In State Machine (Immediate playback stop, stale chunk cancellation).
 - **`PC-VOICE-005`**: Duplex Voice Session Orchestrator & Turn Identity Coordination over WebSocket.
 
-### Stream: `PC-WEB` — Read-Only Web Current Info
-- **`PC-WEB-001`**: Provider-Independent `WebSearch` Adapter with Privacy Minimization.
-- **`PC-WEB-002`**: Outbound `WebFetch` Pipeline with Strict SSRF, DNS Rebinding & Private IP Containment.
-- **`PC-WEB-003`**: Weather & Public Bulletin Retrieval Integration.
-- **`PC-WEB-004`**: Untrusted External Content Sanitizer & Source Provenance Formatter.
+### Stream: `PC-WEB` — Read-Only Web Current Info *(M4 Batch A Delivered on `feature/m4-d9-tools-and-web-a`)*
+- **`PC-WEB-001`**: Provider-Independent `WebSearch` Adapter with Privacy Minimization (`public_search` default, Host-Admin SearXNG / optional ACL-protected Tavily & Brave) — Delivered in M4 Batch A.
+- **`PC-WEB-002`**: Outbound `WebFetch` Pipeline with Strict SSRF, DNS Rebinding, Private/CGNAT/IPv6-Mapped IP Containment & TLS SNI IP-Pinning — Delivered in M4 Batch A (`backend/app/services/web/ssrf_guard.py`).
+- **`PC-WEB-003`**: Weather & Public Bulletin Retrieval Integration (zero-key Open-Meteo default adapter) — Delivered in M4 Batch A (`backend/app/services/web/providers.py`).
+- **`PC-WEB-004`**: Untrusted External Content Sanitizer (`<untrusted_web_content>`) & Normalized `WebSourceRefOut` Source Provenance UI — Delivered in M4 Batch A.
 
 ### Stream: `PC-CLOUD` — Optional Cloud Fallback
 - **`PC-CLOUD-001`**: Cloud Provider Abstraction (provider-agnostic CloudProvider abstraction).

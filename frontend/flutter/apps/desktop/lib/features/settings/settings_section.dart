@@ -110,10 +110,7 @@ const List<SettingsSectionMeta> kSettingsSections = <SettingsSectionMeta>[
     label: 'Tools & Safety',
     description: 'Permissions, D9 policy & kill switch',
     icon: Icons.security_rounded,
-    status: SettingsSectionStatus.planned,
-    milestoneHint: 'M4',
-    plannedSummary:
-        'Deterministic D9 action policy tiers, read-only web & weather retrieval provenance controls, and the emergency tool kill switch arrive in Milestone M4.',
+    status: SettingsSectionStatus.available,
     keywords: <String>['tools', 'd9', 'safety', 'kill switch', 'web', 'permissions'],
   ),
   SettingsSectionMeta(

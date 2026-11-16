@@ -43,7 +43,7 @@ In accordance with Decision D7, ADR-0018, and D11 (`ADR-0008`, `ADR-0018`, `ADR-
 Per `ADR-0019`, communication between client applications (Flutter Desktop, React Web, Android Companion) and the Local AI Runtime is governed by strict protocol and persistence boundaries:
 - **Transport Separation:**
   - **REST / JSON:** Used for commands, queries, configuration updates, and turn submissions.
-  - **Server-Sent Events (SSE):** Used for token completions and typed turn events (`token`, `tool_call`, `error`, `done`).
+  - **Server-Sent Events (SSE):** Used for token completions and typed turn events (`token`, `tool_intent`, `tool_confirmation_required`, `tool_result`, `error`, `done`).
   - **WebSocket:** Dedicated to full-duplex conversational voice streaming (audio frames, barge-in, STT/TTS control).
 - **Durable FIFO Turn Queue:**
   - The Local AI Runtime manages a durable FIFO turn queue per conversation.
@@ -162,7 +162,7 @@ Repository source code and test suites verify the following baseline reality:
 
 Verified in `app.models.conversation.Conversation` and `app.models.message.Message`:
 - **Conversation Entity:** `id` (UUIDv4), `title` (String(255)), `character_id` (String(64), default `"default"`), `owner_id` (String), `created_at`, `updated_at`, `is_deleted` (Boolean), `deleted_at` (DateTime, optional).
-- **Message Entity:** `id` (UUIDv4), `conversation_id` (FK to `conversations.id`), `sender` (String(32), `"user"` or `"assistant"`), `content` (Text), `status` (String(32), default `"completed"`), `sequence_no` (Integer), `client_message_id` (String(64), optional), `model_name` (String(128), optional), `prompt_tokens` (Integer, optional), `completion_tokens` (Integer, optional), `attachments` (relationship to `Attachment`, lazy `"selectin"`), plus audit and soft-delete mixins.
+- **Message Entity:** `id` (UUIDv4), `conversation_id` (FK to `conversations.id`), `sender` (String(32), `"user"` or `"assistant"`), `content` (Text), `status` (String(32), default `"completed"`), `sequence_no` (Integer), `client_message_id` (String(64), optional), `model_name` (String(128), optional), `prompt_tokens` (Integer, optional), `completion_tokens` (Integer, optional), `metadata_json` (Text, optional JSON storing `tool_receipts` and `sources` added in Migration `017`), `attachments` (relationship to `Attachment`, lazy `"selectin"`), plus audit and soft-delete mixins.
 - **Database Constraints:**
   - `uq_messages_conversation_sequence`: Unique (`conversation_id`, `sequence_no`).
   - `uq_messages_conversation_client_message_id`: Unique (`conversation_id`, `client_message_id`).
@@ -202,6 +202,7 @@ Verified in `backend/app/services/assistant/orchestrator.py` and `backend/app/se
 - Supports **1-Hop Compacted In-Stream Continuation** (`CONTEXT_COMPACTION_AUTO_CONTINUE_ENABLED = True`): when an uninterrupted response hits the single-pass output ceiling (`finish_reason == "length"`, `completion_tokens >= CONTEXT_COMPACTION_AUTO_CONTINUE_MIN_TOKENS = 160`, and not halted by `_guard_repetitive_stream`), `build_continuation_messages` compacts the partial response head while keeping the cutoff tail verbatim so one continuation pass (`<= CONTEXT_COMPACTION_AUTO_CONTINUE_MAX_TOKENS = 384`) streams seamlessly into the same assistant message before closing SSE.
 - Binds user message attachments via multimodal vision contracts when vision capability is enabled.
 - Loads recent uncompacted conversation history turns (falling back to bounded recent turns when compaction is disabled or below trigger thresholds) to construct chat context.
+- Supports **Bounded D9 Tool Orchestration & Non-Replay Metadata (`MAX_TOOL_ROUNDS = 3`, `D-SHARED-CONV-03A`):** `LlamaCppProvider` and `MockLLMProvider` support OpenAI-style `delta.tool_calls` accumulation alongside buffered `<tool_call>` JSON tag parsing without leaking raw tag markup into visible SSE tokens. Each tool intent streams `tool_intent`, optional `tool_confirmation_required`, and `tool_result` frames, executes via D9 deterministic policy evaluation, persists `tool_receipts` and `sources` progressively into `Message.metadata_json` (retained across mid-round cancellation/failure and injected as compact `[Prior action: ...]` context on follow-up turns without silent replay), and explicitly omits `tools` during 1-hop length-continuation, context compaction, and background memory extraction. Conversational confirmation rejects vague affirmations (`"yes"`, `"ok"`) and executes only unambiguous confirmation phrases matching the pending tool/target.
 - **React Web Persistent Attachment History (Slice 8B.7):** Implemented. `AssistantView` preserves attachment metadata when mapping history messages; `ConversationMessageItem` renders supported-image thumbnails and lightbox previews fetched as authenticated Blobs, with unavailable-preview handling and object-URL cleanup. Regression evidence resides in `frontend/web/src/test/persistentAttachmentRendering.test.tsx`. Flutter Desktop parity remains target work.
 
 ### 3.4 Explicitly Unimplemented Capabilities

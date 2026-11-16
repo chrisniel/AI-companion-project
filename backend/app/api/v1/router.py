@@ -13,6 +13,7 @@ from app.api.v1.endpoints.memories import router as memories_router
 from app.api.v1.endpoints.profiles import router as profiles_router
 from app.api.v1.endpoints.scheduling import router as scheduling_router
 from app.api.v1.endpoints.tasks import router as tasks_router
+from app.api.v1.endpoints.tools import router as tools_router
 
 api_v1_router = APIRouter()
 
@@ -37,3 +38,4 @@ api_v1_router.include_router(system_router, dependencies=[Depends(require_host_a
 api_v1_router.include_router(auth_router)
 api_v1_router.include_router(profiles_router)
 api_v1_router.include_router(llm_router)
+api_v1_router.include_router(tools_router)

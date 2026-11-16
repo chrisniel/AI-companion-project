@@ -31,7 +31,7 @@ The desktop shell utilizes a compact, collapsible left navigation rail:
   3. **Schedule:** Tasks, Reminders, Alarms, and daily Routines.
   4. **Memory:** User-visible memory browser, fact verification, and forgetting controls.
   5. **Studio:** Character Studio (traits, lore, avatar, voice selection).
-  6. **Settings:** Responsive two-column categorized settings workspace (aligned with Web preferences) featuring live sidebar search, active `AVAILABLE` sections (*Appearance*, *General & Lifecycle*, *Notifications & Quiet Hours*, *Profiles & Privacy*, *AI Runtime & Models*, *Storage & Diagnostics*), and truthful `PLANNED` milestone tabs (*Voice & Audio*, *Tools & Safety*, *Health & Context*, *Network & Mesh*), without duplicating window-exit or hide-to-tray action buttons inside Settings.
+  6. **Settings:** Responsive two-column categorized settings workspace (aligned with Web preferences) featuring live sidebar search, active `AVAILABLE` sections (*Appearance*, *General & Lifecycle*, *Notifications & Quiet Hours*, *Profiles & Privacy*, *AI Runtime & Models*, *Storage & Diagnostics*, *Tools & Safety*), and truthful `PLANNED` milestone tabs (*Voice & Audio* M4, *Health & Context* M5+, *Network & Mesh* M5+), without duplicating window-exit or hide-to-tray action buttons inside Settings. The top utility strip alongside Profile Scope / Notifications displays a persistent **Stop Tools / Tools KILLED** Kill Switch pill whenever `DesktopToolPolicyController` is wired.
 - **Bottom:** System runtime health indicator (Green = Connected, Yellow = Reconnecting, Red = Stopped), quick Performance Mode / rail collapse controls, and a persistent **`⏻` Power Menu** providing global access to **Minimize to System Tray**, **Close & Startup Settings...** (deep-linking to `Settings -> General & Lifecycle`), and **Exit Companion**.
 
 ---
@@ -48,6 +48,7 @@ The desktop shell utilizes a compact, collapsible left navigation rail:
 The system tray menu strictly distinguishes three distinct lifecycle concepts:
 1. **Open AI Companion** *(Default click / double-click action)* — Restores and focuses the main window.
 2. **Hide to System Tray** — Minimizes/hides the desktop UI window to the system tray. Both the Flutter UI process and the Local AI Runtime host process remain active and executing.
+3. **Emergency Stop Tools / Tools Killed** — Immediately engages the persistent Global Tool Kill Switch (`POST /api/v1/tools/kill-switch`); disabled once engaged until reset in Settings under local Host Admin authority.
 3. **Active Profile:** Shows current profile name with quick flyout to switch profiles.
 4. --- (Separator) ---
 5. **Mute Audio:** Immediate toggle to silence speech output and chime alerts.

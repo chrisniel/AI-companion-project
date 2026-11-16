@@ -7,17 +7,20 @@ import 'package:flutter/services.dart';
 import '../features/chat/assistant_markdown_view.dart';
 import '../features/chat/conversation_history_drawer.dart';
 import '../features/chat/desktop_chat_controller.dart';
+import '../features/tools/desktop_tool_policy_controller.dart';
 import '../platform/desktop_client_settings.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
     super.key,
     this.controller,
+    this.toolPolicyController,
     this.clientSettings,
     this.onNavigateToSettings,
   });
 
   final DesktopChatController? controller;
+  final DesktopToolPolicyController? toolPolicyController;
   final DesktopClientSettings? clientSettings;
   final VoidCallback? onNavigateToSettings;
 
@@ -43,6 +46,8 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _restoredConversationId;
   bool _isRestorationScheduled = false;
   bool _userExplicitlySent = false;
+  final Set<String> _expandedSourcesMessageIds = <String>{};
+  final Set<String> _resolvingConfirmationIds = <String>{};
 
   DesktopChatController get _effectiveController => widget.controller ?? _internalController!;
 
@@ -1458,6 +1463,22 @@ class _ChatScreenState extends State<ChatScreen> {
                   AssistantMarkdownView(
                     content: msg.content,
                   ),
+                if (isStreaming && _effectiveController.activeToolStatus != null) ...[
+                  const SizedBox(height: CompanionSpacing.xs),
+                  _buildToolProgressChip(_effectiveController.activeToolStatus!, ext),
+                ],
+                if (msg.toolReceipts.isNotEmpty) ...[
+                  const SizedBox(height: CompanionSpacing.sm),
+                  _buildToolReceiptsStrip(msg.toolReceipts, ext),
+                ],
+                if (msg.sources.isNotEmpty) ...[
+                  const SizedBox(height: CompanionSpacing.sm),
+                  _buildSourcesStrip(msg, ext),
+                ],
+                if (msg.pendingConfirmations.isNotEmpty) ...[
+                  const SizedBox(height: CompanionSpacing.sm),
+                  _buildPendingConfirmations(msg, ext),
+                ],
                 if (isStreaming) ...[
                   if (msg.content.isEmpty)
                     Row(
@@ -1616,6 +1637,273 @@ class _ChatScreenState extends State<ChatScreen> {
               : bubble,
         ),
       ],
+    );
+  }
+
+  Widget _buildToolProgressChip(String statusText, CompanionThemeExtension? ext) {
+    return Container(
+      key: const Key('chat_live_tool_status'),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: (ext?.accent ?? CompanionColors.lightAccent).withValues(alpha: 0.10),
+        borderRadius: CompanionRadius.borderFull,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 12,
+            height: 12,
+            child: CircularProgressIndicator(
+              strokeWidth: 1.8,
+              color: ext?.accent ?? CompanionColors.lightAccent,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            statusText,
+            style: CompanionTypography.caption.copyWith(
+              color: ext?.accent ?? CompanionColors.lightAccent,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToolReceiptsStrip(
+    List<ToolReceiptOut> receipts,
+    CompanionThemeExtension? ext,
+  ) {
+    return Wrap(
+      spacing: CompanionSpacing.xs,
+      runSpacing: CompanionSpacing.xs,
+      children: receipts.map((r) {
+        final isBlocked = r.outcomeStatus == 'killed' ||
+            r.decision == 'DENY' ||
+            r.outcomeStatus == 'denied' ||
+            r.outcomeStatus == 'rejected_by_user';
+        final color = isBlocked
+            ? (ext?.danger ?? CompanionColors.danger)
+            : (ext?.accent ?? CompanionColors.lightAccent);
+        return Tooltip(
+          message: r.summary,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.10),
+              borderRadius: CompanionRadius.borderSm,
+              border: Border.all(color: color.withValues(alpha: 0.25)),
+            ),
+            child: Text(
+              '${r.toolName} · ${r.outcomeStatus}',
+              style: CompanionTypography.caption.copyWith(
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildSourcesStrip(MessageOut msg, CompanionThemeExtension? ext) {
+    final expanded = _expandedSourcesMessageIds.contains(msg.id);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          key: Key('sources_toggle_${msg.id}'),
+          borderRadius: CompanionRadius.borderSm,
+          onTap: () {
+            setState(() {
+              if (expanded) {
+                _expandedSourcesMessageIds.remove(msg.id);
+              } else {
+                _expandedSourcesMessageIds.add(msg.id);
+              }
+            });
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: (ext?.textMuted ?? CompanionColors.lightTextMuted)
+                  .withValues(alpha: 0.10),
+              borderRadius: CompanionRadius.borderSm,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.public_rounded, size: 14, color: ext?.accent),
+                const SizedBox(width: 6),
+                Text(
+                  'Sources (${msg.sources.length})',
+                  style: CompanionTypography.caption.copyWith(
+                    color: ext?.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                  size: 16,
+                  color: ext?.textSecondary,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (expanded) ...[
+          const SizedBox(height: CompanionSpacing.xs),
+          ...msg.sources.map((src) {
+            return Container(
+              margin: const EdgeInsets.only(bottom: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: (ext?.textMuted ?? CompanionColors.lightTextMuted)
+                    .withValues(alpha: 0.06),
+                borderRadius: CompanionRadius.borderSm,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          src.title,
+                          style: CompanionTypography.caption.copyWith(
+                            color: ext?.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          '${src.domain} — ${src.url}',
+                          style: CompanionTypography.caption.copyWith(
+                            color: ext?.textMuted,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Copy source URL',
+                    icon: const Icon(Icons.copy_rounded, size: 14),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: src.url));
+                    },
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildPendingConfirmations(
+    MessageOut msg,
+    CompanionThemeExtension? ext,
+  ) {
+    final policyCtrl = widget.toolPolicyController;
+    Widget buildCards(bool killed) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: msg.pendingConfirmations.map((conf) {
+          final isBusy = _resolvingConfirmationIds.contains(conf.id);
+          return Container(
+            key: Key('confirmation_card_${conf.id}'),
+            margin: const EdgeInsets.only(bottom: CompanionSpacing.xs),
+            padding: const EdgeInsets.all(CompanionSpacing.sm),
+            decoration: BoxDecoration(
+              color: (ext?.warning ?? CompanionColors.warning).withValues(alpha: 0.10),
+              borderRadius: CompanionRadius.borderSm,
+              border: Border.all(
+                color: (ext?.warning ?? CompanionColors.warning).withValues(alpha: 0.35),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Confirm Risk ${conf.riskTier}: ${conf.toolName}',
+                  style: CompanionTypography.caption.copyWith(
+                    color: ext?.warning ?? CompanionColors.warning,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Target: ${conf.targetSummary}',
+                  style: CompanionTypography.bodySmall.copyWith(color: ext?.textPrimary),
+                ),
+                if (killed) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Approve disabled: Global Kill Switch is active.',
+                    style: CompanionTypography.caption.copyWith(
+                      color: ext?.danger ?? CompanionColors.danger,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: CompanionSpacing.xs),
+                Row(
+                  children: [
+                    FilledButton(
+                      key: Key('confirm_approve_${conf.id}'),
+                      onPressed: isBusy || killed
+                          ? null
+                          : () async {
+                              setState(() => _resolvingConfirmationIds.add(conf.id));
+                              try {
+                                await _effectiveController.resolveConfirmation(conf.id, 'approve');
+                              } finally {
+                                if (mounted) {
+                                  setState(() => _resolvingConfirmationIds.remove(conf.id));
+                                }
+                              }
+                            },
+                      child: const Text('Approve'),
+                    ),
+                    const SizedBox(width: CompanionSpacing.sm),
+                    OutlinedButton(
+                      key: Key('confirm_reject_${conf.id}'),
+                      onPressed: isBusy
+                          ? null
+                          : () async {
+                              setState(() => _resolvingConfirmationIds.add(conf.id));
+                              try {
+                                await _effectiveController.resolveConfirmation(conf.id, 'reject');
+                              } finally {
+                                if (mounted) {
+                                  setState(() => _resolvingConfirmationIds.remove(conf.id));
+                                }
+                              }
+                            },
+                      child: const Text('Reject'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      );
+    }
+
+    if (policyCtrl == null) {
+      return buildCards(false);
+    }
+    return ListenableBuilder(
+      listenable: policyCtrl,
+      builder: (_, __) => buildCards(policyCtrl.globalKillSwitch),
     );
   }
 

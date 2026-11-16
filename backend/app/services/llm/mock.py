@@ -42,6 +42,7 @@ class MockLLMProvider(BaseLLMProvider):
         self._active_profile = settings.LLM_PROFILE
         self._last_active_at = datetime.now(timezone.utc)
         self._last_error: Optional[str] = None
+        self.scripted_turns: List[Any] = []
 
     @property
     def provider_name(self) -> str:
@@ -191,9 +192,31 @@ class MockLLMProvider(BaseLLMProvider):
             reason = kwargs["finish_reason"]
 
         self.last_finish_reason = reason
-        stream_meta = {"finish_reason": reason}
+        stream_meta: dict[str, Any] = {"finish_reason": reason}
+
+        scripted = self.scripted_turns.pop(0) if self.scripted_turns else None
+        if isinstance(scripted, dict):
+            if "tool_calls" in scripted:
+                stream_meta["tool_calls"] = list(scripted["tool_calls"])
+                stream_meta["finish_reason"] = scripted.get("finish_reason", "tool_calls")
+                self.last_finish_reason = stream_meta["finish_reason"]
 
         async def _stream_generator() -> AsyncGenerator[str, None]:
+            if isinstance(scripted, dict):
+                text_out = str(scripted.get("text") or "")
+                if text_out:
+                    for i, token in enumerate(text_out.split(" ")):
+                        yield token if i == 0 else f" {token}"
+                        await asyncio.sleep(0.005)
+                return
+
+            if isinstance(scripted, str):
+                tokens = scripted.split(" ")
+                for i, token in enumerate(tokens):
+                    yield token if i == 0 else f" {token}"
+                    await asyncio.sleep(0.005)
+                return
+
             raw_user_msg = next((m.content for m in reversed(messages) if m.role == "user"), "Hello!")
             last_user_msg = _extract_text_content(raw_user_msg) if raw_user_msg != "Hello!" else "Hello!"
             response_text = f"I received your message: '{last_user_msg}'. Local AI Runtime is operational."

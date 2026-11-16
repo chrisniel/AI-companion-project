@@ -38,6 +38,8 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
   final String trayToolTip;
   final Future<void> Function()? onExitRequested;
   Future<void> Function()? onExitMenuTriggered;
+  Future<void> Function()? onKillSwitchTriggered;
+  bool _globalKillSwitchActive = false;
 
   bool _isInitialized = false;
   bool _isWindowVisible = false;
@@ -106,9 +108,25 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
     _runtimeProcessState = state;
     if (_isTrayAvailable && !_isDisposed) {
       try {
-        await trayAdapter.setContextMenu(buildTrayContextMenu(state));
+        await trayAdapter.setContextMenu(
+          buildTrayContextMenu(state, null, _globalKillSwitchActive),
+        );
       } catch (e) {
         debugPrint('DesktopLifecycleCoordinator: Error updating tray context menu: $e');
+      }
+    }
+  }
+
+  /// Updates the Global Tool Kill Switch state shown inside the system tray menu.
+  Future<void> updateKillSwitchStatus(bool active) async {
+    _globalKillSwitchActive = active;
+    if (_isTrayAvailable && !_isDisposed) {
+      try {
+        await trayAdapter.setContextMenu(
+          buildTrayContextMenu(_runtimeProcessState, null, _globalKillSwitchActive),
+        );
+      } catch (e) {
+        debugPrint('DesktopLifecycleCoordinator: Error updating tray kill switch menu: $e');
       }
     }
   }
@@ -118,8 +136,22 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
     RuntimeProcessState? state,
     bool? includeDevTestActions,
   ]) {
+    return buildTrayMenuItemsWithSafety(
+      state,
+      includeDevTestActions,
+      _globalKillSwitchActive,
+    );
+  }
+
+  /// Builds tray context menu items with optional explicit D9 Kill Switch badge state.
+  List<MenuItem> buildTrayMenuItemsWithSafety([
+    RuntimeProcessState? state,
+    bool? includeDevTestActions,
+    bool? globalKillSwitchOverride,
+  ]) {
     final runtime = state ?? _runtimeProcessState;
     final allowDevActions = includeDevTestActions ?? kDebugMode;
+    final killSwitch = globalKillSwitchOverride ?? _globalKillSwitchActive;
     String statusLabel;
     if (runtime == null) {
       statusLabel = 'Runtime: Standalone';
@@ -182,6 +214,11 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
         key: 'hide_to_tray',
         label: 'Hide Window to Tray',
       ),
+      MenuItem(
+        key: 'kill_switch_toggle',
+        label: killSwitch ? 'Tools Killed (Reset in Settings)' : 'Emergency Stop Tools',
+        disabled: killSwitch,
+      ),
     ];
 
     if (allowDevActions) {
@@ -209,8 +246,15 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
   Menu buildTrayContextMenu([
     RuntimeProcessState? state,
     bool? includeDevTestActions,
+    bool globalKillSwitch = false,
   ]) {
-    return Menu(items: buildTrayMenuItems(state, includeDevTestActions));
+    return Menu(
+      items: buildTrayMenuItemsWithSafety(
+        state,
+        includeDevTestActions,
+        globalKillSwitch,
+      ),
+    );
   }
 
 
@@ -314,6 +358,10 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
       restoreAndFocusWindow();
     } else if (menuItem.key == 'hide_to_tray') {
       hideToTray();
+    } else if (menuItem.key == 'kill_switch_toggle') {
+      if (onKillSwitchTriggered != null) {
+        onKillSwitchTriggered!();
+      }
     } else if (menuItem.key == 'quit_ui_dev') {
       handleExitRequested();
     } else if (menuItem.key == 'exit_full' || menuItem.key == 'exit') {

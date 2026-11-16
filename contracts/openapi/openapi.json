@@ -4964,6 +4964,514 @@
           }
         ]
       }
+    },
+    "/api/v1/tools/catalog": {
+      "get": {
+        "tags": [
+          "Tools & Safety"
+        ],
+        "summary": "List Registered D9 Tools",
+        "description": "Return all registered Decision D9 tools alongside permanently rejected Risk 3 classes.",
+        "operationId": "get_tool_catalog_api_v1_tools_catalog_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolCatalogOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tools/policy": {
+      "get": {
+        "tags": [
+          "Tools & Safety"
+        ],
+        "summary": "Get D9 Policy & Kill Switch State",
+        "description": "Return active profile's D9 policy, Global Kill Switch state, and non-secret Web config.",
+        "operationId": "get_tool_policy_api_v1_tools_policy_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPolicyOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Tools & Safety"
+        ],
+        "summary": "Update Profile D9 Policy",
+        "description": "Update Risk 0-2 policy thresholds scoped strictly to the authenticated profile.",
+        "operationId": "update_tool_policy_api_v1_tools_policy_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolPolicyUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPolicyOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tools/kill-switch": {
+      "get": {
+        "tags": [
+          "Tools & Safety"
+        ],
+        "summary": "Get Global Tool Kill Switch",
+        "description": "Read persistent Global Tool Kill Switch state (requires Profile Session or Host Admin).",
+        "operationId": "get_kill_switch_state_api_v1_tools_kill_switch_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-host-admin-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Host-Admin-Secret"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KillSwitchStateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Tools & Safety"
+        ],
+        "summary": "Toggle Global Tool Kill Switch",
+        "description": "Engage (Profile Session or Host Admin) or disengage (Host Admin ONLY) the persistent Kill Switch.",
+        "operationId": "set_kill_switch_state_api_v1_tools_kill_switch_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-host-admin-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Host-Admin-Secret"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KillSwitchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KillSwitchStateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tools/web-config": {
+      "put": {
+        "tags": [
+          "Tools & Safety"
+        ],
+        "summary": "Configure Web Info Providers (Host Admin)",
+        "description": "Host-Admin-only update of Web provider routing and ACL-protected search API key.",
+        "operationId": "update_web_config_api_v1_tools_web_config_put",
+        "parameters": [
+          {
+            "name": "x-host-admin-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Host-Admin-Secret"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebConfigUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebConfigOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tools/web-config/api-key": {
+      "delete": {
+        "tags": [
+          "Tools & Safety"
+        ],
+        "summary": "Clear Local Web Search API Key (Host Admin)",
+        "description": "Delete device-local Web Search API key file on native Host Admin request.",
+        "operationId": "delete_web_search_api_key_api_v1_tools_web_config_api_key_delete",
+        "parameters": [
+          {
+            "name": "x-host-admin-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Host-Admin-Secret"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebApiKeyClearOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tools/audit": {
+      "get": {
+        "tags": [
+          "Tools & Safety"
+        ],
+        "summary": "List Redacted Tool Audit Logs",
+        "description": "List newest redacted tool audit logs for the authenticated profile.",
+        "operationId": "list_tool_audit_logs_api_v1_tools_audit_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolAuditLogListOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tools/confirmations": {
+      "get": {
+        "tags": [
+          "Tools & Safety"
+        ],
+        "summary": "List Tool Confirmations",
+        "description": "List profile-owned D9 confirmation requests filtered optionally by conversation/status.",
+        "operationId": "list_tool_confirmations_api_v1_tools_confirmations_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "pending",
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolConfirmationListOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tools/confirmations/{confirmation_id}/resolve": {
+      "post": {
+        "tags": [
+          "Tools & Safety"
+        ],
+        "summary": "Resolve Pending Tool Confirmation",
+        "description": "Atomically approve or reject a fingerprint-bound pending confirmation.",
+        "operationId": "resolve_tool_confirmation_api_v1_tools_confirmations__confirmation_id__resolve_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "confirmation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Confirmation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolConfirmationResolveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolConfirmationResolveResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -6946,6 +7454,71 @@
         ],
         "title": "InputModality"
       },
+      "KillSwitchRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "KillSwitchRequest",
+        "description": "Toggle Global Tool Kill Switch (disengaging strictly requires Host Admin)."
+      },
+      "KillSwitchStateOut": {
+        "properties": {
+          "global_kill_switch": {
+            "type": "boolean",
+            "title": "Global Kill Switch"
+          },
+          "kill_switch_updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kill Switch Updated At"
+          },
+          "kill_switch_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kill Switch Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "global_kill_switch"
+        ],
+        "title": "KillSwitchStateOut",
+        "description": "Persistent Global Tool Kill Switch status."
+      },
       "LLMRuntimeState": {
         "type": "string",
         "enum": [
@@ -7478,6 +8051,27 @@
             },
             "type": "array",
             "title": "Attachments"
+          },
+          "tool_receipts": {
+            "items": {
+              "$ref": "#/components/schemas/ToolReceiptOut"
+            },
+            "type": "array",
+            "title": "Tool Receipts"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/WebSourceRefOut"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "pending_confirmations": {
+            "items": {
+              "$ref": "#/components/schemas/ToolConfirmationOut"
+            },
+            "type": "array",
+            "title": "Pending Confirmations"
           }
         },
         "additionalProperties": false,
@@ -10047,6 +10641,583 @@
         ],
         "title": "TicketRequest"
       },
+      "ToolAuditLogListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ToolAuditLogOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "total"
+        ],
+        "title": "ToolAuditLogListOut",
+        "description": "Paginated redacted tool audit ledger response."
+      },
+      "ToolAuditLogOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "profile_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Id"
+          },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
+          "tool_name": {
+            "type": "string",
+            "title": "Tool Name"
+          },
+          "risk_tier": {
+            "type": "integer",
+            "title": "Risk Tier"
+          },
+          "provenance": {
+            "type": "string",
+            "title": "Provenance"
+          },
+          "decision": {
+            "type": "string",
+            "title": "Decision"
+          },
+          "outcome_status": {
+            "type": "string",
+            "title": "Outcome Status"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "source_domains": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Domains"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "tool_name",
+          "risk_tier",
+          "provenance",
+          "decision",
+          "outcome_status",
+          "created_at"
+        ],
+        "title": "ToolAuditLogOut",
+        "description": "Redacted tool audit record (zero prompts, secrets, or personal bodies)."
+      },
+      "ToolCatalogItemOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "risk_tier": {
+            "type": "integer",
+            "title": "Risk Tier"
+          },
+          "domain": {
+            "type": "string",
+            "title": "Domain"
+          },
+          "reversible": {
+            "type": "boolean",
+            "title": "Reversible"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "risk_tier",
+          "domain",
+          "reversible"
+        ],
+        "title": "ToolCatalogItemOut",
+        "description": "Read-only description of a registered D9 typed tool."
+      },
+      "ToolCatalogOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ToolCatalogItemOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "prohibited_capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Prohibited Capabilities"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ToolCatalogOut",
+        "description": "Catalog of registered D9 tools plus permanently rejected Risk 3 classes."
+      },
+      "ToolConfirmationListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ToolConfirmationOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "total"
+        ],
+        "title": "ToolConfirmationListOut",
+        "description": "List of tool confirmations for the active profile."
+      },
+      "ToolConfirmationOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "conversation_id": {
+            "type": "string",
+            "title": "Conversation Id"
+          },
+          "tool_name": {
+            "type": "string",
+            "title": "Tool Name"
+          },
+          "risk_tier": {
+            "type": "integer",
+            "title": "Risk Tier"
+          },
+          "provenance": {
+            "type": "string",
+            "title": "Provenance"
+          },
+          "target_summary": {
+            "type": "string",
+            "title": "Target Summary"
+          },
+          "arguments_preview": {
+            "type": "string",
+            "title": "Arguments Preview"
+          },
+          "fingerprint": {
+            "type": "string",
+            "title": "Fingerprint"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "conversation_id",
+          "tool_name",
+          "risk_tier",
+          "provenance",
+          "target_summary",
+          "arguments_preview",
+          "fingerprint",
+          "status",
+          "expires_at",
+          "created_at"
+        ],
+        "title": "ToolConfirmationOut",
+        "description": "Pending or resolved fingerprint-bound tool confirmation card."
+      },
+      "ToolConfirmationResolveRequest": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approve",
+              "reject"
+            ],
+            "title": "Decision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "decision"
+        ],
+        "title": "ToolConfirmationResolveRequest",
+        "description": "Explicit user resolution for a pending confirmation."
+      },
+      "ToolConfirmationResolveResponse": {
+        "properties": {
+          "confirmation": {
+            "$ref": "#/components/schemas/ToolConfirmationOut"
+          },
+          "executed": {
+            "type": "boolean",
+            "title": "Executed"
+          },
+          "outcome_status": {
+            "type": "string",
+            "title": "Outcome Status"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/WebSourceRefOut"
+            },
+            "type": "array",
+            "title": "Sources"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "confirmation",
+          "executed",
+          "outcome_status",
+          "summary"
+        ],
+        "title": "ToolConfirmationResolveResponse",
+        "description": "Result of atomically resolving a pending confirmation."
+      },
+      "ToolPolicyOut": {
+        "properties": {
+          "profile_id": {
+            "type": "string",
+            "title": "Profile Id"
+          },
+          "global_kill_switch": {
+            "type": "boolean",
+            "title": "Global Kill Switch"
+          },
+          "kill_switch_updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kill Switch Updated At"
+          },
+          "kill_switch_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kill Switch Reason"
+          },
+          "risk0_policy": {
+            "type": "string",
+            "enum": [
+              "allow",
+              "confirm",
+              "deny"
+            ],
+            "title": "Risk0 Policy"
+          },
+          "risk1_explicit_policy": {
+            "type": "string",
+            "enum": [
+              "allow",
+              "confirm",
+              "deny"
+            ],
+            "title": "Risk1 Explicit Policy"
+          },
+          "risk1_suggested_policy": {
+            "type": "string",
+            "enum": [
+              "confirm",
+              "deny"
+            ],
+            "title": "Risk1 Suggested Policy"
+          },
+          "risk2_policy": {
+            "type": "string",
+            "enum": [
+              "confirm",
+              "deny"
+            ],
+            "title": "Risk2 Policy"
+          },
+          "weather_provider": {
+            "type": "string",
+            "enum": [
+              "open_meteo",
+              "disabled"
+            ],
+            "title": "Weather Provider"
+          },
+          "web_search_provider": {
+            "type": "string",
+            "enum": [
+              "public_search",
+              "searxng",
+              "tavily",
+              "brave",
+              "disabled"
+            ],
+            "title": "Web Search Provider"
+          },
+          "searxng_base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Searxng Base Url"
+          },
+          "search_api_key_configured": {
+            "type": "boolean",
+            "title": "Search Api Key Configured",
+            "default": false
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "profile_id",
+          "global_kill_switch",
+          "risk0_policy",
+          "risk1_explicit_policy",
+          "risk1_suggested_policy",
+          "risk2_policy",
+          "weather_provider",
+          "web_search_provider",
+          "updated_at"
+        ],
+        "title": "ToolPolicyOut",
+        "description": "Combined profile D9 policy settings, global Kill Switch, and non-secret Web config."
+      },
+      "ToolPolicyUpdate": {
+        "properties": {
+          "risk0_policy": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "allow",
+                  "confirm",
+                  "deny"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk0 Policy"
+          },
+          "risk1_explicit_policy": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "allow",
+                  "confirm",
+                  "deny"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk1 Explicit Policy"
+          },
+          "risk1_suggested_policy": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "confirm",
+                  "deny"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk1 Suggested Policy"
+          },
+          "risk2_policy": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "confirm",
+                  "deny"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk2 Policy"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ToolPolicyUpdate",
+        "description": "Profile-scoped risk policy mutation payload."
+      },
+      "ToolReceiptOut": {
+        "properties": {
+          "tool_name": {
+            "type": "string",
+            "title": "Tool Name"
+          },
+          "risk_tier": {
+            "type": "integer",
+            "title": "Risk Tier"
+          },
+          "provenance": {
+            "type": "string",
+            "title": "Provenance"
+          },
+          "decision": {
+            "type": "string",
+            "title": "Decision"
+          },
+          "outcome_status": {
+            "type": "string",
+            "title": "Outcome Status"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tool_name",
+          "risk_tier",
+          "provenance",
+          "decision",
+          "outcome_status",
+          "summary"
+        ],
+        "title": "ToolReceiptOut",
+        "description": "Committed action receipt persisted on assistant turns (D-SHARED-CONV-03A)."
+      },
       "TrashListResponse": {
         "properties": {
           "items": {
@@ -10260,6 +11431,175 @@
           "incompatible"
         ],
         "title": "ValidationStatus"
+      },
+      "WebApiKeyClearOut": {
+        "properties": {
+          "cleared": {
+            "type": "boolean",
+            "title": "Cleared"
+          },
+          "search_api_key_configured": {
+            "type": "boolean",
+            "title": "Search Api Key Configured"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "cleared",
+          "search_api_key_configured"
+        ],
+        "title": "WebApiKeyClearOut",
+        "description": "Result of clearing the device-local Web Search API key."
+      },
+      "WebConfigOut": {
+        "properties": {
+          "weather_provider": {
+            "type": "string",
+            "enum": [
+              "open_meteo",
+              "disabled"
+            ],
+            "title": "Weather Provider"
+          },
+          "web_search_provider": {
+            "type": "string",
+            "enum": [
+              "public_search",
+              "searxng",
+              "tavily",
+              "brave",
+              "disabled"
+            ],
+            "title": "Web Search Provider"
+          },
+          "searxng_base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Searxng Base Url"
+          },
+          "search_api_key_configured": {
+            "type": "boolean",
+            "title": "Search Api Key Configured",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "weather_provider",
+          "web_search_provider"
+        ],
+        "title": "WebConfigOut",
+        "description": "Non-secret Web retrieval provider configuration status."
+      },
+      "WebConfigUpdateRequest": {
+        "properties": {
+          "weather_provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "open_meteo",
+                  "disabled"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weather Provider"
+          },
+          "web_search_provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "public_search",
+                  "searxng",
+                  "tavily",
+                  "brave",
+                  "disabled"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Web Search Provider"
+          },
+          "searxng_base_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 512
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Searxng Base Url"
+          },
+          "search_api_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 512,
+                "minLength": 4
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Search Api Key"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "WebConfigUpdateRequest",
+        "description": "Host-Admin-only Web retrieval provider configuration (secret stored out-of-DB)."
+      },
+      "WebSourceRefOut": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "domain": {
+            "type": "string",
+            "title": "Domain"
+          },
+          "snippet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snippet"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "url",
+          "domain"
+        ],
+        "title": "WebSourceRefOut",
+        "description": "Normalized source attribution link for read-only external retrieval."
       }
     },
     "securitySchemes": {

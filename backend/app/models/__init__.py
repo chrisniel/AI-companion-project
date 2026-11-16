@@ -15,6 +15,10 @@ from app.models.reminder import Reminder
 from app.models.alarm import Alarm
 from app.models.routine import Routine
 from app.models.notification_event import NotificationEvent
+from app.models.tool_runtime_config import ToolRuntimeConfig
+from app.models.profile_tool_settings import ProfileToolSettings
+from app.models.tool_confirmation import ToolConfirmation
+from app.models.tool_audit_log import ToolAuditLog
 
 __all__ = [
     "Profile",
@@ -32,4 +36,8 @@ __all__ = [
     "Alarm",
     "Routine",
     "NotificationEvent",
+    "ToolRuntimeConfig",
+    "ProfileToolSettings",
+    "ToolConfirmation",
+    "ToolAuditLog",
 ]

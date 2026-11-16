@@ -1,4 +1,5 @@
 import 'package:meta/meta.dart';
+import 'tools_dto.dart';
 
 /// Lightweight attachment reference embedded in message payloads.
 @immutable
@@ -149,6 +150,9 @@ class MessageOut {
   final int? completionTokens;
   final String createdAt;
   final List<AttachmentRef> attachments;
+  final List<ToolReceiptOut> toolReceipts;
+  final List<WebSourceRefOut> sources;
+  final List<ToolConfirmationOut> pendingConfirmations;
 
   const MessageOut({
     required this.id,
@@ -163,6 +167,9 @@ class MessageOut {
     this.completionTokens,
     required this.createdAt,
     this.attachments = const [],
+    this.toolReceipts = const [],
+    this.sources = const [],
+    this.pendingConfirmations = const [],
   });
 
   factory MessageOut.fromJson(Map<String, dynamic> json) {
@@ -211,6 +218,27 @@ class MessageOut {
       parsedAtts = const [];
     }
 
+    final rawReceipts = json['tool_receipts'];
+    final List<ToolReceiptOut> parsedReceipts = rawReceipts is List
+        ? rawReceipts
+            .map((e) => ToolReceiptOut.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList()
+        : const [];
+
+    final rawSources = json['sources'];
+    final List<WebSourceRefOut> parsedSources = rawSources is List
+        ? rawSources
+            .map((e) => WebSourceRefOut.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList()
+        : const [];
+
+    final rawConfirmations = json['pending_confirmations'];
+    final List<ToolConfirmationOut> parsedConfirmations = rawConfirmations is List
+        ? rawConfirmations
+            .map((e) => ToolConfirmationOut.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList()
+        : const [];
+
     return MessageOut(
       id: idVal,
       conversationId: convIdVal,
@@ -224,6 +252,9 @@ class MessageOut {
       completionTokens: json['completion_tokens'] as int?,
       createdAt: createdVal,
       attachments: parsedAtts,
+      toolReceipts: parsedReceipts,
+      sources: parsedSources,
+      pendingConfirmations: parsedConfirmations,
     );
   }
 
@@ -240,6 +271,12 @@ class MessageOut {
         if (completionTokens != null) 'completion_tokens': completionTokens,
         'created_at': createdAt,
         'attachments': attachments.map((e) => e.toJson()).toList(),
+        if (toolReceipts.isNotEmpty)
+          'tool_receipts': toolReceipts.map((e) => e.toJson()).toList(),
+        if (sources.isNotEmpty) 'sources': sources.map((e) => e.toJson()).toList(),
+        if (pendingConfirmations.isNotEmpty)
+          'pending_confirmations':
+              pendingConfirmations.map((e) => e.toJson()).toList(),
       };
 
   @override

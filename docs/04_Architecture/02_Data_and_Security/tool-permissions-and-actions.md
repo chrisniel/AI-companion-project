@@ -76,8 +76,8 @@ To ensure user agency and safe runtime intervention during tool execution, the a
   3. *Stop Queued Sequence:* Immediately discards all queued, unexecuted, or pending downstream actions within an active multi-step operation.
   4. *Global Tool Kill-Switch:* A master administrative toggle enabling the user to immediately disable all autonomous or external tool execution across the entire runtime.
 - **Cancellation vs. Rollback Boundary:** Cancellation halts further execution and terminates pending work. When supported by the adapter, cooperative cancellation signals are dispatched to in-flight tasks. However, the architecture strictly recognizes that **cancellation cannot promise rollback of an already-committed external side effect** (e.g., an external HTTP mutation already processed by a remote server, an external webhook triggered, or an irreversible physical/network transmission).
-- **Implementation Status:** Like the conversational tool engine itself, these emergency control mechanisms represent target governance architecture and are **NOT IMPLEMENTED** in the current runtime.
-- **Open Design Parameters:** Exact API endpoints, cancellation token plumbing, frontend UI controls (such as emergency stop buttons), transport signaling, and user notification/recovery workflows remain open design.
+- **Implementation Status:** The persistent Global Tool Kill Switch, turn cancellation / Stop Generation interception, and D9 policy gating across multi-step bounded loops (up to `MAX_TOOL_ROUNDS = 3`) are **implemented** in M4 Batch A. Cooperative mid-flight cancellation of external HTTP fetches respects bounded stream timeouts.
+- **Residual Open Design Parameters:** Multi-step plan pause/resume queues for long-running external workflows remain future target refinements as additional external adapters are added.
 
 ---
 
@@ -139,11 +139,14 @@ In accordance with Decisions `D-PHONE-13` through `D-PHONE-13F` and `D-SHARED-CO
 
 ## 3. Current Verified Implementation
 
-Repository source code establishes the following baseline reality:
+Repository source code establishes the following baseline reality for M4 Batch A:
 
-- **Conversational Tool Engine Status:** **NOT IMPLEMENTED**. The current backend runtime contains no conversational tool calling engine, no tool dispatcher, and no JSON-schema tool registry.
-- **REST Endpoints vs. Tool Engine:** The existing REST API exposes endpoints for tasks (`/api/v1/tasks`), memories (`/api/v1/memories`), and attachments (`/api/v1/conversations/{id}/attachments`). These are standard HTTP CRUD routes invoked directly by client interfaces. They must **not** be mistaken for an automated conversational tool execution policy engine.
-- **Model Registry Flags:** `app/schemas/model_registry.py` defines `ModelCapability.tool_calling = "tool_calling"`, but this is a metadata capability flag declaring whether a model architecture supports tool call tokens, not an active execution engine.
+- **Typed D9 Tool Registry & Schema Validation (`backend/app/services/tools/registry.py`):** Exposes strict Pydantic (`extra="forbid"`) schemas for Risk 0 (`weather_lookup`, `web_search`, `web_fetch`, `list_tasks`, `list_reminders`, `list_alarms`, `search_memories`), Risk 1 (`create_task`, `update_task`, `create_reminder`, `create_alarm`), and Risk 2 (`delete_task`, `delete_reminder`, `delete_alarm`) capabilities, plus `PROHIBITED_RISK3_CATEGORIES` (`arbitrary_shell_execution`, `arbitrary_filesystem_write`, `credential_exfiltration`, `os_security_reconfiguration`).
+- **5-Stage Deterministic Execution & Policy Engine (`backend/app/services/tools/policy.py`, `executor.py`):** Evaluates Global Kill Switch state, provenance (`EXPLICIT_USER`, `COMPANION_SUGGESTED`, `APPROVED_ROUTINE`, `SYSTEM_RECOVERY`, `EXTERNAL_CONTENT`), Risk Tier, profile policy (`ToolPolicyOut`), and active Quiet Hours before calling narrow SQLite-profile-scoped productivity/memory adapters or SSRF-hardened Web info adapters. `EXTERNAL_CONTENT` is unconditionally rejected (`DENY`) from authorization.
+- **Fingerprint-Bound Confirmations & Conversational Intercept:** Pending Risk 1/2 confirmations (`ToolConfirmation`, 120s TTL) bind `profile_id`, `ProfileSession.id`, SHA-256 parameter fingerprint, and `expires_at` via atomic single-winner claim (`POST /api/v1/tools/confirmations/{confirmation_id}/resolve`). Vague affirmations (`"yes"`, `"ok"`) are safely rejected without executing pending actions; explicit confirmation naming the tool/target is required.
+- **Persistent Global Kill Switch & Control Plane (`/api/v1/tools/*`):** Profile Sessions can engage the Kill Switch immediately via UI top bar, tray menu, or Settings; **disengaging strictly requires native Host Admin over loopback** (`X-Host-Admin-Secret` without browser `Origin`). Action receipts persist in `Message.metadata_json` without silent replay (`D-SHARED-CONV-03A`).
+- **Desktop Safety Workspace & Chat UI:** Flutter Desktop (`SettingsToolsSection`, `DesktopToolPolicyController`, `DesktopShell`, `ChatScreen`) surfaces live tool execution progress chips, collapsible citation cards, inline confirmation cards (with Approve disabled while Kill Switch is active), Risk tier toggles, and the redacted audit ledger.
+- **Model Registry Flags:** `app/schemas/model_registry.py` defines `ModelCapability.tool_calling = "tool_calling"`, while orchestrator supports both structured `delta.tool_calls` and buffered `<tool_call>` JSON fallback parsing.
 
 ---
 

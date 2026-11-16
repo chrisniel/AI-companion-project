@@ -40,6 +40,7 @@ class Message(Base, UUIDPrimaryKeyMixin, TimestampMixin, OwnerMixin, ProfileMixi
     model_name: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     prompt_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     completion_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    metadata_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     conversation: Mapped["Conversation"] = relationship("Conversation", back_populates="messages")
     attachments: Mapped[List["Attachment"]] = relationship(

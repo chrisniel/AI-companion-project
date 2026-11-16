@@ -44,12 +44,49 @@ class ProviderGenerationError(RuntimeError):
     """Internal generation failure with a safe diagnostic code, never upstream data."""
 
 
-def _decode_stream_event(event: str, data: str) -> tuple[str, bool]:
+def _accumulate_tool_call_deltas(
+    acc: dict[int, dict[str, Any]],
+    deltas: list[Any],
+) -> None:
+    """Assemble OpenAI streaming tool_calls chunks indexed by tool slot index."""
+    for entry in deltas:
+        if not isinstance(entry, dict):
+            continue
+        idx = int(entry.get("index", 0))
+        slot = acc.setdefault(
+            idx,
+            {
+                "id": "",
+                "type": "function",
+                "function": {"name": "", "arguments": ""},
+            },
+        )
+        if isinstance(entry.get("id"), str) and entry["id"]:
+            slot["id"] = entry["id"]
+        if isinstance(entry.get("type"), str) and entry["type"]:
+            slot["type"] = entry["type"]
+        fn = entry.get("function")
+        if isinstance(fn, dict):
+            if isinstance(fn.get("name"), str):
+                slot["function"]["name"] += fn["name"]
+            if isinstance(fn.get("arguments"), str):
+                slot["function"]["arguments"] += fn["arguments"]
+
+
+def _decode_stream_event(event: str, data: str) -> tuple[str, bool, Optional[str]]:
+    token, done, reason, _ = _decode_stream_payload(event, data)
+    return token, done, reason
+
+
+def _decode_stream_payload(
+    event: str,
+    data: str,
+) -> tuple[str, bool, Optional[str], Optional[list[Any]]]:
     """Decode llama-server's OpenAI-compatible SSE payload and explicit errors."""
     if event == "error":
         raise ProviderGenerationError("UPSTREAM_GENERATION_ERROR")
     if data == "[DONE]":
-        return "", True, None
+        return "", True, None, None
     try:
         chunk = json.loads(data)
     except (ValueError, TypeError):
@@ -61,7 +98,7 @@ def _decode_stream_event(event: str, data: str) -> tuple[str, bool]:
     choices = chunk.get("choices")
     # Usage-only frames and role-only deltas carry no text, but are valid protocol.
     if choices == [] and isinstance(chunk.get("usage"), dict):
-        return "", False, None
+        return "", False, None, None
     if not isinstance(choices, list) or len(choices) != 1 or not isinstance(choices[0], dict):
         raise ProviderGenerationError("UPSTREAM_PROTOCOL_ERROR")
     choice = choices[0]
@@ -74,12 +111,16 @@ def _decode_stream_event(event: str, data: str) -> tuple[str, bool]:
     token = delta.get("content")
     if token is not None and not isinstance(token, str):
         raise ProviderGenerationError("UPSTREAM_PROTOCOL_ERROR")
-    return token or "", False, reason
+    raw_tool_calls = delta.get("tool_calls")
+    if raw_tool_calls is not None and not isinstance(raw_tool_calls, list):
+        raise ProviderGenerationError("UPSTREAM_PROTOCOL_ERROR")
+    return token or "", False, reason, raw_tool_calls
 
 
 async def _server_stream_tokens(
     response: httpx.Response,
     on_finish: Optional[Callable[[str], None]] = None,
+    on_tool_calls: Optional[Callable[[list[Any]], None]] = None,
 ) -> AsyncGenerator[str, None]:
     if not response.is_success:
         raise ProviderGenerationError("UPSTREAM_HTTP_ERROR")
@@ -88,7 +129,9 @@ async def _server_stream_tokens(
     async for line in response.aiter_lines():
         if not line:
             if data or event == "error":
-                token, done, finish_reason = _decode_stream_event(event, "\n".join(data))
+                token, done, finish_reason, raw_tc = _decode_stream_payload(event, "\n".join(data))
+                if raw_tc and on_tool_calls:
+                    on_tool_calls(raw_tc)
                 if finish_reason and on_finish:
                     on_finish(finish_reason)
                 if token:
@@ -102,7 +145,9 @@ async def _server_stream_tokens(
             event = line[6:].strip()
         # SSE comments, id and retry fields are non-terminal metadata.
     if data or event == "error":
-        token, done, finish_reason = _decode_stream_event(event, "\n".join(data))
+        token, done, finish_reason, raw_tc = _decode_stream_payload(event, "\n".join(data))
+        if raw_tc and on_tool_calls:
+            on_tool_calls(raw_tc)
         if finish_reason and on_finish:
             on_finish(finish_reason)
         if token:
@@ -121,8 +166,15 @@ def _translate_messages(messages: List[ChatMessage]) -> list[dict[str, Any]]:
     """
     wire_messages = []
     for m in messages:
-        if isinstance(m.content, str):
-            wire_messages.append({"role": m.role, "content": m.content})
+        if m.content is None or isinstance(m.content, str):
+            msg_dict: dict[str, Any] = {"role": m.role, "content": m.content or ""}
+            if getattr(m, "tool_calls", None):
+                msg_dict["tool_calls"] = m.tool_calls
+            if getattr(m, "tool_call_id", None):
+                msg_dict["tool_call_id"] = m.tool_call_id
+            if getattr(m, "name", None):
+                msg_dict["name"] = m.name
+            wire_messages.append(msg_dict)
         elif isinstance(m.content, list):
             wire_parts = []
             for block in m.content:
@@ -1208,11 +1260,16 @@ class LlamaCppProvider(BaseLLMProvider):
         max_tokens: int = 1024,
         **kwargs
     ) -> GenerationStream:
-        stream_meta = {"finish_reason": "stop"}
+        stream_meta: dict[str, Any] = {"finish_reason": "stop", "tool_calls": []}
+        tool_call_acc: dict[int, dict[str, Any]] = {}
 
         def _record_finish(reason: str) -> None:
             stream_meta["finish_reason"] = reason
             self.last_finish_reason = reason
+
+        def _record_tool_calls(deltas: list[Any]) -> None:
+            _accumulate_tool_call_deltas(tool_call_acc, deltas)
+            stream_meta["tool_calls"] = [tool_call_acc[k] for k in sorted(tool_call_acc)]
 
         async def _stream_generator() -> AsyncGenerator[str, None]:
             formatted_messages = _translate_messages(messages)
@@ -1225,6 +1282,7 @@ class LlamaCppProvider(BaseLLMProvider):
             dry_allowed_length = kwargs.get("dry_allowed_length", 2)
             dry_penalty_last_n = kwargs.get("dry_penalty_last_n", 128)
             stop_sequences = kwargs.get("stop", ["<|im_end|>", "<|endoftext|>", "\nUser:"])
+            tools = kwargs.get("tools")
 
             try:
                 # Route A: Standalone llama-server streaming
@@ -1243,9 +1301,15 @@ class LlamaCppProvider(BaseLLMProvider):
                         "dry_penalty_last_n": dry_penalty_last_n,
                         "stop": stop_sequences,
                     }
+                    if tools:
+                        payload["tools"] = tools
                     async with httpx.AsyncClient(timeout=120.0) as client:
                         async with client.stream("POST", f"{settings.LLAMA_SERVER_URL}/chat/completions", json=payload) as response:
-                            async for token in _server_stream_tokens(response, on_finish=_record_finish):
+                            async for token in _server_stream_tokens(
+                                response,
+                                on_finish=_record_finish,
+                                on_tool_calls=_record_tool_calls,
+                            ):
                                 yield token
                     return
 
@@ -1264,6 +1328,8 @@ class LlamaCppProvider(BaseLLMProvider):
                             "repeat_penalty": repeat_penalty,
                             "stop": stop_sequences,
                         }
+                        if tools:
+                            infer_kwargs["tools"] = tools
                         stream = native_model.create_chat_completion(**infer_kwargs)
                         for chunk in stream:
                             choices = chunk.get("choices", [])
@@ -1273,6 +1339,9 @@ class LlamaCppProvider(BaseLLMProvider):
                                 if reason:
                                     _record_finish(reason)
                                 delta = choice.get("delta", {})
+                                raw_tc = delta.get("tool_calls")
+                                if isinstance(raw_tc, list) and raw_tc:
+                                    _record_tool_calls(raw_tc)
                                 token = delta.get("content")
                                 if token:
                                     loop.call_soon_threadsafe(queue.put_nowait, token)

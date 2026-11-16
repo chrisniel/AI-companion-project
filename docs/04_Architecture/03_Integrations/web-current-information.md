@@ -68,11 +68,12 @@ In accordance with Decisions `D-PHONE-13C` and `D-PHONE-01A`:
 
 ## 3. Current Verified Implementation
 
-Repository source code establishes the current baseline reality:
+Repository source code establishes the following baseline reality (delivered in M4 Batch A):
 
-- **Web Providers Status:** WebSearch, WebFetch, and Weather provider adapters are **NOT IMPLEMENTED** in the current codebase.
-- **Backend Services:** `backend/app/services` contains local model orchestration (`llm/`), conversational turn management (`assistant/`), memory persistence (`memory/`), attachment handling, and model registry services. No external HTTP search client, web scraper, or weather connector exists in the backend runtime.
-- **Candidate Status:** Provider names referenced in architecture plans (e.g., Tavily, SearXNG, Open-Meteo) represent candidate options for future implementation slices, not currently functional adapters.
+- **Hardened SSRF Guard & TLS SNI IP-Pinning (`backend/app/services/web/ssrf_guard.py`):** Restricts schemes strictly to `http://` and `https://`, unwraps IPv6-mapped IPv4 addresses, rejects loopback/RFC1918/link-local/CGNAT/reserved subnets across initial and redirect targets (`follow_redirects=False`, max 3 hops), validates DNS resolution pre-flight, connects to the verified IP with TLS `sni_hostname` pinning, enforces 10s HTTP timeout and 2 MiB streaming payload cap, and blocks standard ports other than `80`/`443`.
+- **Untrusted Content Sanitizer (`backend/app/services/web/sanitizer.py`):** Strips `<script>`, `<style>`, `<iframe>`, `<form>`, `<noscript>`, `<svg>`, HTML comments, and invisible control characters before wrapping bounded output in `<untrusted_web_content source_url="...">` delimiters.
+- **Zero-Key & Optional Keyed Providers (`backend/app/services/web/providers.py`, `backend/app/services/tools/web_secret_store.py`):** Default Weather uses **Open-Meteo** (`open_meteo`); default Web Search uses zero-key **Public Search** (`public_search`), with Host-Admin-configurable **SearXNG** (loopback or public HTTPS origin without credentials) and optional **Tavily** / **Brave** (`search_api_key` persisted out-of-DB in ACL-protected local file storage, never returned in API responses or logs).
+- **Attribution & UI Rendering:** Normalized `WebSourceRefOut` links (`title`, `url`, `domain`, `snippet`) persist on assistant messages (`Message.metadata_json`) and render inside expandable `Sources` strips in Flutter Desktop Chat. Interactive browser automation (Playwright/Selenium) remains `APPROVED / PC LATER`.
 
 ---
 

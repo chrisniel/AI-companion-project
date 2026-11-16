@@ -52,6 +52,10 @@ class DesktopChatController extends ChangeNotifier {
   ConversationOut? _activeConversation;
   List<MessageOut> _messages = [];
   String _streamingText = '';
+  String? _activeToolStatus;
+  List<ToolReceiptOut> _liveToolReceipts = const [];
+  List<WebSourceRefOut> _liveSources = const [];
+  List<ToolConfirmationOut> _liveConfirmations = const [];
   String? _activeModelName;
   String? _authenticatedProfileId;
   String? _authenticatedProfileName;
@@ -138,6 +142,11 @@ class DesktopChatController extends ChangeNotifier {
     _messages = [];
     _streamingText = '';
     _activeSummary = null;
+    _streamingText = '';
+    _activeToolStatus = null;
+    _liveToolReceipts = const [];
+    _liveSources = const [];
+    _liveConfirmations = const [];
     _isCompacting = false;
     _errorMessage = null;
     _conversationError = null;
@@ -436,6 +445,7 @@ class DesktopChatController extends ChangeNotifier {
   bool get isConnected => _connectionStatus == RuntimeConnectionStatus.connected;
   bool get canSend =>
       isConnected && !isGenerating && !_isCreatingConversation;
+  String? get activeToolStatus => _activeToolStatus;
 
   /// Filtered conversations for the history drawer matching Web Phase 8C logic:
   /// Hides old, inactive, untouched empty drafts from the drawer without deleting database records.
@@ -615,6 +625,11 @@ class DesktopChatController extends ChangeNotifier {
     _streamingText = '';
     _errorMessage = null;
     _activeSummary = null;
+    _streamingText = '';
+    _activeToolStatus = null;
+    _liveToolReceipts = const [];
+    _liveSources = const [];
+    _liveConfirmations = const [];
     _isCompacting = false;
     ++_summarySequenceToken;
     if (restoreSavedSession) {
@@ -787,6 +802,11 @@ class DesktopChatController extends ChangeNotifier {
     _streamingText = '';
     _generationState = ChatGenerationState.idle;
     _activeSummary = null;
+    _streamingText = '';
+    _activeToolStatus = null;
+    _liveToolReceipts = const [];
+    _liveSources = const [];
+    _liveConfirmations = const [];
     _isCompacting = false;
     ++_summarySequenceToken;
 
@@ -900,6 +920,10 @@ class DesktopChatController extends ChangeNotifier {
           _streamingText = '';
           _generationState = ChatGenerationState.idle;
           _activeSummary = null;
+          _activeToolStatus = null;
+          _liveToolReceipts = const [];
+          _liveSources = const [];
+          _liveConfirmations = const [];
           _isCompacting = false;
           ++_summarySequenceToken;
           notifyListeners();
@@ -1076,6 +1100,10 @@ class DesktopChatController extends ChangeNotifier {
     }
 
     _isAwaitingAcceptance = true;
+    _activeToolStatus = null;
+    _liveToolReceipts = const [];
+    _liveSources = const [];
+    _liveConfirmations = const [];
     _errorMessage = null;
     notifyListeners();
 
@@ -1180,6 +1208,7 @@ class DesktopChatController extends ChangeNotifier {
           }
 
           if (event is SseTokenEvent) {
+            _activeToolStatus = null;
             _streamingText += event.token;
             if (_messages.isNotEmpty && _messages.last.sender == 'assistant') {
               final last = _messages.last;
@@ -1192,7 +1221,96 @@ class DesktopChatController extends ChangeNotifier {
                   content: _streamingText,
                   status: 'generating',
                   sequenceNo: last.sequenceNo,
+                  clientMessageId: last.clientMessageId,
+                  modelName: last.modelName,
+                  promptTokens: last.promptTokens,
+                  completionTokens: last.completionTokens,
                   createdAt: last.createdAt,
+                  attachments: last.attachments,
+                  toolReceipts: _liveToolReceipts.isNotEmpty ? _liveToolReceipts : last.toolReceipts,
+                  sources: _liveSources.isNotEmpty ? _liveSources : last.sources,
+                  pendingConfirmations: _liveConfirmations.isNotEmpty ? _liveConfirmations : last.pendingConfirmations,
+                ),
+              ];
+            }
+            notifyListeners();
+          } else if (event is SseToolIntentEvent) {
+            _activeToolStatus = 'Running ${event.toolName}...';
+            notifyListeners();
+          } else if (event is SseToolConfirmationRequiredEvent) {
+            _activeToolStatus = 'Awaiting confirmation: ${event.toolName}';
+            _liveConfirmations = [..._liveConfirmations, event.confirmation];
+            if (_messages.isNotEmpty && _messages.last.sender == 'assistant') {
+              final last = _messages.last;
+              _messages = [
+                ..._messages.sublist(0, _messages.length - 1),
+                MessageOut(
+                  id: last.id,
+                  conversationId: last.conversationId,
+                  sender: last.sender,
+                  content: last.content,
+                  status: last.status,
+                  sequenceNo: last.sequenceNo,
+                  clientMessageId: last.clientMessageId,
+                  modelName: last.modelName,
+                  promptTokens: last.promptTokens,
+                  completionTokens: last.completionTokens,
+                  createdAt: last.createdAt,
+                  attachments: last.attachments,
+                  toolReceipts: _liveToolReceipts,
+                  sources: _liveSources,
+                  pendingConfirmations: _liveConfirmations,
+                ),
+              ];
+            }
+            notifyListeners();
+          } else if (event is SseToolResultEvent) {
+            _activeToolStatus = null;
+            _liveToolReceipts = [
+              ..._liveToolReceipts,
+              ToolReceiptOut(
+                toolName: event.toolName,
+                riskTier: 0,
+                provenance: 'EXPLICIT_USER',
+                decision: event.decision,
+                outcomeStatus: event.outcomeStatus,
+                summary: event.summary,
+              ),
+            ];
+            if (event.sources.isNotEmpty) {
+              final existingUrls = _liveSources.map((s) => s.url).toSet();
+              _liveSources = [
+                ..._liveSources,
+                ...event.sources.where((s) => !existingUrls.contains(s.url)),
+              ];
+            }
+            if (event.confirmationId != null &&
+                (event.outcomeStatus == 'confirmed_executed' ||
+                    event.outcomeStatus == 'rejected_by_user')) {
+              _liveConfirmations = _liveConfirmations
+                  .where((c) => c.id != event.confirmationId)
+                  .toList();
+            }
+            if (_messages.isNotEmpty && _messages.last.sender == 'assistant') {
+              final last = _messages.last;
+              _messages = [
+                ..._messages.sublist(0, _messages.length - 1),
+                MessageOut(
+                  id: last.id,
+                  conversationId: last.conversationId,
+                  sender: last.sender,
+                  content: last.content,
+                  status: last.status,
+                  sequenceNo: last.sequenceNo,
+                  clientMessageId: last.clientMessageId,
+                  modelName: last.modelName,
+                  promptTokens: last.promptTokens,
+                  completionTokens: last.completionTokens,
+                  createdAt: last.createdAt,
+                  attachments: last.attachments,
+                  toolReceipts: _liveToolReceipts,
+                  sources: _liveSources,
+                  pendingConfirmations: _liveConfirmations,
                 ),
               ];
             }
@@ -1200,6 +1318,7 @@ class DesktopChatController extends ChangeNotifier {
           } else if (event is SseDoneEvent) {
             _generationState = ChatGenerationState.idle;
             _streamingText = '';
+            _activeToolStatus = null;
             if (_messages.isNotEmpty && _messages.last.sender == 'assistant') {
               final last = _messages.last;
               final finalStatus = event.finishReason == 'length' ? 'length' : 'completed';
@@ -1212,7 +1331,15 @@ class DesktopChatController extends ChangeNotifier {
                   content: last.content,
                   status: finalStatus,
                   sequenceNo: last.sequenceNo,
+                  clientMessageId: last.clientMessageId,
+                  modelName: last.modelName,
+                  promptTokens: last.promptTokens,
+                  completionTokens: last.completionTokens,
                   createdAt: last.createdAt,
+                  attachments: last.attachments,
+                  toolReceipts: _liveToolReceipts.isNotEmpty ? _liveToolReceipts : last.toolReceipts,
+                  sources: _liveSources.isNotEmpty ? _liveSources : last.sources,
+                  pendingConfirmations: _liveConfirmations.isNotEmpty ? _liveConfirmations : last.pendingConfirmations,
                 ),
               ];
             }
@@ -1334,6 +1461,7 @@ class DesktopChatController extends ChangeNotifier {
 
   void _finalizeTurn(String conversationId, int turnToken, {bool hasBeenAccepted = true}) {
     if (_turnSequenceToken != turnToken) return;
+    _activeToolStatus = null;
     _currentStreamSubscription = null;
     if (_turnCompleter != null && !_turnCompleter!.isCompleted) {
       _turnCompleter!.complete(hasBeenAccepted);
@@ -1341,6 +1469,78 @@ class DesktopChatController extends ChangeNotifier {
     if (hasBeenAccepted) {
       loadMessages(conversationId, expectedTurnToken: turnToken);
       unawaited(loadConversationSummary(conversationId: conversationId));
+    }
+  }
+
+  /// Resolves an inline D9 tool confirmation card ('approve' or 'reject') atomically.
+  Future<ToolConfirmationResolveResponse?> resolveConfirmation(
+    String confirmationId,
+    String decision,
+  ) async {
+    final convId = _activeConversation?.id;
+    final epoch = _configEpoch;
+    try {
+      final res = await _client.resolveToolConfirmation(
+        confirmationId,
+        ToolConfirmationResolveRequest(decision: decision),
+      );
+      if (_isDisposed || epoch != _configEpoch) return null;
+
+      _messages = _messages.map((m) {
+        if (m.pendingConfirmations.every((c) => c.id != confirmationId)) {
+          return m;
+        }
+        final remaining =
+            m.pendingConfirmations.where((c) => c.id != confirmationId).toList();
+        final newReceipts = [
+          ...m.toolReceipts,
+          ToolReceiptOut(
+            toolName: res.confirmation.toolName,
+            riskTier: res.confirmation.riskTier,
+            provenance: res.confirmation.provenance,
+            decision: 'CONFIRM',
+            outcomeStatus: res.outcomeStatus,
+            summary: res.summary,
+          ),
+        ];
+        final existingUrls = m.sources.map((s) => s.url).toSet();
+        final newSources = [
+          ...m.sources,
+          ...res.sources.where((s) => !existingUrls.contains(s.url)),
+        ];
+        return MessageOut(
+          id: m.id,
+          conversationId: m.conversationId,
+          sender: m.sender,
+          content: m.content,
+          status: m.status,
+          sequenceNo: m.sequenceNo,
+          clientMessageId: m.clientMessageId,
+          modelName: m.modelName,
+          promptTokens: m.promptTokens,
+          completionTokens: m.completionTokens,
+          createdAt: m.createdAt,
+          attachments: m.attachments,
+          toolReceipts: newReceipts,
+          sources: newSources,
+          pendingConfirmations: remaining,
+        );
+      }).toList();
+      notifyListeners();
+      return res;
+    } on CompanionApiException catch (e) {
+      if (_isDisposed || epoch != _configEpoch) return null;
+      _errorMessage = e.message;
+      if (convId != null) {
+        unawaited(loadMessages(convId));
+      }
+      notifyListeners();
+      return null;
+    } catch (e) {
+      if (_isDisposed || epoch != _configEpoch) return null;
+      _errorMessage = e.toString();
+      notifyListeners();
+      return null;
     }
   }
 

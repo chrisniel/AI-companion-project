@@ -29,6 +29,11 @@ class GenerationStream:
     def finish_reason(self, value: str) -> None:
         self._meta["finish_reason"] = value
 
+    @property
+    def tool_calls(self) -> List[Dict[str, Any]]:
+        raw = self._meta.get("tool_calls")
+        return list(raw) if isinstance(raw, list) else []
+
     def __aiter__(self) -> GenerationStream:
         return self
 

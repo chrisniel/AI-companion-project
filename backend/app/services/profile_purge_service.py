@@ -31,10 +31,13 @@ from app.models.message import Message
 from app.models.notification_event import NotificationEvent
 from app.models.profile import Profile
 from app.models.profile_session import ProfileSession
+from app.models.profile_tool_settings import ProfileToolSettings
 from app.models.reminder import Reminder
 from app.models.routine import Routine
 from app.models.session_ticket import SessionTicket
 from app.models.task import Task
+from app.models.tool_audit_log import ToolAuditLog
+from app.models.tool_confirmation import ToolConfirmation
 
 logger = logging.getLogger(__name__)
 
@@ -264,6 +267,9 @@ class ProfilePurgeService:
             .values(active_character_instance_id=None)
         )
         # 2. Relational deletions (Memory before CharacterInstance to satisfy RESTRICT FK)
+        await self.db.execute(delete(ToolAuditLog).where(ToolAuditLog.profile_id == profile_id))
+        await self.db.execute(delete(ToolConfirmation).where(ToolConfirmation.profile_id == profile_id))
+        await self.db.execute(delete(ProfileToolSettings).where(ProfileToolSettings.profile_id == profile_id))
         await self.db.execute(delete(Attachment).where(Attachment.profile_id == profile_id))
         await self.db.execute(delete(ConversationSummary).where(ConversationSummary.profile_id == profile_id))
         await self.db.execute(delete(Message).where(Message.profile_id == profile_id))

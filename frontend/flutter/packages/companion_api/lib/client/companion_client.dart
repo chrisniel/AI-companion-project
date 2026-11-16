@@ -17,6 +17,7 @@ import '../dto/scheduling_dto.dart';
 import '../dto/sse_event_dto.dart';
 import '../dto/system_status_dto.dart';
 import '../dto/task_dto.dart';
+import '../dto/tools_dto.dart';
 import '../transport/sse_parser.dart';
 import 'companion_api_exception.dart';
 
@@ -1000,27 +1001,38 @@ class CompanionClient {
     Map<String, String>? queryParameters,
     Map<String, dynamic>? body,
     int expectedStatus = 200,
+    bool admin = false,
   }) async {
     final uri = baseUri.replace(
       path: '${baseUri.path}$fullPath',
       queryParameters:
           queryParameters == null || queryParameters.isEmpty ? null : queryParameters,
     );
-    final headers = await _buildHeaders(requiresAuth: true);
+    final headers = await _buildHeaders(requiresAuth: !admin, admin: admin);
     final encoded = body == null ? null : jsonEncode(body);
     late final http.Response response;
-    switch (method) {
-      case 'GET':
-        response = await _httpClient.get(uri, headers: headers);
-        break;
-      case 'POST':
-        response = await _httpClient.post(uri, headers: headers, body: encoded);
-        break;
-      case 'PATCH':
-        response = await _httpClient.patch(uri, headers: headers, body: encoded);
-        break;
-      default:
-        throw ArgumentError.value(method, 'method', 'Unsupported HTTP method');
+    if (admin) {
+      response = await _adminRequest(method, uri, body: encoded);
+    } else {
+      switch (method) {
+        case 'GET':
+          response = await _httpClient.get(uri, headers: headers);
+          break;
+        case 'POST':
+          response = await _httpClient.post(uri, headers: headers, body: encoded);
+          break;
+        case 'PATCH':
+          response = await _httpClient.patch(uri, headers: headers, body: encoded);
+          break;
+        case 'PUT':
+          response = await _httpClient.put(uri, headers: headers, body: encoded);
+          break;
+        case 'DELETE':
+          response = await _httpClient.delete(uri, headers: headers);
+          break;
+        default:
+          throw ArgumentError.value(method, 'method', 'Unsupported HTTP method');
+      }
     }
     if (response.statusCode == expectedStatus) {
       final dynamic json = jsonDecode(response.body);
@@ -1481,6 +1493,116 @@ class CompanionClient {
       body: (payload ?? const SnoozeRequest()).toJson(),
     );
     return NotificationEventOut.fromJson(json);
+  }
+
+  // ---------------------------------------------------------------------------
+  // D9 Deterministic Action Engine & Safety Controls (/api/v1/tools)
+  // ---------------------------------------------------------------------------
+
+  /// Lists registered D9 tools and permanently disabled Risk 3 capabilities.
+  Future<ToolCatalogOut> getToolCatalog() async {
+    final json = await _requestJson('GET', '/api/v1/tools/catalog');
+    return ToolCatalogOut.fromJson(json);
+  }
+
+  /// Reads combined profile D9 risk policy, global Kill Switch, and Web config.
+  Future<ToolPolicyOut> getToolPolicy() async {
+    final json = await _requestJson('GET', '/api/v1/tools/policy');
+    return ToolPolicyOut.fromJson(json);
+  }
+
+  /// Updates profile-scoped D9 risk policy thresholds via PATCH /api/v1/tools/policy.
+  Future<ToolPolicyOut> updateToolPolicy(ToolPolicyUpdate payload) async {
+    final json = await _requestJson(
+      'PATCH',
+      '/api/v1/tools/policy',
+      body: payload.toJson(),
+    );
+    return ToolPolicyOut.fromJson(json);
+  }
+
+  /// Reads persistent Global Tool Kill Switch status via GET /api/v1/tools/kill-switch.
+  Future<KillSwitchStateOut> getKillSwitch({bool useHostAdmin = false}) async {
+    final json = await _requestJson(
+      'GET',
+      '/api/v1/tools/kill-switch',
+      admin: useHostAdmin,
+    );
+    return KillSwitchStateOut.fromJson(json);
+  }
+
+  /// Engages (session/admin) or disengages (Host Admin only) the Global Kill Switch.
+  Future<KillSwitchStateOut> setKillSwitch(
+    KillSwitchRequest payload, {
+    bool useHostAdmin = false,
+  }) async {
+    final json = await _requestJson(
+      'POST',
+      '/api/v1/tools/kill-switch',
+      body: payload.toJson(),
+      admin: useHostAdmin || !payload.enabled,
+    );
+    return KillSwitchStateOut.fromJson(json);
+  }
+
+  /// Updates Web retrieval provider routing and ACL-protected search API key (Host Admin).
+  Future<WebConfigOut> updateWebConfig(WebConfigUpdateRequest payload) async {
+    final json = await _requestJson(
+      'PUT',
+      '/api/v1/tools/web-config',
+      body: payload.toJson(),
+      admin: true,
+    );
+    return WebConfigOut.fromJson(json);
+  }
+
+  /// Clears device-local Web Search API key file (Host Admin).
+  Future<WebApiKeyClearOut> clearWebApiKey() async {
+    final json = await _requestJson(
+      'DELETE',
+      '/api/v1/tools/web-config/api-key',
+      admin: true,
+    );
+    return WebApiKeyClearOut.fromJson(json);
+  }
+
+  /// Lists redacted D9 tool audit logs via GET /api/v1/tools/audit.
+  Future<ToolAuditLogListOut> listToolAuditLogs({int limit = 50}) async {
+    final json = await _requestJson(
+      'GET',
+      '/api/v1/tools/audit',
+      queryParameters: {'limit': limit.toString()},
+    );
+    return ToolAuditLogListOut.fromJson(json);
+  }
+
+  /// Lists D9 tool confirmations for the active profile via GET /api/v1/tools/confirmations.
+  Future<ToolConfirmationListOut> listToolConfirmations({
+    String? conversationId,
+    String? status = 'pending',
+  }) async {
+    final json = await _requestJson(
+      'GET',
+      '/api/v1/tools/confirmations',
+      queryParameters: {
+        if (conversationId != null) 'conversation_id': conversationId,
+        if (status != null) 'status': status,
+      },
+    );
+    return ToolConfirmationListOut.fromJson(json);
+  }
+
+  /// Atomically approves or rejects a pending D9 confirmation.
+  Future<ToolConfirmationResolveResponse> resolveToolConfirmation(
+    String confirmationId,
+    ToolConfirmationResolveRequest payload,
+  ) async {
+    final json = await _requestJson(
+      'POST',
+      '/api/v1/tools/confirmations/$confirmationId/resolve',
+      body: payload.toJson(),
+    );
+    return ToolConfirmationResolveResponse.fromJson(json);
   }
 
   void close() {

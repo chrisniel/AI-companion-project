@@ -75,8 +75,8 @@ Verified in `backend/app/models/conversation.py` and `backend/app/api/v1/endpoin
 
 ### 3.5 Security Audit Status
 
-- **Audit Ledger Status:** **NOT IMPLEMENTED**. No `audit_logs` database table, structured security ledger, or immutable event journal exists in the repository.
-- **General Logging Reality:** The codebase utilizes standard Python logging (`backend/app/core/logging.py`) emitting diagnostic console lines. These standard application logs must **not** be conflated with a dedicated security audit ledger.
+- **Redacted D9 Tool Audit Ledger (`backend/app/models/tool_audit_log.py`, Migration `017`):** Implemented in M4 Batch A. `tool_audit_logs` records strictly redacted operational metadata (`id`, `profile_id`, `conversation_id`, `tool_name`, `risk_tier`, `provenance`, `decision`, `outcome_status`, `duration_ms`, `source_domains_json`, `error_code`, `created_at`) accessible via `GET /api/v1/tools/audit`, and **never stores** user prompts, raw tool arguments, message bodies, or Web/Cloud API keys. Permanent Profile purge (`ProfilePurgeService.purge_profile`) deletes `ToolAuditLog`, `ToolConfirmation`, and `ProfileToolSettings` in FK dependency order.
+- **General Logging Reality:** Standard Python logging (`backend/app/core/logging.py`) emits redacted diagnostic application logs alongside the dedicated `tool_audit_logs` ledger.
 
 ---
 
