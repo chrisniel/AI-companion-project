@@ -49,8 +49,8 @@ void main() {
       expect(voice.milestoneHint, equals('M4'));
 
       final tools = kSettingsSections.firstWhere((s) => s.id == SettingsSectionId.tools);
-      expect(tools.status, equals(SettingsSectionStatus.planned));
-      expect(tools.milestoneHint, equals('M4'));
+      expect(tools.status, equals(SettingsSectionStatus.available));
+      expect(tools.milestoneHint, isNull);
 
       final general = kSettingsSections.firstWhere((s) => s.id == SettingsSectionId.general);
       expect(general.status, equals(SettingsSectionStatus.available));
@@ -295,11 +295,11 @@ void main() {
       expect(controller.selectedSettingsSection, equals(SettingsSectionId.voice));
       expect(find.textContaining('Milestone M4 Voice'), findsOneWidget);
 
-      // Tap Tools & Safety (Planned M4)
+      // Tap Tools & Safety (Available M4 Batch A; standalone fallback without controller)
       await tester.tap(find.byKey(const Key('settings_nav_tools')));
       await tester.pumpAndSettle();
       expect(controller.selectedSettingsSection, equals(SettingsSectionId.tools));
-      expect(find.textContaining('D9 action policy'), findsOneWidget);
+      expect(find.textContaining('Tools & Safety Controls'), findsOneWidget);
 
       // Tap Notifications & Profiles without wired controllers shows clean fallback
       await tester.tap(find.byKey(const Key('settings_nav_notifications')));

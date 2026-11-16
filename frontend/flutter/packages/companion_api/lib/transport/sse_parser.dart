@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import '../dto/sse_event_dto.dart';
+import '../dto/tools_dto.dart';
 
 /// Parses raw byte streams into typed [SseEvent] stream frames.
 ///
@@ -65,6 +66,47 @@ class SseStreamParser {
             }
             controller.add(SseTokenEvent((content ?? '').toString()));
             return;
+          } else if (type == 'tool_intent') {
+            controller.add(
+              SseToolIntentEvent(
+                toolName: decoded['tool_name']?.toString() ?? '',
+                riskTier: decoded['risk_tier'] as int?,
+                provenance: decoded['provenance']?.toString(),
+                targetSummary: decoded['target_summary']?.toString(),
+              ),
+            );
+            return;
+          } else if (type == 'tool_result') {
+            final rawSources = decoded['sources'];
+            final parsedSources = rawSources is List
+                ? rawSources
+                    .map((e) => WebSourceRefOut.fromJson(Map<String, dynamic>.from(e as Map)))
+                    .toList()
+                : const <WebSourceRefOut>[];
+            controller.add(
+              SseToolResultEvent(
+                toolName: decoded['tool_name']?.toString() ?? '',
+                decision: decoded['decision']?.toString() ?? '',
+                outcomeStatus: decoded['outcome_status']?.toString() ?? '',
+                summary: decoded['summary']?.toString() ?? '',
+                sources: parsedSources,
+                confirmationId: decoded['confirmation_id']?.toString(),
+              ),
+            );
+            return;
+          } else if (type == 'tool_confirmation_required') {
+            final rawConf = decoded['confirmation'];
+            if (rawConf is Map) {
+              controller.add(
+                SseToolConfirmationRequiredEvent(
+                  toolName: decoded['tool_name']?.toString() ?? '',
+                  confirmation: ToolConfirmationOut.fromJson(
+                    Map<String, dynamic>.from(rawConf),
+                  ),
+                ),
+              );
+              return;
+            }
           } else if (type == 'done') {
             terminalEmitted = true;
             final finishReason = decoded['finish_reason']?.toString() ?? 'stop';

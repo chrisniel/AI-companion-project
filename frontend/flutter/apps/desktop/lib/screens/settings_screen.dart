@@ -14,8 +14,10 @@ import '../features/settings/sections/settings_planned_section.dart';
 import '../features/settings/sections/settings_profiles_section.dart';
 import '../features/settings/sections/settings_runtime_section.dart';
 import '../features/settings/sections/settings_storage_section.dart';
+import '../features/settings/sections/settings_tools_section.dart';
 import '../features/settings/settings_section.dart';
 import '../features/settings/settings_sidebar.dart';
+import '../features/tools/desktop_tool_policy_controller.dart';
 import '../lifecycle/desktop_lifecycle_coordinator.dart';
 import '../platform/desktop_client_settings.dart';
 
@@ -33,6 +35,7 @@ class SettingsScreen extends StatefulWidget {
     this.credentialStore,
     this.client,
     this.scheduleController,
+    this.toolPolicyController,
   });
 
   final DesktopSettingsController controller;
@@ -44,6 +47,7 @@ class SettingsScreen extends StatefulWidget {
   final CredentialStore? credentialStore;
   final CompanionClient? client;
   final DesktopScheduleController? scheduleController;
+  final DesktopToolPolicyController? toolPolicyController;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -207,8 +211,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       SettingsSectionId.storage => SettingsStorageSection(
           diagnosticReader: widget.controller.diagnosticReader,
         ),
+      SettingsSectionId.tools => SettingsToolsSection(
+          toolPolicyController: widget.toolPolicyController,
+        ),
       SettingsSectionId.voice ||
-      SettingsSectionId.tools ||
       SettingsSectionId.health ||
       SettingsSectionId.network =>
         SettingsPlannedSection(section: meta),

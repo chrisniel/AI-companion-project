@@ -6,6 +6,7 @@ from pydantic import Field
 
 from app.schemas.attachment import AttachmentRef
 from app.schemas.common import BaseSchema
+from app.schemas.tools import ToolConfirmationOut, ToolReceiptOut, WebSourceRefOut
 
 
 class MessageSend(BaseSchema):
@@ -31,6 +32,9 @@ class MessageOut(BaseSchema):
     completion_tokens: Optional[int] = None
     created_at: datetime
     attachments: List[AttachmentRef] = Field(default_factory=list)
+    tool_receipts: List[ToolReceiptOut] = Field(default_factory=list)
+    sources: List[WebSourceRefOut] = Field(default_factory=list)
+    pending_confirmations: List[ToolConfirmationOut] = Field(default_factory=list)
 
 
 class MessageListOut(BaseSchema):

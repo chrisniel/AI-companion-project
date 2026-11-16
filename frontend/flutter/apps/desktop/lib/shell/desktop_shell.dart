@@ -16,6 +16,7 @@ import '../features/schedule/desktop_schedule_controller.dart';
 import '../features/schedule/notification_backlog_drawer.dart';
 import '../features/settings/settings_section.dart';
 import '../features/studio/desktop_studio_controller.dart';
+import '../features/tools/desktop_tool_policy_controller.dart';
 import '../lifecycle/desktop_lifecycle_coordinator.dart';
 import '../platform/desktop_client_settings.dart';
 import '../platform/windows_toast_adapter.dart';
@@ -48,6 +49,7 @@ class DesktopShell extends StatefulWidget {
     this.clientSettings,
     this.credentialStore,
     this.scheduleController,
+    this.toolPolicyController,
     this.toastAdapter,
     this.enableSchedulePolling,
   });
@@ -62,6 +64,7 @@ class DesktopShell extends StatefulWidget {
   final DesktopClientSettings? clientSettings;
   final CredentialStore? credentialStore;
   final DesktopScheduleController? scheduleController;
+  final DesktopToolPolicyController? toolPolicyController;
   final DesktopToastAdapter? toastAdapter;
   final bool? enableSchedulePolling;
 
@@ -77,6 +80,9 @@ class _DesktopShellState extends State<DesktopShell> {
   bool _ownsMemoryController = false;
   late final DesktopScheduleController? _scheduleController;
   bool _ownsScheduleController = false;
+  late final DesktopToolPolicyController? _toolPolicyController;
+  bool _ownsToolPolicyController = false;
+  String? _lastKnownToolProfileId;
   DesktopToastAdapter? _toastAdapter;
   bool _ownsToastAdapter = false;
   bool _isBacklogDrawerOpen = false;
@@ -134,12 +140,47 @@ class _DesktopShellState extends State<DesktopShell> {
       _scheduleController = null;
     }
 
+    if (widget.toolPolicyController != null) {
+      _toolPolicyController = widget.toolPolicyController;
+      _ownsToolPolicyController = false;
+    } else if (widget.chatController != null) {
+      _toolPolicyController = DesktopToolPolicyController(
+        clientProvider: () => widget.chatController!.client,
+      );
+      _ownsToolPolicyController = true;
+    } else {
+      _toolPolicyController = null;
+    }
+
+    _lastKnownToolProfileId = _resolveActiveProfileId();
+    _toolPolicyController?.addListener(_handleToolPolicyChange);
+    if (_toolPolicyController != null && widget.coordinator != null) {
+      final toolCtrl = _toolPolicyController;
+      try {
+        widget.coordinator!.onKillSwitchTriggered = () async {
+          if (!toolCtrl.globalKillSwitch) {
+            await toolCtrl.toggleKillSwitch(
+              enabled: true,
+              reason: 'tray_emergency_stop',
+            );
+          }
+        };
+      } on UnimplementedError {
+        // Minimal Fake coordinators in widget tests may omit optional callbacks.
+      }
+    }
+
     _lastDestination = widget.controller.currentDestination;
     widget.controller.addListener(_handleDestinationChange);
     widget.profileController?.addListener(_handleProfileChange);
     widget.chatController?.addListener(_handleProfileChange);
     widget.controller.navigationGuard = _handleNavigationGuard;
     _initScheduleActivation();
+    if (_ownsToolPolicyController &&
+        _shouldPollSchedule &&
+        (widget.chatController?.isConnected ?? false)) {
+      unawaited(_toolPolicyController?.refreshKillSwitch());
+    }
     widget.coordinator?.onExitMenuTriggered = () async {
       if (mounted) {
         await _handleExitCompanion();
@@ -327,6 +368,17 @@ class _DesktopShellState extends State<DesktopShell> {
     }
   }
 
+  void _handleToolPolicyChange() {
+    final ctrl = _toolPolicyController;
+    final coord = widget.coordinator;
+    if (ctrl == null || coord == null) return;
+    try {
+      unawaited(coord.updateKillSwitchStatus(ctrl.globalKillSwitch));
+    } on UnimplementedError {
+      // Minimal Fake coordinators in widget tests may omit optional tray status sync.
+    }
+  }
+
   void _handleProfileChange() {
     final active = widget.profileController?.activeProfile;
     final profileId = active?['id'] as String?;
@@ -336,6 +388,16 @@ class _DesktopShellState extends State<DesktopShell> {
       memoryExtractionEnabled: extractionEnabled,
     );
     _syncScheduleScope();
+    final effectiveProfileId = _resolveActiveProfileId();
+    if (effectiveProfileId != _lastKnownToolProfileId) {
+      _lastKnownToolProfileId = effectiveProfileId;
+      _toolPolicyController?.resetForProfileChange();
+      if (effectiveProfileId != null && effectiveProfileId.isNotEmpty) {
+        unawaited(_toolPolicyController?.refreshAll());
+      } else {
+        unawaited(_toolPolicyController?.refreshKillSwitch());
+      }
+    }
   }
 
   @override
@@ -343,6 +405,7 @@ class _DesktopShellState extends State<DesktopShell> {
     widget.controller.removeListener(_handleDestinationChange);
     widget.profileController?.removeListener(_handleProfileChange);
     widget.chatController?.removeListener(_handleProfileChange);
+    _toolPolicyController?.removeListener(_handleToolPolicyChange);
     if (_ownsStudioController) {
       _studioController?.dispose();
     }
@@ -354,6 +417,9 @@ class _DesktopShellState extends State<DesktopShell> {
     } else if (_scheduleController?.onNavigateRequested ==
         _handleToastNavigation) {
       _scheduleController?.onNavigateRequested = null;
+    }
+    if (_ownsToolPolicyController) {
+      _toolPolicyController?.dispose();
     }
     if (_ownsToastAdapter) {
       _toastAdapter?.dispose();
@@ -486,13 +552,20 @@ class _DesktopShellState extends State<DesktopShell> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                if (_scheduleController != null)
+                                if (_scheduleController != null ||
+                                    _toolPolicyController != null)
                                   ListenableBuilder(
-                                    listenable: _scheduleController,
+                                    listenable: Listenable.merge([
+                                      if (_scheduleController != null)
+                                        _scheduleController,
+                                      if (_toolPolicyController != null)
+                                        _toolPolicyController,
+                                    ]),
                                     builder: (context, _) {
                                       return _buildTopUtilityStrip(
                                         context,
                                         _scheduleController,
+                                        _toolPolicyController,
                                         ext,
                                       );
                                     },
@@ -636,6 +709,7 @@ class _DesktopShellState extends State<DesktopShell> {
         return ChatScreen(
           key: const ValueKey('chat_screen'),
           controller: widget.chatController,
+          toolPolicyController: _toolPolicyController,
           onNavigateToSettings: () => widget.controller.requestDestination(DesktopNavDestination.settings),
         );
       case DesktopNavDestination.voice:
@@ -677,30 +751,36 @@ class _DesktopShellState extends State<DesktopShell> {
           clientSettings: widget.clientSettings,
           credentialStore: widget.credentialStore,
           scheduleController: _scheduleController,
+          toolPolicyController: _toolPolicyController,
         );
     }
   }
 
   Widget _buildTopUtilityStrip(
     BuildContext context,
-    DesktopScheduleController ctrl,
+    DesktopScheduleController? ctrl,
+    DesktopToolPolicyController? toolCtrl,
     CompanionThemeExtension? ext,
   ) {
-    final profileLabel = _resolveActiveProfileName() ?? ctrl.profileId;
-    final totalAttention = ctrl.unreadCount + ctrl.missedCount;
-    final hasUnread = ctrl.unreadCount > 0;
-    final hasMissedOnly = !hasUnread && ctrl.missedCount > 0;
+    final profileLabel = _resolveActiveProfileName() ?? ctrl?.profileId;
+    final totalAttention = ctrl == null ? 0 : (ctrl.unreadCount + ctrl.missedCount);
+    final hasUnread = ctrl != null && ctrl.unreadCount > 0;
+    final hasMissedOnly = !hasUnread && ctrl != null && ctrl.missedCount > 0;
     final bellColor = hasUnread
         ? (ext?.accent ?? CompanionColors.lightAccent)
         : hasMissedOnly
             ? (ext?.warning ?? CompanionColors.warning)
             : ext?.textSecondary;
 
-    final badgeText = hasUnread
-        ? 'Alerts (${ctrl.unreadCount})'
-        : hasMissedOnly
-            ? 'Alerts (${ctrl.missedCount} missed)'
-            : 'Alerts';
+    final badgeText = ctrl == null
+        ? ''
+        : hasUnread
+            ? 'Alerts (${ctrl.unreadCount})'
+            : hasMissedOnly
+                ? 'Alerts (${ctrl.missedCount} missed)'
+                : 'Alerts';
+
+    final killed = toolCtrl?.globalKillSwitch ?? false;
 
     return Padding(
       key: const Key('shell_top_utility_strip'),
@@ -738,7 +818,7 @@ class _DesktopShellState extends State<DesktopShell> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                if (ctrl.quietHours.quietHoursEnabled)
+                if (ctrl != null && ctrl.quietHours.quietHoursEnabled)
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 10,
@@ -759,26 +839,75 @@ class _DesktopShellState extends State<DesktopShell> {
               ],
             ),
           ),
-          const SizedBox(width: CompanionSpacing.sm),
-          OutlinedButton.icon(
-            key: const Key('shell_notification_bell_button'),
-            onPressed: () =>
-                setState(() => _isBacklogDrawerOpen = !_isBacklogDrawerOpen),
-            icon: Icon(
-              totalAttention > 0
-                  ? Icons.notifications_active_rounded
-                  : Icons.notifications_none_rounded,
-              size: 16,
-              color: bellColor,
-            ),
-            label: Text(
-              badgeText,
-              style: CompanionTypography.caption.copyWith(
-                color: hasUnread ? ext?.accent : ext?.textPrimary,
-                fontWeight: FontWeight.w600,
+          if (toolCtrl != null) ...[
+            const SizedBox(width: CompanionSpacing.sm),
+            OutlinedButton.icon(
+              key: const Key('shell_kill_switch_button'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: killed
+                    ? (ext?.danger ?? CompanionColors.danger)
+                    : ext?.textPrimary,
+                side: BorderSide(
+                  color: killed
+                      ? (ext?.danger ?? CompanionColors.danger)
+                      : (ext?.textMuted ?? CompanionColors.lightTextMuted)
+                          .withValues(alpha: 0.35),
+                ),
+              ),
+              onPressed: toolCtrl.isSaving
+                  ? null
+                  : () async {
+                      if (killed) {
+                        await widget.controller.requestOpenSettingsSection(
+                          SettingsSectionId.tools,
+                        );
+                      } else {
+                        await toolCtrl.toggleKillSwitch(
+                          enabled: true,
+                          reason: 'shell_top_bar_emergency',
+                        );
+                      }
+                    },
+              icon: Icon(
+                killed ? Icons.gpp_bad_rounded : Icons.shield_outlined,
+                size: 16,
+                color: killed
+                    ? (ext?.danger ?? CompanionColors.danger)
+                    : ext?.accent,
+              ),
+              label: Text(
+                killed ? 'Tools KILLED' : 'Stop Tools',
+                style: CompanionTypography.caption.copyWith(
+                  color: killed
+                      ? (ext?.danger ?? CompanionColors.danger)
+                      : ext?.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
-          ),
+          ],
+          if (ctrl != null) ...[
+            const SizedBox(width: CompanionSpacing.sm),
+            OutlinedButton.icon(
+              key: const Key('shell_notification_bell_button'),
+              onPressed: () =>
+                  setState(() => _isBacklogDrawerOpen = !_isBacklogDrawerOpen),
+              icon: Icon(
+                totalAttention > 0
+                    ? Icons.notifications_active_rounded
+                    : Icons.notifications_none_rounded,
+                size: 16,
+                color: bellColor,
+              ),
+              label: Text(
+                badgeText,
+                style: CompanionTypography.caption.copyWith(
+                  color: hasUnread ? ext?.accent : ext?.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

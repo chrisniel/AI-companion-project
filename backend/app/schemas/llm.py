@@ -14,8 +14,11 @@ from app.services.llm.runtime_state import LLMRuntimeState
 
 class ChatMessage(BaseSchema):
     """Internal chat message used by orchestrator and provider layers."""
-    role: Literal["system", "user", "assistant"]
-    content: Union[str, List[ContentBlock]]
+    role: Literal["system", "user", "assistant", "tool"]
+    content: Optional[Union[str, List[ContentBlock]]] = ""
+    tool_calls: Optional[List[Dict[str, Any]]] = None
+    tool_call_id: Optional[str] = None
+    name: Optional[str] = None
 
 
 class ChatCompletionMessage(BaseSchema):

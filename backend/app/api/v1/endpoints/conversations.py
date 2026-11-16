@@ -2,6 +2,7 @@
 
 import asyncio
 from datetime import datetime, timezone
+import json
 import logging
 import re
 from typing import Optional
@@ -34,6 +35,7 @@ from app.schemas.conversation import (
 )
 from app.schemas.llm import ChatMessage
 from app.schemas.message import MessageListOut, MessageOut, MessageSend
+from app.schemas.tools import ToolConfirmationOut, ToolReceiptOut, WebSourceRefOut
 from app.services.assistant.compactor import (
     compact_conversation,
     get_active_conversation_summary,
@@ -48,6 +50,8 @@ from app.services.character_service import resolve_conversation_character
 from app.services.llm.base import BaseLLMProvider
 from app.services.llm.manager import get_llm_provider
 from app.services.llm.runtime_state import LLMRuntimeState
+from app.services.tools.audit import serialize_tool_confirmation
+from app.services.tools.executor import list_pending_confirmations_for_conversation
 
 logger = logging.getLogger("app.api.v1.endpoints.conversations")
 
@@ -555,6 +559,17 @@ async def list_messages(
     items_query = query.order_by(Message.sequence_no.asc()).offset(skip).limit(limit)
     items = list((await db.execute(items_query)).scalars().all())
 
+    live_pending_rows = await list_pending_confirmations_for_conversation(
+        db,
+        profile_id=session.profile_id,
+        conversation_id=conversation_id,
+    )
+    live_pending_cards = [serialize_tool_confirmation(c) for c in live_pending_rows]
+    latest_assistant_id: Optional[str] = next(
+        (m.id for m in reversed(items) if m.sender == "assistant"),
+        None,
+    )
+
     output_items: list[MessageOut] = []
     for msg in items:
         active_refs = [
@@ -568,6 +583,21 @@ async def list_messages(
             if not att.is_deleted and att.message_id == msg.id
             and att.profile_id == session.profile_id and att.conversation_id == conversation_id
         ]
+        receipts: list[ToolReceiptOut] = []
+        sources: list[WebSourceRefOut] = []
+        if msg.metadata_json:
+            try:
+                meta = json.loads(msg.metadata_json)
+                if isinstance(meta, dict):
+                    for r in meta.get("tool_receipts") or []:
+                        if isinstance(r, dict):
+                            receipts.append(ToolReceiptOut(**r))
+                    for s in meta.get("sources") or []:
+                        if isinstance(s, dict):
+                            sources.append(WebSourceRefOut(**s))
+            except Exception:
+                pass
+        msg_pending = live_pending_cards if (msg.id == latest_assistant_id) else []
         output_items.append(
             MessageOut(
                 id=msg.id,
@@ -582,6 +612,9 @@ async def list_messages(
                 completion_tokens=msg.completion_tokens,
                 created_at=msg.created_at,
                 attachments=active_refs,
+                tool_receipts=receipts,
+                sources=sources,
+                pending_confirmations=msg_pending,
             )
         )
 

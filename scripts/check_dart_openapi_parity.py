@@ -235,6 +235,41 @@ SCHEMA_TO_DART_CLASS: Dict[str, Tuple[str, str]] = {
     "NotificationListOut": ("scheduling_dto.dart", "NotificationListOut"),
     "NotificationClearResponse": ("scheduling_dto.dart", "NotificationClearResponse"),
     "NotificationMarkReadResponse": ("scheduling_dto.dart", "NotificationMarkReadResponse"),
+    # M4 Batch A D9 Tools, Confirmations, Audit & Web Config DTOs
+    "WebSourceRefOut": ("tools_dto.dart", "WebSourceRefOut"),
+    "ToolReceiptOut": ("tools_dto.dart", "ToolReceiptOut"),
+    "ToolCatalogItemOut": ("tools_dto.dart", "ToolCatalogItemOut"),
+    "ToolCatalogOut": ("tools_dto.dart", "ToolCatalogOut"),
+    "ToolPolicyOut": ("tools_dto.dart", "ToolPolicyOut"),
+    "ToolPolicyUpdate": ("tools_dto.dart", "ToolPolicyUpdate"),
+    "KillSwitchStateOut": ("tools_dto.dart", "KillSwitchStateOut"),
+    "KillSwitchRequest": ("tools_dto.dart", "KillSwitchRequest"),
+    "WebConfigUpdateRequest": ("tools_dto.dart", "WebConfigUpdateRequest"),
+    "WebConfigOut": ("tools_dto.dart", "WebConfigOut"),
+    "WebApiKeyClearOut": ("tools_dto.dart", "WebApiKeyClearOut"),
+    "ToolConfirmationOut": ("tools_dto.dart", "ToolConfirmationOut"),
+    "ToolConfirmationListOut": ("tools_dto.dart", "ToolConfirmationListOut"),
+    "ToolConfirmationResolveRequest": ("tools_dto.dart", "ToolConfirmationResolveRequest"),
+    "ToolConfirmationResolveResponse": ("tools_dto.dart", "ToolConfirmationResolveResponse"),
+    "ToolAuditLogOut": ("tools_dto.dart", "ToolAuditLogOut"),
+    "ToolAuditLogListOut": ("tools_dto.dart", "ToolAuditLogListOut"),
+}
+
+
+M4_ROUTE_DART_METHODS: Dict[Tuple[str, str], Tuple[str, str]] = {
+    ("GET", "/api/v1/tools/catalog"): ("getToolCatalog", "/api/v1/tools/catalog"),
+    ("GET", "/api/v1/tools/policy"): ("getToolPolicy", "/api/v1/tools/policy"),
+    ("PATCH", "/api/v1/tools/policy"): ("updateToolPolicy", "/api/v1/tools/policy"),
+    ("GET", "/api/v1/tools/kill-switch"): ("getKillSwitch", "/api/v1/tools/kill-switch"),
+    ("POST", "/api/v1/tools/kill-switch"): ("setKillSwitch", "/api/v1/tools/kill-switch"),
+    ("PUT", "/api/v1/tools/web-config"): ("updateWebConfig", "/api/v1/tools/web-config"),
+    ("DELETE", "/api/v1/tools/web-config/api-key"): ("clearWebApiKey", "/api/v1/tools/web-config/api-key"),
+    ("GET", "/api/v1/tools/audit"): ("listToolAuditLogs", "/api/v1/tools/audit"),
+    ("GET", "/api/v1/tools/confirmations"): ("listToolConfirmations", "/api/v1/tools/confirmations"),
+    ("POST", "/api/v1/tools/confirmations/{confirmation_id}/resolve"): (
+        "resolveToolConfirmation",
+        "/api/v1/tools/confirmations/$confirmationId/resolve",
+    ),
 }
 
 
@@ -454,12 +489,23 @@ def verify_route_coverage(openapi_data: Dict[str, Any]) -> Tuple[List[str], List
         else:
             errors.append(f"[Route Coverage] Required M3 route missing from OpenAPI: {method} {path}")
 
+    for method, path in sorted(M4_ROUTE_DART_METHODS):
+        if (method, path) in all_openapi_routes:
+            verified_m1.append((method, path))
+        else:
+            errors.append(f"[Route Coverage] Required M4 route missing from OpenAPI: {method} {path}")
+
     # Check unmapped routes against catalog
     unmapped_cataloged: List[Tuple[str, str, str]] = []
     unaccounted_routes: List[Tuple[str, str]] = []
 
     for method, path in sorted(all_openapi_routes):
-        if (method, path) in M1_COVERED_ROUTES or (method, path) in M2_ROUTE_DART_METHODS or (method, path) in M3_ROUTE_DART_METHODS:
+        if (
+            (method, path) in M1_COVERED_ROUTES
+            or (method, path) in M2_ROUTE_DART_METHODS
+            or (method, path) in M3_ROUTE_DART_METHODS
+            or (method, path) in M4_ROUTE_DART_METHODS
+        ):
             continue
         if (method, path) in UNMAPPED_FUTURE_ROUTES:
             unmapped_cataloged.append((method, path, UNMAPPED_FUTURE_ROUTES[(method, path)]))
@@ -488,7 +534,12 @@ def verify_companion_client_implementations(client_path: Path) -> Tuple[List[str
 
     content = client_path.read_text(encoding="utf-8")
 
-    covered_methods = {**M1_ROUTE_DART_METHODS, **M2_ROUTE_DART_METHODS, **M3_ROUTE_DART_METHODS}
+    covered_methods = {
+        **M1_ROUTE_DART_METHODS,
+        **M2_ROUTE_DART_METHODS,
+        **M3_ROUTE_DART_METHODS,
+        **M4_ROUTE_DART_METHODS,
+    }
     for (http_method, openapi_path), (method_name, dart_path_template) in sorted(covered_methods.items()):
         method_pattern = rf"\b{re.escape(method_name)}\s*\("
         if not re.search(method_pattern, content):
@@ -563,7 +614,9 @@ def run_checks() -> Tuple[bool, str]:
     if route_errors:
         all_errors.extend(route_errors)
 
-    report_lines.append(f"\n[M1 + M2 + M3 Native Covered Routes: {len(verified_m1)}/{len(M1_COVERED_ROUTES) + len(M2_ROUTE_DART_METHODS) + len(M3_ROUTE_DART_METHODS)}]")
+    report_lines.append(
+        f"\n[M1 + M2 + M3 + M4 Native Covered Routes: {len(verified_m1)}/{len(M1_COVERED_ROUTES) + len(M2_ROUTE_DART_METHODS) + len(M3_ROUTE_DART_METHODS) + len(M4_ROUTE_DART_METHODS)}]"
+    )
     for method, path in verified_m1:
         report_lines.append(f"  [OK] {method:<6} {path}")
 
@@ -576,7 +629,9 @@ def run_checks() -> Tuple[bool, str]:
     if client_errors:
         all_errors.extend(client_errors)
 
-    report_lines.append(f"\n[Verified CompanionClient Route Methods: {len(verified_impls)}/{len(M1_ROUTE_DART_METHODS) + len(M2_ROUTE_DART_METHODS) + len(M3_ROUTE_DART_METHODS)}]")
+    report_lines.append(
+        f"\n[Verified CompanionClient Route Methods: {len(verified_impls)}/{len(M1_ROUTE_DART_METHODS) + len(M2_ROUTE_DART_METHODS) + len(M3_ROUTE_DART_METHODS) + len(M4_ROUTE_DART_METHODS)}]"
+    )
     for method, path, dart_method in verified_impls:
         report_lines.append(f"  [OK] {method:<6} {path:<48} -> {dart_method}()")
 

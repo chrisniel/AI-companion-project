@@ -17,5 +17,6 @@ export 'dto/scheduling_dto.dart';
 export 'dto/sse_event_dto.dart';
 export 'dto/system_status_dto.dart';
 export 'dto/task_dto.dart';
+export 'dto/tools_dto.dart';
 export 'transport/sse_parser.dart';
 export 'transport/ws_transport.dart';

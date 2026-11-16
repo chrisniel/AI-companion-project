@@ -1,4 +1,5 @@
 import 'package:meta/meta.dart';
+import 'tools_dto.dart';
 
 /// Base class for all typed Server-Sent Events (SSE) from the Assistant stream.
 @immutable
@@ -89,4 +90,52 @@ class SseUnknownEvent extends SseEvent {
 
   @override
   String toString() => 'SseUnknownEvent("$rawData")';
+}
+
+/// Emitted when the companion orchestrator intends to invoke a D9 typed tool.
+@immutable
+class SseToolIntentEvent extends SseEvent {
+  final String toolName;
+  final int? riskTier;
+  final String? provenance;
+  final String? targetSummary;
+
+  const SseToolIntentEvent({
+    required this.toolName,
+    this.riskTier,
+    this.provenance,
+    this.targetSummary,
+  });
+}
+
+/// Emitted after deterministic D9 policy evaluation and tool execution/denial.
+@immutable
+class SseToolResultEvent extends SseEvent {
+  final String toolName;
+  final String decision;
+  final String outcomeStatus;
+  final String summary;
+  final List<WebSourceRefOut> sources;
+  final String? confirmationId;
+
+  const SseToolResultEvent({
+    required this.toolName,
+    required this.decision,
+    required this.outcomeStatus,
+    required this.summary,
+    this.sources = const [],
+    this.confirmationId,
+  });
+}
+
+/// Emitted when a Risk 1/2 tool requires explicit user confirmation before execution.
+@immutable
+class SseToolConfirmationRequiredEvent extends SseEvent {
+  final String toolName;
+  final ToolConfirmationOut confirmation;
+
+  const SseToolConfirmationRequiredEvent({
+    required this.toolName,
+    required this.confirmation,
+  });
 }
