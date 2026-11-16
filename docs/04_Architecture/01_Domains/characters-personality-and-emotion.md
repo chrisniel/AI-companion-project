@@ -178,7 +178,7 @@ The `CharacterService` (`backend/app/services/character_service.py`) and FastAPI
 - `GET /api/v1/characters/instances` — List Profile-owned Character Instances (supports `include_archived: bool = True` and `include_legacy: bool = False`).
 - `POST /api/v1/characters/instances` — Create a new Character Instance from a template snapshot.
 - `GET /api/v1/characters/instances/{instance_id}` — Get single Character Instance.
-- `PATCH /api/v1/characters/instances/{instance_id}` — Update instance lore, prompt, traits, preset, or archive state (legacy placeholders rejected with HTTP 400).
+- `PATCH /api/v1/characters/instances/{instance_id}` — Update instance lore, prompt, traits, preset, optional `voice_id` (explicit `null` clears), or archive state (legacy placeholders rejected with HTTP 400).
 - `DELETE /api/v1/characters/instances/{instance_id}` — Hard-delete instance or soft-archive (legacy placeholders rejected with HTTP 400).
 - `GET /api/v1/characters/active` — Get active character state (`ActiveCharacterStateOut` containing `is_neutral_fallback: bool`) for authenticated Profile.
 - `PUT /api/v1/characters/active` — Select active character instance for Profile using request body `{"character_id": "<instance_id> | 'default' | 'neutral-assistant'"}`.
@@ -266,7 +266,7 @@ The following capabilities are approved under Decision D11 and scheduled for sub
 5. **Relationship Continuity State (PC Later):**
    - Long-term interaction familiarity depth and opt-in relationship progression.
 6. **Decoupled Voice Synthesis Integration (PC V1 — `PC-VOICE-003`):**
-   - TTS acoustic profiles and prosody mapping bound to character definitions.
+   - Nullable `CharacterInstance.voice_id` (Migration `018`) binds preferred TTS voice identifiers to character instances with explicit resolution priority (`explicit -> CharacterInstance.voice_id -> ProfileVoiceSettings.default_voice_id -> af_nicole`), exposed in `companion_api` (`CharacterInstanceOut.voiceId`, `CharacterInstanceUpdate(..., clearVoiceId: true)`). Character Studio UI voice picker lands in M4 Batch C.
 7. **Multimodal Attachments Status:**
    - Image attachment backend: implemented.
    - React Web image-attachment interface: implemented.

@@ -2,7 +2,7 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- **Status:** Awaiting Approval
+- **Status:** Approved (Option 1 Locked)
 - **Delivery Level:** Level C — Sensitive Design
 - **Scope Mode:** New Feature — M4 Batch B backend speech pipeline (`whisper.cpp` STT subprocess adapter, `Silero` ONNX / adaptive pure-Python VAD with anti-false-trigger `BargeInGate`, `Kokoro-82M` ONNX / Windows SAPI TTS adapters), Alembic Migration `018` (`profile_voice_settings` & nullable `character_instances.voice_id`), authenticated full-duplex `WS /api/v1/voice/ws` session orchestrator with D9 tool parity and mandatory barge-in, `/api/v1/voice/*` REST endpoints, OpenAPI 3.1 regeneration, and `companion_api` Dart SDK WebSocket + REST + DTO parity. (Windows C++ WASAPI/hotkey native channel and Option A Flutter Desktop Voice/Chat/Settings/Studio UI belong to follow-on **M4 Batch C**.)
 - **Target Files:**
@@ -175,9 +175,8 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 ## 6. Risks, Dependencies, Assumptions & Safeguards
 
-- **Dependencies & Approval Choice (`requirements.lock`):**
-  - *Option 1 (Recommended Default — Zero Lockfile Churn):* Keep `backend/pyproject.toml`, `backend/requirements.txt`, and `backend/requirements.lock` untouched. `WhisperCppSttProvider` (`runtime/whisper.cpp/whisper-server.exe` via `httpx`), `WindowsSapiTtsProvider`, `AdaptiveEnergyVadProvider`, and `BargeInGate` operate with zero new Python packages, while `KokoroOnnxTtsProvider` & `SileroOnnxVadProvider` detect `onnxruntime` + `numpy` dynamically when installed in the Python environment.
-  - *Option 2 (Pin `onnxruntime` + `numpy` Now):* Add `onnxruntime` and `numpy` to `backend/pyproject.toml` / `backend/requirements.txt` and regenerate `backend/requirements.lock` using `runtime/ci-cancellation/qualification311` (`CPython 3.11.9` + `pip 26.1.2`) in Slice 1 so `Kokoro-82M` and `Silero VAD` ONNX models run inside the CI-locked environment out of the box.
+- **Dependencies & Approved Choice (`requirements.lock`):**
+  - **Approved — Option 1 (Zero Lockfile Churn):** Keep `backend/pyproject.toml`, `backend/requirements.txt`, and `backend/requirements.lock` untouched. `WhisperCppSttProvider` (`runtime/whisper.cpp/whisper-server.exe` via `httpx`), `WindowsSapiTtsProvider`, `AdaptiveEnergyVadProvider`, and `BargeInGate` operate with zero new Python packages, while `KokoroOnnxTtsProvider` & `SileroOnnxVadProvider` detect `onnxruntime` + `numpy` dynamically when installed in the Python environment. *(Option 2 lockfile pinning rejected for Batch B to preserve cross-version Python `3.11`/`3.13` lock parity.)*
 - **Risks & Mitigations:**
   - *Kokoro G2P without system `espeak-ng`:* Embedded pure-Python English grapheme-to-IPA converter ensures Kokoro `tokenizer.json` produces valid phoneme token sequences without requiring external `espeak-ng` binaries; falls back cleanly to Windows SAPI or returns clear capability status when needed.
   - *Orphaned `whisper-server.exe` subprocesses:* Bind strictly to `127.0.0.1`, register `terminate()` / Windows Job/process cleanup in `VoiceManager.shutdown()` + `main.py` lifespan `finally`, and exercise cleanup in unit tests with `FakeProcess`.

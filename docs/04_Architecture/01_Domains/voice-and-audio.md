@@ -108,20 +108,26 @@ In accordance with Decision D1:
 
 ## 3. Current Verified Implementation
 
-Repository source code and test suites verify the following baseline reality:
+Repository source code and test suites verify the following baseline reality after M4 Batch B (`feature/m4-voice-pipeline-b`):
 
-### 3.1 Codebase State
+### 3.1 Backend & Companion API Codebase State
 
-- **Voice Subsystem Runtime:** `NOT IMPLEMENTED`.
-- **Speech Engines:** There is currently zero operational STT, TTS, VAD, or wake-word runtime code integrated into the FastAPI backend or React frontend.
-- **Router Status:** `app.api.v1.router` mounts health, auth, tasks, llm, conversations, attachments, and memories routers. No audio, voice, or speech endpoints are mounted.
-- **Frontend State:** Voice UI controls in the frontend operate as non-functional visual placeholders or UI previews without backend WebSocket or audio streaming bindings.
+- **Database Schema (`018_voice_settings_and_character_voice.py`, ORM Models):** Implemented `ProfileVoiceSettings` (`profile_voice_settings` table with `profile_id` PK/FK, `barge_in_policy`, `vad_sensitivity`, `stt_language`, `tts_speed`, `default_voice_id`, `auto_read_replies`, `proactive_speech_enabled`, `cloud_stt_enabled`, `cloud_tts_enabled`, `updated_at`) and nullable `CharacterInstance.voice_id` on `character_instances`. `ProfilePurgeService.purge_profile` deletes `ProfileVoiceSettings` prior to `Profile` deletion, and `ProfilePurgeService.soft_delete_profile` + `auth.revoke_session` immediately terminate active WebSocket voice sessions.
+- **Audio Validation & Ephemeral Memory Safety (`backend/app/services/voice/audio_utils.py`):** In-memory PCM16/WAV decoding and RMS normalization (`MAX_TRANSCRIBE_WAV_BYTES = 1,468,006` (~1.4 MiB) keeping base64 REST JSON safely beneath the 2 MiB `PayloadLimitMiddleware` cap; `MAX_TURN_AUDIO_BYTES` per WS turn); raw audio is never persisted to disk.
+- **Speech Engines & Lazy `VoiceManager` (`backend/app/services/voice/`):**
+  - *VAD & Barge-In (`vad.py`):* `SileroOnnxVadProvider` (dynamic `onnxruntime`/`numpy` detection) with automatic pure-stdlib `AdaptiveEnergyVadProvider` fallback (`512`-sample frames @ 16 kHz); `BargeInGate` supports `smart_auto`, `strict_noisy`, and `manual_only` policies across configurable `low`/`medium`/`high` sensitivities.
+  - *STT (`stt.py`):* `WhisperCppSttProvider` running windowless localhost-only `runtime/whisper.cpp/whisper-server.exe -ng` on CPU/RAM with explicit unavailable reporting when model weights are absent.
+  - *TTS (`tts.py`):* `KokoroOnnxTtsProvider` (dynamic `onnxruntime`/`numpy` detection, embedded G2P-to-IPA converter, `tokenizer.json`, and `.bin` style vectors) with automatic `WindowsSapiTtsProvider` fallback on Windows (`af_nicole` / voice catalog).
+  - *Lifecycle (`manager.py`, `main.py`):* Lazy `VoiceManager` (`get_voice_manager()`) shuts down cleanly via `reset_voice_manager()` inside FastAPI `lifespan`, preserving clean `test_import_isolation.py` collection without heavy module-level side effects and zero `backend/requirements.lock` changes (Option 1).
+- **Duplex WebSocket & REST Control Plane (`session_orchestrator.py`, `ws_protocol.py`, `endpoints/voice.py`):**
+  - *REST Endpoints (`/api/v1/voice/*`):* `GET /status`, `GET /voices`, `GET /settings`, `PATCH /settings`, `POST /transcribe`, and `POST /synthesize` (resolving explicit voice -> active/conversation `CharacterInstance.voice_id` -> `ProfileVoiceSettings.default_voice_id` -> `af_nicole`).
+  - *WebSocket (`/api/v1/voice/ws`):* Full-duplex `VoiceSessionOrchestrator` with no request-scoped `Depends(get_db)` session, authenticating via `Authorization` header or initial `session.start` `session_token`, streaming `vad.state`, `stt.final`, `llm.delta`, `tool.intent`, `tool.result`, `tool.confirmation_required`, `tts.audio.chunk`, `tts.end`, `turn.cancelled`, `pong`, and `error` frames. Enforces identical D9 tool policies (`orchestrate_chat_stream`), shared `_get_lock(conversation_id)` concurrency safety, and bounded `await asyncio.wait_for(task, timeout=5.0)` cancellation on manual or VAD-triggered `barge_in`.
+- **OpenAPI 3.1 & `companion_api` Dart SDK:** Regenerated `contracts/openapi/openapi.json` (`80` REST paths), added `voice_dto.dart`, optional `voiceId` / `clearVoiceId` on `CharacterInstance*`, `WebSocketChannelCompanionClient` (enforcing D5 `wss://` on credentialed non-loopback hosts), `VoiceSessionClient` (suppressing stale `turn_id` output after `barge_in`), and `6` REST methods on `CompanionClient` (`87/87` schemas, `99/99` covered routes in `check_dart_openapi_parity.py --check`).
 
-### 3.2 Mobile Implementation Reality
+### 3.2 Desktop & Mobile Audio Hardware State
 
-- **Flutter Mobile Audio Pipeline:** `NOT IMPLEMENTED`. The Flutter client does not yet include audio capture, playback, or audio focus handlers.
-- **Mobile WebSocket Voice Stream:** `NOT IMPLEMENTED`. Full-duplex WebSocket client transport for speech frames is not implemented on mobile.
-- **Mobile Local STT / TTS Engines:** `NOT IMPLEMENTED`. On-device execution of whisper.cpp or mobile TTS runtimes is not implemented in repository code.
+- **Flutter Desktop Native Audio I/O & Chat Voice UI (M4 Batch C Pending):** Windows WASAPI capture/playback, hotkey binding, `ChatScreen` live voice mode + per-message Read Aloud, `Character Studio` voice picker, and `Settings -> Voice & Audio` UI remain deferred to **M4 Batch C**.
+- **Flutter Mobile Audio Pipeline:** `NOT IMPLEMENTED`. Mobile audio capture, playback, audio focus handlers, and on-device mobile STT/TTS engines remain future Mobile V1 work.
 
 ---
 

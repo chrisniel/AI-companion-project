@@ -76,6 +76,7 @@ Verified in `backend/app/models/conversation.py` and `backend/app/api/v1/endpoin
 ### 3.5 Security Audit Status
 
 - **Redacted D9 Tool Audit Ledger (`backend/app/models/tool_audit_log.py`, Migration `017`):** Implemented in M4 Batch A. `tool_audit_logs` records strictly redacted operational metadata (`id`, `profile_id`, `conversation_id`, `tool_name`, `risk_tier`, `provenance`, `decision`, `outcome_status`, `duration_ms`, `source_domains_json`, `error_code`, `created_at`) accessible via `GET /api/v1/tools/audit`, and **never stores** user prompts, raw tool arguments, message bodies, or Web/Cloud API keys. Permanent Profile purge (`ProfilePurgeService.purge_profile`) deletes `ToolAuditLog`, `ToolConfirmation`, and `ProfileToolSettings` in FK dependency order.
+- **Voice Privacy, Ephemeral Audio & Profile Termination (Migration `018`, M4 Batch B):** Raw microphone/dictation buffers remain strictly in transient RAM (`MAX_TRANSCRIBE_WAV_BYTES = 1,468,006`) and are never written to disk by `/api/v1/voice/transcribe`, `/api/v1/voice/synthesize`, or `/api/v1/voice/ws`. `ProfileVoiceSettings` rows are deleted prior to `Profile` during permanent purge (`ProfilePurgeService.purge_profile`), and both `ProfilePurgeService.soft_delete_profile` and `auth.revoke_session` immediately terminate active WebSocket voice sessions and discard in-memory audio buffers.
 - **General Logging Reality:** Standard Python logging (`backend/app/core/logging.py`) emits redacted diagnostic application logs alongside the dedicated `tool_audit_logs` ledger.
 
 ---
