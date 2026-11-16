@@ -202,6 +202,14 @@ class Settings(BaseSettings):
     SCHEDULER_MISSED_GRACE_SECONDS: int = 300
     MEMORY_EXPIRATION_SWEEP_INTERVAL_SECONDS: int = 300
 
+    # M4 Batch B: Local Voice & Speech Pipeline (CPU-first, RAM-only transient audio)
+    VOICE_PROVIDER: str = "auto"  # "auto" | "local" | "mock"
+    VOICE_STT_MODEL_PATH: Optional[str] = None
+    VOICE_WHISPER_THREADS: int = 4
+    VOICE_WHISPER_PORT: int = 0
+    VOICE_MAX_TURN_AUDIO_BYTES: int = 1_572_864
+    VOICE_BARGE_IN_DEFAULT_HOLD_MS: int = 280
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:

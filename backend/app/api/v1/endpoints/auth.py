@@ -199,6 +199,8 @@ async def exchange_session(payload: ExchangeRequest, request: Request, db: Async
 async def revoke_session(session: ProfileSession = Depends(get_current_profile_session), db: AsyncSession = Depends(get_db)):
     await db.execute(update(ProfileSession).where(ProfileSession.id == session.id).values(revoked_at=now_utc()))
     await db.commit()
+    from app.services.voice.manager import get_voice_manager
+    await get_voice_manager().terminate_sessions_for_profile_session(session.id)
 
 
 @router.get("/session/me", response_model=SessionMetadata)

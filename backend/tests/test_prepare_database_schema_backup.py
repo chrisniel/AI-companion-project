@@ -19,7 +19,7 @@ from app.core.storage import prepare_database_schema, StorageError
 from app.db.backup import SQLiteBackupError
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-HEAD_REVISION = "017_d9_tool_policy_and_audit"
+HEAD_REVISION = "018_voice_settings_and_character_voice"
 
 
 def _get_alembic_config(db_path: Path) -> Config:

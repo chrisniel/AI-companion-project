@@ -96,7 +96,16 @@ class CharacterInstanceCreate(BaseModel):
     lore: Optional[str] = None
     system_prompt: Optional[str] = None
     avatar_asset: Optional[str] = Field(None, min_length=1, max_length=255)
+    voice_id: Optional[str] = Field(default=None, max_length=64)
     traits: Optional[CharacterTraitVector] = None
+
+    @field_validator("voice_id")
+    @classmethod
+    def normalize_voice_id(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        cleaned = v.strip()
+        return cleaned or None
 
     @field_validator("template_id")
     @classmethod
@@ -120,9 +129,18 @@ class CharacterInstanceUpdate(BaseModel):
     lore: Optional[str] = Field(default=None)
     system_prompt: Optional[str] = Field(default=None)
     avatar_asset: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    voice_id: Optional[str] = Field(default=None, max_length=64)
     preset_id: Optional[CharacterPresetId] = Field(default=None)
     traits: Optional[CharacterTraitVector] = Field(default=None)
     status: Optional[Literal["active", "archived"]] = Field(default=None)
+
+    @field_validator("voice_id")
+    @classmethod
+    def normalize_voice_id(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        cleaned = v.strip()
+        return cleaned or None
 
     @model_validator(mode="before")
     @classmethod
@@ -161,6 +179,7 @@ class CharacterInstanceOut(BaseModel):
     lore: str
     system_prompt: str
     avatar_asset: str
+    voice_id: Optional[str] = None
     preset_id: Optional[CharacterPresetId] = None
     traits: Optional[CharacterTraitVector] = None
     current_mood: Optional[CharacterMoodId] = None

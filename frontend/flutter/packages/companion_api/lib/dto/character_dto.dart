@@ -330,6 +330,7 @@ class CharacterInstanceCreate {
   final String? lore;
   final String? systemPrompt;
   final String? avatarAsset;
+  final String? voiceId;
   final CharacterTraitVector? traits;
 
   const CharacterInstanceCreate({
@@ -340,6 +341,7 @@ class CharacterInstanceCreate {
     this.lore,
     this.systemPrompt,
     this.avatarAsset,
+    this.voiceId,
     this.traits,
   });
 
@@ -352,6 +354,7 @@ class CharacterInstanceCreate {
       lore: json['lore'] as String?,
       systemPrompt: json['system_prompt'] as String?,
       avatarAsset: json['avatar_asset'] as String?,
+      voiceId: json['voice_id'] as String?,
       traits: json['traits'] != null
           ? CharacterTraitVector.fromJson(Map<String, dynamic>.from(json['traits'] as Map))
           : null,
@@ -366,6 +369,7 @@ class CharacterInstanceCreate {
         if (lore != null) 'lore': lore,
         if (systemPrompt != null) 'system_prompt': systemPrompt,
         if (avatarAsset != null) 'avatar_asset': avatarAsset,
+        if (voiceId != null) 'voice_id': voiceId,
         if (traits != null) 'traits': traits!.toJson(),
       };
 
@@ -381,6 +385,7 @@ class CharacterInstanceCreate {
           lore == other.lore &&
           systemPrompt == other.systemPrompt &&
           avatarAsset == other.avatarAsset &&
+          voiceId == other.voiceId &&
           traits == other.traits;
 
   @override
@@ -392,6 +397,7 @@ class CharacterInstanceCreate {
         lore,
         systemPrompt,
         avatarAsset,
+        voiceId,
         traits,
       );
 
@@ -407,6 +413,7 @@ class CharacterInstanceUpdate {
   final String? lore;
   final String? systemPrompt;
   final String? avatarAsset;
+  final String? voiceId;
   final String? presetId;
   final CharacterTraitVector? traits;
   final String? status;
@@ -417,6 +424,7 @@ class CharacterInstanceUpdate {
     this.lore,
     this.systemPrompt,
     this.avatarAsset,
+    this.voiceId,
     this.presetId,
     this.traits,
     this.status,
@@ -429,6 +437,7 @@ class CharacterInstanceUpdate {
       lore: json['lore'] as String?,
       systemPrompt: json['system_prompt'] as String?,
       avatarAsset: json['avatar_asset'] as String?,
+      voiceId: json['voice_id'] as String?,
       presetId: json['preset_id'] as String?,
       traits: json['traits'] != null
           ? CharacterTraitVector.fromJson(Map<String, dynamic>.from(json['traits'] as Map))
@@ -437,12 +446,16 @@ class CharacterInstanceUpdate {
     );
   }
 
-  Map<String, dynamic> toJson() => {
+  Map<String, dynamic> toJson({bool clearVoiceId = false}) => {
         if (name != null) 'name': name,
         if (summary != null) 'summary': summary,
         if (lore != null) 'lore': lore,
         if (systemPrompt != null) 'system_prompt': systemPrompt,
         if (avatarAsset != null) 'avatar_asset': avatarAsset,
+        if (clearVoiceId)
+          'voice_id': null
+        else if (voiceId != null)
+          'voice_id': voiceId,
         if (presetId != null) 'preset_id': presetId,
         if (traits != null) 'traits': traits!.toJson(),
         if (status != null) 'status': status,
@@ -458,6 +471,7 @@ class CharacterInstanceUpdate {
           lore == other.lore &&
           systemPrompt == other.systemPrompt &&
           avatarAsset == other.avatarAsset &&
+          voiceId == other.voiceId &&
           presetId == other.presetId &&
           traits == other.traits &&
           status == other.status;
@@ -469,6 +483,7 @@ class CharacterInstanceUpdate {
         lore,
         systemPrompt,
         avatarAsset,
+        voiceId,
         presetId,
         traits,
         status,
@@ -492,6 +507,7 @@ class CharacterInstanceOut {
   final String lore;
   final String systemPrompt;
   final String avatarAsset;
+  final String? voiceId;
   final String? presetId;
   final CharacterTraitVector? traits;
   final String? currentMood;
@@ -514,6 +530,7 @@ class CharacterInstanceOut {
     required this.lore,
     required this.systemPrompt,
     required this.avatarAsset,
+    this.voiceId,
     this.presetId,
     this.traits,
     this.currentMood,
@@ -587,6 +604,7 @@ class CharacterInstanceOut {
       lore: json['lore'] as String? ?? '',
       systemPrompt: json['system_prompt'] as String,
       avatarAsset: json['avatar_asset'] as String? ?? 'default_avatar',
+      voiceId: json['voice_id'] as String?,
       presetId: json['preset_id'] as String?,
       traits: json['traits'] != null
           ? CharacterTraitVector.fromJson(Map<String, dynamic>.from(json['traits'] as Map))
@@ -613,6 +631,7 @@ class CharacterInstanceOut {
         'lore': lore,
         'system_prompt': systemPrompt,
         'avatar_asset': avatarAsset,
+        if (voiceId != null) 'voice_id': voiceId,
         if (presetId != null) 'preset_id': presetId,
         if (traits != null) 'traits': traits!.toJson(),
         if (currentMood != null) 'current_mood': currentMood,
@@ -640,6 +659,7 @@ class CharacterInstanceOut {
           lore == other.lore &&
           systemPrompt == other.systemPrompt &&
           avatarAsset == other.avatarAsset &&
+          voiceId == other.voiceId &&
           presetId == other.presetId &&
           traits == other.traits &&
           currentMood == other.currentMood &&
@@ -651,7 +671,7 @@ class CharacterInstanceOut {
           updatedAt == other.updatedAt;
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
         id,
         profileId,
         isLegacyPlaceholder,
@@ -663,6 +683,7 @@ class CharacterInstanceOut {
         lore,
         systemPrompt,
         avatarAsset,
+        voiceId,
         presetId,
         traits,
         currentMood,
@@ -672,7 +693,7 @@ class CharacterInstanceOut {
         isActiveForProfile,
         createdAt,
         updatedAt,
-      );
+      ]);
 
   @override
   String toString() => 'CharacterInstanceOut(id: $id, name: $name, status: $status)';

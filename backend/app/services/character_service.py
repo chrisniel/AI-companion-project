@@ -333,6 +333,7 @@ def _to_instance_out(inst: CharacterInstance, active_id: Optional[str] = None) -
         lore=inst.lore,
         system_prompt=inst.system_prompt,
         avatar_asset=inst.avatar_asset,
+        voice_id=inst.voice_id,
         preset_id=inst.preset_id,  # type: ignore[arg-type]
         traits=traits,
         current_mood=current_mood,
@@ -632,6 +633,7 @@ async def create_character_instance(
         lore=payload.lore if payload.lore is not None else template.lore,
         system_prompt=payload.system_prompt if payload.system_prompt is not None else template.system_prompt,
         avatar_asset=payload.avatar_asset if payload.avatar_asset is not None else template.avatar_asset,
+        voice_id=payload.voice_id,
         preset_id=preset_id,
         warmth=trait_dict["warmth"],
         teasing=trait_dict["teasing"],
@@ -701,6 +703,8 @@ async def update_character_instance(
         instance.system_prompt = payload.system_prompt
     if "avatar_asset" in set_fields and payload.avatar_asset is not None:
         instance.avatar_asset = payload.avatar_asset
+    if "voice_id" in set_fields:
+        instance.voice_id = payload.voice_id
     if "preset_id" in set_fields and payload.preset_id is not None:
         instance.preset_id = payload.preset_id
     if "status" in set_fields and payload.status is not None:

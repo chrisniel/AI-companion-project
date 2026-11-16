@@ -17,6 +17,7 @@ from app.models.routine import Routine
 from app.models.notification_event import NotificationEvent
 from app.models.tool_runtime_config import ToolRuntimeConfig
 from app.models.profile_tool_settings import ProfileToolSettings
+from app.models.profile_voice_settings import ProfileVoiceSettings
 from app.models.tool_confirmation import ToolConfirmation
 from app.models.tool_audit_log import ToolAuditLog
 
@@ -38,6 +39,7 @@ __all__ = [
     "NotificationEvent",
     "ToolRuntimeConfig",
     "ProfileToolSettings",
+    "ProfileVoiceSettings",
     "ToolConfirmation",
     "ToolAuditLog",
 ]
