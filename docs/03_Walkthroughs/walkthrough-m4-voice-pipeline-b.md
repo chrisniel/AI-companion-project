@@ -41,18 +41,18 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 ### Automated Checks
 
-- [x] `venv\Scripts\python.exe -B backend\tests\test_import_isolation.py -v` — `Ran 4 tests in 4.027s — OK (ISOLATED_COLLECTION_COUNT=877)`.
-- [x] `venv\Scripts\python.exe -m pytest backend\tests -q` — `877 passed` (`0` failed, `0` skipped, `302.25s`), including `test_migration_018.py`, `test_voice_engines_and_barge_in.py`, `test_voice_api_and_ws.py`, and character regression tests (`32 passed`).
+- [x] `venv\Scripts\python.exe -B backend\tests\test_import_isolation.py -v` — `Ran 4 tests in 5.355s — OK (ISOLATED_COLLECTION_COUNT=878)`.
+- [x] `venv\Scripts\python.exe -m pytest backend\tests -q` — `878 passed` (`0` failed, `0` skipped, `319.53s`), including `test_migration_018.py`, `test_voice_engines_and_barge_in.py`, `test_voice_api_and_ws.py`, and character regression tests (`32 passed`).
 - [x] `venv\Scripts\python.exe scripts\check_openapi_contract.py --check` — `OpenAPI contract is up-to-date (80 routes, all required model routes present)`.
 - [x] `venv\Scripts\python.exe scripts\check_dart_openapi_parity.py --check` — `Verified DTO Schemas: 87/87`, `M1 + M2 + M3 + M4 Native Covered Routes: 99/99`, `RESULT: ALL CONTRACT PARITY AND ROUTE COVERAGE CHECKS PASSED`.
-- [x] `venv\Scripts\python.exe -m unittest scripts/tests/test_check_dart_openapi_parity.py -v` — `Ran 8 tests in 0.232s — OK`.
+- [x] `venv\Scripts\python.exe -m unittest scripts/tests/test_check_dart_openapi_parity.py -v` — `Ran 8 tests in 0.228s — OK`.
 - [x] `git diff --exit-code -- backend/requirements.txt backend/requirements.lock backend/pyproject.toml` — Exited `0` (zero dependency/lockfile changes under Option 1).
 - [x] `dart analyze && dart test` (`frontend/flutter/packages/companion_api`) — `No issues found!`, `112` tests passed.
 - [x] `dart analyze . && flutter test --no-pub --concurrency=1 apps/desktop/test` (`frontend/flutter`) — `No issues found!`, `409` tests passed.
 
-### Optional Hardware / Binary Smoke Note
+### Live Local Hardware / Neural Engine Smoke Verification
 
-- Batch B introduces backend speech adapters and `companion_api` WebSocket transport with no Flutter Desktop UI changes (UI wiring and WASAPI audio I/O arrive in M4 Batch C). On hosts with `runtime/whisper.cpp/whisper-server.exe` + a GGUF `.bin` whisper model staged, `GET /api/v1/voice/status` and `POST /api/v1/voice/transcribe` can additionally be exercised directly over HTTP; without staged STT model weights, `/api/v1/voice/status` reports `stt_available: false` truthfully while `AdaptiveEnergyVadProvider` and `WindowsSapiTtsProvider` remain active.
+- [x] Live end-to-end neural smoke run verified with staged [`ggml-base.bin`](../../models/stt/whisper/ggml-base.bin), [`silero_vad.onnx`](../../models/vad/silero-vad-v6.2.1/silero_vad.onnx), [`model_quantized.onnx`](../../models/tts/kokoro-82m-v1.0/model_quantized.onnx) (`af_nicole.bin`), and [`whisper-server.exe`](../../runtime/whisper.cpp/whisper-server.exe): `KokoroOnnxTtsProvider` synthesized `24 kHz` WAV -> resampled to `16 kHz` PCM16 (`rms=0.0696`) -> `SileroOnnxVadProvider` detected `131/216` speech frames (`max_prob=1.0000`) -> `WhisperCppSttProvider` transcribed cleanly over loopback HTTP (`en` and `auto`) + `WindowsSapiTtsProvider` verified (`RIFF` WAV) + `reset_voice_manager()` terminated child process cleanly.
 
 ## 5. Safe Customization & Invariants
 

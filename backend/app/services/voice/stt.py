@@ -184,11 +184,8 @@ class WhisperCppSttProvider(SttProvider):
             "-nt",
         ]
         vad_path = self._vad_model_path
-        if vad_path is None:
-            candidate = settings.MODELS_DIR / "vad" / "silero-vad-v6.2.1" / "silero_vad.onnx"
-            if candidate.is_file():
-                vad_path = candidate
-        if vad_path is not None and Path(vad_path).is_file():
+        # whisper-server --vad -vm strictly expects a GGML .bin VAD model (never .onnx).
+        if vad_path is not None and Path(vad_path).is_file() and str(vad_path).lower().endswith(".bin"):
             cmd.extend(["--vad", "-vm", str(vad_path)])
         return cmd
 

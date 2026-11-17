@@ -109,6 +109,38 @@ def test_silero_provider_reports_missing_runtime_gracefully(tmp_path):
     assert provider.is_available() is False
 
 
+def test_silero_provider_prepends_64_sample_context_and_resets():
+    pytest.importorskip("numpy")
+    captured_inputs = []
+
+    class _FakeSileroSession:
+        def run(self, _names, feed):
+            captured_inputs.append(feed["input"].copy())
+            return ([[0.88]], feed["state"])
+
+    vad = SileroOnnxVadProvider(sensitivity="medium", session=_FakeSileroSession())
+    assert vad.is_available() is True
+
+    frame1 = _tone_pcm16(8000, freq_hz=260.0)
+    res1 = vad.evaluate_frame(frame1)
+    assert res1.probability == pytest.approx(0.88)
+    assert res1.is_speech is True
+    assert captured_inputs[0].shape == (1, 576)
+    # First 64 context samples start at zero
+    assert float(captured_inputs[0][0, :64].max()) == 0.0
+
+    # Second frame receives tail 64 samples from frame1 as its context prefix
+    frame2 = _silence_pcm16()
+    vad.evaluate_frame(frame2)
+    assert captured_inputs[1].shape == (1, 576)
+    assert float(abs(captured_inputs[1][0, :64]).max()) > 0.0
+
+    # reset() clears context back to zero
+    vad.reset()
+    vad.evaluate_frame(frame2)
+    assert float(captured_inputs[2][0, :64].max()) == 0.0
+
+
 def test_whisper_provider_command_and_truthful_unavailability(tmp_path):
     from app.services.voice.stt import WhisperCppSttProvider
 
@@ -122,13 +154,32 @@ def test_whisper_provider_command_and_truthful_unavailability(tmp_path):
     # Present binary & model -> builds localhost CPU-first command cleanly
     model_file = tmp_path / "ggml-base.bin"
     model_file.write_bytes(b"GGML")
-    stt = WhisperCppSttProvider(binary_path=missing_bin, model_path=model_file, threads=4)
+    onnx_vad = tmp_path / "silero_vad.onnx"
+    onnx_vad.write_bytes(b"ONNX")
+    stt = WhisperCppSttProvider(
+        binary_path=missing_bin,
+        model_path=model_file,
+        vad_model_path=onnx_vad,
+        threads=4,
+    )
     assert stt.is_available() is True
     cmd = stt.build_command(port=18123, language="en")
     assert "--host" in cmd and "127.0.0.1" in cmd
     assert "-ng" in cmd
     assert str(model_file) in cmd
     assert "-l" in cmd and "en" in cmd
+    # Never pass .onnx files into whisper-server's GGML -vm flag
+    assert "--vad" not in cmd and str(onnx_vad) not in cmd
+
+    ggml_vad = tmp_path / "ggml-silero.bin"
+    ggml_vad.write_bytes(b"GGML")
+    stt_ggml_vad = WhisperCppSttProvider(
+        binary_path=missing_bin,
+        model_path=model_file,
+        vad_model_path=ggml_vad,
+        threads=4,
+    )
+    assert "-vm" in stt_ggml_vad.build_command(port=18123)
 
 
 async def test_whisper_provider_transcribe_and_shutdown_uses_mocked_http_and_process(tmp_path):

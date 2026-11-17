@@ -100,6 +100,7 @@ class SileroOnnxVadProvider(VadProvider):
     """Optional Silero VAD ONNX provider; gracefully inactive unless onnxruntime+numpy+model exist."""
 
     name = "silero_onnx"
+    _CONTEXT_SAMPLES = 64
 
     def __init__(
         self,
@@ -113,6 +114,7 @@ class SileroOnnxVadProvider(VadProvider):
         self._session = session
         self._np: Any = None
         self._state: Any = None
+        self._context: Any = None
         self._init_error: Optional[str] = None
         if self._session is None:
             self._try_init_lazy()
@@ -160,6 +162,7 @@ class SileroOnnxVadProvider(VadProvider):
     def reset(self) -> None:
         if self._np is not None:
             self._state = self._np.zeros((2, 1, 128), dtype=self._np.float32)
+            self._context = self._np.zeros((1, self._CONTEXT_SAMPLES), dtype=self._np.float32)
 
     def evaluate_frame(self, pcm16_frame: bytes) -> VadFrameResult:
         if not self.is_available():
@@ -171,7 +174,11 @@ class SileroOnnxVadProvider(VadProvider):
                 samples = np.pad(samples, (0, VAD_FRAME_SAMPLES - len(samples)))
             else:
                 samples = samples[:VAD_FRAME_SAMPLES]
-        audio_input = samples.reshape(1, VAD_FRAME_SAMPLES)
+        frame_batch = samples.reshape(1, VAD_FRAME_SAMPLES)
+        if self._context is None:
+            self._context = np.zeros((1, self._CONTEXT_SAMPLES), dtype=np.float32)
+        audio_input = np.concatenate([self._context, frame_batch], axis=1)
+        self._context = frame_batch[:, -self._CONTEXT_SAMPLES :]
         sr_tensor = np.array(VOICE_SAMPLE_RATE, dtype=np.int64)
         inputs = {"input": audio_input, "state": self._state, "sr": sr_tensor}
         out, new_state = self._session.run(None, inputs)
