@@ -26,6 +26,7 @@ class CharacterStudioDraft {
     required String avatarAsset,
     required String presetId,
     CharacterTraitVector? traits,
+    String? voiceId,
     this.isLegacyPlaceholder = false,
     required this.onChanged,
   })  : _instanceId = instanceId,
@@ -36,13 +37,15 @@ class CharacterStudioDraft {
         _avatarAsset = avatarAsset,
         _presetId = presetId,
         _traits = traits,
+        _voiceId = (voiceId == null || voiceId.isEmpty) ? null : voiceId,
         _initialName = name,
         _initialSummary = summary,
         _initialLore = lore,
         _initialSystemPrompt = systemPrompt,
         _initialAvatarAsset = avatarAsset,
         _initialPresetId = presetId,
-        _initialTraits = traits;
+        _initialTraits = traits,
+        _initialVoiceId = (voiceId == null || voiceId.isEmpty) ? null : voiceId;
 
   String? _instanceId;
   String? get instanceId => _instanceId;
@@ -69,6 +72,7 @@ class CharacterStudioDraft {
   String _avatarAsset;
   String _presetId;
   CharacterTraitVector? _traits;
+  String? _voiceId;
 
   String _initialName;
   String _initialSummary;
@@ -77,6 +81,7 @@ class CharacterStudioDraft {
   String _initialAvatarAsset;
   String _initialPresetId;
   CharacterTraitVector? _initialTraits;
+  String? _initialVoiceId;
 
   bool get isNew => _instanceId == null;
   String get name => _name;
@@ -86,6 +91,7 @@ class CharacterStudioDraft {
   String get avatarAsset => _avatarAsset;
   String get presetId => _presetId;
   CharacterTraitVector? get traits => _traits;
+  String? get voiceId => _voiceId;
 
   bool get isDirty =>
       _hasUncertainCreation ||
@@ -95,7 +101,8 @@ class CharacterStudioDraft {
       _systemPrompt != _initialSystemPrompt ||
       _avatarAsset != _initialAvatarAsset ||
       _presetId != _initialPresetId ||
-      _traits != _initialTraits;
+      _traits != _initialTraits ||
+      _voiceId != _initialVoiceId;
 
   void updateName(String val) {
     if (isReadOnly) return;
@@ -137,6 +144,16 @@ class CharacterStudioDraft {
     if (isReadOnly) return;
     if (_avatarAsset != val) {
       _avatarAsset = val;
+      _revision++;
+      onChanged();
+    }
+  }
+
+  void updateVoiceId(String? val) {
+    if (isReadOnly) return;
+    final normalized = (val == null || val.trim().isEmpty) ? null : val.trim();
+    if (_voiceId != normalized) {
+      _voiceId = normalized;
       _revision++;
       onChanged();
     }
@@ -210,6 +227,7 @@ class CharacterStudioDraft {
     _initialAvatarAsset = saved.avatarAsset;
     _initialPresetId = saved.presetId ?? 'custom';
     _initialTraits = saved.traits;
+    _initialVoiceId = saved.voiceId;
 
     if (_revision == snapshotRevision) {
       _name = saved.name;
@@ -219,6 +237,7 @@ class CharacterStudioDraft {
       _avatarAsset = saved.avatarAsset;
       _presetId = saved.presetId ?? 'custom';
       _traits = saved.traits;
+      _voiceId = saved.voiceId;
     }
     onChanged();
   }
@@ -231,6 +250,7 @@ class PendingUpdateSnapshot {
     required this.targetDraft,
     required this.snapshotRevision,
     required this.submittedUpdate,
+    this.submittedClearVoiceId = false,
     required this.baselineInstance,
   });
 
@@ -238,6 +258,7 @@ class PendingUpdateSnapshot {
   final CharacterStudioDraft targetDraft;
   final int snapshotRevision;
   final CharacterInstanceUpdate submittedUpdate;
+  final bool submittedClearVoiceId;
   final CharacterInstanceOut? baselineInstance;
 }
 
@@ -515,7 +536,11 @@ class DesktopStudioController extends ChangeNotifier {
         final snapshot = _pendingUpdateSnapshot!;
         final matching = _instances.where((i) => i.id == snapshot.instanceId).firstOrNull;
         if (matching != null) {
-          final isCommitted = _matchesUpdatePayload(matching, snapshot.submittedUpdate);
+          final isCommitted = _matchesUpdatePayload(
+            matching,
+            snapshot.submittedUpdate,
+            clearVoiceId: snapshot.submittedClearVoiceId,
+          );
           if (isCommitted) {
             snapshot.targetDraft.reconcileSavedInstance(matching, snapshot.snapshotRevision);
             _uncertainWriteWarning = false;
@@ -554,7 +579,11 @@ class DesktopStudioController extends ChangeNotifier {
     }
   }
 
-  bool _matchesUpdatePayload(CharacterInstanceOut inst, CharacterInstanceUpdate update) {
+  bool _matchesUpdatePayload(
+    CharacterInstanceOut inst,
+    CharacterInstanceUpdate update, {
+    bool clearVoiceId = false,
+  }) {
     if (update.name != null && inst.name != update.name) return false;
     if (update.summary != null && inst.summary != update.summary) return false;
     if (update.lore != null && inst.lore != update.lore) return false;
@@ -562,6 +591,11 @@ class DesktopStudioController extends ChangeNotifier {
     if (update.avatarAsset != null && inst.avatarAsset != update.avatarAsset) return false;
     if (update.presetId != null && inst.presetId != update.presetId) return false;
     if (update.traits != null && inst.traits != update.traits) return false;
+    if (clearVoiceId) {
+      if (inst.voiceId != null) return false;
+    } else if (update.voiceId != null && inst.voiceId != update.voiceId) {
+      return false;
+    }
     return true;
   }
 
@@ -572,7 +606,8 @@ class DesktopStudioController extends ChangeNotifier {
         inst.systemPrompt == baseline.systemPrompt &&
         inst.avatarAsset == baseline.avatarAsset &&
         inst.presetId == baseline.presetId &&
-        inst.traits == baseline.traits;
+        inst.traits == baseline.traits &&
+        inst.voiceId == baseline.voiceId;
   }
 
   void selectTemplate(CharacterTemplateOut tmpl) {
@@ -622,6 +657,7 @@ class DesktopStudioController extends ChangeNotifier {
       avatarAsset: inst.avatarAsset,
       presetId: inst.presetId ?? 'custom',
       traits: inst.traits,
+      voiceId: inst.voiceId,
       onChanged: _notify,
     );
     _uncertainCreateWarning = false;
@@ -664,6 +700,7 @@ class DesktopStudioController extends ChangeNotifier {
     CharacterInstanceCreate? createPayload;
     CharacterInstanceUpdate? updatePayload;
     CharacterInstanceOut? baselineInstance;
+    var clearVoiceId = false;
 
     try {
       CharacterInstanceOut saved;
@@ -676,6 +713,7 @@ class DesktopStudioController extends ChangeNotifier {
           systemPrompt: targetDraft.systemPrompt.isNotEmpty ? targetDraft.systemPrompt : null,
           avatarAsset: targetDraft.avatarAsset,
           presetId: targetDraft.presetId,
+          voiceId: targetDraft.voiceId,
           traits: targetDraft.traits ??
               const CharacterTraitVector(
                 warmth: 50, teasing: 50, guardedness: 50, directness: 50,
@@ -685,6 +723,8 @@ class DesktopStudioController extends ChangeNotifier {
         saved = await chat.client.createCharacterInstance(createPayload);
       } else {
         baselineInstance = _instances.where((i) => i.id == targetDraft.instanceId).firstOrNull;
+        clearVoiceId = targetDraft.voiceId == null &&
+            (targetDraft._initialVoiceId != null || baselineInstance?.voiceId != null);
         updatePayload = CharacterInstanceUpdate(
           name: targetDraft.name,
           summary: targetDraft.summary,
@@ -692,11 +732,13 @@ class DesktopStudioController extends ChangeNotifier {
           systemPrompt: targetDraft.systemPrompt,
           avatarAsset: targetDraft.avatarAsset,
           presetId: targetDraft.presetId,
+          voiceId: targetDraft.voiceId,
           traits: targetDraft.traits,
         );
         saved = await chat.client.updateCharacterInstance(
           targetDraft.instanceId!,
           updatePayload,
+          clearVoiceId: clearVoiceId,
         );
       }
 
@@ -751,6 +793,7 @@ class DesktopStudioController extends ChangeNotifier {
             targetDraft: targetDraft,
             snapshotRevision: snapshotRevision,
             submittedUpdate: updatePayload!,
+            submittedClearVoiceId: clearVoiceId,
             baselineInstance: baselineInstance,
           );
           _error = 'Character update timed out. Investigating server state...';

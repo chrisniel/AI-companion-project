@@ -37,10 +37,10 @@ void main() {
         ),
       );
 
-      // Verify brand title and rail items
+      // Verify brand title and 5 Option A rail items (no standalone Voice tab)
       expect(find.text('AI Companion'), findsWidgets);
       expect(find.text('Chat'), findsWidgets);
-      expect(find.text('Voice'), findsOneWidget);
+      expect(find.text('Voice'), findsNothing);
       expect(find.text('Schedule'), findsOneWidget);
       expect(find.text('Memory'), findsOneWidget);
       expect(find.text('Studio'), findsOneWidget);
@@ -49,8 +49,8 @@ void main() {
       // Verify truthful runtime status
       expect(find.text('Runtime: Standalone (Unconnected)'), findsWidgets);
 
-      // Verify planned milestone badges
-      expect(find.text('M4'), findsOneWidget);
+      // Verify remaining planned milestone badge
+      expect(find.text('M4'), findsNothing);
       expect(find.text('M3'), findsOneWidget); // Studio only (Memory & Schedule active in M3)
     });
 
@@ -65,12 +65,6 @@ void main() {
           home: DesktopShell(controller: controller),
         ),
       );
-
-      // Navigate to Voice
-      await tester.tap(find.text('Voice'));
-      await tester.pumpAndSettle();
-      expect(find.text('Voice Interaction'), findsOneWidget);
-      expect(find.text('PLANNED MILESTONE M4'), findsOneWidget);
 
       // Navigate to Schedule
       await tester.tap(find.text('Schedule'));

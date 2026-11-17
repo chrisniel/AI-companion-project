@@ -2,7 +2,7 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- **Status:** Awaiting Approval
+- **Status:** Implemented & Automated-Verified on `feature/m4-voice-desktop-c` (Pending Phase 4 Review & Manual Windows Hardware Audio QA)
 - **Delivery Level:** Level C — Sensitive Design
 - **Scope Mode:** New Feature — M4 Batch C native Windows C++ WASAPI audio capture/playback, Win32 global hotkeys (`WindowsAudioChannel`), Option A Desktop Voice UI (removing standalone `Voice` rail tab and integrating Dictation, Live Duplex Voice Stage, Auto-Read, and Read Aloud into `ChatScreen`), `Settings -> Voice & Audio` promotion (`SettingsVoiceSection` with customizable shortcuts, hardware device pickers, barge-in & engine controls), `Character Studio` voice picker, `DesktopShell` amber mic privacy indicator, and System Tray Mute toggle.
 - **Target Files:**

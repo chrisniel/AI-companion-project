@@ -5,16 +5,19 @@ import '../features/studio/desktop_studio_controller.dart';
 import '../features/studio/studio_backdrop_layer.dart';
 import '../features/studio/studio_inspector_panel.dart';
 import '../features/studio/studio_library_panel.dart';
+import '../features/voice/desktop_voice_controller.dart';
 
 /// Immersive, game-inspired Windows Desktop Character Studio V1 (PC-CLIENT-007).
 class StudioScreen extends StatefulWidget {
   const StudioScreen({
     super.key,
     required this.controller,
+    this.voiceController,
     this.onNavigateToSettings,
   });
 
   final DesktopStudioController controller;
+  final DesktopVoiceController? voiceController;
   final VoidCallback? onNavigateToSettings;
 
   @override
@@ -190,6 +193,7 @@ class _StudioScreenState extends State<StudioScreen> {
             width: 384,
             child: StudioInspectorPanel(
               controller: widget.controller,
+              voiceController: widget.voiceController,
               onSave: widget.controller.saveDraft,
               onActivate: widget.controller.activateCharacter,
               onResetNeutral: widget.controller.resetProfileToNeutral,
@@ -237,6 +241,7 @@ class _StudioScreenState extends State<StudioScreen> {
             width: 336,
             child: StudioInspectorPanel(
               controller: widget.controller,
+              voiceController: widget.voiceController,
               onSave: widget.controller.saveDraft,
               onActivate: widget.controller.activateCharacter,
               onResetNeutral: widget.controller.resetProfileToNeutral,
@@ -276,6 +281,7 @@ class _StudioScreenState extends State<StudioScreen> {
                 width: 328,
                 child: StudioInspectorPanel(
                   controller: widget.controller,
+                  voiceController: widget.voiceController,
                   onSave: widget.controller.saveDraft,
                   onActivate: widget.controller.activateCharacter,
                   onResetNeutral: widget.controller.resetProfileToNeutral,

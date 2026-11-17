@@ -17,7 +17,10 @@ import '../features/schedule/notification_backlog_drawer.dart';
 import '../features/settings/settings_section.dart';
 import '../features/studio/desktop_studio_controller.dart';
 import '../features/tools/desktop_tool_policy_controller.dart';
+import '../features/voice/desktop_voice_controller.dart';
+import '../features/voice/voice_shortcut_recorder.dart';
 import '../lifecycle/desktop_lifecycle_coordinator.dart';
+import '../platform/desktop_audio_adapter.dart';
 import '../platform/desktop_client_settings.dart';
 import '../platform/windows_toast_adapter.dart';
 import '../screens/chat_screen.dart';
@@ -25,7 +28,6 @@ import '../screens/memory_screen.dart';
 import '../screens/schedule_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/studio_screen.dart';
-import '../screens/voice_screen.dart';
 import 'desktop_navigation_rail.dart';
 
 class OpenSettingsIntent extends Intent {
@@ -34,6 +36,14 @@ class OpenSettingsIntent extends Intent {
 
 class HideToTrayIntent extends Intent {
   const HideToTrayIntent();
+}
+
+class ToggleLiveVoiceIntent extends Intent {
+  const ToggleLiveVoiceIntent();
+}
+
+class ToggleMuteAudioIntent extends Intent {
+  const ToggleMuteAudioIntent();
 }
 
 class DesktopShell extends StatefulWidget {
@@ -50,6 +60,8 @@ class DesktopShell extends StatefulWidget {
     this.credentialStore,
     this.scheduleController,
     this.toolPolicyController,
+    this.voiceController,
+    this.audioAdapter,
     this.toastAdapter,
     this.enableSchedulePolling,
   });
@@ -65,6 +77,8 @@ class DesktopShell extends StatefulWidget {
   final CredentialStore? credentialStore;
   final DesktopScheduleController? scheduleController;
   final DesktopToolPolicyController? toolPolicyController;
+  final DesktopVoiceController? voiceController;
+  final DesktopAudioAdapter? audioAdapter;
   final DesktopToastAdapter? toastAdapter;
   final bool? enableSchedulePolling;
 
@@ -82,7 +96,10 @@ class _DesktopShellState extends State<DesktopShell> {
   bool _ownsScheduleController = false;
   late final DesktopToolPolicyController? _toolPolicyController;
   bool _ownsToolPolicyController = false;
+  late final DesktopVoiceController? _voiceController;
+  bool _ownsVoiceController = false;
   String? _lastKnownToolProfileId;
+  int _lastKnownVoiceProfileEpoch = 0;
   DesktopToastAdapter? _toastAdapter;
   bool _ownsToastAdapter = false;
   bool _isBacklogDrawerOpen = false;
@@ -152,7 +169,44 @@ class _DesktopShellState extends State<DesktopShell> {
       _toolPolicyController = null;
     }
 
+    if (widget.voiceController != null) {
+      _voiceController = widget.voiceController;
+      _ownsVoiceController = false;
+    } else if (widget.chatController != null) {
+      final chat = widget.chatController!;
+      _voiceController = DesktopVoiceController(
+        clientProvider: () => chat.client,
+        audioAdapter: widget.audioAdapter,
+        clientSettings: widget.clientSettings,
+        ensureActiveConversationId: () async {
+          if (chat.activeConversation?.id == null) {
+            await chat.createNewConversation();
+          }
+          return chat.activeConversation?.id;
+        },
+        onConversationMessagesUpdated: (conversationId) async {
+          if (chat.activeConversation?.id == conversationId) {
+            await chat.loadMessages(conversationId);
+          } else {
+            await chat.loadConversations();
+          }
+        },
+        onAudioMutedChanged: (muted) {
+          try {
+            unawaited(widget.coordinator?.updateAudioMutedStatus(muted));
+          } on UnimplementedError {
+            // Minimal Fake coordinators in widget tests may omit optional tray sync.
+          }
+        },
+        onGlobalHotkeyTriggered: _handleGlobalVoiceHotkeyTriggered,
+      );
+      _ownsVoiceController = true;
+    } else {
+      _voiceController = null;
+    }
+
     _lastKnownToolProfileId = _resolveActiveProfileId();
+    _lastKnownVoiceProfileEpoch = widget.chatController?.profileEpoch ?? 0;
     _toolPolicyController?.addListener(_handleToolPolicyChange);
     if (_toolPolicyController != null && widget.coordinator != null) {
       final toolCtrl = _toolPolicyController;
@@ -169,6 +223,16 @@ class _DesktopShellState extends State<DesktopShell> {
         // Minimal Fake coordinators in widget tests may omit optional callbacks.
       }
     }
+    if (_voiceController != null && widget.coordinator != null) {
+      final voiceCtrl = _voiceController;
+      try {
+        widget.coordinator!.onMuteToggleTriggered = () async {
+          await voiceCtrl.setMuted(!voiceCtrl.isAudioMuted);
+        };
+      } on UnimplementedError {
+        // Minimal Fake coordinators in widget tests may omit optional callbacks.
+      }
+    }
 
     _lastDestination = widget.controller.currentDestination;
     widget.controller.addListener(_handleDestinationChange);
@@ -176,6 +240,9 @@ class _DesktopShellState extends State<DesktopShell> {
     widget.chatController?.addListener(_handleProfileChange);
     widget.controller.navigationGuard = _handleNavigationGuard;
     _initScheduleActivation();
+    if (_ownsVoiceController && _shouldPollSchedule) {
+      unawaited(_voiceController?.initialize());
+    }
     if (_ownsToolPolicyController &&
         _shouldPollSchedule &&
         (widget.chatController?.isConnected ?? false)) {
@@ -368,6 +435,22 @@ class _DesktopShellState extends State<DesktopShell> {
     }
   }
 
+  Future<void> _handleGlobalVoiceHotkeyTriggered() async {
+    final vc = _voiceController;
+    if (!mounted || vc == null) return;
+    try {
+      await widget.coordinator?.restoreAndFocusWindow();
+    } on UnimplementedError {
+      // Test coordinator doubles may omit window management.
+    }
+    await widget.controller.requestDestination(DesktopNavDestination.chat);
+    if (vc.isLiveVoiceActive) {
+      await vc.stopLiveVoice();
+    } else {
+      await vc.startLiveVoice();
+    }
+  }
+
   void _handleToolPolicyChange() {
     final ctrl = _toolPolicyController;
     final coord = widget.coordinator;
@@ -398,6 +481,11 @@ class _DesktopShellState extends State<DesktopShell> {
         unawaited(_toolPolicyController?.refreshKillSwitch());
       }
     }
+    final voiceEpoch = widget.chatController?.profileEpoch;
+    if (voiceEpoch != null && voiceEpoch != _lastKnownVoiceProfileEpoch) {
+      _lastKnownVoiceProfileEpoch = voiceEpoch;
+      unawaited(_voiceController?.handleProfileEpochChanged(voiceEpoch));
+    }
   }
 
   @override
@@ -420,6 +508,9 @@ class _DesktopShellState extends State<DesktopShell> {
     }
     if (_ownsToolPolicyController) {
       _toolPolicyController?.dispose();
+    }
+    if (_ownsVoiceController) {
+      _voiceController?.dispose();
     }
     if (_ownsToastAdapter) {
       _toastAdapter?.dispose();
@@ -470,18 +561,37 @@ class _DesktopShellState extends State<DesktopShell> {
 
   @override
   Widget build(BuildContext context) {
+    final topListenables = <Listenable>[
+      widget.controller,
+      if (_voiceController != null) _voiceController,
+    ];
     return ListenableBuilder(
-      listenable: widget.controller,
+      listenable: Listenable.merge(topListenables),
       builder: (context, _) {
         _visitedDestinations.add(widget.controller.currentDestination);
         final currentDest = widget.controller.currentDestination;
         final ext = Theme.of(context).extension<CompanionThemeExtension>();
         final isDark = Theme.of(context).brightness == Brightness.dark;
 
+        final inAppVoiceActivator = _voiceController != null
+            ? VoiceShortcutKeyMapper.toSingleActivator(
+                _voiceController.shortcuts.inAppToggle,
+              )
+            : null;
+        final muteActivator = _voiceController != null
+            ? VoiceShortcutKeyMapper.toSingleActivator(
+                _voiceController.shortcuts.muteToggle,
+              )
+            : null;
+
         final shortcuts = <ShortcutActivator, Intent>{
           LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.comma):
               const OpenSettingsIntent(),
           LogicalKeySet(LogicalKeyboardKey.escape): const HideToTrayIntent(),
+          if (inAppVoiceActivator != null)
+            inAppVoiceActivator: const ToggleLiveVoiceIntent(),
+          if (muteActivator != null)
+            muteActivator: const ToggleMuteAudioIntent(),
         };
 
         final actions = <Type, Action<Intent>>{
@@ -500,6 +610,27 @@ class _DesktopShellState extends State<DesktopShell> {
               if (widget.coordinator?.isTrayAvailable == true) {
                 widget.coordinator?.hideToTray();
               }
+              return null;
+            },
+          ),
+          ToggleLiveVoiceIntent: CallbackAction<ToggleLiveVoiceIntent>(
+            onInvoke: (_) {
+              final vc = _voiceController;
+              if (vc == null) return null;
+              if (vc.isLiveVoiceActive) {
+                unawaited(vc.stopLiveVoice());
+              } else {
+                unawaited(widget.controller.requestDestination(DesktopNavDestination.chat));
+                unawaited(vc.startLiveVoice());
+              }
+              return null;
+            },
+          ),
+          ToggleMuteAudioIntent: CallbackAction<ToggleMuteAudioIntent>(
+            onInvoke: (_) {
+              final vc = _voiceController;
+              if (vc == null) return null;
+              unawaited(vc.setMuted(!vc.isAudioMuted));
               return null;
             },
           ),
@@ -553,19 +684,23 @@ class _DesktopShellState extends State<DesktopShell> {
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 if (_scheduleController != null ||
-                                    _toolPolicyController != null)
+                                    _toolPolicyController != null ||
+                                    _voiceController != null)
                                   ListenableBuilder(
                                     listenable: Listenable.merge([
                                       if (_scheduleController != null)
                                         _scheduleController,
                                       if (_toolPolicyController != null)
                                         _toolPolicyController,
+                                      if (_voiceController != null)
+                                        _voiceController,
                                     ]),
                                     builder: (context, _) {
                                       return _buildTopUtilityStrip(
                                         context,
                                         _scheduleController,
                                         _toolPolicyController,
+                                        _voiceController,
                                         ext,
                                       );
                                     },
@@ -710,10 +845,9 @@ class _DesktopShellState extends State<DesktopShell> {
           key: const ValueKey('chat_screen'),
           controller: widget.chatController,
           toolPolicyController: _toolPolicyController,
+          voiceController: _voiceController,
           onNavigateToSettings: () => widget.controller.requestDestination(DesktopNavDestination.settings),
         );
-      case DesktopNavDestination.voice:
-        return const VoiceScreen(key: ValueKey('voice_screen'));
       case DesktopNavDestination.schedule:
         return ScheduleScreen(
           key: const ValueKey('schedule_screen'),
@@ -736,6 +870,7 @@ class _DesktopShellState extends State<DesktopShell> {
           return StudioScreen(
             key: const ValueKey('studio_screen'),
             controller: studio,
+            voiceController: _voiceController,
             onNavigateToSettings: () => widget.controller.requestDestination(DesktopNavDestination.settings),
           );
         }
@@ -752,6 +887,7 @@ class _DesktopShellState extends State<DesktopShell> {
           credentialStore: widget.credentialStore,
           scheduleController: _scheduleController,
           toolPolicyController: _toolPolicyController,
+          voiceController: _voiceController,
         );
     }
   }
@@ -760,6 +896,7 @@ class _DesktopShellState extends State<DesktopShell> {
     BuildContext context,
     DesktopScheduleController? ctrl,
     DesktopToolPolicyController? toolCtrl,
+    DesktopVoiceController? voiceCtrl,
     CompanionThemeExtension? ext,
   ) {
     final profileLabel = _resolveActiveProfileName() ?? ctrl?.profileId;
@@ -834,6 +971,79 @@ class _DesktopShellState extends State<DesktopShell> {
                       style: CompanionTypography.caption.copyWith(
                         color: ext?.textSecondary,
                       ),
+                    ),
+                  ),
+                if (voiceCtrl != null && voiceCtrl.isMicCapturing)
+                  Container(
+                    key: const Key('shell_mic_privacy_indicator'),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: (ext?.warning ?? CompanionColors.warning)
+                          .withValues(alpha: 0.16),
+                      borderRadius: CompanionRadius.borderFull,
+                      border: Border.all(
+                        color: (ext?.warning ?? CompanionColors.warning)
+                            .withValues(alpha: 0.65),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (ext?.warning ?? CompanionColors.warning)
+                              .withValues(alpha: 0.25),
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.mic_rounded,
+                          size: 13,
+                          color: ext?.warning ?? CompanionColors.warning,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          'Mic Active',
+                          style: CompanionTypography.caption.copyWith(
+                            color: ext?.warning ?? CompanionColors.warning,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (voiceCtrl != null && voiceCtrl.isAudioMuted)
+                  Container(
+                    key: const Key('shell_mic_muted_indicator'),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: (ext?.textMuted ?? CompanionColors.lightTextMuted)
+                          .withValues(alpha: 0.12),
+                      borderRadius: CompanionRadius.borderFull,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.mic_off_rounded,
+                          size: 13,
+                          color: ext?.textSecondary,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          'Audio Muted',
+                          style: CompanionTypography.caption.copyWith(
+                            color: ext?.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
               ],

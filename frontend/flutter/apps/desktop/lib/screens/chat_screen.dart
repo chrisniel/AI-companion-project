@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:companion_api/companion_api.dart';
 import 'package:companion_design/companion_design.dart';
 import 'package:flutter/gestures.dart';
@@ -8,6 +10,9 @@ import '../features/chat/assistant_markdown_view.dart';
 import '../features/chat/conversation_history_drawer.dart';
 import '../features/chat/desktop_chat_controller.dart';
 import '../features/tools/desktop_tool_policy_controller.dart';
+import '../features/voice/desktop_voice_controller.dart';
+import '../features/voice/live_voice_stage_panel.dart';
+import '../features/voice/voice_shortcut_recorder.dart';
 import '../platform/desktop_client_settings.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -15,12 +20,14 @@ class ChatScreen extends StatefulWidget {
     super.key,
     this.controller,
     this.toolPolicyController,
+    this.voiceController,
     this.clientSettings,
     this.onNavigateToSettings,
   });
 
   final DesktopChatController? controller;
   final DesktopToolPolicyController? toolPolicyController;
+  final DesktopVoiceController? voiceController;
   final DesktopClientSettings? clientSettings;
   final VoidCallback? onNavigateToSettings;
 
@@ -30,6 +37,7 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   late final TextEditingController _textController;
+  late final FocusNode _screenFocusNode;
   late final FocusNode _focusNode;
   late final ScrollController _scrollController;
   DesktopChatController? _internalController;
@@ -46,6 +54,8 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _restoredConversationId;
   bool _isRestorationScheduled = false;
   bool _userExplicitlySent = false;
+  bool _wasGenerating = false;
+  bool _pttHolding = false;
   final Set<String> _expandedSourcesMessageIds = <String>{};
   final Set<String> _resolvingConfirmationIds = <String>{};
 
@@ -78,6 +88,7 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     }
     _textController = TextEditingController();
+    _screenFocusNode = FocusNode(debugLabel: 'chat_screen_focus');
     _focusNode = FocusNode(onKeyEvent: _handleFocusKeyEvent);
     _scrollController = ScrollController();
 
@@ -85,6 +96,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollController.addListener(_onScroll);
     _effectiveController.addListener(_onChatControllerChanged);
     _profileEpoch = _effectiveController.profileEpoch;
+    _wasGenerating = _effectiveController.isGenerating;
 
     // Initialize current conversation state if already selected
     final activeId = _effectiveController.activeConversation?.id;
@@ -145,6 +157,7 @@ class _ChatScreenState extends State<ChatScreen> {
       widget.controller?.addListener(_onChatControllerChanged);
       _restoredConversationId = null;
       _isRestorationScheduled = false;
+      _wasGenerating = _effectiveController.isGenerating;
     }
     _checkAndRestoreScroll();
   }
@@ -285,6 +298,89 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     _checkAndRestoreScroll();
+
+    final isGeneratingNow = _effectiveController.isGenerating;
+    final completedCleanly = _wasGenerating &&
+        !isGeneratingNow &&
+        _effectiveController.errorMessage == null;
+    _wasGenerating = isGeneratingNow;
+
+    if (completedCleanly && widget.voiceController != null) {
+      MessageOut? latestAssistant;
+      for (final msg in _effectiveController.messages.reversed) {
+        if (msg.sender == 'assistant') {
+          latestAssistant = msg;
+          break;
+        }
+      }
+      unawaited(
+        widget.voiceController!.handleChatCompletionForAutoRead(latestAssistant),
+      );
+    }
+  }
+
+  void _insertDictatedText(String? transcribed) {
+    final clean = transcribed?.trim();
+    if (!mounted || clean == null || clean.isEmpty) return;
+    final existing = _textController.text;
+    final nextText = existing.trim().isEmpty
+        ? clean
+        : existing.endsWith(' ') || existing.endsWith('\n')
+            ? '$existing$clean'
+            : '$existing $clean';
+    _textController.value = TextEditingValue(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: nextText.length),
+    );
+  }
+
+  Future<void> _toggleDictation(DesktopVoiceController voiceCtrl) async {
+    if (voiceCtrl.isDictating) {
+      final text = await voiceCtrl.stopDictationAndTranscribe();
+      _insertDictatedText(text);
+    } else if (!voiceCtrl.isTranscribing) {
+      await voiceCtrl.startDictation();
+    }
+  }
+
+  KeyEventResult _handleScreenKeyEvent(FocusNode node, KeyEvent event) {
+    final voiceCtrl = widget.voiceController;
+    if (voiceCtrl == null) return KeyEventResult.ignored;
+
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.space &&
+        voiceCtrl.isLiveVoiceActive &&
+        !_focusNode.hasFocus) {
+      unawaited(voiceCtrl.interruptBargeIn());
+      return KeyEventResult.handled;
+    }
+
+    if (VoiceShortcutKeyMapper.matchesKeyEvent(
+      event,
+      voiceCtrl.shortcuts.pushToTalk,
+    )) {
+      if (event is KeyDownEvent && !_pttHolding) {
+        _pttHolding = true;
+        if (!voiceCtrl.isLiveVoiceActive &&
+            !voiceCtrl.isDictating &&
+            !voiceCtrl.isTranscribing) {
+          unawaited(voiceCtrl.startDictation());
+        }
+        return KeyEventResult.handled;
+      } else if (event is KeyUpEvent && _pttHolding) {
+        _pttHolding = false;
+        if (voiceCtrl.isDictating) {
+          unawaited(() async {
+            final text = await voiceCtrl.stopDictationAndTranscribe();
+            _insertDictatedText(text);
+          }());
+        } else if (voiceCtrl.isLiveVoiceActive) {
+          unawaited(voiceCtrl.commitLiveUtterance());
+        }
+        return KeyEventResult.handled;
+      }
+    }
+    return KeyEventResult.ignored;
   }
 
   void _checkAndRestoreScroll() {
@@ -329,6 +425,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollController.removeListener(_onScroll);
     _effectiveController.removeListener(_onChatControllerChanged);
     _textController.dispose();
+    _screenFocusNode.dispose();
     _focusNode.dispose();
     _scrollController.dispose();
     _internalController?.dispose();
@@ -429,8 +526,17 @@ class _ChatScreenState extends State<ChatScreen> {
             const SingleActivator(LogicalKeyboardKey.numpad0, control: true): () => _updateZoom(1.0),
           },
           child: Focus(
+            focusNode: _screenFocusNode,
             autofocus: true,
-            child: Stack(
+            onKeyEvent: _handleScreenKeyEvent,
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () {
+                if (_focusNode.hasFocus) {
+                  _screenFocusNode.requestFocus();
+                }
+              },
+              child: Stack(
               children: [
                 Padding(
                   padding: const EdgeInsets.all(CompanionSpacing.xl),
@@ -439,6 +545,22 @@ class _ChatScreenState extends State<ChatScreen> {
                     children: [
                       // Header Bar
                       _buildHeader(context, chatCtrl, ext, isDark),
+                      if (widget.voiceController != null)
+                        ListenableBuilder(
+                          listenable: widget.voiceController!,
+                          builder: (context, _) {
+                            final vc = widget.voiceController!;
+                            if (!vc.isLiveVoiceActive) {
+                              return const SizedBox.shrink();
+                            }
+                            return LiveVoiceStagePanel(
+                              controller: vc,
+                              companionName: chatCtrl.getConversationCharacterName(
+                                chatCtrl.activeConversation,
+                              ),
+                            );
+                          },
+                        ),
                       const SizedBox(height: CompanionSpacing.lg),
 
                       // Central Conversational Stage
@@ -480,7 +602,8 @@ class _ChatScreenState extends State<ChatScreen> {
               ],
             ),
           ),
-        );
+        ),
+      );
       },
     );
   }
@@ -918,6 +1041,74 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
             ),
+          ),
+          const SizedBox(width: CompanionSpacing.sm),
+        ],
+        if (widget.voiceController != null) ...[
+          ListenableBuilder(
+            listenable: widget.voiceController!,
+            builder: (context, _) {
+              final vc = widget.voiceController!;
+              final isLive = vc.isLiveVoiceActive;
+              final autoRead = vc.voiceSettings?.autoReadReplies ?? false;
+              final showVoiceLabels = constraints.maxWidth >= 1060;
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  NeumorphicButton(
+                    key: const Key('chat_voice_mode_toggle'),
+                    size: NeumorphicButtonSize.sm,
+                    selected: isLive,
+                    accentOnSelected: false,
+                    icon: Icon(
+                      isLive
+                          ? Icons.call_end_rounded
+                          : Icons.record_voice_over_rounded,
+                      size: 16,
+                      color: isLive
+                          ? (ext?.danger ?? CompanionColors.danger)
+                          : null,
+                    ),
+                    tooltip: isLive
+                        ? 'End Live Voice (${vc.shortcuts.inAppToggle.label})'
+                        : 'Start Live Voice (${vc.shortcuts.inAppToggle.label})',
+                    onPressed: isLive ? vc.stopLiveVoice : vc.startLiveVoice,
+                    child: showVoiceLabels
+                        ? Text(
+                            isLive ? 'End Voice' : 'Live Voice',
+                            style: TextStyle(
+                              color: isLive
+                                  ? (ext?.danger ?? CompanionColors.danger)
+                                  : null,
+                            ),
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: CompanionSpacing.xs),
+                  NeumorphicButton(
+                    key: const Key('chat_auto_read_toggle'),
+                    size: NeumorphicButtonSize.sm,
+                    selected: autoRead,
+                    icon: Icon(
+                      autoRead
+                          ? Icons.volume_up_rounded
+                          : Icons.volume_off_rounded,
+                      size: 16,
+                      color: autoRead ? ext?.accent : null,
+                    ),
+                    tooltip: autoRead
+                        ? 'Auto-Read replies enabled (click to disable)'
+                        : 'Enable Auto-Read replies',
+                    onPressed: vc.voiceSettings == null || vc.isSaving
+                        ? null
+                        : () => vc.updateBackendSettings(
+                              VoiceSettingsUpdate(autoReadReplies: !autoRead),
+                            ),
+                    child: showVoiceLabels ? const Text('Auto-Read') : null,
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(width: CompanionSpacing.sm),
         ],
@@ -1596,6 +1787,54 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ),
                   ),
+                if (widget.voiceController != null &&
+                    !isStreaming &&
+                    (msg.status == 'completed' || msg.status == 'length') &&
+                    msg.content.trim().isNotEmpty) ...[
+                  const SizedBox(height: CompanionSpacing.xs),
+                  ListenableBuilder(
+                    listenable: widget.voiceController!,
+                    builder: (context, _) {
+                      final vc = widget.voiceController!;
+                      final isSpeakingThis = vc.speakingMessageId == msg.id;
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextButton.icon(
+                            key: Key('message_speak_${msg.id}'),
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            icon: Icon(
+                              isSpeakingThis
+                                  ? Icons.stop_rounded
+                                  : Icons.volume_up_rounded,
+                              size: 14,
+                            ),
+                            label: Text(
+                              isSpeakingThis ? 'Stop' : 'Read Aloud',
+                              style: CompanionTypography.caption.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            onPressed: isSpeakingThis
+                                ? vc.stopSpeaking
+                                : () => vc.speakMessage(
+                                      messageId: msg.id,
+                                      text: msg.content,
+                                    ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
               ],
             ),
     );
@@ -2017,12 +2256,49 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
               const SizedBox(width: CompanionSpacing.sm),
-              const NeumorphicButton(
-                size: NeumorphicButtonSize.sm,
-                icon: Icon(Icons.mic_none_rounded),
-                tooltip: 'Voice input (Planned M4)',
-                onPressed: null,
-              ),
+              if (widget.voiceController != null)
+                ListenableBuilder(
+                  listenable: widget.voiceController!,
+                  builder: (context, _) {
+                    final vc = widget.voiceController!;
+                    final dictating = vc.isDictating;
+                    final transcribing = vc.isTranscribing;
+                    return NeumorphicButton(
+                      key: const Key('chat_dictate_button'),
+                      size: NeumorphicButtonSize.sm,
+                      selected: dictating,
+                      accentOnSelected: false,
+                      icon: transcribing
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(
+                              dictating
+                                  ? Icons.stop_circle_rounded
+                                  : Icons.mic_none_rounded,
+                              color: dictating
+                                  ? (ext?.danger ?? CompanionColors.danger)
+                                  : null,
+                            ),
+                      tooltip: dictating
+                          ? 'Stop dictation & transcribe into message'
+                          : transcribing
+                              ? 'Transcribing speech...'
+                              : 'Dictate message (speech to text)',
+                      onPressed: transcribing ? null : () => _toggleDictation(vc),
+                    );
+                  },
+                )
+              else
+                const NeumorphicButton(
+                  key: Key('chat_dictate_button'),
+                  size: NeumorphicButtonSize.sm,
+                  icon: Icon(Icons.mic_none_rounded),
+                  tooltip: 'Dictation unavailable (voice controller disconnected)',
+                  onPressed: null,
+                ),
               const SizedBox(width: CompanionSpacing.sm),
               if (isBusy)
                 NeumorphicButton(
