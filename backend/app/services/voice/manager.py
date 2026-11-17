@@ -58,14 +58,16 @@ class VoiceManager:
     def create_turn_vad(self, *, sensitivity: str = "medium") -> VadProvider:
         """Create an isolated per-session VAD instance so sessions never share RNN state."""
         mode = (settings.VOICE_PROVIDER or "auto").strip().lower()
-        if mode != "mock" and self._vad is None:
-            silero_path = settings.MODELS_DIR / "vad" / "silero-vad-v6.2.1" / "silero_vad.onnx"
-            silero = SileroOnnxVadProvider(model_path=silero_path, sensitivity=sensitivity)
-            if silero.is_available():
-                return silero
-        if isinstance(self._vad, AdaptiveEnergyVadProvider) or self._vad is None:
+        base = self.get_vad(sensitivity=sensitivity)
+        if mode != "mock" and isinstance(base, SileroOnnxVadProvider) and base.is_available():
+            return SileroOnnxVadProvider(
+                model_path=base.model_path,
+                sensitivity=sensitivity,
+                session=base._session,
+            )
+        if isinstance(base, AdaptiveEnergyVadProvider):
             return AdaptiveEnergyVadProvider(sensitivity=sensitivity)
-        return self._vad
+        return base
 
     def get_tts(self) -> TtsProvider:
         if self._tts is None:

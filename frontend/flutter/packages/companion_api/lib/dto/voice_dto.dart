@@ -391,7 +391,12 @@ class VoiceWsEvent {
   bool get isSpeech => raw['is_speech'] as bool? ?? false;
   double? get probability => (raw['probability'] as num?)?.toDouble();
   String? get text => raw['text'] as String?;
-  String? get token => raw['token'] as String?;
+  String? get content => (raw['content'] ?? raw['token']) as String?;
+  String? get token => content;
+  String? get language => raw['language'] as String?;
+  String? get messageId => raw['message_id'] as String?;
+  String? get finishReason => raw['finish_reason'] as String?;
+  String? get toolName => raw['tool_name'] as String?;
   String? get voiceId => raw['voice_id'] as String?;
   int? get seq => (raw['seq'] as num?)?.toInt();
   int? get sampleRate => (raw['sample_rate'] as num?)?.toInt();

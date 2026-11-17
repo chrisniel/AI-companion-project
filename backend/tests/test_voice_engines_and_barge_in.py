@@ -277,3 +277,30 @@ async def test_kokoro_tokenizer_style_slicing_and_mock_tts():
     assert kokoro_res.sample_rate == 24000
     assert kokoro_res.provider == "kokoro_onnx"
 
+
+def test_voice_manager_create_turn_vad_isolates_silero_state(monkeypatch):
+    pytest.importorskip("numpy")
+    from app.core.config import settings
+    from app.services.voice.manager import VoiceManager
+
+    class _FakeSileroSession:
+        def run(self, _names, feed):
+            return ([[0.5]], feed["state"])
+
+    monkeypatch.setattr(settings, "VOICE_PROVIDER", "auto")
+    shared_silero = SileroOnnxVadProvider(sensitivity="medium", session=_FakeSileroSession())
+    vm = VoiceManager(vad=shared_silero)
+
+    first = vm.get_vad(sensitivity="medium")
+    turn_a = vm.create_turn_vad(sensitivity="high")
+    turn_b = vm.create_turn_vad(sensitivity="low")
+
+    assert first is shared_silero
+    assert isinstance(turn_a, SileroOnnxVadProvider)
+    assert isinstance(turn_b, SileroOnnxVadProvider)
+    assert turn_a is not shared_silero
+    assert turn_b is not shared_silero
+    assert turn_a is not turn_b
+    assert turn_a._session is shared_silero._session
+    assert turn_a._state is not turn_b._state
+    assert turn_a._context is not turn_b._context

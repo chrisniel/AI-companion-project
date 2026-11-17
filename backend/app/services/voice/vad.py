@@ -235,9 +235,13 @@ class BargeInGate:
         self._triggered = False
 
     def required_hold_frames(self) -> Optional[int]:
+        from app.core.config import settings
+
         hold_ms = POLICY_HOLD_MS[self.policy]
         if hold_ms is None:
             return None
+        if self.policy == "smart_auto":
+            hold_ms = max(self.frame_ms, int(settings.VOICE_BARGE_IN_DEFAULT_HOLD_MS or hold_ms))
         return max(1, math.ceil(hold_ms / float(self.frame_ms)))
 
     def process_pcm16_frame(self, pcm16_frame: bytes) -> bool:

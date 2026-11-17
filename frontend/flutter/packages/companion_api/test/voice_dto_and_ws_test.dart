@@ -321,7 +321,7 @@ void main() {
         'type': 'llm.delta',
         'voice_session_id': 'vs1',
         'turn_id': 1,
-        'token': 'Hello ',
+        'content': 'Hello ',
       });
       fakeWs.pushServerFrame({
         'type': 'tts.audio.chunk',
@@ -333,6 +333,8 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(received.map((e) => e.type), ['llm.delta', 'tts.audio.chunk']);
+      expect(received.first.content, 'Hello ');
+      expect(received.first.token, 'Hello ');
 
       // Manual barge-in suppresses any delayed turn 1 audio chunks/deltas.
       voiceClient.sendBargeIn(reason: 'user_tap');
@@ -354,7 +356,7 @@ void main() {
         'type': 'llm.delta',
         'voice_session_id': 'vs1',
         'turn_id': 2,
-        'token': 'Yes?',
+        'content': 'Yes?',
       });
       await Future<void>.delayed(Duration.zero);
 
@@ -367,6 +369,7 @@ void main() {
           'llm.delta:2',
         ],
       );
+      expect(received.last.content, 'Yes?');
 
       voiceClient.stopSession();
       expect(fakeWs.sentFrames.last['type'], 'session.stop');

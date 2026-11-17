@@ -545,7 +545,8 @@ class VoiceSessionOrchestrator:
             self._barge_in_gate.set_speaking(False)
 
     async def _handle_pcm_chunk(self, pcm_bytes: bytes) -> None:
-        if len(self._pcm_buffer) + len(pcm_bytes) > MAX_TURN_AUDIO_BYTES:
+        max_turn_bytes = max(VAD_FRAME_BYTES, int(settings.VOICE_MAX_TURN_AUDIO_BYTES or MAX_TURN_AUDIO_BYTES))
+        if len(self._pcm_buffer) + len(pcm_bytes) > max_turn_bytes:
             self._pcm_buffer.clear()
             await self._send_json(
                 build_ws_frame(
@@ -586,6 +587,8 @@ class VoiceSessionOrchestrator:
         async with self._turn_seq_lock:
             if self._active_turn_task is not None and not self._active_turn_task.done():
                 await self._cancel_active_turn(reason="superseded_by_commit", emit_cancelled=True)
+            if self._closed:
+                return
             pcm_snapshot = bytes(self._pcm_buffer)
             self._pcm_buffer.clear()
             self._vad_remainder.clear()

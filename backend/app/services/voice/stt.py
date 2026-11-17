@@ -194,8 +194,8 @@ class WhisperCppSttProvider(SttProvider):
             return self._process_launcher(cmd)
         kwargs: dict[str, Any] = {
             "stdin": subprocess.DEVNULL,
-            "stdout": subprocess.PIPE,
-            "stderr": subprocess.PIPE,
+            "stdout": subprocess.DEVNULL,
+            "stderr": subprocess.DEVNULL,
         }
         if sys.platform == "win32":
             kwargs["creationflags"] = _CREATE_NO_WINDOW
