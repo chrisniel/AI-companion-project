@@ -10,8 +10,13 @@ from app.models.memory import Memory
 from app.models.message import Message
 from app.models.profile import Profile
 from app.models.profile_session import ProfileSession
+from app.models.profile_tool_settings import ProfileToolSettings
+from app.models.profile_voice_settings import ProfileVoiceSettings
 from app.models.session_ticket import SessionTicket
 from app.models.task import Task
+from app.models.tool_audit_log import ToolAuditLog
+from app.models.tool_confirmation import ToolConfirmation
+from app.models.tool_runtime_config import ToolRuntimeConfig
 from app.models.reminder import Reminder
 from app.models.alarm import Alarm
 from app.models.routine import Routine
@@ -21,8 +26,13 @@ __all__ = [
     "Base",
     "Profile",
     "ProfileSession",
+    "ProfileToolSettings",
+    "ProfileVoiceSettings",
     "SessionTicket",
     "Task",
+    "ToolAuditLog",
+    "ToolConfirmation",
+    "ToolRuntimeConfig",
     "Conversation",
     "ConversationSummary",
     "Message",

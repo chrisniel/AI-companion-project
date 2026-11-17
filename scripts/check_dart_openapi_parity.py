@@ -253,6 +253,16 @@ SCHEMA_TO_DART_CLASS: Dict[str, Tuple[str, str]] = {
     "ToolConfirmationResolveResponse": ("tools_dto.dart", "ToolConfirmationResolveResponse"),
     "ToolAuditLogOut": ("tools_dto.dart", "ToolAuditLogOut"),
     "ToolAuditLogListOut": ("tools_dto.dart", "ToolAuditLogListOut"),
+    # M4 Batch B Voice runtime, settings, dictation & synthesis DTOs
+    "VoiceDescriptorOut": ("voice_dto.dart", "VoiceDescriptorOut"),
+    "VoiceCatalogOut": ("voice_dto.dart", "VoiceCatalogOut"),
+    "VoiceStatusOut": ("voice_dto.dart", "VoiceStatusOut"),
+    "VoiceSettingsOut": ("voice_dto.dart", "VoiceSettingsOut"),
+    "VoiceSettingsUpdate": ("voice_dto.dart", "VoiceSettingsUpdate"),
+    "VoiceTranscribeRequest": ("voice_dto.dart", "VoiceTranscribeRequest"),
+    "VoiceTranscribeOut": ("voice_dto.dart", "VoiceTranscribeOut"),
+    "VoiceSynthesizeRequest": ("voice_dto.dart", "VoiceSynthesizeRequest"),
+    "VoiceSynthesizeOut": ("voice_dto.dart", "VoiceSynthesizeOut"),
 }
 
 
@@ -270,6 +280,13 @@ M4_ROUTE_DART_METHODS: Dict[Tuple[str, str], Tuple[str, str]] = {
         "resolveToolConfirmation",
         "/api/v1/tools/confirmations/$confirmationId/resolve",
     ),
+    # M4 Batch B Voice endpoints
+    ("GET", "/api/v1/voice/status"): ("getVoiceStatus", "/api/v1/voice/status"),
+    ("GET", "/api/v1/voice/voices"): ("listVoices", "/api/v1/voice/voices"),
+    ("GET", "/api/v1/voice/settings"): ("getVoiceSettings", "/api/v1/voice/settings"),
+    ("PATCH", "/api/v1/voice/settings"): ("updateVoiceSettings", "/api/v1/voice/settings"),
+    ("POST", "/api/v1/voice/transcribe"): ("transcribeAudio", "/api/v1/voice/transcribe"),
+    ("POST", "/api/v1/voice/synthesize"): ("synthesizeSpeech", "/api/v1/voice/synthesize"),
 }
 
 

@@ -80,6 +80,7 @@ class CharacterInstance(Base, TimestampMixin, SoftDeleteMixin):
     lore: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     system_prompt: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     avatar_asset: Mapped[str] = mapped_column(String(255), nullable=False, default="default_avatar", server_default="default_avatar")
+    voice_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     preset_id: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
 
     # 8 personality traits (0-100; NULL for legacy placeholders)

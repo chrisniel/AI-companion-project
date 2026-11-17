@@ -303,6 +303,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     logger.info("Shutting down Local AI Runtime, draining LLM and disposing database...")
     try:
+        from app.services.voice.manager import reset_voice_manager
+        await reset_voice_manager()
+    except Exception as exc:
+        logger.warning(f"Error during VoiceManager shutdown: {exc}")
+
+    try:
         from app.services.llm.manager import llm_manager
         await llm_manager.get_provider().shutdown()
     except Exception as exc:

@@ -34,11 +34,9 @@
   - *Context:* Transitioning from single-user `owner_id` to multi-Profile `profile_id` (ADR-0018).
   - *Resolution:* Delivered in Batch A via Alembic migration 007 (`007_profiles_and_owner_id_migration.py`). Introduces `profiles` table with unique per-installation Default Profile UUID, partial unique index, and foreign keys across existing user entity tables while retaining `owner_id` for compatibility. Fail-closed legacy owner validation enforces data safety. Batch B migration 008 removed implicit Profile defaults and implemented Profile Sessions and the authorization/ownership cutover (`PC-IDENTITY-002`), locally verified; independent delivery review remains pending ([plan](../01_Plans/plan-m2-profile-foundation-b.md)). Profile administration, PIN/device enrollment and deletion lifecycle remain future deliveries; this schema resolution does not resolve remote-browser, enrollment, packaging or restore-quiescence debt.
 
-- **`DEBT-V1-04`: Local STT & TTS Process Architecture**
-  - *Context:* Pre-staged binaries (`runtime/whisper.cpp/`) and Kokoro-82M ONNX weights exist locally.
-  - *Decision Needed:* Subprocess daemons over localhost/HTTP (matching `llama-server.exe`) vs. in-process Python C-bindings (requiring `onnxruntime` + audio libraries in `backend/.venv`).
-  - *Current Direction:* Subprocess daemon for `whisper.cpp` avoids heavy Python audio/C-extension dependencies in the backend.
-  - *Resolution Point:* Milestone M4 planning.
+- **`DEBT-V1-04`: Local STT & TTS Process Architecture [RESOLVED IN M4 BATCH B]**
+  - *Context:* Pre-staged binaries (`runtime/whisper.cpp/`) and Kokoro-82M ONNX weights exist locally alongside Windows SAPI and optional ONNX packages.
+  - *Resolution:* Delivered in M4 Batch B (`feature/m4-voice-pipeline-b`) using **Option 1 (Zero Lockfile Churn)**: `WhisperCppSttProvider` runs a windowless localhost-only `whisper-server.exe -ng` subprocess on CPU/RAM (`stt.py`), while `SileroOnnxVadProvider` and `KokoroOnnxTtsProvider` dynamically detect `onnxruntime`/`numpy` in the Python environment with automatic stdlib `AdaptiveEnergyVadProvider` (`vad.py`) and `WindowsSapiTtsProvider` (`tts.py`) fallbacks, leaving `backend/requirements.lock` untouched.
 
 ### Category: `V1 OPEN IMPLEMENTATION DETAIL`
 - **`DEBT-V1-05`: D6 Import UI Interaction & Progress Reporting**

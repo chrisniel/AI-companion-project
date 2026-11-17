@@ -5472,6 +5472,226 @@
           }
         }
       }
+    },
+    "/api/v1/voice/status": {
+      "get": {
+        "tags": [
+          "Voice"
+        ],
+        "summary": "Get Voice Pipeline Status",
+        "description": "Return truthful readiness telemetry for STT, VAD, and TTS subsystems.",
+        "operationId": "get_voice_status_api_v1_voice_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceStatusOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/voice/voices": {
+      "get": {
+        "tags": [
+          "Voice"
+        ],
+        "summary": "List Available TTS Voices",
+        "description": "List locally discovered TTS voice identifiers for Studio and Settings.",
+        "operationId": "list_voices_api_v1_voice_voices_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceCatalogOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/voice/settings": {
+      "get": {
+        "tags": [
+          "Voice"
+        ],
+        "summary": "Get Profile Voice Settings",
+        "description": "Retrieve per-Profile voice, barge-in, and privacy preferences.",
+        "operationId": "get_voice_settings_api_v1_voice_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceSettingsOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Voice"
+        ],
+        "summary": "Update Profile Voice Settings",
+        "description": "Update per-Profile voice behavior and privacy settings.",
+        "operationId": "update_voice_settings_api_v1_voice_settings_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoiceSettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceSettingsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/voice/transcribe": {
+      "post": {
+        "tags": [
+          "Voice"
+        ],
+        "summary": "Transcribe Bounded Ephemeral Audio",
+        "description": "Transcribe short dictation audio in RAM without writing raw audio to disk.",
+        "operationId": "transcribe_audio_api_v1_voice_transcribe_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoiceTranscribeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceTranscribeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/voice/synthesize": {
+      "post": {
+        "tags": [
+          "Voice"
+        ],
+        "summary": "Synthesize Text to In-Memory WAV",
+        "description": "Synthesize speech in RAM resolving character override -> Profile default voice.",
+        "operationId": "synthesize_speech_api_v1_voice_synthesize_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoiceSynthesizeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceSynthesizeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -6197,6 +6417,18 @@
             ],
             "title": "Avatar Asset"
           },
+          "voice_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Id"
+          },
           "traits": {
             "anyOf": [
               {
@@ -6283,6 +6515,17 @@
           "avatar_asset": {
             "type": "string",
             "title": "Avatar Asset"
+          },
+          "voice_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Id"
           },
           "preset_id": {
             "anyOf": [
@@ -6457,6 +6700,18 @@
               }
             ],
             "title": "Avatar Asset"
+          },
+          "voice_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Id"
           },
           "preset_id": {
             "anyOf": [
@@ -11431,6 +11686,501 @@
           "incompatible"
         ],
         "title": "ValidationStatus"
+      },
+      "VoiceCatalogOut": {
+        "properties": {
+          "voices": {
+            "items": {
+              "$ref": "#/components/schemas/VoiceDescriptorOut"
+            },
+            "type": "array",
+            "title": "Voices"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "voices"
+        ],
+        "title": "VoiceCatalogOut",
+        "description": "List of available local TTS voices."
+      },
+      "VoiceDescriptorOut": {
+        "properties": {
+          "voice_id": {
+            "type": "string",
+            "title": "Voice Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "sample_rate": {
+            "type": "integer",
+            "title": "Sample Rate"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "voice_id",
+          "name",
+          "provider",
+          "language",
+          "sample_rate"
+        ],
+        "title": "VoiceDescriptorOut",
+        "description": "Metadata describing one locally discoverable TTS voice."
+      },
+      "VoiceSettingsOut": {
+        "properties": {
+          "profile_id": {
+            "type": "string",
+            "title": "Profile Id"
+          },
+          "barge_in_policy": {
+            "type": "string",
+            "enum": [
+              "smart_auto",
+              "strict_noisy",
+              "manual_only"
+            ],
+            "title": "Barge In Policy"
+          },
+          "vad_sensitivity": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Vad Sensitivity"
+          },
+          "stt_language": {
+            "type": "string",
+            "title": "Stt Language"
+          },
+          "tts_speed": {
+            "type": "number",
+            "maximum": 2.0,
+            "minimum": 0.5,
+            "title": "Tts Speed"
+          },
+          "default_voice_id": {
+            "type": "string",
+            "title": "Default Voice Id"
+          },
+          "auto_read_replies": {
+            "type": "boolean",
+            "title": "Auto Read Replies"
+          },
+          "proactive_speech_enabled": {
+            "type": "boolean",
+            "title": "Proactive Speech Enabled"
+          },
+          "cloud_stt_enabled": {
+            "type": "boolean",
+            "title": "Cloud Stt Enabled"
+          },
+          "cloud_tts_enabled": {
+            "type": "boolean",
+            "title": "Cloud Tts Enabled"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "profile_id",
+          "barge_in_policy",
+          "vad_sensitivity",
+          "stt_language",
+          "tts_speed",
+          "default_voice_id",
+          "auto_read_replies",
+          "proactive_speech_enabled",
+          "cloud_stt_enabled",
+          "cloud_tts_enabled",
+          "updated_at"
+        ],
+        "title": "VoiceSettingsOut",
+        "description": "Per-Profile voice behavior, barge-in, and privacy preferences."
+      },
+      "VoiceSettingsUpdate": {
+        "properties": {
+          "barge_in_policy": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "smart_auto",
+                  "strict_noisy",
+                  "manual_only"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barge In Policy"
+          },
+          "vad_sensitivity": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vad Sensitivity"
+          },
+          "stt_language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 16,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stt Language"
+          },
+          "tts_speed": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 2.0,
+                "minimum": 0.5
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tts Speed"
+          },
+          "default_voice_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Voice Id"
+          },
+          "auto_read_replies": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Read Replies"
+          },
+          "proactive_speech_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proactive Speech Enabled"
+          },
+          "cloud_stt_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloud Stt Enabled"
+          },
+          "cloud_tts_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloud Tts Enabled"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "VoiceSettingsUpdate",
+        "description": "Partial update payload for PATCH /api/v1/voice/settings."
+      },
+      "VoiceStatusOut": {
+        "properties": {
+          "stt_available": {
+            "type": "boolean",
+            "title": "Stt Available"
+          },
+          "stt_provider": {
+            "type": "string",
+            "title": "Stt Provider"
+          },
+          "stt_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stt Model"
+          },
+          "stt_unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stt Unavailable Reason"
+          },
+          "vad_available": {
+            "type": "boolean",
+            "title": "Vad Available"
+          },
+          "vad_provider": {
+            "type": "string",
+            "title": "Vad Provider"
+          },
+          "tts_available": {
+            "type": "boolean",
+            "title": "Tts Available"
+          },
+          "tts_provider": {
+            "type": "string",
+            "title": "Tts Provider"
+          },
+          "tts_unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tts Unavailable Reason"
+          },
+          "cpu_first": {
+            "type": "boolean",
+            "title": "Cpu First",
+            "default": true
+          },
+          "active_voice_sessions": {
+            "type": "integer",
+            "title": "Active Voice Sessions",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "stt_available",
+          "stt_provider",
+          "vad_available",
+          "vad_provider",
+          "tts_available",
+          "tts_provider"
+        ],
+        "title": "VoiceStatusOut",
+        "description": "Truthful runtime readiness status across STT, VAD, and TTS subsystems."
+      },
+      "VoiceSynthesizeOut": {
+        "properties": {
+          "audio_base64": {
+            "type": "string",
+            "title": "Audio Base64"
+          },
+          "mime_type": {
+            "type": "string",
+            "title": "Mime Type",
+            "default": "audio/wav"
+          },
+          "sample_rate": {
+            "type": "integer",
+            "title": "Sample Rate"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms"
+          },
+          "voice_id": {
+            "type": "string",
+            "title": "Voice Id"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "audio_base64",
+          "sample_rate",
+          "duration_ms",
+          "voice_id",
+          "provider"
+        ],
+        "title": "VoiceSynthesizeOut",
+        "description": "In-memory synthesized WAV audio payload."
+      },
+      "VoiceSynthesizeRequest": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "voice_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Id"
+          },
+          "speed": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 2.0,
+                "minimum": 0.5
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "VoiceSynthesizeRequest",
+        "description": "Bounded speech synthesis request for Read Aloud and Auto-Read replies."
+      },
+      "VoiceTranscribeOut": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text",
+          "language",
+          "duration_ms",
+          "provider"
+        ],
+        "title": "VoiceTranscribeOut",
+        "description": "Ephemeral STT transcription response."
+      },
+      "VoiceTranscribeRequest": {
+        "properties": {
+          "audio_base64": {
+            "type": "string",
+            "maxLength": 2000000,
+            "minLength": 4,
+            "title": "Audio Base64"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "wav",
+              "pcm16"
+            ],
+            "title": "Format",
+            "default": "wav"
+          },
+          "sample_rate": {
+            "type": "integer",
+            "maximum": 48000.0,
+            "minimum": 8000.0,
+            "title": "Sample Rate",
+            "default": 16000
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 16
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "audio_base64"
+        ],
+        "title": "VoiceTranscribeRequest",
+        "description": "Bounded ephemeral audio transcription request (never written to disk)."
       },
       "WebApiKeyClearOut": {
         "properties": {

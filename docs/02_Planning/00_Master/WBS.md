@@ -112,12 +112,12 @@
 - **`PC-SCHED-004`**: Missed Event Reconciliation & Late Alarm Grace Window Evaluation (`reconcile_missed_events` startup catch-up, bounded grace window evaluation, and durable `missed_catchup` backlog notifications delivered in M3 Batch G1 on `feature/m3-scheduler-notifications-g1`).
 - **`PC-SCHED-005`**: Bounded Companion Routines Engine (Deterministic `fallback_message` trigger with zero LLM delay and manual `/run` endpoint delivered in M3 Batch G1 on `feature/m3-scheduler-notifications-g1`; Risk 2 D9 conversational creation remains Milestone M4).
 
-### Stream: `PC-VOICE` — Conversational Voice Pipeline
-- **`PC-VOICE-001`**: Flutter Native Audio Capture & Playback Hardware Controller.
-- **`PC-VOICE-002`**: Local STT Provider Adapter (e.g., whisper.cpp reference candidate).
-- **`PC-VOICE-003`**: Local TTS Provider Adapter (e.g., Kokoro reference candidate).
-- **`PC-VOICE-004`**: Mandatory Voice Barge-In State Machine (Immediate playback stop, stale chunk cancellation).
-- **`PC-VOICE-005`**: Duplex Voice Session Orchestrator & Turn Identity Coordination over WebSocket.
+### Stream: `PC-VOICE` — Conversational Voice Pipeline *(M4 Batch B Delivered on `feature/m4-voice-pipeline-b`)*
+- **`PC-VOICE-001`**: Flutter Native Audio Capture & Playback Hardware Controller *(Remaining for M4 Batch C alongside Option A Chat/Settings/Studio Voice UI)*.
+- **`PC-VOICE-002`**: Local STT Provider Adapter (`WhisperCppSttProvider` running windowless localhost `whisper-server.exe -ng` with truthful unavailable reporting) — Delivered in M4 Batch B (`backend/app/services/voice/stt.py`).
+- **`PC-VOICE-003`**: Local TTS Provider Adapter (`KokoroOnnxTtsProvider` + `WindowsSapiTtsProvider` fallback & `CharacterInstance.voice_id` resolution) — Delivered in M4 Batch B (`backend/app/services/voice/tts.py`, Migration `018`).
+- **`PC-VOICE-004`**: Mandatory Voice Barge-In State Machine (`BargeInGate`, `SileroOnnxVadProvider`/`AdaptiveEnergyVadProvider`, stale `turn_id` discard in `VoiceSessionClient`) — Delivered in M4 Batch B (`backend/app/services/voice/vad.py`, `voice_session_client.dart`).
+- **`PC-VOICE-005`**: Duplex Voice Session Orchestrator & Turn Identity Coordination over WebSocket (`VoiceSessionOrchestrator`, `WS /api/v1/voice/ws` without `Depends(get_db)`, D9 tool policy parity, shared `_get_lock(conversation_id)` concurrency guard, & Profile revoke/purge WS termination) — Delivered in M4 Batch B.
 
 ### Stream: `PC-WEB` — Read-Only Web Current Info *(M4 Batch A Delivered on `feature/m4-d9-tools-and-web-a`)*
 - **`PC-WEB-001`**: Provider-Independent `WebSearch` Adapter with Privacy Minimization (`public_search` default, Host-Admin SearXNG / optional ACL-protected Tavily & Brave) — Delivered in M4 Batch A.

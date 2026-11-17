@@ -18,6 +18,7 @@ import '../dto/sse_event_dto.dart';
 import '../dto/system_status_dto.dart';
 import '../dto/task_dto.dart';
 import '../dto/tools_dto.dart';
+import '../dto/voice_dto.dart';
 import '../transport/sse_parser.dart';
 import 'companion_api_exception.dart';
 
@@ -865,14 +866,15 @@ class CompanionClient {
   /// Updates a character instance by ID via PATCH /api/v1/characters/instances/{instance_id}.
   Future<CharacterInstanceOut> updateCharacterInstance(
     String instanceId,
-    CharacterInstanceUpdate payload,
-  ) async {
+    CharacterInstanceUpdate payload, {
+    bool clearVoiceId = false,
+  }) async {
     final uri = baseUri.replace(path: '${baseUri.path}/api/v1/characters/instances/$instanceId');
     final headers = await _buildHeaders(requiresAuth: true);
     final response = await _httpClient.patch(
       uri,
       headers: headers,
-      body: jsonEncode(payload.toJson()),
+      body: jsonEncode(payload.toJson(clearVoiceId: clearVoiceId)),
     );
     if (response.statusCode == 200) {
       final dynamic json = jsonDecode(response.body);
@@ -1603,6 +1605,58 @@ class CompanionClient {
       body: payload.toJson(),
     );
     return ToolConfirmationResolveResponse.fromJson(json);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Local Voice Pipeline (/api/v1/voice)
+  // ---------------------------------------------------------------------------
+
+  /// Returns truthful readiness status across STT, VAD, and TTS subsystems.
+  Future<VoiceStatusOut> getVoiceStatus() async {
+    final json = await _requestJson('GET', '/api/v1/voice/status');
+    return VoiceStatusOut.fromJson(json);
+  }
+
+  /// Lists locally discovered TTS voices via GET /api/v1/voice/voices.
+  Future<VoiceCatalogOut> listVoices() async {
+    final json = await _requestJson('GET', '/api/v1/voice/voices');
+    return VoiceCatalogOut.fromJson(json);
+  }
+
+  /// Retrieves per-Profile voice behavior and privacy preferences.
+  Future<VoiceSettingsOut> getVoiceSettings() async {
+    final json = await _requestJson('GET', '/api/v1/voice/settings');
+    return VoiceSettingsOut.fromJson(json);
+  }
+
+  /// Partially updates per-Profile voice settings via PATCH /api/v1/voice/settings.
+  Future<VoiceSettingsOut> updateVoiceSettings(VoiceSettingsUpdate payload) async {
+    final json = await _requestJson(
+      'PATCH',
+      '/api/v1/voice/settings',
+      body: payload.toJson(),
+    );
+    return VoiceSettingsOut.fromJson(json);
+  }
+
+  /// Transcribes bounded ephemeral dictation audio via POST /api/v1/voice/transcribe.
+  Future<VoiceTranscribeOut> transcribeAudio(VoiceTranscribeRequest payload) async {
+    final json = await _requestJson(
+      'POST',
+      '/api/v1/voice/transcribe',
+      body: payload.toJson(),
+    );
+    return VoiceTranscribeOut.fromJson(json);
+  }
+
+  /// Synthesizes text to an in-memory WAV payload via POST /api/v1/voice/synthesize.
+  Future<VoiceSynthesizeOut> synthesizeSpeech(VoiceSynthesizeRequest payload) async {
+    final json = await _requestJson(
+      'POST',
+      '/api/v1/voice/synthesize',
+      body: payload.toJson(),
+    );
+    return VoiceSynthesizeOut.fromJson(json);
   }
 
   void close() {

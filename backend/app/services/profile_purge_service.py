@@ -32,6 +32,7 @@ from app.models.notification_event import NotificationEvent
 from app.models.profile import Profile
 from app.models.profile_session import ProfileSession
 from app.models.profile_tool_settings import ProfileToolSettings
+from app.models.profile_voice_settings import ProfileVoiceSettings
 from app.models.reminder import Reminder
 from app.models.routine import Routine
 from app.models.session_ticket import SessionTicket
@@ -102,6 +103,8 @@ class ProfilePurgeService:
 
         await self.db.commit()
         await self.db.refresh(profile)
+        from app.services.voice.manager import get_voice_manager
+        await get_voice_manager().terminate_sessions_for_profile(profile_id)
         return profile
 
     async def list_deleted_profiles(self) -> list[Profile]:
@@ -156,6 +159,8 @@ class ProfilePurgeService:
 
         await self.db.commit()
         await self.db.refresh(profile)
+        from app.services.voice.manager import get_voice_manager
+        await get_voice_manager().terminate_sessions_for_profile(profile_id)
         return profile
 
     async def purge_profile(self, profile_id: str, allow_unexpired: bool = False) -> bool:
@@ -270,6 +275,7 @@ class ProfilePurgeService:
         await self.db.execute(delete(ToolAuditLog).where(ToolAuditLog.profile_id == profile_id))
         await self.db.execute(delete(ToolConfirmation).where(ToolConfirmation.profile_id == profile_id))
         await self.db.execute(delete(ProfileToolSettings).where(ProfileToolSettings.profile_id == profile_id))
+        await self.db.execute(delete(ProfileVoiceSettings).where(ProfileVoiceSettings.profile_id == profile_id))
         await self.db.execute(delete(Attachment).where(Attachment.profile_id == profile_id))
         await self.db.execute(delete(ConversationSummary).where(ConversationSummary.profile_id == profile_id))
         await self.db.execute(delete(Message).where(Message.profile_id == profile_id))

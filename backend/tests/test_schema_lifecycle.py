@@ -15,7 +15,7 @@ from app.db.session import (
     get_engine,
 )
 
-HEAD_REVISION = "017_d9_tool_policy_and_audit"
+HEAD_REVISION = "018_voice_settings_and_character_voice"
 
 
 def _create_legacy_v004_db(path: Path) -> None:
