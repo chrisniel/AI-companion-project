@@ -18,6 +18,7 @@ from app.services.assistant.orchestrator import (
     SYSTEM_PROMPT_TEMPLATE,
     _build_context,
     _estimate_tokens,
+    _text_char_units,
 )
 from app.services.character_service import (
     MODULATION_BLOCK_MAX_CHARS,
@@ -583,11 +584,12 @@ async def test_assembled_system_prompt_context_budgeting_in_4096_context_window(
     )
 
     # 3. Explicit heuristic character-based token verification:
-    # _estimate_tokens uses len(content) // 4, representing ~4 chars per BPE token.
-    # Verify that the heuristic token count leaves substantial margin.
+    # _estimate_tokens weights ASCII (1) and non-ASCII (6) char units // 4,
+    # keeping token estimates conservative (>= raw len(content) // 4).
     system_chars = len(system_msg.content)
     heuristic_system_tokens = _estimate_tokens(system_msg.content)
-    assert heuristic_system_tokens == max(1, system_chars // 4)
+    assert heuristic_system_tokens == max(1, _text_char_units(system_msg.content) // 4)
+    assert heuristic_system_tokens >= max(1, system_chars // 4)
     assert prompt_tokens < context_capacity
 
 

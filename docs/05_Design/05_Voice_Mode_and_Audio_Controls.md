@@ -15,13 +15,13 @@ Voice Mode provides a natural, low-latency, hands-free conversational interface 
 ## 2. Voice Mode Interface Layout (Option A — Integrated Chat Stage)
 
 Voice Mode is integrated directly into the primary `ChatScreen` workspace (`LiveVoiceStagePanel`) rather than using a separate top-level navigation rail tab:
-- **Chat Header Controls:** `Live Voice` button (`chat_voice_mode_toggle`) to enter/exit hands-free duplex voice mode and `Auto-Read` toggle (`chat_auto_read_toggle`) to speak completed text replies automatically.
-- **Inline Stage (`LiveVoiceStagePanel`):** Appears above the message timeline during active voice sessions with a reactive Companion orb, live status pill (`Connecting...` / `Listening` / `Thinking...` / `Speaking`), WASAPI mic RMS level bar, active tool progress hint, and real-time user/assistant captions.
-- **Composer Dictate & Message Read Aloud:** Active composer Mic button (`chat_dictate_button`) records WASAPI PCM16 audio into `POST /api/v1/voice/transcribe` and appends recognized text without overwriting existing unsent drafts; completed assistant messages expose per-message `Read Aloud / Stop` (`message_speak_<id>`) controls.
+- **Chat Header Controls:** `Live Voice` button (`chat_voice_mode_toggle`) to enter/exit hands-free duplex voice mode, 1-click **Mute / Unmute** toggle (`chat_header_mute_toggle`), and `Auto-Read` toggle (`chat_auto_read_toggle`) to speak completed text replies automatically, plus an inline voice error banner (`chat_voice_error_banner`) with a 1-click **Unmute** button (`chat_voice_error_unmute`) if capture is blocked while muted.
+- **Inline Stage (`LiveVoiceStagePanel`):** Appears above the message timeline during active voice sessions with a reactive Companion orb, live status pill (`Connecting...` / `Listening` / `Thinking...` / `Speaking`), isolated 60 Hz WASAPI mic RMS level bar (`ValueListenableBuilder<double>` without rebuilding the root shell), active tool progress hint, and real-time user/assistant captions. Hands-free Silero/energy VAD automatically commits turns after a natural speech-to-silence pause (`~0.8s`), discarding non-interrupting speaker bleed while speaking.
+- **Composer Dictate & Message Read Aloud:** Active composer Mic button (`chat_dictate_button`) records WASAPI PCM16 audio into `POST /api/v1/voice/transcribe` and appends recognized text without overwriting existing unsent drafts; completed assistant messages expose per-message `Read Aloud / Stop` (`message_speak_<id>`) controls backed by sentence-pipelined `Kokoro` playback (`espeak-ng` + Taglish G2P) and playback-aware button completion reset.
 - **Stage Interaction Controls:**
-  - **Mute Microphone Toggle (`Ctrl+Shift+M` default, customizable):** Cuts OS capture at the Windows driver level and flushes playback.
+  - **Mute Microphone Toggle (`Ctrl+Shift+M` default, customizable):** Cuts OS capture at the Windows driver level, flushes playback, and syncs shell/chat pills and tray check state.
   - **Interrupt / Barge-In Button (`Spacebar` when composer is unfocused):** Immediately cuts companion speech and dispatches WS `barge_in`.
-  - **End Voice Session (`Ctrl+Shift+V` in-app or `Ctrl+Alt+V` global default, customizable):** Closes the WebSocket channel, stops WASAPI capture, and hides `LiveVoiceStagePanel`.
+  - **End Voice Session (`Ctrl+Shift+V` via root `HardwareKeyboard` across Chat/Settings, or `Ctrl+Alt+V` global Win32 hotkey, customizable):** Closes the WebSocket channel, stops WASAPI capture, and hides `LiveVoiceStagePanel`. (`Escape` closes active History/Bell drawers before minimizing to tray).
 
 ---
 
@@ -40,8 +40,8 @@ In accordance with architectural invariants, conversational barge-in is **mandat
 
 Accessible via **Settings $\rightarrow$ Voice & Audio** (`SettingsVoiceSection`) and **Character Studio**:
 - **Engine Readiness & Privacy Banner:** Displays live STT/VAD/TTS provider readiness (`GET /api/v1/voice/status`) and confirms audio buffers remain in transient RAM with zero disk persistence or biometric voiceprinting.
-- **Microphone & Speaker Routing:** Native Windows WASAPI endpoint dropdowns (`IMMDeviceEnumerator`) with live mic RMS level meter, **Test Sound** playback verification, and **Refresh Devices**.
-- **Customizable Keyboard Shortcuts:** Interactive key-combo recorder (`VoiceShortcutRecorderTile`) with conflict/reserved-key (`Alt+Space`) validation, Win32 global hotkey registration conflict warnings, and **Reset Defaults** (`Ctrl+Shift+V`, `Ctrl+Alt+V`, `Ctrl+Shift+M`, `Right Alt`).
+- **Microphone & Speaker Routing:** Native Windows WASAPI endpoint dropdowns (`IMMDeviceEnumerator`) with live mic **Test Mic** RMS probe & input hot-swap while listening, **Test Sound** playback verification, and **Refresh Devices**.
+- **Customizable Keyboard Shortcuts:** Interactive key-combo recorder (`VoiceShortcutRecorderTile`) with capture-modal interception guard, conflict/reserved-key (`Alt+Space`) validation, Win32 global hotkey registration conflict warnings, and **Reset Defaults** (`Ctrl+Shift+V`, `Ctrl+Alt+V`, `Ctrl+Shift+M`, `Right Alt`).
 - **Behavior & Character Voice:** Per-Profile Barge-In Policy (`smart_auto` / `strict_noisy` / `manual_only`), VAD Sensitivity (`low`/`medium`/`high`), Recognition Language (`en`/`auto`), Default TTS Voice + Preview, Speech Speed (`0.50x`–`2.00x`), Auto-Read Replies, opt-in Proactive Speech (`OFF` by default), plus per-character TTS voice override and preview inside `Character Studio` (`Identity & Lore`).
 
 ---

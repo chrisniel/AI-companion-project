@@ -2,23 +2,28 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- **Status:** Implemented & Automated-Verified on `feature/m4-voice-desktop-c` (Pending Phase 4 Review & Manual Windows Hardware Audio QA)
+- **Status:** Phase 3 Complete — Slice 4 Stabilized & Automated-Verified (Ready for Manual Hardware QA & Phase 4 Review)
 - **Delivery Level:** Level C — Sensitive Design
-- **Scope Mode:** New Feature — M4 Batch C native Windows C++ WASAPI audio capture/playback, Win32 global hotkeys (`WindowsAudioChannel`), Option A Desktop Voice UI (removing standalone `Voice` rail tab and integrating Dictation, Live Duplex Voice Stage, Auto-Read, and Read Aloud into `ChatScreen`), `Settings -> Voice & Audio` promotion (`SettingsVoiceSection` with customizable shortcuts, hardware device pickers, barge-in & engine controls), `Character Studio` voice picker, `DesktopShell` amber mic privacy indicator, and System Tray Mute toggle.
+- **Scope Mode:** New Feature & Post-QA Stabilization — M4 Batch C native Windows C++ WASAPI audio capture/playback, Win32 global hotkeys (`WindowsAudioChannel`), Option A Desktop Voice UI (removing standalone `Voice` rail tab and integrating Dictation, Live Duplex Voice Stage, Auto-Read, and Read Aloud into `ChatScreen`), `Settings -> Voice & Audio` promotion (`SettingsVoiceSection` with customizable shortcuts, hardware device pickers, barge-in & engine controls), `Character Studio` voice picker, `DesktopShell` amber mic privacy indicator, System Tray Mute toggle, plus **Slice 4** targeted backend/client fixes uncovered during live Windows QA & full codebase audit.
 - **Target Files:**
+  - `backend/app/services/voice/` (`tts.py`, `session_orchestrator.py`)
+  - `backend/app/services/assistant/` (`orchestrator.py`, `compactor.py`)
+  - `backend/app/services/tools/registry.py`
+  - `backend/` (`pyproject.toml`, `requirements.txt`, `requirements.lock`)
+  - `backend/tests/` (`test_voice_engines_and_barge_in.py`, `test_voice_api_and_ws.py`, `test_assistant_orchestrator.py`, `test_character_personality_modulator.py`)
   - `frontend/flutter/apps/desktop/windows/runner/` (`CMakeLists.txt`, `flutter_window.h`, `flutter_window.cpp`, `windows_audio_channel.h`, `windows_audio_channel.cpp`)
   - `frontend/flutter/apps/desktop/lib/platform/` (`desktop_audio_adapter.dart`, `desktop_client_settings.dart`)
   - `frontend/flutter/apps/desktop/lib/features/voice/` (`desktop_voice_controller.dart`, `live_voice_stage_panel.dart`, `voice_shortcut_recorder.dart`)
   - `frontend/flutter/apps/desktop/lib/controllers/desktop_settings_controller.dart`
-  - `frontend/flutter/apps/desktop/lib/lifecycle/desktop_lifecycle_coordinator.dart`
+  - `frontend/flutter/apps/desktop/lib/lifecycle/` (`desktop_tray_adapter.dart`, `live_desktop_adapters.dart`, `desktop_lifecycle_coordinator.dart`)
   - `frontend/flutter/apps/desktop/lib/shell/` (`desktop_navigation_rail.dart`, `desktop_shell.dart`)
   - `frontend/flutter/apps/desktop/lib/screens/` (`chat_screen.dart`, `settings_screen.dart`, `studio_screen.dart`, DELETE `voice_screen.dart`)
   - `frontend/flutter/apps/desktop/lib/features/settings/` (`settings_section.dart`, `sections/settings_voice_section.dart`)
   - `frontend/flutter/apps/desktop/lib/features/studio/` (`desktop_studio_controller.dart`, `studio_inspector_panel.dart`)
-  - `frontend/flutter/apps/desktop/test/` (`desktop_voice_test.dart`, updates to `desktop_shell_test.dart`, `desktop_settings_revamp_test.dart`, `desktop_studio_controller_test.dart`, `studio_screen_test.dart`, `desktop_lifecycle_test.dart`, `desktop_shortcuts_test.dart`, `widget_test.dart`)
+  - `frontend/flutter/apps/desktop/test/` (`desktop_voice_test.dart`, `desktop_voice_ui_test.dart`, updates to `desktop_shell_test.dart`, `desktop_settings_revamp_test.dart`, `desktop_studio_controller_test.dart`, `studio_screen_test.dart`, `desktop_lifecycle_test.dart`, `desktop_shortcuts_test.dart`, `widget_test.dart`)
   - Phase 3 docs: [`docs/05_Design/01_PC_Desktop_Shell_and_Tray.md`](../../05_Design/01_PC_Desktop_Shell_and_Tray.md), [`docs/05_Design/05_Voice_Mode_and_Audio_Controls.md`](../../05_Design/05_Voice_Mode_and_Audio_Controls.md), [`docs/04_Architecture/01_Domains/voice-and-audio.md`](../../04_Architecture/01_Domains/voice-and-audio.md), [`docs/02_Planning/00_Master/WBS.md`](../00_Master/WBS.md), [`MASTER_CHECKLIST.md`](../00_Master/MASTER_CHECKLIST.md), [`DELIVERY_INDEX.md`](../00_Master/DELIVERY_INDEX.md), [`CHANGELOG.md`](../../../CHANGELOG.md), walkthrough, and archived branch tracker.
 - **Branch:** `feature/m4-voice-desktop-c`
-- **Active Branch Tracker:** `docs/01_Tracking/active/task-feature-m4-voice-desktop-c.md`
+- **Archived Branch Tracker:** [`docs/01_Tracking/archive/task-feature-m4-voice-desktop-c.md`](../../01_Tracking/archive/task-feature-m4-voice-desktop-c.md)
 
 > Notice: Update this plan in place during planning. After Phase 1 approval, track execution in `docs/01_Tracking/active/task-feature-m4-voice-desktop-c.md` and reopen this plan only when revising scope or architecture.
 
@@ -41,7 +46,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
   5. Shell mic capture privacy indicator in `_buildTopUtilityStrip` and **Mute Audio (`Ctrl+Shift+M`)** item in the Windows System Tray menu.
   6. Updated Desktop widget/unit tests (`flutter analyze --no-pub`, full `apps/desktop/test`, `flutter build windows --debug --no-pub`) and synchronized canonical documentation.
 - **Explicit Out-of-Scope:**
-  - Backend schema/API changes (all `6` REST endpoints, `WS /api/v1/voice/ws`, and `CharacterInstance.voice_id` already landed in M4 Batch B).
+  - Public REST/WS API URLs, DB table schemas, and DTO contracts (`contracts/openapi/openapi.json` and `companion_api` remain unchanged from M4 Batch B; Slice 4 includes targeted internal backend fixes in `tts.py`, `session_orchestrator.py`, `orchestrator.py`, `compactor.py`, `tools/registry.py`, and Python dependency locking for `onnxruntime`, `numpy`, and `espeakng-loader`).
   - Screen Share / Camera capture multimodal pipeline (prepared cleanly via Option A unified `ChatScreen`, deferred to dedicated Vision work).
   - Always-on wake word (`openWakeWord`, `PC Later`) and global low-level keyboard hook (`WH_KEYBOARD_LL` avoided to remain AV-clean).
   - React Web (`frontend/web/`) or Android (`android/`).
@@ -98,10 +103,55 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
      - **`Character Studio` (`desktop_studio_controller.dart`, `studio_inspector_panel.dart`):**
        - Add optional `voiceId` to `CharacterStudioDraft`, `PendingUpdateSnapshot`, `_matchesUpdatePayload`, and `_matchesBaseline` (forwarding explicit `clearVoiceId: draft.voiceId == null && baselineVoiceId != null` on PATCH).
        - Render **Character Voice** dropdown (`"Profile Default"` + catalog voices) + **Preview** button in `StudioInspectorPanel` Identity tab, disabled when `draft.isReadOnly` (`isLegacyPlaceholder`) and immutable on `isNeutralSelected`.
+  5. **Slice 4 — Post-QA Hardware, Runtime & UX Stabilization (12 Verified Root Causes):**
+     1. **Existing Conversation `"Text Generation Error"` (`orchestrator.py`, `compactor.py`, `tools/registry.py`):**
+        - *Evidence:* `llama_server.log` recorded HTTP 400 `request (4754 tokens) exceeds the available context size (4096 tokens)` on conversation `aa8cdd32-...` (turns 21–26).
+        - *Root Causes:* `get_openai_tool_definitions()` serializes 14 verbose Pydantic JSON schemas (`7,449` chars / `~2,100` tokens in Qwen's chat template), which `_build_context()` and `should_compact_conversation()` completely ignored; `_build_context()` also omitted `_estimate_tokens(user_text)` from `used`, `_estimate_tokens()` undercounted multi-byte UTF-8 emojis/Unicode, `orchestrator.py:1039-1052` loaded empty `status='failed'`/`'cancelled'` assistant rows into history, `compactor.py:267-270` refused auto-compaction whenever `<= 8` uncompacted messages existed despite overflowing `4096`, and `CreateAlarmArgs.time_of_day` (`registry.py:115`) emitted `\d` triggering `llama-server` schema warnings.
+        - *Fix:* Compact OpenAI tool schemas in `get_openai_tool_definitions()` (strip redundant `title` metadata, flatten nullable `anyOf`, replace `\d` with `[0-9]`), pass `tool_tokens` reserve + `user_text` tokens into `_build_context()` and `should_compact_conversation()`, weight multi-byte UTF-8 conservatively while preserving `_estimate_tokens("a" * 40) == 10`, exclude empty non-completed assistant turns from history assembly, and allow `compactor.py` auto-compaction to step down `effective_keep` when prompt tokens cross the watermark.
+     2. **Broken English (`"city"` → `"qity"`) & Taglish Pronunciation (`tts.py`, `pyproject.toml`, `requirements.*`):**
+        - *Evidence:* Live IPA check produced `wɛlkɑmɛ tɑ ðə kɪtj` for `"Welcome to the city"` and `kæmʌstæ kæ næ? mæɡændæŋ ɡæbɪ sæ kwɛzɑn kɪtj!` for `"Kamusta ka na? Magandang gabi sa Quezon City!"`.
+        - *Root Cause:* Toy 20-rule table (`"c": "k"`, `"e": "ɛ"`, `"u": "ʌ"`) with no real G2P engine, no markdown/URL/emoji stripping, no number/acronym expansion, and no Tagalog vowel/consonant rules.
+        - *Fix:* Integrate offline `espeak-ng` phonemization via `espeakng-loader` (`libespeak-ng.dll` ctypes/phonemizer wrapper, keeping the pure-Python table only as an emergency backup), preprocess markdown/URLs/emojis/numbers/acronyms (`CPU`/`GPU`/`API`), add Tagalog phonemic mapping (`[a ɛ i o u]`, `ng`→`ŋ`, soft `c`/`g`) for Tagalog words in Taglish, and lock `onnxruntime`, `numpy`, and `espeakng-loader` into `backend/pyproject.toml`, `backend/requirements.txt`, and `backend/requirements.lock`.
+     3. **~30s Delay Before Speech & 510-Token Truncation (`tts.py`, `session_orchestrator.py`, `desktop_voice_controller.dart`):**
+        - *Evidence:* 12-core CPU benchmark shows 1 sentence takes `1.35s` at `intra_op_num_threads=6` (`RTF=0.35x`), whereas `speakMessage()` waited for full LLM completion (`~10s`) and synthesized the full 500–800 char message in a single blocking `POST /api/v1/voice/synthesize` call (`~15–20s`, silently truncating past `max_tokens=510`).
+        - *Fix:* Set Kokoro `intra_op_num_threads = min(6, max(2, os.cpu_count() or 4))`; update `KokoroOnnxTtsProvider.synthesize()` to split long texts via `split_sentences_for_tts` and concatenate PCM16 frames cleanly so long replies never truncate at 510 tokens; update `DesktopVoiceController.speakMessage()` to split multi-sentence replies client-side and pipeline `synthesizeSpeech` → `playAudio` sentence-by-sentence under the same `playbackGeneration` (sentence 1 plays in `~1.3–2.0s`); decouple `VoiceSessionOrchestrator._speak_text_segment` into an ordered async per-turn TTS worker queue so LLM token streaming does not stall on CPU synthesis.
+     4. **Hands-Free Live Voice Never Commits Turns (`session_orchestrator.py`):**
+        - *Root Cause:* `_handle_pcm_chunk()` only ran VAD when `_barge_in_gate.is_speaking` was `True`; while `Listening`, frames accumulated without ever triggering `_start_committed_turn()` unless `Right Alt` PTT was released.
+        - *Fix:* Add a per-session VAD speech endpointing state machine in `VoiceSessionOrchestrator` while `_barge_in_gate.is_speaking == False` using a `~320ms` (`10`-frame) pre-roll ring buffer, speech onset detection (`>= 3` voiced frames), and automatic `_start_committed_turn()` after `~800ms` (`25` frames) of trailing silence (preserving manual `audio.commit` support).
+     5. **System Tray Right-Click Does Nothing & Runtime Status Overwrites Mute Label (`desktop_tray_adapter.dart`, `live_desktop_adapters.dart`, `desktop_lifecycle_coordinator.dart`):**
+        - *Root Cause:* `tray_manager-0.2.4` emits `onTrayIconRightMouseDown` on Windows `WM_RBUTTONUP` without auto-opening the popup menu unless `trayManager.popUpContextMenu()` is invoked; `DesktopLifecycleCoordinator` never overrode `onTrayIconRightMouseDown()`, and `updateRuntimeStatus()` (`line 114`) omitted `_audioMuted` when rebuilding the tray menu.
+        - *Fix:* Expose `Future<void> popUpContextMenu()` on `DesktopTrayAdapter` / `LiveDesktopTrayAdapter`, override `onTrayIconRightMouseDown()` in `DesktopLifecycleCoordinator` to invoke it, and forward `_audioMuted` inside `updateRuntimeStatus()`.
+     6. **In-App Shortcuts Fail After Focus Changes & 31x/sec Rebuild Storm (`desktop_shell.dart`, `chat_screen.dart`, `desktop_voice_controller.dart`):**
+        - *Root Causes:* `DesktopShell`'s `Shortcuts` only triggers when `FocusManager.instance.primaryFocus` sits below it—clicking non-focusable `NeumorphicButton`s, dismissing dialogs/dropdowns, or switching `Offstage` tabs leaves `primaryFocus` on `ModalRoute`'s `FocusScopeNode` above `DesktopShell`; `ChatScreen` bound `Escape` unconditionally to `_closeHistoryDrawer`; and `DesktopShell` rebuilt its entire `Shortcuts`/`Scaffold` tree `31x/sec` because `_voiceController.notifyListeners()` fired on every `32ms` capture frame.
+        - *Fix:* Move app-wide shortcuts (`Ctrl+Shift+V`, `muteToggle`, `Ctrl+,`, `Esc` closing drawers before hiding to tray) and Chat-active `pushToTalk` (`Right Alt`) / unfocused `Space` barge-in onto a root `HardwareKeyboard.instance.addHandler` dispatcher (automatically bypassed when `_ShortcutCaptureDialog` is open), and isolate `micRmsLevel` updates into a dedicated `ValueListenable<double>` (`micRmsListenable`) so `DesktopVoiceController.notifyListeners()` fires only on phase/state/transcript/setting transitions.
+     7. **Mute Trap With No Accessible GUI Unmute (`desktop_shell.dart`, `chat_screen.dart`):**
+        - *Root Cause:* `setMuted(true)` stops Live Voice (hiding `LiveVoiceStagePanel` and its `Unmute Mic` button), while `shell_mic_muted_indicator` was a static non-clickable `Container` and `ChatScreen` header had no mute/unmute button.
+        - *Fix:* Make `shell_mic_muted_indicator` / `shell_mic_privacy_indicator` interactive mute-toggle pills in `DesktopShell`'s top bar and add a persistent Mute/Unmute button in `ChatScreen`'s header voice bar.
+     8. **(Hidden Audit Finding) Cold-Launch Race Leaving Voice Catalog & Settings `null` (`desktop_shell.dart`):**
+        - *Root Cause:* `DesktopShell.initState()` calls `_voiceController.initialize()` while the Python runtime is still booting (`Connection refused`), and `_handleProfileChange()` only checked `voiceEpoch != _lastKnownVoiceProfileEpoch` (unchanged when `checkConnection()` transitions `isConnected` from `false` to `true`).
+        - *Fix:* Track `_lastKnownVoiceConnected` and `_lastKnownVoiceProfileId` in `DesktopShell._handleProfileChange()` and call `refreshBackendState()` whenever `isConnected` becomes `true` (or while connected with `voiceSettings == null`).
+     9. **(Hidden Audit Finding) Per-Message `Read Aloud` Stuck on `"Stop"` (`desktop_voice_controller.dart`):**
+        - *Root Cause:* `playAudio()` queues WAV chunks asynchronously into C++ `render_queue_` and resolves immediately; `speakMessage()` never cleared `_speakingMessageId` after playback duration elapsed.
+        - *Fix:* Schedule a generation-fenced `Timer` over cumulative `durationMs` in `speakMessage()` (cancelled cleanly on `stopSpeaking()`, `setMuted(true)`, or superseded `playbackGeneration`) to reset `_speakingMessageId = null`.
+     10. **(Hidden Audit Finding) Dictation & Voice Errors Invisible When `LiveVoiceStagePanel` Is Closed (`chat_screen.dart`):**
+         - *Root Cause:* `voiceController.errorMessage` rendered only inside `LiveVoiceStagePanel`.
+         - *Fix:* Render a compact dismissible voice error banner on `ChatScreen` when `voiceController.errorMessage != null && !voiceController.isLiveVoiceActive` (including a 1-click **Unmute** action when `isAudioMuted` is true).
+     11. **(Hidden Audit Finding) Dead Mic Level Meter in `Settings -> Voice & Audio` & Hot-Swap Mic Capture (`settings_voice_section.dart`, `desktop_voice_controller.dart`):**
+         - *Root Cause:* `SettingsVoiceSection`'s RMS meter stayed at `0` unless Live Voice happened to be active, and `selectInputDevice()` did not restart active capture when switching mics.
+         - *Fix:* Add a **Test Mic** / **Stop Test** toggle next to the Settings RMS meter (with safe disposal on leave) and restart active capture inside `selectInputDevice()`.
+     12. **(Hidden Audit Finding) Premature Server `BargeInGate.set_speaking(False)` & Speaker Bleed Buffering (`session_orchestrator.py`):**
+         - *Root Cause:* `session_orchestrator.py` cleared `_barge_in_gate.set_speaking(False)` as soon as the last `tts.audio.chunk` frame left WebSocket—before client WASAPI finished playing—and buffered non-interrupting mic frames during speech.
+         - *Fix:* Keep `_barge_in_gate.is_speaking` armed across the estimated playback window (cleared on `barge_in`, `audio.commit`, or expiry) and discard non-interrupting mic frames while speaking.
 
 ---
 
 ## 3. Proposed File Changes & In-Place Logic
+
+### [ADD / MODIFY] `backend/` (Slice 4 Stabilization)
+- **`app/services/assistant/orchestrator.py`, `compactor.py`, `app/services/tools/registry.py` (MODIFY):** Account for OpenAI `tools` JSON overhead + `user_text` tokens in `_build_context()` and `should_compact_conversation()`, tighten UTF-8 multi-byte token estimation, exclude empty failed/cancelled assistant messages from history, compact tool schema JSON (`title`/nullable cleanup & `[0-9]` regex), and step down `effective_keep` during overflowing auto-compaction.
+- **`app/services/voice/tts.py` (MODIFY):** Integrate offline `espeak-ng` phonemizer (`espeakng-loader`) + text normalization + Tagalog phonemic fallback, tune Kokoro CPU thread count (`min(6, cpu_count)`), and chunk long `synthesize()` inputs cleanly so 510-token truncation never occurs.
+- **`app/services/voice/session_orchestrator.py` (MODIFY):** Add hands-free VAD speech-onset + trailing-silence auto-commit in `_handle_pcm_chunk`, move WS TTS segment synthesis onto an ordered async worker queue, and keep `BargeInGate.is_speaking` armed cleanly across playback without buffering speaker bleed.
+- **`pyproject.toml`, `requirements.txt`, `requirements.lock` (MODIFY):** Lock `onnxruntime`, `numpy`, and `espeakng-loader` so CI matches `backend\.venv`.
 
 ### [ADD / MODIFY] `frontend/flutter/apps/desktop/windows/runner/`
 - **`windows_audio_channel.h` / `windows_audio_channel.cpp` (ADD):** COM/WASAPI device enumeration, MTA capture/render worker threads with `kWmAudioEvent = WM_APP + 0x43` UI-thread queue marshaling, RIFF `"fmt "`/`"data"` scanner + sample-rate conversion, `<50ms` generation-tagged `flushPlayback`, in-memory test tone, and Win32 `RegisterHotKey` (`WM_HOTKEY`).
@@ -112,56 +162,62 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 - **`desktop_client_settings.dart` (MODIFY):** Add `readVoiceHardwarePrefs()` / `writeVoiceHardwarePrefs()` and `readVoiceShortcuts()` / `writeVoiceShortcuts()`.
 
 ### [ADD] `frontend/flutter/apps/desktop/lib/features/voice/`
-- **`desktop_voice_controller.dart` (ADD):** State machine (`VoiceSessionPhase`), Dictation (`format: 'pcm16'`, bounded `1,468,006` B), Live Voice WS lifecycle, Read Aloud / Auto-Read transition hook, monotonic barge-in `playbackGeneration`, hard Mute, and `profileEpoch` cleanup.
-- **`live_voice_stage_panel.dart` (ADD):** Reactive Companion Orb, state ring, live captions, RMS bar, Mute / Interrupt / End dock inside `ChatScreen`.
-- **`voice_shortcut_recorder.dart` (ADD):** Key-combo capture tile/dialog + conflict indicator.
+- **`desktop_voice_controller.dart` (ADD/MODIFY):** State machine (`VoiceSessionPhase`), Dictation (`format: 'pcm16'`, bounded `1,468,006` B), Live Voice WS lifecycle, sentence-pipelined Read Aloud / Auto-Read with generation-fenced completion `Timer`, isolated `micRmsListenable` (`ValueNotifier<double>`), Settings mic-test & device hot-swap support, monotonic barge-in `playbackGeneration`, hard Mute, and `profileEpoch` cleanup.
+- **`live_voice_stage_panel.dart` (ADD/MODIFY):** Reactive Companion Orb, state ring, live captions, `ValueListenableBuilder`-scoped RMS bar, Mute / Interrupt / End dock inside `ChatScreen`.
+- **`voice_shortcut_recorder.dart` (ADD/MODIFY):** Key-combo capture tile/dialog + conflict indicator + static modal-open guard (`VoiceShortcutCaptureScope.isRecording`) so root `HardwareKeyboard` shortcuts pause cleanly while recording a new binding.
 
 ### [MODIFY / DELETE] Shell, Navigation, Chat, Settings & Studio
 - **`desktop_settings_controller.dart` (MODIFY):** Remove `DesktopNavDestination.voice`.
 - **`screens/voice_screen.dart` (DELETE):** Remove deprecated standalone `Voice` rail tab under Option A.
-- **`desktop_lifecycle_coordinator.dart` (MODIFY):** Add `isAudioMuted`, `updateAudioMutedStatus(bool)`, `onMuteToggleTriggered`, and `Mute Audio` / `Unmute Audio` menu item with `isAudioMuted = false` optional default in `buildTrayMenuItemsWithSafety`.
-- **`desktop_shell.dart` (MODIFY):** Wire `DesktopVoiceController` + `DesktopAudioAdapter`, remove `VoiceScreen` branch, gate `_buildTopUtilityStrip` on `_voiceController != null` as well and render glowing amber `shell_mic_privacy_indicator`, bind customizable global/in-app hotkeys cleanly (`try/on UnimplementedError` for test fakes).
-- **`screens/chat_screen.dart` (MODIFY):** Header Live Voice & Auto-Read toggles, inline `LiveVoiceStagePanel`, active composer Mic Dictate button, composer-safe `Spacebar` barge-in shortcut, per-message Read Aloud / Stop controls.
-- **`features/settings/settings_section.dart`, `screens/settings_screen.dart` & `sections/settings_voice_section.dart` (ADD/MODIFY):** Promote `SettingsSectionId.voice` to `available` and render `SettingsVoiceSection`.
+- **`desktop_tray_adapter.dart`, `live_desktop_adapters.dart` & `desktop_lifecycle_coordinator.dart` (MODIFY):** Expose `popUpContextMenu()`, override `onTrayIconRightMouseDown()` to show the Windows tray menu on right-click, preserve `_audioMuted` in `updateRuntimeStatus()`, and add `Mute Audio` / `Unmute Audio` tray action.
+- **`desktop_shell.dart` (MODIFY):** Wire `DesktopVoiceController` + `DesktopAudioAdapter`, remove `VoiceScreen` branch, gate `_buildTopUtilityStrip` on `_voiceController != null`, render interactive `shell_mic_privacy_indicator` & `shell_mic_muted_indicator` toggle pills, replace focus-dependent root `Shortcuts` with `HardwareKeyboard.instance.addHandler`, stop 31x/sec shell rebuilds during mic capture, and refresh voice state on `isConnected` transitions.
+- **`screens/chat_screen.dart` (MODIFY):** Header Live Voice, Auto-Read & Mute/Unmute toggles, inline `LiveVoiceStagePanel`, dismissible voice error banner with 1-click Unmute, active composer Mic Dictate button, `HardwareKeyboard`-backed Chat PTT & unfocused `Spacebar` barge-in, conditional `Escape` handling, and per-message Read Aloud / Stop controls.
+- **`features/settings/settings_section.dart`, `screens/settings_screen.dart` & `sections/settings_voice_section.dart` (ADD/MODIFY):** Promote `SettingsSectionId.voice` to `available` and render `SettingsVoiceSection` with **Test Mic** RMS meter toggle.
 - **`features/studio/desktop_studio_controller.dart` & `studio_inspector_panel.dart` (MODIFY):** Add `voiceId` across `CharacterStudioDraft`, `PendingUpdateSnapshot`, `_matchesUpdatePayload`, `_matchesBaseline`, `clearVoiceId`, and Studio Character Voice dropdown + Preview button (disabled when read-only).
 
 ---
 
 ## 4. Step-by-Step Implementation Sequence (TDD)
 
-1. **Slice 1 — Native Windows C++ WASAPI & Hotkey Channel (`windows/runner/`) + Dart `DesktopAudioAdapter` & `DesktopClientSettings`:**
+1. **Slice 1 — Native Windows C++ WASAPI & Hotkey Channel (`windows/runner/`) + Dart `DesktopAudioAdapter` & `DesktopClientSettings`:** (Completed)
    - Write failing unit tests for `DesktopClientSettings` voice hardware/shortcut persistence + conflict rules (`desktop_voice_test.dart`, RED).
    - Implement `windows_audio_channel.h/.cpp` (with `kWmAudioEvent` UI marshaling, STA/MTA COM isolation, RIFF subchunk walk), update `flutter_window.h/.cpp` & `CMakeLists.txt`, and implement `desktop_audio_adapter.dart` & `desktop_client_settings.dart` (GREEN).
    - Verify native Windows compilation (`flutter build windows --debug --no-pub`).
-2. **Slice 2 — `DesktopVoiceController`, Generation-Tagged Barge-In, Tray Mute & Profile Isolation:**
+2. **Slice 2 — `DesktopVoiceController`, Generation-Tagged Barge-In, Tray Mute & Profile Isolation:** (Completed)
    - Write failing tests covering: Dictation (`pcm16`, byte cap, transcript callback); Read Aloud + clean `isGenerating` transition `Auto-Read`; Live Voice auto-conversation creation + WS events + `<50ms` `flushPlayback` generation bump on `barge_in` / `vad.state: barge_in_triggered` / `turn.cancelled`; hard OS `setMuted` (`stopCapture` + `flushPlayback` + Tray sync); and immediate capture/WS tear-down on `profileEpoch` change (`desktop_voice_test.dart`, RED -> GREEN).
-3. **Slice 3 — Option A UI (`Voice` Tab Removal, Shell Mic Badge, `ChatScreen`, `SettingsVoiceSection` & Studio Voice Picker):**
+3. **Slice 3 — Option A UI (`Voice` Tab Removal, Shell Mic Badge, `ChatScreen`, `SettingsVoiceSection` & Studio Voice Picker):** (Completed)
    - Write/update failing tests across `desktop_voice_test.dart`, `desktop_shell_test.dart`, `widget_test.dart`, `desktop_settings_revamp_test.dart`, `desktop_lifecycle_test.dart`, `desktop_shortcuts_test.dart`, `desktop_studio_controller_test.dart`, and `studio_screen_test.dart` (RED -> GREEN).
-4. **Verification Gate (All Checks Must Pass Before Phase 3):**
+4. **Slice 4 — Post-QA Hardware, Runtime & UX Stabilization:** (Completed — 4A, 4B, 4C)
+   - *Slice 4A (Backend Context Budget & Compaction):* Add failing regression tests in `test_assistant_orchestrator.py` covering tool JSON schema token reservation, UTF-8 multi-byte weighting, `user_text` token accounting, filtering empty failed assistant history rows, `[0-9]` regex schema sanitization, and step-down auto-compaction -> implement in `orchestrator.py`, `compactor.py`, `tools/registry.py` (RED -> GREEN).
+   - *Slice 4B (Backend Speech G2P, Latency & Live VAD Endpointing):* Install & lock `onnxruntime`, `numpy`, and `espeakng-loader` (`pyproject.toml`, `requirements.txt`, `requirements.lock`); write failing tests in `test_voice_engines_and_barge_in.py` & `test_voice_api_and_ws.py` for real `espeak-ng` IPA (`city` -> `/sˈɪti/`), markdown/number/acronym preprocessing, Tagalog phonemic fallback, multi-chunk `synthesize()`, dynamic CPU thread count, automatic VAD turn-commit on speech+silence, ordered background TTS queue, and `BargeInGate` speaker-bleed protection -> implement in `tts.py` and `session_orchestrator.py` (RED -> GREEN).
+   - *Slice 4C (Desktop Tray Right-Click, Focus-Independent Shortcuts, Progressive Playback & Mute/Settings UX):* Add failing widget/unit tests across `desktop_lifecycle_test.dart`, `desktop_shortcuts_test.dart`, `desktop_voice_test.dart`, `desktop_voice_ui_test.dart`, `desktop_shell_test.dart` covering tray `onTrayIconRightMouseDown` -> `popUpContextMenu()`, `_audioMuted` retention across `updateRuntimeStatus()`, clickable shell/header mute pills, 1-click Unmute on voice error banner, root `HardwareKeyboard` shortcuts without focus traps or 31x/sec shell rebuilds, conditional `Escape` drawer handling, cold-launch `refreshBackendState()`, `Read Aloud` completion timer, sentence-pipelined playback, and Settings **Test Mic** + mic hot-swap -> implement across Dart adapters/controllers/screens (RED -> GREEN).
+5. **Verification Gate (All Checks Must Pass Before Phase 3 Update):**
+   - `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_voice_engines_and_barge_in.py backend\tests\test_voice_api_and_ws.py backend\tests\test_assistant_orchestrator.py -q`
    - `Push-Location frontend\flutter; dart analyze .; flutter test --no-pub --concurrency=1 apps/desktop/test; Pop-Location`
    - `Push-Location frontend\flutter\apps\desktop; flutter build windows --debug --no-pub; Pop-Location`
    - `Push-Location frontend\flutter\packages\companion_api; dart analyze; dart test; Pop-Location`
-   - `venv\Scripts\python.exe scripts\check_dart_openapi_parity.py --check`
-5. **Phase 3 Closure & Draft PR:**
-   - Sync [`01_PC_Desktop_Shell_and_Tray.md`](../../05_Design/01_PC_Desktop_Shell_and_Tray.md), [`05_Voice_Mode_and_Audio_Controls.md`](../../05_Design/05_Voice_Mode_and_Audio_Controls.md), [`voice-and-audio.md`](../../04_Architecture/01_Domains/voice-and-audio.md), [`WBS.md`](../00_Master/WBS.md), [`MASTER_CHECKLIST.md`](../00_Master/MASTER_CHECKLIST.md), [`DELIVERY_INDEX.md`](../00_Master/DELIVERY_INDEX.md), `CHANGELOG.md`, `walkthrough-m4-voice-desktop-c.md`, archive `task-feature-m4-voice-desktop-c.md`, commit, push, and open Draft PR targeting `develop`.
+   - `backend\.venv\Scripts\python.exe scripts\check_dart_openapi_parity.py --check`
+6. **Phase 3 Closure & Draft PR Sync:**
+   - Sync [`01_PC_Desktop_Shell_and_Tray.md`](../../05_Design/01_PC_Desktop_Shell_and_Tray.md), [`05_Voice_Mode_and_Audio_Controls.md`](../../05_Design/05_Voice_Mode_and_Audio_Controls.md), [`voice-and-audio.md`](../../04_Architecture/01_Domains/voice-and-audio.md), [`WBS.md`](../00_Master/WBS.md), [`MASTER_CHECKLIST.md`](../00_Master/MASTER_CHECKLIST.md), [`DELIVERY_INDEX.md`](../00_Master/DELIVERY_INDEX.md), `CHANGELOG.md`, `walkthrough-m4-voice-desktop-c.md`, archive `task-feature-m4-voice-desktop-c.md`, commit, and push updates to the active branch / Draft PR #46 targeting `develop`.
 
 ---
 
 ## 5. Acceptance Criteria & Verification Strategy
 
 ### Automated Repository Checks
-- [ ] Flutter static analysis: `Push-Location frontend\flutter; dart analyze .; Pop-Location` (`0` issues)
-- [ ] Full Flutter Desktop test suite: `Push-Location frontend\flutter; flutter test --no-pub --concurrency=1 apps/desktop/test; Pop-Location` (all existing `409` + new Batch C tests pass)
-- [ ] Windows native C++ build: `Push-Location frontend\flutter\apps\desktop; flutter build windows --debug --no-pub; Pop-Location`
-- [ ] `companion_api` sanity & contract parity: `venv\Scripts\python.exe scripts\check_dart_openapi_parity.py --check`
-- [ ] Optional backend sanity check: `venv\Scripts\python.exe -m pytest backend\tests\test_voice_api_and_ws.py backend\tests\test_character_foundation.py -q`
+- [x] Full backend unit/integration suite: `backend\.venv\Scripts\python.exe -m pytest backend\tests -q -p no:cacheprovider -o log_file=NUL` (`887 passed`, `0` failed, including Slice 4A/4B voice/orchestrator regressions and updated Unicode heuristic check in `test_character_personality_modulator.py`)
+- [x] Flutter static analysis: `Push-Location frontend\flutter; dart analyze .; Pop-Location` (`No issues found!`)
+- [x] Full Flutter Desktop test suite: `Push-Location frontend\flutter; flutter test --no-pub --concurrency=1 apps/desktop/test; Pop-Location` (`427: All tests passed!`, `0` failed)
+- [x] Windows native C++ build: `Push-Location frontend\flutter\apps\desktop; flutter build windows --debug --no-pub; Pop-Location` (`Built build\windows\x64\runner\Debug\ai_companion_desktop.exe` in `14.8s`, exit `0`)
+- [x] `companion_api` sanity & contract parity: `Push-Location frontend\flutter\packages\companion_api; dart analyze .; dart test; Pop-Location` (`No issues found!`, `112: All tests passed!`) and `backend\.venv\Scripts\python.exe scripts\check_dart_openapi_parity.py --check` (`87/87` DTO schemas & routes passed)
+- [x] Python dependency lock & import isolation verification: `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_import_isolation.py scripts\tests\test_python_dependency_lock.py -q` passed (`pyproject.toml`, `requirements.txt`, `requirements.lock` synchronized with `numpy==2.4.6`, `onnxruntime==1.32.0`, `espeakng-loader==0.2.4`; direct `python_dependency_lock.py verify` targets CI CPython `3.11.9` while local `.venv` runs Python `3.13`)
 
-### Manual & Host-Level Checks (Windows Hardware — Batch C UI + Audio!)
-- [ ] Launch `ai_companion_desktop.exe` alongside local runtime (`ggml-base.bin` + `silero_vad.onnx` + `kokoro-82m-v1.0`):
-  1. Open `Settings -> Voice & Audio`: verify Windows Mic dropdown + live input level meter react to voice; pick Speaker + click **Test Sound** to hear chime; test binding custom hotkey + **Reset Defaults**.
-  2. Open `Character Studio`: assign `af_nicole` to a Character, click **Preview**, save, and verify Chat inherits it (`CharacterInstance.voice_id`); clear back to **Profile Default**.
-  3. In `ChatScreen`: click Composer **Mic** icon, speak a phrase, verify transcription populates the input box without losing draft safety; toggle **Live Voice Mode**, speak a turn, verify animated Orb + real spoken TTS reply + persistent Chat history bubble + amber top-bar **Mic Live** pill; interrupt mid-sentence by speaking or pressing `Spacebar` and confirm playback stops cleanly in `<50ms`.
-  4. Right-click System Tray icon -> toggle **Mute Audio** and verify mic capture stops and output silences.
+### Manual & Host-Level Checks (Windows Hardware — Slice 4 Re-Verification)
+- [ ] Launch `.\scripts\run-desktop.ps1` alongside local runtime (`ggml-base.bin` + `silero_vad.onnx` + `kokoro-82m-v1.0`):
+  1. **Context Budget:** Open an existing multi-turn conversation (such as `aa8cdd32-...`) and send new messages; verify auto-compaction triggers cleanly below `4096` tokens without HTTP 400 / `"Model generation encountered an unexpected failure."`.
+  2. **TTS Pronunciation & Latency:** Click **Read Aloud** on a long assistant reply (`> 500` chars); verify English words (`"city"`, `"welcome"`, acronyms, numbers) pronounce accurately via `espeak-ng`, Taglish words follow clean Filipino vowels, and playback starts within `~1.3–2.0s` without truncating past 510 tokens.
+  3. **Hands-Free Live Voice:** Start **Live Voice** (`Ctrl+Shift+V` or `Ctrl+Alt+V` inside app), speak naturally without holding `Right Alt`, pause `~1s`, and verify automatic STT -> LLM -> streaming TTS turn commit, clean **Read Aloud** button reset on completion, and working **Spacebar** / voice barge-in without speaker bleed phantom turns.
+  4. **Shortcuts, Tray Right-Click & Mute UX:** Test `Ctrl+Shift+V` repeatedly inside Chat and Settings, `F8` / `Ctrl+Shift+M` mute toggle, `Ctrl+,`, `Esc` (closing drawers before hiding to tray), `Right Alt` PTT, right-clicking the Windows tray icon to open the menu, unmuting via clickable top-bar pill / Chat header / error banner, and **Test Mic** RMS meter in `Settings -> Voice & Audio`.
 
 ---
 
@@ -173,6 +229,8 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
   - *Barge-in race where in-flight MethodChannel PCM bytes play after `Spacebar` / VAD cut:* Monotonic `uint64_t` `playbackGeneration` checked on both Dart and C++ render FIFO queue guarantees stale audio is dropped instantaneously on `flushPlayback(generation)`.
   - *Unattended thread/COM lifetime on Windows app close (`FlutterWindow::OnDestroy`):* Worker capture/render threads join deterministically inside `~WindowsAudioChannel()` before `FlutterWindow::OnDestroy` completes teardown.
   - *Hot-swap / profile switch mic leak:* `DesktopVoiceController` listens to `profileEpoch` and immediately releases WASAPI capture & closes `VoiceSessionClient` before reloading new Profile voice settings.
-- **Dependencies & Assumptions:** Windows 10/11 Desktop SDK (verified via `flutter build windows --debug --no-pub`), zero new `pubspec.yaml` dependencies, backend M4 Batch B merged into `develop` at `de25ada`.
-- **Required Permissions:** Phase 1 planning branch/commit/push on `feature/m4-voice-desktop-c`; after Human Owner plan approval, full Phase 2–3 autonomous implementation, verification, doc sync, push, and Draft PR on `feature/m4-voice-desktop-c`.
-- **Genuine Stop Conditions:** Material scope change (e.g., adding third-party pub audio plugins or altering backend API contracts), unapproved architecture changes, Windows C++ COM/WASAPI linker blocker, or unresolvable test failures.
+  - *Cross-platform CI compatibility (`ubuntu-latest` vs Windows) when locking `onnxruntime` / `espeakng-loader`:* Verify wheel availability on both Linux CI (Python `3.11.9`) and Windows local `backend\.venv` (Python `3.13`), and guard native `espeakng-loader` DLL lookup gracefully when system `espeak-ng` is absent in isolated unit tests.
+  - *Taglish acoustic accent boundary:* Adding `espeak-ng` + Tagalog G2P rules fixes misreading (`"city"` / Filipino phonetics), though Kokoro-82M weights remain American/British-voiced without native Tagalog acoustic weights (noted truthfully for user expectations).
+- **Dependencies & Assumptions:** Windows 10/11 Desktop SDK (verified via `flutter build windows --debug --no-pub`), zero new Dart `pubspec.yaml` dependencies, Python runtime additions (`onnxruntime`, `numpy`, `espeakng-loader`) locked in `backend/requirements.lock` so CI matches `backend\.venv`, backend M4 Batch B merged into `develop` at `de25ada`.
+- **Required Permissions:** Phase 1 planning updates & Slice 4 approval on `feature/m4-voice-desktop-c`; after Human Owner approval of Slice 4 plan, autonomous Phase 2–3 implementation, verification, doc sync, push, and PR update on `feature/m4-voice-desktop-c`.
+- **Genuine Stop Conditions:** Material scope change (e.g., altering DB schemas or adding third-party pub audio plugins), unapproved architecture changes, cross-platform Python wheel lock conflict in CI, or unresolvable test failures.

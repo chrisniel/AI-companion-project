@@ -304,3 +304,68 @@ def test_voice_manager_create_turn_vad_isolates_silero_state(monkeypatch):
     assert turn_a._session is shared_silero._session
     assert turn_a._state is not turn_b._state
     assert turn_a._context is not turn_b._context
+
+
+def test_tts_espeak_g2p_taglish_and_preprocessing():
+    from app.services.voice.tts import preprocess_text_for_tts, text_to_kokoro_ipa
+
+    cleaned = preprocess_text_for_tts(
+        "**Check** the [CPU guide](https://example.com) on GPU 🎉 `test` 100%"
+    )
+    assert "https://" not in cleaned
+    assert "🎉" not in cleaned
+    assert "**" not in cleaned
+    assert "`" not in cleaned
+    assert "C P U" in cleaned and "G P U" in cleaned
+
+    english_ipa = text_to_kokoro_ipa("Welcome to the city today.")
+    assert "kɪtj" not in english_ipa
+    assert "s" in english_ipa  # soft c in "city" -> /s.../
+
+    taglish_ipa = text_to_kokoro_ipa("Kamusta ka na? Magandang gabi sa Quezon City!")
+    assert "kæmʌstæ" not in taglish_ipa
+    assert "kɪtj" not in taglish_ipa
+    assert "ŋ" in taglish_ipa  # Magandang -> ...ŋ
+
+
+async def test_kokoro_synthesize_chunks_long_text_without_510_truncation():
+    from app.services.voice.tts import KokoroOnnxTtsProvider
+
+    class _FakeInput:
+        def __init__(self, name: str):
+            self.name = name
+
+    calls: list[int] = []
+
+    class _CountingSession:
+        def get_inputs(self):
+            return [_FakeInput("input_ids"), _FakeInput("style"), _FakeInput("speed")]
+
+        def run(self, _names, feed):
+            ids = feed["input_ids"]
+            token_len = len(ids[0])
+            assert token_len <= 512
+            calls.append(token_len)
+            return [[[0.1, -0.1, 0.2, -0.2] * 300]]  # 1200 samples per chunk
+
+    vocab = {"$": 0, " ": 16}
+    for idx, ch in enumerate("abcdefghijklmnopqrstuvwxyz.,!?ˈˌːɑɛiɔuŋɡɾɹəɪʊʌæʃʒθð ", start=20):
+        vocab.setdefault(ch, idx)
+
+    long_text = " ".join(
+        f"Sentence number {i} explains how local voice streaming stays responsive."
+        for i in range(1, 14)
+    )
+    assert len(long_text) > 700
+
+    kokoro = KokoroOnnxTtsProvider(
+        vocab=vocab,
+        voices={"af_nicole": [[0.1] * 256] * 512},
+        session=_CountingSession(),
+    )
+    res = await kokoro.synthesize(long_text, voice_id="af_nicole", speed=1.0)
+    assert res.wav_bytes[:4] == b"RIFF"
+    assert len(calls) >= 4
+    # Combined WAV holds multiple 1200-sample chunks (> 1200 * 2 bytes PCM payload)
+    assert len(res.wav_bytes) > 1200 * 2 * 3
+

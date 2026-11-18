@@ -30,22 +30,6 @@ import '../screens/settings_screen.dart';
 import '../screens/studio_screen.dart';
 import 'desktop_navigation_rail.dart';
 
-class OpenSettingsIntent extends Intent {
-  const OpenSettingsIntent();
-}
-
-class HideToTrayIntent extends Intent {
-  const HideToTrayIntent();
-}
-
-class ToggleLiveVoiceIntent extends Intent {
-  const ToggleLiveVoiceIntent();
-}
-
-class ToggleMuteAudioIntent extends Intent {
-  const ToggleMuteAudioIntent();
-}
-
 class DesktopShell extends StatefulWidget {
   const DesktopShell({
     super.key,
@@ -100,6 +84,9 @@ class _DesktopShellState extends State<DesktopShell> {
   bool _ownsVoiceController = false;
   String? _lastKnownToolProfileId;
   int _lastKnownVoiceProfileEpoch = 0;
+  bool _lastKnownVoiceConnected = false;
+  String? _lastKnownVoiceProfileId;
+  bool Function()? _chatHistoryDrawerCloser;
   DesktopToastAdapter? _toastAdapter;
   bool _ownsToastAdapter = false;
   bool _isBacklogDrawerOpen = false;
@@ -207,6 +194,9 @@ class _DesktopShellState extends State<DesktopShell> {
 
     _lastKnownToolProfileId = _resolveActiveProfileId();
     _lastKnownVoiceProfileEpoch = widget.chatController?.profileEpoch ?? 0;
+    _lastKnownVoiceConnected = widget.chatController?.isConnected ?? false;
+    _lastKnownVoiceProfileId = _lastKnownToolProfileId;
+    HardwareKeyboard.instance.addHandler(_handleShellHardwareKey);
     _toolPolicyController?.addListener(_handleToolPolicyChange);
     if (_toolPolicyController != null && widget.coordinator != null) {
       final toolCtrl = _toolPolicyController;
@@ -481,15 +471,99 @@ class _DesktopShellState extends State<DesktopShell> {
         unawaited(_toolPolicyController?.refreshKillSwitch());
       }
     }
+    final connected = widget.chatController?.isConnected ?? false;
     final voiceEpoch = widget.chatController?.profileEpoch;
     if (voiceEpoch != null && voiceEpoch != _lastKnownVoiceProfileEpoch) {
       _lastKnownVoiceProfileEpoch = voiceEpoch;
+      _lastKnownVoiceConnected = connected;
+      _lastKnownVoiceProfileId = effectiveProfileId;
       unawaited(_voiceController?.handleProfileEpochChanged(voiceEpoch));
+    } else if (connected &&
+        (!_lastKnownVoiceConnected ||
+            effectiveProfileId != _lastKnownVoiceProfileId ||
+            (_voiceController?.initialized == true &&
+                _voiceController?.voiceSettings == null &&
+                _voiceController?.isLoading == false))) {
+      _lastKnownVoiceConnected = connected;
+      _lastKnownVoiceProfileId = effectiveProfileId;
+      unawaited(_voiceController?.refreshBackendState());
+    } else {
+      _lastKnownVoiceConnected = connected;
+      _lastKnownVoiceProfileId = effectiveProfileId;
     }
+  }
+
+  bool _isEditableTextFocused() {
+    final ctx = FocusManager.instance.primaryFocus?.context;
+    if (ctx == null) return false;
+    return ctx.widget is EditableText ||
+        ctx.findAncestorWidgetOfExactType<EditableText>() != null;
+  }
+
+  bool _handleShellHardwareKey(KeyEvent event) {
+    if (!mounted || VoiceShortcutKeyMapper.isCaptureModalOpen) return false;
+    if (event is! KeyDownEvent) return false;
+
+    final hw = HardwareKeyboard.instance;
+    final isCtrlOnly = hw.isControlPressed &&
+        !hw.isAltPressed &&
+        !hw.isShiftPressed &&
+        !hw.isMetaPressed;
+    if (isCtrlOnly && event.logicalKey == LogicalKeyboardKey.comma) {
+      widget.controller.requestDestination(DesktopNavDestination.settings);
+      return true;
+    }
+
+    final vc = _voiceController;
+    if (vc != null) {
+      if (VoiceShortcutKeyMapper.matchesKeyEvent(
+        event,
+        vc.shortcuts.inAppToggle,
+      )) {
+        if (vc.isLiveVoiceActive) {
+          unawaited(vc.stopLiveVoice());
+        } else {
+          unawaited(widget.controller.requestDestination(DesktopNavDestination.chat));
+          unawaited(vc.startLiveVoice());
+        }
+        return true;
+      }
+      if (VoiceShortcutKeyMapper.matchesKeyEvent(
+        event,
+        vc.shortcuts.muteToggle,
+      )) {
+        unawaited(vc.setMuted(!vc.isAudioMuted));
+        return true;
+      }
+    }
+
+    if (event.logicalKey == LogicalKeyboardKey.escape &&
+        !hw.isControlPressed &&
+        !hw.isAltPressed &&
+        !hw.isShiftPressed &&
+        !hw.isMetaPressed) {
+      if (_isEditableTextFocused()) {
+        return false;
+      }
+      if (_isBacklogDrawerOpen) {
+        setState(() => _isBacklogDrawerOpen = false);
+        return true;
+      }
+      if (widget.controller.currentDestination == DesktopNavDestination.chat &&
+          (_chatHistoryDrawerCloser?.call() ?? false)) {
+        return true;
+      }
+      if (widget.coordinator?.isTrayAvailable == true) {
+        widget.coordinator?.hideToTray();
+        return true;
+      }
+    }
+    return false;
   }
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleShellHardwareKey);
     widget.controller.removeListener(_handleDestinationChange);
     widget.profileController?.removeListener(_handleProfileChange);
     widget.chatController?.removeListener(_handleProfileChange);
@@ -561,88 +635,17 @@ class _DesktopShellState extends State<DesktopShell> {
 
   @override
   Widget build(BuildContext context) {
-    final topListenables = <Listenable>[
-      widget.controller,
-      if (_voiceController != null) _voiceController,
-    ];
     return ListenableBuilder(
-      listenable: Listenable.merge(topListenables),
+      listenable: widget.controller,
       builder: (context, _) {
         _visitedDestinations.add(widget.controller.currentDestination);
         final currentDest = widget.controller.currentDestination;
         final ext = Theme.of(context).extension<CompanionThemeExtension>();
         final isDark = Theme.of(context).brightness == Brightness.dark;
 
-        final inAppVoiceActivator = _voiceController != null
-            ? VoiceShortcutKeyMapper.toSingleActivator(
-                _voiceController.shortcuts.inAppToggle,
-              )
-            : null;
-        final muteActivator = _voiceController != null
-            ? VoiceShortcutKeyMapper.toSingleActivator(
-                _voiceController.shortcuts.muteToggle,
-              )
-            : null;
-
-        final shortcuts = <ShortcutActivator, Intent>{
-          LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.comma):
-              const OpenSettingsIntent(),
-          LogicalKeySet(LogicalKeyboardKey.escape): const HideToTrayIntent(),
-          if (inAppVoiceActivator != null)
-            inAppVoiceActivator: const ToggleLiveVoiceIntent(),
-          if (muteActivator != null)
-            muteActivator: const ToggleMuteAudioIntent(),
-        };
-
-        final actions = <Type, Action<Intent>>{
-          OpenSettingsIntent: CallbackAction<OpenSettingsIntent>(
-            onInvoke: (_) {
-              widget.controller.requestDestination(DesktopNavDestination.settings);
-              return null;
-            },
-          ),
-          HideToTrayIntent: CallbackAction<HideToTrayIntent>(
-            onInvoke: (_) {
-              if (_isBacklogDrawerOpen) {
-                setState(() => _isBacklogDrawerOpen = false);
-                return null;
-              }
-              if (widget.coordinator?.isTrayAvailable == true) {
-                widget.coordinator?.hideToTray();
-              }
-              return null;
-            },
-          ),
-          ToggleLiveVoiceIntent: CallbackAction<ToggleLiveVoiceIntent>(
-            onInvoke: (_) {
-              final vc = _voiceController;
-              if (vc == null) return null;
-              if (vc.isLiveVoiceActive) {
-                unawaited(vc.stopLiveVoice());
-              } else {
-                unawaited(widget.controller.requestDestination(DesktopNavDestination.chat));
-                unawaited(vc.startLiveVoice());
-              }
-              return null;
-            },
-          ),
-          ToggleMuteAudioIntent: CallbackAction<ToggleMuteAudioIntent>(
-            onInvoke: (_) {
-              final vc = _voiceController;
-              if (vc == null) return null;
-              unawaited(vc.setMuted(!vc.isAudioMuted));
-              return null;
-            },
-          ),
-        };
-
-        return Shortcuts(
-          shortcuts: shortcuts,
-          child: Actions(
-            actions: actions,
-            child: Focus(
-              autofocus: true,
-              child: Scaffold(
+        return Focus(
+          autofocus: true,
+          child: Scaffold(
                 backgroundColor: ext?.appBg ??
                     (isDark ? CompanionColors.darkAppBg : CompanionColors.lightAppBg),
                 body: Stack(
@@ -831,8 +834,6 @@ class _DesktopShellState extends State<DesktopShell> {
                   ],
                 ),
               ),
-            ),
-          ),
         );
       },
     );
@@ -846,6 +847,8 @@ class _DesktopShellState extends State<DesktopShell> {
           controller: widget.chatController,
           toolPolicyController: _toolPolicyController,
           voiceController: _voiceController,
+          isActiveTab: widget.controller.currentDestination == DesktopNavDestination.chat,
+          onRegisterCloseHistoryDrawer: (closer) => _chatHistoryDrawerCloser = closer,
           onNavigateToSettings: () => widget.controller.requestDestination(DesktopNavDestination.settings),
         );
       case DesktopNavDestination.schedule:
@@ -974,76 +977,94 @@ class _DesktopShellState extends State<DesktopShell> {
                     ),
                   ),
                 if (voiceCtrl != null && voiceCtrl.isMicCapturing)
-                  Container(
-                    key: const Key('shell_mic_privacy_indicator'),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: (ext?.warning ?? CompanionColors.warning)
-                          .withValues(alpha: 0.16),
+                  Tooltip(
+                    message: 'Microphone is active — click to mute',
+                    child: InkWell(
+                      key: const Key('shell_mic_privacy_indicator'),
                       borderRadius: CompanionRadius.borderFull,
-                      border: Border.all(
-                        color: (ext?.warning ?? CompanionColors.warning)
-                            .withValues(alpha: 0.65),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
+                      onTap: () => unawaited(voiceCtrl.setMuted(true)),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
                           color: (ext?.warning ?? CompanionColors.warning)
-                              .withValues(alpha: 0.25),
-                          blurRadius: 8,
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.mic_rounded,
-                          size: 13,
-                          color: ext?.warning ?? CompanionColors.warning,
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          'Mic Active',
-                          style: CompanionTypography.caption.copyWith(
-                            color: ext?.warning ?? CompanionColors.warning,
-                            fontWeight: FontWeight.w700,
+                              .withValues(alpha: 0.16),
+                          borderRadius: CompanionRadius.borderFull,
+                          border: Border.all(
+                            color: (ext?.warning ?? CompanionColors.warning)
+                                .withValues(alpha: 0.65),
                           ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: (ext?.warning ?? CompanionColors.warning)
+                                  .withValues(alpha: 0.25),
+                              blurRadius: 8,
+                            ),
+                          ],
                         ),
-                      ],
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.mic_rounded,
+                              size: 13,
+                              color: ext?.warning ?? CompanionColors.warning,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              'Mic Active',
+                              style: CompanionTypography.caption.copyWith(
+                                color: ext?.warning ?? CompanionColors.warning,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   )
                 else if (voiceCtrl != null && voiceCtrl.isAudioMuted)
-                  Container(
-                    key: const Key('shell_mic_muted_indicator'),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: (ext?.textMuted ?? CompanionColors.lightTextMuted)
-                          .withValues(alpha: 0.12),
+                  Tooltip(
+                    message: 'Audio & mic muted — click to unmute',
+                    child: InkWell(
+                      key: const Key('shell_mic_muted_indicator'),
                       borderRadius: CompanionRadius.borderFull,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.mic_off_rounded,
-                          size: 13,
-                          color: ext?.textSecondary,
+                      onTap: () => unawaited(voiceCtrl.setMuted(false)),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
                         ),
-                        const SizedBox(width: 5),
-                        Text(
-                          'Audio Muted',
-                          style: CompanionTypography.caption.copyWith(
-                            color: ext?.textSecondary,
-                            fontWeight: FontWeight.w600,
+                        decoration: BoxDecoration(
+                          color: (ext?.warning ?? CompanionColors.warning)
+                              .withValues(alpha: 0.12),
+                          borderRadius: CompanionRadius.borderFull,
+                          border: Border.all(
+                            color: (ext?.warning ?? CompanionColors.warning)
+                                .withValues(alpha: 0.45),
                           ),
                         ),
-                      ],
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.mic_off_rounded,
+                              size: 13,
+                              color: ext?.warning ?? CompanionColors.warning,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              'Audio Muted · Unmute',
+                              style: CompanionTypography.caption.copyWith(
+                                color: ext?.warning ?? CompanionColors.warning,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
               ],

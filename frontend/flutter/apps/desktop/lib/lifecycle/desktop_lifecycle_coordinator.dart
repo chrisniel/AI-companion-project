@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:companion_core/companion_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -111,7 +113,12 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
     if (_isTrayAvailable && !_isDisposed) {
       try {
         await trayAdapter.setContextMenu(
-          buildTrayContextMenu(state, null, _globalKillSwitchActive),
+          buildTrayContextMenu(
+            state,
+            null,
+            _globalKillSwitchActive,
+            _audioMuted,
+          ),
         );
       } catch (e) {
         debugPrint('DesktopLifecycleCoordinator: Error updating tray context menu: $e');
@@ -385,6 +392,12 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
   void onTrayIconMouseDown() {
     if (_isDisposed) return;
     restoreAndFocusWindow();
+  }
+
+  @override
+  void onTrayIconRightMouseDown() {
+    if (_isDisposed || !_isTrayAvailable) return;
+    unawaited(trayAdapter.popUpContextMenu());
   }
 
   @override

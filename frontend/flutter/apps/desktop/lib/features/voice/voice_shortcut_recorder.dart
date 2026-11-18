@@ -6,6 +6,8 @@ import '../../platform/desktop_audio_adapter.dart';
 
 /// Maps between Flutter keyboard events/activators and Win32 virtual-key bindings.
 abstract final class VoiceShortcutKeyMapper {
+  static bool isCaptureModalOpen = false;
+
   static LogicalKeyboardKey? virtualKeyToLogical(int vk) {
     if (vk >= 0x41 && vk <= 0x5A) {
       return LogicalKeyboardKey(LogicalKeyboardKey.keyA.keyId + (vk - 0x41));
@@ -288,11 +290,13 @@ class _ShortcutCaptureDialogState extends State<_ShortcutCaptureDialog> {
   @override
   void initState() {
     super.initState();
+    VoiceShortcutKeyMapper.isCaptureModalOpen = true;
     _captured = widget.initialBinding;
   }
 
   @override
   void dispose() {
+    VoiceShortcutKeyMapper.isCaptureModalOpen = false;
     _focusNode.dispose();
     super.dispose();
   }

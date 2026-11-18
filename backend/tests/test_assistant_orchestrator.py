@@ -1193,3 +1193,119 @@ async def test_concurrent_interleaving_streams_retain_independent_finish_reasons
     finally:
         provider.generate_stream = orig_generate_stream
         await engine.dispose()
+
+
+def test_unicode_emoji_token_estimation():
+    """Verify multi-byte/emoji text weighs more than len(s)//4 while keeping ASCII baseline."""
+    assert _estimate_tokens("a" * 40) == 10
+    emoji_text = "😀" * 20
+    assert _estimate_tokens(emoji_text) >= 30
+
+
+def test_openai_tool_definitions_compacted_and_valid_regex():
+    """Verify OpenAI tool schemas strip title metadata, avoid \\d regex escape, and estimate >= 1400 tokens."""
+    from app.services.tools.registry import (
+        estimate_openai_tools_tokens,
+        get_openai_tool_definitions,
+    )
+
+    tool_defs = get_openai_tool_definitions()
+    serialized = json.dumps(tool_defs, separators=(",", ":"))
+    for tool in tool_defs:
+        params = tool["function"]["parameters"]
+        assert "title" not in params
+        for prop_schema in params.get("properties", {}).values():
+            assert "title" not in prop_schema
+
+    update_task_tool = next(t for t in tool_defs if t["function"]["name"] == "update_task")
+    assert "title" in update_task_tool["function"]["parameters"]["properties"]
+
+    alarm_tool = next(t for t in tool_defs if t["function"]["name"] == "create_alarm")
+    time_schema = alarm_tool["function"]["parameters"]["properties"]["time_of_day"]
+    assert "\\d" not in time_schema.get("pattern", "")
+    assert "[0-9]" in time_schema.get("pattern", "")
+
+    assert estimate_openai_tools_tokens(tool_defs) >= 1400
+
+
+def test_build_context_reserves_tool_and_user_tokens_within_4096():
+    """Verify _build_context includes tool_tokens and user_text so 4096-ctx requests never overflow."""
+    from app.services.tools.registry import (
+        estimate_openai_tools_tokens,
+        get_openai_tool_definitions,
+    )
+
+    tool_tokens = estimate_openai_tools_tokens(get_openai_tool_definitions())
+    long_history = [
+        Message(
+            profile_id="p-ctx",
+            sender="user" if i % 2 == 0 else "assistant",
+            content=f"Turn {i}: " + ("long companion conversation message " * 12),
+            status="completed",
+            sequence_no=i + 1,
+        )
+        for i in range(15)
+    ]
+    user_text = "Can you remind me what we discussed earlier today?"
+    generation_reserve = 512
+
+    assembled = _build_context(
+        history=long_history,
+        system_prompt="You are a warm local AI companion.",
+        user_text=user_text,
+        memories=[],
+        context_capacity=4096,
+        generation_reserve=generation_reserve,
+        tool_tokens=tool_tokens,
+    )
+
+    assembled_tokens = sum(_estimate_tokens(m.content) for m in assembled)
+    assert assembled_tokens + tool_tokens + generation_reserve <= 4096
+    assert assembled[-1].content == user_text
+
+
+@pytest.mark.anyio
+async def test_auto_compaction_steps_down_keep_recent_when_under_8_long_messages(
+    test_session: AsyncSession,
+    monkeypatch,
+):
+    """Auto-compaction steps down effective_keep when <= 8 long uncompacted messages still overflow context."""
+    from app.services.assistant.compactor import compact_conversation
+    from app.services.llm.mock import MockLLMProvider
+
+    profile_id = (await session_for_owner(test_session, "test-compact-small")).profile_id
+    conv = Conversation(profile_id=profile_id, owner_id="test-compact-small", title="Small Verbose Conv")
+    test_session.add(conv)
+    await test_session.flush()
+
+    monkeypatch.setattr(settings, "CONTEXT_COMPACTION_KEEP_RECENT_MESSAGES", 8)
+    monkeypatch.setattr(settings, "CONTEXT_COMPACTION_MIN_MESSAGES", 4)
+
+    for seq in range(1, 7):
+        test_session.add(
+            Message(
+                profile_id=profile_id,
+                conversation_id=conv.id,
+                sender="user" if seq % 2 == 1 else "assistant",
+                content=f"Verbose turn {seq}: " + ("detailed context block " * 30),
+                status="completed",
+                sequence_no=seq,
+            )
+        )
+    await test_session.commit()
+
+    provider = MockLLMProvider(default_model="mock-test")
+    await provider.load_model()
+
+    result = await compact_conversation(
+        db=test_session,
+        conversation_id=conv.id,
+        profile_id=profile_id,
+        provider=provider,
+        force=False,
+        trigger="auto",
+    )
+    assert result.compacted is True
+    assert result.summary is not None
+    assert result.summary.to_sequence_no < 6
+

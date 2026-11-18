@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:companion_api/companion_api.dart';
 import 'package:flutter/foundation.dart';
@@ -86,7 +87,10 @@ class DesktopVoiceController extends ChangeNotifier {
   ];
 
   final List<int> _dictationPcmBuffer = <int>[];
+  final ValueNotifier<double> _micRmsNotifier = ValueNotifier<double>(0.0);
   double _micRmsLevel = 0.0;
+  bool _isTestingMic = false;
+  Timer? _speakCompletionTimer;
   int _playbackGeneration = 0;
   int _profileEpoch = 0;
   int? _activeTurnId;
@@ -114,7 +118,9 @@ class DesktopVoiceController extends ChangeNotifier {
   bool get isMicCapturing =>
       _audioAdapter.isCapturing && !_hardwarePrefs.audioMuted;
   bool get isAudioMuted => _hardwarePrefs.audioMuted;
+  bool get isTestingMic => _isTestingMic;
   double get micRmsLevel => _micRmsLevel;
+  ValueListenable<double> get micRmsListenable => _micRmsNotifier;
   int get playbackGeneration => _playbackGeneration;
   int get profileEpoch => _profileEpoch;
   int? get activeTurnId => _activeTurnId;
@@ -241,7 +247,49 @@ class DesktopVoiceController extends ChangeNotifier {
   Future<void> selectInputDevice(String deviceId) async {
     _hardwarePrefs = _hardwarePrefs.copyWith(selectedMicDeviceId: deviceId);
     await _effectiveSettingsForDisk?.writeVoiceHardwarePrefs(_hardwarePrefs);
+    if ((_isTestingMic || _phase == VoiceSessionPhase.recordingDictation || isLiveVoiceActive) &&
+        !isAudioMuted) {
+      await _audioAdapter.startCapture(deviceId: deviceId);
+    }
     notifyListeners();
+  }
+
+  void clearError() {
+    if (_errorMessage != null) {
+      _errorMessage = null;
+      notifyListeners();
+    }
+  }
+
+  Future<void> startMicTest() async {
+    if (_isDisposed || _isTestingMic) return;
+    if (isAudioMuted) {
+      _errorMessage = 'Audio/Mic is muted. Unmute first to test microphone.';
+      notifyListeners();
+      return;
+    }
+    if (_phase != VoiceSessionPhase.idle) return;
+    _isTestingMic = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      await _audioAdapter.startCapture(
+        deviceId: _hardwarePrefs.selectedMicDeviceId,
+      );
+    } catch (e) {
+      _isTestingMic = false;
+      _errorMessage = 'Failed to open Windows microphone: $e';
+      notifyListeners();
+    }
+  }
+
+  Future<void> stopMicTest() async {
+    if (!_isTestingMic) return;
+    _isTestingMic = false;
+    _micRmsLevel = 0.0;
+    _micRmsNotifier.value = 0.0;
+    await _audioAdapter.stopCapture();
+    if (!_isDisposed) notifyListeners();
   }
 
   Future<void> selectOutputDevice(String deviceId) async {
@@ -289,15 +337,23 @@ class DesktopVoiceController extends ChangeNotifier {
     _onAudioMutedChanged?.call(muted);
 
     if (muted) {
+      _speakCompletionTimer?.cancel();
+      _speakCompletionTimer = null;
       _playbackGeneration++;
       await _audioAdapter.flushPlayback(_playbackGeneration);
       _speakingMessageId = null;
-      if (isLiveVoiceActive) {
+      if (_isTestingMic) {
+        _isTestingMic = false;
+        await _audioAdapter.stopCapture();
+        _micRmsLevel = 0.0;
+        _micRmsNotifier.value = 0.0;
+      } else if (isLiveVoiceActive) {
         await stopLiveVoice();
       } else if (_phase == VoiceSessionPhase.recordingDictation) {
         await _audioAdapter.stopCapture();
         _dictationPcmBuffer.clear();
         _micRmsLevel = 0.0;
+        _micRmsNotifier.value = 0.0;
         _phase = VoiceSessionPhase.idle;
       }
     }
@@ -312,13 +368,20 @@ class DesktopVoiceController extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+    if (_isTestingMic) {
+      await stopMicTest();
+    }
     if (isLiveVoiceActive) {
       await stopLiveVoice();
+    }
+    if (_isTestingMic) {
+      await stopMicTest();
     }
     await stopSpeaking();
     _errorMessage = null;
     _dictationPcmBuffer.clear();
     _micRmsLevel = 0.0;
+    _micRmsNotifier.value = 0.0;
     _phase = VoiceSessionPhase.recordingDictation;
     notifyListeners();
     try {
@@ -339,6 +402,7 @@ class DesktopVoiceController extends ChangeNotifier {
     if (_phase != VoiceSessionPhase.recordingDictation) return null;
     await _audioAdapter.stopCapture();
     _micRmsLevel = 0.0;
+    _micRmsNotifier.value = 0.0;
     final bytes = Uint8List.fromList(_dictationPcmBuffer);
     _dictationPcmBuffer.clear();
 
@@ -375,6 +439,27 @@ class DesktopVoiceController extends ChangeNotifier {
     }
   }
 
+  static List<String> _splitSpeakSentences(String rawText) {
+    final trimmed = rawText.trim();
+    final bounded = trimmed.length > 2000 ? trimmed.substring(0, 2000) : trimmed;
+    final parts = bounded
+        .split(RegExp(r'(?<=[.!?])\s+|\n+'))
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (parts.length <= 1) return parts.isEmpty ? [bounded] : parts;
+
+    final merged = <String>[];
+    for (final part in parts) {
+      if (merged.isNotEmpty && merged.last.length < 24) {
+        merged[merged.length - 1] = '${merged.last} $part';
+      } else {
+        merged.add(part);
+      }
+    }
+    return merged;
+  }
+
   /// Reads aloud a specific chat message (or toggles stop if already speaking it).
   Future<void> speakMessage({
     required String messageId,
@@ -392,6 +477,8 @@ class DesktopVoiceController extends ChangeNotifier {
       return;
     }
 
+    _speakCompletionTimer?.cancel();
+    _speakCompletionTimer = null;
     final gen = ++_playbackGeneration;
     await _audioAdapter.flushPlayback(gen);
     _speakingMessageId = messageId;
@@ -399,27 +486,57 @@ class DesktopVoiceController extends ChangeNotifier {
     notifyListeners();
 
     final epochAtStart = _profileEpoch;
+    final chunks = _splitSpeakSentences(text);
+    int remainingPlaybackMs = 0;
     try {
-      final res = await _clientProvider().synthesizeSpeech(
-        VoiceSynthesizeRequest(
-          text: text.trim().length > 2000 ? text.trim().substring(0, 2000) : text.trim(),
-          voiceId: overrideVoiceId,
-          speed: _voiceSettings?.ttsSpeed,
-        ),
-      );
-      if (_isDisposed ||
-          epochAtStart != _profileEpoch ||
-          gen != _playbackGeneration ||
-          isAudioMuted) {
-        return;
+      for (final chunk in chunks) {
+        if (_isDisposed ||
+            epochAtStart != _profileEpoch ||
+            gen != _playbackGeneration ||
+            isAudioMuted ||
+            _speakingMessageId != messageId) {
+          return;
+        }
+        final synthSw = Stopwatch()..start();
+        final res = await _clientProvider().synthesizeSpeech(
+          VoiceSynthesizeRequest(
+            text: chunk,
+            voiceId: overrideVoiceId,
+            speed: _voiceSettings?.ttsSpeed,
+          ),
+        );
+        synthSw.stop();
+        if (_isDisposed ||
+            epochAtStart != _profileEpoch ||
+            gen != _playbackGeneration ||
+            isAudioMuted ||
+            _speakingMessageId != messageId) {
+          return;
+        }
+        remainingPlaybackMs =
+            math.max(0, remainingPlaybackMs - synthSw.elapsedMilliseconds) +
+                math.max(0, res.durationMs);
+        final wavBytes = base64Decode(res.audioBase64);
+        await _audioAdapter.playAudio(
+          wavBytes,
+          deviceId: _hardwarePrefs.selectedSpeakerDeviceId,
+          sampleRate: res.sampleRate,
+          generation: gen,
+        );
       }
-      final wavBytes = base64Decode(res.audioBase64);
-      await _audioAdapter.playAudio(
-        wavBytes,
-        deviceId: _hardwarePrefs.selectedSpeakerDeviceId,
-        sampleRate: res.sampleRate,
-        generation: gen,
-      );
+      if (!_isDisposed &&
+          gen == _playbackGeneration &&
+          _speakingMessageId == messageId) {
+        final clearDelayMs = math.max(1200, remainingPlaybackMs + 400);
+        _speakCompletionTimer = Timer(Duration(milliseconds: clearDelayMs), () {
+          if (!_isDisposed &&
+              _playbackGeneration == gen &&
+              _speakingMessageId == messageId) {
+            _speakingMessageId = null;
+            notifyListeners();
+          }
+        });
+      }
     } catch (e) {
       if (!_isDisposed && gen == _playbackGeneration) {
         _speakingMessageId = null;
@@ -439,6 +556,8 @@ class DesktopVoiceController extends ChangeNotifier {
   }
 
   Future<void> stopSpeaking() async {
+    _speakCompletionTimer?.cancel();
+    _speakCompletionTimer = null;
     _playbackGeneration++;
     _speakingMessageId = null;
     await _audioAdapter.flushPlayback(_playbackGeneration);
@@ -475,6 +594,9 @@ class DesktopVoiceController extends ChangeNotifier {
     }
     if (isLiveVoiceActive) return;
 
+    if (_isTestingMic) {
+      await stopMicTest();
+    }
     await stopSpeaking();
     _errorMessage = null;
     _liveUserTranscript = null;
@@ -561,6 +683,7 @@ class DesktopVoiceController extends ChangeNotifier {
   Future<void> stopLiveVoice() async {
     _phase = VoiceSessionPhase.idle;
     _micRmsLevel = 0.0;
+    _micRmsNotifier.value = 0.0;
     if (!_isDisposed) notifyListeners();
     await _teardownLiveSessionOnly();
     if (!_isDisposed) notifyListeners();
@@ -570,7 +693,10 @@ class DesktopVoiceController extends ChangeNotifier {
   Future<void> handleProfileEpochChanged(int newEpoch) async {
     if (_isDisposed || newEpoch == _profileEpoch) return;
     _profileEpoch = newEpoch;
+    _speakCompletionTimer?.cancel();
+    _speakCompletionTimer = null;
     _playbackGeneration++;
+    _isTestingMic = false;
     await _teardownLiveSessionOnly();
     _dictationPcmBuffer.clear();
     _speakingMessageId = null;
@@ -581,6 +707,7 @@ class DesktopVoiceController extends ChangeNotifier {
     _voiceSettings = null;
     _voiceCatalog = null;
     _micRmsLevel = 0.0;
+    _micRmsNotifier.value = 0.0;
     _phase = VoiceSessionPhase.idle;
     notifyListeners();
 
@@ -609,19 +736,18 @@ class DesktopVoiceController extends ChangeNotifier {
   void _handleCaptureFrame(CapturedAudioFrame frame) {
     if (_isDisposed || _hardwarePrefs.audioMuted) return;
     _micRmsLevel = frame.rms;
+    _micRmsNotifier.value = frame.rms;
 
     if (_phase == VoiceSessionPhase.recordingDictation) {
       if (_dictationPcmBuffer.length + frame.pcm16Bytes.length <=
           kMaxTranscribePcmBytes) {
         _dictationPcmBuffer.addAll(frame.pcm16Bytes);
       }
-      notifyListeners();
       return;
     }
 
     if (isLiveVoiceActive && _voiceSession != null) {
       _voiceSession!.sendAudioChunk(frame.pcm16Bytes, sampleRate: 16000);
-      notifyListeners();
     }
   }
 
@@ -713,6 +839,9 @@ class DesktopVoiceController extends ChangeNotifier {
   void dispose() {
     if (_isDisposed) return;
     _isDisposed = true;
+    _speakCompletionTimer?.cancel();
+    _speakCompletionTimer = null;
+    _micRmsNotifier.dispose();
     unawaited(_captureSub?.cancel());
     unawaited(_hotkeySub?.cancel());
     unawaited(_teardownLiveSessionOnly());

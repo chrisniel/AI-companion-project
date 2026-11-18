@@ -66,6 +66,8 @@ class _NoOpTrayAdapter implements DesktopTrayAdapter {
   @override
   Future<void> setContextMenu(Menu menu) async {}
   @override
+  Future<void> popUpContextMenu() async {}
+  @override
   Future<void> setIcon(String iconPath) async {}
   @override
   Future<void> setToolTip(String toolTip) async {}

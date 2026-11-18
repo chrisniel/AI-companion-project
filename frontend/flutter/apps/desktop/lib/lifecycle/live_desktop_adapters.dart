@@ -96,6 +96,9 @@ class LiveDesktopTrayAdapter implements DesktopTrayAdapter {
   Future<void> setContextMenu(Menu menu) => trayManager.setContextMenu(menu);
 
   @override
+  Future<void> popUpContextMenu() => trayManager.popUpContextMenu();
+
+  @override
   Future<void> destroy() => trayManager.destroy();
 
   @override

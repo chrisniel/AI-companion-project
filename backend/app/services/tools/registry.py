@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -112,7 +113,7 @@ class CreateReminderArgs(_StrictToolArgs):
 
 class CreateAlarmArgs(_StrictToolArgs):
     label: str = Field(..., min_length=1, max_length=255)
-    time_of_day: str = Field(..., pattern=r"^([01]\d|2[0-3]):([0-5]\d)$")
+    time_of_day: str = Field(..., pattern=r"^([01][0-9]|2[0-3]):([0-5][0-9])$")
     recurrence_days: Optional[list[int]] = None
     timezone: Optional[str] = Field(default=None, max_length=64)
     bypass_quiet_hours: bool = True
@@ -258,8 +259,45 @@ TOOL_REGISTRY: dict[str, ToolSpec] = {
 }
 
 
+def _compact_json_schema(node: Any) -> Any:
+    """Strip Pydantic title metadata and flatten nullable anyOf unions for tight LLM contexts."""
+    if isinstance(node, list):
+        return [_compact_json_schema(item) for item in node]
+    if not isinstance(node, dict):
+        return node
+
+    any_of = node.get("anyOf")
+    if isinstance(any_of, list) and len(any_of) == 2 and {"type": "null"} in any_of:
+        non_null = [item for item in any_of if item != {"type": "null"}]
+        if len(non_null) == 1 and isinstance(non_null[0], dict):
+            merged = dict(non_null[0])
+            for key, value in node.items():
+                if key in ("anyOf", "title"):
+                    continue
+                if key == "default" and value is None:
+                    continue
+                merged[key] = value
+            return _compact_json_schema(merged)
+
+    compacted: dict[str, Any] = {}
+    for key, value in node.items():
+        if key == "title":
+            continue
+        if key == "default" and value is None:
+            continue
+        if key == "properties" and isinstance(value, dict):
+            # Property names like "title" belong to tool argument schemas and must be preserved.
+            compacted["properties"] = {
+                prop_name: _compact_json_schema(prop_schema)
+                for prop_name, prop_schema in value.items()
+            }
+            continue
+        compacted[key] = _compact_json_schema(value)
+    return compacted
+
+
 def get_openai_tool_definitions() -> list[dict[str, Any]]:
-    """Return OpenAI-compatible JSON Schema tool descriptors for LLM inference."""
+    """Return compacted OpenAI-compatible JSON Schema tool descriptors for LLM inference."""
     definitions: list[dict[str, Any]] = []
     for spec in TOOL_REGISTRY.values():
         definitions.append(
@@ -268,8 +306,18 @@ def get_openai_tool_definitions() -> list[dict[str, Any]]:
                 "function": {
                     "name": spec.name,
                     "description": spec.description,
-                    "parameters": spec.args_model.model_json_schema(),
+                    "parameters": _compact_json_schema(spec.args_model.model_json_schema()),
                 },
             }
         )
     return definitions
+
+
+def estimate_openai_tools_tokens(tools: Optional[list[dict[str, Any]]] = None) -> int:
+    """Estimate conservative prompt tokens consumed by OpenAI tool schemas in chat templates."""
+    payload = tools if tools is not None else get_openai_tool_definitions()
+    if not payload:
+        return 0
+    raw = json.dumps(payload, separators=(",", ":"))
+    # Account for JSON punctuation tokenization density plus chat-template XML wrapper overhead.
+    return max(1, len(raw) // 3) + 250

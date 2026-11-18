@@ -23,7 +23,6 @@ class LiveVoiceStagePanel extends StatelessWidget {
       builder: (context, _) {
         final phase = controller.phase;
         final muted = controller.isAudioMuted;
-        final rms = muted ? 0.0 : controller.micRmsLevel.clamp(0.0, 1.0);
         final phaseColor = _phaseColor(ext, phase, muted);
         final phaseLabel = _phaseLabel(phase, muted);
 
@@ -42,162 +41,168 @@ class LiveVoiceStagePanel extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  children: [
-                    // Reactive Companion Voice Orb
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 120),
-                      width: 44 + (rms * 10),
-                      height: 44 + (rms * 10),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          colors: [
-                            phaseColor.withValues(alpha: 0.9),
-                            phaseColor.withValues(alpha: 0.25),
-                          ],
-                        ),
-                        border: Border.all(
-                          color: phaseColor.withValues(alpha: 0.8),
-                          width: 1.5,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: phaseColor.withValues(alpha: 0.28 + rms * 0.25),
-                            blurRadius: 12 + (rms * 10),
-                            spreadRadius: 1,
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        _phaseIcon(phase, muted),
-                        size: 22,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(width: CompanionSpacing.md),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  companionName?.trim().isNotEmpty == true
-                                      ? '${companionName!.trim()} · Live Voice'
-                                      : 'Live Voice Session',
-                                  style: CompanionTypography.titleSmall.copyWith(
-                                    color: ext?.textPrimary,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: CompanionSpacing.sm),
-                              Container(
-                                key: const ValueKey('live_voice_phase_badge'),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: phaseColor.withValues(alpha: 0.16),
-                                  borderRadius: CompanionRadius.borderFull,
-                                  border: Border.all(
-                                    color: phaseColor.withValues(alpha: 0.45),
-                                  ),
-                                ),
-                                child: Text(
-                                  phaseLabel,
-                                  style: CompanionTypography.caption.copyWith(
-                                    color: phaseColor,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
+                ValueListenableBuilder<double>(
+                  valueListenable: controller.micRmsListenable,
+                  builder: (context, rawRms, _) {
+                    final rms = muted ? 0.0 : rawRms.clamp(0.0, 1.0);
+                    return Row(
+                      children: [
+                        // Reactive Companion Voice Orb
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 120),
+                          width: 44 + (rms * 10),
+                          height: 44 + (rms * 10),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: RadialGradient(
+                              colors: [
+                                phaseColor.withValues(alpha: 0.9),
+                                phaseColor.withValues(alpha: 0.25),
+                              ],
+                            ),
+                            border: Border.all(
+                              color: phaseColor.withValues(alpha: 0.8),
+                              width: 1.5,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: phaseColor.withValues(alpha: 0.28 + rms * 0.25),
+                                blurRadius: 12 + (rms * 10),
+                                spreadRadius: 1,
                               ),
                             ],
                           ),
-                          const SizedBox(height: 6),
-                          Row(
+                          child: Icon(
+                            _phaseIcon(phase, muted),
+                            size: 22,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: CompanionSpacing.md),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(
-                                muted ? Icons.mic_off_rounded : Icons.graphic_eq_rounded,
-                                size: 14,
-                                color: ext?.textSecondary,
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: ClipRRect(
-                                  borderRadius: CompanionRadius.borderFull,
-                                  child: LinearProgressIndicator(
-                                    key: const ValueKey('live_voice_rms_meter'),
-                                    value: rms,
-                                    minHeight: 5,
-                                    backgroundColor:
-                                        (ext?.surfaceElevated ?? Colors.black26)
-                                            .withValues(alpha: 0.55),
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      muted
-                                          ? (ext?.warning ?? Colors.amber)
-                                          : phaseColor,
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      companionName?.trim().isNotEmpty == true
+                                          ? '${companionName!.trim()} · Live Voice'
+                                          : 'Live Voice Session',
+                                      style: CompanionTypography.titleSmall.copyWith(
+                                        color: ext?.textPrimary,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                ),
+                                  const SizedBox(width: CompanionSpacing.sm),
+                                  Container(
+                                    key: const ValueKey('live_voice_phase_badge'),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: phaseColor.withValues(alpha: 0.16),
+                                      borderRadius: CompanionRadius.borderFull,
+                                      border: Border.all(
+                                        color: phaseColor.withValues(alpha: 0.45),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      phaseLabel,
+                                      style: CompanionTypography.caption.copyWith(
+                                        color: phaseColor,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Icon(
+                                    muted ? Icons.mic_off_rounded : Icons.graphic_eq_rounded,
+                                    size: 14,
+                                    color: ext?.textSecondary,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: ClipRRect(
+                                      borderRadius: CompanionRadius.borderFull,
+                                      child: LinearProgressIndicator(
+                                        key: const ValueKey('live_voice_rms_meter'),
+                                        value: rms,
+                                        minHeight: 5,
+                                        backgroundColor:
+                                            (ext?.surfaceElevated ?? Colors.black26)
+                                                .withValues(alpha: 0.55),
+                                        valueColor: AlwaysStoppedAnimation<Color>(
+                                          muted
+                                              ? (ext?.warning ?? Colors.amber)
+                                              : phaseColor,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: CompanionSpacing.sm),
-                    Wrap(
-                      spacing: CompanionSpacing.xs,
-                      runSpacing: CompanionSpacing.xs,
-                      children: [
-                        NeumorphicButton(
-                          key: const ValueKey('live_voice_mute_button'),
-                          size: NeumorphicButtonSize.sm,
-                          selected: muted,
-                          icon: Icon(
-                            muted ? Icons.mic_off_rounded : Icons.mic_rounded,
-                            color: muted ? ext?.warning : null,
-                          ),
-                          tooltip:
-                              '${muted ? 'Unmute' : 'Mute'} microphone (${controller.shortcuts.muteToggle.label})',
-                          onPressed: () => controller.setMuted(!muted),
-                          child: Text(muted ? 'Unmute Mic' : 'Mute Mic'),
                         ),
-                        NeumorphicButton(
-                          key: const ValueKey('live_voice_interrupt_button'),
-                          size: NeumorphicButtonSize.sm,
-                          icon: const Icon(Icons.pan_tool_alt_rounded),
-                          tooltip: 'Interrupt reply (Space when composer unfocused)',
-                          onPressed: phase == VoiceSessionPhase.speaking ||
-                                  phase == VoiceSessionPhase.thinking
-                              ? controller.interruptBargeIn
-                              : null,
-                          child: const Text('Interrupt'),
-                        ),
-                        NeumorphicButton(
-                          key: const ValueKey('live_voice_end_button'),
-                          size: NeumorphicButtonSize.sm,
-                          icon: Icon(
-                            Icons.call_end_rounded,
-                            color: ext?.danger ?? Colors.redAccent,
-                          ),
-                          tooltip:
-                              'End Live Voice session (${controller.shortcuts.inAppToggle.label})',
-                          onPressed: controller.stopLiveVoice,
-                          child: Text(
-                            'End Voice',
-                            style: TextStyle(
-                              color: ext?.danger ?? Colors.redAccent,
+                        const SizedBox(width: CompanionSpacing.sm),
+                        Wrap(
+                          spacing: CompanionSpacing.xs,
+                          runSpacing: CompanionSpacing.xs,
+                          children: [
+                            NeumorphicButton(
+                              key: const ValueKey('live_voice_mute_button'),
+                              size: NeumorphicButtonSize.sm,
+                              selected: muted,
+                              icon: Icon(
+                                muted ? Icons.mic_off_rounded : Icons.mic_rounded,
+                                color: muted ? ext?.warning : null,
+                              ),
+                              tooltip:
+                                  '${muted ? 'Unmute' : 'Mute'} microphone (${controller.shortcuts.muteToggle.label})',
+                              onPressed: () => controller.setMuted(!muted),
+                              child: Text(muted ? 'Unmute Mic' : 'Mute Mic'),
                             ),
-                          ),
+                            NeumorphicButton(
+                              key: const ValueKey('live_voice_interrupt_button'),
+                              size: NeumorphicButtonSize.sm,
+                              icon: const Icon(Icons.pan_tool_alt_rounded),
+                              tooltip: 'Interrupt reply (Space when composer unfocused)',
+                              onPressed: phase == VoiceSessionPhase.speaking ||
+                                      phase == VoiceSessionPhase.thinking
+                                  ? controller.interruptBargeIn
+                                  : null,
+                              child: const Text('Interrupt'),
+                            ),
+                            NeumorphicButton(
+                              key: const ValueKey('live_voice_end_button'),
+                              size: NeumorphicButtonSize.sm,
+                              icon: Icon(
+                                Icons.call_end_rounded,
+                                color: ext?.danger ?? Colors.redAccent,
+                              ),
+                              tooltip:
+                                  'End Live Voice session (${controller.shortcuts.inAppToggle.label})',
+                              onPressed: controller.stopLiveVoice,
+                              child: Text(
+                                'End Voice',
+                                style: TextStyle(
+                                  color: ext?.danger ?? Colors.redAccent,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
-                    ),
-                  ],
+                    );
+                  },
                 ),
                 if (controller.activeToolHint != null) ...[
                   const SizedBox(height: CompanionSpacing.xs),

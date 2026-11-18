@@ -643,9 +643,95 @@ void main() {
       expect(find.byKey(const Key('shell_mic_privacy_indicator')), findsNothing);
       expect(find.byKey(const Key('shell_mic_muted_indicator')), findsOneWidget);
 
+      // Clicking shell_mic_muted_indicator or chat_header_mute_toggle unmutes cleanly in GUI
+      await tester.tap(find.byKey(const Key('shell_mic_muted_indicator')));
+      await tester.pumpAndSettle();
+      expect(voice.isAudioMuted, isFalse);
+
+      // Tapping Chat header mute toggle mutes cleanly; voice error banner appears outside Live Voice with Unmute
+      await tester.tap(find.byKey(const Key('chat_header_mute_toggle')));
+      await tester.pumpAndSettle();
+      expect(voice.isAudioMuted, isTrue);
+      await voice.startDictation();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('chat_voice_error_banner')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('chat_voice_error_unmute')));
+      await tester.pumpAndSettle();
+      expect(voice.isAudioMuted, isFalse);
+
       voice.dispose();
       chat.dispose();
       await coordinator.dispose();
     });
+
+    testWidgets(
+      'Cold launch refreshes voice settings once backend runtime connects & Settings Test Mic toggles capture',
+      timeout: const Timeout(Duration(seconds: 10)),
+      (tester) async {
+        setupViewport(tester);
+        var backendUp = false;
+        final audio = _TestVoiceAudioAdapter();
+        final store = InMemoryCredentialStore()..writeToken('sess-tok');
+        final client = CompanionClient(
+          baseUrl: 'http://127.0.0.1:8000',
+          sessionStore: store,
+          httpClient: MockClient((req) async {
+            if (!backendUp) {
+              return http.Response('Service booting', 503);
+            }
+            if (req.url.path == '/api/v1/health') {
+              return http.Response(jsonEncode({'status': 'healthy'}), 200);
+            }
+            if (req.url.path == '/api/v1/auth/verify') {
+              return http.Response(jsonEncode({'authenticated': true, 'profile_id': 'p1'}), 200);
+            }
+            if (req.url.path == '/api/v1/voice/status') {
+              return http.Response(jsonEncode({'stt_available': true, 'vad_available': true, 'tts_available': true}), 200);
+            }
+            if (req.url.path == '/api/v1/voice/voices') {
+              return http.Response(jsonEncode({'voices': <dynamic>[]}), 200);
+            }
+            if (req.url.path == '/api/v1/voice/settings') {
+              return http.Response(jsonEncode({'profile_id': 'p1', 'auto_read_replies': true}), 200);
+            }
+            return http.Response(jsonEncode({'items': <dynamic>[], 'total': 0}), 200);
+          }),
+        );
+
+        final chat = DesktopChatController(client: client);
+        final settings = DesktopSettingsController(initialDestination: DesktopNavDestination.settings);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: CompanionTheme.dark(),
+            home: DesktopShell(
+              controller: settings,
+              chatController: chat,
+              audioAdapter: audio,
+              enableSchedulePolling: false,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Simulate backend finishing startup after shell mounted
+        backendUp = true;
+        await chat.checkConnection();
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('chat_auto_read_toggle')), findsNothing); // currently on Settings
+        await tester.tap(find.text('Voice & Audio'));
+        await tester.pumpAndSettle();
+
+        // Settings Test Mic button toggles capture cleanly
+        await tester.tap(find.byKey(const Key('settings_voice_test_mic_button')));
+        await tester.pumpAndSettle();
+        expect(audio.isCapturing, isTrue);
+        await tester.tap(find.byKey(const Key('settings_voice_test_mic_button')));
+        await tester.pumpAndSettle();
+        expect(audio.isCapturing, isFalse);
+
+        chat.dispose();
+        client.close();
+      },
+    );
   });
 }

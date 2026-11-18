@@ -19,6 +19,7 @@ class _FakeAudioAdapter implements DesktopAudioAdapter {
       StreamController<CapturedAudioFrame>.broadcast();
   final StreamController<void> _hotkeyCtrl = StreamController<void>.broadcast();
   bool _capturing = false;
+  String? lastCaptureDeviceId;
   int flushCount = 0;
   int? lastFlushedGeneration;
   final List<int> playedGenerations = [];
@@ -55,6 +56,7 @@ class _FakeAudioAdapter implements DesktopAudioAdapter {
   @override
   Future<void> startCapture({String? deviceId}) async {
     _capturing = true;
+    lastCaptureDeviceId = deviceId;
   }
 
   @override
@@ -474,6 +476,86 @@ void main() {
 
       final mutedItems = coord.buildTrayMenuItemsWithSafety(null, false, false, true);
       expect(mutedItems.any((i) => i.key == 'mute_audio_toggle' && i.label == 'Unmute Audio (Ctrl+Shift+M)'), isTrue);
+    });
+
+    test('isolates capture frame RMS notifications, pipelines multi-sentence speakMessage, and resets speakingMessageId', () async {
+      final synthesized = <String>[];
+      final store = InMemoryCredentialStore()..writeToken('sess-tok');
+      final client = CompanionClient(
+        baseUrl: 'http://127.0.0.1:8000',
+        sessionStore: store,
+        httpClient: MockClient((request) async {
+          if (request.url.path == '/api/v1/voice/synthesize') {
+            final body = jsonDecode(request.body) as Map<String, dynamic>;
+            synthesized.add(body['text'] as String);
+            return http.Response(
+              jsonEncode({
+                'audio_base64': base64Encode([1, 2, 3, 4]),
+                'mime_type': 'audio/wav',
+                'sample_rate': 24000,
+                'duration_ms': 120,
+                'voice_id': 'af_nicole',
+                'provider': 'kokoro_onnx',
+              }),
+              200,
+            );
+          }
+          if (request.url.path == '/api/v1/voice/status') {
+            return http.Response(jsonEncode({'stt_available': true, 'vad_available': true, 'tts_available': true}), 200);
+          }
+          if (request.url.path == '/api/v1/voice/voices') {
+            return http.Response(jsonEncode({'voices': <dynamic>[]}), 200);
+          }
+          if (request.url.path == '/api/v1/voice/settings') {
+            return http.Response(jsonEncode({'profile_id': 'p1', 'auto_read_replies': false}), 200);
+          }
+          return http.Response('{}', 200);
+        }),
+      );
+      final audio = _FakeAudioAdapter();
+      final ctrl = DesktopVoiceController(
+        clientProvider: () => client,
+        audioAdapter: audio,
+      );
+      await ctrl.initialize();
+
+      // 1. Capture frames update micRmsListenable without firing notifyListeners()
+      int controllerNotifies = 0;
+      double latestRms = 0;
+      ctrl.addListener(() => controllerNotifies++);
+      ctrl.micRmsListenable.addListener(() => latestRms = ctrl.micRmsListenable.value);
+
+      await ctrl.startDictation();
+      final baselineNotifies = controllerNotifies;
+      audio.pushMicFrame(Uint8List.fromList([1, 2, 3, 4]), rms: 0.55);
+      await pumpEventQueue();
+      expect(latestRms, closeTo(0.55, 0.01));
+      expect(controllerNotifies, equals(baselineNotifies));
+      await ctrl.stopDictationAndTranscribe();
+
+      // 2. Settings mic test starts/stops capture and selectInputDevice hot-swaps capture
+      await ctrl.startMicTest();
+      expect(ctrl.isTestingMic, isTrue);
+      expect(audio.isCapturing, isTrue);
+      await ctrl.selectInputDevice('usb-mic');
+      expect(audio.lastCaptureDeviceId, equals('usb-mic'));
+      await ctrl.stopMicTest();
+      expect(ctrl.isTestingMic, isFalse);
+      expect(audio.isCapturing, isFalse);
+
+      // 3. Multi-sentence speakMessage pipelines sentence chunks & resets speakingMessageId on completion timer
+      await ctrl.speakMessage(
+        messageId: 'msg-multi-1',
+        text: 'First sentence finishes fast here. Second sentence follows smoothly after it.',
+      );
+      expect(synthesized, hasLength(2));
+      expect(audio.playedGenerations, hasLength(2));
+      expect(ctrl.speakingMessageId, equals('msg-multi-1'));
+
+      // Allow completion timer (> remainingMs + tail) to fire cleanly
+      await Future<void>.delayed(const Duration(milliseconds: 1350));
+      expect(ctrl.speakingMessageId, isNull);
+      ctrl.dispose();
     });
   });
 }

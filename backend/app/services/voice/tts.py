@@ -8,11 +8,13 @@ from dataclasses import dataclass
 import io
 import json
 import math
+import os
 from pathlib import Path
 import re
 import struct
 import subprocess
 import sys
+import threading
 from typing import Any, AsyncIterator, Optional
 import wave
 
@@ -21,6 +23,111 @@ from app.services.voice.audio_utils import VOICE_SAMPLE_RATE, pcm16_to_wav_bytes
 
 _CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+|\n+")
+_MD_LINK_RE = re.compile(r"\[([^\]]+)\]\((?:https?://|www\.)[^)]+\)")
+_URL_RE = re.compile(r"https?://\S+|www\.\S+", re.IGNORECASE)
+_EMOJI_RE = re.compile(
+    r"[\U00010000-\U0010FFFF\u2600-\u27BF\u2300-\u23FF\u2B00-\u2BFF]+",
+    flags=re.UNICODE,
+)
+_ACRONYM_RE = re.compile(r"\b(CPU|GPU|API|RAM|UI|TTS|STT|LLM|JSON|SQL|PC|SDK|WS)\b")
+
+_TAGALOG_LEXICON_IPA: dict[str, str] = {
+    "ako": "ɑkˈɔ",
+    "ang": "ɑŋ",
+    "ano": "ɑnˈɔ",
+    "ay": "ɑj",
+    "ayaw": "ɑjˈɑw",
+    "ba": "bɑ",
+    "bahay": "bˈɑhɑj",
+    "bakit": "bˈɑkit",
+    "bawal": "bˈɑwɑl",
+    "bayan": "bˈɑjɑn",
+    "bukas": "bˈukɑs",
+    "cebu": "sɛbˈu",
+    "charot": "tʃˈɑɾɔt",
+    "davao": "dˈɑvɑw",
+    "daw": "dɑw",
+    "din": "din",
+    "dito": "dˈitɔ",
+    "diyan": "djˈɑn",
+    "doon": "dɔˈɔn",
+    "gabi": "ɡɑbˈi",
+    "ganon": "ɡɑnˈɔn",
+    "ganun": "ɡɑnˈun",
+    "gusto": "ɡustˈɔ",
+    "hapon": "hˈɑpɔn",
+    "hindi": "hindˈi",
+    "ikaw": "ikˈɑw",
+    "ingat": "ˈiŋɑt",
+    "ito": "itˈɔ",
+    "iyan": "ijˈɑn",
+    "iyon": "ijˈɔn",
+    "ka": "kɑ",
+    "kahapon": "kɑhˈɑpɔn",
+    "kailan": "kɑilˈɑn",
+    "kain": "kˈɑin",
+    "kami": "kɑmˈi",
+    "kamusta": "kɑmustˈɑ",
+    "kasi": "kɑsˈi",
+    "kaya": "kɑjˈɑ",
+    "kayo": "kɑjˈɔ",
+    "ko": "kɔ",
+    "kumusta": "kumustˈɑ",
+    "lang": "lɑŋ",
+    "lungsod": "luŋsˈɔd",
+    "magandang": "mɑɡɑndˈɑŋ",
+    "mahal": "mɑhˈɑl",
+    "makati": "mɑkˈɑti",
+    "manila": "mɑnˈilɑ",
+    "maraming": "mɑɾˈɑmiŋ",
+    "masyado": "mɑʃˈɑdɔ",
+    "mga": "mɑŋˈɑ",
+    "mo": "mɔ",
+    "muna": "mˈunɑ",
+    "na": "nɑ",
+    "naman": "nɑmˈɑn",
+    "namin": "nˈɑmin",
+    "natin": "nˈɑtin",
+    "ng": "nɑŋ",
+    "ngayon": "ŋɑjˈɔn",
+    "nila": "nilˈɑ",
+    "ninyo": "ninjˈɔ",
+    "niya": "njˈɑ",
+    "oo": "ˈɔɔ",
+    "opo": "ˈɔpɔ",
+    "pa": "pɑ",
+    "paano": "pɑˈɑnɔ",
+    "pala": "pɑlˈɑ",
+    "para": "pˈɑɾɑ",
+    "pero": "pˈɛɾɔ",
+    "pilipinas": "pˌilipˈinɑs",
+    "po": "pɔ",
+    "puwede": "puwˈɛdɛ",
+    "pwede": "pwˈɛdɛ",
+    "quezon": "kˈɛzɔn",
+    "raw": "ɾɑw",
+    "rin": "ɾin",
+    "sa": "sɑ",
+    "saan": "sɑˈɑn",
+    "salamat": "sɑlˈɑmɑt",
+    "si": "si",
+    "sige": "sˈiɡɛ",
+    "siguro": "siɡˈuɾɔ",
+    "sila": "silˈɑ",
+    "sino": "sˈinɔ",
+    "siya": "ʃˈɑ",
+    "tagalog": "tɑɡˈɑlɔɡ",
+    "talaga": "tɑlɑɡˈɑ",
+    "tanghali": "tɑŋhˈɑli",
+    "tara": "tˈɑɾɑ",
+    "tayo": "tˈɑjɔ",
+    "tulog": "tˈulɔɡ",
+    "ulit": "ˈulit",
+    "umaga": "umˈɑɡɑ",
+    "ung": "uŋ",
+    "yun": "jun",
+    "yung": "juŋ",
+}
 
 # Lightweight pure-Python English grapheme-to-IPA mapping for Kokoro's phoneme vocab
 # when system espeak-ng is not present; covers common conversational English cleanly.
@@ -167,13 +274,103 @@ def split_sentences_for_tts(text: str, *, max_chars: int = 240) -> list[str]:
     return chunks
 
 
-def _word_to_ipa(word: str) -> str:
+def preprocess_text_for_tts(text: str) -> str:
+    """Clean Markdown, URLs, emojis, and technical acronyms before G2P phonemization."""
+    cleaned = text or ""
+    cleaned = _MD_LINK_RE.sub(r"\1", cleaned)
+    cleaned = _URL_RE.sub("", cleaned)
+    cleaned = cleaned.replace("```", " ").replace("`", "")
+    cleaned = re.sub(r"[*_~#>]+", " ", cleaned)
+    cleaned = _EMOJI_RE.sub(" ", cleaned)
+    cleaned = _ACRONYM_RE.sub(lambda m: " ".join(m.group(1)), cleaned)
+    return " ".join(cleaned.split())
+
+
+class _LazyEspeakPhonemizer:
+    """Thread-safe lazy ctypes wrapper over bundled espeak-ng shared library."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._attempted = False
+        self._lib: Any = None
+        self._ctypes: Any = None
+        self._active_voice: Optional[bytes] = None
+
+    def _ensure_loaded(self) -> bool:
+        if self._attempted:
+            return self._lib is not None
+        self._attempted = True
+        try:
+            import ctypes
+            import espeakng_loader  # type: ignore[import-not-found]
+
+            lib_path = espeakng_loader.get_library_path()
+            data_path = espeakng_loader.get_data_path()
+            lib = ctypes.CDLL(str(lib_path))
+            lib.espeak_Initialize.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_char_p, ctypes.c_int]
+            lib.espeak_Initialize.restype = ctypes.c_int
+            lib.espeak_SetVoiceByName.argtypes = [ctypes.c_char_p]
+            lib.espeak_SetVoiceByName.restype = ctypes.c_int
+            lib.espeak_TextToPhonemes.argtypes = [
+                ctypes.POINTER(ctypes.c_void_p),
+                ctypes.c_int,
+                ctypes.c_int,
+            ]
+            lib.espeak_TextToPhonemes.restype = ctypes.c_char_p
+            sr = lib.espeak_Initialize(2, 0, str(data_path).encode("utf-8"), 0)
+            if sr <= 0:
+                return False
+            self._lib = lib
+            self._ctypes = ctypes
+            return True
+        except Exception:
+            self._lib = None
+            return False
+
+    def phonemize(self, text: str, *, espeak_voice: str = "en-us") -> Optional[str]:
+        if not text.strip():
+            return ""
+        with self._lock:
+            if not self._ensure_loaded():
+                return None
+            ctypes = self._ctypes
+            lib = self._lib
+            voice_bytes = espeak_voice.encode("utf-8")
+            if self._active_voice != voice_bytes:
+                if lib.espeak_SetVoiceByName(voice_bytes) == 0:
+                    self._active_voice = voice_bytes
+                else:
+                    lib.espeak_SetVoiceByName(b"en-us")
+                    self._active_voice = b"en-us"
+            buf = ctypes.create_string_buffer(text.encode("utf-8"))
+            ptr = ctypes.c_void_p(ctypes.addressof(buf))
+            segments: list[str] = []
+            while ptr.value:
+                res = lib.espeak_TextToPhonemes(ctypes.byref(ptr), 1, 2)
+                if not res:
+                    break
+                piece = res.decode("utf-8", errors="ignore").strip()
+                if piece:
+                    segments.append(piece.replace("g", "ɡ"))
+            return " ".join(segments)
+
+
+_ESPEAK_PHONEMIZER = _LazyEspeakPhonemizer()
+
+
+def _fallback_word_to_ipa(word: str) -> str:
     low = word.lower()
+    if low in _TAGALOG_LEXICON_IPA:
+        return _TAGALOG_LEXICON_IPA[low]
     if low in _COMMON_WORDS_IPA:
         return _COMMON_WORDS_IPA[low]
     out: list[str] = []
     i = 0
     while i < len(low):
+        if low.startswith("c", i) and i + 1 < len(low) and low[i + 1] in ("e", "i", "y"):
+            out.append("s")
+            i += 1
+            continue
         matched = False
         for digraph, ipa in _IPA_DIGRAPHS:
             if low.startswith(digraph, i):
@@ -189,22 +386,66 @@ def _word_to_ipa(word: str) -> str:
     return "".join(out)
 
 
-def text_to_kokoro_ipa(text: str) -> str:
-    """Convert English text cleanly into an IPA phoneme string."""
-    parts = re.findall(r"[A-Za-z]+|[0-9]+|[.,!?;:\"'()\-\s]", text)
+def text_to_kokoro_ipa(text: str, *, language: str = "en-us") -> str:
+    """Convert cleaned English/Taglish text into Kokoro-compatible IPA phonemes."""
+    cleaned = preprocess_text_for_tts(text)
+    if not cleaned:
+        return ""
+    tokens = re.findall(r"[A-Za-z0-9']+|[^\w\s]+|\s+", cleaned)
     rendered: list[str] = []
-    for part in parts:
-        if part.isalpha():
-            rendered.append(_word_to_ipa(part))
+    english_buf: list[str] = []
+
+    def _flush_english() -> None:
+        if not english_buf:
+            return
+        phrase = "".join(english_buf).strip()
+        english_buf.clear()
+        if not phrase:
+            return
+        espeak_out = _ESPEAK_PHONEMIZER.phonemize(phrase, espeak_voice=language)
+        if espeak_out:
+            rendered.append(espeak_out)
         else:
-            rendered.append(part)
-    return "".join(rendered)
+            fallback_parts = [
+                _fallback_word_to_ipa(tok) if tok.isalpha() else tok
+                for tok in re.findall(r"[A-Za-z]+|\s+|[^\w\s]+|[0-9]+", phrase)
+            ]
+            rendered.append("".join(fallback_parts))
+
+    for tok in tokens:
+        low = tok.lower()
+        if low.isalpha() and low in _TAGALOG_LEXICON_IPA:
+            _flush_english()
+            rendered.append(_TAGALOG_LEXICON_IPA[low])
+        elif re.fullmatch(r"[.,!?;:()—\-]+", tok):
+            _flush_english()
+            rendered.append(tok)
+        elif tok.isspace():
+            if english_buf:
+                english_buf.append(" ")
+            elif rendered and not rendered[-1].endswith(" "):
+                rendered.append(" ")
+        else:
+            if english_buf and not english_buf[-1].endswith(" "):
+                english_buf.append(" ")
+            english_buf.append(tok)
+
+    _flush_english()
+    ipa = "".join(rendered)
+    ipa = re.sub(r"\s+([.,!?;:])", r"\1", ipa)
+    return " ".join(ipa.split())
 
 
-def text_to_kokoro_tokens(text: str, vocab: dict[str, int], *, max_tokens: int = 510) -> list[int]:
+def text_to_kokoro_tokens(
+    text: str,
+    vocab: dict[str, int],
+    *,
+    max_tokens: int = 510,
+    language: str = "en-us",
+) -> list[int]:
     """Convert text -> IPA characters -> Kokoro tokenizer IDs padded with [0, ..., 0]."""
     pad_id = int(vocab.get("$", 0))
-    ipa = text_to_kokoro_ipa(text)
+    ipa = text_to_kokoro_ipa(text, language=language)
     ids: list[int] = []
     for ch in ipa:
         if ch in vocab:
@@ -399,8 +640,8 @@ class KokoroOnnxTtsProvider(TtsProvider):
             tok_data = json.loads(tok_file.read_text(encoding="utf-8"))
             self._vocab = dict(tok_data.get("model", {}).get("vocab", {}))
         opts = ort.SessionOptions()
-        opts.inter_op_num_threads = 2
-        opts.intra_op_num_threads = 4
+        opts.inter_op_num_threads = 1
+        opts.intra_op_num_threads = min(6, max(2, os.cpu_count() or 4))
         self._session = ort.InferenceSession(
             str(root / "model_quantized.onnx"),
             sess_options=opts,
@@ -442,12 +683,52 @@ class KokoroOnnxTtsProvider(TtsProvider):
             return chosen, list(rows[idx])
         return chosen, load_kokoro_voice_style_vector(self._voice_paths[chosen], token_count=token_count)
 
-    def _run_sync(self, text: str, voice_id: Optional[str], speed: float) -> TtsResult:
-        assert self._vocab is not None and self._session is not None
-        tokens = text_to_kokoro_tokens(text, self._vocab)
-        chosen_voice, style_vec = self._resolve_style(voice_id, len(tokens))
-        clamped_speed = max(0.5, min(2.0, float(speed)))
+    def _split_token_bounded_chunks(
+        self,
+        text: str,
+        *,
+        language: str,
+        max_body_tokens: int = 480,
+    ) -> list[str]:
+        assert self._vocab is not None
+        cleaned = preprocess_text_for_tts(text) or text.strip()
+        if not cleaned:
+            return []
+        raw_chunks = split_sentences_for_tts(cleaned, max_chars=180)
+        bounded: list[str] = []
+        for chunk in raw_chunks:
+            if len(text_to_kokoro_tokens(chunk, self._vocab, max_tokens=510, language=language)) <= max_body_tokens + 2:
+                bounded.append(chunk)
+                continue
+            words = chunk.split(" ")
+            buf = ""
+            for word in words:
+                candidate = word if not buf else f"{buf} {word}"
+                if len(text_to_kokoro_tokens(candidate, self._vocab, max_tokens=510, language=language)) <= max_body_tokens + 2:
+                    buf = candidate
+                else:
+                    if buf:
+                        bounded.append(buf)
+                    buf = word
+            if buf:
+                bounded.append(buf)
+        return bounded or [cleaned]
 
+    def _run_chunk_sync(
+        self,
+        chunk_text: str,
+        chosen_voice: str,
+        clamped_speed: float,
+        language: str,
+    ) -> array:
+        assert self._vocab is not None and self._session is not None
+        tokens = text_to_kokoro_tokens(
+            chunk_text,
+            self._vocab,
+            max_tokens=510,
+            language=language,
+        )
+        _, style_vec = self._resolve_style(chosen_voice, len(tokens))
         if self._np is not None:
             np = self._np
             feed = {
@@ -474,10 +755,28 @@ class KokoroOnnxTtsProvider(TtsProvider):
         for sample in flat:
             clipped = max(-1.0, min(1.0, float(sample)))
             pcm.append(int(round(clipped * 32767.0)))
+        return pcm
+
+    def _run_sync(self, text: str, voice_id: Optional[str], speed: float) -> TtsResult:
+        assert self._vocab is not None and self._session is not None
+        available = sorted(set(self._voice_paths.keys()) | set((self._voices_cache or {}).keys()))
+        chosen_voice = voice_id if voice_id in available else (available[0] if available else "af_nicole")
+        language = "en-gb" if chosen_voice.startswith(("bf_", "bm_")) else "en-us"
+        clamped_speed = max(0.5, min(2.0, float(speed)))
+
+        chunks = self._split_token_bounded_chunks(text, language=language)
+        combined_pcm = array("h")
+        gap_samples = array("h", [0] * int(self._SAMPLE_RATE * 0.06))
+        for idx, chunk in enumerate(chunks):
+            chunk_pcm = self._run_chunk_sync(chunk, chosen_voice, clamped_speed, language)
+            combined_pcm.extend(chunk_pcm)
+            if idx + 1 < len(chunks):
+                combined_pcm.extend(gap_samples)
+
         if sys.byteorder != "little":
-            pcm.byteswap()
-        wav_bytes = pcm16_to_wav_bytes(pcm.tobytes(), sample_rate=self._SAMPLE_RATE)
-        duration_ms = max(1, int(round(len(pcm) / float(self._SAMPLE_RATE) * 1000.0)))
+            combined_pcm.byteswap()
+        wav_bytes = pcm16_to_wav_bytes(combined_pcm.tobytes(), sample_rate=self._SAMPLE_RATE)
+        duration_ms = max(1, int(round(len(combined_pcm) / float(self._SAMPLE_RATE) * 1000.0)))
         return TtsResult(
             wav_bytes=wav_bytes,
             sample_rate=self._SAMPLE_RATE,

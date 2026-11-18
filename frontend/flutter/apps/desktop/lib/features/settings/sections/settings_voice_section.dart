@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:companion_api/companion_api.dart';
 import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
@@ -35,6 +37,15 @@ class _SettingsVoiceSectionState extends State<SettingsVoiceSection> {
         ctrl.refreshAll();
       }
     });
+  }
+
+  @override
+  void dispose() {
+    final ctrl = widget.voiceController;
+    if (ctrl != null && ctrl.isTestingMic) {
+      unawaited(ctrl.stopMicTest());
+    }
+    super.dispose();
   }
 
   @override
@@ -262,22 +273,41 @@ class _SettingsVoiceSectionState extends State<SettingsVoiceSection> {
               Expanded(
                 child: ClipRRect(
                   borderRadius: CompanionRadius.borderFull,
-                  child: LinearProgressIndicator(
-                    value: ctrl.isAudioMuted
-                        ? 0.0
-                        : ctrl.micRmsLevel.clamp(0.0, 1.0),
-                    minHeight: 6,
-                    backgroundColor: (ext?.surfaceElevated ?? Colors.black26)
-                        .withValues(alpha: 0.55),
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      ctrl.isAudioMuted
-                          ? (ext?.warning ?? Colors.amber)
-                          : (ext?.accent ?? Colors.teal),
-                    ),
+                  child: ValueListenableBuilder<double>(
+                    valueListenable: ctrl.micRmsListenable,
+                    builder: (context, rms, _) {
+                      return LinearProgressIndicator(
+                        value: ctrl.isAudioMuted ? 0.0 : rms.clamp(0.0, 1.0),
+                        minHeight: 6,
+                        backgroundColor: (ext?.surfaceElevated ?? Colors.black26)
+                            .withValues(alpha: 0.55),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          ctrl.isAudioMuted
+                              ? (ext?.warning ?? Colors.amber)
+                              : (ext?.accent ?? Colors.teal),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
-              const SizedBox(width: CompanionSpacing.md),
+              const SizedBox(width: CompanionSpacing.sm),
+              NeumorphicButton(
+                key: const ValueKey('settings_voice_test_mic_button'),
+                size: NeumorphicButtonSize.sm,
+                selected: ctrl.isTestingMic,
+                icon: Icon(
+                  ctrl.isTestingMic ? Icons.stop_rounded : Icons.mic_none_rounded,
+                  size: 16,
+                ),
+                onPressed: ctrl.isAudioMuted
+                    ? null
+                    : () => ctrl.isTestingMic
+                        ? ctrl.stopMicTest()
+                        : ctrl.startMicTest(),
+                child: Text(ctrl.isTestingMic ? 'Stop Test' : 'Test Mic'),
+              ),
+              const SizedBox(width: CompanionSpacing.sm),
               Switch(
                 key: const ValueKey('settings_voice_mute_switch'),
                 value: ctrl.isAudioMuted,

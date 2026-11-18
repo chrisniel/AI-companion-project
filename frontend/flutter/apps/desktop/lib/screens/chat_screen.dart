@@ -22,6 +22,8 @@ class ChatScreen extends StatefulWidget {
     this.toolPolicyController,
     this.voiceController,
     this.clientSettings,
+    this.isActiveTab = true,
+    this.onRegisterCloseHistoryDrawer,
     this.onNavigateToSettings,
   });
 
@@ -29,6 +31,8 @@ class ChatScreen extends StatefulWidget {
   final DesktopToolPolicyController? toolPolicyController;
   final DesktopVoiceController? voiceController;
   final DesktopClientSettings? clientSettings;
+  final bool isActiveTab;
+  final void Function(bool Function()? closer)? onRegisterCloseHistoryDrawer;
   final VoidCallback? onNavigateToSettings;
 
   @override
@@ -75,6 +79,107 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  bool _closeHistoryDrawerIfOpen() {
+    if (!_isHistoryOpen) return false;
+    setState(() {
+      _isHistoryOpen = false;
+    });
+    return true;
+  }
+
+  bool _isEditableTextFocused() {
+    final ctx = FocusManager.instance.primaryFocus?.context;
+    if (ctx == null) return false;
+    return ctx.widget is EditableText ||
+        ctx.findAncestorWidgetOfExactType<EditableText>() != null;
+  }
+
+  bool _handleChatHardwareKey(KeyEvent event) {
+    if (!mounted ||
+        !widget.isActiveTab ||
+        VoiceShortcutKeyMapper.isCaptureModalOpen) {
+      return false;
+    }
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) {
+      return false;
+    }
+
+    final hw = HardwareKeyboard.instance;
+    if (event is KeyDownEvent &&
+        event is! KeyRepeatEvent &&
+        hw.isControlPressed &&
+        !hw.isAltPressed &&
+        !hw.isShiftPressed &&
+        !hw.isMetaPressed) {
+      if (event.logicalKey == LogicalKeyboardKey.keyH) {
+        _toggleHistoryDrawer();
+        return true;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.equal ||
+          event.logicalKey == LogicalKeyboardKey.add ||
+          event.logicalKey == LogicalKeyboardKey.numpadAdd) {
+        _updateZoom(_zoomLevel + 0.1);
+        return true;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.minus ||
+          event.logicalKey == LogicalKeyboardKey.numpadSubtract) {
+        _updateZoom(_zoomLevel - 0.1);
+        return true;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.digit0 ||
+          event.logicalKey == LogicalKeyboardKey.numpad0) {
+        _updateZoom(1.0);
+        return true;
+      }
+    }
+
+    final voiceCtrl = widget.voiceController;
+    if (voiceCtrl == null) return false;
+
+    if (event is KeyDownEvent &&
+        event is! KeyRepeatEvent &&
+        event.logicalKey == LogicalKeyboardKey.space &&
+        voiceCtrl.isLiveVoiceActive &&
+        !_isEditableTextFocused()) {
+      final hw = HardwareKeyboard.instance;
+      if (!hw.isControlPressed &&
+          !hw.isAltPressed &&
+          !hw.isShiftPressed &&
+          !hw.isMetaPressed) {
+        unawaited(voiceCtrl.interruptBargeIn());
+        return true;
+      }
+    }
+
+    if (VoiceShortcutKeyMapper.matchesKeyEvent(
+      event,
+      voiceCtrl.shortcuts.pushToTalk,
+    )) {
+      if (event is KeyDownEvent && !_pttHolding) {
+        _pttHolding = true;
+        if (!voiceCtrl.isLiveVoiceActive &&
+            !voiceCtrl.isDictating &&
+            !voiceCtrl.isTranscribing) {
+          unawaited(voiceCtrl.startDictation());
+        }
+        return true;
+      } else if (event is KeyUpEvent && _pttHolding) {
+        _pttHolding = false;
+        if (voiceCtrl.isDictating) {
+          unawaited(() async {
+            final text = await voiceCtrl.stopDictationAndTranscribe();
+            _insertDictatedText(text);
+          }());
+        } else if (voiceCtrl.isLiveVoiceActive) {
+          unawaited(voiceCtrl.commitLiveUtterance());
+        }
+        return true;
+      }
+    }
+    return false;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -97,6 +202,8 @@ class _ChatScreenState extends State<ChatScreen> {
     _effectiveController.addListener(_onChatControllerChanged);
     _profileEpoch = _effectiveController.profileEpoch;
     _wasGenerating = _effectiveController.isGenerating;
+    widget.onRegisterCloseHistoryDrawer?.call(_closeHistoryDrawerIfOpen);
+    HardwareKeyboard.instance.addHandler(_handleChatHardwareKey);
 
     // Initialize current conversation state if already selected
     final activeId = _effectiveController.activeConversation?.id;
@@ -152,6 +259,10 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void didUpdateWidget(ChatScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.onRegisterCloseHistoryDrawer != widget.onRegisterCloseHistoryDrawer) {
+      oldWidget.onRegisterCloseHistoryDrawer?.call(null);
+      widget.onRegisterCloseHistoryDrawer?.call(_closeHistoryDrawerIfOpen);
+    }
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller?.removeListener(_onChatControllerChanged);
       widget.controller?.addListener(_onChatControllerChanged);
@@ -163,26 +274,6 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   KeyEventResult _handleFocusKeyEvent(FocusNode node, KeyEvent event) {
-    final isControl = HardwareKeyboard.instance.isControlPressed;
-    if (isControl && event is KeyDownEvent) {
-      if (event.logicalKey == LogicalKeyboardKey.equal ||
-          event.logicalKey == LogicalKeyboardKey.add ||
-          event.logicalKey == LogicalKeyboardKey.numpadAdd) {
-        _updateZoom(_zoomLevel + 0.1);
-        return KeyEventResult.handled;
-      }
-      if (event.logicalKey == LogicalKeyboardKey.minus ||
-          event.logicalKey == LogicalKeyboardKey.numpadSubtract) {
-        _updateZoom(_zoomLevel - 0.1);
-        return KeyEventResult.handled;
-      }
-      if (event.logicalKey == LogicalKeyboardKey.digit0 ||
-          event.logicalKey == LogicalKeyboardKey.numpad0) {
-        _updateZoom(1.0);
-        return KeyEventResult.handled;
-      }
-    }
-
     if (event.logicalKey == LogicalKeyboardKey.enter) {
       if (event is KeyDownEvent) {
         final isShift = HardwareKeyboard.instance.isShiftPressed;
@@ -343,46 +434,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  KeyEventResult _handleScreenKeyEvent(FocusNode node, KeyEvent event) {
-    final voiceCtrl = widget.voiceController;
-    if (voiceCtrl == null) return KeyEventResult.ignored;
-
-    if (event is KeyDownEvent &&
-        event.logicalKey == LogicalKeyboardKey.space &&
-        voiceCtrl.isLiveVoiceActive &&
-        !_focusNode.hasFocus) {
-      unawaited(voiceCtrl.interruptBargeIn());
-      return KeyEventResult.handled;
-    }
-
-    if (VoiceShortcutKeyMapper.matchesKeyEvent(
-      event,
-      voiceCtrl.shortcuts.pushToTalk,
-    )) {
-      if (event is KeyDownEvent && !_pttHolding) {
-        _pttHolding = true;
-        if (!voiceCtrl.isLiveVoiceActive &&
-            !voiceCtrl.isDictating &&
-            !voiceCtrl.isTranscribing) {
-          unawaited(voiceCtrl.startDictation());
-        }
-        return KeyEventResult.handled;
-      } else if (event is KeyUpEvent && _pttHolding) {
-        _pttHolding = false;
-        if (voiceCtrl.isDictating) {
-          unawaited(() async {
-            final text = await voiceCtrl.stopDictationAndTranscribe();
-            _insertDictatedText(text);
-          }());
-        } else if (voiceCtrl.isLiveVoiceActive) {
-          unawaited(voiceCtrl.commitLiveUtterance());
-        }
-        return KeyEventResult.handled;
-      }
-    }
-    return KeyEventResult.ignored;
-  }
-
   void _checkAndRestoreScroll() {
     final activeId = _effectiveController.activeConversation?.id;
     if (activeId == null) return;
@@ -421,6 +472,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    widget.onRegisterCloseHistoryDrawer?.call(null);
+    HardwareKeyboard.instance.removeHandler(_handleChatHardwareKey);
     _textController.removeListener(_onTextChanged);
     _scrollController.removeListener(_onScroll);
     _effectiveController.removeListener(_onChatControllerChanged);
@@ -515,20 +568,12 @@ class _ChatScreenState extends State<ChatScreen> {
 
         return CallbackShortcuts(
           bindings: <ShortcutActivator, VoidCallback>{
-            const SingleActivator(LogicalKeyboardKey.keyH, control: true): _toggleHistoryDrawer,
-            const SingleActivator(LogicalKeyboardKey.escape): _closeHistoryDrawer,
-            const SingleActivator(LogicalKeyboardKey.equal, control: true): () => _updateZoom(_zoomLevel + 0.1),
-            const SingleActivator(LogicalKeyboardKey.add, control: true): () => _updateZoom(_zoomLevel + 0.1),
-            const SingleActivator(LogicalKeyboardKey.numpadAdd, control: true): () => _updateZoom(_zoomLevel + 0.1),
-            const SingleActivator(LogicalKeyboardKey.minus, control: true): () => _updateZoom(_zoomLevel - 0.1),
-            const SingleActivator(LogicalKeyboardKey.numpadSubtract, control: true): () => _updateZoom(_zoomLevel - 0.1),
-            const SingleActivator(LogicalKeyboardKey.digit0, control: true): () => _updateZoom(1.0),
-            const SingleActivator(LogicalKeyboardKey.numpad0, control: true): () => _updateZoom(1.0),
+            if (_isHistoryOpen)
+              const SingleActivator(LogicalKeyboardKey.escape): _closeHistoryDrawer,
           },
           child: Focus(
             focusNode: _screenFocusNode,
             autofocus: true,
-            onKeyEvent: _handleScreenKeyEvent,
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
               onTap: () {
@@ -574,6 +619,20 @@ class _ChatScreenState extends State<ChatScreen> {
                         const SizedBox(height: CompanionSpacing.sm),
                         _buildErrorBanner(context, chatCtrl.errorMessage!, ext),
                       ],
+                      if (widget.voiceController != null)
+                        ListenableBuilder(
+                          listenable: widget.voiceController!,
+                          builder: (context, _) {
+                            final vc = widget.voiceController!;
+                            if (vc.isLiveVoiceActive || vc.errorMessage == null) {
+                              return const SizedBox.shrink();
+                            }
+                            return Padding(
+                              padding: const EdgeInsets.only(top: CompanionSpacing.sm),
+                              child: _buildVoiceErrorBanner(context, vc, ext),
+                            );
+                          },
+                        ),
 
                       const SizedBox(height: CompanionSpacing.lg),
 
@@ -1105,6 +1164,28 @@ class _ChatScreenState extends State<ChatScreen> {
                               VoiceSettingsUpdate(autoReadReplies: !autoRead),
                             ),
                     child: showVoiceLabels ? const Text('Auto-Read') : null,
+                  ),
+                  const SizedBox(width: CompanionSpacing.xs),
+                  NeumorphicButton(
+                    key: const Key('chat_header_mute_toggle'),
+                    size: NeumorphicButtonSize.sm,
+                    selected: vc.isAudioMuted,
+                    icon: Icon(
+                      vc.isAudioMuted
+                          ? Icons.mic_off_rounded
+                          : Icons.mic_none_rounded,
+                      size: 16,
+                      color: vc.isAudioMuted
+                          ? (ext?.warning ?? CompanionColors.warning)
+                          : null,
+                    ),
+                    tooltip: vc.isAudioMuted
+                        ? 'Unmute mic & audio (${vc.shortcuts.muteToggle.label})'
+                        : 'Mute mic & audio (${vc.shortcuts.muteToggle.label})',
+                    onPressed: () => vc.setMuted(!vc.isAudioMuted),
+                    child: (showVoiceLabels && vc.isAudioMuted)
+                        ? const Text('Muted')
+                        : null,
                   ),
                 ],
               );
@@ -2143,6 +2224,57 @@ class _ChatScreenState extends State<ChatScreen> {
     return ListenableBuilder(
       listenable: policyCtrl,
       builder: (_, __) => buildCards(policyCtrl.globalKillSwitch),
+    );
+  }
+
+  Widget _buildVoiceErrorBanner(
+    BuildContext context,
+    DesktopVoiceController vc,
+    CompanionThemeExtension? ext,
+  ) {
+    final bannerColor = vc.isAudioMuted
+        ? (ext?.warning ?? CompanionColors.warning)
+        : (ext?.danger ?? CompanionColors.danger);
+    return Container(
+      key: const Key('chat_voice_error_banner'),
+      padding: const EdgeInsets.symmetric(
+        horizontal: CompanionSpacing.md,
+        vertical: CompanionSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: bannerColor.withValues(alpha: 0.12),
+        borderRadius: CompanionRadius.borderMd,
+        border: Border.all(color: bannerColor.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            vc.isAudioMuted ? Icons.mic_off_rounded : Icons.error_outline_rounded,
+            size: 16,
+            color: bannerColor,
+          ),
+          const SizedBox(width: CompanionSpacing.sm),
+          Expanded(
+            child: Text(
+              vc.errorMessage ?? '',
+              style: CompanionTypography.bodySmall.copyWith(color: ext?.textPrimary),
+            ),
+          ),
+          if (vc.isAudioMuted) ...[
+            const SizedBox(width: CompanionSpacing.sm),
+            TextButton(
+              key: const Key('chat_voice_error_unmute'),
+              onPressed: () => unawaited(vc.setMuted(false)),
+              child: const Text('Unmute'),
+            ),
+          ],
+          IconButton(
+            tooltip: 'Dismiss voice notice',
+            icon: Icon(Icons.close_rounded, size: 16, color: ext?.textSecondary),
+            onPressed: vc.clearError,
+          ),
+        ],
+      ),
     );
   }
 

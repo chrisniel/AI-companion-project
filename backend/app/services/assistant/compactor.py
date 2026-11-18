@@ -247,7 +247,15 @@ async def compact_conversation(
         stmt = stmt.where(Message.sequence_no < before_sequence_no)
     stmt = stmt.order_by(Message.sequence_no.asc())
 
-    uncompacted = list((await db.scalars(stmt)).all())
+    uncompacted = [
+        m
+        for m in (await db.scalars(stmt)).all()
+        if not (
+            m.sender == "assistant"
+            and m.status in ("failed", "cancelled", "pending", "streaming")
+            and not (m.content or "").strip()
+        )
+    ]
     if not uncompacted:
         return CompactionExecutionResult(
             summary=prior,
@@ -265,6 +273,9 @@ async def compact_conversation(
         )
     else:
         effective_keep = max(1, settings.CONTEXT_COMPACTION_KEEP_RECENT_MESSAGES)
+        # When <= keep_recent long turns still blow past context budget, step down so auto-compaction can proceed.
+        if trigger == "auto" and 2 <= len(uncompacted) <= effective_keep:
+            effective_keep = max(1, len(uncompacted) // 2)
 
     if len(uncompacted) <= effective_keep:
         return CompactionExecutionResult(
@@ -275,11 +286,33 @@ async def compact_conversation(
         )
 
     slice_end = len(uncompacted) - effective_keep if effective_keep > 0 else len(uncompacted)
-    to_compact = uncompacted[:slice_end]
+    to_compact = [
+        m
+        for m in uncompacted[:slice_end]
+        if not (
+            m.sender == "assistant"
+            and m.status in ("failed", "cancelled", "pending", "streaming")
+            and not (m.content or "").strip()
+        )
+    ]
+    if not to_compact:
+        return CompactionExecutionResult(
+            summary=prior,
+            compacted=False,
+            reason="nothing_new_to_compact" if prior is not None else "insufficient_messages",
+            active_summary=prior,
+        )
 
     min_req = (
         1
-        if (force and min_messages_to_compact is None)
+        if (
+            (force and min_messages_to_compact is None)
+            or (
+                keep_recent_messages is None
+                and trigger == "auto"
+                and len(uncompacted) <= settings.CONTEXT_COMPACTION_KEEP_RECENT_MESSAGES
+            )
+        )
         else (
             settings.CONTEXT_COMPACTION_MIN_MESSAGES
             if min_messages_to_compact is None

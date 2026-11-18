@@ -30,7 +30,7 @@ The desktop shell utilizes a compact, collapsible left navigation rail:
   2. **Schedule:** Tasks, Reminders, Alarms, and daily Routines.
   3. **Memory:** User-visible memory browser, fact verification, and forgetting controls.
   4. **Studio:** Character Studio (traits, lore, avatar, per-character TTS voice selection & preview).
-  5. **Settings:** Responsive two-column categorized settings workspace (aligned with Web preferences) featuring live sidebar search, active `AVAILABLE` sections (*Appearance*, *General & Lifecycle*, *Notifications & Quiet Hours*, *Profiles & Privacy*, *AI Runtime & Models*, *Storage & Diagnostics*, *Tools & Safety*, *Voice & Audio*), and truthful `PLANNED` milestone tabs (*Health & Context* M5+, *Network & Mesh* M5+), without duplicating window-exit or hide-to-tray action buttons inside Settings. The top utility strip alongside Profile Scope / Notifications displays a persistent **Stop Tools / Tools KILLED** Kill Switch pill whenever `DesktopToolPolicyController` is wired, plus a glowing amber **Mic Active** badge (`shell_mic_privacy_indicator`) while microphone capture is active (or **Audio Muted** while muted).
+  5. **Settings:** Responsive two-column categorized settings workspace (aligned with Web preferences) featuring live sidebar search, active `AVAILABLE` sections (*Appearance*, *General & Lifecycle*, *Notifications & Quiet Hours*, *Profiles & Privacy*, *AI Runtime & Models*, *Storage & Diagnostics*, *Tools & Safety*, *Voice & Audio*), and truthful `PLANNED` milestone tabs (*Health & Context* M5+, *Network & Mesh* M5+), without duplicating window-exit or hide-to-tray action buttons inside Settings. The top utility strip alongside Profile Scope / Notifications displays a persistent **Stop Tools / Tools KILLED** Kill Switch pill whenever `DesktopToolPolicyController` is wired, plus a glowing amber **Mic Active** badge (`shell_mic_privacy_indicator`) while microphone capture is active (or clickable **Audio Muted** pill `shell_mic_muted_indicator` while muted to unmute with one click).
 - **Bottom:** System runtime health indicator (Green = Connected, Yellow = Reconnecting, Red = Stopped), quick Performance Mode / rail collapse controls, and a persistent **`⏻` Power Menu** providing global access to **Minimize to System Tray**, **Close & Startup Settings...** (deep-linking to `Settings -> General & Lifecycle`), and **Exit Companion**.
 
 ---
@@ -44,7 +44,7 @@ The desktop shell utilizes a compact, collapsible left navigation rail:
 - **Disconnected / Offline:** Grayscale icon with warning indicator.
 
 ### 3.2 System Tray Context Menu (Right-Click) & Lifecycle Distinctions
-The system tray menu strictly distinguishes three distinct lifecycle concepts:
+The system tray menu explicitly opens on both left-button release and right-button click (`onTrayIconRightMouseDown` -> `popUpContextMenu()`) and retains **Mute Audio** check state across periodic `updateRuntimeStatus()` refreshes, strictly distinguishing three distinct lifecycle concepts:
 1. **Open AI Companion** *(Default click / double-click action)* — Restores and focuses the main window.
 2. **Hide to System Tray** — Minimizes/hides the desktop UI window to the system tray. Both the Flutter UI process and the Local AI Runtime host process remain active and executing.
 3. **Emergency Stop Tools / Tools Killed** — Immediately engages the persistent Global Tool Kill Switch (`POST /api/v1/tools/kill-switch`); disabled once engaged until reset in Settings under local Host Admin authority.

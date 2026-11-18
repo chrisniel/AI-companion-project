@@ -66,7 +66,10 @@ from app.services.tools.executor import (
     list_pending_confirmations_for_conversation,
     resolve_confirmation_atomic,
 )
-from app.services.tools.registry import get_openai_tool_definitions
+from app.services.tools.registry import (
+    estimate_openai_tools_tokens,
+    get_openai_tool_definitions,
+)
 
 logger = logging.getLogger("app.services.assistant.orchestrator")
 
@@ -165,26 +168,34 @@ def _get_lock(conversation_id: str) -> asyncio.Lock:
     return _conversation_locks[conversation_id]
 
 
+def _text_char_units(text: str) -> int:
+    """Count ASCII chars as 1 unit and multi-byte/emoji code points conservatively as 6 units."""
+    return sum(1 if ord(ch) < 128 else 6 for ch in text)
+
+
 def _estimate_tokens(content: Union[str, List[Any]]) -> int:
-    """Estimate token count: 4 chars ~ 1 token, minimum 1. Only counts textual content."""
+    """Estimate token count conservatively (4 ASCII chars ~ 1 token, weighted for multi-byte UTF-8)."""
     if not content:
         return 0
     if isinstance(content, str):
-        return max(1, len(content) // 4)
+        return max(1, _text_char_units(content) // 4)
     if isinstance(content, list):
-        total_len = 0
+        total_units = 0
+        has_text = False
         for block in content:
             if getattr(block, "type", None) == "text":
                 text = getattr(block, "text", "")
                 if text:
-                    total_len += len(text)
+                    has_text = True
+                    total_units += _text_char_units(text)
             elif isinstance(block, dict) and block.get("type") == "text":
                 text = block.get("text", "")
                 if text:
-                    total_len += len(text)
-        if total_len == 0:
+                    has_text = True
+                    total_units += _text_char_units(text)
+        if not has_text or total_units == 0:
             return 0
-        return max(1, total_len // 4)
+        return max(1, total_units // 4)
     return 0
 
 
@@ -233,13 +244,20 @@ def _build_context(
     triggered_lore: Optional[List[Memory]] = None,
     short_term_memories: Optional[List[Memory]] = None,
     episode_summary: Optional[ConversationSummary] = None,
+    tool_tokens: int = 0,
 ) -> List[ChatMessage]:
     """
     Construct context fitting within the token budget with semantic 3-tier XML partitioning.
-    Budget: context_capacity - generation_reserve - system_tokens - memory_tokens = history_budget.
+    Budget: context_capacity - generation_reserve - tool_tokens - system_tokens - user_tokens - memory_tokens = history_budget.
     Walk history newest-first until budget exhausted.
     """
-    used = generation_reserve + _estimate_tokens(system_prompt)
+    used = (
+        generation_reserve
+        + max(0, tool_tokens)
+        + _estimate_tokens(system_prompt)
+        + _estimate_tokens(user_text)
+        + 10
+    )
     effective_budget = max(memory_budget, 256) if (core_memories or triggered_lore or short_term_memories) else memory_budget
 
     # Fallback partitioning when legacy callers supply a flat `memories` list only
@@ -1049,10 +1067,22 @@ async def orchestrate_chat_stream(
         if active_summary is not None:
             hist_query = hist_query.where(Message.sequence_no > active_summary.to_sequence_no)
         hist_result = await db.execute(hist_query)
-        history = list(hist_result.scalars().all())
+        history = [
+            m
+            for m in hist_result.scalars().all()
+            if not (
+                m.sender == "assistant"
+                and m.status in ("failed", "cancelled", "pending", "streaming")
+                and not (m.content or "").strip()
+            )
+        ]
 
         status_resp = await provider.get_status()
         context_capacity = status_resp.context_size or 4096
+        tool_defs = get_openai_tool_definitions()
+        effective_tool_reserve = (
+            estimate_openai_tools_tokens(tool_defs) if context_capacity >= 4096 else 0
+        )
         emotion_event = appraise_user_turn(user_text).event_type
         if conv:
             await appraise_and_update_conversation_mood(db, profile_session, conv, user_text)
@@ -1078,15 +1108,26 @@ async def orchestrate_chat_stream(
             memory_budget=max(settings.MEMORY_BUDGET_TOKENS, 570),
             conflicts=conflicts,
             episode_summary=active_summary,
+            tool_tokens=effective_tool_reserve,
         )
 
-        # Pre-limit context compaction: summarize older turns when approaching context capacity
+        # Pre-limit context compaction: account for tool schemas and untruncated history
         estimated_prompt_tokens = sum(
             _estimate_tokens(m.content) if isinstance(m.content, str) else 64
             for m in prompt_messages
+        ) + effective_tool_reserve
+        raw_history_tokens = sum(
+            _estimate_tokens(_format_history_message_content(m)) + 10 for m in history
+        )
+        untruncated_prompt_tokens = (
+            (_estimate_tokens(prompt_messages[0].content) if prompt_messages else 0)
+            + raw_history_tokens
+            + _estimate_tokens(user_text)
+            + 10
+            + effective_tool_reserve
         )
         if conv and should_compact_conversation(
-            estimated_prompt_tokens=estimated_prompt_tokens,
+            estimated_prompt_tokens=max(estimated_prompt_tokens, untruncated_prompt_tokens),
             context_capacity=context_capacity,
             generation_reserve=settings.GENERATION_RESERVE_TOKENS,
         ):
@@ -1118,6 +1159,7 @@ async def orchestrate_chat_stream(
                     memory_budget=max(settings.MEMORY_BUDGET_TOKENS, 570),
                     conflicts=conflicts,
                     episode_summary=active_summary,
+                    tool_tokens=effective_tool_reserve,
                 )
 
         # Query committed attachments bound to this user turn
@@ -1157,10 +1199,9 @@ async def orchestrate_chat_stream(
             prompt_messages[-1] = ChatMessage(role="user", content=user_blocks)
 
         prompt_tokens = sum(_estimate_tokens(m.content) for m in prompt_messages)
-        available_generation_tokens = max(1, context_capacity - prompt_tokens)
+        available_generation_tokens = max(1, context_capacity - prompt_tokens - effective_tool_reserve)
         max_tokens = min(1024, available_generation_tokens)
 
-        tool_defs = get_openai_tool_definitions()
         working_messages = list(prompt_messages)
         if working_messages and working_messages[0].role == "system":
             tool_instruction = (
@@ -1181,7 +1222,8 @@ async def orchestrate_chat_stream(
             round_tools = tool_defs if round_idx < MAX_TOOL_ROUNDS else None
             pass_state: dict[str, Any] = {}
             round_text = ""
-            round_prompt_tokens = sum(_estimate_tokens(m.content) for m in working_messages)
+            round_tool_reserve = effective_tool_reserve if round_tools else 0
+            round_prompt_tokens = sum(_estimate_tokens(m.content) for m in working_messages) + round_tool_reserve
             round_max_tokens = min(1024, max(64, context_capacity - round_prompt_tokens))
 
             async for token, sse_frame in _stream_guarded_sse_pass(

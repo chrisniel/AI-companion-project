@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:companion_core/companion_core.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:ai_companion_desktop/lifecycle/desktop_lifecycle_coordinator.dart';
@@ -112,6 +113,7 @@ class FakeDesktopTrayAdapter implements DesktopTrayAdapter {
   String? iconPath;
   String? toolTip;
   Menu? contextMenu;
+  int popUpContextMenuCount = 0;
   bool isDestroyed = false;
   final List<TrayListener> listeners = [];
 
@@ -128,6 +130,11 @@ class FakeDesktopTrayAdapter implements DesktopTrayAdapter {
   @override
   Future<void> setContextMenu(Menu menu) async {
     contextMenu = menu;
+  }
+
+  @override
+  Future<void> popUpContextMenu() async {
+    popUpContextMenuCount++;
   }
 
   @override
@@ -161,6 +168,9 @@ class FailingDesktopTrayAdapter implements DesktopTrayAdapter {
   Future<void> setContextMenu(Menu menu) async {
     throw Exception('Tray unavailable on host platform');
   }
+
+  @override
+  Future<void> popUpContextMenu() async {}
 
   @override
   Future<void> destroy() async {}
@@ -417,6 +427,28 @@ void main() {
       expect(windowAdapter.hideCallCount, equals(initialHideCount));
       expect(windowAdapter.showCallCount, equals(initialShowCount));
     });
+
+    test('right-clicking tray pops up context menu and updateRuntimeStatus preserves Unmute Audio', () async {
+      await coordinator.initialize();
+      await coordinator.updateAudioMutedStatus(true);
+      await coordinator.updateRuntimeStatus(
+        const RuntimeProcessState(
+          supervisionMode: SupervisionMode.localLoopback,
+          status: RuntimeStatus.readyAndAuthenticated,
+          pid: 1234,
+        ),
+      );
+
+      final items = trayAdapter.contextMenu?.items ?? const [];
+      expect(
+        items.any((i) => i.key == 'mute_audio_toggle' && (i.label?.startsWith('Unmute Audio') ?? false)),
+        isTrue,
+      );
+
+      coordinator.onTrayIconRightMouseDown();
+      await pumpEventQueue();
+      expect(trayAdapter.popUpContextMenuCount, equals(1));
+    });
   });
 }
 
@@ -439,6 +471,9 @@ class PartialFailureTrayAdapter implements DesktopTrayAdapter {
   Future<void> setContextMenu(Menu menu) async {
     throw Exception('Failed setting context menu');
   }
+
+  @override
+  Future<void> popUpContextMenu() async {}
 
   @override
   Future<void> destroy() async {
