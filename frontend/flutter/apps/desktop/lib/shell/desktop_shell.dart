@@ -87,6 +87,8 @@ class _DesktopShellState extends State<DesktopShell> {
   bool _lastKnownVoiceConnected = false;
   String? _lastKnownVoiceProfileId;
   bool Function()? _chatHistoryDrawerCloser;
+  VoidCallback? _chatHistoryDrawerToggler;
+  bool _pendingToggleHistoryDrawer = false;
   DesktopToastAdapter? _toastAdapter;
   bool _ownsToastAdapter = false;
   bool _isBacklogDrawerOpen = false;
@@ -509,13 +511,46 @@ class _DesktopShellState extends State<DesktopShell> {
         !hw.isAltPressed &&
         !hw.isShiftPressed &&
         !hw.isMetaPressed;
-    if (isCtrlOnly && event.logicalKey == LogicalKeyboardKey.comma) {
+    if (isCtrlOnly &&
+        event is! KeyRepeatEvent &&
+        event.logicalKey == LogicalKeyboardKey.comma) {
       widget.controller.requestDestination(DesktopNavDestination.settings);
+      return true;
+    }
+    if (isCtrlOnly &&
+        event is! KeyRepeatEvent &&
+        event.logicalKey == LogicalKeyboardKey.keyH) {
+      final notOnChat =
+          widget.controller.currentDestination != DesktopNavDestination.chat;
+      if (notOnChat) {
+        widget.controller.requestDestination(DesktopNavDestination.chat);
+        final toggler = _chatHistoryDrawerToggler;
+        if (toggler != null) {
+          // Ensure History Drawer is open when switching from another tab.
+          if (_chatHistoryDrawerCloser == null ||
+              !_visitedDestinations.contains(DesktopNavDestination.chat)) {
+            toggler();
+          } else {
+            // Close first if left open, or simpler: call toggler only if not already open.
+            final wasOpen = _chatHistoryDrawerCloser!.call();
+            if (!wasOpen) {
+              toggler();
+            } else {
+              // Keep open when jumping into Chat from Settings via Ctrl+H
+              toggler();
+            }
+          }
+        } else {
+          _pendingToggleHistoryDrawer = true;
+        }
+      } else {
+        _chatHistoryDrawerToggler?.call();
+      }
       return true;
     }
 
     final vc = _voiceController;
-    if (vc != null) {
+    if (vc != null && event is! KeyRepeatEvent) {
       if (VoiceShortcutKeyMapper.matchesKeyEvent(
         event,
         vc.shortcuts.inAppToggle,
@@ -528,10 +563,18 @@ class _DesktopShellState extends State<DesktopShell> {
         }
         return true;
       }
+      final isF8Backup = event.logicalKey == LogicalKeyboardKey.f8 &&
+          !hw.isControlPressed &&
+          !hw.isAltPressed &&
+          !hw.isShiftPressed &&
+          !hw.isMetaPressed &&
+          vc.shortcuts.inAppToggle.virtualKey != 0x77 &&
+          vc.shortcuts.pushToTalk.virtualKey != 0x77;
       if (VoiceShortcutKeyMapper.matchesKeyEvent(
-        event,
-        vc.shortcuts.muteToggle,
-      )) {
+            event,
+            vc.shortcuts.muteToggle,
+          ) ||
+          isF8Backup) {
         unawaited(vc.setMuted(!vc.isAudioMuted));
         return true;
       }
@@ -849,6 +892,17 @@ class _DesktopShellState extends State<DesktopShell> {
           voiceController: _voiceController,
           isActiveTab: widget.controller.currentDestination == DesktopNavDestination.chat,
           onRegisterCloseHistoryDrawer: (closer) => _chatHistoryDrawerCloser = closer,
+          onRegisterToggleHistoryDrawer: (toggler) {
+            _chatHistoryDrawerToggler = toggler;
+            if (toggler != null && _pendingToggleHistoryDrawer) {
+              _pendingToggleHistoryDrawer = false;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  toggler();
+                }
+              });
+            }
+          },
           onNavigateToSettings: () => widget.controller.requestDestination(DesktopNavDestination.settings),
         );
       case DesktopNavDestination.schedule:

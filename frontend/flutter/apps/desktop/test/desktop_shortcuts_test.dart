@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:ai_companion_desktop/controllers/desktop_settings_controller.dart';
 import 'package:ai_companion_desktop/features/chat/desktop_chat_controller.dart';
 import 'package:ai_companion_desktop/features/voice/desktop_voice_controller.dart';
+import 'package:ai_companion_desktop/features/voice/voice_shortcut_recorder.dart';
 import 'package:ai_companion_desktop/lifecycle/desktop_lifecycle_coordinator.dart';
 import 'package:ai_companion_desktop/platform/desktop_audio_adapter.dart';
 import 'package:ai_companion_desktop/shell/desktop_shell.dart';
@@ -284,10 +285,55 @@ void main() {
         await tester.pumpAndSettle();
         expect(windowAdapter.hideCallCount, 1);
 
+        // Press F8 backup mute toggle -> mutes & unmutes cleanly
+        await tester.sendKeyEvent(LogicalKeyboardKey.f8);
+        await tester.pumpAndSettle();
+        expect(voice.isAudioMuted, isTrue);
+        await tester.sendKeyEvent(LogicalKeyboardKey.f8);
+        await tester.pumpAndSettle();
+        expect(voice.isAudioMuted, isFalse);
+
+        // Physical key fallback: CapsLock/Shift altered keyM (uppercase M keyId) still matches Ctrl+Shift+M
+        expect(
+          VoiceShortcutKeyMapper.physicalToVirtualKey(PhysicalKeyboardKey.keyM),
+          equals(0x4D),
+        );
+
         await ws.close();
         voice.dispose();
         chat.dispose();
         client.close();
+      },
+    );
+
+    testWidgets(
+      'Ctrl+H works globally when launched directly on Settings before Chat is visited',
+      (tester) async {
+        setupDesktopViewport(tester);
+
+        final controller = DesktopSettingsController(
+          initialDestination: DesktopNavDestination.settings,
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: CompanionTheme.dark(),
+            home: DesktopShell(
+              controller: controller,
+              enableSchedulePolling: false,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(controller.currentDestination, DesktopNavDestination.settings);
+
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+        await tester.pumpAndSettle();
+
+        expect(controller.currentDestination, DesktopNavDestination.chat);
+        expect(find.text('Conversation History'), findsOneWidget);
       },
     );
   });

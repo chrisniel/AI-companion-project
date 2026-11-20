@@ -327,6 +327,12 @@ def test_tts_espeak_g2p_taglish_and_preprocessing():
     assert "kɪtj" not in taglish_ipa
     assert "ŋ" in taglish_ipa  # Magandang -> ...ŋ
 
+    # Slice 5B: Slash word normalization, emoji-only suppression, and punctuation prosody preservation
+    assert preprocess_text_for_tts("Since it's in late winter/early spring.") == "Since it's in late winter or early spring."
+    assert preprocess_text_for_tts("🌸") == ""
+    prosody_ipa = text_to_kokoro_ipa("Oh my dear, would you like more suggestions?")
+    assert "," in prosody_ipa and prosody_ipa.rstrip().endswith("?")
+
 
 async def test_kokoro_synthesize_chunks_long_text_without_510_truncation():
     from app.services.voice.tts import KokoroOnnxTtsProvider
@@ -363,6 +369,29 @@ async def test_kokoro_synthesize_chunks_long_text_without_510_truncation():
         voices={"af_nicole": [[0.1] * 256] * 512},
         session=_CountingSession(),
     )
+    # 183+ char sentence stays intact inside a single chunk instead of slicing before "spring."
+    intact_chunks = kokoro._split_token_bounded_chunks(
+        "Since it is December eighth in late winter/early spring, I recommend looking at lavender wedding suits today.",
+        language="en-us",
+    )
+    assert len(intact_chunks) == 1
+
+    # Emoji-only string skips ONNX synthesis and returns silent padding WAV
+    calls.clear()
+    emoji_res = await kokoro.synthesize("🌸", voice_id="af_nicole", speed=1.0)
+    assert len(calls) == 0
+    assert emoji_res.wav_bytes[:4] == b"RIFF"
+
+    # Normal text includes 50ms leading + 120ms trailing silence padding at 24 kHz
+    import io
+    import wave
+
+    hi_res = await kokoro.synthesize("Hi!", voice_id="af_nicole", speed=1.0)
+    with wave.open(io.BytesIO(hi_res.wav_bytes), "rb") as wf:
+        assert wf.getframerate() == 24000
+        assert wf.getnframes() == 1200 + int(24000 * 0.05) + int(24000 * 0.12)
+
+    calls.clear()
     res = await kokoro.synthesize(long_text, voice_id="af_nicole", speed=1.0)
     assert res.wav_bytes[:4] == b"RIFF"
     assert len(calls) >= 4

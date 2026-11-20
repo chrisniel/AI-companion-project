@@ -569,3 +569,134 @@ async def test_mid_round_cancellation_retains_round1_receipts_and_continuation_o
         assert "tools" not in calls[1]["kwargs"]
     finally:
         _reset_provider_for_tests()
+
+
+@pytest.mark.asyncio
+async def test_multi_round_readonly_search_allowed_denied_receipt_omitted_and_local_time_injected(
+    test_session: AsyncSession,
+    profile_id: str,
+    profile_session,
+    monkeypatch,
+):
+    """Risk 0 web_search retries work after web context, denied receipts stay out of history, and local time is injected."""
+    from datetime import timezone
+    from app.services.assistant.orchestrator import _format_history_message_content
+    from app.services.tools.adapters_productivity import _parse_iso_utc
+
+    _reset_provider_for_tests()
+    try:
+        profile = await test_session.get(Profile, profile_id)
+        assert profile is not None
+        profile.quiet_hours_timezone = "Asia/Manila"
+        await test_session.commit()
+
+        # Verify naive and date-only scheduling parsing respects Profile timezone
+        parsed_naive = _parse_iso_utc("2026-12-08T10:00:00", tz_name="Asia/Manila")
+        assert parsed_naive.tzinfo == timezone.utc
+        assert parsed_naive.hour == 2  # 10:00 Asia/Manila (UTC+8) == 02:00 UTC
+        parsed_date_only = _parse_iso_utc("2026-12-08", tz_name="Asia/Manila")
+        assert parsed_date_only.hour == 1  # defaults to 09:00 Asia/Manila == 01:00 UTC
+
+        # Denied/failed/killed receipts must NOT poison future turns in history
+        hist_msg = Message(
+            id=generate_uuid(),
+            conversation_id="c-hist",
+            profile_id=profile_id,
+            sender="assistant",
+            content="Here is what I found earlier.",
+            metadata_json=json.dumps(
+                {
+                    "tool_receipts": [
+                        {
+                            "tool_name": "web_search",
+                            "outcome_status": "denied",
+                            "summary": "Tool 'web_search' denied by policy (EXTERNAL_CONTENT_FORBIDDEN).",
+                        },
+                        {
+                            "tool_name": "weather_lookup",
+                            "outcome_status": "executed",
+                            "summary": "Executed weather_lookup.",
+                        },
+                    ],
+                    "sources": [],
+                }
+            ),
+        )
+        formatted_hist = _format_history_message_content(hist_msg)
+        assert "denied" not in formatted_hist
+        assert "EXTERNAL_CONTENT_FORBIDDEN" not in formatted_hist
+        assert "weather_lookup (executed)" in formatted_hist
+
+        conv, provider = await _setup_conv_and_provider(test_session, profile_id)
+
+        async def _fake_search(query: str, **_kwargs) -> dict[str, Any]:
+            return {
+                "provider": "public_search",
+                "results": [{"title": "Suit", "url": "https://example.org/suit", "domain": "example.org", "snippet": "Lavender wedding suit ideas"}],
+                "sources": [{"title": "Suit", "url": "https://example.org/suit", "domain": "example.org"}],
+                "content": "<untrusted_web_content url=\"https://example.org/suit\" domain=\"example.org\">Lavender wedding suit ideas</untrusted_web_content>",
+            }
+
+        monkeypatch.setattr("app.services.tools.executor.search_web", _fake_search)
+
+        captured_system_prompts: list[str] = []
+        round_calls = 0
+
+        def _multi_round_stream(messages: list[ChatMessage], **kwargs):
+            nonlocal round_calls
+            round_calls += 1
+            captured_system_prompts.append(str(messages[0].content))
+            if round_calls in (1, 2):
+                async def _g_empty():
+                    if False:
+                        yield ""
+
+                return GenerationStream(
+                    _g_empty(),
+                    meta={
+                        "finish_reason": "tool_calls",
+                        "tool_calls": [
+                            {
+                                "id": f"call_ws_{round_calls}",
+                                "type": "function",
+                                "function": {
+                                    "name": "web_search",
+                                    "arguments": json.dumps({"query": f"lavender suit pass {round_calls}"}),
+                                },
+                            }
+                        ],
+                    },
+                )
+
+            async def _g_final():
+                yield "Here are refined lavender suit recommendations."
+
+            return GenerationStream(_g_final(), meta={"finish_reason": "stop"})
+
+        monkeypatch.setattr(provider, "generate_stream", _multi_round_stream)
+        prepared = await prepare_turn(
+            db=test_session,
+            conversation_id=conv.id,
+            profile_session=profile_session,
+            user_text="Please recommend outfits for December 8.",
+        )
+        lock = _get_lock(conv.id)
+        await lock.acquire()
+        frames: list[str] = []
+        async for frame in orchestrate_chat_stream(
+            db=test_session,
+            conversation_id=conv.id,
+            user_text="Please recommend outfits for December 8.",
+            profile_session=profile_session,
+            prepared_turn=prepared,
+            conversation_lock=lock,
+        ):
+            frames.append(frame)
+
+        events = _parse_sse_events(frames)
+        tool_results = [e for e in events if e.get("type") == "tool_result"]
+        assert len(tool_results) == 2
+        assert all(r["outcome_status"] == "executed" for r in tool_results), tool_results
+        assert any("Current Local Date & Time:" in s and "Asia/Manila" in s for s in captured_system_prompts)
+    finally:
+        _reset_provider_for_tests()

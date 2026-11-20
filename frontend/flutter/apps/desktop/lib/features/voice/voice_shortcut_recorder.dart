@@ -34,6 +34,9 @@ abstract final class VoiceShortcutKeyMapper {
         id <= LogicalKeyboardKey.keyZ.keyId) {
       return 0x41 + (id - LogicalKeyboardKey.keyA.keyId);
     }
+    if (id >= 0x41 && id <= 0x5A) {
+      return id;
+    }
     if (id >= LogicalKeyboardKey.digit0.keyId &&
         id <= LogicalKeyboardKey.digit9.keyId) {
       return 0x30 + (id - LogicalKeyboardKey.digit0.keyId);
@@ -49,6 +52,64 @@ abstract final class VoiceShortcutKeyMapper {
     if (key == LogicalKeyboardKey.altRight) return 0xA5;
     return null;
   }
+
+  static final Map<PhysicalKeyboardKey, int> _physicalVkMap = {
+    PhysicalKeyboardKey.keyA: 0x41,
+    PhysicalKeyboardKey.keyB: 0x42,
+    PhysicalKeyboardKey.keyC: 0x43,
+    PhysicalKeyboardKey.keyD: 0x44,
+    PhysicalKeyboardKey.keyE: 0x45,
+    PhysicalKeyboardKey.keyF: 0x46,
+    PhysicalKeyboardKey.keyG: 0x47,
+    PhysicalKeyboardKey.keyH: 0x48,
+    PhysicalKeyboardKey.keyI: 0x49,
+    PhysicalKeyboardKey.keyJ: 0x4A,
+    PhysicalKeyboardKey.keyK: 0x4B,
+    PhysicalKeyboardKey.keyL: 0x4C,
+    PhysicalKeyboardKey.keyM: 0x4D,
+    PhysicalKeyboardKey.keyN: 0x4E,
+    PhysicalKeyboardKey.keyO: 0x4F,
+    PhysicalKeyboardKey.keyP: 0x50,
+    PhysicalKeyboardKey.keyQ: 0x51,
+    PhysicalKeyboardKey.keyR: 0x52,
+    PhysicalKeyboardKey.keyS: 0x53,
+    PhysicalKeyboardKey.keyT: 0x54,
+    PhysicalKeyboardKey.keyU: 0x55,
+    PhysicalKeyboardKey.keyV: 0x56,
+    PhysicalKeyboardKey.keyW: 0x57,
+    PhysicalKeyboardKey.keyX: 0x58,
+    PhysicalKeyboardKey.keyY: 0x59,
+    PhysicalKeyboardKey.keyZ: 0x5A,
+    PhysicalKeyboardKey.digit0: 0x30,
+    PhysicalKeyboardKey.digit1: 0x31,
+    PhysicalKeyboardKey.digit2: 0x32,
+    PhysicalKeyboardKey.digit3: 0x33,
+    PhysicalKeyboardKey.digit4: 0x34,
+    PhysicalKeyboardKey.digit5: 0x35,
+    PhysicalKeyboardKey.digit6: 0x36,
+    PhysicalKeyboardKey.digit7: 0x37,
+    PhysicalKeyboardKey.digit8: 0x38,
+    PhysicalKeyboardKey.digit9: 0x39,
+    PhysicalKeyboardKey.f1: 0x70,
+    PhysicalKeyboardKey.f2: 0x71,
+    PhysicalKeyboardKey.f3: 0x72,
+    PhysicalKeyboardKey.f4: 0x73,
+    PhysicalKeyboardKey.f5: 0x74,
+    PhysicalKeyboardKey.f6: 0x75,
+    PhysicalKeyboardKey.f7: 0x76,
+    PhysicalKeyboardKey.f8: 0x77,
+    PhysicalKeyboardKey.f9: 0x78,
+    PhysicalKeyboardKey.f10: 0x79,
+    PhysicalKeyboardKey.f11: 0x7A,
+    PhysicalKeyboardKey.f12: 0x7B,
+    PhysicalKeyboardKey.space: 0x20,
+    PhysicalKeyboardKey.shiftRight: 0xA1,
+    PhysicalKeyboardKey.controlRight: 0xA3,
+    PhysicalKeyboardKey.altLeft: 0xA4,
+    PhysicalKeyboardKey.altRight: 0xA5,
+  };
+
+  static int? physicalToVirtualKey(PhysicalKeyboardKey key) => _physicalVkMap[key];
 
   static bool isStandaloneModifierVk(int vk) =>
       vk == 0xA1 || vk == 0xA3 || vk == 0xA4 || vk == 0xA5;
@@ -66,8 +127,10 @@ abstract final class VoiceShortcutKeyMapper {
   }
 
   static bool matchesKeyEvent(KeyEvent event, VoiceShortcutBinding binding) {
-    final expectedKey = virtualKeyToLogical(binding.virtualKey);
-    if (expectedKey == null || event.logicalKey != expectedKey) return false;
+    final keyMatches =
+        (logicalToVirtualKey(event.logicalKey) == binding.virtualKey) ||
+            (physicalToVirtualKey(event.physicalKey) == binding.virtualKey);
+    if (!keyMatches) return false;
     if (isStandaloneModifierVk(binding.virtualKey)) {
       return true;
     }

@@ -275,15 +275,19 @@ def split_sentences_for_tts(text: str, *, max_chars: int = 240) -> list[str]:
 
 
 def preprocess_text_for_tts(text: str) -> str:
-    """Clean Markdown, URLs, emojis, and technical acronyms before G2P phonemization."""
+    """Clean Markdown, URLs, emojis, slash pairs, and acronyms before G2P phonemization."""
     cleaned = text or ""
     cleaned = _MD_LINK_RE.sub(r"\1", cleaned)
     cleaned = _URL_RE.sub("", cleaned)
     cleaned = cleaned.replace("```", " ").replace("`", "")
+    cleaned = re.sub(r"(?<=[A-Za-z])\s*/\s*(?=[A-Za-z])", " or ", cleaned)
     cleaned = re.sub(r"[*_~#>]+", " ", cleaned)
     cleaned = _EMOJI_RE.sub(" ", cleaned)
     cleaned = _ACRONYM_RE.sub(lambda m: " ".join(m.group(1)), cleaned)
-    return " ".join(cleaned.split())
+    normalized = " ".join(cleaned.split())
+    if not normalized or not re.search(r"[A-Za-z0-9]", normalized):
+        return ""
+    return normalized
 
 
 class _LazyEspeakPhonemizer:
@@ -342,17 +346,38 @@ class _LazyEspeakPhonemizer:
                 else:
                     lib.espeak_SetVoiceByName(b"en-us")
                     self._active_voice = b"en-us"
-            buf = ctypes.create_string_buffer(text.encode("utf-8"))
-            ptr = ctypes.c_void_p(ctypes.addressof(buf))
-            segments: list[str] = []
-            while ptr.value:
-                res = lib.espeak_TextToPhonemes(ctypes.byref(ptr), 1, 2)
-                if not res:
-                    break
-                piece = res.decode("utf-8", errors="ignore").strip()
-                if piece:
-                    segments.append(piece.replace("g", "ɡ"))
-            return " ".join(segments)
+            clause_matches = list(re.finditer(r"([^.,!?;:—]*)([.,!?;:—]*)", text))
+            clause_phonemes: list[str] = []
+            for m in clause_matches:
+                body = (m.group(1) or "").strip()
+                punct = (m.group(2) or "").strip()
+                if not body and not punct:
+                    continue
+                if not body:
+                    if clause_phonemes:
+                        clause_phonemes[-1] = f"{clause_phonemes[-1]}{punct}"
+                    else:
+                        clause_phonemes.append(punct)
+                    continue
+                clause_input = f"{body}{punct}"
+                buf = ctypes.create_string_buffer(clause_input.encode("utf-8"))
+                ptr = ctypes.c_void_p(ctypes.addressof(buf))
+                segments: list[str] = []
+                while ptr.value:
+                    res = lib.espeak_TextToPhonemes(ctypes.byref(ptr), 1, 2)
+                    if not res:
+                        break
+                    piece = res.decode("utf-8", errors="ignore").strip()
+                    if piece:
+                        segments.append(piece.replace("g", "ɡ"))
+                joined = " ".join(segments).strip()
+                if joined:
+                    if punct and not joined.endswith(punct[-1]):
+                        joined = f"{joined}{punct}"
+                    clause_phonemes.append(joined)
+                elif punct:
+                    clause_phonemes.append(punct)
+            return " ".join(clause_phonemes)
 
 
 _ESPEAK_PHONEMIZER = _LazyEspeakPhonemizer()
@@ -391,7 +416,7 @@ def text_to_kokoro_ipa(text: str, *, language: str = "en-us") -> str:
     cleaned = preprocess_text_for_tts(text)
     if not cleaned:
         return ""
-    tokens = re.findall(r"[A-Za-z0-9']+|[^\w\s]+|\s+", cleaned)
+    tokens = re.findall(r"[A-Za-z0-9']+|[.,!?;:()—\-]+|[^\w\s]+|\s+", cleaned)
     rendered: list[str] = []
     english_buf: list[str] = []
 
@@ -416,17 +441,23 @@ def text_to_kokoro_ipa(text: str, *, language: str = "en-us") -> str:
         low = tok.lower()
         if low.isalpha() and low in _TAGALOG_LEXICON_IPA:
             _flush_english()
+            if rendered and not rendered[-1].endswith((" ", "(", "—")):
+                rendered.append(" ")
             rendered.append(_TAGALOG_LEXICON_IPA[low])
-        elif re.fullmatch(r"[.,!?;:()—\-]+", tok):
-            _flush_english()
-            rendered.append(tok)
         elif tok.isspace():
             if english_buf:
-                english_buf.append(" ")
+                if not english_buf[-1].endswith(" "):
+                    english_buf.append(" ")
             elif rendered and not rendered[-1].endswith(" "):
                 rendered.append(" ")
+        elif re.fullmatch(r"[.,!?;:()—\-]+", tok):
+            if any(any(c.isalnum() for c in s) for s in english_buf):
+                english_buf.append(tok)
+            else:
+                _flush_english()
+                rendered.append(tok)
         else:
-            if english_buf and not english_buf[-1].endswith(" "):
+            if english_buf and not english_buf[-1].endswith((" ", "-", "(")):
                 english_buf.append(" ")
             english_buf.append(tok)
 
@@ -691,28 +722,42 @@ class KokoroOnnxTtsProvider(TtsProvider):
         max_body_tokens: int = 480,
     ) -> list[str]:
         assert self._vocab is not None
-        cleaned = preprocess_text_for_tts(text) or text.strip()
+        cleaned = preprocess_text_for_tts(text)
         if not cleaned:
             return []
-        raw_chunks = split_sentences_for_tts(cleaned, max_chars=180)
+        raw_chunks = split_sentences_for_tts(cleaned, max_chars=420)
         bounded: list[str] = []
         for chunk in raw_chunks:
             if len(text_to_kokoro_tokens(chunk, self._vocab, max_tokens=510, language=language)) <= max_body_tokens + 2:
                 bounded.append(chunk)
                 continue
-            words = chunk.split(" ")
+            # Prefer splitting oversize sentences cleanly at clause boundaries before word fallback.
+            clauses = [c.strip() for c in re.split(r"(?<=[,;—:])\s+", chunk) if c.strip()]
+            words = clauses if len(clauses) > 1 else chunk.split(" ")
             buf = ""
-            for word in words:
-                candidate = word if not buf else f"{buf} {word}"
+            for unit in words:
+                candidate = unit if not buf else f"{buf} {unit}"
                 if len(text_to_kokoro_tokens(candidate, self._vocab, max_tokens=510, language=language)) <= max_body_tokens + 2:
                     buf = candidate
                 else:
                     if buf:
                         bounded.append(buf)
-                    buf = word
+                    if len(text_to_kokoro_tokens(unit, self._vocab, max_tokens=510, language=language)) <= max_body_tokens + 2:
+                        buf = unit
+                    else:
+                        sub_buf = ""
+                        for word in unit.split(" "):
+                            sub_cand = word if not sub_buf else f"{sub_buf} {word}"
+                            if len(text_to_kokoro_tokens(sub_cand, self._vocab, max_tokens=510, language=language)) <= max_body_tokens + 2:
+                                sub_buf = sub_cand
+                            else:
+                                if sub_buf:
+                                    bounded.append(sub_buf)
+                                sub_buf = word
+                        buf = sub_buf
             if buf:
                 bounded.append(buf)
-        return bounded or [cleaned]
+        return bounded
 
     def _run_chunk_sync(
         self,
@@ -764,14 +809,21 @@ class KokoroOnnxTtsProvider(TtsProvider):
         language = "en-gb" if chosen_voice.startswith(("bf_", "bm_")) else "en-us"
         clamped_speed = max(0.5, min(2.0, float(speed)))
 
-        chunks = self._split_token_bounded_chunks(text, language=language)
+        chunks = [c for c in self._split_token_bounded_chunks(text, language=language) if c.strip()]
         combined_pcm = array("h")
-        gap_samples = array("h", [0] * int(self._SAMPLE_RATE * 0.06))
-        for idx, chunk in enumerate(chunks):
-            chunk_pcm = self._run_chunk_sync(chunk, chosen_voice, clamped_speed, language)
-            combined_pcm.extend(chunk_pcm)
-            if idx + 1 < len(chunks):
-                combined_pcm.extend(gap_samples)
+        if not chunks:
+            combined_pcm.extend([0] * int(self._SAMPLE_RATE * 0.04))
+        else:
+            lead_silence = array("h", [0] * int(self._SAMPLE_RATE * 0.05))
+            gap_samples = array("h", [0] * int(self._SAMPLE_RATE * 0.09))
+            tail_silence = array("h", [0] * int(self._SAMPLE_RATE * 0.12))
+            combined_pcm.extend(lead_silence)
+            for idx, chunk in enumerate(chunks):
+                chunk_pcm = self._run_chunk_sync(chunk, chosen_voice, clamped_speed, language)
+                combined_pcm.extend(chunk_pcm)
+                if idx + 1 < len(chunks):
+                    combined_pcm.extend(gap_samples)
+            combined_pcm.extend(tail_silence)
 
         if sys.byteorder != "little":
             combined_pcm.byteswap()

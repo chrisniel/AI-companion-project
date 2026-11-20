@@ -158,6 +158,46 @@ class LiveVoiceStagePanel extends StatelessWidget {
                           runSpacing: CompanionSpacing.xs,
                           children: [
                             NeumorphicButton(
+                              key: const ValueKey('live_voice_input_mode_toggle'),
+                              size: NeumorphicButtonSize.sm,
+                              selected: controller.liveInputMode ==
+                                  LiveVoiceInputMode.tapToSend,
+                              icon: Icon(
+                                controller.liveInputMode ==
+                                        LiveVoiceInputMode.tapToSend
+                                    ? Icons.touch_app_rounded
+                                    : Icons.hearing_rounded,
+                              ),
+                              tooltip: controller.liveInputMode ==
+                                      LiveVoiceInputMode.tapToSend
+                                  ? 'Tap-to-Send active (click Send Now or switch to Auto-Send)'
+                                  : 'Auto-Send on pause (~1.3s silence) — click for Tap-to-Send',
+                              onPressed: () => controller.setLiveInputMode(
+                                controller.liveInputMode ==
+                                        LiveVoiceInputMode.autoSend
+                                    ? LiveVoiceInputMode.tapToSend
+                                    : LiveVoiceInputMode.autoSend,
+                              ),
+                              child: Text(
+                                controller.liveInputMode ==
+                                        LiveVoiceInputMode.tapToSend
+                                    ? 'Tap-to-Send'
+                                    : 'Auto-Send',
+                              ),
+                            ),
+                            NeumorphicButton(
+                              key: const ValueKey('live_voice_send_now_button'),
+                              size: NeumorphicButtonSize.sm,
+                              icon: const Icon(Icons.send_rounded),
+                              tooltip: 'Send buffered speech now',
+                              onPressed: controller.isLiveVoiceActive &&
+                                      !muted &&
+                                      phase == VoiceSessionPhase.listening
+                                  ? controller.commitLiveUtterance
+                                  : null,
+                              child: const Text('Send Now'),
+                            ),
+                            NeumorphicButton(
                               key: const ValueKey('live_voice_mute_button'),
                               size: NeumorphicButtonSize.sm,
                               selected: muted,
@@ -166,7 +206,7 @@ class LiveVoiceStagePanel extends StatelessWidget {
                                 color: muted ? ext?.warning : null,
                               ),
                               tooltip:
-                                  '${muted ? 'Unmute' : 'Mute'} microphone (${controller.shortcuts.muteToggle.label})',
+                                  '${muted ? 'Unmute' : 'Mute'} microphone (${controller.shortcuts.muteToggle.label} · F8)',
                               onPressed: () => controller.setMuted(!muted),
                               child: Text(muted ? 'Unmute Mic' : 'Mute Mic'),
                             ),
@@ -282,7 +322,9 @@ class LiveVoiceStagePanel extends StatelessWidget {
                 ],
                 const SizedBox(height: CompanionSpacing.xs),
                 Text(
-                  'Push-to-Talk: Hold ${controller.shortcuts.pushToTalk.label}  ·  Spacebar: Interrupt when text box is unfocused',
+                  controller.liveInputMode == LiveVoiceInputMode.tapToSend
+                      ? 'Tap-to-Send active: Click Send Now or release ${controller.shortcuts.pushToTalk.label} to send  ·  Mute: ${controller.shortcuts.muteToggle.label} / F8'
+                      : 'Auto-Send after pause (~1.3s)  ·  Push-to-Talk: Hold ${controller.shortcuts.pushToTalk.label}  ·  Spacebar: Interrupt  ·  Mute: ${controller.shortcuts.muteToggle.label} / F8',
                   style: CompanionTypography.caption.copyWith(
                     color: ext?.textMuted ?? ext?.textSecondary,
                   ),

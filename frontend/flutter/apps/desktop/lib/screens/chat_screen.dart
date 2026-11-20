@@ -24,6 +24,7 @@ class ChatScreen extends StatefulWidget {
     this.clientSettings,
     this.isActiveTab = true,
     this.onRegisterCloseHistoryDrawer,
+    this.onRegisterToggleHistoryDrawer,
     this.onNavigateToSettings,
   });
 
@@ -33,6 +34,7 @@ class ChatScreen extends StatefulWidget {
   final DesktopClientSettings? clientSettings;
   final bool isActiveTab;
   final void Function(bool Function()? closer)? onRegisterCloseHistoryDrawer;
+  final void Function(VoidCallback? toggleDrawer)? onRegisterToggleHistoryDrawer;
   final VoidCallback? onNavigateToSettings;
 
   @override
@@ -112,7 +114,8 @@ class _ChatScreenState extends State<ChatScreen> {
         !hw.isAltPressed &&
         !hw.isShiftPressed &&
         !hw.isMetaPressed) {
-      if (event.logicalKey == LogicalKeyboardKey.keyH) {
+      if (event.logicalKey == LogicalKeyboardKey.keyH &&
+          widget.onRegisterToggleHistoryDrawer == null) {
         _toggleHistoryDrawer();
         return true;
       }
@@ -203,6 +206,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _profileEpoch = _effectiveController.profileEpoch;
     _wasGenerating = _effectiveController.isGenerating;
     widget.onRegisterCloseHistoryDrawer?.call(_closeHistoryDrawerIfOpen);
+    widget.onRegisterToggleHistoryDrawer?.call(_toggleHistoryDrawer);
     HardwareKeyboard.instance.addHandler(_handleChatHardwareKey);
 
     // Initialize current conversation state if already selected
@@ -262,6 +266,10 @@ class _ChatScreenState extends State<ChatScreen> {
     if (oldWidget.onRegisterCloseHistoryDrawer != widget.onRegisterCloseHistoryDrawer) {
       oldWidget.onRegisterCloseHistoryDrawer?.call(null);
       widget.onRegisterCloseHistoryDrawer?.call(_closeHistoryDrawerIfOpen);
+    }
+    if (oldWidget.onRegisterToggleHistoryDrawer != widget.onRegisterToggleHistoryDrawer) {
+      oldWidget.onRegisterToggleHistoryDrawer?.call(null);
+      widget.onRegisterToggleHistoryDrawer?.call(_toggleHistoryDrawer);
     }
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller?.removeListener(_onChatControllerChanged);
@@ -473,6 +481,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     widget.onRegisterCloseHistoryDrawer?.call(null);
+    widget.onRegisterToggleHistoryDrawer?.call(null);
     HardwareKeyboard.instance.removeHandler(_handleChatHardwareKey);
     _textController.removeListener(_onTextChanged);
     _scrollController.removeListener(_onScroll);

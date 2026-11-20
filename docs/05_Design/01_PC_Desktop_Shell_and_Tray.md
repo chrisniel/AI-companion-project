@@ -50,7 +50,7 @@ The system tray menu explicitly opens on both left-button release and right-butt
 3. **Emergency Stop Tools / Tools Killed** — Immediately engages the persistent Global Tool Kill Switch (`POST /api/v1/tools/kill-switch`); disabled once engaged until reset in Settings under local Host Admin authority.
 3. **Active Profile:** Shows current profile name with quick flyout to switch profiles.
 4. --- (Separator) ---
-5. **Mute Audio (`Ctrl+Shift+M`):** Immediate hard-mute toggle to silence OS microphone capture, speech playback, and chime alerts.
+5. **Mute Audio (`Ctrl+Shift+M` / `F8`):** Immediate hard-mute toggle to silence OS microphone capture (pausing active Live Voice capture in-place without closing the session), flush speech playback, and mute chime alerts.
 6. **Performance Mode:** Quick toggle (`Normal` / `Low-Impact` / `Auto`).
 7. --- (Separator) ---
 8. **Runtime Status:** Informational label (e.g., *"Runtime: Active (PID 14220)"* or *"Runtime: Remote Host"*).
@@ -74,7 +74,7 @@ The approved visual design language across the companion ecosystem is:
 ### 4.2 Theme & Accessibility Invariants
 
 - **System Theme Synchronization:** Automatic switching between Windows Dark Mode and Light Mode based on OS preference, with manual override in Settings.
-- **Keyboard Navigation:** Full keyboard focus traversal (`Tab` / `Shift+Tab`), shortcut keys (`Ctrl+N` for new conversation, `Ctrl+Shift+V` / customizable in-app Live Voice toggle, `Ctrl+Alt+V` / customizable Win32 global hotkey to restore window & toggle Live Voice, `Ctrl+Shift+M` / customizable mute toggle, `Right Alt` push-to-talk, `Ctrl+,` for settings, `Esc` to hide window).
+- **Keyboard Navigation:** Full keyboard focus traversal (`Tab` / `Shift+Tab`), app-wide `HardwareKeyboard` shortcut keys (`Ctrl+H` to switch to Chat from any destination and toggle the History Drawer, `Ctrl+N` for new conversation, `Ctrl+Shift+V` / customizable in-app Live Voice toggle, `Ctrl+Alt+V` / customizable Win32 global hotkey to restore window & toggle Live Voice, `Ctrl+Shift+M` w/ Shift-tolerant physical-key matching + `F8` backup mute toggle, `Right Alt` push-to-talk, `Ctrl+,` for settings, `Esc` to close drawers before hiding to tray).
 - **High-Contrast Support:** Compatible with Windows High Contrast mode themes.
 
 ---

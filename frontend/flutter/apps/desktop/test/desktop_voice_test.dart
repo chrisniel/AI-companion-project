@@ -410,16 +410,17 @@ void main() {
       expect(audio.lastFlushedGeneration, 2);
       expect(fakeWs.sent.any((f) => f['type'] == 'barge_in'), isTrue);
 
-      // Mute cuts OS mic capture & bumps flush generation
+      // Mute cuts OS mic capture & bumps flush generation IN-PLACE (keeps live WS session alive)
       await ctrl.setMuted(true);
       expect(mutedFromCallback, isTrue);
       expect(audio.isCapturing, isFalse);
-      expect(ctrl.isLiveVoiceActive, isFalse);
+      expect(ctrl.isLiveVoiceActive, isTrue);
+      expect(ctrl.isMicCapturing, isFalse);
 
-      // Unmute and restart live voice -> profile epoch change kills everything cleanly
+      // Unmute resumes capture automatically inside the active Live Voice session -> profile epoch change kills everything cleanly
       await ctrl.setMuted(false);
-      await ctrl.startLiveVoice();
       expect(audio.isCapturing, isTrue);
+      expect(ctrl.isLiveVoiceActive, isTrue);
       await ctrl.handleProfileEpochChanged(99);
       expect(audio.isCapturing, isFalse);
       expect(ctrl.isLiveVoiceActive, isFalse);
@@ -555,6 +556,51 @@ void main() {
       // Allow completion timer (> remainingMs + tail) to fire cleanly
       await Future<void>.delayed(const Duration(milliseconds: 1350));
       expect(ctrl.speakingMessageId, isNull);
+
+      // 4. Emoji-only messages skip synthesizeSpeech; >2 sentence replies group past Chunk 0
+      synthesized.clear();
+      await ctrl.speakMessage(messageId: 'msg-emoji', text: '🌸');
+      expect(synthesized, isEmpty);
+      expect(ctrl.speakingMessageId, isNull);
+
+      await ctrl.speakMessage(
+        messageId: 'msg-group-1',
+        text:
+            'Lead sentence starts right here today. Second sentence follows cleanly. Third sentence finishes nicely too!',
+      );
+      expect(synthesized, hasLength(2));
+      expect(synthesized[0], 'Lead sentence starts right here today.');
+      expect(
+        synthesized[1],
+        'Second sentence follows cleanly. Third sentence finishes nicely too!',
+      );
+      await ctrl.stopSpeaking();
+
+      // 5. Tap-to-Send Live Voice buffers audio until commitLiveUtterance
+      final fakeWs = _FakeWsTransport();
+      final tapCtrl = DesktopVoiceController(
+        clientProvider: () => client,
+        audioAdapter: audio,
+        voiceSessionClientFactory: () => VoiceSessionClient(wsClient: fakeWs),
+        ensureActiveConversationId: () async => 'conv-tap-1',
+      );
+      await tapCtrl.initialize();
+      await tapCtrl.startLiveVoice();
+      tapCtrl.setLiveInputMode(LiveVoiceInputMode.tapToSend);
+      expect(tapCtrl.liveInputMode, LiveVoiceInputMode.tapToSend);
+
+      audio.pushMicFrame(Uint8List.fromList(List.filled(1024, 9)), rms: 0.25);
+      await pumpEventQueue();
+      expect(tapCtrl.hasPendingManualAudio, isTrue);
+      expect(fakeWs.sent.where((f) => f['type'] == 'audio.chunk'), isEmpty);
+
+      await tapCtrl.commitLiveUtterance();
+      expect(tapCtrl.hasPendingManualAudio, isFalse);
+      expect(fakeWs.sent.where((f) => f['type'] == 'audio.chunk'), hasLength(1));
+      expect(fakeWs.sent.last['type'], 'audio.commit');
+
+      tapCtrl.dispose();
+      await fakeWs.close();
       ctrl.dispose();
     });
   });

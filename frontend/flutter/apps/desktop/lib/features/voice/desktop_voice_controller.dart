@@ -22,6 +22,11 @@ enum VoiceSessionPhase {
   errored,
 }
 
+enum LiveVoiceInputMode {
+  autoSend,
+  tapToSend,
+}
+
 /// Manages Desktop speech state: WASAPI capture/playback, Dictation, Live Duplex WS,
 /// Read Aloud / Auto-Read, generation-fenced barge-in, hotkeys, and Profile isolation.
 class DesktopVoiceController extends ChangeNotifier {
@@ -87,9 +92,12 @@ class DesktopVoiceController extends ChangeNotifier {
   ];
 
   final List<int> _dictationPcmBuffer = <int>[];
+  final List<int> _manualLivePcmBuffer = <int>[];
   final ValueNotifier<double> _micRmsNotifier = ValueNotifier<double>(0.0);
   double _micRmsLevel = 0.0;
   bool _isTestingMic = false;
+  bool _manualSpeechDetected = false;
+  LiveVoiceInputMode _liveInputMode = LiveVoiceInputMode.autoSend;
   Timer? _speakCompletionTimer;
   int _playbackGeneration = 0;
   int _profileEpoch = 0;
@@ -119,6 +127,8 @@ class DesktopVoiceController extends ChangeNotifier {
       _audioAdapter.isCapturing && !_hardwarePrefs.audioMuted;
   bool get isAudioMuted => _hardwarePrefs.audioMuted;
   bool get isTestingMic => _isTestingMic;
+  LiveVoiceInputMode get liveInputMode => _liveInputMode;
+  bool get hasPendingManualAudio => _manualLivePcmBuffer.isNotEmpty;
   double get micRmsLevel => _micRmsLevel;
   ValueListenable<double> get micRmsListenable => _micRmsNotifier;
   int get playbackGeneration => _playbackGeneration;
@@ -348,13 +358,27 @@ class DesktopVoiceController extends ChangeNotifier {
         _micRmsLevel = 0.0;
         _micRmsNotifier.value = 0.0;
       } else if (isLiveVoiceActive) {
-        await stopLiveVoice();
+        // Keep the live WebSocket session open and mute OS capture in-place.
+        await _audioAdapter.stopCapture();
+        _manualLivePcmBuffer.clear();
+        _manualSpeechDetected = false;
+        _micRmsLevel = 0.0;
+        _micRmsNotifier.value = 0.0;
       } else if (_phase == VoiceSessionPhase.recordingDictation) {
         await _audioAdapter.stopCapture();
         _dictationPcmBuffer.clear();
         _micRmsLevel = 0.0;
         _micRmsNotifier.value = 0.0;
         _phase = VoiceSessionPhase.idle;
+      }
+    } else if (isLiveVoiceActive) {
+      try {
+        await _audioAdapter.startCapture(
+          deviceId: _hardwarePrefs.selectedMicDeviceId,
+        );
+        _errorMessage = null;
+      } catch (e) {
+        _errorMessage = 'Failed to resume Windows microphone: $e';
       }
     }
     if (!_isDisposed) notifyListeners();
@@ -441,23 +465,46 @@ class DesktopVoiceController extends ChangeNotifier {
 
   static List<String> _splitSpeakSentences(String rawText) {
     final trimmed = rawText.trim();
+    if (trimmed.isEmpty) return const [];
     final bounded = trimmed.length > 2000 ? trimmed.substring(0, 2000) : trimmed;
     final parts = bounded
         .split(RegExp(r'(?<=[.!?])\s+|\n+'))
         .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
+        .where((s) => s.isNotEmpty && RegExp(r'[A-Za-z0-9]').hasMatch(s))
         .toList();
-    if (parts.length <= 1) return parts.isEmpty ? [bounded] : parts;
+    if (parts.isEmpty) return const [];
 
     final merged = <String>[];
     for (final part in parts) {
-      if (merged.isNotEmpty && merged.last.length < 24) {
+      if (merged.isNotEmpty &&
+          merged.last.length < 24 &&
+          '${merged.last} $part'.length <= 360) {
         merged[merged.length - 1] = '${merged.last} $part';
       } else {
         merged.add(part);
       }
     }
-    return merged;
+    if (merged.length <= 2) return merged;
+
+    // Keep Chunk 0 as a single fast lead sentence, then group subsequent sentences
+    // up to 360 chars so multi-sentence replies stream smoothly with natural cadence.
+    final grouped = <String>[merged.first];
+    var buf = '';
+    for (var i = 1; i < merged.length; i++) {
+      final next = merged[i];
+      if (buf.isEmpty) {
+        buf = next;
+      } else if (buf.length + 1 + next.length <= 360) {
+        buf = '$buf $next';
+      } else {
+        grouped.add(buf);
+        buf = next;
+      }
+    }
+    if (buf.isNotEmpty) {
+      grouped.add(buf);
+    }
+    return grouped;
   }
 
   /// Reads aloud a specific chat message (or toggles stop if already speaking it).
@@ -476,6 +523,8 @@ class DesktopVoiceController extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    final chunks = _splitSpeakSentences(text);
+    if (chunks.isEmpty) return;
 
     _speakCompletionTimer?.cancel();
     _speakCompletionTimer = null;
@@ -486,7 +535,6 @@ class DesktopVoiceController extends ChangeNotifier {
     notifyListeners();
 
     final epochAtStart = _profileEpoch;
-    final chunks = _splitSpeakSentences(text);
     int remainingPlaybackMs = 0;
     try {
       for (final chunk in chunks) {
@@ -663,9 +711,49 @@ class DesktopVoiceController extends ChangeNotifier {
     }
   }
 
+  void setLiveInputMode(LiveVoiceInputMode mode) {
+    if (_isDisposed || _liveInputMode == mode) return;
+    _liveInputMode = mode;
+    if (mode == LiveVoiceInputMode.autoSend &&
+        _manualLivePcmBuffer.isNotEmpty &&
+        isLiveVoiceActive &&
+        _voiceSession != null) {
+      _flushManualBufferChunks();
+    } else if (mode == LiveVoiceInputMode.tapToSend) {
+      _manualLivePcmBuffer.clear();
+      _manualSpeechDetected = false;
+    }
+    notifyListeners();
+  }
+
+  void _flushManualBufferChunks() {
+    final ws = _voiceSession;
+    if (ws == null || _manualLivePcmBuffer.isEmpty) {
+      _manualLivePcmBuffer.clear();
+      _manualSpeechDetected = false;
+      return;
+    }
+    const chunkBytes = 32768;
+    for (var offset = 0;
+        offset < _manualLivePcmBuffer.length;
+        offset += chunkBytes) {
+      final end = math.min(offset + chunkBytes, _manualLivePcmBuffer.length);
+      ws.sendAudioChunk(
+        Uint8List.fromList(_manualLivePcmBuffer.sublist(offset, end)),
+        sampleRate: 16000,
+      );
+    }
+    _manualLivePcmBuffer.clear();
+    _manualSpeechDetected = false;
+  }
+
   Future<void> commitLiveUtterance() async {
-    if (!isLiveVoiceActive) return;
+    if (!isLiveVoiceActive || _voiceSession == null) return;
+    if (_manualLivePcmBuffer.isNotEmpty) {
+      _flushManualBufferChunks();
+    }
     _voiceSession?.commitAudio();
+    if (!_isDisposed) notifyListeners();
   }
 
   /// Immediate barge-in cut: bumps local playback generation, flushes C++ mixer (<50ms),
@@ -719,6 +807,8 @@ class DesktopVoiceController extends ChangeNotifier {
 
   Future<void> _teardownLiveSessionOnly() async {
     _playbackGeneration++;
+    _manualLivePcmBuffer.clear();
+    _manualSpeechDetected = false;
     await _audioAdapter.stopCapture();
     await _audioAdapter.flushPlayback(_playbackGeneration);
     await _wsEventsSub?.cancel();
@@ -747,7 +837,27 @@ class DesktopVoiceController extends ChangeNotifier {
     }
 
     if (isLiveVoiceActive && _voiceSession != null) {
-      _voiceSession!.sendAudioChunk(frame.pcm16Bytes, sampleRate: 16000);
+      if (_liveInputMode == LiveVoiceInputMode.autoSend) {
+        _voiceSession!.sendAudioChunk(frame.pcm16Bytes, sampleRate: 16000);
+      } else {
+        final hadPending = _manualLivePcmBuffer.isNotEmpty;
+        if (frame.rms >= 0.015) {
+          _manualSpeechDetected = true;
+        }
+        if (_manualLivePcmBuffer.length + frame.pcm16Bytes.length <=
+            kMaxTranscribePcmBytes) {
+          _manualLivePcmBuffer.addAll(frame.pcm16Bytes);
+        }
+        if (!_manualSpeechDetected && _manualLivePcmBuffer.length > 16384) {
+          _manualLivePcmBuffer.removeRange(
+            0,
+            _manualLivePcmBuffer.length - 16384,
+          );
+        }
+        if (!hadPending && _manualLivePcmBuffer.isNotEmpty) {
+          notifyListeners();
+        }
+      }
     }
   }
 

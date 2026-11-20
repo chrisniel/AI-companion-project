@@ -57,11 +57,14 @@ def _parse_duckduckgo_html(html_text: str, max_results: int) -> list[dict[str, s
         html_text,
         flags=re.IGNORECASE | re.DOTALL,
     )
-    snippets = re.findall(
-        r'<[a-z]+[^>]*class=["\'][^"\']*result__snippet[^"\']*["\'][^>]*>(.*?)</[a-z]+>',
-        html_text,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
+    snippets = [
+        m[1]
+        for m in re.findall(
+            r'<([a-z]+)[^>]*class=["\'][^"\']*result__snippet[^"\']*["\'][^>]*>(.*?)</\1>',
+            html_text,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+    ]
     results: list[dict[str, str]] = []
     for idx, (raw_href, raw_title) in enumerate(anchors[:max_results]):
         target_url = _unwrap_ddg_redirect(unescape(raw_href).strip())
@@ -108,6 +111,23 @@ async def weather_lookup(
     geo_data = json.loads(geo_bytes.decode("utf-8", errors="replace"))
     geo_results = geo_data.get("results") or []
     if not geo_results:
+        fallback_query = re.sub(
+            r"\bcity\b",
+            "",
+            query.split(",")[0],
+            flags=re.IGNORECASE,
+        ).strip()
+        if fallback_query and fallback_query.lower() != query.lower():
+            fb_url = f"https://geocoding-api.open-meteo.com/v1/search?name={quote_plus(fallback_query)}&count=1&language=en&format=json"
+            fb_bytes, _, _, fb_status = await guarded_fetch_bytes(
+                fb_url,
+                resolver=resolver,
+                transport=transport,
+            )
+            if fb_status < 400:
+                fb_data = json.loads(fb_bytes.decode("utf-8", errors="replace"))
+                geo_results = fb_data.get("results") or []
+    if not geo_results:
         raise RuntimeError(f"No matching location found for '{query}'.")
 
     place = geo_results[0]
@@ -117,7 +137,9 @@ async def weather_lookup(
 
     forecast_url = (
         f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
-        "&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&timezone=auto"
+        "&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code"
+        "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
+        "&forecast_days=3&timezone=auto"
     )
     wx_bytes, final_wx_url, _, wx_status = await guarded_fetch_bytes(
         forecast_url,
@@ -132,15 +154,46 @@ async def weather_lookup(
     code = current.get("weather_code")
     condition = _WEATHER_CODE_DESCRIPTIONS.get(code, "Current conditions")
 
+    daily_raw = wx_data.get("daily") or {}
+    daily_dates = daily_raw.get("time") or []
+    daily_codes = daily_raw.get("weather_code") or []
+    daily_max = daily_raw.get("temperature_2m_max") or []
+    daily_min = daily_raw.get("temperature_2m_min") or []
+    daily_pop = daily_raw.get("precipitation_probability_max") or []
+    daily_forecast: list[dict[str, Any]] = []
+    for idx, day_str in enumerate(daily_dates):
+        d_code = daily_codes[idx] if idx < len(daily_codes) else None
+        daily_forecast.append(
+            {
+                "date": day_str,
+                "condition": _WEATHER_CODE_DESCRIPTIONS.get(d_code, "Forecast conditions"),
+                "temp_max_c": daily_max[idx] if idx < len(daily_max) else None,
+                "temp_min_c": daily_min[idx] if idx < len(daily_min) else None,
+                "precipitation_prob_pct": daily_pop[idx] if idx < len(daily_pop) else None,
+            }
+        )
+
+    loc_label = display_loc or query
+    temp_val = current.get("temperature_2m")
+    summary_parts = [f"Weather in {loc_label}: {condition}, {temp_val}°C now."]
+    if daily_forecast:
+        preview = "; ".join(
+            f"{d['date']}: {d['condition']} ({d['temp_min_c']}–{d['temp_max_c']}°C, rain {d['precipitation_prob_pct']}%)"
+            for d in daily_forecast[:3]
+        )
+        summary_parts.append(f"3-day forecast: {preview}.")
+
     return {
-        "location": display_loc or query,
-        "temperature_c": current.get("temperature_2m"),
+        "location": loc_label,
+        "temperature_c": temp_val,
         "humidity_pct": current.get("relative_humidity_2m"),
         "wind_speed_kmh": current.get("wind_speed_10m"),
         "condition": condition,
+        "daily_forecast": daily_forecast,
+        "summary": " ".join(summary_parts),
         "sources": [
             {
-                "title": f"Open-Meteo Forecast ({display_loc or query})",
+                "title": f"Open-Meteo Forecast ({loc_label})",
                 "url": final_wx_url,
                 "domain": _extract_domain(final_wx_url),
             }

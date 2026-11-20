@@ -514,6 +514,16 @@ void main() {
       await tester.pumpAndSettle();
       expect(ws.sent.any((f) => f['type'] == 'barge_in'), isTrue);
 
+      // Switch Live Voice to Tap-to-Send and click Send Now -> commits buffered audio
+      await tester.tap(find.byKey(const ValueKey('live_voice_input_mode_toggle')));
+      await tester.pumpAndSettle();
+      expect(voice.liveInputMode, LiveVoiceInputMode.tapToSend);
+      audio.pushFrame(Uint8List.fromList(List.filled(512, 7)), rms: 0.30);
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('live_voice_send_now_button')));
+      await tester.pumpAndSettle();
+      expect(ws.sent.any((f) => f['type'] == 'audio.commit'), isTrue);
+
       // End Voice closes stage panel
       await tester.tap(find.byKey(const Key('live_voice_end_button')));
       await tester.pumpAndSettle();

@@ -479,12 +479,24 @@ def test_voice_ws_hands_free_vad_auto_commits_after_silence_without_commit(voice
             vsid = ready["voice_session_id"]
             orch = env["vm"]._active_sessions[vsid]
 
-            # Stream voiced speech frames (>3 frames) then trailing silence (>=25 frames) with NO audio.commit
+            # Stream two 4-frame speech bursts separated by a brief 20-frame (~640ms) thinking pause
+            # -> must NOT auto-commit early; only >=40 trailing silence frames auto-commits the full turn!
             loud_frame = _tone_pcm16(9000, num_samples=VAD_FRAME_SAMPLES)
             silent_frame = b"\x00\x00" * VAD_FRAME_SAMPLES
-            for _ in range(5):
+            for _ in range(4):
                 ws.send_bytes(loud_frame)
-            for _ in range(28):
+            for _ in range(20):
+                ws.send_bytes(silent_frame)
+            ws.send_json({"type": "ping"})
+            while True:
+                pause_msg = ws.receive_json()
+                if pause_msg["type"] == "pong":
+                    break
+            assert orch._active_turn_id == 0
+
+            for _ in range(4):
+                ws.send_bytes(loud_frame)
+            for _ in range(42):
                 ws.send_bytes(silent_frame)
 
             # Fail fast without blocking forever if VAD auto-commit did not start a turn
@@ -495,7 +507,7 @@ def test_voice_ws_hands_free_vad_auto_commits_after_silence_without_commit(voice
                 events.append(msg)
                 if msg["type"] == "pong":
                     break
-            assert orch._active_turn_id >= 1
+            assert orch._active_turn_id == 1
 
             while len(events) < 25:
                 if any(e.get("type") in ("tts.end", "error") for e in events):

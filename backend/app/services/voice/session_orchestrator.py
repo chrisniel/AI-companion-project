@@ -33,6 +33,7 @@ from app.services.voice.audio_utils import (
     MAX_TURN_AUDIO_BYTES,
     VAD_FRAME_BYTES,
     AudioFormatError,
+    compute_pcm16_rms,
     decode_audio_to_pcm16,
 )
 from app.services.voice.manager import VoiceManager, get_voice_manager
@@ -199,6 +200,8 @@ class VoiceSessionOrchestrator:
         self._vad_in_speech: bool = False
         self._vad_speech_run: int = 0
         self._vad_silence_run: int = 0
+        self._vad_voiced_total: int = 0
+        self._barge_in_preroll = bytearray()
 
         self._language: str = "auto"
         self._tts_speed: float = 1.0
@@ -213,9 +216,11 @@ class VoiceSessionOrchestrator:
         """Guarantee ephemeral PCM audio buffers never linger in RAM."""
         self._pcm_buffer.clear()
         self._vad_remainder.clear()
+        self._barge_in_preroll.clear()
         self._vad_in_speech = False
         self._vad_speech_run = 0
         self._vad_silence_run = 0
+        self._vad_voiced_total = 0
         self._barge_in_gate.reset_hold()
         self._vad.reset()
 
@@ -281,7 +286,8 @@ class VoiceSessionOrchestrator:
         tts_res = await tts.synthesize(text, voice_id=self._voice_id, speed=self._tts_speed)
         if cancel_event.is_set() or turn_id != self._active_turn_id:
             return
-        self._barge_in_gate.set_speaking(True, assistant_output_rms=0.04)
+        chunk_rms = compute_pcm16_rms(tts_res.wav_bytes[44:]) if len(tts_res.wav_bytes) > 44 else 0.04
+        self._barge_in_gate.set_speaking(True, assistant_output_rms=max(0.04, chunk_rms))
         seq = seq_counter[0]
         seq_counter[0] += 1
         await self._send_json(
@@ -343,7 +349,8 @@ class VoiceSessionOrchestrator:
             )
             return
 
-        stt_res = await stt.transcribe(pcm_audio, language=self._language)
+        effective_stt_lang = "en" if (not self._language or self._language == "auto") else self._language
+        stt_res = await stt.transcribe(pcm_audio, language=effective_stt_lang)
         if cancel_event.is_set() or turn_id != self._active_turn_id:
             return
 
@@ -433,7 +440,8 @@ class VoiceSessionOrchestrator:
                         )
                         if cancel_event.is_set() or turn_id != self._active_turn_id:
                             break
-                        self._barge_in_gate.set_speaking(True, assistant_output_rms=0.04)
+                        chunk_rms = compute_pcm16_rms(tts_res.wav_bytes[44:]) if len(tts_res.wav_bytes) > 44 else 0.04
+                        self._barge_in_gate.set_speaking(True, assistant_output_rms=max(0.04, chunk_rms))
                         seq = seq_counter[0]
                         seq_counter[0] += 1
                         await self._send_json(
@@ -598,16 +606,22 @@ class VoiceSessionOrchestrator:
     async def _handle_pcm_chunk(self, pcm_bytes: bytes) -> None:
         max_turn_bytes = max(VAD_FRAME_BYTES, int(settings.VOICE_MAX_TURN_AUDIO_BYTES or MAX_TURN_AUDIO_BYTES))
         if self._barge_in_gate.is_speaking:
-            # Never buffer non-interrupting speaker bleed into the next turn's STT audio.
+            # Never buffer non-interrupting speaker bleed into the next turn's STT audio;
+            # keep only a bounded temporary pre-roll ring released strictly if barge-in triggers.
             self._vad_remainder.extend(pcm_bytes)
             while len(self._vad_remainder) >= VAD_FRAME_BYTES:
                 frame_bytes = bytes(self._vad_remainder[:VAD_FRAME_BYTES])
                 del self._vad_remainder[:VAD_FRAME_BYTES]
+                self._barge_in_preroll.extend(frame_bytes)
+                if len(self._barge_in_preroll) > VAD_FRAME_BYTES * 15:
+                    del self._barge_in_preroll[: len(self._barge_in_preroll) - VAD_FRAME_BYTES * 15]
                 triggered = self._barge_in_gate.process_pcm16_frame(frame_bytes)
                 if triggered:
-                    self._pcm_buffer = bytearray(frame_bytes)
+                    self._pcm_buffer = bytearray(self._barge_in_preroll)
+                    self._barge_in_preroll.clear()
                     self._vad_in_speech = True
                     self._vad_speech_run = 3
+                    self._vad_voiced_total = 5
                     self._vad_silence_run = 0
                     await self._cancel_active_turn(reason="vad_barge_in", emit_cancelled=True)
                     await self._send_json(
@@ -621,11 +635,15 @@ class VoiceSessionOrchestrator:
                     break
             return
 
+        if self._barge_in_preroll:
+            self._barge_in_preroll.clear()
+
         if len(self._pcm_buffer) + len(pcm_bytes) > max_turn_bytes:
             self._pcm_buffer.clear()
             self._vad_in_speech = False
             self._vad_speech_run = 0
             self._vad_silence_run = 0
+            self._vad_voiced_total = 0
             await self._send_json(
                 build_ws_frame(
                     "error",
@@ -638,9 +656,14 @@ class VoiceSessionOrchestrator:
             return
 
         self._pcm_buffer.extend(pcm_bytes)
-        if not self._vad_in_speech and len(self._pcm_buffer) > VAD_FRAME_BYTES * 20:
-            # Keep a ~320ms pre-roll ring while idle so room silence cannot exhaust MAX_TURN_AUDIO_BYTES.
-            del self._pcm_buffer[: len(self._pcm_buffer) - VAD_FRAME_BYTES * 10]
+        # While an STT/LLM turn is still in flight (before speaking), buffer speech cleanly
+        # without triggering auto-commit cancellation (`superseded_by_commit`).
+        if self._active_turn_task is not None and not self._active_turn_task.done():
+            return
+
+        if not self._vad_in_speech and len(self._pcm_buffer) > VAD_FRAME_BYTES * 28:
+            # Keep a ~512ms pre-roll ring while idle so room silence cannot exhaust MAX_TURN_AUDIO_BYTES.
+            del self._pcm_buffer[: len(self._pcm_buffer) - VAD_FRAME_BYTES * 16]
         self._vad_remainder.extend(pcm_bytes)
 
         while len(self._vad_remainder) >= VAD_FRAME_BYTES:
@@ -650,6 +673,7 @@ class VoiceSessionOrchestrator:
             if not self._vad_in_speech:
                 if vad_res.is_speech:
                     self._vad_speech_run += 1
+                    self._vad_voiced_total += 1
                     self._vad_silence_run = 0
                     if self._vad_speech_run >= 3:
                         self._vad_in_speech = True
@@ -663,15 +687,23 @@ class VoiceSessionOrchestrator:
                         )
                 else:
                     self._vad_speech_run = 0
+                    self._vad_voiced_total = 0
             else:
                 if vad_res.is_speech:
+                    self._vad_voiced_total += 1
                     self._vad_silence_run = 0
                 else:
                     self._vad_silence_run += 1
-                    if self._vad_silence_run >= 25:
+                    if self._vad_silence_run >= 40:
+                        voiced_count = self._vad_voiced_total
                         self._vad_in_speech = False
                         self._vad_speech_run = 0
                         self._vad_silence_run = 0
+                        self._vad_voiced_total = 0
+                        if voiced_count < 5:
+                            if len(self._pcm_buffer) > VAD_FRAME_BYTES * 16:
+                                del self._pcm_buffer[: len(self._pcm_buffer) - VAD_FRAME_BYTES * 16]
+                            continue
                         await self._send_json(
                             build_ws_frame(
                                 "vad.state",
@@ -694,9 +726,11 @@ class VoiceSessionOrchestrator:
             pcm_snapshot = bytes(self._pcm_buffer)
             self._pcm_buffer.clear()
             self._vad_remainder.clear()
+            self._barge_in_preroll.clear()
             self._vad_in_speech = False
             self._vad_speech_run = 0
             self._vad_silence_run = 0
+            self._vad_voiced_total = 0
 
             self._active_turn_id += 1
             turn_id = self._active_turn_id
