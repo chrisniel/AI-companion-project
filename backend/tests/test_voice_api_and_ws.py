@@ -553,4 +553,3 @@ def test_voice_ws_discards_non_interrupting_speaker_bleed_while_speaking(voice_t
 
             assert orch.buffered_audio_bytes == 0
             ws.send_json({"type": "session.stop"})
-

@@ -523,26 +523,30 @@ class _DesktopShellState extends State<DesktopShell> {
       final notOnChat =
           widget.controller.currentDestination != DesktopNavDestination.chat;
       if (notOnChat) {
-        widget.controller.requestDestination(DesktopNavDestination.chat);
-        final toggler = _chatHistoryDrawerToggler;
-        if (toggler != null) {
-          // Ensure History Drawer is open when switching from another tab.
-          if (_chatHistoryDrawerCloser == null ||
-              !_visitedDestinations.contains(DesktopNavDestination.chat)) {
-            toggler();
-          } else {
-            // Close first if left open, or simpler: call toggler only if not already open.
-            final wasOpen = _chatHistoryDrawerCloser!.call();
-            if (!wasOpen) {
+        unawaited(() async {
+          final allowed = await widget.controller.requestDestination(
+            DesktopNavDestination.chat,
+          );
+          if (!mounted || !allowed) return;
+          final toggler = _chatHistoryDrawerToggler;
+          if (toggler != null) {
+            // Ensure History Drawer is open when switching from another tab.
+            if (_chatHistoryDrawerCloser == null ||
+                !_visitedDestinations.contains(DesktopNavDestination.chat)) {
               toggler();
             } else {
-              // Keep open when jumping into Chat from Settings via Ctrl+H
-              toggler();
+              final wasOpen = _chatHistoryDrawerCloser!.call();
+              if (!wasOpen) {
+                toggler();
+              } else {
+                // Keep open when jumping into Chat from Settings via Ctrl+H.
+                toggler();
+              }
             }
+          } else {
+            _pendingToggleHistoryDrawer = true;
           }
-        } else {
-          _pendingToggleHistoryDrawer = true;
-        }
+        }());
       } else {
         _chatHistoryDrawerToggler?.call();
       }

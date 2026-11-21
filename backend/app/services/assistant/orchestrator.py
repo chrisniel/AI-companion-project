@@ -87,15 +87,8 @@ _TOOL_PROVENANCE_HINTS: dict[str, tuple[str, ...]] = {
         "wheather",
         "forecast",
         "temperature",
-        "temp",
-        "rain",
+        "humidity",
         "climate",
-        "tomorrow",
-        "tommorrow",
-        "humid",
-        "caloocan",
-        "manila",
-        "quezon",
     ),
     "web_search": (
         "search",
@@ -106,28 +99,41 @@ _TOOL_PROVENANCE_HINTS: dict[str, tuple[str, ...]] = {
         "news",
         "latest",
         "recent",
-        "find",
-        "recommend",
-        "suggest",
-        "check",
-        "what is",
-        "who is",
-        "where is",
-        "ideas",
-        "options",
+        "check online",
+        "check the web",
     ),
-    "web_fetch": ("http://", "https://", "fetch", "read url", "open link", "website", "page", "url"),
-    "list_tasks": ("task", "todo", "to-do"),
-    "create_task": ("create task", "add task", "new task", "todo", "to-do", "add a task", "make a task", "schedule", "task", "plan"),
+    "web_fetch": ("http://", "https://", "fetch", "read url", "open link", "visit url", "visit website", "visit page"),
+    "list_tasks": ("list tasks", "show tasks", "my tasks", "to-do list", "todo list"),
+    "create_task": ("create task", "add task", "new task", "create a task", "add a task", "make a task", "schedule a task"),
     "update_task": ("update task", "complete task", "mark task", "finish task", "edit task"),
     "delete_task": ("delete task", "remove task", "trash task"),
-    "list_reminders": ("reminder", "reminders", "remind"),
-    "create_reminder": ("remind", "reminder", "schedule", "schedule it", "set it", "calendar", "appointment", "event", "wedding", "december", "tomorrow", "tommorrow"),
+    "list_reminders": ("list reminders", "show reminders", "my reminders"),
+    "create_reminder": ("remind me", "set reminder", "set a reminder", "create reminder", "create a reminder", "add reminder", "add a reminder", "schedule reminder", "schedule a reminder", "schedule it", "set it"),
     "delete_reminder": ("delete reminder", "remove reminder", "cancel reminder"),
-    "list_alarms": ("alarm", "alarms"),
-    "create_alarm": ("alarm", "wake me", "wake up"),
+    "list_alarms": ("list alarms", "show alarms", "my alarms"),
+    "create_alarm": ("set alarm", "set an alarm", "create alarm", "create an alarm", "add an alarm", "wake me up", "wake me"),
     "delete_alarm": ("delete alarm", "remove alarm", "cancel alarm"),
-    "search_memories": ("remember", "memory", "memories", "recall", "what did i"),
+    "search_memories": ("search memory", "search memories", "recall", "what did i", "what do you remember"),
+}
+
+_TOOL_EXPLICIT_USER_PATTERNS: dict[str, re.Pattern[str]] = {
+    "weather_lookup": re.compile(r"(?i)\b(?:weather|wheather|forecast|temperature|humidity|climate)\b"),
+    "web_search": re.compile(r"(?i)\b(?:search|look\s+up|lookup|google|online|web|news|latest|recent|check\s+(?:online|the\s+web))\b"),
+    "web_fetch": re.compile(r"(?i)(?:https?://|\b(?:fetch|read\s+url|open\s+link|visit\s+(?:the\s+)?(?:url|website|page))\b)"),
+    "list_tasks": re.compile(r"(?i)\b(?:list|show|get|what\s+are)\s+(?:my\s+|all\s+)?(?:active\s+)?tasks?\b|\bto-?do\s+list\b"),
+    "create_task": re.compile(r"(?i)\b(?:create|add|make|new|schedule)\s+(?:a\s+|an\s+|new\s+)?(?:task|to-?do)\b"),
+    "update_task": re.compile(r"(?i)\b(?:update|complete|mark|finish|edit)\s+(?:the\s+|my\s+|a\s+)?task\b"),
+    "delete_task": re.compile(r"(?i)\b(?:delete|remove|trash|cancel)\s+(?:the\s+|my\s+|a\s+)?task\b"),
+    "list_reminders": re.compile(r"(?i)\b(?:list|show|check|what\s+are)\s+(?:my\s+|all\s+)?reminders?\b"),
+    "create_reminder": re.compile(
+        r"(?i)\b(?:remind\s+me|set\s+(?:a|me\s+a|this)?\s*reminder|create\s+(?:a\s+)?reminder|"
+        r"add\s+(?:a\s+)?reminder|schedule\s+(?:a\s+)?reminder|schedule\s+it|set\s+it)\b"
+    ),
+    "delete_reminder": re.compile(r"(?i)\b(?:delete|remove|cancel)\s+(?:the\s+|my\s+|a\s+)?reminder\b"),
+    "list_alarms": re.compile(r"(?i)\b(?:list|show|check|what\s+are)\s+(?:my\s+|all\s+)?alarms?\b"),
+    "create_alarm": re.compile(r"(?i)\b(?:set\s+(?:an?\s+)?alarm|create\s+(?:an?\s+)?alarm|add\s+(?:an?\s+)?alarm|wake\s+me(?:\s+up)?)\b"),
+    "delete_alarm": re.compile(r"(?i)\b(?:delete|remove|cancel)\s+(?:the\s+|my\s+|an?\s+)?alarm\b"),
+    "search_memories": re.compile(r"(?i)\b(?:search\s+memor(?:y|ies)|recall(?:\s+memor(?:y|ies))?|what\s+do\s+you\s+remember|what\s+did\s+i)\b"),
 }
 
 SYSTEM_PROMPT_TEMPLATE = """{persona}
@@ -325,6 +331,15 @@ _FOLLOWUP_SCHEDULE_TRIGGER_RE = re.compile(
 _EXPLICIT_ALARM_TRIGGER_RE = re.compile(
     r"(?i)\b(?:set\s+(?:an?\s+)?alarm|create\s+(?:an?\s+)?alarm|wake\s+me\s+(?:up\s+)?at)\b"
 )
+_SCHEDULING_NEGATION_RE = re.compile(
+    r"(?i)\b(?:don't|do\s+not|dont|never|stop|cancel|no\s+need\s+to|shouldn't|should\s+not)\s+"
+    r"(?:set|create|add|schedule|remind)\b|\bno\s+reminder\b|\bno\s+alarm\b"
+)
+_SCHEDULING_STATUS_QUERY_RE = re.compile(
+    r"(?i)^(?:\s*(?:hey|wait|btw|so)[,\s]*)?(?:did\s+(?:i|you)|have\s+(?:i|you)|do\s+(?:i|we)\s+have|"
+    r"is\s+there|was\s+there|what\s+happened|when\s+is\s+(?:my|the)\s+(?:reminder|alarm)|"
+    r"can\s+you\s+remind\s+me\s+(?:what|who|where|when|why|how)\b)"
+)
 
 
 def _extract_clock_time(text: str) -> Optional[tuple[int, int]]:
@@ -420,7 +435,12 @@ def _extract_explicit_reminder_intent(
 ) -> Optional[dict[str, Any]]:
     """Extract deterministic create_reminder args when user asks for a dated reminder and 2B skips tool_calls."""
     text = (user_text or "").strip()
-    if not text or local_now is None:
+    if (
+        not text
+        or local_now is None
+        or _SCHEDULING_NEGATION_RE.search(text)
+        or _SCHEDULING_STATUS_QUERY_RE.search(text)
+    ):
         return None
 
     source_text: Optional[str] = None
@@ -462,7 +482,12 @@ def _extract_explicit_reminder_intent(
 def _extract_explicit_alarm_intent(user_text: str) -> Optional[dict[str, Any]]:
     """Extract deterministic create_alarm args when user specifies an alarm clock time and 2B skips tool_calls."""
     text = (user_text or "").strip()
-    if not text or not _EXPLICIT_ALARM_TRIGGER_RE.search(text):
+    if (
+        not text
+        or _SCHEDULING_NEGATION_RE.search(text)
+        or _SCHEDULING_STATUS_QUERY_RE.search(text)
+        or not _EXPLICIT_ALARM_TRIGGER_RE.search(text)
+    ):
         return None
     clock = _extract_clock_time(text)
     if clock is None:
@@ -478,7 +503,7 @@ def _extract_explicit_alarm_intent(user_text: str) -> Optional[dict[str, Any]]:
     }
 
 
-def _build_pre_armed_risk0_fallbacks(
+def _build_pre_armed_turn_fallbacks(
     tool_defs: Optional[list[dict[str, Any]]],
     user_text: str,
     history: List[Message],
@@ -552,9 +577,17 @@ def _build_pre_armed_risk0_fallbacks(
 
 def _classify_tool_provenance(user_text: str, tool_name: str, has_untrusted_web_context: bool) -> str:
     """Determine D9 caller provenance from user utterance and untrusted-content exposure."""
-    low = user_text.lower()
-    hints = _TOOL_PROVENANCE_HINTS.get(tool_name, ())
-    user_requested = any(h in low for h in hints)
+    text = (user_text or "").strip()
+    pattern = _TOOL_EXPLICIT_USER_PATTERNS.get(tool_name)
+    if pattern is not None:
+        user_requested = bool(pattern.search(text))
+        if user_requested and tool_name in ("create_reminder", "create_alarm"):
+            if _SCHEDULING_NEGATION_RE.search(text) or _SCHEDULING_STATUS_QUERY_RE.search(text):
+                user_requested = False
+    else:
+        hints = _TOOL_PROVENANCE_HINTS.get(tool_name, ())
+        low = text.lower()
+        user_requested = any(re.search(rf"\b{re.escape(h)}\b", low) for h in hints)
     if has_untrusted_web_context and not user_requested:
         # Allow read-only public lookup retries (`web_search`, `weather_lookup`) across rounds
         # while strictly blocking state-mutating tools or arbitrary web fetches from untrusted context.
@@ -936,6 +969,15 @@ async def _stream_guarded_sse_pass(
     guard_state: dict[str, Any] = {}
     need_spacer = bool(existing_text and not existing_text[-1].isspace())
     first_non_empty_seen = False
+    allowed_tool_names: set[str] = (
+        {
+            str(t.get("function", {}).get("name") or "")
+            for t in tools
+            if isinstance(t, dict)
+        }
+        if tools is not None
+        else set()
+    )
     fallback_tool_calls: list[dict[str, Any]] = []
     pending_buf = ""
     in_tool_tag = False
@@ -977,6 +1019,9 @@ async def _stream_guarded_sse_pass(
                         try:
                             parsed_tc = json.loads(raw_body)
                             if isinstance(parsed_tc, dict) and isinstance(parsed_tc.get("name"), str):
+                                tc_name = parsed_tc["name"]
+                                if tc_name not in allowed_tool_names:
+                                    continue
                                 raw_args = parsed_tc.get("arguments")
                                 args_str = (
                                     json.dumps(raw_args)
@@ -988,7 +1033,7 @@ async def _stream_guarded_sse_pass(
                                         "id": f"fallback_{uuid.uuid4().hex[:12]}",
                                         "type": "function",
                                         "function": {
-                                            "name": parsed_tc["name"],
+                                            "name": tc_name,
                                             "arguments": args_str,
                                         },
                                     }
@@ -1673,7 +1718,7 @@ async def orchestrate_chat_stream(
         has_untrusted_web_context = False
         final_pass_state: dict[str, Any] = {}
         last_round_messages: List[ChatMessage] = working_messages
-        pre_armed_fallbacks = _build_pre_armed_risk0_fallbacks(
+        pre_armed_fallbacks = _build_pre_armed_turn_fallbacks(
             tool_defs,
             user_text,
             history,

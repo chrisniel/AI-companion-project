@@ -570,10 +570,30 @@ flutter::EncodableList WindowsAudioChannel::EnumerateDevices(bool capture) {
   return list;
 }
 
-bool WindowsAudioChannel::StartCapture(const std::wstring& device_id, std::string* /*err_out*/) {
+bool WindowsAudioChannel::StartCapture(const std::wstring& device_id, std::string* err_out) {
   StopCapture();
+  {
+    std::lock_guard<std::mutex> lock(capture_mutex_);
+    capture_init_done_ = false;
+    capture_init_ok_ = false;
+    capture_init_error_.clear();
+  }
   capture_stop_requested_.store(false);
   capture_thread_ = std::thread(&WindowsAudioChannel::CaptureWorker, this, device_id);
+
+  std::unique_lock<std::mutex> lock(capture_mutex_);
+  capture_init_cv_.wait(lock, [&]() { return capture_init_done_; });
+  const bool ok = capture_init_ok_;
+  const std::string err = capture_init_error_;
+  lock.unlock();
+
+  if (!ok) {
+    StopCapture();
+    if (err_out) {
+      *err_out = err.empty() ? "Failed to open WASAPI capture device." : err;
+    }
+    return false;
+  }
   return true;
 }
 
@@ -588,11 +608,29 @@ void WindowsAudioChannel::StopCapture() {
 }
 
 void WindowsAudioChannel::CaptureWorker(std::wstring device_id) {
+  auto notify_init = [&](bool ok, const char* msg) {
+    {
+      std::lock_guard<std::mutex> lock(capture_mutex_);
+      if (!capture_init_done_) {
+        capture_init_ok_ = ok;
+        capture_init_error_ = msg ? msg : "";
+        capture_init_done_ = true;
+      }
+    }
+    capture_init_cv_.notify_all();
+  };
+
+  struct CaptureInitGuard {
+    decltype(notify_init)& fn;
+    ~CaptureInitGuard() { fn(false, "Capture worker exited before WASAPI initialization completed."); }
+  } init_guard{notify_init};
+
   ScopedMtaComGuard com_guard;
   {
     ComPtr<IMMDeviceEnumerator> enumerator;
     if (FAILED(::CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
                                   IID_PPV_ARGS(&enumerator)))) {
+      notify_init(false, "Unable to create MMDeviceEnumerator for microphone capture.");
       return;
     }
 
@@ -604,11 +642,15 @@ void WindowsAudioChannel::CaptureWorker(std::wstring device_id) {
     } else {
       enumerator->GetDevice(device_id.c_str(), &device);
     }
-    if (!device) return;
+    if (!device) {
+      notify_init(false, "No active microphone input device found.");
+      return;
+    }
 
     ComPtr<IAudioClient> audio_client;
     if (FAILED(device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr,
                                 reinterpret_cast<void**>(audio_client.GetAddressOf())))) {
+      notify_init(false, "Failed to activate WASAPI IAudioClient for microphone.");
       return;
     }
 
@@ -631,12 +673,14 @@ void WindowsAudioChannel::CaptureWorker(std::wstring device_id) {
     bool native_16k = SUCCEEDED(hr);
     if (!native_16k) {
       if (FAILED(audio_client->GetMixFormat(&mix_fmt)) || mix_fmt == nullptr) {
+        notify_init(false, "Failed to query WASAPI microphone mix format.");
         return;
       }
       hr = audio_client->Initialize(
           AUDCLNT_SHAREMODE_SHARED, 0, buffer_duration, 0, mix_fmt, nullptr);
       if (FAILED(hr)) {
         ::CoTaskMemFree(mix_fmt);
+        notify_init(false, "Failed to initialize WASAPI microphone stream.");
         return;
       }
       active_fmt = mix_fmt;
@@ -645,13 +689,17 @@ void WindowsAudioChannel::CaptureWorker(std::wstring device_id) {
     ComPtr<IAudioCaptureClient> capture_client;
     if (FAILED(audio_client->GetService(IID_PPV_ARGS(&capture_client)))) {
       if (mix_fmt) ::CoTaskMemFree(mix_fmt);
+      notify_init(false, "Failed to acquire WASAPI IAudioCaptureClient service.");
       return;
     }
 
     if (FAILED(audio_client->Start())) {
       if (mix_fmt) ::CoTaskMemFree(mix_fmt);
+      notify_init(false, "Failed to start WASAPI microphone capture stream.");
       return;
     }
+
+    notify_init(true, nullptr);
 
     std::vector<int16_t> staging;
     staging.reserve(kCaptureFrameSamples * 2);
@@ -781,12 +829,16 @@ void WindowsAudioChannel::FlushPlayback(uint64_t min_generation) {
 }
 
 void WindowsAudioChannel::EnsureRenderThreadStarted(const std::wstring& device_id) {
-  if (render_thread_.joinable() && active_render_device_ == device_id) {
+  if (render_thread_.joinable() &&
+      render_worker_alive_.load() &&
+      active_render_device_ == device_id) {
     return;
   }
   StopRenderThread();
   active_render_device_ = device_id;
   render_stop_requested_.store(false);
+  render_flush_requested_.store(false);
+  render_worker_alive_.store(true);
   render_thread_ = std::thread(&WindowsAudioChannel::RenderWorker, this, device_id);
 }
 
@@ -797,11 +849,17 @@ void WindowsAudioChannel::StopRenderThread() {
   if (render_thread_.joinable()) {
     render_thread_.join();
   }
+  render_worker_alive_.store(false);
   std::lock_guard<std::mutex> lock(render_mutex_);
   render_queue_.clear();
 }
 
 void WindowsAudioChannel::RenderWorker(std::wstring device_id) {
+  struct AliveGuard {
+    std::atomic<bool>& flag;
+    ~AliveGuard() { flag.store(false); }
+  } alive_guard{render_worker_alive_};
+
   ScopedMtaComGuard com_guard;
   {
     ComPtr<IMMDeviceEnumerator> enumerator;
@@ -861,26 +919,34 @@ void WindowsAudioChannel::RenderWorker(std::wstring device_id) {
 
     while (!render_stop_requested_.load()) {
       PlaybackItem item{};
+      bool do_flush = false;
       {
         std::unique_lock<std::mutex> lock(render_mutex_);
         render_cv_.wait(lock, [&]() {
-          return render_stop_requested_.load() || !render_queue_.empty();
+          return render_stop_requested_.load() ||
+                 render_flush_requested_.load() ||
+                 !render_queue_.empty();
         });
         if (render_stop_requested_.load()) break;
-        item = std::move(render_queue_.front());
-        render_queue_.pop_front();
+        do_flush = render_flush_requested_.exchange(false);
+        if (!render_queue_.empty()) {
+          item = std::move(render_queue_.front());
+          render_queue_.pop_front();
+        }
+      }
+
+      if (do_flush && is_started) {
+        audio_client->Stop();
+        audio_client->Reset();
+        audio_client->Start();
+      }
+
+      if (item.samples.empty()) {
+        continue;
       }
 
       if (item.generation < min_playback_generation_.load()) {
         continue;
-      }
-
-      if (render_flush_requested_.exchange(false)) {
-        if (is_started) {
-          audio_client->Stop();
-          audio_client->Reset();
-          audio_client->Start();
-        }
       }
 
       auto resampled = ConvertAndResamplePcm16(

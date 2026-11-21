@@ -263,6 +263,18 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void didUpdateWidget(ChatScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.isActiveTab && !widget.isActiveTab && _pttHolding) {
+      _pttHolding = false;
+      final vc = widget.voiceController;
+      if (vc != null && vc.isDictating) {
+        unawaited(() async {
+          final text = await vc.stopDictationAndTranscribe();
+          _insertDictatedText(text);
+        }());
+      } else if (vc != null && vc.isLiveVoiceActive) {
+        unawaited(vc.commitLiveUtterance());
+      }
+    }
     if (oldWidget.onRegisterCloseHistoryDrawer != widget.onRegisterCloseHistoryDrawer) {
       oldWidget.onRegisterCloseHistoryDrawer?.call(null);
       widget.onRegisterCloseHistoryDrawer?.call(_closeHistoryDrawerIfOpen);

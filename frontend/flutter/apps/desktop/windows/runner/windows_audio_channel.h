@@ -76,6 +76,10 @@ class WindowsAudioChannel {
 
   // Capture thread & UI-marshaled queue
   std::mutex capture_mutex_;
+  std::condition_variable capture_init_cv_;
+  bool capture_init_done_{false};
+  bool capture_init_ok_{false};
+  std::string capture_init_error_;
   std::deque<CapturedFrame> capture_queue_;
   std::atomic<bool> capture_event_posted_{false};
   std::atomic<bool> capture_stop_requested_{false};
@@ -89,6 +93,7 @@ class WindowsAudioChannel {
   std::atomic<uint64_t> min_playback_generation_{0};
   std::atomic<bool> render_flush_requested_{false};
   std::atomic<bool> render_stop_requested_{false};
+  std::atomic<bool> render_worker_alive_{false};
   std::thread render_thread_;
 };
 

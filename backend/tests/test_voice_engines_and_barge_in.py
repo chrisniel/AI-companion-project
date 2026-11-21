@@ -426,4 +426,3 @@ async def test_kokoro_synthesize_chunks_long_text_without_510_truncation():
     assert len(calls) >= 4
     # Combined WAV holds multiple 1200-sample chunks (> 1200 * 2 bytes PCM payload)
     assert len(res.wav_bytes) > 1200 * 2 * 3
-

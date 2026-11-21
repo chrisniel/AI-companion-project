@@ -1308,4 +1308,3 @@ async def test_auto_compaction_steps_down_keep_recent_when_under_8_long_messages
     assert result.compacted is True
     assert result.summary is not None
     assert result.summary.to_sequence_no < 6
-
