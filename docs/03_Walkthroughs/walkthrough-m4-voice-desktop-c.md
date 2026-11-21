@@ -32,6 +32,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
   - *6B — Intent-Focused Tool Schema Pruning & Deterministic `Risk 0` Fallback (`tools/registry.py`, `orchestrator.py`):* Added `select_relevant_tool_definitions()` to prune tool schemas per user intent and added a deterministic `Risk 0` `web_search` fallback when explicit web search queries emit `0` model tool calls on Round 0.
   - *6C — 7-Day Weather Widget & Consumer Assistant Cards (`web/providers.py`, `desktop_chat_controller.dart`, `chat_screen.dart`):* Upgraded `weather_lookup()` to `forecast_days=7` (`7-day forecast:`), mapped `SseToolIntentEvent` to friendly status strings (`"Checking live weather..."`, `"Searching the web..."`, etc.), replaced raw `snake_case · executed` chips & tooltips with auto-visible **7-day Weather Widget cards**, consumer **Assistant Action cards** (reminders/tasks/alarms/memories), hidden executed `web_search` pills beside `Sources`, and cleaned source display URLs.
   - *6D — TTS Contraction, Decimal, Temperature & Symbol Normalization (`voice/tts.py`):* Normalized Unicode curly apostrophes (`’` -> `'`), expanded temperature ranges (`24.8–31.3°C`), scalar temps (`26.7°C`, `30.2c`, `°F`), standalone `°`, `%`, and decimals (`30.2` -> `"30 point 2"`) before clause splitting, and converted arrows (`→`, `->`) into natural pauses.
+  - *6E — Round 4 Surgical Polish (`assistant/orchestrator.py`, `voice/tts.py`):* Buffered Round-0 visible SSE frames when an explicit `Risk 0` lookup fallback (`web_search` or `weather_lookup`) is pre-armed so preliminary ungrounded refusals/roleplay are discarded cleanly before Round 1 streams, stripped stray ASCII/Unicode quotes in `_extract_explicit_web_search_query()`, ordered history newest-first (`_iter_history_newest_first`), added `_extract_explicit_weather_location()` to recover location from follow-up weather queries & prior `weather_lookup` receipts (ignoring secondary reminder clauses), added Web Search Grounding rules, expanded dual-unit temperature ranges (`77°F–91°F`, `25°C–30°C` via `_format_temp_range`) and standalone hyphenated day ranges (`November 22-30` while preserving `2026-11-21`), and normalized prose `—`/`–` dashes into smooth comma pauses before `espeak-ng` splits clauses.
 
 ## 2. Files Changed
 
@@ -63,13 +64,13 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 ### Automated Checks
 
-- [x] `backend\.venv\Scripts\python.exe -m pytest backend\tests -q -p no:cacheprovider -o log_file=NUL`: `892 passed, 96 warnings` in `485.63s` (`0` failed, `0` skipped — run after all final backend & test edits).
+- [x] `backend\.venv\Scripts\python.exe -m pytest backend\tests -q -p no:cacheprovider -o log_file=NUL`: `893 passed, 98 warnings` in `421.79s` (`0` failed, `0` skipped — run after all final Slice 6E backend & test edits).
 - [x] `dart analyze .` (from `frontend/flutter`): `No issues found!`.
-- [x] `flutter test --no-pub --concurrency=1 test` (from `frontend/flutter/apps/desktop`): `429: All tests passed!` (`0` failed, `0` skipped — run after all final Desktop & test edits).
-- [x] `flutter build windows --debug --no-pub` (from `frontend/flutter/apps/desktop`): `Built build\windows\x64\runner\Debug\ai_companion_desktop.exe` (`25.5s`, exit `0`).
+- [x] `flutter test --no-pub --concurrency=1 test` (from `frontend/flutter/apps/desktop`): `429: All tests passed!` (`0` failed, `0` skipped).
+- [x] `flutter build windows --debug --no-pub` (from `frontend/flutter/apps/desktop`): `Built build\windows\x64\runner\Debug\ai_companion_desktop.exe` (`25.5s`, exit `0`; verified prior to backend-only Slice 6E).
 - [x] `companion_api` (`dart analyze .` + `dart test`): `No issues found!`, `112: All tests passed!`.
 - [x] `backend\.venv\Scripts\python.exe scripts\check_dart_openapi_parity.py --check`: `Verified DTO Schemas: 87/87`, `ALL CONTRACT PARITY AND ROUTE COVERAGE CHECKS PASSED`.
-- [x] `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_import_isolation.py scripts\tests\test_python_dependency_lock.py -q -p no:cacheprovider -o log_file=NUL`: `10 passed, 4 subtests passed` in `4.59s`.
+- [x] `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_import_isolation.py scripts\tests\test_python_dependency_lock.py -q -p no:cacheprovider -o log_file=NUL`: `10 passed, 4 subtests passed` in `7.28s`.
 
 ### Pending Manual Physical Windows Hardware & GUI QA
 

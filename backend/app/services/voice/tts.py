@@ -292,14 +292,19 @@ def preprocess_text_for_tts(text: str) -> str:
     def _unit_name(unit: str) -> str:
         return "degrees Celsius" if unit.lower() == "c" else "degrees Fahrenheit"
 
+    def _format_temp_range(m: re.Match[str]) -> str:
+        if m.group(2) and m.group(2).lower() != m.group(4).lower():
+            return f"{m.group(1)} {_unit_name(m.group(2))} to {m.group(3)} {_unit_name(m.group(4))}"
+        return f"{m.group(1)} to {m.group(3)} {_unit_name(m.group(4))}"
+
     cleaned = re.sub(
-        r"(-?\d+(?:\.\d+)?)\s*[–—\-]\s*(-?\d+(?:\.\d+)?)\s*°\s*([CcFf])\b",
-        lambda m: f"{m.group(1)} to {m.group(2)} {_unit_name(m.group(3))}",
+        r"(-?\d+(?:\.\d+)?)\s*(?:°?\s*([CcFf]))?\s*[–—\-]\s*(-?\d+(?:\.\d+)?)\s*°\s*([CcFf])\b",
+        _format_temp_range,
         cleaned,
     )
     cleaned = re.sub(
-        r"(-?\d+(?:\.\d+)?)\s*[–—\-]\s*(-?\d+(?:\.\d+)?)\s*([CcFf])\b",
-        lambda m: f"{m.group(1)} to {m.group(2)} {_unit_name(m.group(3))}",
+        r"(-?\d+(?:\.\d+)?)\s*(?:°?\s*([CcFf]))?\s*[–—\-]\s*(-?\d+(?:\.\d+)?)\s*([CcFf])\b",
+        _format_temp_range,
         cleaned,
     )
     cleaned = re.sub(
@@ -313,7 +318,15 @@ def preprocess_text_for_tts(text: str) -> str:
         cleaned,
     )
     cleaned = re.sub(r"(\d+(?:\.\d+)?)\s*°(?!\s*[CcFf]\b)", r"\1 degrees ", cleaned)
-    cleaned = re.sub(r"(\d+(?:\.\d+)?)\s*[–—]\s*(\d+(?:\.\d+)?)", r"\1 to \2", cleaned)
+    cleaned = re.sub(
+        r"(?<![\d\-])(\d+(?:\.\d+)?)\s*[–—\-]\s*(\d+(?:\.\d+)?)(?![\d\-])",
+        r"\1 to \2",
+        cleaned,
+    )
+    # Normalize prose em/en-dashes to natural comma pauses before espeak-ng splits clauses on '—'.
+    cleaned = re.sub(r"(?<=[,.;:!?])\s*[—–]+\s*", " ", cleaned)
+    cleaned = re.sub(r"\s*[—–]+\s*(?=[.!?]|$)", "", cleaned)
+    cleaned = re.sub(r"\s*[—–]+\s*", ", ", cleaned)
     cleaned = re.sub(r"(\d+(?:\.\d+)?)\s*%", r"\1 percent", cleaned)
     cleaned = re.sub(r"(\d+)\.(\d+)", r"\1 point \2", cleaned)
     cleaned = re.sub(r"\s*(?:->|=>|[→⇒➜➔⟶])\s*", ", ", cleaned)

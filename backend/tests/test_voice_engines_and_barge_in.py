@@ -348,6 +348,20 @@ def test_tts_espeak_g2p_taglish_and_preprocessing():
     assert "ˌɛlˈɛl" not in contraction_ipa
     assert "dˈɑːn tˈiː" not in contraction_ipa
 
+    # Slice 6E: Dual-unit temperature ranges, hyphenated day ranges (preserving ISO dates), and em-dash comma pauses
+    dual_temp = preprocess_text_for_tts("25°C–30°C (about 77°F–91°F).")
+    assert "25 to 30 degrees Celsius" in dual_temp
+    assert "77 to 91 degrees Fahrenheit" in dual_temp
+    assert "–" not in dual_temp
+
+    date_and_range = preprocess_text_for_tts("November 22-30 vs 2026-11-21")
+    assert "November 22 to 30" in date_and_range
+    assert "2026-11-21" in date_and_range
+
+    em_dash = preprocess_text_for_tts("But wait—your friend’s wedding is on December 8th—really!")
+    assert "—" not in em_dash
+    assert "But wait, your friend's wedding is on December 8th, really!" == em_dash
+
 
 async def test_kokoro_synthesize_chunks_long_text_without_510_truncation():
     from app.services.voice.tts import KokoroOnnxTtsProvider

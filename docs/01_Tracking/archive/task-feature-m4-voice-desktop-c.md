@@ -3,7 +3,7 @@
 - **Branch:** `feature/m4-voice-desktop-c`
 - **Plan:** [`plan-m4-voice-desktop-c.md`](../../02_Planning/01_Plans/plan-m4-voice-desktop-c.md)
 - **Delivery Level:** Level C — Sensitive Design
-- **Current Phase:** Phase 3 Complete — Slice 6 Stabilized & Automated-Verified Locally (Ready for Manual Hardware QA & Phase 4 Independent Review; Local Commit Only)
+- **Current Phase:** Phase 3 Complete — Slice 6E Stabilized & Automated-Verified Locally (Ready for Manual Hardware QA / Remote Push & Phase 4 Independent Review; Local Commit Only)
 
 ## Checklist
 
@@ -23,5 +23,6 @@
 - [x] Phase 2 Slice 6D: Normalize Unicode curly apostrophes (`’` -> `'`), temperature units/ranges (`°C`, `30.2c`, `24.8–31.3°C`, `°F`), decimals (`30.2` -> `"30 point 2"`), percentages (`%`), and arrows (`→`) in `tts.py`
 - [x] Verification Gate: `892` backend pytest (`96 warnings`, `485.63s`), `10` import-isolation & lock tests (`4 subtests`, `4.59s`), `87/87` OpenAPI parity, `dart analyze .` `0` issues, `112` `companion_api` tests, `429` Desktop tests, & `ai_companion_desktop.exe` Windows debug build (`25.5s`)
 - [x] Phase 3: Re-synced `plan-m4-voice-desktop-c.md`, `walkthrough-m4-voice-desktop-c.md`, `CHANGELOG.md`, `voice-and-audio.md`, `WBS.md`, `MASTER_CHECKLIST.md`, `DELIVERY_INDEX.md`, and archived branch tracker locally on `feature/m4-voice-desktop-c`
-- [ ] Manual Physical Windows Hardware QA (Round 4): Human Owner re-verification on physical Windows audio devices & GUI (7-day Weather Widget, consumer schedule cards, explicit web search, no Turn-2 compaction, and TTS curly-apostrophe/temperature/decimal speech)
+- [x] Manual Physical Windows Hardware QA (Round 4) & Forensic Audit: Inspected `companion.db` and tested `tts.py` against all 5 QA screenshots (identified Round-0 pre-fallback refusal streaming, stray quote `"` + 2B year confusion, uncalled weather follow-up, dual-unit `"77°F–91°F"`, and em-dash `—` `espeak-ng` splitting); updated `plan-m4-voice-desktop-c.md` with Slice 6E
+- [x] Phase 2 Slice 6E (`Option 1`): Implemented Round-0 SSE buffer & refusal/roleplay discard on armed fallback + quote-safe web query extraction + weather follow-up history recovery + Web Search Grounding prompt rule (`orchestrator.py`), dual-unit temperature range formatting (`_format_temp_range`) + standalone day-range expansion (`November 22-30` preserving `2026-11-21`) + prose `—`/`–` comma pauses (`tts.py`); re-verified full gate (`893` backend pytest, `10` lock/import tests, `87/87` OpenAPI parity, `0` analyzer issues, `112` `companion_api`, `429` Desktop tests) & re-synced Phase 3 docs locally
 - [ ] Phase 4: Remote push, combined independent review, green PR CI, & Human Owner squash merge into `develop`
