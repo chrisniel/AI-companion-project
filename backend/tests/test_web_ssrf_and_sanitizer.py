@@ -238,6 +238,7 @@ async def test_ddg_snippets_preserve_nested_bold_tags_and_weather_geocoding_fall
                 json={"results": [{"name": "Caloocan", "country": "Philippines", "latitude": 14.65, "longitude": 120.97}]},
             )
         if host == "api.open-meteo.com":
+            assert "forecast_days=7" in str(request.url)
             return httpx.Response(
                 200,
                 json={
@@ -248,11 +249,19 @@ async def test_ddg_snippets_preserve_nested_bold_tags_and_weather_geocoding_fall
                         "weather_code": 2,
                     },
                     "daily": {
-                        "time": ["2026-11-20", "2026-11-21", "2026-11-22"],
-                        "weather_code": [2, 61, 0],
-                        "temperature_2m_max": [32.1, 29.8, 31.5],
-                        "temperature_2m_min": [25.0, 24.5, 24.8],
-                        "precipitation_probability_max": [20, 75, 10],
+                        "time": [
+                            "2026-11-20",
+                            "2026-11-21",
+                            "2026-11-22",
+                            "2026-11-23",
+                            "2026-11-24",
+                            "2026-11-25",
+                            "2026-11-26",
+                        ],
+                        "weather_code": [2, 61, 0, 1, 3, 95, 2],
+                        "temperature_2m_max": [32.1, 29.8, 31.5, 32.0, 30.2, 28.9, 31.0],
+                        "temperature_2m_min": [25.0, 24.5, 24.8, 25.1, 24.9, 24.0, 24.6],
+                        "precipitation_probability_max": [20, 75, 10, 15, 40, 90, 25],
                     },
                 },
             )
@@ -271,6 +280,7 @@ async def test_ddg_snippets_preserve_nested_bold_tags_and_weather_geocoding_fall
     weather = await weather_lookup(location="Caloocan City", resolver=resolver, transport=transport)
     assert len(seen_geo_urls) == 2
     assert weather["location"] == "Caloocan, Philippines"
-    assert len(weather["daily_forecast"]) == 3
+    assert len(weather["daily_forecast"]) == 7
+    assert "7-day forecast:" in weather["summary"]
     assert weather["daily_forecast"][1]["condition"] == "Slight rain"
     assert weather["daily_forecast"][1]["precipitation_prob_pct"] == 75

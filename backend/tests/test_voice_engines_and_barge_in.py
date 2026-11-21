@@ -333,6 +333,21 @@ def test_tts_espeak_g2p_taglish_and_preprocessing():
     prosody_ipa = text_to_kokoro_ipa("Oh my dear, would you like more suggestions?")
     assert "," in prosody_ipa and prosody_ipa.rstrip().endswith("?")
 
+    # Slice 6D: Curly apostrophes, decimals, temperature ranges/units, percentages, and arrows
+    norm = preprocess_text_for_tts(
+        "I’ll check Caloocan: 26.7°C now, 24.8–31.3°C tomorrow (51% rain) or 30.2c → Thunderstorm!"
+    )
+    assert "I'll" in norm
+    assert "’" not in norm
+    assert "26 point 7 degrees Celsius" in norm
+    assert "24 point 8 to 31 point 3 degrees Celsius" in norm
+    assert "51 percent" in norm
+    assert "30 point 2 degrees Celsius" in norm
+    assert "→" not in norm
+    contraction_ipa = text_to_kokoro_ipa("We’ll check tomorrow, don’t worry!")
+    assert "ˌɛlˈɛl" not in contraction_ipa
+    assert "dˈɑːn tˈiː" not in contraction_ipa
+
 
 async def test_kokoro_synthesize_chunks_long_text_without_510_truncation():
     from app.services.voice.tts import KokoroOnnxTtsProvider

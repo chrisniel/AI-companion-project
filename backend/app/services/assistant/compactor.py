@@ -83,6 +83,18 @@ def _is_generic_mock_output(text: str) -> bool:
     return any(marker in lowered for marker in markers)
 
 
+_HALLUCINATED_DIALOGUE_RE = re.compile(
+    r"(?im)(?:^\s*[-*•]?\s*(?:user|assistant)\s*(?:\(\s*turn\s*\d+\s*\))?\s*:|\b(?:user|assistant)\s*\(turn\s*\d+\)\s*:)"
+)
+
+
+def _looks_like_hallucinated_dialogue(text: str) -> bool:
+    """Reject LLM digests formatted as synthetic User/Assistant dialogue scripts."""
+    if not text:
+        return False
+    return len(_HALLUCINATED_DIALOGUE_RE.findall(text)) >= 2
+
+
 def _extractive_episode_digest(
     prior_summary: Optional[ConversationSummary],
     messages_to_compact: Sequence[Message],
@@ -209,7 +221,7 @@ async def _generate_llm_digest(
             max_tokens=max_tokens,
         )
         raw_text = str(generated).strip()
-        if not raw_text or _is_generic_mock_output(raw_text):
+        if not raw_text or _is_generic_mock_output(raw_text) or _looks_like_hallucinated_dialogue(raw_text):
             return None
         return raw_text
     except Exception as exc:
@@ -273,9 +285,9 @@ async def compact_conversation(
         )
     else:
         effective_keep = max(1, settings.CONTEXT_COMPACTION_KEEP_RECENT_MESSAGES)
-        # When <= keep_recent long turns still blow past context budget, step down so auto-compaction can proceed.
-        if trigger == "auto" and 2 <= len(uncompacted) <= effective_keep:
-            effective_keep = max(1, len(uncompacted) // 2)
+        # When 4..keep_recent long turns overflow context, step down safely while preserving >= 2 recent messages.
+        if trigger == "auto" and 4 <= len(uncompacted) <= effective_keep:
+            effective_keep = max(2, len(uncompacted) // 2)
 
     if len(uncompacted) <= effective_keep:
         return CompactionExecutionResult(
@@ -330,11 +342,16 @@ async def compact_conversation(
     max_summary_tokens = max(64, settings.CONTEXT_COMPACTION_SUMMARY_MAX_TOKENS)
     max_summary_chars = max_summary_tokens * 4
 
-    llm_digest = await _generate_llm_digest(
-        provider=provider,
-        prior_summary=prior,
-        messages_to_compact=to_compact,
-        max_tokens=settings.CONTEXT_COMPACTION_LLM_MAX_TOKENS,
+    use_extractive_only = trigger == "auto" and len(to_compact) <= 2
+    llm_digest = (
+        None
+        if use_extractive_only
+        else await _generate_llm_digest(
+            provider=provider,
+            prior_summary=prior,
+            messages_to_compact=to_compact,
+            max_tokens=settings.CONTEXT_COMPACTION_LLM_MAX_TOKENS,
+        )
     )
     if llm_digest is not None:
         summary_text = _truncate_clean(llm_digest, max_summary_chars)

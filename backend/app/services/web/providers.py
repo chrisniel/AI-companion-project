@@ -139,7 +139,7 @@ async def weather_lookup(
         f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
         "&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code"
         "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
-        "&forecast_days=3&timezone=auto"
+        "&forecast_days=7&timezone=auto"
     )
     wx_bytes, final_wx_url, _, wx_status = await guarded_fetch_bytes(
         forecast_url,
@@ -177,11 +177,12 @@ async def weather_lookup(
     temp_val = current.get("temperature_2m")
     summary_parts = [f"Weather in {loc_label}: {condition}, {temp_val}°C now."]
     if daily_forecast:
+        days_slice = daily_forecast[:7]
         preview = "; ".join(
             f"{d['date']}: {d['condition']} ({d['temp_min_c']}–{d['temp_max_c']}°C, rain {d['precipitation_prob_pct']}%)"
-            for d in daily_forecast[:3]
+            for d in days_slice
         )
-        summary_parts.append(f"3-day forecast: {preview}.")
+        summary_parts.append(f"{len(days_slice)}-day forecast: {preview}.")
 
     return {
         "location": loc_label,

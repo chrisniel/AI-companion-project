@@ -275,11 +275,49 @@ def split_sentences_for_tts(text: str, *, max_chars: int = 240) -> list[str]:
 
 
 def preprocess_text_for_tts(text: str) -> str:
-    """Clean Markdown, URLs, emojis, slash pairs, and acronyms before G2P phonemization."""
+    """Clean Markdown, URLs, apostrophes, temperatures, decimals, symbols, slashes, and acronyms before G2P."""
     cleaned = text or ""
+    cleaned = (
+        cleaned.replace("\u2019", "'")
+        .replace("\u2018", "'")
+        .replace("\u02bc", "'")
+        .replace("\u2032", "'")
+        .replace("\u201c", '"')
+        .replace("\u201d", '"')
+    )
     cleaned = _MD_LINK_RE.sub(r"\1", cleaned)
     cleaned = _URL_RE.sub("", cleaned)
     cleaned = cleaned.replace("```", " ").replace("`", "")
+
+    def _unit_name(unit: str) -> str:
+        return "degrees Celsius" if unit.lower() == "c" else "degrees Fahrenheit"
+
+    cleaned = re.sub(
+        r"(-?\d+(?:\.\d+)?)\s*[–—\-]\s*(-?\d+(?:\.\d+)?)\s*°\s*([CcFf])\b",
+        lambda m: f"{m.group(1)} to {m.group(2)} {_unit_name(m.group(3))}",
+        cleaned,
+    )
+    cleaned = re.sub(
+        r"(-?\d+(?:\.\d+)?)\s*[–—\-]\s*(-?\d+(?:\.\d+)?)\s*([CcFf])\b",
+        lambda m: f"{m.group(1)} to {m.group(2)} {_unit_name(m.group(3))}",
+        cleaned,
+    )
+    cleaned = re.sub(
+        r"(-?\d+(?:\.\d+)?)\s*°\s*([CcFf])\b",
+        lambda m: f"{m.group(1)} {_unit_name(m.group(2))}",
+        cleaned,
+    )
+    cleaned = re.sub(
+        r"\b(-?\d+\.\d+)\s*([CcFf])\b",
+        lambda m: f"{m.group(1)} {_unit_name(m.group(2))}",
+        cleaned,
+    )
+    cleaned = re.sub(r"(\d+(?:\.\d+)?)\s*°(?!\s*[CcFf]\b)", r"\1 degrees ", cleaned)
+    cleaned = re.sub(r"(\d+(?:\.\d+)?)\s*[–—]\s*(\d+(?:\.\d+)?)", r"\1 to \2", cleaned)
+    cleaned = re.sub(r"(\d+(?:\.\d+)?)\s*%", r"\1 percent", cleaned)
+    cleaned = re.sub(r"(\d+)\.(\d+)", r"\1 point \2", cleaned)
+    cleaned = re.sub(r"\s*(?:->|=>|[→⇒➜➔⟶])\s*", ", ", cleaned)
+    cleaned = re.sub(r"[\u2190-\u21FF\u25A0-\u25FF]+", " ", cleaned)
     cleaned = re.sub(r"(?<=[A-Za-z])\s*/\s*(?=[A-Za-z])", " or ", cleaned)
     cleaned = re.sub(r"[*_~#>]+", " ", cleaned)
     cleaned = _EMOJI_RE.sub(" ", cleaned)

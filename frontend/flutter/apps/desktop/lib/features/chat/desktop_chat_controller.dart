@@ -1054,6 +1054,41 @@ class DesktopChatController extends ChangeNotifier {
     if (!_isDisposed) notifyListeners();
   }
 
+  static String _friendlyToolProgressLabel(String toolName) {
+    switch (toolName) {
+      case 'weather_lookup':
+        return 'Checking live weather...';
+      case 'web_search':
+        return 'Searching the web...';
+      case 'web_fetch':
+        return 'Reading web page...';
+      case 'create_reminder':
+        return 'Setting a reminder...';
+      case 'list_reminders':
+        return 'Checking your reminders...';
+      case 'delete_reminder':
+        return 'Updating your reminders...';
+      case 'create_task':
+        return 'Adding a task...';
+      case 'update_task':
+        return 'Updating task...';
+      case 'list_tasks':
+        return 'Checking your tasks...';
+      case 'delete_task':
+        return 'Updating your tasks...';
+      case 'create_alarm':
+        return 'Setting an alarm...';
+      case 'list_alarms':
+        return 'Checking your alarms...';
+      case 'delete_alarm':
+        return 'Updating your alarms...';
+      case 'search_memories':
+        return 'Checking your memories...';
+      default:
+        return 'Working on your request...';
+    }
+  }
+
   /// Submits a user prompt, adds optimistic turns upon server acceptance, and consumes streaming tokens.
   ///
   /// Returns `true` if the turn was accepted by the runtime and streaming commenced/completed;
@@ -1235,10 +1270,10 @@ class DesktopChatController extends ChangeNotifier {
             }
             notifyListeners();
           } else if (event is SseToolIntentEvent) {
-            _activeToolStatus = 'Running ${event.toolName}...';
+            _activeToolStatus = _friendlyToolProgressLabel(event.toolName);
             notifyListeners();
           } else if (event is SseToolConfirmationRequiredEvent) {
-            _activeToolStatus = 'Awaiting confirmation: ${event.toolName}';
+            _activeToolStatus = 'Waiting for your confirmation...';
             _liveConfirmations = [..._liveConfirmations, event.confirmation];
             if (_messages.isNotEmpty && _messages.last.sender == 'assistant') {
               final last = _messages.last;

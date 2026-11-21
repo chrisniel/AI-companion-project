@@ -313,6 +313,103 @@ def get_openai_tool_definitions() -> list[dict[str, Any]]:
     return definitions
 
 
+_DOMAIN_KEYWORDS: tuple[tuple[tuple[str, ...], frozenset[str]], ...] = (
+    (
+        (
+            "search",
+            "web",
+            "google",
+            "internet",
+            "online",
+            "news",
+            "release",
+            "released",
+            "latest",
+            "recent",
+            "http://",
+            "https://",
+            "url",
+            "website",
+            "look up",
+            "lookup",
+        ),
+        frozenset({"web_search", "web_fetch"}),
+    ),
+    (
+        (
+            "weather",
+            "wheather",
+            "forecast",
+            "temperature",
+            "temp",
+            "rain",
+            "storm",
+            "typhoon",
+            "umbrella",
+            "humid",
+            "celsius",
+            "drizzle",
+        ),
+        frozenset({"weather_lookup"}),
+    ),
+    (
+        (
+            "remind",
+            "reminder",
+            "reminders",
+            "schedule",
+            "calendar",
+            "appointment",
+            "alarm",
+            "alarms",
+            "wake",
+            "timer",
+            "task",
+            "tasks",
+            "todo",
+            "to-do",
+        ),
+        frozenset(
+            {
+                "create_reminder",
+                "list_reminders",
+                "delete_reminder",
+                "create_task",
+                "update_task",
+                "list_tasks",
+                "delete_task",
+                "create_alarm",
+                "list_alarms",
+                "delete_alarm",
+            }
+        ),
+    ),
+    (
+        ("remember", "memory", "memories", "recall", "what did i", "what do you know"),
+        frozenset({"search_memories"}),
+    ),
+)
+
+
+def select_relevant_tool_definitions(user_text: str) -> list[dict[str, Any]]:
+    """Return intent-focused tool descriptors to keep 2B context tight and tool selection sharp."""
+    all_defs = get_openai_tool_definitions()
+    low = (user_text or "").lower().strip()
+    if not low or any(phrase in low for phrase in ("what tools", "which tools", "all tools", "available tools")):
+        return all_defs
+
+    selected_names: set[str] = set()
+    for keywords, names in _DOMAIN_KEYWORDS:
+        if any(kw in low for kw in keywords):
+            selected_names.update(names)
+
+    if not selected_names:
+        return all_defs
+
+    filtered = [d for d in all_defs if d.get("function", {}).get("name") in selected_names]
+    return filtered or all_defs
+
+
 def estimate_openai_tools_tokens(tools: Optional[list[dict[str, Any]]] = None) -> int:
     """Estimate conservative prompt tokens consumed by OpenAI tool schemas in chat templates."""
     payload = tools if tools is not None else get_openai_tool_definitions()

@@ -1748,10 +1748,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   const SizedBox(height: CompanionSpacing.xs),
                   _buildToolProgressChip(_effectiveController.activeToolStatus!, ext),
                 ],
-                if (msg.toolReceipts.isNotEmpty) ...[
-                  const SizedBox(height: CompanionSpacing.sm),
-                  _buildToolReceiptsStrip(msg.toolReceipts, ext),
-                ],
+                if (msg.toolReceipts.isNotEmpty)
+                  _buildToolReceiptsStrip(msg, ext, isDark),
                 if (msg.sources.isNotEmpty) ...[
                   const SizedBox(height: CompanionSpacing.sm),
                   _buildSourcesStrip(msg, ext),
@@ -2002,40 +2000,420 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildToolReceiptsStrip(
-    List<ToolReceiptOut> receipts,
+    MessageOut msg,
+    CompanionThemeExtension? ext,
+    bool isDark,
+  ) {
+    final cards = <Widget>[];
+    for (final r in msg.toolReceipts) {
+      final isBlocked = r.outcomeStatus == 'killed' ||
+          r.decision == 'DENY' ||
+          r.outcomeStatus == 'denied' ||
+          r.outcomeStatus == 'rejected_by_user' ||
+          r.outcomeStatus == 'failed';
+      if (isBlocked) {
+        cards.add(_buildBlockedToolCard(r, ext));
+        continue;
+      }
+      if (r.outcomeStatus == 'pending_confirmation') {
+        if (msg.pendingConfirmations.isEmpty) {
+          cards.add(_buildBlockedToolCard(r, ext, isWarning: true));
+        }
+        continue;
+      }
+      if (r.toolName == 'weather_lookup') {
+        cards.add(_buildWeatherWidgetCard(r, ext, isDark));
+        continue;
+      }
+      if (r.toolName == 'web_search' || r.toolName == 'web_fetch') {
+        // Executed web tools surface cleanly via the collapsible Sources strip below.
+        continue;
+      }
+      cards.add(_buildAssistantActionCard(r, ext, isDark));
+    }
+    if (cards.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: CompanionSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < cards.length; i++) ...[
+            if (i > 0) const SizedBox(height: CompanionSpacing.xs),
+            cards[i],
+          ],
+        ],
+      ),
+    );
+  }
+
+  ({IconData icon, Color color}) _weatherVisualForCondition(
+    String condition,
     CompanionThemeExtension? ext,
   ) {
-    return Wrap(
-      spacing: CompanionSpacing.xs,
-      runSpacing: CompanionSpacing.xs,
-      children: receipts.map((r) {
-        final isBlocked = r.outcomeStatus == 'killed' ||
-            r.decision == 'DENY' ||
-            r.outcomeStatus == 'denied' ||
-            r.outcomeStatus == 'rejected_by_user';
-        final color = isBlocked
-            ? (ext?.danger ?? CompanionColors.danger)
-            : (ext?.accent ?? CompanionColors.lightAccent);
-        return Tooltip(
-          message: r.summary,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
-              borderRadius: CompanionRadius.borderSm,
-              border: Border.all(color: color.withValues(alpha: 0.25)),
+    final low = condition.toLowerCase();
+    if (low.contains('thunder') || low.contains('storm')) {
+      return (icon: Icons.thunderstorm_rounded, color: Colors.amberAccent);
+    }
+    if (low.contains('drizzle') || low.contains('rain') || low.contains('shower')) {
+      return (icon: Icons.water_drop_rounded, color: Colors.lightBlueAccent);
+    }
+    if (low.contains('partly')) {
+      return (icon: Icons.wb_cloudy_rounded, color: ext?.accent ?? CompanionColors.lightAccent);
+    }
+    if (low.contains('overcast') || low.contains('cloud') || low.contains('fog')) {
+      return (icon: Icons.cloud_rounded, color: ext?.textSecondary ?? Colors.blueGrey);
+    }
+    return (icon: Icons.wb_sunny_rounded, color: Colors.orangeAccent);
+  }
+
+  String _formatShortDateLabel(String isoDate) {
+    final parsed = DateTime.tryParse(isoDate);
+    if (parsed == null) return isoDate;
+    final now = DateTime.now();
+    if (parsed.year == now.year && parsed.month == now.month && parsed.day == now.day) {
+      return 'Today';
+    }
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${weekdays[parsed.weekday - 1]}, ${months[parsed.month - 1]} ${parsed.day}';
+  }
+
+  Widget _buildWeatherWidgetCard(
+    ToolReceiptOut receipt,
+    CompanionThemeExtension? ext,
+    bool isDark,
+  ) {
+    final summary = receipt.summary;
+    final headerMatch = RegExp(
+      r'^Weather in ([^:]+):\s*([^,]+),\s*([-\d.]+)\s*°?C(?:\s*now)?\.',
+    ).firstMatch(summary);
+    final location = headerMatch?.group(1)?.trim();
+    final nowCondition = headerMatch?.group(2)?.trim() ?? '';
+    final nowTemp = headerMatch?.group(3)?.trim();
+
+    final dayMatches = RegExp(
+      r'(\d{4}-\d{2}-\d{2}):\s*([^(]+?)\s*\(([-\d.]+)\s*[–\-]\s*([-\d.]+)\s*°?C,\s*rain\s*(\d+)%\)',
+    ).allMatches(summary).toList();
+
+    final surfaceColor = isDark
+        ? Colors.white.withValues(alpha: 0.045)
+        : Colors.black.withValues(alpha: 0.03);
+    final borderColor = ext?.borderSubtle ?? (isDark ? Colors.white12 : Colors.black12);
+    final visual = _weatherVisualForCondition(nowCondition, ext);
+
+    return Container(
+      key: const Key('weather_widget_card'),
+      padding: const EdgeInsets.all(CompanionSpacing.md),
+      decoration: BoxDecoration(
+        color: surfaceColor,
+        borderRadius: CompanionRadius.borderMd,
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (location != null && nowTemp != null) ...[
+            Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: visual.color.withValues(alpha: 0.16),
+                    borderRadius: CompanionRadius.borderSm,
+                  ),
+                  child: Icon(visual.icon, size: 18, color: visual.color),
+                ),
+                const SizedBox(width: CompanionSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        location,
+                        style: CompanionTypography.bodySmall.copyWith(
+                          color: ext?.textPrimary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        nowCondition,
+                        style: CompanionTypography.caption.copyWith(
+                          color: ext?.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: (ext?.accent ?? CompanionColors.lightAccent).withValues(alpha: 0.14),
+                    borderRadius: CompanionRadius.borderFull,
+                  ),
+                  child: Text(
+                    '$nowTemp°C',
+                    style: CompanionTypography.bodySmall.copyWith(
+                      color: ext?.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            child: Text(
-              '${r.toolName} · ${r.outcomeStatus}',
-              style: CompanionTypography.caption.copyWith(
-                color: color,
-                fontWeight: FontWeight.w600,
+            if (dayMatches.isNotEmpty) ...[
+              const SizedBox(height: CompanionSpacing.sm),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (var i = 0; i < dayMatches.length; i++) ...[
+                      if (i > 0) const SizedBox(width: CompanionSpacing.xs),
+                      _buildWeatherDayTile(dayMatches[i], ext, isDark),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ] else
+            Text(
+              summary,
+              style: CompanionTypography.bodySmall.copyWith(
+                color: ext?.textSecondary,
               ),
             ),
-          ),
-        );
-      }).toList(),
+        ],
+      ),
     );
+  }
+
+  Widget _buildWeatherDayTile(
+    RegExpMatch match,
+    CompanionThemeExtension? ext,
+    bool isDark,
+  ) {
+    final dateIso = match.group(1) ?? '';
+    final cond = (match.group(2) ?? '').trim();
+    final minT = match.group(3) ?? '';
+    final maxT = match.group(4) ?? '';
+    final rainPct = match.group(5) ?? '0';
+    final label = _formatShortDateLabel(dateIso);
+    final isToday = label == 'Today';
+    final visual = _weatherVisualForCondition(cond, ext);
+    final accent = ext?.accent ?? CompanionColors.lightAccent;
+
+    return Container(
+      width: 114,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: isToday
+            ? accent.withValues(alpha: 0.10)
+            : (isDark ? Colors.white.withValues(alpha: 0.03) : Colors.black.withValues(alpha: 0.02)),
+        borderRadius: CompanionRadius.borderSm,
+        border: Border.all(
+          color: isToday
+              ? accent.withValues(alpha: 0.45)
+              : (ext?.borderSubtle ?? Colors.transparent),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: CompanionTypography.caption.copyWith(
+              color: isToday ? accent : ext?.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Icon(visual.icon, size: 15, color: visual.color),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  '$minT°–$maxT°',
+                  style: CompanionTypography.caption.copyWith(
+                    color: ext?.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 3),
+          Text(
+            cond,
+            style: CompanionTypography.caption.copyWith(
+              color: ext?.textSecondary,
+              fontSize: 11,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          Row(
+            children: [
+              Icon(
+                Icons.water_drop_outlined,
+                size: 11,
+                color: Colors.lightBlueAccent.withValues(alpha: 0.9),
+              ),
+              const SizedBox(width: 2),
+              Text(
+                '$rainPct%',
+                style: CompanionTypography.caption.copyWith(
+                  color: ext?.textMuted,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAssistantActionCard(
+    ToolReceiptOut receipt,
+    CompanionThemeExtension? ext,
+    bool isDark,
+  ) {
+    final (IconData icon, String title) = switch (receipt.toolName) {
+      'create_reminder' => (Icons.alarm_add_rounded, 'Reminder Set'),
+      'list_reminders' => (Icons.event_note_rounded, 'Reminders Checked'),
+      'delete_reminder' => (Icons.event_busy_rounded, 'Reminder Removed'),
+      'create_task' => (Icons.task_alt_rounded, 'Task Added'),
+      'update_task' => (Icons.check_circle_outline_rounded, 'Task Updated'),
+      'list_tasks' => (Icons.checklist_rounded, 'Tasks Checked'),
+      'delete_task' => (Icons.delete_outline_rounded, 'Task Removed'),
+      'create_alarm' => (Icons.alarm_rounded, 'Alarm Set'),
+      'list_alarms' => (Icons.access_alarms_rounded, 'Alarms Checked'),
+      'delete_alarm' => (Icons.alarm_off_rounded, 'Alarm Removed'),
+      'search_memories' => (Icons.psychology_alt_rounded, 'Memories Checked'),
+      _ => (Icons.auto_awesome_rounded, 'Assistant Action'),
+    };
+    final accent = ext?.accent ?? CompanionColors.lightAccent;
+    return Container(
+      key: Key('assistant_action_card_${receipt.toolName}'),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.black.withValues(alpha: 0.025),
+        borderRadius: CompanionRadius.borderMd,
+        border: Border.all(color: accent.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.14),
+              borderRadius: CompanionRadius.borderSm,
+            ),
+            child: Icon(icon, size: 16, color: accent),
+          ),
+          const SizedBox(width: CompanionSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: CompanionTypography.caption.copyWith(
+                    color: ext?.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  receipt.summary,
+                  style: CompanionTypography.caption.copyWith(
+                    color: ext?.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBlockedToolCard(
+    ToolReceiptOut receipt,
+    CompanionThemeExtension? ext, {
+    bool isWarning = false,
+  }) {
+    final color = isWarning
+        ? (ext?.warning ?? CompanionColors.warning)
+        : (ext?.danger ?? CompanionColors.danger);
+    final label = switch (receipt.outcomeStatus) {
+      'killed' => 'Actions Paused',
+      'denied' => 'Action Blocked',
+      'rejected_by_user' => 'Action Cancelled',
+      'failed' => 'Action Failed',
+      'pending_confirmation' => 'Awaiting Confirmation',
+      _ => 'Notice',
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: CompanionRadius.borderSm,
+        border: Border.all(color: color.withValues(alpha: 0.30)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            isWarning ? Icons.hourglass_bottom_rounded : Icons.shield_outlined,
+            size: 16,
+            color: color,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: CompanionTypography.caption.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  receipt.summary,
+                  style: CompanionTypography.caption.copyWith(
+                    color: ext?.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _displaySourceUrl(WebSourceRefOut src) {
+    final parsed = Uri.tryParse(src.url);
+    if (parsed == null || parsed.host.isEmpty) return src.domain;
+    final path = parsed.path;
+    if (path.isEmpty || path == '/') return src.domain;
+    return '${src.domain}$path';
   }
 
   Widget _buildSourcesStrip(MessageOut msg, CompanionThemeExtension? ext) {
@@ -2111,7 +2489,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         Text(
-                          '${src.domain} — ${src.url}',
+                          _displaySourceUrl(src),
                           style: CompanionTypography.caption.copyWith(
                             color: ext?.textMuted,
                           ),

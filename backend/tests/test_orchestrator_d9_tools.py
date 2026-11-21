@@ -700,3 +700,130 @@ async def test_multi_round_readonly_search_allowed_denied_receipt_omitted_and_lo
         assert any("Current Local Date & Time:" in s and "Asia/Manila" in s for s in captured_system_prompts)
     finally:
         _reset_provider_for_tests()
+
+
+@pytest.mark.asyncio
+async def test_slice6_tool_pruning_explicit_web_search_fallback_and_facts_first_no_2turn_compaction(
+    test_session: AsyncSession,
+    profile_id: str,
+    profile_session,
+    monkeypatch,
+):
+    """Intent prunes schemas cleanly, explicit search requests auto-execute web_search on 0 model calls, and 2-turn chats skip runaway compaction."""
+    from app.core.config import settings
+    from app.services.assistant.compactor import get_active_conversation_summary
+    from app.services.tools.registry import select_relevant_tool_definitions
+
+    _reset_provider_for_tests()
+    try:
+        # 1. Intent pruning shrinks schema count instead of flooding 2B model with all 14 tools
+        search_tools = select_relevant_tool_definitions("ohh right can you search for me? Did GTA 6 just release?")
+        search_names = {t["function"]["name"] for t in search_tools}
+        assert search_names == {"web_search", "web_fetch"}
+
+        wx_tools = select_relevant_tool_definitions("Check the weather tomorrow in Caloocan")
+        assert {t["function"]["name"] for t in wx_tools} == {"weather_lookup"}
+
+        all_tools = select_relevant_tool_definitions("What tools can you execute?")
+        assert len(all_tools) >= 14
+
+        conv, provider = await _setup_conv_and_provider(test_session, profile_id)
+        # Seed 2 prior messages (Turn 1 user + assistant)
+        test_session.add(
+            Message(
+                id=generate_uuid(),
+                conversation_id=conv.id,
+                profile_id=profile_id,
+                sender="user",
+                content="Did GTA 6 release already?",
+                status="completed",
+                sequence_no=1,
+            )
+        )
+        test_session.add(
+            Message(
+                id=generate_uuid(),
+                conversation_id=conv.id,
+                profile_id=profile_id,
+                sender="assistant",
+                content="Let me know if you want me to search!",
+                status="completed",
+                sequence_no=2,
+            )
+        )
+        await test_session.commit()
+
+        async def _fake_search(query: str, **_kwargs) -> dict[str, Any]:
+            assert "gta" in query.lower()
+            return {
+                "provider": "public_search",
+                "results": [
+                    {
+                        "title": "Rockstar Games GTA VI Release Window",
+                        "url": "https://example.org/gta6",
+                        "domain": "example.org",
+                        "snippet": "Grand Theft Auto VI is scheduled for fall release next year and has not released yet.",
+                    }
+                ],
+                "sources": [{"title": "Rockstar Games GTA VI Release Window", "url": "https://example.org/gta6", "domain": "example.org"}],
+                "content": "<untrusted_web_content>GTA VI has not released yet.</untrusted_web_content>",
+            }
+
+        monkeypatch.setattr("app.services.tools.executor.search_web", _fake_search)
+        monkeypatch.setattr(settings, "CONTEXT_COMPACTION_ENABLED", True)
+
+        captured_prompts: list[str] = []
+        round_calls = 0
+
+        def _fake_stream_no_initial_tool(messages: list[ChatMessage], **kwargs):
+            nonlocal round_calls
+            round_calls += 1
+            captured_prompts.append(str(messages[0].content))
+            if round_calls == 1:
+                # 2B model forgets to emit tool_calls and just writes fluff on Round 0
+                async def _g_fluff():
+                    yield "Let me check that for you!"
+
+                return GenerationStream(_g_fluff(), meta={"finish_reason": "stop", "tool_calls": []})
+
+            # Round 1 runs after deterministic Risk 0 web_search fallback injects tool payload
+            assert any(m.role == "tool" and m.name == "web_search" for m in messages)
+
+            async def _g_grounded():
+                yield "No, GTA 6 has not released yet based on Rockstar's latest announcement."
+
+            return GenerationStream(_g_grounded(), meta={"finish_reason": "stop", "tool_calls": []})
+
+        monkeypatch.setattr(provider, "generate_stream", _fake_stream_no_initial_tool)
+
+        user_msg_text = "ohh right can you search for me? Can you check it at web?"
+        prepared = await prepare_turn(
+            db=test_session,
+            conversation_id=conv.id,
+            profile_session=profile_session,
+            user_text=user_msg_text,
+        )
+        lock = _get_lock(conv.id)
+        await lock.acquire()
+        frames: list[str] = []
+        async for frame in orchestrate_chat_stream(
+            db=test_session,
+            conversation_id=conv.id,
+            user_text=user_msg_text,
+            profile_session=profile_session,
+            prepared_turn=prepared,
+            conversation_lock=lock,
+        ):
+            frames.append(frame)
+
+        events = _parse_sse_events(frames)
+        tool_results = [e for e in events if e.get("type") == "tool_result"]
+        assert len(tool_results) == 1
+        assert tool_results[0]["tool_name"] == "web_search"
+        assert tool_results[0]["outcome_status"] == "executed"
+        assert "not released yet" in "".join(e.get("content", "") for e in events if e.get("type") == "token").lower()
+        # 2-turn conversation must NOT trigger runaway auto-compaction
+        assert await get_active_conversation_summary(test_session, conv.id, profile_id) is None
+        assert "Facts & Corrections First" in captured_prompts[0]
+    finally:
+        _reset_provider_for_tests()

@@ -28,6 +28,11 @@ TEMPORAL_CONTEXT_PATTERN = re.compile(
     r"(?i)\b(today|tonight|this morning|this afternoon|this evening|this week|right now|currently|at the moment|for now|temporarily)\b"
 )
 
+_TRANSIENT_QUERY_OR_PLAN_RE = re.compile(
+    r"(?i)\b(is seeking|seeking suggestions|is asking|asking for|wants suggestions|looking for suggestions|"
+    r"is going to return|return home later|later on|right now|at the moment)\b"
+)
+
 DEFAULT_SHORT_TERM_TTL_HOURS = 72
 
 DISCLOSURE_PATTERN = re.compile(
@@ -251,6 +256,10 @@ async def extract_memory_candidates(
         raw_category = item.get("category", "fact")
         is_core_flag = bool(item.get("is_core", False))
         raw_expires_at = item.get("expires_at")
+
+        if not is_explicit and _TRANSIENT_QUERY_OR_PLAN_RE.search(content):
+            is_core_flag = False
+            raw_category = "context"
 
         # Small Win: Explicit "Remember that..." immediately boosts verification and importance >= 1.5
         try:
