@@ -2167,16 +2167,14 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             if (dayMatches.isNotEmpty) ...[
               const SizedBox(height: CompanionSpacing.sm),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    for (var i = 0; i < dayMatches.length; i++) ...[
-                      if (i > 0) const SizedBox(width: CompanionSpacing.xs),
-                      _buildWeatherDayTile(dayMatches[i], ext, isDark),
-                    ],
+              _WeatherForecastScrollStrip(
+                key: const Key('weather_forecast_scroll_strip'),
+                children: [
+                  for (var i = 0; i < dayMatches.length; i++) ...[
+                    if (i > 0) const SizedBox(width: CompanionSpacing.xs),
+                    _buildWeatherDayTile(dayMatches[i], ext, isDark),
                   ],
-                ),
+                ],
               ),
             ],
           ] else
@@ -2864,6 +2862,81 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _WeatherForecastScrollStrip extends StatefulWidget {
+  const _WeatherForecastScrollStrip({
+    super.key,
+    required this.children,
+  });
+
+  final List<Widget> children;
+
+  @override
+  State<_WeatherForecastScrollStrip> createState() =>
+      _WeatherForecastScrollStripState();
+}
+
+class _WeatherForecastScrollStripState
+    extends State<_WeatherForecastScrollStrip> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _handlePointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent || !_scrollController.hasClients) {
+      return;
+    }
+    final pos = _scrollController.position;
+    final delta = event.scrollDelta.dx != 0
+        ? event.scrollDelta.dx
+        : event.scrollDelta.dy;
+    if (pos.maxScrollExtent <= 0 || delta == 0) {
+      return;
+    }
+    final target = (pos.pixels + delta).clamp(0.0, pos.maxScrollExtent);
+    if ((target - pos.pixels).abs() <= 0.5) {
+      return;
+    }
+    GestureBinding.instance.pointerSignalResolver.register(event, (_) {
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(target);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerSignal: _handlePointerSignal,
+      child: Scrollbar(
+        controller: _scrollController,
+        thumbVisibility: true,
+        trackVisibility: true,
+        child: ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(
+            dragDevices: const {
+              PointerDeviceKind.touch,
+              PointerDeviceKind.mouse,
+              PointerDeviceKind.trackpad,
+              PointerDeviceKind.stylus,
+            },
+            scrollbars: false,
+          ),
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(children: widget.children),
+          ),
+        ),
       ),
     );
   }

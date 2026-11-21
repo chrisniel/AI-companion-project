@@ -11,6 +11,7 @@ import 'package:ai_companion_desktop/lifecycle/desktop_tray_adapter.dart';
 import 'package:ai_companion_desktop/lifecycle/desktop_window_adapter.dart';
 import 'package:ai_companion_desktop/screens/chat_screen.dart';
 import 'package:ai_companion_desktop/shell/desktop_shell.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -551,11 +552,28 @@ void main() {
       expect(find.textContaining('create_reminder · executed'), findsNothing);
       expect(find.textContaining('web_search · executed'), findsNothing);
 
-      // Auto-visible Weather Widget card & 7-day items appear cleanly
+      // Auto-visible Weather Widget card & 7-day horizontally scrollable strip appear cleanly
       expect(find.byKey(const Key('weather_widget_card')), findsOneWidget);
+      final wxStripFinder = find.byKey(const Key('weather_forecast_scroll_strip'));
+      expect(wxStripFinder, findsOneWidget);
+      expect(
+        find.descendant(of: wxStripFinder, matching: find.byType(Scrollbar)),
+        findsOneWidget,
+      );
       expect(find.text('Caloocan, Philippines'), findsOneWidget);
       expect(find.textContaining('26.7°C'), findsOneWidget);
       expect(find.textContaining('Moderate drizzle'), findsWidgets);
+
+      // Drag horizontally with mouse inside the forecast strip to scroll to later days
+      final stripScrollable = find.descendant(
+        of: wxStripFinder,
+        matching: find.byType(Scrollable),
+      );
+      final beforeOffset = tester.state<ScrollableState>(stripScrollable).position.pixels;
+      await tester.drag(wxStripFinder, const Offset(-320, 0), kind: PointerDeviceKind.mouse);
+      await tester.pumpAndSettle();
+      final afterOffset = tester.state<ScrollableState>(stripScrollable).position.pixels;
+      expect(afterOffset, greaterThan(beforeOffset));
 
       // Consumer Action Card renders cleanly for create_reminder
       expect(find.byKey(const Key('assistant_action_card_create_reminder')), findsOneWidget);

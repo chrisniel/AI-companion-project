@@ -289,11 +289,11 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 ## 5. Acceptance Criteria & Verification Strategy
 
-### Automated Repository Checks *(Re-Verified After Slice 6F Implementation)*
+### Automated Repository Checks *(Re-Verified After Slice 6F & Weather Card Scrollbar Polish)*
 - [x] Full backend unit/integration suite: `backend\.venv\Scripts\python.exe -m pytest backend\tests -q -p no:cacheprovider -o log_file=NUL` (`895 passed, 99 warnings` in `334.89s`)
 - [x] Flutter static analysis: `Push-Location frontend\flutter; dart analyze .; Pop-Location` (`No issues found!`)
-- [x] Full Flutter Desktop test suite: `Push-Location frontend\flutter\apps\desktop; flutter test --no-pub --concurrency=1 test; Pop-Location` (`429: All tests passed!`, verified prior to backend-only Slices 6E–6F)
-- [x] Windows native C++ build: `Push-Location frontend\flutter\apps\desktop; flutter build windows --debug --no-pub; Pop-Location` (`ai_companion_desktop.exe`, `25.5s`, exit `0`; verified prior to backend-only Slices 6E–6F)
+- [x] Full Flutter Desktop test suite: `Push-Location frontend\flutter\apps\desktop; flutter test --no-pub --concurrency=1 test; Pop-Location` (`429: All tests passed!`, including mouse-drag horizontal Weather Widget scroll check in `desktop_d9_tools_and_kill_switch_test.dart`)
+- [x] Windows native C++ build: `Push-Location frontend\flutter\apps\desktop; flutter build windows --debug --no-pub; Pop-Location` (`ai_companion_desktop.exe`, `14.8s`, exit `0`)
 - [x] `companion_api` sanity & contract parity: `Push-Location frontend\flutter\packages\companion_api; dart analyze .; dart test; Pop-Location` (`No issues found!`, `112: All tests passed!`) and `backend\.venv\Scripts\python.exe scripts\check_dart_openapi_parity.py --check` (`Verified DTO Schemas: 87/87`, `ALL CONTRACT PARITY AND ROUTE COVERAGE CHECKS PASSED`)
 - [x] Python dependency lock & import isolation verification: `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_import_isolation.py scripts\tests\test_python_dependency_lock.py -q -p no:cacheprovider -o log_file=NUL` (`10 passed, 4 subtests passed` in `4.10s`)
 
