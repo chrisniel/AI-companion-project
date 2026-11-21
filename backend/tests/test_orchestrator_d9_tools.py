@@ -1058,3 +1058,117 @@ async def test_slice6e_buffered_fallback_discards_round0_refusal_strips_quotes_a
         assert "25°C to 30°C" in tok2
     finally:
         _reset_provider_for_tests()
+
+
+@pytest.mark.asyncio
+async def test_slice6f_weather_weekday_noise_default_tz_reminder_fallback_and_casual_pruning(
+    test_session: AsyncSession,
+    profile_id: str,
+    profile_session,
+    monkeypatch,
+):
+    """Slice 6F: weekday spans are never geocoded as cities, new-chat weather defaults to Profile timezone city, explicit reminders execute deterministically, and casual chat omits list_reminders."""
+    from datetime import datetime, timezone
+    from app.models.reminder import Reminder
+    from app.services.assistant.orchestrator import (
+        _extract_explicit_reminder_intent,
+        _extract_explicit_weather_location,
+        _resolve_default_weather_location,
+    )
+    from app.services.tools.registry import select_relevant_tool_definitions
+
+    _reset_provider_for_tests()
+    try:
+        profile = await test_session.get(Profile, profile_id)
+        assert profile is not None
+        profile.quiet_hours_timezone = "Asia/Manila"
+        await test_session.commit()
+
+        # 1. Casual banter only keeps read-only lookup tools (no list_reminders / mutations)
+        casual_tools = select_relevant_tool_definitions("Yeppppp darling seems prettty good to me. So yeah from now on call me darling HAHAHA Thank you")
+        casual_names = {t["function"]["name"] for t in casual_tools}
+        assert "list_reminders" not in casual_names
+        assert casual_names == {"web_search", "weather_lookup", "search_memories"}
+
+        # 2. Weekday ranges are ignored as locations and default timezone city recovers cleanly
+        assert _resolve_default_weather_location("Asia/Manila") == "Manila"
+        assert (
+            _extract_explicit_weather_location(
+                "hmm, what about the weather for November 22nd sunday - saturday?",
+                [],
+                default_location="Manila",
+            )
+            == "Manila"
+        )
+        assert (
+            _extract_explicit_weather_location(
+                "hmm, what about the weather for November 22nd sunday - saturday?",
+                [],
+            )
+            is None
+        )
+
+        # 3. Reminder intent parser extracts wedding reminder date & title
+        local_now = datetime(2026, 11, 21, 22, 18, tzinfo=timezone.utc)
+        rem_args = _extract_explicit_reminder_intent(
+            "I see, thank youu ❤️ BTW can you also remind me later that my friends wedding will be on December 8? So I need to wake up that day too early",
+            [],
+            local_now,
+        )
+        assert rem_args is not None
+        assert "wedding" in rem_args["title"].lower()
+        assert rem_args["scheduled_at"].startswith("2026-12-08T07:00")
+
+        # 4. End-to-end orchestrator executes create_reminder when 2B skips <tool_call>
+        conv, provider = await _setup_conv_and_provider(test_session, profile_id)
+        rem_round = 0
+
+        def _fake_reminder_skip(messages: list[ChatMessage], **kwargs):
+            nonlocal rem_round
+            rem_round += 1
+            if rem_round == 1:
+                async def _g0():
+                    yield "I'll pretend to remind you without calling a tool!"
+
+                return GenerationStream(_g0(), meta={"finish_reason": "stop", "tool_calls": []})
+
+            async def _g1():
+                yield "All set, darling! I've scheduled your reminder for December 8."
+
+            return GenerationStream(_g1(), meta={"finish_reason": "stop", "tool_calls": []})
+
+        monkeypatch.setattr(provider, "generate_stream", _fake_reminder_skip)
+
+        user_rem_text = "BTW can you also remind me later that my friends wedding will be on December 8? So I need to wake up that day too early"
+        prep = await prepare_turn(
+            db=test_session,
+            conversation_id=conv.id,
+            profile_session=profile_session,
+            user_text=user_rem_text,
+        )
+        lock = _get_lock(conv.id)
+        await lock.acquire()
+        frames: list[str] = []
+        async for frame in orchestrate_chat_stream(
+            db=test_session,
+            conversation_id=conv.id,
+            user_text=user_rem_text,
+            profile_session=profile_session,
+            prepared_turn=prep,
+            conversation_lock=lock,
+        ):
+            frames.append(frame)
+
+        events = _parse_sse_events(frames)
+        rem_results = [e for e in events if e.get("type") == "tool_result" and e.get("tool_name") == "create_reminder"]
+        assert len(rem_results) == 1
+        assert rem_results[0]["outcome_status"] == "executed"
+        tok = "".join(e.get("content", "") for e in events if e.get("type") == "token")
+        assert "pretend to remind you" not in tok
+        assert "December 8" in tok
+
+        saved_rem = (await test_session.execute(select(Reminder).where(Reminder.profile_id == profile_id))).scalars().all()
+        assert len(saved_rem) == 1
+        assert "wedding" in saved_rem[0].title.lower()
+    finally:
+        _reset_provider_for_tests()

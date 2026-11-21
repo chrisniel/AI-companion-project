@@ -71,10 +71,10 @@ SECRET_PATTERNS = [
 ]
 
 EXTRACTION_SYSTEM_PROMPT = """You are a precise, conservative memory extraction engine for a local AI companion.
-Your job is to extract ONLY concrete, durable personal facts explicitly declared by the USER (e.g. name, location, occupation, direct dietary restrictions, or specific enduring hobbies).
+Your job is to extract ONLY concrete, durable personal facts explicitly declared by the USER (e.g. name, preferred nickname / how they ask to be called, location, occupation, direct dietary restrictions, or specific enduring hobbies).
 
 STRICT RULES:
-1. Extract facts strictly explicitly stated by the USER. Never assume, extrapolate, or psychoanalyze.
+1. Extract facts strictly explicitly stated by the USER (including explicit requests like "call me darling" or "remember that..."). Never assume, extrapolate, or psychoanalyze.
 2. DO NOT extract conversational meta-observations (e.g. NEVER extract "User enjoys metaphors", "User is willing to ask questions", "User is collaborative", or "User appreciates responses").
 3. DO NOT extract temporary advice-seeking queries or recommendation requests as facts (e.g. asking for anime or food recommendations is NOT a permanent profile fact).
 4. Ignore transient states, fleeting banter, or temporary events.
@@ -84,14 +84,27 @@ STRICT RULES:
 
 CANDIDATE SCHEMA:
 Each item in the array MUST be a JSON object with:
-- "content": (string, 1 concise factual sentence in 3rd person, e.g. "User prefers oat milk over dairy in coffee")
+- "content": (string, 1 concise factual sentence in 3rd person, e.g. "User prefers oat milk over dairy in coffee" or "User prefers to be called Darling")
 - "category": ("fact" | "preference" | "context")
 - "scope": ("profile" | "character") (use "profile" for user facts, "character" only for character-specific interactions)
-- "is_core": (boolean, true only for vital identity facts like name, severe allergies, or core identity)
+- "is_core": (boolean, true only for vital identity facts like name, preferred nickname, severe allergies, or core identity)
 - "expires_at": (null or ISO8601 string if the fact has an obvious expiration)
 - "confidence": (float between 0.0 and 1.0)
 
 Output ONLY valid JSON inside a json array. Do not write explanations or markdown outside the JSON."""
+
+
+_QUESTION_SAFE_DISCLOSURE_RE = re.compile(
+    r"(?i)\b(?:call\s+me|my\s+name\s+is|i\s+am|i'm|i\s+like|i\s+love|i\s+prefer|i\s+hate|"
+    r"i\s+dislike|i\s+live\s+in|i\s+work\s+(?:as|at|in)|my\s+favorite|my\s+birthday\s+is)\b"
+)
+
+_CALL_ME_NICKNAME_RE = re.compile(
+    r"(?i)\b(?:from\s+now\s+on\s+)?(?:(?:can\s+you|could\s+you|please|you\s+can)\s+)?call\s+me\s+"
+    r"(?!(?:a|an|the|back|later|tomorrow|soon|today|tonight|now|on|at)\b)"
+    r"[\"']?([A-Za-z][A-Za-z\s.'-]{0,28}?)[\"']?"
+    r"(?=(?:[?.!,;\n]|\b(?:please|plz|pls|haha+|hehe+|hihi+|lol|thank+s*|ty|from|so|or|and|because|btw)\b|$))"
+)
 
 
 class MemoryCandidate(BaseModel):
@@ -143,6 +156,10 @@ def should_skip_extraction(user_text: str) -> bool:
     if normalized_lower in TRIVIAL_WORDS:
         return True
 
+    # Allow explicit self-disclosures wrapped inside polite questions (e.g. "can you call me darling?")
+    if _QUESTION_SAFE_DISCLOSURE_RE.search(text):
+        return False
+
     # Questions ending with '?' without explicit memory triggers are conversational queries, not fact declarations
     if "?" in text and not is_explicit_intent(text):
         return True
@@ -169,8 +186,8 @@ def contains_secrets(text: str) -> bool:
 
 
 def _clean_json_response(raw_text: str) -> str:
-    """Strip markdown code blocks and surrounding whitespace from LLM output."""
-    cleaned = raw_text.strip()
+    """Strip <think> blocks, markdown fences, and extract JSON array payload cleanly."""
+    cleaned = re.sub(r"(?is)<think>.*?</think>", "", raw_text or "").strip()
     if cleaned.startswith("```"):
         lines = cleaned.splitlines()
         if lines[0].startswith("```"):
@@ -178,7 +195,59 @@ def _clean_json_response(raw_text: str) -> str:
         if lines and lines[-1].startswith("```"):
             lines = lines[:-1]
         cleaned = "\n".join(lines).strip()
+    if not cleaned.startswith("["):
+        start_idx = cleaned.find("[")
+        end_idx = cleaned.rfind("]")
+        if start_idx != -1 and end_idx > start_idx:
+            cleaned = cleaned[start_idx : end_idx + 1].strip()
     return cleaned
+
+
+def _extract_deterministic_user_fact(user_text: str) -> List[MemoryCandidate]:
+    """Fallback extractor when 2B LLM misses explicit nickname or 'remember that...' statements."""
+    text = (user_text or "").strip()
+    if not text or contains_secrets(text):
+        return []
+
+    nick_match = _CALL_ME_NICKNAME_RE.search(text)
+    if nick_match:
+        nickname = " ".join(nick_match.group(1).strip(" .,'\"").split())
+        if 2 <= len(nickname) <= 28:
+            formatted = nickname.title() if nickname.islower() else nickname
+            return [
+                MemoryCandidate(
+                    content=f"User prefers to be called {formatted}",
+                    category="preference",
+                    scope="profile",
+                    is_core=True,
+                    expires_at=None,
+                    confidence=1.0,
+                    importance=1.5,
+                    user_verified=True,
+                )
+            ]
+
+    if is_explicit_intent(text):
+        stripped = re.sub(
+            r"(?i)^.*?\b(?:please\s+remember(?:\s+that|\s+to)?|remember(?:\s+that|\s*:|\s+to)?|"
+            r"don't\s+forget(?:\s+that)?|keep\s+in\s+mind(?:\s+that)?)\s*",
+            "",
+            text,
+        ).strip(" .!?,\"'")
+        if len(stripped) >= 6:
+            return [
+                MemoryCandidate(
+                    content=stripped[0].upper() + stripped[1:],
+                    category="fact",
+                    scope="profile",
+                    is_core=False,
+                    expires_at=None,
+                    confidence=1.0,
+                    importance=1.5,
+                    user_verified=True,
+                )
+            ]
+    return []
 
 
 async def extract_memory_candidates(
@@ -228,16 +297,16 @@ async def extract_memory_candidates(
 
     cleaned_json = _clean_json_response(str(raw_output))
     if not cleaned_json or cleaned_json == "[]":
-        return []
+        return _extract_deterministic_user_fact(user_text)
 
     try:
         parsed_data = json.loads(cleaned_json)
         if not isinstance(parsed_data, list):
             logger.debug("LLM extraction output was not a list.")
-            return []
+            return _extract_deterministic_user_fact(user_text)
     except Exception as exc:
         logger.debug(f"Failed to parse LLM extraction JSON: {exc} | raw={cleaned_json[:100]}")
-        return []
+        return _extract_deterministic_user_fact(user_text)
 
     candidates: List[MemoryCandidate] = []
     is_explicit = is_explicit_intent(user_text)

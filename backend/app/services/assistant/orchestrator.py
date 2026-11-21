@@ -11,7 +11,7 @@ import logging
 import re
 from contextlib import aclosing, suppress
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Any, AsyncGenerator, List, Optional, Union
 import uuid
 
@@ -122,10 +122,10 @@ _TOOL_PROVENANCE_HINTS: dict[str, tuple[str, ...]] = {
     "update_task": ("update task", "complete task", "mark task", "finish task", "edit task"),
     "delete_task": ("delete task", "remove task", "trash task"),
     "list_reminders": ("reminder", "reminders", "remind"),
-    "create_reminder": ("remind", "reminder", "schedule", "calendar", "appointment", "event", "wedding", "december", "tomorrow", "tommorrow"),
+    "create_reminder": ("remind", "reminder", "schedule", "schedule it", "set it", "calendar", "appointment", "event", "wedding", "december", "tomorrow", "tommorrow"),
     "delete_reminder": ("delete reminder", "remove reminder", "cancel reminder"),
     "list_alarms": ("alarm", "alarms"),
-    "create_alarm": ("alarm", "wake me"),
+    "create_alarm": ("alarm", "wake me", "wake up"),
     "delete_alarm": ("delete alarm", "remove alarm", "cancel alarm"),
     "search_memories": ("remember", "memory", "memories", "recall", "what did i"),
 }
@@ -219,7 +219,8 @@ _SECONDARY_TASK_BREAK_RE = re.compile(
 )
 _WEATHER_TEMPORAL_NOISE_RE = re.compile(
     r"(?i)\b(?:tomorrow|tommorrow|today|tonight|this\s+week|next\s+week|this\s+weekend|next\s+weekend|"
-    r"right\s+now|thank+s*(?:\s+so\s+much|\s+you)?|ty|plz|pls|please|"
+    r"next\s+few\s+days|few\s+days|starting|right\s+now|thank+s*(?:\s+so\s+much|\s+you)?|ty|plz|pls|please|"
+    r"monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun|"
     r"(?:january|february|march|april|may|june|july|august|september|october|november|december|"
     r"jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+\d{1,2}(?:st|nd|rd|th)?)\b"
 )
@@ -228,16 +229,28 @@ _WEATHER_PREPOSITION_LOC_RE = re.compile(
 )
 _WEATHER_NON_LOCATION_TOKENS = frozenset({
     "today", "tomorrow", "tommorrow", "tonight", "this", "that", "it",
-    "next", "week", "weekend", "me", "us", "you", "my", "the", "weather",
-    "wheather", "forecast", "rain", "now", "here", "there", "this week", "next week",
+    "next", "few", "days", "day", "starting", "week", "weekend", "me", "us",
+    "you", "my", "the", "weather", "wheather", "forecast", "rain", "now",
+    "here", "there", "this week", "next week",
+    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+    "mon", "tue", "tues", "wed", "thu", "thur", "thurs", "fri", "sat", "sun",
 })
+
+
+def _resolve_default_weather_location(tz_name: str) -> Optional[str]:
+    """Derive a sensible default city from an IANA timezone name like Asia/Manila."""
+    tz = (tz_name or "").strip()
+    if "/" not in tz or tz.upper().startswith("ETC/"):
+        return None
+    city = tz.split("/")[-1].replace("_", " ").strip()
+    return city if len(city) >= 2 else None
 
 
 def _extract_city_from_weather_clause(text: str) -> Optional[str]:
     clause = _SECONDARY_TASK_BREAK_RE.split(text, maxsplit=1)[0]
     cleaned = _WEATHER_TEMPORAL_NOISE_RE.sub(" ", clause)
     for match in _WEATHER_PREPOSITION_LOC_RE.finditer(cleaned):
-        candidate = " ".join(match.group(1).strip(" .,'\"").split())
+        candidate = " ".join(match.group(1).strip(" .,'\"-").split())
         if len(candidate) < 2:
             continue
         words = candidate.lower().split()
@@ -247,7 +260,11 @@ def _extract_city_from_weather_clause(text: str) -> Optional[str]:
     return None
 
 
-def _extract_explicit_weather_location(user_text: str, history: List[Message]) -> Optional[str]:
+def _extract_explicit_weather_location(
+    user_text: str,
+    history: List[Message],
+    default_location: Optional[str] = None,
+) -> Optional[str]:
     """Recover a target location when the user explicitly asks about weather/forecast and the model skips tool_calls."""
     text = (user_text or "").strip()
     if not text or not _EXPLICIT_WEATHER_RE.search(text) or not _WEATHER_ASK_RE.search(text):
@@ -281,22 +298,203 @@ def _extract_explicit_weather_location(user_text: str, history: List[Message]) -
             prev_loc = _extract_city_from_weather_clause(prev.content)
             if prev_loc:
                 return prev_loc
-    return None
+    return default_location.strip() if isinstance(default_location, str) and default_location.strip() else None
+
+
+_MONTH_MAP = {
+    "january": 1, "jan": 1, "february": 2, "feb": 2, "march": 3, "mar": 3,
+    "april": 4, "apr": 4, "may": 5, "june": 6, "jun": 6, "july": 7, "jul": 7,
+    "august": 8, "aug": 8, "september": 9, "sep": 9, "sept": 9,
+    "october": 10, "oct": 10, "november": 11, "nov": 11, "december": 12, "dec": 12,
+}
+_ISO_DATE_RE = re.compile(r"\b(20\d{2})-(\d{1,2})-(\d{1,2})\b")
+_MONTH_DAY_RE = re.compile(
+    r"(?i)\b(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|"
+    r"august|aug|september|sep|sept|october|oct|november|nov|december|dec)\s+"
+    r"(\d{1,2})(?:st|nd|rd|th)?(?:,?\s*(20\d{2}))?\b"
+)
+_CLOCK_TIME_RE = re.compile(r"(?i)(?:\bat\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b|\b([01]?\d|2[0-3]):(\d{2})\s*(am|pm)?\b)")
+_EXPLICIT_REMINDER_TRIGGER_RE = re.compile(
+    r"(?i)\b(?:remind\s+me(?:\s+(?:later|tomorrow|tommorrow|today|tonight|on|at|about|that|to))?|"
+    r"set\s+(?:a|me\s+a|this)?\s*reminder|create\s+(?:a\s+)?reminder|"
+    r"add\s+(?:a\s+)?reminder|schedule\s+(?:a\s+)?reminder)\b"
+)
+_FOLLOWUP_SCHEDULE_TRIGGER_RE = re.compile(
+    r"(?i)\b(?:set\s+it|schedule\s+it|save\s+(?:the\s+)?reminder)\b"
+)
+_EXPLICIT_ALARM_TRIGGER_RE = re.compile(
+    r"(?i)\b(?:set\s+(?:an?\s+)?alarm|create\s+(?:an?\s+)?alarm|wake\s+me\s+(?:up\s+)?at)\b"
+)
+
+
+def _extract_clock_time(text: str) -> Optional[tuple[int, int]]:
+    match = _CLOCK_TIME_RE.search(text)
+    if not match:
+        return None
+    if match.group(1) is not None:
+        hour = int(match.group(1))
+        minute = int(match.group(2) or 0)
+        ampm = (match.group(3) or "").lower()
+    else:
+        hour = int(match.group(4))
+        minute = int(match.group(5) or 0)
+        ampm = (match.group(6) or "").lower()
+    if ampm == "pm" and hour < 12:
+        hour += 12
+    elif ampm == "am" and hour == 12:
+        hour = 0
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    return hour, minute
+
+
+def _parse_date_and_time_for_scheduling(text: str, local_now: datetime) -> Optional[datetime]:
+    target_date: Optional[date] = None
+    iso_m = _ISO_DATE_RE.search(text)
+    if iso_m:
+        try:
+            target_date = date(int(iso_m.group(1)), int(iso_m.group(2)), int(iso_m.group(3)))
+        except ValueError:
+            target_date = None
+    if target_date is None:
+        mon_m = _MONTH_DAY_RE.search(text)
+        if mon_m:
+            month_num = _MONTH_MAP.get(mon_m.group(1).lower())
+            day_num = int(mon_m.group(2))
+            year_num = int(mon_m.group(3)) if mon_m.group(3) else local_now.year
+            if month_num:
+                try:
+                    candidate = date(year_num, month_num, day_num)
+                    if not mon_m.group(3) and candidate < local_now.date():
+                        candidate = date(year_num + 1, month_num, day_num)
+                    target_date = candidate
+                except ValueError:
+                    target_date = None
+    if target_date is None:
+        if re.search(r"(?i)\b(?:tomorrow|tommorrow)\b", text):
+            target_date = local_now.date() + timedelta(days=1)
+        elif re.search(r"(?i)\b(?:today|tonight)\b", text):
+            target_date = local_now.date()
+
+    parsed_clock = _extract_clock_time(text)
+    if target_date is None and parsed_clock is not None:
+        target_date = local_now.date()
+    if target_date is None:
+        return None
+
+    if parsed_clock is not None:
+        hour, minute = parsed_clock
+    elif re.search(r"(?i)\b(?:wake\s+up|early|morning)\b", text):
+        hour, minute = 7, 0
+    elif re.search(r"(?i)\b(?:tonight|evening)\b", text):
+        hour, minute = 19, 0
+    elif re.search(r"(?i)\bafternoon\b", text):
+        hour, minute = 14, 0
+    else:
+        hour, minute = 9, 0
+
+    return datetime(target_date.year, target_date.month, target_date.day, hour, minute, 0, tzinfo=local_now.tzinfo)
+
+
+def _extract_reminder_title(source_text: str) -> str:
+    after = _EXPLICIT_REMINDER_TRIGGER_RE.split(source_text, maxsplit=1)[-1].strip()
+    clause = re.split(r"[?!\n]|\bso\s+i\s+(?:need|can|have|should|will)\b|\bthank+s*\b|\btysm+m*\b", after, maxsplit=1, flags=re.IGNORECASE)[0]
+    cleaned = _ISO_DATE_RE.sub(" ", clause)
+    cleaned = _MONTH_DAY_RE.sub(" ", cleaned)
+    cleaned = _CLOCK_TIME_RE.sub(" ", cleaned)
+    cleaned = re.sub(
+        r"(?i)\b(?:will\s+be\s+(?:on|at)|is\s+(?:on|happening\s+on)|on|tomorrow|tommorrow|today|tonight|next\s+week|please|later|that)\b",
+        " ",
+        cleaned,
+    )
+    cleaned = " ".join(cleaned.strip(" .,'\"-:").split())
+    if len(cleaned) < 2:
+        return "Reminder"
+    return (cleaned[0].upper() + cleaned[1:])[:200]
+
+
+def _extract_explicit_reminder_intent(
+    user_text: str,
+    history: List[Message],
+    local_now: Optional[datetime] = None,
+) -> Optional[dict[str, Any]]:
+    """Extract deterministic create_reminder args when user asks for a dated reminder and 2B skips tool_calls."""
+    text = (user_text or "").strip()
+    if not text or local_now is None:
+        return None
+
+    source_text: Optional[str] = None
+    if _EXPLICIT_REMINDER_TRIGGER_RE.search(text):
+        source_text = text
+    elif _FOLLOWUP_SCHEDULE_TRIGGER_RE.search(text):
+        for prev in _iter_history_newest_first(history):
+            if prev.sender == "assistant" and prev.metadata_json:
+                try:
+                    parsed = json.loads(prev.metadata_json)
+                except Exception:
+                    parsed = None
+                receipts = parsed.get("tool_receipts") if isinstance(parsed, dict) else None
+                if isinstance(receipts, list) and any(
+                    isinstance(r, dict)
+                    and r.get("tool_name") == "create_reminder"
+                    and str(r.get("outcome_status") or "").lower() == "executed"
+                    for r in receipts
+                ):
+                    return None
+            elif prev.sender == "user" and (prev.content or "").strip():
+                if _EXPLICIT_REMINDER_TRIGGER_RE.search(prev.content):
+                    source_text = prev.content
+                    break
+
+    if not source_text:
+        return None
+
+    scheduled_dt = _parse_date_and_time_for_scheduling(source_text, local_now)
+    if scheduled_dt is None:
+        return None
+
+    return {
+        "title": _extract_reminder_title(source_text),
+        "scheduled_at": scheduled_dt.isoformat(),
+    }
+
+
+def _extract_explicit_alarm_intent(user_text: str) -> Optional[dict[str, Any]]:
+    """Extract deterministic create_alarm args when user specifies an alarm clock time and 2B skips tool_calls."""
+    text = (user_text or "").strip()
+    if not text or not _EXPLICIT_ALARM_TRIGGER_RE.search(text):
+        return None
+    clock = _extract_clock_time(text)
+    if clock is None:
+        return None
+    hour, minute = clock
+    after = _EXPLICIT_ALARM_TRIGGER_RE.split(text, maxsplit=1)[-1]
+    label = _CLOCK_TIME_RE.sub(" ", after)
+    label = re.sub(r"(?i)\b(?:for|to|please|tomorrow|today|every\s+day)\b", " ", label)
+    label = " ".join(label.strip(" .,'\"-?!").split())
+    return {
+        "label": (label[0].upper() + label[1:])[:120] if len(label) >= 2 else "Alarm",
+        "time_of_day": f"{hour:02d}:{minute:02d}",
+    }
 
 
 def _build_pre_armed_risk0_fallbacks(
     tool_defs: Optional[list[dict[str, Any]]],
     user_text: str,
     history: List[Message],
+    *,
+    local_now: Optional[datetime] = None,
+    default_weather_location: Optional[str] = None,
 ) -> list[dict[str, Any]]:
-    """Pre-compute deterministic Risk 0 lookup fallbacks so Round-0 refusals can be buffered and discarded cleanly."""
+    """Pre-compute deterministic turn fallbacks so Round-0 refusals/roleplay can be buffered and discarded cleanly."""
     if not tool_defs:
         return []
     allowed_names = {t.get("function", {}).get("name") for t in tool_defs}
+    fallbacks: list[dict[str, Any]] = []
     if "web_search" in allowed_names:
         fallback_query = _extract_explicit_web_search_query(user_text, history)
         if fallback_query:
-            return [
+            fallbacks.append(
                 {
                     "id": f"auto_web_{uuid.uuid4().hex[:8]}",
                     "type": "function",
@@ -305,11 +503,15 @@ def _build_pre_armed_risk0_fallbacks(
                         "arguments": json.dumps({"query": fallback_query, "max_results": 5}),
                     },
                 }
-            ]
+            )
     if "weather_lookup" in allowed_names:
-        fallback_loc = _extract_explicit_weather_location(user_text, history)
+        fallback_loc = _extract_explicit_weather_location(
+            user_text,
+            history,
+            default_location=default_weather_location,
+        )
         if fallback_loc:
-            return [
+            fallbacks.append(
                 {
                     "id": f"auto_wx_{uuid.uuid4().hex[:8]}",
                     "type": "function",
@@ -318,8 +520,34 @@ def _build_pre_armed_risk0_fallbacks(
                         "arguments": json.dumps({"location": fallback_loc}),
                     },
                 }
-            ]
-    return []
+            )
+    if "create_reminder" in allowed_names:
+        rem_args = _extract_explicit_reminder_intent(user_text, history, local_now)
+        if rem_args:
+            fallbacks.append(
+                {
+                    "id": f"auto_rem_{uuid.uuid4().hex[:8]}",
+                    "type": "function",
+                    "function": {
+                        "name": "create_reminder",
+                        "arguments": json.dumps(rem_args),
+                    },
+                }
+            )
+    if "create_alarm" in allowed_names:
+        alarm_args = _extract_explicit_alarm_intent(user_text)
+        if alarm_args:
+            fallbacks.append(
+                {
+                    "id": f"auto_alarm_{uuid.uuid4().hex[:8]}",
+                    "type": "function",
+                    "function": {
+                        "name": "create_alarm",
+                        "arguments": json.dumps(alarm_args),
+                    },
+                }
+            )
+    return fallbacks
 
 
 def _classify_tool_provenance(user_text: str, tool_name: str, has_untrusted_web_context: bool) -> str:
@@ -1420,11 +1648,11 @@ async def orchestrate_chat_stream(
         available_generation_tokens = max(1, context_capacity - prompt_tokens - effective_tool_reserve)
         max_tokens = min(1024, available_generation_tokens)
 
+        conv_profile = await db.get(Profile, profile_session.profile_id)
+        tz_name = (getattr(conv_profile, "quiet_hours_timezone", None) or "Asia/Manila").strip() or "Asia/Manila"
+        local_now = datetime.now(resolve_timezone(tz_name))
         working_messages = list(prompt_messages)
         if working_messages and working_messages[0].role == "system":
-            conv_profile = await db.get(Profile, profile_session.profile_id)
-            tz_name = (getattr(conv_profile, "quiet_hours_timezone", None) or "Asia/Manila").strip() or "Asia/Manila"
-            local_now = datetime.now(resolve_timezone(tz_name))
             local_time_str = f"{local_now.strftime('%Y-%m-%d %H:%M')} ({local_now.strftime('%A')}, {tz_name})"
             tool_instruction = (
                 f"\n\n[Runtime Context & Capabilities]: Current Local Date & Time: {local_time_str}. "
@@ -1445,7 +1673,13 @@ async def orchestrate_chat_stream(
         has_untrusted_web_context = False
         final_pass_state: dict[str, Any] = {}
         last_round_messages: List[ChatMessage] = working_messages
-        pre_armed_fallbacks = _build_pre_armed_risk0_fallbacks(tool_defs, user_text, history)
+        pre_armed_fallbacks = _build_pre_armed_risk0_fallbacks(
+            tool_defs,
+            user_text,
+            history,
+            local_now=local_now,
+            default_weather_location=_resolve_default_weather_location(tz_name),
+        )
 
         for round_idx in range(MAX_TOOL_ROUNDS + 1):
             round_tools = tool_defs if round_idx < MAX_TOOL_ROUNDS else None

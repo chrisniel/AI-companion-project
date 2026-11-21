@@ -646,3 +646,28 @@ async def test_extractor_demotes_transient_advice_queries_from_is_core():
     assert home_cand.expires_at is not None
     assert name_cand.is_core is True
     assert name_cand.expires_at is None
+
+
+@pytest.mark.asyncio
+async def test_extractor_preserves_question_disclosures_and_call_me_nickname():
+    """Slice 6F: Self-disclosures inside polite questions ('can you call me...') bypass the '?' skip gate and extract nicknames reliably."""
+    from app.services.memory.extractor import should_skip_extraction
+
+    assert should_skip_extraction("Thank youu so muchh, can you call me honey? or darling ❤️🥺") is False
+    assert should_skip_extraction("What is the capital of France?") is True
+
+    provider = MockLLMProvider()
+    await provider.load_model("mock-test")
+
+    async def mock_empty(*args, **kwargs):
+        return "[]"
+
+    provider.generate = mock_empty
+    candidates = await extract_memory_candidates(
+        user_text="Yeppppp darling seems prettty good to me. So yeah from now on call me darling HAHAHA Thank you",
+        provider=provider,
+    )
+    assert len(candidates) == 1
+    assert "darling" in candidates[0].content.lower()
+    assert candidates[0].is_core is True
+    assert candidates[0].user_verified is True

@@ -358,11 +358,14 @@ _DOMAIN_KEYWORDS: tuple[tuple[tuple[str, ...], frozenset[str]], ...] = (
             "reminder",
             "reminders",
             "schedule",
+            "schedule it",
+            "set it",
             "calendar",
             "appointment",
             "alarm",
             "alarms",
-            "wake",
+            "wake up",
+            "wake me",
             "timer",
             "task",
             "tasks",
@@ -390,6 +393,8 @@ _DOMAIN_KEYWORDS: tuple[tuple[tuple[str, ...], frozenset[str]], ...] = (
     ),
 )
 
+_CASUAL_SAFE_TOOL_NAMES = frozenset({"web_search", "weather_lookup", "search_memories"})
+
 
 def select_relevant_tool_definitions(user_text: str) -> list[dict[str, Any]]:
     """Return intent-focused tool descriptors to keep 2B context tight and tool selection sharp."""
@@ -404,7 +409,9 @@ def select_relevant_tool_definitions(user_text: str) -> list[dict[str, Any]]:
             selected_names.update(names)
 
     if not selected_names:
-        return all_defs
+        # Keep casual banter limited to safe read-only lookups so 2B never hallucinates list_reminders/mutations.
+        casual = [d for d in all_defs if d.get("function", {}).get("name") in _CASUAL_SAFE_TOOL_NAMES]
+        return casual or all_defs
 
     filtered = [d for d in all_defs if d.get("function", {}).get("name") in selected_names]
     return filtered or all_defs

@@ -33,6 +33,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
   - *6C — 7-Day Weather Widget & Consumer Assistant Cards (`web/providers.py`, `desktop_chat_controller.dart`, `chat_screen.dart`):* Upgraded `weather_lookup()` to `forecast_days=7` (`7-day forecast:`), mapped `SseToolIntentEvent` to friendly status strings (`"Checking live weather..."`, `"Searching the web..."`, etc.), replaced raw `snake_case · executed` chips & tooltips with auto-visible **7-day Weather Widget cards**, consumer **Assistant Action cards** (reminders/tasks/alarms/memories), hidden executed `web_search` pills beside `Sources`, and cleaned source display URLs.
   - *6D — TTS Contraction, Decimal, Temperature & Symbol Normalization (`voice/tts.py`):* Normalized Unicode curly apostrophes (`’` -> `'`), expanded temperature ranges (`24.8–31.3°C`), scalar temps (`26.7°C`, `30.2c`, `°F`), standalone `°`, `%`, and decimals (`30.2` -> `"30 point 2"`) before clause splitting, and converted arrows (`→`, `->`) into natural pauses.
   - *6E — Round 4 Surgical Polish (`assistant/orchestrator.py`, `voice/tts.py`):* Buffered Round-0 visible SSE frames when an explicit `Risk 0` lookup fallback (`web_search` or `weather_lookup`) is pre-armed so preliminary ungrounded refusals/roleplay are discarded cleanly before Round 1 streams, stripped stray ASCII/Unicode quotes in `_extract_explicit_web_search_query()`, ordered history newest-first (`_iter_history_newest_first`), added `_extract_explicit_weather_location()` to recover location from follow-up weather queries & prior `weather_lookup` receipts (ignoring secondary reminder clauses), added Web Search Grounding rules, expanded dual-unit temperature ranges (`77°F–91°F`, `25°C–30°C` via `_format_temp_range`) and standalone hyphenated day ranges (`November 22-30` while preserving `2026-11-21`), and normalized prose `—`/`–` dashes into smooth comma pauses before `espeak-ng` splits clauses.
+  - *6F — Round 5 Weather Weekday Guard, Scheduling Fallbacks & Memory Question/Nickname Extraction (`tools/registry.py`, `assistant/orchestrator.py`, `memory/extractor.py`):* Ignored weekday names (`sunday - saturday`) and `"next few days"` in `_extract_city_from_weather_clause()`, added Profile timezone default city fallback (`_resolve_default_weather_location` -> `"Manila"`), narrowed casual-turn `select_relevant_tool_definitions()` to read-only lookups (`_CASUAL_SAFE_TOOL_NAMES`) so casual chats never fire `list_reminders`, added deterministic `create_reminder` and `create_alarm` fallback extractors for explicit dated/timed prompts (`orchestrator.py`), checked `_QUESTION_SAFE_DISCLOSURE_RE` before `?` skipping in `should_skip_extraction()`, hardened `_clean_json_response()` (`<think>` + bracket stripping), and added `_extract_deterministic_user_fact()` so `"call me darling"` / explicit preferences save reliably to Memory.
 
 ## 2. Files Changed
 
@@ -64,13 +65,13 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
 ### Automated Checks
 
-- [x] `backend\.venv\Scripts\python.exe -m pytest backend\tests -q -p no:cacheprovider -o log_file=NUL`: `893 passed, 98 warnings` in `421.79s` (`0` failed, `0` skipped — run after all final Slice 6E backend & test edits).
+- [x] `backend\.venv\Scripts\python.exe -m pytest backend\tests -q -p no:cacheprovider -o log_file=NUL`: `895 passed, 99 warnings` in `334.89s` (`0` failed, `0` skipped — run after all final Slice 6F backend & test edits).
 - [x] `dart analyze .` (from `frontend/flutter`): `No issues found!`.
-- [x] `flutter test --no-pub --concurrency=1 test` (from `frontend/flutter/apps/desktop`): `429: All tests passed!` (`0` failed, `0` skipped).
-- [x] `flutter build windows --debug --no-pub` (from `frontend/flutter/apps/desktop`): `Built build\windows\x64\runner\Debug\ai_companion_desktop.exe` (`25.5s`, exit `0`; verified prior to backend-only Slice 6E).
+- [x] `flutter test --no-pub --concurrency=1 test` (from `frontend/flutter/apps/desktop`): `429: All tests passed!` (`0` failed, `0` skipped; verified prior to backend-only Slices 6E–6F).
+- [x] `flutter build windows --debug --no-pub` (from `frontend/flutter/apps/desktop`): `Built build\windows\x64\runner\Debug\ai_companion_desktop.exe` (`25.5s`, exit `0`; verified prior to backend-only Slices 6E–6F).
 - [x] `companion_api` (`dart analyze .` + `dart test`): `No issues found!`, `112: All tests passed!`.
 - [x] `backend\.venv\Scripts\python.exe scripts\check_dart_openapi_parity.py --check`: `Verified DTO Schemas: 87/87`, `ALL CONTRACT PARITY AND ROUTE COVERAGE CHECKS PASSED`.
-- [x] `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_import_isolation.py scripts\tests\test_python_dependency_lock.py -q -p no:cacheprovider -o log_file=NUL`: `10 passed, 4 subtests passed` in `7.28s`.
+- [x] `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_import_isolation.py scripts\tests\test_python_dependency_lock.py -q -p no:cacheprovider -o log_file=NUL`: `10 passed, 4 subtests passed` in `4.10s`.
 
 ### Pending Manual Physical Windows Hardware & GUI QA
 
