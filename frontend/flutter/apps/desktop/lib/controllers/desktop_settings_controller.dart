@@ -8,7 +8,6 @@ import '../features/settings/settings_section.dart';
 /// Navigation destinations available within the desktop navigation rail.
 enum DesktopNavDestination {
   chat(label: 'Chat', icon: Icons.chat_bubble_outline_rounded, activeIcon: Icons.chat_bubble_rounded),
-  voice(label: 'Voice', icon: Icons.mic_none_rounded, activeIcon: Icons.mic_rounded, badge: 'M4'),
   schedule(label: 'Schedule', icon: Icons.calendar_today_rounded, activeIcon: Icons.calendar_month_rounded),
   memory(label: 'Memory', icon: Icons.psychology_outlined, activeIcon: Icons.psychology_rounded),
   studio(label: 'Studio', icon: Icons.palette_outlined, activeIcon: Icons.palette_rounded, badge: 'M3'),

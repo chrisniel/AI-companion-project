@@ -460,3 +460,96 @@ def test_voice_ws_session_killed_on_revoke_and_buffers_cleared(voice_test_env):
             with pytest.raises(WebSocketDisconnect) as disc:
                 ws.receive_json()
             assert disc.value.code == 4401
+
+
+def test_voice_ws_hands_free_vad_auto_commits_after_silence_without_commit(voice_test_env):
+    env = voice_test_env
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/api/v1/voice/ws") as ws:
+            ws.send_json(
+                {
+                    "type": "session.start",
+                    "session_token": env["tok1"],
+                    "conversation_id": env["conv1_id"],
+                }
+            )
+            ready = ws.receive_json()
+            assert ready["type"] == "session.ready"
+            vsid = ready["voice_session_id"]
+            orch = env["vm"]._active_sessions[vsid]
+
+            # Stream two 4-frame speech bursts separated by a brief 20-frame (~640ms) thinking pause
+            # -> must NOT auto-commit early; only >=40 trailing silence frames auto-commits the full turn!
+            loud_frame = _tone_pcm16(9000, num_samples=VAD_FRAME_SAMPLES)
+            silent_frame = b"\x00\x00" * VAD_FRAME_SAMPLES
+            for _ in range(4):
+                ws.send_bytes(loud_frame)
+            for _ in range(20):
+                ws.send_bytes(silent_frame)
+            ws.send_json({"type": "ping"})
+            while True:
+                pause_msg = ws.receive_json()
+                if pause_msg["type"] == "pong":
+                    break
+            assert orch._active_turn_id == 0
+
+            for _ in range(4):
+                ws.send_bytes(loud_frame)
+            for _ in range(42):
+                ws.send_bytes(silent_frame)
+
+            # Fail fast without blocking forever if VAD auto-commit did not start a turn
+            ws.send_json({"type": "ping"})
+            events = []
+            while len(events) < 10:
+                msg = ws.receive_json()
+                events.append(msg)
+                if msg["type"] == "pong":
+                    break
+            assert orch._active_turn_id == 1
+
+            while len(events) < 25:
+                if any(e.get("type") in ("tts.end", "error") for e in events):
+                    break
+                msg = ws.receive_json()
+                events.append(msg)
+                if msg["type"] in ("tts.end", "error"):
+                    break
+
+            assert not any(e["type"] == "error" for e in events), events
+            types = [e["type"] for e in events]
+            assert "stt.final" in types
+            assert "tts.audio.chunk" in types
+            assert "tts.end" in types
+
+            ws.send_json({"type": "session.stop"})
+
+
+def test_voice_ws_discards_non_interrupting_speaker_bleed_while_speaking(voice_test_env):
+    env = voice_test_env
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/api/v1/voice/ws") as ws:
+            ws.send_json(
+                {
+                    "type": "session.start",
+                    "session_token": env["tok1"],
+                    "conversation_id": env["conv1_id"],
+                    "barge_in_policy": "manual_only",
+                }
+            )
+            ready = ws.receive_json()
+            assert ready["type"] == "session.ready"
+            vsid = ready["voice_session_id"]
+            orch = env["vm"]._active_sessions[vsid]
+
+            # Hold speaking gate True as while assistant playback is active
+            orch._barge_in_gate.set_speaking(True, assistant_output_rms=0.05)
+            for _ in range(5):
+                ws.send_bytes(_tone_pcm16(500, num_samples=VAD_FRAME_SAMPLES))
+            ws.send_json({"type": "ping"})
+            assert ws.receive_json()["type"] == "pong"
+
+            assert orch.buffered_audio_bytes == 0
+            ws.send_json({"type": "session.stop"})

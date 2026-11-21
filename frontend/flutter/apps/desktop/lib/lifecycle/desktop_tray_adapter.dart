@@ -11,6 +11,9 @@ abstract class DesktopTrayAdapter {
   /// Configures the right-click context menu.
   Future<void> setContextMenu(Menu menu);
 
+  /// Displays the configured context menu at the tray icon location.
+  Future<void> popUpContextMenu();
+
   /// Removes the system tray icon and releases native resources.
   Future<void> destroy();
 

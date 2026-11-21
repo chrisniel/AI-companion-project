@@ -6,6 +6,7 @@ from contextlib import aclosing, suppress
 from dataclasses import dataclass
 import json
 import logging
+import time
 from typing import Any, Optional
 import uuid
 
@@ -32,6 +33,7 @@ from app.services.voice.audio_utils import (
     MAX_TURN_AUDIO_BYTES,
     VAD_FRAME_BYTES,
     AudioFormatError,
+    compute_pcm16_rms,
     decode_audio_to_pcm16,
 )
 from app.services.voice.manager import VoiceManager, get_voice_manager
@@ -195,6 +197,11 @@ class VoiceSessionOrchestrator:
         self._vad_remainder = bytearray()
         self._vad = self.voice_manager.create_turn_vad(sensitivity="medium")
         self._barge_in_gate = BargeInGate(vad=self._vad, policy="smart_auto", sensitivity="medium")
+        self._vad_in_speech: bool = False
+        self._vad_speech_run: int = 0
+        self._vad_silence_run: int = 0
+        self._vad_voiced_total: int = 0
+        self._barge_in_preroll = bytearray()
 
         self._language: str = "auto"
         self._tts_speed: float = 1.0
@@ -209,6 +216,11 @@ class VoiceSessionOrchestrator:
         """Guarantee ephemeral PCM audio buffers never linger in RAM."""
         self._pcm_buffer.clear()
         self._vad_remainder.clear()
+        self._barge_in_preroll.clear()
+        self._vad_in_speech = False
+        self._vad_speech_run = 0
+        self._vad_silence_run = 0
+        self._vad_voiced_total = 0
         self._barge_in_gate.reset_hold()
         self._vad.reset()
 
@@ -274,7 +286,8 @@ class VoiceSessionOrchestrator:
         tts_res = await tts.synthesize(text, voice_id=self._voice_id, speed=self._tts_speed)
         if cancel_event.is_set() or turn_id != self._active_turn_id:
             return
-        self._barge_in_gate.set_speaking(True, assistant_output_rms=0.04)
+        chunk_rms = compute_pcm16_rms(tts_res.wav_bytes[44:]) if len(tts_res.wav_bytes) > 44 else 0.04
+        self._barge_in_gate.set_speaking(True, assistant_output_rms=max(0.04, chunk_rms))
         seq = seq_counter[0]
         seq_counter[0] += 1
         await self._send_json(
@@ -336,7 +349,8 @@ class VoiceSessionOrchestrator:
             )
             return
 
-        stt_res = await stt.transcribe(pcm_audio, language=self._language)
+        effective_stt_lang = "en" if (not self._language or self._language == "auto") else self._language
+        stt_res = await stt.transcribe(pcm_audio, language=effective_stt_lang)
         if cancel_event.is_set() or turn_id != self._active_turn_id:
             return
 
@@ -406,7 +420,49 @@ class VoiceSessionOrchestrator:
                 sentence_buf = ""
                 seq_counter = [0]
                 finish_reason = "stop"
+                tts_queue: asyncio.Queue[Optional[str]] = asyncio.Queue()
+                playback_end = 0.0
 
+                async def _tts_worker() -> None:
+                    nonlocal playback_end
+                    while not cancel_event.is_set() and turn_id == self._active_turn_id:
+                        seg = await tts_queue.get()
+                        if seg is None:
+                            break
+                        if not seg.strip() or cancel_event.is_set() or turn_id != self._active_turn_id:
+                            continue
+                        if not tts.is_available():
+                            continue
+                        tts_res = await tts.synthesize(
+                            seg,
+                            voice_id=self._voice_id,
+                            speed=self._tts_speed,
+                        )
+                        if cancel_event.is_set() or turn_id != self._active_turn_id:
+                            break
+                        chunk_rms = compute_pcm16_rms(tts_res.wav_bytes[44:]) if len(tts_res.wav_bytes) > 44 else 0.04
+                        self._barge_in_gate.set_speaking(True, assistant_output_rms=max(0.04, chunk_rms))
+                        seq = seq_counter[0]
+                        seq_counter[0] += 1
+                        await self._send_json(
+                            build_ws_frame(
+                                "tts.audio.chunk",
+                                voice_session_id=self.voice_session_id,
+                                turn_id=turn_id,
+                                seq=seq,
+                                sample_rate=tts_res.sample_rate,
+                                duration_ms=tts_res.duration_ms,
+                                voice_id=tts_res.voice_id,
+                                wav_base64=base64.b64encode(tts_res.wav_bytes).decode("ascii"),
+                            )
+                        )
+                        if tts.name != "mock":
+                            now_mono = time.monotonic()
+                            playback_end = max(playback_end, now_mono) + (
+                                max(0, int(tts_res.duration_ms)) / 1000.0
+                            )
+
+                tts_worker_task = asyncio.create_task(_tts_worker())
                 stream = orchestrate_chat_stream(
                     db=turn_db,
                     conversation_id=self._conversation_id,
@@ -416,117 +472,120 @@ class VoiceSessionOrchestrator:
                     conversation_lock=lock,
                 )
 
-                async with aclosing(stream):
-                    async for raw_sse in stream:
-                        if cancel_event.is_set() or turn_id != self._active_turn_id:
-                            return
-                        if not raw_sse.startswith("data: "):
-                            continue
-                        data_str = raw_sse[6:].strip()
-                        if data_str == "[DONE]":
-                            break
-                        try:
-                            event = json.loads(data_str)
-                        except ValueError:
-                            continue
-                        ev_type = event.get("type")
-                        if ev_type == "token":
-                            piece = str(event.get("content") or "")
-                            if piece:
-                                sentence_buf += piece
+                try:
+                    async with aclosing(stream):
+                        async for raw_sse in stream:
+                            if cancel_event.is_set() or turn_id != self._active_turn_id:
+                                return
+                            if not raw_sse.startswith("data: "):
+                                continue
+                            data_str = raw_sse[6:].strip()
+                            if data_str == "[DONE]":
+                                break
+                            try:
+                                event = json.loads(data_str)
+                            except ValueError:
+                                continue
+                            ev_type = event.get("type")
+                            if ev_type == "token":
+                                piece = str(event.get("content") or "")
+                                if piece:
+                                    sentence_buf += piece
+                                    await self._send_json(
+                                        build_ws_frame(
+                                            "llm.delta",
+                                            voice_session_id=self.voice_session_id,
+                                            turn_id=turn_id,
+                                            content=piece,
+                                        )
+                                    )
+                                    while any(p in sentence_buf for p in (". ", "! ", "? ", "\n")):
+                                        cut = -1
+                                        for sep in (". ", "! ", "? ", "\n"):
+                                            idx = sentence_buf.find(sep)
+                                            if idx != -1 and (cut == -1 or idx + len(sep) < cut):
+                                                cut = idx + len(sep)
+                                        if cut <= 0:
+                                            break
+                                        seg = sentence_buf[:cut].strip()
+                                        sentence_buf = sentence_buf[cut:]
+                                        if seg:
+                                            tts_queue.put_nowait(seg)
+                            elif ev_type == "tool_intent":
                                 await self._send_json(
                                     build_ws_frame(
-                                        "llm.delta",
+                                        "tool.intent",
                                         voice_session_id=self.voice_session_id,
                                         turn_id=turn_id,
-                                        content=piece,
+                                        tool_name=event.get("tool_name"),
+                                        risk_tier=event.get("risk_tier"),
+                                        provenance=event.get("provenance"),
+                                        target_summary=event.get("target_summary"),
                                     )
                                 )
-                                while any(p in sentence_buf for p in (". ", "! ", "? ", "\n")):
-                                    cut = -1
-                                    for sep in (". ", "! ", "? ", "\n"):
-                                        idx = sentence_buf.find(sep)
-                                        if idx != -1 and (cut == -1 or idx + len(sep) < cut):
-                                            cut = idx + len(sep)
-                                    if cut <= 0:
-                                        break
-                                    seg = sentence_buf[:cut].strip()
-                                    sentence_buf = sentence_buf[cut:]
-                                    await self._speak_text_segment(
-                                        tts=tts,
-                                        text=seg,
+                            elif ev_type == "tool_result":
+                                await self._send_json(
+                                    build_ws_frame(
+                                        "tool.result",
+                                        voice_session_id=self.voice_session_id,
                                         turn_id=turn_id,
-                                        cancel_event=cancel_event,
-                                        seq_counter=seq_counter,
+                                        tool_name=event.get("tool_name"),
+                                        decision=event.get("decision"),
+                                        outcome_status=event.get("outcome_status"),
+                                        summary=event.get("summary"),
+                                        sources=event.get("sources", []),
                                     )
-                        elif ev_type == "tool_intent":
-                            await self._send_json(
-                                build_ws_frame(
-                                    "tool.intent",
-                                    voice_session_id=self.voice_session_id,
-                                    turn_id=turn_id,
-                                    tool_name=event.get("tool_name"),
-                                    risk_tier=event.get("risk_tier"),
-                                    provenance=event.get("provenance"),
-                                    target_summary=event.get("target_summary"),
                                 )
-                            )
-                        elif ev_type == "tool_result":
-                            await self._send_json(
-                                build_ws_frame(
-                                    "tool.result",
-                                    voice_session_id=self.voice_session_id,
-                                    turn_id=turn_id,
-                                    tool_name=event.get("tool_name"),
-                                    decision=event.get("decision"),
-                                    outcome_status=event.get("outcome_status"),
-                                    summary=event.get("summary"),
-                                    sources=event.get("sources", []),
+                            elif ev_type == "tool_confirmation_required":
+                                await self._send_json(
+                                    build_ws_frame(
+                                        "tool.confirmation_required",
+                                        voice_session_id=self.voice_session_id,
+                                        turn_id=turn_id,
+                                        confirmation=event.get("confirmation"),
+                                    )
                                 )
-                            )
-                        elif ev_type == "tool_confirmation_required":
-                            await self._send_json(
-                                build_ws_frame(
-                                    "tool.confirmation_required",
-                                    voice_session_id=self.voice_session_id,
-                                    turn_id=turn_id,
-                                    confirmation=event.get("confirmation"),
+                            elif ev_type == "done":
+                                finish_reason = str(event.get("finish_reason") or "stop")
+                            elif ev_type == "error":
+                                finish_reason = "error"
+                                await self._send_json(
+                                    build_ws_frame(
+                                        "error",
+                                        voice_session_id=self.voice_session_id,
+                                        turn_id=turn_id,
+                                        code=event.get("code") or "MODEL_GENERATION_FAILED",
+                                        message=event.get("message") or "Generation failed.",
+                                    )
                                 )
-                            )
-                        elif ev_type == "done":
-                            finish_reason = str(event.get("finish_reason") or "stop")
-                        elif ev_type == "error":
-                            finish_reason = "error"
-                            await self._send_json(
-                                build_ws_frame(
-                                    "error",
-                                    voice_session_id=self.voice_session_id,
-                                    turn_id=turn_id,
-                                    code=event.get("code") or "MODEL_GENERATION_FAILED",
-                                    message=event.get("message") or "Generation failed.",
-                                )
-                            )
-                            return
+                                return
 
-                if sentence_buf.strip() and not cancel_event.is_set() and turn_id == self._active_turn_id:
-                    await self._speak_text_segment(
-                        tts=tts,
-                        text=sentence_buf.strip(),
-                        turn_id=turn_id,
-                        cancel_event=cancel_event,
-                        seq_counter=seq_counter,
-                    )
+                    if sentence_buf.strip() and not cancel_event.is_set() and turn_id == self._active_turn_id:
+                        tts_queue.put_nowait(sentence_buf.strip())
+                    tts_queue.put_nowait(None)
+                    await tts_worker_task
 
-                self._barge_in_gate.set_speaking(False)
-                if not cancel_event.is_set() and turn_id == self._active_turn_id:
-                    await self._send_json(
-                        build_ws_frame(
-                            "tts.end",
-                            voice_session_id=self.voice_session_id,
-                            turn_id=turn_id,
-                            finish_reason=finish_reason,
+                    if tts.name != "mock" and not cancel_event.is_set() and turn_id == self._active_turn_id:
+                        remaining = playback_end - time.monotonic()
+                        if remaining > 0.0:
+                            with suppress(asyncio.TimeoutError):
+                                await asyncio.wait_for(cancel_event.wait(), timeout=remaining)
+
+                    self._barge_in_gate.set_speaking(False)
+                    if not cancel_event.is_set() and turn_id == self._active_turn_id:
+                        await self._send_json(
+                            build_ws_frame(
+                                "tts.end",
+                                voice_session_id=self.voice_session_id,
+                                turn_id=turn_id,
+                                finish_reason=finish_reason,
+                            )
                         )
-                    )
+                finally:
+                    if not tts_worker_task.done():
+                        tts_worker_task.cancel()
+                        with suppress(asyncio.CancelledError, Exception):
+                            await tts_worker_task
         except asyncio.CancelledError:
             raise
         except HTTPException as exc:
@@ -546,8 +605,45 @@ class VoiceSessionOrchestrator:
 
     async def _handle_pcm_chunk(self, pcm_bytes: bytes) -> None:
         max_turn_bytes = max(VAD_FRAME_BYTES, int(settings.VOICE_MAX_TURN_AUDIO_BYTES or MAX_TURN_AUDIO_BYTES))
+        if self._barge_in_gate.is_speaking:
+            # Never buffer non-interrupting speaker bleed into the next turn's STT audio;
+            # keep only a bounded temporary pre-roll ring released strictly if barge-in triggers.
+            self._vad_remainder.extend(pcm_bytes)
+            while len(self._vad_remainder) >= VAD_FRAME_BYTES:
+                frame_bytes = bytes(self._vad_remainder[:VAD_FRAME_BYTES])
+                del self._vad_remainder[:VAD_FRAME_BYTES]
+                self._barge_in_preroll.extend(frame_bytes)
+                if len(self._barge_in_preroll) > VAD_FRAME_BYTES * 15:
+                    del self._barge_in_preroll[: len(self._barge_in_preroll) - VAD_FRAME_BYTES * 15]
+                triggered = self._barge_in_gate.process_pcm16_frame(frame_bytes)
+                if triggered:
+                    self._pcm_buffer = bytearray(self._barge_in_preroll)
+                    self._barge_in_preroll.clear()
+                    self._vad_in_speech = True
+                    self._vad_speech_run = 3
+                    self._vad_voiced_total = 5
+                    self._vad_silence_run = 0
+                    await self._cancel_active_turn(reason="vad_barge_in", emit_cancelled=True)
+                    await self._send_json(
+                        build_ws_frame(
+                            "vad.state",
+                            voice_session_id=self.voice_session_id,
+                            turn_id=self._active_turn_id,
+                            state="barge_in_triggered",
+                        )
+                    )
+                    break
+            return
+
+        if self._barge_in_preroll:
+            self._barge_in_preroll.clear()
+
         if len(self._pcm_buffer) + len(pcm_bytes) > max_turn_bytes:
             self._pcm_buffer.clear()
+            self._vad_in_speech = False
+            self._vad_speech_run = 0
+            self._vad_silence_run = 0
+            self._vad_voiced_total = 0
             await self._send_json(
                 build_ws_frame(
                     "error",
@@ -560,26 +656,64 @@ class VoiceSessionOrchestrator:
             return
 
         self._pcm_buffer.extend(pcm_bytes)
+        # While an STT/LLM turn is still in flight (before speaking), buffer speech cleanly
+        # without triggering auto-commit cancellation (`superseded_by_commit`).
+        if self._active_turn_task is not None and not self._active_turn_task.done():
+            return
+
+        if not self._vad_in_speech and len(self._pcm_buffer) > VAD_FRAME_BYTES * 28:
+            # Keep a ~512ms pre-roll ring while idle so room silence cannot exhaust MAX_TURN_AUDIO_BYTES.
+            del self._pcm_buffer[: len(self._pcm_buffer) - VAD_FRAME_BYTES * 16]
         self._vad_remainder.extend(pcm_bytes)
 
         while len(self._vad_remainder) >= VAD_FRAME_BYTES:
             frame_bytes = bytes(self._vad_remainder[:VAD_FRAME_BYTES])
             del self._vad_remainder[:VAD_FRAME_BYTES]
-            if self._barge_in_gate.is_speaking:
-                triggered = self._barge_in_gate.process_pcm16_frame(frame_bytes)
-                if triggered:
-                    # Keep only the interrupting speech slice that just fired barge-in.
-                    self._pcm_buffer = bytearray(frame_bytes)
-                    await self._cancel_active_turn(reason="vad_barge_in", emit_cancelled=True)
-                    await self._send_json(
-                        build_ws_frame(
-                            "vad.state",
-                            voice_session_id=self.voice_session_id,
-                            turn_id=self._active_turn_id,
-                            state="barge_in_triggered",
+            vad_res = self._vad.evaluate_frame(frame_bytes)
+            if not self._vad_in_speech:
+                if vad_res.is_speech:
+                    self._vad_speech_run += 1
+                    self._vad_voiced_total += 1
+                    self._vad_silence_run = 0
+                    if self._vad_speech_run >= 3:
+                        self._vad_in_speech = True
+                        await self._send_json(
+                            build_ws_frame(
+                                "vad.state",
+                                voice_session_id=self.voice_session_id,
+                                turn_id=self._active_turn_id,
+                                state="speech_start",
+                            )
                         )
-                    )
-                    break
+                else:
+                    self._vad_speech_run = 0
+                    self._vad_voiced_total = 0
+            else:
+                if vad_res.is_speech:
+                    self._vad_voiced_total += 1
+                    self._vad_silence_run = 0
+                else:
+                    self._vad_silence_run += 1
+                    if self._vad_silence_run >= 40:
+                        voiced_count = self._vad_voiced_total
+                        self._vad_in_speech = False
+                        self._vad_speech_run = 0
+                        self._vad_silence_run = 0
+                        self._vad_voiced_total = 0
+                        if voiced_count < 5:
+                            if len(self._pcm_buffer) > VAD_FRAME_BYTES * 16:
+                                del self._pcm_buffer[: len(self._pcm_buffer) - VAD_FRAME_BYTES * 16]
+                            continue
+                        await self._send_json(
+                            build_ws_frame(
+                                "vad.state",
+                                voice_session_id=self.voice_session_id,
+                                turn_id=self._active_turn_id,
+                                state="speech_end",
+                            )
+                        )
+                        await self._start_committed_turn()
+                        break
 
     async def _start_committed_turn(self) -> None:
         if not self._pcm_buffer:
@@ -592,6 +726,11 @@ class VoiceSessionOrchestrator:
             pcm_snapshot = bytes(self._pcm_buffer)
             self._pcm_buffer.clear()
             self._vad_remainder.clear()
+            self._barge_in_preroll.clear()
+            self._vad_in_speech = False
+            self._vad_speech_run = 0
+            self._vad_silence_run = 0
+            self._vad_voiced_total = 0
 
             self._active_turn_id += 1
             turn_id = self._active_turn_id

@@ -25,13 +25,12 @@ The PC V1 companion experience is anchored by a native Windows Flutter desktop a
 ### 2.2 Primary Navigation Rail (Left Sidebar)
 The desktop shell utilizes a compact, collapsible left navigation rail:
 - **Top:** Companion avatar, active profile switcher chip, and current companion mood accent.
-- **Navigation Items:**
-  1. **Chat:** Primary conversational interface with text and media attachments.
-  2. **Voice:** Hands-free duplex conversational voice mode.
-  3. **Schedule:** Tasks, Reminders, Alarms, and daily Routines.
-  4. **Memory:** User-visible memory browser, fact verification, and forgetting controls.
-  5. **Studio:** Character Studio (traits, lore, avatar, voice selection).
-  6. **Settings:** Responsive two-column categorized settings workspace (aligned with Web preferences) featuring live sidebar search, active `AVAILABLE` sections (*Appearance*, *General & Lifecycle*, *Notifications & Quiet Hours*, *Profiles & Privacy*, *AI Runtime & Models*, *Storage & Diagnostics*, *Tools & Safety*), and truthful `PLANNED` milestone tabs (*Voice & Audio* M4, *Health & Context* M5+, *Network & Mesh* M5+), without duplicating window-exit or hide-to-tray action buttons inside Settings. The top utility strip alongside Profile Scope / Notifications displays a persistent **Stop Tools / Tools KILLED** Kill Switch pill whenever `DesktopToolPolicyController` is wired.
+- **Navigation Items (Option A — 5 Destinations):**
+  1. **Chat:** Primary conversational interface integrating text, media attachments, Composer mic Dictate button, Header `Live Voice` & `Auto-Read` toggles, inline `LiveVoiceStagePanel` overlay, and per-message `Read Aloud / Stop` controls.
+  2. **Schedule:** Tasks, Reminders, Alarms, and daily Routines.
+  3. **Memory:** User-visible memory browser, fact verification, and forgetting controls.
+  4. **Studio:** Character Studio (traits, lore, avatar, per-character TTS voice selection & preview).
+  5. **Settings:** Responsive two-column categorized settings workspace (aligned with Web preferences) featuring live sidebar search, active `AVAILABLE` sections (*Appearance*, *General & Lifecycle*, *Notifications & Quiet Hours*, *Profiles & Privacy*, *AI Runtime & Models*, *Storage & Diagnostics*, *Tools & Safety*, *Voice & Audio*), and truthful `PLANNED` milestone tabs (*Health & Context* M5+, *Network & Mesh* M5+), without duplicating window-exit or hide-to-tray action buttons inside Settings. The top utility strip alongside Profile Scope / Notifications displays a persistent **Stop Tools / Tools KILLED** Kill Switch pill whenever `DesktopToolPolicyController` is wired, plus a glowing amber **Mic Active** badge (`shell_mic_privacy_indicator`) while microphone capture is active (or clickable **Audio Muted** pill `shell_mic_muted_indicator` while muted to unmute with one click).
 - **Bottom:** System runtime health indicator (Green = Connected, Yellow = Reconnecting, Red = Stopped), quick Performance Mode / rail collapse controls, and a persistent **`⏻` Power Menu** providing global access to **Minimize to System Tray**, **Close & Startup Settings...** (deep-linking to `Settings -> General & Lifecycle`), and **Exit Companion**.
 
 ---
@@ -45,13 +44,13 @@ The desktop shell utilizes a compact, collapsible left navigation rail:
 - **Disconnected / Offline:** Grayscale icon with warning indicator.
 
 ### 3.2 System Tray Context Menu (Right-Click) & Lifecycle Distinctions
-The system tray menu strictly distinguishes three distinct lifecycle concepts:
+The system tray menu explicitly opens on both left-button release and right-button click (`onTrayIconRightMouseDown` -> `popUpContextMenu()`) and retains **Mute Audio** check state across periodic `updateRuntimeStatus()` refreshes, strictly distinguishing three distinct lifecycle concepts:
 1. **Open AI Companion** *(Default click / double-click action)* — Restores and focuses the main window.
 2. **Hide to System Tray** — Minimizes/hides the desktop UI window to the system tray. Both the Flutter UI process and the Local AI Runtime host process remain active and executing.
 3. **Emergency Stop Tools / Tools Killed** — Immediately engages the persistent Global Tool Kill Switch (`POST /api/v1/tools/kill-switch`); disabled once engaged until reset in Settings under local Host Admin authority.
 3. **Active Profile:** Shows current profile name with quick flyout to switch profiles.
 4. --- (Separator) ---
-5. **Mute Audio:** Immediate toggle to silence speech output and chime alerts.
+5. **Mute Audio (`Ctrl+Shift+M` / `F8`):** Immediate hard-mute toggle to silence OS microphone capture (pausing active Live Voice capture in-place without closing the session), flush speech playback, and mute chime alerts.
 6. **Performance Mode:** Quick toggle (`Normal` / `Low-Impact` / `Auto`).
 7. --- (Separator) ---
 8. **Runtime Status:** Informational label (e.g., *"Runtime: Active (PID 14220)"* or *"Runtime: Remote Host"*).
@@ -75,7 +74,7 @@ The approved visual design language across the companion ecosystem is:
 ### 4.2 Theme & Accessibility Invariants
 
 - **System Theme Synchronization:** Automatic switching between Windows Dark Mode and Light Mode based on OS preference, with manual override in Settings.
-- **Keyboard Navigation:** Full keyboard focus traversal (`Tab` / `Shift+Tab`), shortcut keys (`Ctrl+N` for new conversation, `Ctrl+M` to toggle mute, `Ctrl+,` for settings, `Esc` to hide window).
+- **Keyboard Navigation:** Full keyboard focus traversal (`Tab` / `Shift+Tab`), app-wide `HardwareKeyboard` shortcut keys (`Ctrl+H` to switch to Chat from any destination and toggle the History Drawer, `Ctrl+N` for new conversation, `Ctrl+Shift+V` / customizable in-app Live Voice toggle, `Ctrl+Alt+V` / customizable Win32 global hotkey to restore window & toggle Live Voice, `Ctrl+Shift+M` w/ Shift-tolerant physical-key matching + `F8` backup mute toggle, `Right Alt` push-to-talk, `Ctrl+,` for settings, `Esc` to close drawers before hiding to tray).
 - **High-Contrast Support:** Compatible with Windows High Contrast mode themes.
 
 ---

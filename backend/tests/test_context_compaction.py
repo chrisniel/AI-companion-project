@@ -750,3 +750,85 @@ async def test_orchestrator_auto_continue_respects_guards_and_single_hop_cap(
     msgs2 = (await client.get(f"/api/v1/conversations/{conv2_id}/messages", headers=auth_headers)).json()["items"]
     assert msgs2[1]["status"] == "length"
     assert msgs2[1]["content"].endswith("still continuing at cap.")
+
+
+@pytest.mark.anyio
+async def test_compactor_rejects_hallucinated_dialogue_and_skips_2_turn_step_down(
+    test_session: AsyncSession,
+    monkeypatch,
+):
+    """2-turn conversations never step down to keep=1, and fake dialogue digests fall back cleanly."""
+    from app.core.config import settings
+    from app.models.message import Message
+    from app.services.assistant.compactor import compact_conversation
+    from app.services.llm.mock import MockLLMProvider
+
+    monkeypatch.setattr(settings, "CONTEXT_COMPACTION_KEEP_RECENT_MESSAGES", 8)
+    monkeypatch.setattr(settings, "CONTEXT_COMPACTION_MIN_MESSAGES", 4)
+
+    profile = await test_session.scalar(select(Profile).limit(1))
+    assert profile is not None
+    conv = Conversation(profile_id=profile.id, owner_id="local_user", title="2-Turn Guard")
+    test_session.add(conv)
+    await test_session.flush()
+
+    for seq in (1, 2):
+        test_session.add(
+            Message(
+                profile_id=profile.id,
+                conversation_id=conv.id,
+                sender="user" if seq == 1 else "assistant",
+                content=f"Turn {seq} real weather check message about Caloocan.",
+                status="completed",
+                sequence_no=seq,
+            )
+        )
+    await test_session.commit()
+
+    # 1. Auto-compaction must not step down on only 2 uncompacted messages
+    provider = MockLLMProvider(default_model="mock-test")
+    await provider.load_model()
+    res_small = await compact_conversation(
+        db=test_session,
+        conversation_id=conv.id,
+        profile_id=profile.id,
+        provider=provider,
+        force=False,
+        trigger="auto",
+    )
+    assert res_small.compacted is False
+
+    # 2. Add 4 more messages (6 total) and return hallucinated "- User:" / "- Assistant:" dialogue script
+    for seq in range(3, 7):
+        test_session.add(
+            Message(
+                profile_id=profile.id,
+                conversation_id=conv.id,
+                sender="user" if seq % 2 == 1 else "assistant",
+                content=f"Turn {seq} follow-up message in Caloocan.",
+                status="completed",
+                sequence_no=seq,
+            )
+        )
+    await test_session.commit()
+
+    async def mock_hallucinated_summary(**kwargs):
+        return (
+            "- User: Wait, today was November 20th?\n"
+            "- Assistant: Sure, here is a fake script about 28C!"
+        )
+
+    provider.generate = mock_hallucinated_summary
+    res_6 = await compact_conversation(
+        db=test_session,
+        conversation_id=conv.id,
+        profile_id=profile.id,
+        provider=provider,
+        force=False,
+        trigger="auto",
+    )
+    assert res_6.compacted is True
+    assert res_6.summary is not None
+    assert res_6.summary.source == "extractive_fallback"
+    assert "Turn 1 real weather check" in res_6.summary.summary_text
+    assert res_6.summary.to_sequence_no <= 4  # effective_keep >= 2 preserved at least 2 recent turns

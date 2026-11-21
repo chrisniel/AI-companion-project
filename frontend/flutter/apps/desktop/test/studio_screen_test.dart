@@ -6,6 +6,8 @@ import 'package:ai_companion_desktop/features/studio/character_stage_presenter.d
 import 'package:ai_companion_desktop/features/studio/desktop_studio_controller.dart';
 import 'package:ai_companion_desktop/features/studio/studio_backdrop_layer.dart';
 import 'package:ai_companion_desktop/features/studio/character_showcase_stage.dart';
+import 'package:ai_companion_desktop/features/voice/desktop_voice_controller.dart';
+import 'package:ai_companion_desktop/platform/desktop_audio_adapter.dart';
 import 'package:ai_companion_desktop/screens/studio_screen.dart';
 import 'package:companion_api/companion_api.dart';
 import 'package:companion_design/companion_design.dart';
@@ -772,6 +774,164 @@ void main() {
       expect(find.byKey(const Key('studio-inspector-mood-badge')), findsOneWidget);
       expect(find.text('Mood: 😊 Cheerful (65%)'), findsOneWidget);
 
+      studio.dispose();
+      chat.dispose();
+    });
+
+    testWidgets('Identity & Lore tab renders Character Voice dropdown & Preview button, respecting read-only legacy', (tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1280, 800);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final synthesizedVoiceIds = <String?>[];
+      final client = CompanionClient(
+        sessionStore: InMemoryCredentialStore('psk_test'),
+        httpClient: MockClient((request) async {
+          final p = request.url.path;
+          if (p.endsWith('/voice/status')) {
+            return http.Response(
+              jsonEncode({
+                'stt_available': true,
+                'stt_provider': 'faster_whisper',
+                'vad_available': true,
+                'vad_provider': 'silero',
+                'tts_available': true,
+                'tts_provider': 'kokoro',
+              }),
+              200,
+            );
+          }
+          if (p.endsWith('/voice/voices')) {
+            return http.Response(
+              jsonEncode({
+                'voices': [
+                  {
+                    'voice_id': 'af_nicole',
+                    'name': 'Nicole',
+                    'provider': 'kokoro',
+                    'language': 'en-us',
+                    'sample_rate': 24000,
+                  },
+                  {
+                    'voice_id': 'bf_emma',
+                    'name': 'Emma',
+                    'provider': 'kokoro',
+                    'language': 'en-gb',
+                    'sample_rate': 24000,
+                  },
+                ],
+              }),
+              200,
+            );
+          }
+          if (p.endsWith('/voice/settings')) {
+            return http.Response(
+              jsonEncode({
+                'profile_id': 'profile-1',
+                'barge_in_policy': 'smart_auto',
+                'vad_sensitivity': 'medium',
+                'stt_language': 'en',
+                'tts_speed': 1.0,
+                'default_voice_id': 'af_nicole',
+                'auto_read_replies': false,
+                'proactive_speech_enabled': false,
+                'cloud_stt_enabled': false,
+                'cloud_tts_enabled': false,
+                'updated_at': '2026-01-01T00:00:00Z',
+              }),
+              200,
+            );
+          }
+          if (p.endsWith('/voice/synthesize')) {
+            final body = jsonDecode(request.body) as Map<String, dynamic>;
+            synthesizedVoiceIds.add(body['voice_id'] as String?);
+            return http.Response(
+              jsonEncode({
+                'audio_base64': base64Encode([0, 0, 1, 0]),
+                'mime_type': 'audio/wav',
+                'sample_rate': 24000,
+                'duration_ms': 100,
+                'voice_id': body['voice_id'] ?? 'af_nicole',
+                'provider': 'kokoro',
+              }),
+              200,
+            );
+          }
+          return handleStudioRequest(request);
+        }),
+      );
+
+      final chat = DesktopChatController(client: client);
+      await chat.checkConnection();
+      final studio = DesktopStudioController(chat: chat);
+      await studio.loadStudioCatalog();
+      studio.selectTemplate(studio.templates.first);
+
+      final voice = DesktopVoiceController(
+        clientProvider: () => client,
+        audioAdapter: NoOpDesktopAudioAdapter(),
+      );
+      await voice.initialize();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CompanionTheme.dark(),
+          home: Scaffold(
+            body: StudioScreen(controller: studio, voiceController: voice),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Identity & Lore'));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.textContaining('Leave on Profile Default'),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('studio_voice_dropdown')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('studio_voice_dropdown')), findsOneWidget);
+      expect(find.byKey(const Key('studio_voice_preview_button')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('studio_voice_dropdown')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Emma (en-gb)').last);
+      await tester.pumpAndSettle();
+      expect(studio.draft!.voiceId, 'bf_emma');
+      expect(studio.draft!.isDirty, isTrue);
+
+      await tester.tap(find.byKey(const Key('studio_voice_preview_button')));
+      await tester.pumpAndSettle();
+      expect(synthesizedVoiceIds, contains('bf_emma'));
+
+      // Legacy read-only instance disables voice dropdown
+      studio.selectInstance(const CharacterInstanceOut(
+        id: 'legacy-1',
+        profileId: 'profile-1',
+        isLegacyPlaceholder: true,
+        name: 'Legacy Char',
+        summary: '',
+        lore: '',
+        systemPrompt: '',
+        avatarAsset: 'default',
+        presetId: 'custom',
+        traits: CharacterTraitVector(
+          warmth: 50, teasing: 50, guardedness: 50, directness: 50,
+          expressiveness: 50, affection: 50, formality: 50, verbosity: 50,
+        ),
+        status: 'active',
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      ));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Legacy character is read-only'), findsOneWidget);
+
+      voice.dispose();
       studio.dispose();
       chat.dispose();
     });

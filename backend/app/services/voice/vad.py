@@ -260,7 +260,7 @@ class BargeInGate:
             rms_floor *= 1.35
 
         # Echo guard when speaker output telemetry is supplied.
-        echo_floor = max(rms_floor, self.assistant_output_rms * 0.45)
+        echo_floor = max(rms_floor, self.assistant_output_rms * 0.65)
         qualifies = res.is_speech and res.probability >= prob_thresh and res.rms >= echo_floor
 
         if qualifies:

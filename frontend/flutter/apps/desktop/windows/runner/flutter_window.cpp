@@ -25,6 +25,8 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  audio_channel_ = std::make_unique<WindowsAudioChannel>(
+      flutter_controller_->engine()->messenger(), GetHandle());
   toast_channel_ = std::make_unique<WindowsToastChannel>(
       flutter_controller_->engine()->messenger(), GetHandle());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
@@ -42,6 +44,9 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  if (audio_channel_) {
+    audio_channel_.reset();
+  }
   if (toast_channel_) {
     toast_channel_.reset();
   }
@@ -67,6 +72,16 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   }
 
   switch (message) {
+    case kWmAudioEvent:
+      if (audio_channel_) {
+        audio_channel_->HandleAudioEventMessage();
+      }
+      return 0;
+    case WM_HOTKEY:
+      if (audio_channel_) {
+        audio_channel_->HandleHotkeyMessage(wparam);
+      }
+      return 0;
     case kWmToastActivated:
       if (toast_channel_) {
         toast_channel_->HandleToastActivatedMessage(wparam, lparam);

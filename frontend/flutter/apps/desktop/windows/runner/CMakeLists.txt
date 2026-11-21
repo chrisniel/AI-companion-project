@@ -11,6 +11,8 @@ add_executable(${BINARY_NAME} WIN32
   "main.cpp"
   "utils.cpp"
   "win32_window.cpp"
+  "windows_audio_channel.cpp"
+  "windows_audio_channel.h"
   "windows_toast_channel.cpp"
   "windows_toast_channel.h"
   "${FLUTTER_MANAGED_DIR}/generated_plugin_registrant.cc"

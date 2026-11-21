@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:companion_core/companion_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -39,7 +41,9 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
   final Future<void> Function()? onExitRequested;
   Future<void> Function()? onExitMenuTriggered;
   Future<void> Function()? onKillSwitchTriggered;
+  Future<void> Function()? onMuteToggleTriggered;
   bool _globalKillSwitchActive = false;
+  bool _audioMuted = false;
 
   bool _isInitialized = false;
   bool _isWindowVisible = false;
@@ -109,7 +113,12 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
     if (_isTrayAvailable && !_isDisposed) {
       try {
         await trayAdapter.setContextMenu(
-          buildTrayContextMenu(state, null, _globalKillSwitchActive),
+          buildTrayContextMenu(
+            state,
+            null,
+            _globalKillSwitchActive,
+            _audioMuted,
+          ),
         );
       } catch (e) {
         debugPrint('DesktopLifecycleCoordinator: Error updating tray context menu: $e');
@@ -123,10 +132,34 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
     if (_isTrayAvailable && !_isDisposed) {
       try {
         await trayAdapter.setContextMenu(
-          buildTrayContextMenu(_runtimeProcessState, null, _globalKillSwitchActive),
+          buildTrayContextMenu(
+            _runtimeProcessState,
+            null,
+            _globalKillSwitchActive,
+            _audioMuted,
+          ),
         );
       } catch (e) {
         debugPrint('DesktopLifecycleCoordinator: Error updating tray kill switch menu: $e');
+      }
+    }
+  }
+
+  /// Updates the Mute Audio toggle state shown inside the system tray menu.
+  Future<void> updateAudioMutedStatus(bool muted) async {
+    _audioMuted = muted;
+    if (_isTrayAvailable && !_isDisposed) {
+      try {
+        await trayAdapter.setContextMenu(
+          buildTrayContextMenu(
+            _runtimeProcessState,
+            null,
+            _globalKillSwitchActive,
+            _audioMuted,
+          ),
+        );
+      } catch (e) {
+        debugPrint('DesktopLifecycleCoordinator: Error updating tray mute menu: $e');
       }
     }
   }
@@ -140,14 +173,16 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
       state,
       includeDevTestActions,
       _globalKillSwitchActive,
+      _audioMuted,
     );
   }
 
-  /// Builds tray context menu items with optional explicit D9 Kill Switch badge state.
+  /// Builds tray context menu items with optional explicit D9 Kill Switch & Mute state.
   List<MenuItem> buildTrayMenuItemsWithSafety([
     RuntimeProcessState? state,
     bool? includeDevTestActions,
     bool? globalKillSwitchOverride,
+    bool isAudioMuted = false,
   ]) {
     final runtime = state ?? _runtimeProcessState;
     final allowDevActions = includeDevTestActions ?? kDebugMode;
@@ -215,6 +250,12 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
         label: 'Hide Window to Tray',
       ),
       MenuItem(
+        key: 'mute_audio_toggle',
+        label: isAudioMuted
+            ? 'Unmute Audio (Ctrl+Shift+M)'
+            : 'Mute Audio (Ctrl+Shift+M)',
+      ),
+      MenuItem(
         key: 'kill_switch_toggle',
         label: killSwitch ? 'Tools Killed (Reset in Settings)' : 'Emergency Stop Tools',
         disabled: killSwitch,
@@ -247,12 +288,14 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
     RuntimeProcessState? state,
     bool? includeDevTestActions,
     bool globalKillSwitch = false,
+    bool isAudioMuted = false,
   ]) {
     return Menu(
       items: buildTrayMenuItemsWithSafety(
         state,
         includeDevTestActions,
         globalKillSwitch,
+        isAudioMuted,
       ),
     );
   }
@@ -352,12 +395,22 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
   }
 
   @override
+  void onTrayIconRightMouseDown() {
+    if (_isDisposed || !_isTrayAvailable) return;
+    unawaited(trayAdapter.popUpContextMenu());
+  }
+
+  @override
   void onTrayMenuItemClick(MenuItem menuItem) {
     if (_isDisposed) return;
     if (menuItem.key == 'open') {
       restoreAndFocusWindow();
     } else if (menuItem.key == 'hide_to_tray') {
       hideToTray();
+    } else if (menuItem.key == 'mute_audio_toggle') {
+      if (onMuteToggleTriggered != null) {
+        onMuteToggleTriggered!();
+      }
     } else if (menuItem.key == 'kill_switch_toggle') {
       if (onKillSwitchTriggered != null) {
         onKillSwitchTriggered!();
