@@ -8,7 +8,7 @@ Never writes to repository models/ directory or mutates model weights.
 """
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 import struct
 from typing import Any, Dict, List, Literal, Optional, Tuple
@@ -40,6 +40,22 @@ _MIN_SIZE_BYTES = 100 * 1024 * 1024
 MAX_METADATA_KV_COUNT = 256
 MAX_STRING_LENGTH = 1024
 MAX_ARRAY_LENGTH = 64
+MAX_SKIP_ARRAY_LENGTH = 1_000_000
+MAX_CHAT_TEMPLATE_LENGTH = 65_536
+
+_GGUF_SCALAR_SIZES: Dict[int, int] = {
+    0: 1,   # UINT8
+    1: 1,   # INT8
+    2: 2,   # UINT16
+    3: 2,   # INT16
+    4: 4,   # UINT32
+    5: 4,   # INT32
+    6: 4,   # FLOAT32
+    7: 1,   # BOOL
+    10: 8,  # UINT64
+    11: 8,  # INT64
+    12: 8,  # FLOAT64
+}
 
 # Standard GGUF file_type (llama_ftype from include/llama.h at llama.cpp b10936)
 GGUF_FILE_TYPE_MAP: Dict[int, str] = {
@@ -89,7 +105,56 @@ class GGUFMetadata:
     context_length: Optional[int] = None
     quantization: str = ""
     quantization_version: Optional[int] = None
+    general_type: str = ""
+    model_name: str = ""
+    size_label: str = ""
+    license_name: str = ""
+    has_chat_template: bool = False
+    has_vision_encoder: bool = False
     raw_metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+_STRUCT_U64 = struct.Struct("<Q")
+_GGUF_METADATA_CACHE: Dict[Tuple[str, int, int], GGUFMetadata] = {}
+
+
+def _seek_forward_bounded(f, skip_bytes: int, file_size: int) -> None:
+    if skip_bytes < 0:
+        raise ValueError(f"Negative GGUF seek offset: {skip_bytes}")
+    pos = f.tell()
+    if pos + skip_bytes > file_size:
+        raise EOFError(f"GGUF skip offset {pos + skip_bytes} exceeds file size {file_size}")
+    f.seek(pos + skip_bytes)
+
+
+def _skip_gguf_array(f, file_size: int) -> None:
+    elem_type = struct.unpack("<I", _read_exact(f, 4))[0]
+    if elem_type == 9:
+        raise ValueError("Nested arrays are not supported in GGUF metadata")
+    (arr_len,) = struct.unpack("<Q", _read_exact(f, 8))
+    if arr_len < 0 or arr_len > MAX_SKIP_ARRAY_LENGTH:
+        raise ValueError(f"Skippable GGUF array length {arr_len} outside bounds [0, {MAX_SKIP_ARRAY_LENGTH}]")
+    if elem_type in _GGUF_SCALAR_SIZES:
+        _seek_forward_bounded(f, arr_len * _GGUF_SCALAR_SIZES[elem_type], file_size)
+        return
+    if elem_type == 8:
+        f_read = f.read
+        unpack_u64 = _STRUCT_U64.unpack
+        for _ in range(arr_len):
+            raw_len = f_read(8)
+            if len(raw_len) < 8:
+                raise EOFError("Unexpected EOF reading GGUF array string length")
+            (slen,) = unpack_u64(raw_len)
+            if slen < 0 or slen > MAX_CHAT_TEMPLATE_LENGTH:
+                raise ValueError(f"Array element string length {slen} outside bounds")
+            if slen <= 65536:
+                data = f_read(slen)
+                if len(data) < slen:
+                    raise EOFError("Unexpected EOF skipping GGUF array string")
+            else:
+                _seek_forward_bounded(f, slen, file_size)
+        return
+    raise ValueError(f"Unsupported GGUF array element type: {elem_type}")
 
 
 def _read_exact(f, n: int) -> bytes:
@@ -159,7 +224,13 @@ def read_gguf_metadata(path: Path) -> GGUFMetadata:
         return result
 
     try:
-        with open(path, "rb") as f:
+        st = path.stat()
+        file_size = st.st_size
+        cache_key = (str(path), file_size, st.st_mtime_ns) if file_size >= 65536 else None
+        if cache_key is not None and cache_key in _GGUF_METADATA_CACHE:
+            cached = _GGUF_METADATA_CACHE[cache_key]
+            return replace(cached, raw_metadata=dict(cached.raw_metadata))
+        with open(path, "rb", buffering=256 * 1024) as f:
             magic = f.read(4)
             if magic != b"GGUF":
                 return result
@@ -181,20 +252,48 @@ def read_gguf_metadata(path: Path) -> GGUFMetadata:
             for _ in range(kv_count):
                 key = _read_gguf_string(f)
                 val_type = struct.unpack("<I", _read_exact(f, 4))[0]
+                if val_type == 9 and key.startswith("tokenizer.ggml."):
+                    _skip_gguf_array(f, file_size)
+                    continue
+                if val_type == 8 and key == "tokenizer.chat_template":
+                    (slen,) = struct.unpack("<Q", _read_exact(f, 8))
+                    if slen < 0 or slen > MAX_CHAT_TEMPLATE_LENGTH:
+                        raise ValueError(
+                            f"tokenizer.chat_template length {slen} outside bounds [0, {MAX_CHAT_TEMPLATE_LENGTH}]"
+                        )
+                    _seek_forward_bounded(f, slen, file_size)
+                    if slen > 0:
+                        result.has_chat_template = True
+                    continue
                 val = _read_gguf_value(f, val_type)
                 raw_metadata[key] = val
 
             result.raw_metadata = raw_metadata
 
-            # 1. Architecture
+            # 1. Architecture & extended general metadata
             arch = raw_metadata.get("general.architecture")
             if isinstance(arch, str) and arch:
                 result.architecture = arch
-                # 2. Dynamic context length: <architecture>.context_length
                 ctx_key = f"{arch}.context_length"
                 ctx_val = raw_metadata.get(ctx_key)
                 if isinstance(ctx_val, int) and ctx_val > 0:
                     result.context_length = ctx_val
+
+            gtype = raw_metadata.get("general.type")
+            if isinstance(gtype, str):
+                result.general_type = gtype
+            gname = raw_metadata.get("general.name")
+            if isinstance(gname, str):
+                result.model_name = gname
+            slabel = raw_metadata.get("general.size_label")
+            if isinstance(slabel, str):
+                result.size_label = slabel
+            glic = raw_metadata.get("general.license")
+            if isinstance(glic, str):
+                result.license_name = glic
+            clip_vision = raw_metadata.get("clip.has_vision_encoder")
+            if isinstance(clip_vision, bool):
+                result.has_vision_encoder = clip_vision
 
             # 3. Quantization from general.file_type ONLY (llama.cpp b10936 llama_ftype mapping)
             ftype = raw_metadata.get("general.file_type")
@@ -206,11 +305,60 @@ def read_gguf_metadata(path: Path) -> GGUFMetadata:
             if isinstance(qver, int):
                 result.quantization_version = qver
 
+            if cache_key is not None:
+                _GGUF_METADATA_CACHE[cache_key] = replace(
+                    result, raw_metadata=dict(result.raw_metadata)
+                )
+
     except Exception as exc:
         logger.debug(f"GGUF header inspection error on {path.name}: {exc}")
         return result
 
     return result
+
+
+def assess_hardware_suitability(
+    file_size_bytes: int,
+    architecture: str = "",
+    dedicated_vram_gb: Optional[float] = None,
+):
+    """Advisory VRAM/hardware preflight assessment (runtime-and-models.md §2.8)."""
+    from app.schemas.model_registry import PreflightAssessmentOut
+
+    vram_budget = float(dedicated_vram_gb if dedicated_vram_gb is not None else settings.HOST_DEDICATED_VRAM_GB)
+    size_gb = max(0.0, float(file_size_bytes)) / (1024 ** 3)
+    estimated_vram_gb = round(size_gb * 1.2 + 0.5, 2)
+    ratio = estimated_vram_gb / max(vram_budget, 0.5)
+
+    if ratio <= 0.50:
+        status: Literal["recommended", "supported_with_warning", "not_recommended"] = "recommended"
+        profile: Literal["eco", "balanced", "maximum"] = "maximum" if ratio <= 0.35 else "balanced"
+        message = (
+            f"Fits comfortably within {vram_budget:.1f} GB dedicated VRAM "
+            f"(~{estimated_vram_gb:.1f} GB estimated)."
+        )
+    elif ratio <= 0.85:
+        status = "supported_with_warning"
+        profile = "eco" if ratio > 0.70 else "balanced"
+        message = (
+            f"Uses ~{estimated_vram_gb:.1f} GB of {vram_budget:.1f} GB VRAM; "
+            "close heavy apps or use Eco/Balanced profile."
+        )
+    else:
+        status = "not_recommended"
+        profile = "eco"
+        message = (
+            f"Estimated {estimated_vram_gb:.1f} GB exceeds comfortable VRAM headroom ({vram_budget:.1f} GB); "
+            "Eco (CPU offload) recommended."
+        )
+
+    return PreflightAssessmentOut(
+        status=status,
+        estimated_vram_gb=estimated_vram_gb,
+        host_dedicated_vram_gb=round(vram_budget, 2),
+        recommended_profile=profile,
+        message=message,
+    )
 
 
 def _get_factory_model_root() -> Path:
@@ -367,6 +515,29 @@ def _parse_registry_entry_dict(raw: dict, source: Literal["factory", "installed"
             sha256_primary=raw.get("sha256_primary"),
         )
 
+        parsed_provenance: List[CapabilityEntry] = []
+        raw_prov = raw.get("capability_provenance")
+        if isinstance(raw_prov, list):
+            for item in raw_prov:
+                if isinstance(item, dict) and "capability" in item:
+                    try:
+                        parsed_provenance.append(
+                            CapabilityEntry(
+                                capability=ModelCapability(item["capability"]),
+                                supported=bool(item.get("supported", True)),
+                                provenance=CapabilityProvenance(
+                                    item.get("provenance", CapabilityProvenance.declared.value)
+                                ),
+                            )
+                        )
+                    except ValueError:
+                        pass
+        if not parsed_provenance:
+            parsed_provenance = [
+                CapabilityEntry(capability=c, supported=True, provenance=CapabilityProvenance.declared)
+                for c in capabilities
+            ]
+
         library_state = ModelLibraryState(
             discovery_state=ModelDiscoveryState.registered,
             validation_status=ValidationStatus.unregistered,
@@ -374,10 +545,7 @@ def _parse_registry_entry_dict(raw: dict, source: Literal["factory", "installed"
             size_gb=None,
             companion_artifact_statuses=[],
             available_capabilities=list(capabilities),
-            capability_provenance=[
-                CapabilityEntry(capability=c, supported=True, provenance=CapabilityProvenance.declared)
-                for c in capabilities
-            ],
+            capability_provenance=parsed_provenance,
         )
 
         gen_defaults = None
@@ -497,6 +665,9 @@ def _validate_entry(entry: ModelRegistryEntry) -> ModelRegistryEntry:
     Missing primary marks model unavailable (available_capabilities=[]).
     """
     base_dir = _asset_root_for_entry(entry)
+    preserved_prov = {
+        cp.capability: cp.provenance for cp in entry.library_state.capability_provenance
+    }
     primary_resolved = _resolve_asset_path(base_dir, entry.manifest.primary_file)
     primary_exists = primary_resolved is not None and primary_resolved.is_file()
     entry.library_state.primary_file_exists = primary_exists
@@ -512,7 +683,11 @@ def _validate_entry(entry: ModelRegistryEntry) -> ModelRegistryEntry:
         entry.library_state.available_capabilities = []
         entry.library_state.companion_artifact_statuses = []
         entry.library_state.capability_provenance = [
-            CapabilityEntry(capability=c, supported=False, provenance=CapabilityProvenance.declared)
+            CapabilityEntry(
+                capability=c,
+                supported=False,
+                provenance=preserved_prov.get(c, CapabilityProvenance.declared),
+            )
             for c in entry.manifest.capabilities
         ]
         return entry
@@ -548,7 +723,11 @@ def _validate_entry(entry: ModelRegistryEntry) -> ModelRegistryEntry:
                 available.remove(ModelCapability.vision)
         entry.library_state.available_capabilities = available
         entry.library_state.capability_provenance = [
-            CapabilityEntry(capability=c, supported=(c in available), provenance=CapabilityProvenance.declared)
+            CapabilityEntry(
+                capability=c,
+                supported=(c in available),
+                provenance=preserved_prov.get(c, CapabilityProvenance.declared),
+            )
             for c in entry.manifest.capabilities
         ]
         return entry
@@ -558,7 +737,11 @@ def _validate_entry(entry: ModelRegistryEntry) -> ModelRegistryEntry:
     entry.library_state.discovery_state = ModelDiscoveryState.verified
     entry.library_state.available_capabilities = list(entry.manifest.capabilities)
     entry.library_state.capability_provenance = [
-        CapabilityEntry(capability=c, supported=True, provenance=CapabilityProvenance.declared)
+        CapabilityEntry(
+            capability=c,
+            supported=True,
+            provenance=preserved_prov.get(c, CapabilityProvenance.declared),
+        )
         for c in entry.manifest.capabilities
     ]
     return entry

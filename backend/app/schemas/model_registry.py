@@ -140,3 +140,70 @@ class ModelRegistryEntry(BaseSchema):
     hints: ModelRuntimeHints
     runtime_model_id: str = ""
     registry_source: Literal["factory", "installed"] = "factory"
+
+
+class PreflightAssessmentOut(BaseSchema):
+    """Advisory hardware/VRAM suitability preflight assessment (runtime-and-models §2.8)."""
+    status: Literal["recommended", "supported_with_warning", "not_recommended"]
+    estimated_vram_gb: float
+    host_dedicated_vram_gb: float
+    recommended_profile: Literal["eco", "balanced", "maximum"]
+    message: str
+
+
+class ModelImportCandidateOut(BaseSchema):
+    """Scanned GGUF candidate bundle discovered in IMPORT_INBOX_DIR."""
+    relative_path: str
+    primary_filename: str
+    suggested_model_id: str
+    display_name: str
+    file_size_bytes: int
+    size_gb: float
+    artifact_valid: bool
+    validation_error: Optional[str] = None
+    architecture: str = ""
+    quantization: str = ""
+    parameters: str = ""
+    variant: str = "unknown"
+    family: str = ""
+    license: str = ""
+    model_max_context: Optional[int] = None
+    has_chat_template: bool = False
+    has_vision_projector: bool = False
+    companion_mmproj_relative_path: Optional[str] = None
+    companion_mmproj_filename: Optional[str] = None
+    detected_capabilities: List[str] = Field(default_factory=list)
+    preflight: PreflightAssessmentOut
+
+
+class ModelImportScanOut(BaseSchema):
+    """Result of manual D6 scan over IMPORT_INBOX_DIR."""
+    inbox_dir: str
+    candidates: List[ModelImportCandidateOut] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+
+
+class ModelImportInstallRequest(BaseSchema):
+    """User-confirmed D6 install request for an inbox GGUF bundle."""
+    relative_path: str = Field(..., min_length=1)
+    companion_relative_path: Optional[str] = None
+    model_id: str = Field(..., min_length=2, max_length=64)
+    display_name: Optional[str] = None
+    variant: Optional[ModelVariant] = None
+    family: Optional[str] = None
+    license: Optional[str] = None
+
+
+class ModelImportInstallOut(BaseSchema):
+    """Result of atomic D6 model installation into MODEL_LIBRARY_DIR and Schema v3 models.json."""
+    installed_id: str
+    display_name: str
+    primary_file: str
+    validation_status: str
+    sha256_primary: str
+
+
+class ModelDeleteOut(BaseSchema):
+    """Result of uninstalling a user-imported D6 model from MODEL_LIBRARY_DIR."""
+    deleted_id: str
+    message: str

@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:companion_core/companion_core.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:ai_companion_desktop/coordinator/desktop_runtime_coordinator.dart';
 import 'package:ai_companion_desktop/lifecycle/desktop_lifecycle_coordinator.dart';
 import 'package:ai_companion_desktop/lifecycle/desktop_window_adapter.dart';
 import 'package:ai_companion_desktop/lifecycle/desktop_tray_adapter.dart';
@@ -448,6 +451,45 @@ void main() {
       coordinator.onTrayIconRightMouseDown();
       await pumpEventQueue();
       expect(trayAdapter.popUpContextMenuCount, equals(1));
+    });
+
+    test('showImmediately=false hides window when tray succeeds and restores if tray fails', () async {
+      await coordinator.initialize(showImmediately: false, maximizeOnStart: false);
+      expect(windowAdapter.visible, isFalse);
+      expect(windowAdapter.hideCallCount, equals(1));
+      expect(coordinator.isWindowVisible, isFalse);
+
+      // Fail-open when tray is unavailable so user never loses window access
+      final failingTray = FailingDesktopTrayAdapter();
+      final fallbackWindow = FakeDesktopWindowAdapter();
+      final robust = DesktopLifecycleCoordinator(
+        windowAdapter: fallbackWindow,
+        trayAdapter: failingTray,
+      );
+      await robust.initialize(showImmediately: false, maximizeOnStart: false);
+      expect(fallbackWindow.visible, isTrue);
+      expect(robust.isWindowVisible, isTrue);
+      await robust.dispose();
+    });
+
+    test('DesktopRuntimeCoordinator discovers backend 9+ ancestor levels from deep runner path', () async {
+      final tempRoot = Directory.systemTemp.createTempSync('deep_runner_test_');
+      addTearDown(() => tempRoot.deleteSync(recursive: true));
+
+      final backendApp = Directory(
+        '${tempRoot.path}${Platform.pathSeparator}backend${Platform.pathSeparator}app',
+      )..createSync(recursive: true);
+      File('${backendApp.path}${Platform.pathSeparator}main.py').writeAsStringSync('# main');
+
+      final runnerDir = Directory(
+        '${tempRoot.path}${Platform.pathSeparator}frontend${Platform.pathSeparator}flutter'
+        '${Platform.pathSeparator}apps${Platform.pathSeparator}desktop${Platform.pathSeparator}build'
+        '${Platform.pathSeparator}windows${Platform.pathSeparator}x64${Platform.pathSeparator}runner'
+        '${Platform.pathSeparator}Debug',
+      )..createSync(recursive: true);
+
+      final resolvedWd = DesktopRuntimeCoordinator.resolveWorkingDirectoryFromBases([runnerDir]);
+      expect(resolvedWd, equals('${tempRoot.path}${Platform.pathSeparator}backend'));
     });
   });
 }

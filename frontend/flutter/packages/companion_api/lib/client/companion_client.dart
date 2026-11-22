@@ -423,6 +423,131 @@ class CompanionClient {
     _handleErrorResponse(response);
   }
 
+  /// Updates the persisted hardware performance profile via PATCH /api/v1/models/profile.
+  Future<ModelStatusResponse> updateModelProfile(
+    String profile, {
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/models/profile');
+    final body = jsonEncode({'profile': profile});
+    final response = await _adminRequest('PATCH', uri, body: body, timeout: timeout);
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return ModelStatusResponse.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Inspects the five canonical host storage roots via GET /api/v1/system/storage.
+  Future<StorageRootsResponse> getStorageRoots({
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/system/storage');
+    final response = await _adminRequest('GET', uri, timeout: timeout);
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return StorageRootsResponse.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Relocates LIBRARY_ROOT atomically in bootstrap.json via PUT /api/v1/system/storage/library-root.
+  Future<StorageRootsResponse> relocateLibraryRoot(
+    LibraryRootUpdateRequest request, {
+    Duration timeout = const Duration(seconds: 120),
+  }) async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/system/storage/library-root');
+    final response = await _adminRequest(
+      'PUT',
+      uri,
+      body: jsonEncode(request.toJson()),
+      timeout: timeout,
+    );
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return StorageRootsResponse.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Queries Windows Task Scheduler autostart status via GET /api/v1/system/autostart.
+  Future<AutostartStatusOut> getAutostartStatus({
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/system/autostart');
+    final response = await _adminRequest('GET', uri, timeout: timeout);
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return AutostartStatusOut.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Updates Windows Task Scheduler autostart registration via PUT /api/v1/system/autostart.
+  Future<AutostartStatusOut> updateAutostart(
+    AutostartUpdateRequest request, {
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/system/autostart');
+    final response = await _adminRequest(
+      'PUT',
+      uri,
+      body: jsonEncode(request.toJson()),
+      timeout: timeout,
+    );
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return AutostartStatusOut.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Manually scans IMPORT_INBOX_DIR for D6 GGUF model bundles via POST /api/v1/models/import/scan.
+  Future<ModelImportScanOut> scanModelImportInbox({
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/models/import/scan');
+    final response = await _adminRequest('POST', uri, timeout: timeout);
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return ModelImportScanOut.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Stages, verifies, and atomically installs a confirmed D6 bundle via POST /api/v1/models/import/install.
+  Future<ModelImportInstallOut> installModelFromInbox(
+    ModelImportInstallRequest request, {
+    Duration timeout = const Duration(seconds: 120),
+  }) async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/models/import/install');
+    final response = await _adminRequest(
+      'POST',
+      uri,
+      body: jsonEncode(request.toJson()),
+      timeout: timeout,
+    );
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return ModelImportInstallOut.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
+  /// Uninstalls a D6 user-imported model via DELETE /api/v1/models/registry/{model_id}.
+  Future<ModelDeleteOut> deleteInstalledModel(
+    String modelId, {
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    final uri = baseUri.replace(path: '${baseUri.path}/api/v1/models/registry/$modelId');
+    final response = await _adminRequest('DELETE', uri, timeout: timeout);
+    if (response.statusCode == 200) {
+      final dynamic json = jsonDecode(response.body);
+      return ModelDeleteOut.fromJson(Map<String, dynamic>.from(json as Map));
+    }
+    _handleErrorResponse(response);
+  }
+
   /// Creates a new persistent conversation thread via POST /api/v1/conversations.
   Future<ConversationOut> createConversation({String? title, String? characterId}) async {
     final uri = baseUri.replace(path: '${baseUri.path}/api/v1/conversations');

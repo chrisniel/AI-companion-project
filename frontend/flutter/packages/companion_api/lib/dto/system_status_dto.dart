@@ -244,3 +244,173 @@ class SystemShutdownResponse {
 
 /// Backward compatibility alias.
 typedef SystemShutdownDto = SystemShutdownResponse;
+
+/// DTO representing one of the five canonical host storage roots (GET /api/v1/system/storage).
+@immutable
+class StorageRootOut {
+  final String key;
+  final String label;
+  final String path;
+  final bool exists;
+  final int? freeBytes;
+  final int? totalBytes;
+  final String source;
+
+  const StorageRootOut({
+    required this.key,
+    required this.label,
+    required this.path,
+    required this.exists,
+    this.freeBytes,
+    this.totalBytes,
+    required this.source,
+  });
+
+  factory StorageRootOut.fromJson(Map<String, dynamic> json) {
+    return StorageRootOut(
+      key: json['key'] as String? ?? '',
+      label: json['label'] as String? ?? '',
+      path: json['path'] as String? ?? '',
+      exists: json['exists'] as bool? ?? false,
+      freeBytes: json['free_bytes'] as int?,
+      totalBytes: json['total_bytes'] as int?,
+      source: json['source'] as String? ?? 'default',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+        'label': label,
+        'path': path,
+        'exists': exists,
+        if (freeBytes != null) 'free_bytes': freeBytes,
+        if (totalBytes != null) 'total_bytes': totalBytes,
+        'source': source,
+      };
+}
+
+/// DTO representing host-admin storage telemetry across all five roots (GET /api/v1/system/storage).
+@immutable
+class StorageRootsResponse {
+  final String bootstrapPath;
+  final String libraryRoot;
+  final String importInboxDir;
+  final bool libraryRelocatable;
+  final String? relocationBlockedReason;
+  final List<StorageRootOut> roots;
+
+  const StorageRootsResponse({
+    required this.bootstrapPath,
+    required this.libraryRoot,
+    required this.importInboxDir,
+    this.libraryRelocatable = true,
+    this.relocationBlockedReason,
+    this.roots = const [],
+  });
+
+  factory StorageRootsResponse.fromJson(Map<String, dynamic> json) {
+    final rawRoots = json['roots'] as List<dynamic>? ?? const [];
+    return StorageRootsResponse(
+      bootstrapPath: json['bootstrap_path'] as String? ?? '',
+      libraryRoot: json['library_root'] as String? ?? '',
+      importInboxDir: json['import_inbox_dir'] as String? ?? '',
+      libraryRelocatable: json['library_relocatable'] as bool? ?? true,
+      relocationBlockedReason: json['relocation_blocked_reason'] as String?,
+      roots: rawRoots
+          .map((e) => StorageRootOut.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'bootstrap_path': bootstrapPath,
+        'library_root': libraryRoot,
+        'import_inbox_dir': importInboxDir,
+        'library_relocatable': libraryRelocatable,
+        if (relocationBlockedReason != null)
+          'relocation_blocked_reason': relocationBlockedReason,
+        'roots': roots.map((r) => r.toJson()).toList(),
+      };
+}
+
+/// Request DTO for PUT /api/v1/system/storage/library-root.
+@immutable
+class LibraryRootUpdateRequest {
+  final String newLibraryRoot;
+  final bool migrateExistingAssets;
+
+  const LibraryRootUpdateRequest({
+    required this.newLibraryRoot,
+    this.migrateExistingAssets = true,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'new_library_root': newLibraryRoot,
+        'migrate_existing_assets': migrateExistingAssets,
+      };
+}
+
+/// DTO representing Windows Task Scheduler autostart status (GET /api/v1/system/autostart).
+@immutable
+class AutostartStatusOut {
+  final bool supported;
+  final bool enabled;
+  final bool taskRegistered;
+  final String taskName;
+  final bool minimizedToTray;
+  final String? command;
+  final String? workingDirectory;
+  final String statusDetail;
+
+  const AutostartStatusOut({
+    required this.supported,
+    required this.enabled,
+    required this.taskRegistered,
+    required this.taskName,
+    this.minimizedToTray = true,
+    this.command,
+    this.workingDirectory,
+    required this.statusDetail,
+  });
+
+  factory AutostartStatusOut.fromJson(Map<String, dynamic> json) {
+    return AutostartStatusOut(
+      supported: json['supported'] as bool? ?? false,
+      enabled: json['enabled'] as bool? ?? false,
+      taskRegistered: json['task_registered'] as bool? ?? false,
+      taskName: json['task_name'] as String? ?? 'AICompanionAutostart',
+      minimizedToTray: json['minimized_to_tray'] as bool? ?? true,
+      command: json['command'] as String?,
+      workingDirectory: json['working_directory'] as String?,
+      statusDetail: json['status_detail'] as String? ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'supported': supported,
+        'enabled': enabled,
+        'task_registered': taskRegistered,
+        'task_name': taskName,
+        'minimized_to_tray': minimizedToTray,
+        if (command != null) 'command': command,
+        if (workingDirectory != null) 'working_directory': workingDirectory,
+        'status_detail': statusDetail,
+      };
+}
+
+/// Request DTO for PUT /api/v1/system/autostart.
+@immutable
+class AutostartUpdateRequest {
+  final bool enabled;
+  final bool minimizedToTray;
+
+  const AutostartUpdateRequest({
+    required this.enabled,
+    this.minimizedToTray = true,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'enabled': enabled,
+        'minimized_to_tray': minimizedToTray,
+      };
+}

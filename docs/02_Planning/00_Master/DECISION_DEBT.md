@@ -21,10 +21,9 @@
 ## 2. Decision Debt Item Inventory
 
 ### Category: `V1 BLOCKER`
-- **`DEBT-V1-01`: Windows Task Scheduler vs. Startup Folder Implementation**
+- **`DEBT-V1-01`: Windows Task Scheduler vs. Startup Folder Implementation [IMPLEMENTED IN CODE IN M2 BATCH E; MANUAL WINDOWS QA PENDING]**
   - *Context:* Decision D2 mandates autostart at login. The exact registration mechanism (Task Scheduler XML vs. Windows Startup shortcut `shell:startup`) must be selected.
-  - *Current Direction:* Task Scheduler configured for `At log on` is preferred because it runs decoupled from console windows and supports auto-restart on unexpected exit.
-  - *Resolution Point:* Milestone M2 planning.
+  - *Resolution:* Implemented in M2 Batch E (`feature/m2-models-storage-autostart-e`) via `WindowsAutostartService` (`backend/app/services/autostart.py`), generating Task Scheduler v1.2 XML (`AICompanionAutostart`, `LogonTrigger`, `<RunLevel>LeastPrivilege</RunLevel>`, explicit `<WorkingDirectory>`, `--minimized-to-tray`, `PT0S`, battery allowed, and XML-escaped paths without watchdog `/RI` restart so intentional exit stays honored) registered via `schtasks.exe`, exposed via `GET`/`PUT /api/v1/system/autostart`, wired to `SettingsGeneralSection`, and paired with flash-free Win32/Flutter `--minimized-to-tray` startup. Live Windows `schtasks` registration and login tray verification remain in manual QA.
 
 - **`DEBT-V1-02`: Flutter Windows Native Toast Adapter Selection [RESOLVED IN M3 BATCH G2]**
   - *Context:* The Local AI Runtime owns durable scheduling, due-event truth, and backlog. Flutter Desktop owns native Windows Toast presentation, including catch-up after client relaunch ([canonical boundary](../../04_Architecture/04_Infrastructure/windows-host-and-notifications.md)).
@@ -39,10 +38,10 @@
   - *Resolution:* Delivered in M4 Batch B (`feature/m4-voice-pipeline-b`) using **Option 1 (Zero Lockfile Churn)**: `WhisperCppSttProvider` runs a windowless localhost-only `whisper-server.exe -ng` subprocess on CPU/RAM (`stt.py`), while `SileroOnnxVadProvider` and `KokoroOnnxTtsProvider` dynamically detect `onnxruntime`/`numpy` in the Python environment with automatic stdlib `AdaptiveEnergyVadProvider` (`vad.py`) and `WindowsSapiTtsProvider` (`tts.py`) fallbacks, leaving `backend/requirements.lock` untouched.
 
 ### Category: `V1 OPEN IMPLEMENTATION DETAIL`
-- **`DEBT-V1-05`: D6 Import UI Interaction & Progress Reporting**
+- **`DEBT-V1-05`: D6 Import UI Interaction & Progress Reporting [PARTIALLY RESOLVED IN M2 BATCH E]**
   - *Context:* D6 requires manual user scan of inbox and preflight review.
-  - *Open Detail:* Exact REST endpoint contract (`POST /api/v1/models/scan`, `POST /api/v1/models/import`) and SSE progress event stream during large multi-gigabyte file copies.
-  - *Resolution Point:* Milestone M2 implementation plan.
+  - *Resolution:* M2 Batch E (`feature/m2-models-storage-autostart-e`) delivered the Host-Admin REST endpoints (`POST /api/v1/models/import/scan`, `POST /api/v1/models/import/install`, `DELETE /api/v1/models/registry/{model_id}`), `companion_api` SDK methods, and Desktop `SettingsRuntimeSection` D6 Inbox UI (Copy Path, Open in Explorer, Scan Inbox, `.gguf` + `mmproj` candidate bundle preview, advisory VRAM preflight badges, Install Bundle confirmation, and Uninstall action).
+  - *Remaining Open Detail:* Optional SSE progress event stream during large multi-gigabyte file copies (`install_inbox_candidate()`).
 
 - **`DEBT-V1-06`: Selective Automatic Memory Extraction Cadence & Prompts**
   - *Context:* Assistant evaluates conversation turns for clear, stable user facts.

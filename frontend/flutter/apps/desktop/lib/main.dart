@@ -65,13 +65,18 @@ void main(List<String> args) async {
   );
 
   final isVisualEvidenceMode = kDebugMode && args.contains('--capture-visual-evidence');
+  final startMinimizedToTray =
+      args.contains('--minimized-to-tray') || args.contains('--autostart');
   final coordinatorInit = coordinator.initialize(
     initialWindowSize: initialSize,
-    maximizeOnStart: initialSize == null && !isVisualEvidenceMode,
+    showImmediately: !startMinimizedToTray,
+    maximizeOnStart:
+        !startMinimizedToTray && initialSize == null && !isVisualEvidenceMode,
   );
 
+  await coordinatorInit;
+
   if (isVisualEvidenceMode) {
-    await coordinatorInit;
     final outputDirArg = args.firstWhere(
       (a) => a.startsWith('--output-dir='),
       orElse: () => '--output-dir=${Platform.environment['TEMP']}\\ai_companion_visual_review',
@@ -102,8 +107,6 @@ void main(List<String> args) async {
       settingsController: settingsController,
     ),
   );
-
-  await coordinatorInit;
 
   // Automated native test harness restricted strictly to debug mode
   if (kDebugMode) {

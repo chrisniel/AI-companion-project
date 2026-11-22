@@ -3784,6 +3784,224 @@
         }
       }
     },
+    "/api/v1/system/storage": {
+      "get": {
+        "tags": [
+          "System Status"
+        ],
+        "summary": "Inspect Five Canonical Storage Roots (Host Admin)",
+        "description": "Return resolved paths and disk telemetry for all five canonical storage roots.",
+        "operationId": "get_system_storage_api_v1_system_storage_get",
+        "parameters": [
+          {
+            "name": "x-host-admin-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Host-Admin-Secret"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageRootsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/storage/library-root": {
+      "put": {
+        "tags": [
+          "System Status"
+        ],
+        "summary": "Relocate LIBRARY_ROOT Atomically (Host Admin)",
+        "description": "Validate and relocate LIBRARY_ROOT in bootstrap.json while no LLM model is loaded.",
+        "operationId": "relocate_system_library_root_api_v1_system_storage_library_root_put",
+        "parameters": [
+          {
+            "name": "x-host-admin-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Host-Admin-Secret"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LibraryRootUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageRootsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/autostart": {
+      "get": {
+        "tags": [
+          "System Status"
+        ],
+        "summary": "Inspect Windows Task Scheduler Login Autostart Status (Host Admin)",
+        "description": "Query standard-user Windows Task Scheduler login autostart status.",
+        "operationId": "get_system_autostart_api_v1_system_autostart_get",
+        "parameters": [
+          {
+            "name": "x-host-admin-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Host-Admin-Secret"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutostartStatusOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "System Status"
+        ],
+        "summary": "Enable or Disable Windows Login Autostart (Host Admin)",
+        "description": "Register or remove standard-user Windows Task Scheduler login autostart.",
+        "operationId": "update_system_autostart_api_v1_system_autostart_put",
+        "parameters": [
+          {
+            "name": "x-host-admin-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Host-Admin-Secret"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutostartUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutostartStatusOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/verify": {
       "post": {
         "tags": [
@@ -4904,6 +5122,166 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ModelStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/models/import/scan": {
+      "post": {
+        "summary": "Scan D6 local model import inbox (Host Admin)",
+        "description": "Manually scan IMPORT_INBOX_DIR for valid GGUF bundles and preflight hardware suitability.",
+        "operationId": "scan_model_import_inbox_api_v1_models_import_scan_post",
+        "parameters": [
+          {
+            "name": "x-host-admin-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Host-Admin-Secret"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelImportScanOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/models/import/install": {
+      "post": {
+        "summary": "Verify, stage, and atomically install a local D6 GGUF bundle (Host Admin)",
+        "description": "Install a confirmed D6 model bundle into MODEL_LIBRARY_DIR and Schema v3 models.json.",
+        "operationId": "install_model_from_inbox_api_v1_models_import_install_post",
+        "parameters": [
+          {
+            "name": "x-host-admin-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Host-Admin-Secret"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelImportInstallRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelImportInstallOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/models/registry/{model_id}": {
+      "delete": {
+        "summary": "Uninstall a D6 user-imported model from MODEL_LIBRARY_DIR (Host Admin)",
+        "description": "Remove an installed model bundle cleanly while protecting factory models and loaded runtimes.",
+        "operationId": "delete_model_from_registry_api_v1_models_registry__model_id__delete",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Model Id"
+            }
+          },
+          {
+            "name": "x-host-admin-secret",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Host-Admin-Secret"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelDeleteOut"
                 }
               }
             }
@@ -6281,6 +6659,98 @@
         "type": "object",
         "title": "AuthVerifyResponse",
         "description": "Result returned on token verification check."
+      },
+      "AutostartStatusOut": {
+        "properties": {
+          "supported": {
+            "type": "boolean",
+            "title": "Supported",
+            "description": "True when running on supported Windows host platform."
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "description": "Whether login autostart is currently enabled/registered."
+          },
+          "task_registered": {
+            "type": "boolean",
+            "title": "Task Registered",
+            "description": "Live Windows Task Scheduler registration verification flag."
+          },
+          "task_name": {
+            "type": "string",
+            "title": "Task Name",
+            "description": "Canonical Windows Task Scheduler task name."
+          },
+          "minimized_to_tray": {
+            "type": "boolean",
+            "title": "Minimized To Tray",
+            "description": "Whether autostart launches silently to system tray.",
+            "default": true
+          },
+          "command": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Command",
+            "description": "Registered executable command and arguments."
+          },
+          "working_directory": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Working Directory",
+            "description": "Registered task working directory."
+          },
+          "status_detail": {
+            "type": "string",
+            "title": "Status Detail",
+            "description": "Human-readable registration or platform status detail."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "supported",
+          "enabled",
+          "task_registered",
+          "task_name",
+          "status_detail"
+        ],
+        "title": "AutostartStatusOut",
+        "description": "Windows Task Scheduler login autostart status (PC-HOST-002)."
+      },
+      "AutostartUpdateRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "description": "Enable or disable Task Scheduler login autostart."
+          },
+          "minimized_to_tray": {
+            "type": "boolean",
+            "title": "Minimized To Tray",
+            "description": "Launch minimized to system tray without initial window flash.",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "AutostartUpdateRequest",
+        "description": "Request to enable or disable standard-user Windows login autostart."
       },
       "Body_upload_attachment_api_v1_conversations__conversation_id__attachments_post": {
         "properties": {
@@ -7790,6 +8260,29 @@
         ],
         "title": "LLMRuntimeState"
       },
+      "LibraryRootUpdateRequest": {
+        "properties": {
+          "new_library_root": {
+            "type": "string",
+            "minLength": 1,
+            "title": "New Library Root",
+            "description": "New absolute path for LIBRARY_ROOT."
+          },
+          "migrate_existing_assets": {
+            "type": "boolean",
+            "title": "Migrate Existing Assets",
+            "description": "Copy existing models, registry, voices, and inbox files into the new LIBRARY_ROOT.",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "new_library_root"
+        ],
+        "title": "LibraryRootUpdateRequest",
+        "description": "Request payload to relocate LIBRARY_ROOT atomically in bootstrap.json."
+      },
       "MemoryCreate": {
         "properties": {
           "content": {
@@ -8401,6 +8894,26 @@
         ],
         "title": "ModelCapability"
       },
+      "ModelDeleteOut": {
+        "properties": {
+          "deleted_id": {
+            "type": "string",
+            "title": "Deleted Id"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "deleted_id",
+          "message"
+        ],
+        "title": "ModelDeleteOut",
+        "description": "Result of uninstalling a user-imported D6 model from MODEL_LIBRARY_DIR."
+      },
       "ModelDiscoveryState": {
         "type": "string",
         "enum": [
@@ -8410,6 +8923,287 @@
           "incompatible"
         ],
         "title": "ModelDiscoveryState"
+      },
+      "ModelImportCandidateOut": {
+        "properties": {
+          "relative_path": {
+            "type": "string",
+            "title": "Relative Path"
+          },
+          "primary_filename": {
+            "type": "string",
+            "title": "Primary Filename"
+          },
+          "suggested_model_id": {
+            "type": "string",
+            "title": "Suggested Model Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "file_size_bytes": {
+            "type": "integer",
+            "title": "File Size Bytes"
+          },
+          "size_gb": {
+            "type": "number",
+            "title": "Size Gb"
+          },
+          "artifact_valid": {
+            "type": "boolean",
+            "title": "Artifact Valid"
+          },
+          "validation_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Error"
+          },
+          "architecture": {
+            "type": "string",
+            "title": "Architecture",
+            "default": ""
+          },
+          "quantization": {
+            "type": "string",
+            "title": "Quantization",
+            "default": ""
+          },
+          "parameters": {
+            "type": "string",
+            "title": "Parameters",
+            "default": ""
+          },
+          "variant": {
+            "type": "string",
+            "title": "Variant",
+            "default": "unknown"
+          },
+          "family": {
+            "type": "string",
+            "title": "Family",
+            "default": ""
+          },
+          "license": {
+            "type": "string",
+            "title": "License",
+            "default": ""
+          },
+          "model_max_context": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Max Context"
+          },
+          "has_chat_template": {
+            "type": "boolean",
+            "title": "Has Chat Template",
+            "default": false
+          },
+          "has_vision_projector": {
+            "type": "boolean",
+            "title": "Has Vision Projector",
+            "default": false
+          },
+          "companion_mmproj_relative_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Companion Mmproj Relative Path"
+          },
+          "companion_mmproj_filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Companion Mmproj Filename"
+          },
+          "detected_capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Detected Capabilities"
+          },
+          "preflight": {
+            "$ref": "#/components/schemas/PreflightAssessmentOut"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "relative_path",
+          "primary_filename",
+          "suggested_model_id",
+          "display_name",
+          "file_size_bytes",
+          "size_gb",
+          "artifact_valid",
+          "preflight"
+        ],
+        "title": "ModelImportCandidateOut",
+        "description": "Scanned GGUF candidate bundle discovered in IMPORT_INBOX_DIR."
+      },
+      "ModelImportInstallOut": {
+        "properties": {
+          "installed_id": {
+            "type": "string",
+            "title": "Installed Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "primary_file": {
+            "type": "string",
+            "title": "Primary File"
+          },
+          "validation_status": {
+            "type": "string",
+            "title": "Validation Status"
+          },
+          "sha256_primary": {
+            "type": "string",
+            "title": "Sha256 Primary"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "installed_id",
+          "display_name",
+          "primary_file",
+          "validation_status",
+          "sha256_primary"
+        ],
+        "title": "ModelImportInstallOut",
+        "description": "Result of atomic D6 model installation into MODEL_LIBRARY_DIR and Schema v3 models.json."
+      },
+      "ModelImportInstallRequest": {
+        "properties": {
+          "relative_path": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Relative Path"
+          },
+          "companion_relative_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Companion Relative Path"
+          },
+          "model_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 2,
+            "title": "Model Id"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "variant": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelVariant"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "family": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Family"
+          },
+          "license": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "relative_path",
+          "model_id"
+        ],
+        "title": "ModelImportInstallRequest",
+        "description": "User-confirmed D6 install request for an inbox GGUF bundle."
+      },
+      "ModelImportScanOut": {
+        "properties": {
+          "inbox_dir": {
+            "type": "string",
+            "title": "Inbox Dir"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/ModelImportCandidateOut"
+            },
+            "type": "array",
+            "title": "Candidates"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "inbox_dir"
+        ],
+        "title": "ModelImportScanOut",
+        "description": "Result of manual D6 scan over IMPORT_INBOX_DIR."
       },
       "ModelLibraryState": {
         "properties": {
@@ -9272,6 +10066,51 @@
           "expires_at"
         ],
         "title": "PendingRequest"
+      },
+      "PreflightAssessmentOut": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "recommended",
+              "supported_with_warning",
+              "not_recommended"
+            ],
+            "title": "Status"
+          },
+          "estimated_vram_gb": {
+            "type": "number",
+            "title": "Estimated Vram Gb"
+          },
+          "host_dedicated_vram_gb": {
+            "type": "number",
+            "title": "Host Dedicated Vram Gb"
+          },
+          "recommended_profile": {
+            "type": "string",
+            "enum": [
+              "eco",
+              "balanced",
+              "maximum"
+            ],
+            "title": "Recommended Profile"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status",
+          "estimated_vram_gb",
+          "host_dedicated_vram_gb",
+          "recommended_profile",
+          "message"
+        ],
+        "title": "PreflightAssessmentOut",
+        "description": "Advisory hardware/VRAM suitability preflight assessment (runtime-and-models §2.8)."
       },
       "ProfileCreateRequest": {
         "properties": {
@@ -10320,6 +11159,125 @@
         "type": "object",
         "title": "SnoozeRequest",
         "description": "Payload to snooze a reminder, alarm, or notification."
+      },
+      "StorageRootOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "Canonical root identifier: app_install, data, library, cache, or log."
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "Human-readable label for Settings UI."
+          },
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "description": "Resolved absolute filesystem path."
+          },
+          "exists": {
+            "type": "boolean",
+            "title": "Exists",
+            "description": "Whether the directory currently exists on disk."
+          },
+          "free_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Free Bytes",
+            "description": "Free space in bytes on the backing volume."
+          },
+          "total_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Bytes",
+            "description": "Total volume capacity in bytes."
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "Precedence source: 'env', 'bootstrap', or 'default'."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "path",
+          "exists",
+          "source"
+        ],
+        "title": "StorageRootOut",
+        "description": "Live telemetry descriptor for one of the five canonical host storage roots."
+      },
+      "StorageRootsResponse": {
+        "properties": {
+          "bootstrap_path": {
+            "type": "string",
+            "title": "Bootstrap Path",
+            "description": "Path to bootstrap.json locator file."
+          },
+          "library_root": {
+            "type": "string",
+            "title": "Library Root",
+            "description": "Active canonical LIBRARY_ROOT path."
+          },
+          "import_inbox_dir": {
+            "type": "string",
+            "title": "Import Inbox Dir",
+            "description": "Active D6 manual model import inbox folder."
+          },
+          "library_relocatable": {
+            "type": "boolean",
+            "title": "Library Relocatable",
+            "description": "Whether LIBRARY_ROOT can currently be relocated.",
+            "default": true
+          },
+          "relocation_blocked_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relocation Blocked Reason",
+            "description": "Explanation when library relocation is temporarily unavailable."
+          },
+          "roots": {
+            "items": {
+              "$ref": "#/components/schemas/StorageRootOut"
+            },
+            "type": "array",
+            "title": "Roots",
+            "description": "All five canonical storage roots."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "bootstrap_path",
+          "library_root",
+          "import_inbox_dir",
+          "roots"
+        ],
+        "title": "StorageRootsResponse",
+        "description": "Host-Admin storage root telemetry across all five canonical roots (PC-HOST-004)."
       },
       "SystemShutdownRequest": {
         "properties": {

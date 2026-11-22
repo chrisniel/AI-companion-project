@@ -144,6 +144,8 @@ class RuntimeAdmissionASGIMiddleware:
         "/api/v1/health",
         "/health",
         "/api/v1/system/status",
+        "/api/v1/system/storage",
+        "/api/v1/system/autostart",
         "/api/v1/system/shutdown",
         "/docs",
         "/redoc",

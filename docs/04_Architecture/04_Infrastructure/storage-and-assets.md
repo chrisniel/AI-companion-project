@@ -68,28 +68,33 @@ The architecture establishes durable separation between configuration classes to
 
 Repository source code establishes the following baseline reality:
 
-### 3.1 Data-Root Resolution Precedence
+### 3.1 Storage-Root Resolution Precedence
 
-Verified in `backend/app/core/storage.py` (`resolve_data_root()`):
-1. **Environment Variable Override:** `COMPANION_DATA_ROOT` environment variable takes highest precedence (used in testing and custom hosting).
-2. **Bootstrap Locator File:** Reads the `data_root` field from `bootstrap.json` located at `%LOCALAPPDATA%\AI Companion\bootstrap.json` on Windows.
-3. **Approved OS Default:** On Windows, defaults to `%LOCALAPPDATA%\AI Companion\Data` (resolved via `LOCALAPPDATA`).
+Verified in `backend/app/core/storage.py` (`resolve_data_root()`, `resolve_library_root()`, `resolve_cache_root()`, `resolve_log_root()`, `resolve_app_install_root()`):
+1. **Environment Variable Override:** `COMPANION_DATA_ROOT`, `COMPANION_LIBRARY_ROOT`, `COMPANION_CACHE_ROOT`, `COMPANION_LOG_ROOT`, and `COMPANION_APP_INSTALL_ROOT` take highest precedence (used in testing and custom hosting).
+2. **Bootstrap Locator File:** Reads `data_root` and optional `library_root` pointers from `bootstrap.json` located at `%LOCALAPPDATA%\AI Companion\bootstrap.json` on Windows. Fail-closed inspection validates `library_root` when present (`companion_core`).
+3. **Approved OS Default:** On Windows, `DATA_ROOT` defaults to `%LOCALAPPDATA%\AI Companion\Data`, `LIBRARY_ROOT` defaults to `<DATA_ROOT>\library` (when no `library_root` override is set), `CACHE_ROOT` defaults to `%LOCALAPPDATA%\AI Companion\Cache`, `LOG_ROOT` defaults to `%LOCALAPPDATA%\AI Companion\Logs`, and `APP_INSTALL_ROOT` resolves to the runtime installation root (`Path(__file__).resolve().parents[3]`).
 
 ### 3.2 Canonical Path Taxonomy
 
 Verified in `app.core.storage.CanonicalPaths`:
-- `DATABASE_DIR`: `<root>/database`
-- `DATABASE_PATH`: `<root>/database/companion.db`
-- `LIBRARY_DIR`: `<root>/library`
-- `MODEL_LIBRARY_DIR`: `<root>/library/models/llm`
-- `INSTALLED_REGISTRY_PATH`: `<root>/library/registry/models.json`
-- `VOICE_LIBRARY_DIR`: `<root>/library/voices`
-- `ATTACHMENT_DIR`: `<root>/attachments`
-- `IMPORT_INBOX_DIR`: `<root>/imports/inbox`
-- `IMPORT_STAGING_DIR`: `<root>/imports/staging`
-- `CHARACTER_DIR`: `<root>/characters`
-- `MEMORY_DIR`: `<root>/memory`
-- `BACKUP_DIR`: `<root>/backups`
+- `APP_INSTALL_ROOT`: Application/runtime installation root
+- `DATA_ROOT`: Active database and core profile state root
+- `LIBRARY_ROOT`: Relocatable heavy-weight library root (`LIBRARY_DIR`)
+- `CACHE_ROOT`: Regenerable caches root
+- `LOG_ROOT`: Rotating runtime diagnostics root
+- `DATABASE_DIR`: `<DATA_ROOT>/database`
+- `DATABASE_PATH`: `<DATA_ROOT>/database/companion.db`
+- `LIBRARY_DIR`: `<LIBRARY_ROOT>`
+- `MODEL_LIBRARY_DIR`: `<LIBRARY_ROOT>/models/llm`
+- `INSTALLED_REGISTRY_PATH`: `<LIBRARY_ROOT>/registry/models.json`
+- `VOICE_LIBRARY_DIR`: `<LIBRARY_ROOT>/voices`
+- `ATTACHMENT_DIR`: `<DATA_ROOT>/attachments`
+- `IMPORT_INBOX_DIR`: `<LIBRARY_ROOT>/imports/inbox`
+- `IMPORT_STAGING_DIR`: `<LIBRARY_ROOT>/imports/staging`
+- `CHARACTER_DIR`: `<DATA_ROOT>/characters`
+- `MEMORY_DIR`: `<DATA_ROOT>/memory`
+- `BACKUP_DIR`: `<DATA_ROOT>/backups`
 
 ### 3.3 Database Migrations & Safety Runner
 
@@ -104,15 +109,14 @@ Verified in `backend/app/core/storage.py` and `backend/migrations/`:
 ---
 
 
-### 3.4 Current D6 Import Path Discrepancy
-- **Current Implementation:** The codebase may currently derive import paths from `COMPANION_DATA_ROOT` (e.g., `DATA_ROOT/imports`). This is a temporary technical debt mismatch.
-- **Target Architecture:** D6 import inbox and staging belong exclusively under `LIBRARY_ROOT` as described above. `DATA_ROOT/imports` is not the final canonical architecture.
+### 3.4 Resolved D6 Import Path Layout
+- **Current Implementation:** `IMPORT_INBOX_DIR` (`<LIBRARY_ROOT>/imports/inbox`) and `IMPORT_STAGING_DIR` (`<LIBRARY_ROOT>/imports/staging`) now reside directly under `LIBRARY_ROOT` (resolved via `resolve_library_root()` in `backend/app/core/storage.py`), resolving the former `DATA_ROOT/imports` technical debt and keeping atomic D6 staging on the same volume as `MODEL_LIBRARY_DIR`.
 
-## 4. Approved Target Architecture / Not Yet Implemented (PC V1)
+## 4. Storage Implementation & Management Status (PC V1)
 
-When implemented for PC V1:
+Implemented in M2 Batch E (`PC-HOST-004`):
 
-1. **Relocatable `LIBRARY_ROOT`:** Support configuring `LIBRARY_ROOT` to an alternate drive or volume (e.g. `D:\AI-Models`) via `bootstrap.json` pointer while `DATA_ROOT` remains anchored to fast OS storage.
+1. **Five Storage Roots & Relocatable `LIBRARY_ROOT`:** `CanonicalPaths` resolves all five roots (`APP_INSTALL_ROOT`, `DATA_ROOT`, `LIBRARY_ROOT`, `CACHE_ROOT`, `LOG_ROOT`). Optional `library_root` pointers in `bootstrap.json` (plus `COMPANION_LIBRARY_ROOT` env overrides) allow relocating `LIBRARY_ROOT` to an alternate drive/volume via `GET /api/v1/system/storage`, `PUT /api/v1/system/storage/library-root`, and Desktop `SettingsStorageSection` while `DATA_ROOT` stays anchored on fast OS storage. Fail-closed `bootstrap.json` inspection (`companion_core`) validates optional `library_root` entries. *(Physical alternate-drive relocation on a multi-volume Windows host awaits manual QA.)*
 2. **Pre-Migration Safety Snapshot Guarantee:** Ensure an automatic SQLite backup snapshot is captured in `BACKUP_DIR` prior to executing any schema-altering migration on an existing database.
 3. **Distribution Separation:** Windows installer packages separate read-only binaries into `APP_INSTALL_ROOT` (`%ProgramFiles%\AI Companion` or per-user local app dir) and runtime mutable data into `DATA_ROOT`, completely decoupled from git repository working copies.
 4. **Self-Contained Windows Installer & Bundled Runtime (`PC-HOST-006`):**

@@ -131,3 +131,48 @@ def resolve_effective_model(
 
     # 4. Otherwise MODEL_SELECTION_REQUIRED
     return None, "MODEL_SELECTION_REQUIRED"
+
+
+VALID_HARDWARE_PROFILES = ("eco", "balanced", "maximum")
+
+
+def get_saved_hardware_profile() -> Optional[str]:
+    """Read the persisted host-level LLM hardware profile, or None if unset/invalid."""
+    cfg = read_host_config()
+    raw = cfg.get("hardware_profile")
+    if isinstance(raw, str):
+        normalized = raw.strip().lower()
+        if normalized in VALID_HARDWARE_PROFILES:
+            return normalized
+    return None
+
+
+def save_hardware_profile(profile: str) -> None:
+    """Persist the host-level LLM hardware profile (eco/balanced/maximum) in host_config.json."""
+    normalized = (profile or "").strip().lower()
+    if normalized not in VALID_HARDWARE_PROFILES:
+        raise ValueError(f"Unsupported hardware profile '{profile}'.")
+    cfg = read_host_config()
+    cfg["hardware_profile"] = normalized
+    write_host_config(cfg)
+    logger.info(f"Persisted host-level hardware profile: {normalized}")
+
+
+def get_autostart_preferences() -> Dict[str, bool]:
+    """Read persisted autostart preference flags from host_config.json."""
+    cfg = read_host_config()
+    return {
+        "enabled": bool(cfg.get("autostart_enabled", False)),
+        "minimized_to_tray": bool(cfg.get("autostart_minimized_to_tray", True)),
+    }
+
+
+def save_autostart_preferences(enabled: bool, minimized_to_tray: bool = True) -> None:
+    """Persist autostart preference flags in host_config.json."""
+    cfg = read_host_config()
+    cfg["autostart_enabled"] = bool(enabled)
+    cfg["autostart_minimized_to_tray"] = bool(minimized_to_tray)
+    write_host_config(cfg)
+    logger.info(
+        f"Persisted autostart preferences: enabled={bool(enabled)}, minimized_to_tray={bool(minimized_to_tray)}"
+    )

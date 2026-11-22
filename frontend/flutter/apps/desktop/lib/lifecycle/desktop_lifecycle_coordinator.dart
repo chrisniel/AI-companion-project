@@ -99,6 +99,13 @@ class DesktopLifecycleCoordinator with WindowListener, TrayListener {
       if (maximizeOnStart && !_isDisposed) {
         await windowAdapter.maximize();
       }
+    } else if (!showImmediately && !_isDisposed) {
+      if (_isTrayAvailable) {
+        await windowAdapter.hide();
+        _isWindowVisible = false;
+      } else {
+        await restoreAndFocusWindow();
+      }
     }
 
     _isInitialized = true;

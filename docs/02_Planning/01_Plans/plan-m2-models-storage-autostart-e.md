@@ -2,7 +2,7 @@
 
 Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 
-- **Status:** Awaiting Approval (Phase 1 Plan Gate — Revised for Independent Review & Deep Related-File Audit Findings)
+- **Status:** Phase 2 & Phase 3 Complete — Awaiting Phase 4 Independent Review & Manual Windows Host QA
 - **Delivery Level:** Level C — Sensitive Design
 - **Scope Mode:** New Feature — M2 Batch E Host Storage Roots & Relocatable Library (`PC-HOST-004`), Decision D6 Controlled Local Model Import, GGUF Header Fix & Schema v3 Registry Writer (`PC-MODEL-001`..`006`), `LlamaCppProvider` Multi-Root Support, Desktop Model Management & Hardware Profile UI (`PC-CLIENT-010`), and Windows Task Scheduler Login Autostart (`PC-HOST-002`). *(Profile PIN lock and Satellite Device Enrollment `PC-IDENTITY-003` remain explicitly deferred per Human Owner direction.)*
 - **Target Files:**
@@ -21,7 +21,7 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
   - `frontend/flutter/apps/desktop/test/` (`desktop_m2_models_storage_autostart_test.dart` [ADD], updates to `desktop_settings_revamp_test.dart` / `desktop_lifecycle_test.dart` as needed)
   - Phase 3 docs: canonical specs (`docs/04_Architecture/04_Infrastructure/storage-and-assets.md`, `runtime-and-models.md`, `windows-host-and-notifications.md`), `docs/02_Planning/00_Master/` (`DELIVERY_INDEX.md`, `WBS.md`, `MASTER_CHECKLIST.md`, `SPRINT_ROADMAP.md`), `CHANGELOG.md`, walkthrough (`docs/03_Walkthroughs/walkthrough-m2-models-storage-autostart-e.md`), and archived branch tracker.
 - **Branch:** `feature/m2-models-storage-autostart-e`
-- **Active Branch Tracker:** `docs/01_Tracking/active/task-feature-m2-models-storage-autostart-e.md`
+- **Archived Branch Tracker:** [`task-feature-m2-models-storage-autostart-e.md`](../../01_Tracking/archive/task-feature-m2-models-storage-autostart-e.md)
 
 > Notice: Update this plan in place during planning. After Phase 1 approval, track execution in `docs/01_Tracking/active/task-feature-m2-models-storage-autostart-e.md` and reopen this plan only when revising scope or architecture.
 
@@ -198,13 +198,13 @@ Template Version: Docs_ProjectWorkflowStarterKit_v2.0
 ## 5. Acceptance Criteria & Verification Strategy
 
 ### Automated Repository Checks
-- [ ] Backend test suite: `backend\.venv\Scripts\python.exe -m pytest backend\tests -q -p no:cacheprovider -o log_file=NUL`
-- [ ] Import isolation & dependency lock check: `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_import_isolation.py scripts\tests\test_python_dependency_lock.py -q -p no:cacheprovider -o log_file=NUL`
-- [ ] OpenAPI contract drift check: `backend\.venv\Scripts\python.exe scripts\check_openapi_contract.py --check`
-- [ ] OpenAPI & Dart contract parity: `backend\.venv\Scripts\python.exe scripts\check_dart_openapi_parity.py --check` and `backend\.venv\Scripts\python.exe -m unittest scripts\tests\test_check_dart_openapi_parity.py -v`
-- [ ] Dart static analysis & SDK tests: `cd frontend\flutter && dart analyze .` and `cd frontend\flutter\packages\companion_core && dart test` and `cd frontend\flutter\packages\companion_api && dart test`
-- [ ] Flutter Desktop test suite & Windows MSVC build: `cd frontend\flutter\apps\desktop && flutter test --no-pub --concurrency=1 test` and `flutter build windows --debug --no-pub`
-- [ ] Diff hygiene: `git diff --check develop`
+- [x] Backend test suite: `backend\.venv\Scripts\python.exe -m pytest backend\tests backend\tests\test_import_isolation.py scripts\tests\test_python_dependency_lock.py -q -p no:cacheprovider -o log_file=NUL` (`922 passed, 4 subtests passed` in `447.72s`)
+- [x] Import isolation & dependency lock check: included cleanly above (`test_import_isolation.py` + `test_python_dependency_lock.py`)
+- [x] OpenAPI contract drift check: `backend\.venv\Scripts\python.exe scripts\check_openapi_contract.py --check` (`86 routes`)
+- [x] OpenAPI & Dart contract parity: `backend\.venv\Scripts\python.exe scripts\check_dart_openapi_parity.py --check` (`98/98` schemas, `111` routes) and `backend\.venv\Scripts\python.exe -m unittest scripts\tests\test_check_dart_openapi_parity.py -v` (`8/8 OK`)
+- [x] Dart static analysis & SDK tests: `cd frontend\flutter && dart analyze .` (`0` issues), `cd frontend\flutter\packages\companion_core && dart test` (`24/24`), and `cd frontend\flutter\packages\companion_api && dart test` (`114/114`)
+- [x] Flutter Desktop test suite & Windows MSVC build: `cd frontend\flutter\apps\desktop && flutter test --no-pub --concurrency=1 test` (`433/433` passed) and `flutter build windows --debug --no-pub` (`ai_companion_desktop.exe`, `47.9s`)
+- [x] Diff hygiene: `git diff --check develop` (clean exit 0)
 
 ### Manual & Host-Level Checks (Windows Desktop)
 - [ ] Inspect `Settings -> Storage & Diagnostics`: verify all 5 roots report live backend telemetry + free disk space + **Copy Path** / **Open in Explorer**, and relocate `LIBRARY_ROOT` to a secondary directory verifying `bootstrap.json` updates and `IMPORT_INBOX_DIR` moves cleanly.

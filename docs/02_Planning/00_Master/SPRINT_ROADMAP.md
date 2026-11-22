@@ -22,15 +22,15 @@
 └──────────────────────────────┬──────────────────────────────┘
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ M2: PC Companion Foundation (Host, Identity, Storage)       │ ◄── [IN PROGRESS — PR #24, #25, #27, #28, #32, #33, #34 MERGED]
+│ M2: PC Companion Foundation (Host, Identity, Storage)       │ ◄── [BATCH E IMPLEMENTED — PR #24, #25, #27, #28, #32, #33, #34 MERGED]
 └──────────────────────────────┬──────────────────────────────┘
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ M3: Companion Character & Intelligence (Studio, Memory)     │ ◄── [IN PROGRESS — PR #29, #35 MERGED; BATCH C2 VERIFIED IN PR #36]
+│ M3: Companion Character & Intelligence (Studio, Memory)     │ ◄── [COMPLETE / SQUASH-MERGED (PR #29, #30, #35–#42)]
 └──────────────────────────────┬──────────────────────────────┘
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ M4: Voice, Tools & Current Information (Barge-in, D9, Web)  │
+│ M4: Voice, Tools & Current Information (Barge-in, D9, Web)  │ ◄── [COMPLETE / SQUASH-MERGED (PR #44, #45, #46)]
 └──────────────────────────────┬──────────────────────────────┘
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -74,7 +74,7 @@
 - **Exit Criteria:** Flutter Desktop client runs on Windows, communicates reliably with Local AI Runtime over localhost REST/SSE, displays live streaming text with Markdown rendering, handles fail-closed auth and model unreadiness, and passes all 193 workspace tests and native Win32 lifecycle checks. Delivered via PR #23 (commit `7c1d1a2ddb5c57ddaae9bbacbcab2e25f9938fe1`); Closure Gate reconciled post-merge with documented tracker archival exception. React Web remains fully operational as test oracle.
 
 ### Milestone M2: PC Companion Foundation (Host, Identity & Model Pipeline)
-- **Current Status:** IN PROGRESS. Batch M2-H1 (`PC-HOST-001` Windows Runtime Launch, Attach & Supervision + Desktop Chat Quality Follow-Up) was squash-merged to develop in PR #24 (`d0f96fc`). Batch A Profile Schema Foundation & Pre-Migration WAL Backup (`PC-IDENTITY-001`, `PC-RESILIENCE-002`) was squash-merged to develop in PR #25 (`369d787`). Batch B Profile Sessions & Cross-Profile Isolation (`PC-IDENTITY-002`) was squash-merged to develop in PR #27 (`5cb2fe6`), with test stability follow-up in PR #28 (`0bb0894`). Host Admin Separation & Secure Lifecycle Authority (`PC-HOST-005`) delivered via PR #32. Batch C Local Profile Administration & Persistent Selection (`PC-IDENTITY-004`, `PC-CLIENT-005`) delivered via PR #33 (`2104d5c`). Batch D Recoverable Profile Deletion & Safe Purge (`PC-IDENTITY-005`, `PC-CLIENT-005`) delivered via PR #34 (`f3752a3`). Wider Milestone M2 tracks remain planned and in progress (Windows Task Scheduler autostart `PC-HOST-002`, Toast notifications `PC-HOST-003` / `PC-CLIENT-012`, storage roots manager, D6 model import `PC-MODEL-002`, Profile PIN, and device enrollment).
+- **Current Status:** BATCH E IMPLEMENTED / AUTOMATED-VERIFIED LOCALLY. Batch M2-H1 (`PC-HOST-001`, PR #24 `d0f96fc`), Batch A (`PC-IDENTITY-001`/`PC-RESILIENCE-002`, PR #25 `369d787`), Batch B (`PC-IDENTITY-002`, PR #27 `5cb2fe6` & PR #28 `0bb0894`), `PC-HOST-005` (PR #32), Batch C (`PC-IDENTITY-004`/`PC-CLIENT-005`, PR #33 `2104d5c`), Batch D (`PC-IDENTITY-005`/`PC-CLIENT-005`, PR #34 `f3752a3`), and notification/settings deliveries (`PR #41`, `#42`, `#43`) are merged. **Batch E** (`feature/m2-models-storage-autostart-e`) delivered 5 storage roots & relocatable `LIBRARY_ROOT` (`PC-HOST-004`), executable D6 model import & GGUF parser/cache fixes (`PC-MODEL-001`..`006`), Desktop Settings model/storage/autostart UI (`PC-CLIENT-010`), and Windows Task Scheduler XML autostart with flash-free `--minimized-to-tray` startup (`PC-HOST-002`); manual Windows host QA remains. Profile PIN lock and Satellite Device Enrollment (`PC-IDENTITY-003`) remain deferred by Human Owner direction.
 - **Primary Objective:** Implement Windows Runtime launch, attach & supervision (Batch M2-H1 delivered in PR #24), deliver Multi-Profile database migration foundation with pre-migration WAL backup (Batch A delivered in PR #25), followed by Profile Sessions and authorization cutover (Batch B delivered in PR #27/28), Host Administration Separation & Secure Lifecycle Authority (`PC-HOST-005`), Windows Task Scheduler autostart at user login (`PC-HOST-002`), native Windows Action Center Toast presentation (`PC-HOST-003` / `PC-CLIENT-012`), storage roots manager (`APP_INSTALL`, `DATA`, `LIBRARY`), and the D6 manual scan / bundle model import service (`PC-MODEL-002`).
 - **Exit Criteria:** Runtime launches reliably and supervised as a detached background process with authenticated identification; autostart configured at login without console window; Toast notifications alert closed-browser; D6 imports paired GGUF+mmproj models into relocatable library; multiple Profiles operate strictly isolated with PIN challenge.
 

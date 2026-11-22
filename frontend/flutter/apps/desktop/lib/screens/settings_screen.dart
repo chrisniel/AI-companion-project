@@ -196,6 +196,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       SettingsSectionId.general => SettingsGeneralSection(
           coordinator: widget.coordinator,
+          clientSettings: widget.clientSettings,
+          credentialStore: widget.credentialStore,
+          client: widget.client,
         ),
       SettingsSectionId.notifications => SettingsNotificationsSection(
           scheduleController: widget.scheduleController,
@@ -214,6 +217,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       SettingsSectionId.storage => SettingsStorageSection(
           diagnosticReader: widget.controller.diagnosticReader,
+          clientSettings: widget.clientSettings,
+          credentialStore: widget.credentialStore,
+          client: widget.client,
         ),
       SettingsSectionId.tools => SettingsToolsSection(
           toolPolicyController: widget.toolPolicyController,

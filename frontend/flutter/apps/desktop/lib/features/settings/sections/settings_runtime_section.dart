@@ -5,10 +5,12 @@ import 'package:companion_api/companion_api.dart';
 import 'package:companion_core/companion_core.dart';
 import 'package:companion_design/companion_design.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../controllers/desktop_settings_controller.dart';
 import '../../../coordinator/desktop_runtime_coordinator.dart';
 import '../../../platform/desktop_client_settings.dart';
+import '../../../platform/host_admin_secret_store.dart';
 import '../../../platform/windows_dpapi_credential_store.dart';
 import '../../chat/desktop_chat_controller.dart';
 import '../settings_section.dart';
@@ -58,6 +60,13 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
   bool _isStillLoading = false;
   String? _selectedModelId;
   String? _modelActionMessage;
+  bool _isUpdatingProfile = false;
+  bool _isScanningInbox = false;
+  String? _installingRelativePath;
+  String? _deletingModelId;
+  String? _importInboxDir;
+  ModelImportScanOut? _inboxScanResult;
+  final Map<String, TextEditingController> _candidateNameControllers = {};
   DesktopNavDestination _lastDestination = DesktopNavDestination.chat;
   SettingsSectionId _lastSection = SettingsSectionId.appearance;
 
@@ -116,6 +125,9 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
     widget.controller.removeListener(_handleControllerChange);
     _urlController.dispose();
     _tokenController.dispose();
+    for (final c in _candidateNameControllers.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -132,6 +144,8 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
         _buildRuntimeSupervisionCard(context, ext, isDark),
         const SizedBox(height: CompanionSpacing.lg),
         _buildModelSelectionCard(context, ext, isDark),
+        const SizedBox(height: CompanionSpacing.lg),
+        _buildD6ImportInboxCard(context, ext, isDark),
       ],
     );
   }
@@ -553,6 +567,7 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
     return CompanionClient(
       baseUrl: uri.toString(),
       credentialStore: _credentialStore,
+      hostAdminStore: HostAdminSecretStore(),
     );
   }
 
@@ -592,15 +607,23 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
             .getModelStatus()
             .catchError((_) => const ModelStatusResponse(provider: 'unknown')),
         _clientSettings.readSelectedModel(),
+        client
+            .getStorageRoots()
+            .then<StorageRootsResponse?>((v) => v)
+            .catchError((_) => null),
       ]);
 
       if (!mounted) return;
+      final storageResp = results[3] as StorageRootsResponse?;
       setState(() {
         _registryEntries = results[0] as List<ModelRegistryEntry>;
         _modelStatus = results[1] as ModelStatusResponse;
         final savedModel = results[2] as String?;
         _selectedModelId =
             _modelStatus?.selectedModel ?? savedModel ?? _selectedModelId;
+        if (storageResp != null && storageResp.importInboxDir.isNotEmpty) {
+          _importInboxDir = storageResp.importInboxDir;
+        }
         _isLoadingModelCatalog = false;
       });
     } catch (e) {
@@ -911,6 +934,149 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
     }
   }
 
+  Future<void> _updateHardwareProfile(String profile) async {
+    if (_isUpdatingProfile || _isExecutingModelAction) return;
+    setState(() {
+      _isUpdatingProfile = true;
+      _modelActionMessage = 'Updating hardware profile to ${profile.toUpperCase()}...';
+    });
+    try {
+      final client = _resolveClient();
+      final updatedStatus = await client.updateModelProfile(profile);
+      if (!mounted) return;
+      setState(() {
+        _modelStatus = updatedStatus;
+        _isUpdatingProfile = false;
+        _modelActionMessage =
+            'Hardware profile set to ${updatedStatus.requestedProfile.toUpperCase()}. '
+            '${updatedStatus.routerRunning ? 'Applies on next model reload.' : 'Ready for next load.'}';
+      });
+      widget.chatController?.updateModelStatus(updatedStatus);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isUpdatingProfile = false;
+        _modelActionMessage = 'Failed to update hardware profile: $e';
+      });
+    }
+  }
+
+  Future<void> _scanInbox() async {
+    if (_isScanningInbox) return;
+    setState(() {
+      _isScanningInbox = true;
+      _modelActionMessage = 'Scanning Decision D6 model import inbox...';
+    });
+    try {
+      final client = _resolveClient();
+      final scanOut = await client.scanModelImportInbox();
+      if (!mounted) return;
+      for (final c in scanOut.candidates) {
+        _candidateNameControllers.putIfAbsent(
+          c.relativePath,
+          () => TextEditingController(text: c.displayName),
+        );
+      }
+      setState(() {
+        _inboxScanResult = scanOut;
+        if (scanOut.inboxDir.isNotEmpty) {
+          _importInboxDir = scanOut.inboxDir;
+        }
+        _isScanningInbox = false;
+        _modelActionMessage = scanOut.candidates.isEmpty
+            ? 'Inbox scanned: no .gguf candidates found.'
+            : 'Found ${scanOut.candidates.length} GGUF candidate(s) in inbox.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isScanningInbox = false;
+        _modelActionMessage = 'Failed to scan model inbox: $e';
+      });
+    }
+  }
+
+  Future<void> _installCandidate(ModelImportCandidateOut cand) async {
+    if (_installingRelativePath != null) return;
+    setState(() {
+      _installingRelativePath = cand.relativePath;
+      _modelActionMessage = 'Staging and verifying ${cand.primaryFilename}...';
+    });
+    try {
+      final client = _resolveClient();
+      final customName = _candidateNameControllers[cand.relativePath]?.text.trim();
+      final res = await client.installModelFromInbox(
+        ModelImportInstallRequest(
+          relativePath: cand.relativePath,
+          companionRelativePath: cand.companionMmprojRelativePath,
+          modelId: cand.suggestedModelId,
+          displayName: (customName != null && customName.isNotEmpty)
+              ? customName
+              : cand.displayName,
+          variant: cand.variant,
+          family: cand.family,
+          license: cand.license,
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _installingRelativePath = null;
+        _modelActionMessage = 'Installed ${res.displayName} (${res.installedId}) cleanly.';
+      });
+      await Future.wait([
+        _loadModelData(),
+        _scanInbox(),
+      ]);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _installingRelativePath = null;
+        _modelActionMessage = 'Model installation failed: $e';
+      });
+    }
+  }
+
+  Future<void> _deleteInstalledModel(ModelRegistryEntry entry) async {
+    if (_deletingModelId != null || _isExecutingModelAction) return;
+    setState(() {
+      _deletingModelId = entry.id;
+      _modelActionMessage = 'Removing installed model ${entry.displayName}...';
+    });
+    try {
+      final client = _resolveClient();
+      final out = await client.deleteInstalledModel(entry.id);
+      if (!mounted) return;
+      setState(() {
+        _deletingModelId = null;
+        _modelActionMessage = out.message;
+      });
+      await _loadModelData();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _deletingModelId = null;
+        _modelActionMessage = 'Failed to uninstall model: $e';
+      });
+    }
+  }
+
+  Future<void> _copyInboxPath(String path) async {
+    await Clipboard.setData(ClipboardData(text: path));
+    if (!mounted) return;
+    setState(() {
+      _modelActionMessage = 'Copied inbox path to clipboard.';
+    });
+  }
+
+  Future<void> _openInboxInExplorer(String path) async {
+    if (!Platform.isWindows || Platform.environment.containsKey('FLUTTER_TEST')) {
+      return;
+    }
+    try {
+      await Process.run('explorer.exe', [path]);
+    } catch (_) {}
+  }
+
   Widget _buildModelSelectionCard(
     BuildContext context,
     CompanionThemeExtension? ext,
@@ -1032,6 +1198,19 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
                         style: CompanionTypography.caption
                             .copyWith(color: ext?.textSecondary),
                       ),
+                      if (status != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          'Profile: ${(status.appliedProfile ?? status.requestedProfile).toUpperCase()} '
+                          '· ${status.appliedContextSize ?? status.contextSize} ctx '
+                          '· ${status.appliedGpuLayers ?? status.gpuLayers} GPU layers '
+                          '· mmproj ${(status.appliedMmprojOffload ?? status.requestedMmprojOffload) ? 'GPU' : 'CPU'}',
+                          style: CompanionTypography.caption.copyWith(
+                            color: ext?.textMuted,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -1057,6 +1236,34 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
                   ),
               ],
             ),
+          ),
+          const SizedBox(height: CompanionSpacing.md),
+          Text(
+            'Hardware Performance Profile (Persisted)',
+            style: CompanionTypography.bodySmall.copyWith(
+              color: ext?.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: CompanionSpacing.xs),
+          Wrap(
+            spacing: CompanionSpacing.sm,
+            runSpacing: CompanionSpacing.xs,
+            children: [
+              for (final option in const [
+                ('eco', 'Eco · 2,048 ctx · CPU'),
+                ('balanced', 'Balanced · 4,096 ctx · 28 GPU'),
+                ('maximum', 'Maximum · 8,192 ctx · 33 GPU'),
+              ])
+                ChoiceChip(
+                  key: Key('profile_chip_${option.$1}'),
+                  label: Text(option.$2),
+                  selected: (status?.requestedProfile ?? 'balanced') == option.$1,
+                  onSelected: (_isUpdatingProfile || _isExecutingModelAction)
+                      ? null
+                      : (_) => _updateHardwareProfile(option.$1),
+                ),
+            ],
           ),
           if (status?.modelLoaded == true ||
               status?.activeModel != null ||
@@ -1270,6 +1477,14 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
                 active: entry.hasReasoning,
                 ext: ext,
               ),
+              if (entry.architecture.isNotEmpty)
+                _buildInfoChip('${entry.architecture} ${entry.parameters}'.trim(), ext),
+              if (entry.quantization.isNotEmpty)
+                _buildInfoChip(entry.quantization, ext),
+              if (entry.sizeGb != null)
+                _buildInfoChip('${entry.sizeGb!.toStringAsFixed(1)} GB disk', ext),
+              if (entry.isInstalled)
+                _buildInfoChip('User Imported', ext, highlight: true),
               _buildValidationBadge(entry, ext),
             ],
           ),
@@ -1282,6 +1497,24 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
               spacing: CompanionSpacing.sm,
               runSpacing: CompanionSpacing.xs,
               children: [
+                if (entry.recommendedProfiles.isNotEmpty)
+                  OutlinedButton.icon(
+                    key: Key('apply_recommended_profile_${entry.id}'),
+                    onPressed: _isUpdatingProfile
+                        ? null
+                        : () => _updateHardwareProfile(entry.recommendedProfiles.first),
+                    icon: const Icon(Icons.tune_rounded, size: 14),
+                    label: Text('Apply Recommended (${entry.recommendedProfiles.first})'),
+                  ),
+                if (entry.isInstalled)
+                  OutlinedButton.icon(
+                    key: Key('delete_model_${entry.id}'),
+                    onPressed: (isReady || _deletingModelId == entry.id || _isExecutingModelAction)
+                        ? null
+                        : () => _deleteInstalledModel(entry),
+                    icon: const Icon(Icons.delete_outline_rounded, size: 14),
+                    label: const Text('Uninstall'),
+                  ),
                 if (isReady)
                   OutlinedButton.icon(
                     key: Key('unload_model_entry_${entry.id}'),
@@ -1392,6 +1625,236 @@ class _SettingsRuntimeSectionState extends State<SettingsRuntimeSection> {
           fontWeight: FontWeight.w600,
           fontSize: 11,
         ),
+      ),
+    );
+  }
+
+  Widget _buildInfoChip(
+    String text,
+    CompanionThemeExtension? ext, {
+    bool highlight = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: highlight
+            ? (ext?.accent.withValues(alpha: 0.14) ?? Colors.blue.withValues(alpha: 0.14))
+            : Colors.grey.withValues(alpha: 0.10),
+        borderRadius: CompanionRadius.borderSm,
+      ),
+      child: Text(
+        text,
+        style: CompanionTypography.caption.copyWith(
+          color: highlight ? (ext?.accent ?? Colors.blue) : (ext?.textSecondary),
+          fontWeight: FontWeight.w500,
+          fontSize: 11,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildD6ImportInboxCard(
+    BuildContext context,
+    CompanionThemeExtension? ext,
+    bool isDark,
+  ) {
+    final inboxPath = _inboxScanResult?.inboxDir ?? _importInboxDir;
+    final candidates = _inboxScanResult?.candidates ?? const <ModelImportCandidateOut>[];
+
+    return SoftGlassPanel(
+      padding: const EdgeInsets.all(CompanionSpacing.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.inventory_2_outlined, size: 20, color: ext?.accent),
+              const SizedBox(width: CompanionSpacing.sm),
+              Expanded(
+                child: Text(
+                  'Controlled Local Model Import (Decision D6)',
+                  style: CompanionTypography.titleMedium
+                      .copyWith(color: ext?.textPrimary),
+                ),
+              ),
+              FilledButton.icon(
+                key: const Key('d6_scan_inbox_button'),
+                onPressed: _isScanningInbox ? null : _scanInbox,
+                icon: _isScanningInbox
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.search_rounded, size: 16),
+                label: const Text('Scan Inbox'),
+              ),
+            ],
+          ),
+          const SizedBox(height: CompanionSpacing.xs),
+          Text(
+            'Place .gguf models (and optional companion mmproj-*.gguf files) in your inbox folder, then click Scan Inbox to inspect metadata and verify installation.',
+            style: CompanionTypography.caption
+                .copyWith(color: ext?.textSecondary),
+          ),
+          if (inboxPath != null && inboxPath.isNotEmpty) ...[
+            const SizedBox(height: CompanionSpacing.sm),
+            NeumorphicSurface(
+              surfaceType: NeumorphicSurfaceType.recessed,
+              borderRadius: CompanionRadius.borderMd,
+              padding: const EdgeInsets.symmetric(
+                horizontal: CompanionSpacing.md,
+                vertical: CompanionSpacing.sm,
+              ),
+              child: Wrap(
+                spacing: CompanionSpacing.sm,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SelectableText(
+                    inboxPath,
+                    style: CompanionTypography.caption.copyWith(
+                      color: ext?.textPrimary,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => _copyInboxPath(inboxPath),
+                    icon: const Icon(Icons.copy_rounded, size: 14),
+                    label: const Text('Copy Path'),
+                  ),
+                  if (Platform.isWindows)
+                    TextButton.icon(
+                      onPressed: () => _openInboxInExplorer(inboxPath),
+                      icon: const Icon(Icons.folder_open_rounded, size: 14),
+                      label: const Text('Open in Explorer'),
+                    ),
+                ],
+              ),
+            ),
+          ],
+          if (_inboxScanResult != null) ...[
+            const SizedBox(height: CompanionSpacing.md),
+            if (candidates.isEmpty)
+              Text(
+                'Inbox is empty. Drop a .gguf file into the inbox folder above and click Scan Inbox.',
+                style: CompanionTypography.bodySmall
+                    .copyWith(color: ext?.textMuted),
+              )
+            else
+              for (final cand in candidates) ...[
+                NeumorphicSurface(
+                  surfaceType: NeumorphicSurfaceType.recessed,
+                  borderRadius: CompanionRadius.borderMd,
+                  padding: const EdgeInsets.all(CompanionSpacing.md),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              cand.primaryFilename,
+                              style: CompanionTypography.bodyMedium.copyWith(
+                                color: ext?.textPrimary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: (cand.artifactValid
+                                      ? (cand.preflight.status == 'recommended'
+                                          ? (ext?.success ?? CompanionColors.success)
+                                          : (ext?.warning ?? CompanionColors.warning))
+                                      : (ext?.danger ?? CompanionColors.danger))
+                                  .withValues(alpha: 0.15),
+                              borderRadius: CompanionRadius.borderSm,
+                            ),
+                            child: Text(
+                              cand.artifactValid
+                                  ? '${cand.preflight.status.toUpperCase()} (~${cand.preflight.estimatedVramGb.toStringAsFixed(1)} GB VRAM)'
+                                  : 'INVALID GGUF',
+                              style: CompanionTypography.caption.copyWith(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: CompanionSpacing.xs,
+                        runSpacing: CompanionSpacing.xs,
+                        children: [
+                          _buildInfoChip('${cand.sizeGb.toStringAsFixed(2)} GB', ext),
+                          if (cand.architecture.isNotEmpty)
+                            _buildInfoChip(cand.architecture, ext),
+                          if (cand.quantization.isNotEmpty)
+                            _buildInfoChip(cand.quantization, ext),
+                          if (cand.companionMmprojFilename != null)
+                            _buildInfoChip('mmproj: ${cand.companionMmprojFilename}', ext, highlight: true),
+                        ],
+                      ),
+                      const SizedBox(height: CompanionSpacing.xs),
+                      Text(
+                        cand.validationError ?? cand.preflight.message,
+                        style: CompanionTypography.caption
+                            .copyWith(color: ext?.textSecondary),
+                      ),
+                      if (cand.artifactValid) ...[
+                        const SizedBox(height: CompanionSpacing.sm),
+                        Wrap(
+                          spacing: CompanionSpacing.sm,
+                          runSpacing: CompanionSpacing.sm,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(
+                                minWidth: 180,
+                                maxWidth: 280,
+                              ),
+                              child: TextField(
+                                controller: _candidateNameControllers[cand.relativePath],
+                                decoration: const InputDecoration(
+                                  labelText: 'Display Name',
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                ),
+                              ),
+                            ),
+                            OutlinedButton(
+                              onPressed: () =>
+                                  _updateHardwareProfile(cand.preflight.recommendedProfile),
+                              child: Text(
+                                'Use ${cand.preflight.recommendedProfile}',
+                              ),
+                            ),
+                            FilledButton.tonalIcon(
+                              key: Key('d6_install_candidate_${cand.suggestedModelId}'),
+                              onPressed: _installingRelativePath != null
+                                  ? null
+                                  : () => _installCandidate(cand),
+                              icon: _installingRelativePath == cand.relativePath
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : const Icon(Icons.download_done_rounded, size: 16),
+                              label: const Text('Install Bundle'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: CompanionSpacing.sm),
+              ],
+          ],
+        ],
       ),
     );
   }

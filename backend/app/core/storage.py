@@ -58,7 +58,7 @@ class CorruptCanonicalDatabaseError(StorageError):
 
 @dataclass(frozen=True)
 class CanonicalPaths:
-    """Canonical persistent storage paths derived from a single COMPANION_DATA_ROOT."""
+    """Canonical persistent storage paths resolved from the five host storage roots."""
     COMPANION_DATA_ROOT: Path
     DATABASE_DIR: Path
     DATABASE_PATH: Path
@@ -73,6 +73,9 @@ class CanonicalPaths:
     CHARACTER_DIR: Path
     MEMORY_DIR: Path
     BACKUP_DIR: Path
+    APP_INSTALL_ROOT: Path
+    CACHE_ROOT: Path
+    LOG_ROOT: Path
 
 
 @dataclass(frozen=True)
@@ -121,6 +124,75 @@ def get_default_data_root() -> Path:
             return Path(local_app_data) / "AI Companion" / "Data"
         return Path.home() / "AppData" / "Local" / "AI Companion" / "Data"
     return Path.home() / ".local" / "share" / "AI Companion" / "Data"
+
+
+def get_default_cache_root() -> Path:
+    """Return the default disposable cache root for the current OS."""
+    if sys.platform == "win32" or "LOCALAPPDATA" in os.environ:
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if local_app_data:
+            return Path(local_app_data) / "AI Companion" / "Cache"
+        return Path.home() / "AppData" / "Local" / "AI Companion" / "Cache"
+    return Path.home() / ".cache" / "ai-companion"
+
+
+def get_default_log_root() -> Path:
+    """Return the default diagnostic log root for the current OS."""
+    if sys.platform == "win32" or "LOCALAPPDATA" in os.environ:
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if local_app_data:
+            return Path(local_app_data) / "AI Companion" / "Logs"
+        return Path.home() / "AppData" / "Local" / "AI Companion" / "Logs"
+    return Path.home() / ".local" / "state" / "ai-companion" / "logs"
+
+
+def get_default_app_install_root() -> Path:
+    """Return the application install/repo root purely without side effects."""
+    # backend/app/core/storage.py -> repo/install root (3 parents up from app/core -> backend, 4 -> root)
+    return Path(__file__).resolve().parent.parent.parent.parent
+
+
+def _resolve_absolute_env_path(env_name: str, env_override: Optional[str]) -> Optional[Path]:
+    raw = env_override if env_override is not None else os.environ.get(env_name)
+    if raw and raw.strip():
+        candidate = Path(raw.strip())
+        if not candidate.is_absolute():
+            raise StorageError(f"{env_name} must be an absolute path, got relative path: '{raw.strip()}'")
+        return candidate.resolve()
+    return None
+
+
+def resolve_app_install_root(
+    env_override: Optional[str] = None,
+    default_root: Optional[Path] = None,
+) -> Path:
+    """Resolve APP_INSTALL_ROOT purely without filesystem side effects."""
+    override = _resolve_absolute_env_path("COMPANION_APP_INSTALL_ROOT", env_override)
+    if override is not None:
+        return override
+    return (default_root if default_root is not None else get_default_app_install_root()).resolve()
+
+
+def resolve_cache_root(
+    env_override: Optional[str] = None,
+    default_root: Optional[Path] = None,
+) -> Path:
+    """Resolve CACHE_ROOT purely without filesystem side effects."""
+    override = _resolve_absolute_env_path("COMPANION_CACHE_ROOT", env_override)
+    if override is not None:
+        return override
+    return (default_root if default_root is not None else get_default_cache_root()).resolve()
+
+
+def resolve_log_root(
+    env_override: Optional[str] = None,
+    default_root: Optional[Path] = None,
+) -> Path:
+    """Resolve LOG_ROOT purely without filesystem side effects."""
+    override = _resolve_absolute_env_path("COMPANION_LOG_ROOT", env_override)
+    if override is not None:
+        return override
+    return (default_root if default_root is not None else get_default_log_root()).resolve()
 
 
 def get_bootstrap_path() -> Path:
@@ -186,17 +258,80 @@ def resolve_data_root(
     return def_root.resolve()
 
 
+def resolve_library_root(
+    data_root: Path,
+    env_override: Optional[str] = None,
+    bootstrap_path: Optional[Path] = None,
+    data_root_env_override: Optional[str] = None,
+) -> Path:
+    """Resolve LIBRARY_ROOT with strict fail-closed precedence.
+
+    Precedence:
+    1. COMPANION_LIBRARY_ROOT environment override (must be absolute)
+    2. bootstrap.json 'library_root' attribute (consulted only when bootstrap_path
+       is explicitly given OR COMPANION_DATA_ROOT is NOT redirecting away from global bootstrap)
+    3. Default <data_root>/library
+    """
+    override = _resolve_absolute_env_path("COMPANION_LIBRARY_ROOT", env_override)
+    if override is not None:
+        return override
+
+    dr_env = data_root_env_override if data_root_env_override is not None else os.environ.get("COMPANION_DATA_ROOT")
+    should_consult_bootstrap = bootstrap_path is not None or not (dr_env and dr_env.strip())
+    if should_consult_bootstrap:
+        b_path = bootstrap_path if bootstrap_path is not None else get_bootstrap_path()
+        if os.path.lexists(b_path):
+            try:
+                if not b_path.is_file():
+                    raise BootstrapCorruptError("Existing bootstrap locator is not a readable file.")
+                data = json.loads(b_path.read_text(encoding="utf-8"))
+                if (
+                    not isinstance(data, dict)
+                    or type(data.get("schema_version")) is not int
+                    or data["schema_version"] != 1
+                ):
+                    raise BootstrapCorruptError("Existing bootstrap locator has invalid schema.")
+                # Only apply global bootstrap library_root if this locator owns the requested data_root.
+                if bootstrap_path is None:
+                    raw_dr = data.get("data_root")
+                    if not isinstance(raw_dr, str) or not raw_dr.strip():
+                        raise BootstrapCorruptError("Existing bootstrap locator has invalid data_root.")
+                    dr_path = Path(raw_dr.strip())
+                    if not dr_path.is_absolute():
+                        raise BootstrapCorruptError("Bootstrap data_root must be an absolute path.")
+                    if dr_path.resolve() != data_root.resolve():
+                        return (data_root.resolve() / "library").resolve()
+                if "library_root" in data:
+                    raw_lib = data.get("library_root")
+                    if not isinstance(raw_lib, str) or not raw_lib.strip():
+                        raise BootstrapCorruptError("Bootstrap library_root must be a non-empty absolute path string.")
+                    lib_path = Path(raw_lib.strip())
+                    if not lib_path.is_absolute():
+                        raise BootstrapCorruptError("Bootstrap library_root must be an absolute path.")
+                    return lib_path.resolve()
+            except BootstrapCorruptError:
+                raise
+            except (OSError, ValueError, TypeError):
+                raise BootstrapCorruptError(
+                    "Existing bootstrap locator is unreadable or malformed; library root selection refused."
+                ) from None
+
+    return (data_root.resolve() / "library").resolve()
+
+
 def write_bootstrap(
     data_root: Path,
     bootstrap_path: Optional[Path] = None,
     schema_version: int = 1,
+    library_root: Optional[Path] = None,
 ) -> None:
     """Write an authoritative bootstrap locator file atomically.
 
     Payload contains ONLY non-secret bootstrap metadata:
     {
       "schema_version": 1,
-      "data_root": "..."
+      "data_root": "...",
+      "library_root": "..." // optional, omitted when None
     }
     """
     if not data_root.is_absolute():
@@ -204,14 +339,20 @@ def write_bootstrap(
             f"Bootstrap data_root must be an absolute path, got relative path: '{data_root}'. "
             "Relative custom roots are rejected to ensure path invariants."
         )
+    if library_root is not None and not library_root.is_absolute():
+        raise StorageError(
+            f"Bootstrap library_root must be an absolute path, got relative path: '{library_root}'."
+        )
 
     b_path = bootstrap_path if bootstrap_path is not None else get_bootstrap_path()
     b_path.parent.mkdir(parents=True, exist_ok=True)
 
-    payload = {
+    payload: dict = {
         "schema_version": schema_version,
         "data_root": str(data_root.resolve()),
     }
+    if library_root is not None:
+        payload["library_root"] = str(library_root.resolve())
     serialized = json.dumps(payload, indent=2) + "\n"
 
     # Atomic write pattern via temp file on same directory
@@ -227,12 +368,112 @@ def write_bootstrap(
                 pass
 
 
+class RelocationConflictError(StorageError):
+    """Raised when LIBRARY_ROOT relocation is blocked by runtime state or env override."""
+    pass
+
+
+def _paths_overlap(a: Path, b: Path) -> bool:
+    ra = a.resolve()
+    rb = b.resolve()
+    return ra == rb or ra.is_relative_to(rb) or rb.is_relative_to(ra)
+
+
+def relocate_library_root(
+    new_library_root: Path,
+    migrate_existing_assets: bool = True,
+    bootstrap_path: Optional[Path] = None,
+) -> Path:
+    """Validate and relocate LIBRARY_ROOT atomically in bootstrap.json with optional asset migration."""
+    if os.environ.get("COMPANION_LIBRARY_ROOT", "").strip():
+        raise RelocationConflictError(
+            "Cannot relocate LIBRARY_ROOT while COMPANION_LIBRARY_ROOT environment override is active."
+        )
+    if os.environ.get("COMPANION_DATA_ROOT", "").strip() and bootstrap_path is None:
+        raise RelocationConflictError(
+            "Cannot relocate LIBRARY_ROOT while COMPANION_DATA_ROOT environment override redirects storage."
+        )
+
+    if not new_library_root.is_absolute():
+        raise StorageError(f"new_library_root must be an absolute path, got '{new_library_root}'.")
+
+    target = new_library_root.resolve()
+    b_path = bootstrap_path if bootstrap_path is not None else get_bootstrap_path()
+    current_data = resolve_data_root(bootstrap_path=b_path)
+    current_paths = get_canonical_paths(
+        current_data,
+        library_root=resolve_library_root(current_data, bootstrap_path=b_path),
+    )
+
+    if _paths_overlap(target, current_paths.LIBRARY_DIR):
+        raise StorageError("Target LIBRARY_ROOT cannot be identical to or nested inside/around the current LIBRARY_ROOT.")
+    if _paths_overlap(target, current_paths.DATABASE_DIR):
+        raise StorageError("Target LIBRARY_ROOT cannot overlap with DATABASE_DIR.")
+    if _paths_overlap(target, current_paths.APP_INSTALL_ROOT):
+        raise StorageError("Target LIBRARY_ROOT cannot overlap with APP_INSTALL_ROOT.")
+    if target == current_paths.COMPANION_DATA_ROOT or current_paths.COMPANION_DATA_ROOT.is_relative_to(target):
+        raise StorageError("Target LIBRARY_ROOT cannot be DATA_ROOT itself or an ancestor of DATA_ROOT.")
+
+    # Preserve existing bootstrap data_root verbatim if valid, else use resolved current_data
+    persisted_data_root = current_data
+    if os.path.lexists(b_path):
+        try:
+            existing_data = json.loads(b_path.read_text(encoding="utf-8"))
+            if isinstance(existing_data, dict) and isinstance(existing_data.get("data_root"), str):
+                persisted_data_root = Path(existing_data["data_root"].strip()).resolve()
+        except Exception as exc:
+            raise BootstrapCorruptError(f"Cannot read bootstrap locator before relocation: {exc}") from exc
+
+    # Create target library structure before migrating/updating locator
+    for subdir in (
+        target / "models" / "llm",
+        target / "registry",
+        target / "voices",
+        target / "imports" / "inbox",
+        target / "imports" / "staging",
+    ):
+        subdir.mkdir(parents=True, exist_ok=True)
+
+    if migrate_existing_assets and current_paths.LIBRARY_DIR.exists():
+        # Copy models, registry, voices, and inbox (never partial staging artifacts)
+        for rel_parts in (("models",), ("registry",), ("voices",), ("imports", "inbox")):
+            src_dir = current_paths.LIBRARY_DIR.joinpath(*rel_parts)
+            dst_dir = target.joinpath(*rel_parts)
+            if not src_dir.is_dir():
+                continue
+            for item in src_dir.rglob("*"):
+                if item.is_symlink() or not item.is_file():
+                    continue
+                rel_item = item.relative_to(src_dir)
+                dst_item = dst_dir / rel_item
+                dst_item.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(item, dst_item)
+                if dst_item.stat().st_size != item.stat().st_size:
+                    raise MigrationVerificationError(
+                        f"Migrated asset size mismatch for '{rel_item.as_posix()}'."
+                    )
+
+    write_bootstrap(
+        data_root=persisted_data_root,
+        bootstrap_path=b_path,
+        schema_version=1,
+        library_root=target,
+    )
+    return target
+
+
 # ---------------------------------------------------------------------------
 # Canonical Paths (8P.3B)
 # ---------------------------------------------------------------------------
 
-def get_canonical_paths(data_root: Path) -> CanonicalPaths:
-    """Derive all canonical persistent paths from a single resolved data root.
+def get_canonical_paths(
+    data_root: Path,
+    library_root: Optional[Path] = None,
+    cache_root: Optional[Path] = None,
+    log_root: Optional[Path] = None,
+    app_install_root: Optional[Path] = None,
+) -> CanonicalPaths:
+    """Derive all canonical persistent paths from the resolved host storage roots.
 
     This function defines paths without eagerly creating directories on disk.
     """
@@ -241,17 +482,21 @@ def get_canonical_paths(data_root: Path) -> CanonicalPaths:
     db_path = db_dir / "companion.db"
     db_url = f"sqlite+aiosqlite:///{db_path.as_posix()}"
 
-    library_dir = root / "library"
+    library_dir = library_root.resolve() if library_root is not None else resolve_library_root(root)
     model_lib_dir = library_dir / "models" / "llm"
     installed_registry = library_dir / "registry" / "models.json"
     voice_lib_dir = library_dir / "voices"
 
     attachment_dir = root / "attachments"
-    import_inbox = root / "imports" / "inbox"
-    import_staging = root / "imports" / "staging"
+    import_inbox = library_dir / "imports" / "inbox"
+    import_staging = library_dir / "imports" / "staging"
     character_dir = root / "characters"
     memory_dir = root / "memory"
     backup_dir = root / "backups"
+
+    resolved_install = app_install_root.resolve() if app_install_root is not None else resolve_app_install_root()
+    resolved_cache = cache_root.resolve() if cache_root is not None else resolve_cache_root()
+    resolved_log = log_root.resolve() if log_root is not None else resolve_log_root()
 
     return CanonicalPaths(
         COMPANION_DATA_ROOT=root,
@@ -268,6 +513,9 @@ def get_canonical_paths(data_root: Path) -> CanonicalPaths:
         CHARACTER_DIR=character_dir,
         MEMORY_DIR=memory_dir,
         BACKUP_DIR=backup_dir,
+        APP_INSTALL_ROOT=resolved_install,
+        CACHE_ROOT=resolved_cache,
+        LOG_ROOT=resolved_log,
     )
 
 

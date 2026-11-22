@@ -146,12 +146,10 @@ In accordance with architectural decisions for replaceable local generative mode
   3. *Development Environment Override:* Explicit override via `COMPANION_DEV_MODEL` when present in development/test environments.
   4. *Fail-Closed Invariant (`MODEL_SELECTION_REQUIRED`):* If no model selection exists (no explicit operation request, no saved host configuration, and no development override), model loading fails closed with `MODEL_SELECTION_REQUIRED` (HTTP 422 in `backend/app/api/v1/endpoints/llm.py`). If a model was explicitly selected or requested but is missing from the registry or host storage, it fails closed with its actual distinct error (HTTP 404 Model Not Found in registry, or HTTP 400 Model File Missing on host, rather than conflating with `MODEL_SELECTION_REQUIRED`). The system **never** silently falls back to an unselected or arbitrary model.
 - **Host-Level Configuration Scope:** Model selection is a machine-wide host configuration owned by the host environment (`host_config.json`), not stored per-user profile and not owned primarily by environment files.
-- **Hardware-Aware Model Recommendation (Target Architecture — PC-CLIENT-010):**
-  - *Dedicated VRAM Target:* Recommendations target at most **50% of total dedicated VRAM** for resident model weights and KV cache under standard operating profiles.
-  - *Headroom & Safety Reserve:* Recommended capacity is further bounded by measured available VRAM headroom and a non-negotiable safety reserve ensuring desktop window compositing, operating system operations, and user applications avoid VRAM starvation or driver crashes.
-  - *Advisory vs. Enforced Policy:* Hardware-aware recommendations are advisory guidance surfaced in the user interface (such as compatibility badges and recommended model tags). Explicit user selection always overrides recommendations, subject to fail-closed preflight memory validation.
-  - *Truthful Capabilities:* Switching models truthfully reconfigures client capabilities; selecting a text-only model disables vision assistance, and missing companion projectors (`mmproj`) retain text capability while disabling multimodal turns without failing the entire model.
-  - *Implementation Status:* Hardware-aware VRAM budgeting and dynamic recommendation formulas are target capabilities tracked under **PC-CLIENT-010** and are not currently enforced in code. Current runtime relies on explicit user model selection and static performance profiles (`eco`, `balanced`, `maximum`).
+- **Hardware-Aware Model Recommendation & Advisory VRAM Preflight (Implemented — `PC-CLIENT-010`):**
+  - *Dedicated VRAM Target:* Advisory preflight in `assess_hardware_suitability()` (`backend/app/services/model_registry.py`) evaluates candidate and catalog model file size against `settings.HOST_DEDICATED_VRAM_GB` (`8.0` default) using `estimated_vram_gb = round(size_gb * 1.2 + 0.5, 2)` and classifies `recommended` (`<= 50%`), `supported_with_warning` (`<= 85%`), or `not_recommended` (`> 85%`) alongside a recommended profile (`maximum`, `balanced`, or `eco`).
+  - *Advisory vs. Enforced Policy:* Recommendations and `recommendedProfiles` badges are surfaced in Flutter Desktop `SettingsRuntimeSection` (with 1-click **Apply Recommended Profile**). Explicit user model and profile selection always takes precedence, subject to corrupt/truncated header fail-closed guards.
+  - *Truthful Capabilities & Profile Persistence:* Switching models reconfigures reported capabilities truthfully (disabling vision when `mmproj` is absent). Selected `hardware_profile` persists across restarts via `host_config.json` (`save_hardware_profile()`), and changing profile resets active Core-managed router state cleanly (`SERVER_STOPPED`).
 
 ---
 
@@ -204,29 +202,29 @@ Verified in `backend/app/core/config.py`:
   - **`balanced`:** Context `4096`, GPU layers `28`, threads `6`, multimodal offload enabled.
   - **`maximum`:** Context `8192`, GPU layers `33`, threads `8`, multimodal offload enabled.
 
-### 3.3 Model Registry & GGUF Parser
+### 3.3 Model Registry, GGUF Parser & Hardware Profiles
 
-Verified in `backend/app/services/model_registry.py`:
-- **Metadata Reader (`read_gguf_metadata`):** Pure-Python binary reader parsing GGUF magic bytes (`0x46554747`), header fields, and key-value string metadata (architecture, context length, chat templates).
-- **Registry Merging:** Merges factory template models (`models/registry.template.json`) with persistent user-installed models at `COMPANION_DATA_ROOT/library/registry/models.json` to generate the effective runtime catalog.
-- **Canonical Model & Voice Libraries:** Model weights reside in `COMPANION_DATA_ROOT/library/models/llm`; voices reside in `COMPANION_DATA_ROOT/library/voices`.
+Verified in `backend/app/services/model_registry.py` and `backend/app/services/host_config.py`:
+- **Metadata Reader (`read_gguf_metadata`):** Pure-Python bounded binary reader parsing GGUF v2/v3 headers (`0x46554747`). Uses file-size-bounded buffered array skipping (`_skip_gguf_array`) for `tokenizer.ggml.*` arrays (`MAX_SKIP_ARRAY_LENGTH = 1_000_000`) and bounded length skipping for `tokenizer.chat_template` (`MAX_CHAT_TEMPLATE_LENGTH = 65_536`), with size/mtime caching (`_GGUF_METADATA_CACHE`) for real `.gguf` files >= 64 KB so trailing metadata keys (`general.file_type`, `general.quantization_version`, `general.name`, `general.size_label`, `general.license`, `clip.has_vision_encoder`) extract reliably without allocating large tokenizer arrays. Strict bounds (`MAX_STRING_LENGTH = 1024`, `MAX_ARRAY_LENGTH = 64`) remain enforced on keys and generic metadata.
+- **Registry Merging:** Merges factory template models (`models/registry.template.json`) with persistent user-installed Schema v3 models at `INSTALLED_REGISTRY_PATH` (`<LIBRARY_ROOT>/registry/models.json`) while preserving `capability_provenance`.
+- **Canonical Model & Voice Libraries:** Factory models reside under `MODELS_DIR`; user-installed D6 models reside under `MODEL_LIBRARY_DIR` (`<LIBRARY_ROOT>/models/llm/<model_id>/`); voices reside in `VOICE_LIBRARY_DIR` (`<LIBRARY_ROOT>/voices`).
+- **Multi-Root `LlamaCppProvider` & Profile Persistence:** `LlamaCppProvider` resolves assets across factory (`LLAMA_MODELS_DIR`) and installed (`MODEL_LIBRARY_DIR`) roots via strict `registry_source == "installed"` checks, switches/restarts managed router roots cleanly when changing between factory and installed models, initializes `hardware_profile` from `host_config.json` (`get_saved_hardware_profile()` / `save_hardware_profile()`), resets tracked active router state cleanly (`SERVER_STOPPED`) when `set_profile()` stops a Core-managed router, and supports idle promotion via `LLMManager.refresh_auto_provider_if_idle()` after D6 installs.
 - **Dynamic Model Selection API & Precedence:** Implemented in `backend/app/api/v1/endpoints/llm.py` (`POST /api/v1/models/select` and `POST /api/v1/models/load`). Model resolution strictly enforces precedence: explicit operation request $\rightarrow$ saved host config (`host_config.json`) $\rightarrow$ development override (`COMPANION_DEV_MODEL`). When no selection exists, load fails closed with `MODEL_SELECTION_REQUIRED` (HTTP 422). If an explicitly selected model is missing from the registry or host filesystem, select/load fails closed with distinct errors (HTTP 404 Not Found or HTTP 400 Bad Request) rather than generic selection failure.
 - **Active Development Reference Model:** `qwen3-vl-2b-instruct` (Vision + Text) serves as the approved development reference model in `models/registry.template.json`.
 
-### 3.4 Decision D6 Implementation Status vs. Gaps
+### 3.4 Decision D6 Implementation Status (M2 Batch E)
 
-- **Implemented Components:** Canonical path definitions for `IMPORT_INBOX_DIR`, `IMPORT_STAGING_DIR`, and `MODEL_LIBRARY_DIR` in `app/core/storage.py`; GGUF file discovery and header metadata parsing in `model_registry.py`.
-- **Implementation Gaps:** An executable D6 controlled import workflow/service is **NOT YET IMPLEMENTED**.
+- **Implemented Components (`PC-MODEL-001`..`006`, `PC-CLIENT-010`):**
+  - Canonical path definitions (`IMPORT_INBOX_DIR`, `IMPORT_STAGING_DIR`, `MODEL_LIBRARY_DIR`, `INSTALLED_REGISTRY_PATH`) under `LIBRARY_ROOT` in `app/core/storage.py`.
+  - Pure `model_import.py` D6 service: `scan_import_inbox()` (symlink-contained `.gguf` discovery, companion `mmproj` pairing, header/preflight inspection without background watchers), `install_inbox_candidate()` (unique staging directory, SHA-256 verification, atomic `os.replace` into `<MODEL_LIBRARY_DIR>/<model_id>/`, Schema v3 `models.json` persistence, idle `auto` provider promotion), and `delete_installed_model()` (`400` on factory, `409` on active/loaded/generating, safe tree cleanup).
+  - Host-Admin REST endpoints in `endpoints/llm.py`: `POST /api/v1/models/import/scan`, `POST /api/v1/models/import/install`, and `DELETE /api/v1/models/registry/{model_id}`.
+  - Flutter Desktop `SettingsRuntimeSection` (`PC-CLIENT-010`): interactive Hardware Profile selector (`eco` / `balanced` / `maximum`) with applied vs requested parameter summary, advisory VRAM & `recommendedProfiles` badges + 1-click **Apply Recommended Profile**, user-installed model uninstall action, and D6 Inbox **Copy Path** / **Open in Explorer** / **Scan Inbox** / **Install Bundle** UI. *(Physical Windows GUI verification with a real multi-GB `.gguf` + `mmproj` bundle awaits manual QA; SSE multi-GB copy progress streaming remains an open detail.)*
 
 ---
 
-## 4. Approved Target Architecture / Not Yet Implemented (PC V1)
+## 4. Remaining Target Architecture (PC V1 / Future)
 
-When implemented for PC V1:
-
-1. **Executable Controlled Import Workflow (Decision D6):** An executable workflow implementing the D6 stages (`inbox` $\rightarrow$ manual user-initiated scan $\rightarrow$ header metadata and capability detection $\rightarrow$ user confirmation $\rightarrow$ staging $\rightarrow$ atomic install $\rightarrow$ library $\rightarrow$ registry).
-   - **No Filesystem Watcher:** Import is triggered explicitly by user action ("Scan Inbox" via REST endpoint), eliminating background polling and partial-write races.
-   - **Atomic Multi-File Bundles:** Vision-language models requiring companion projectors (`.gguf` + `mmproj`) install atomically as a single coordinated bundle.
+1. **Streaming D6 Copy Progress (`DEBT-V1-05`):** Optional SSE progress stream during large multi-gigabyte file copies in `install_inbox_candidate()`.
 2. **Optional Cloud LLM Fallback Router:** An opt-in provider adapter allowing users to configure cloud LLM access with transparent egress indications and strict local-first defaults (`LOCAL_FIRST`). Local-only execution is the default. Background cloud egress defaults to OFF.
 
 ---

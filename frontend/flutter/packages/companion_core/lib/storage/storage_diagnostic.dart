@@ -186,6 +186,30 @@ StorageDiagnosticInfo evaluateBootstrapLocatorContent({
       );
     }
 
+    if (decoded.containsKey('library_root')) {
+      final rawLib = decoded['library_root'];
+      if (rawLib is! String || rawLib.trim().isEmpty) {
+        return StorageDiagnosticInfo(
+          rootType: rootType,
+          locatorStatus: LocatorStatus.corrupt,
+          source: source,
+          details: 'Invalid optional library_root path in bootstrap locator.',
+        );
+      }
+      final trimmedLib = rawLib.trim();
+      final isLibAbsolute = isWindows
+          ? isWindowsAbsolutePath(trimmedLib)
+          : isAbsolutePath(trimmedLib);
+      if (!isLibAbsolute) {
+        return StorageDiagnosticInfo(
+          rootType: rootType,
+          locatorStatus: LocatorStatus.corrupt,
+          source: source,
+          details: 'Configured library_root must be an absolute path: "$trimmedLib"',
+        );
+      }
+    }
+
     final exists = pathExistsChecker != null ? pathExistsChecker(trimmedPath) : true;
     if (exists) {
       return StorageDiagnosticInfo(

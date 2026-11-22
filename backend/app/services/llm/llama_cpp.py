@@ -20,8 +20,10 @@ from app.core.config import settings
 from app.schemas.llm import ChatMessage, ModelStatusResponse
 from app.schemas.multimodal import ContentBlock, ResolvedImageContent, TextContent
 from app.services.host_config import (
+    get_saved_hardware_profile,
     get_saved_model_selection,
     resolve_effective_model,
+    save_hardware_profile,
     save_model_selection,
 )
 from app.services.llm.base import (
@@ -220,7 +222,8 @@ class LlamaCppProvider(BaseLLMProvider):
         self._managed_by_core: bool = False
         self._server_is_active: bool = False
         self._active_model_name: Optional[str] = None
-        self._active_profile: str = settings.LLM_PROFILE  # Requested profile
+        self._active_models_dir: Optional[Path] = None
+        self._active_profile: str = get_saved_hardware_profile() or settings.LLM_PROFILE  # Requested profile
         self._applied_profile: Optional[str] = None       # Verified applied launch profile
         self._applied_context_size: Optional[int] = None
         self._applied_gpu_layers: Optional[int] = None
@@ -479,24 +482,28 @@ class LlamaCppProvider(BaseLLMProvider):
             self._active_router_clients.discard(c)
             await self._safe_aclose_client(c)
 
+    def _models_dir_for_entry(self, registry_entry: Any) -> Path:
+        """Select MODEL_LIBRARY_DIR strictly for installed D6 entries, else LLAMA_MODELS_DIR."""
+        if getattr(registry_entry, "registry_source", "factory") == "installed":
+            return settings.MODEL_LIBRARY_DIR
+        return settings.LLAMA_MODELS_DIR
+
     def _resolve_model_path(self, model_name: Optional[str] = None) -> Path:
         target, _ = resolve_effective_model(model_name)
         if not target:
             target = "model_not_selected"
-        models_dir = settings.MODELS_DIR
+        search_roots = [settings.MODELS_DIR, settings.MODEL_LIBRARY_DIR]
 
-        # Check in configured models directory
-        candidate = models_dir / target
-        if candidate.exists():
-            return candidate
+        for models_dir in search_roots:
+            candidate = models_dir / target
+            if candidate.exists():
+                return candidate
+            if not target.endswith(".gguf"):
+                candidate_gguf = models_dir / f"{target}.gguf"
+                if candidate_gguf.exists():
+                    return candidate_gguf
 
-        # Check if target is a bare name without .gguf
-        if not target.endswith(".gguf"):
-            candidate_gguf = models_dir / f"{target}.gguf"
-            if candidate_gguf.exists():
-                return candidate_gguf
-
-        return candidate
+        return settings.MODELS_DIR / target
 
     def _get_profile_params(self, profile: str) -> Dict[str, Any]:
         """Map performance profiles (Section 13) to technical context, VRAM layers, and mmproj offload."""
@@ -633,35 +640,63 @@ class LlamaCppProvider(BaseLLMProvider):
                         return False
 
                     target_model_name = registry_entry.runtime_model_id or registry_entry.manifest.id
+                    target_models_dir = self._models_dir_for_entry(registry_entry)
 
-                    # Mode 0: If Core-managed process is already alive, reuse it and NEVER spawn another
+                    # Mode 0: If Core-managed process is already alive, check root parity before reusing it
                     if self._server_process is not None and self._server_process.poll() is None:
-                        if not self._server_is_active:
-                            for _ in range(10):
-                                if await self._check_external_server():
-                                    break
-                                await asyncio.sleep(0.5)
-
-                        if await self._check_external_server():
-                            self._runtime_state = LLMRuntimeState.MODEL_LOADING
-                            if await self._router_load_model(target_model_name):
-                                self._runtime_state = LLMRuntimeState.MODEL_READY
-                                self._active_model_name = target_model_name
-                                self._last_active_at = datetime.now(timezone.utc)
-                                self._start_idle_monitor()
-                                return True
-                            else:
-                                if self._shutdown_event.is_set() or self._last_error == "LOAD_ABORTED_BY_SHUTDOWN":
-                                    self._last_error = "LOAD_ABORTED_BY_SHUTDOWN"
-                                    self._runtime_state = LLMRuntimeState.SERVER_STOPPED if self._managed_by_core else LLMRuntimeState.MODEL_UNLOADED
-                                else:
-                                    self._last_error = f"MODEL_LOAD_FAILED: {target_model_name}"
-                                    self._runtime_state = LLMRuntimeState.MODEL_ERROR
+                        need_root_restart = (
+                            self._managed_by_core
+                            and self._active_models_dir is not None
+                            and str(self._active_models_dir) != str(target_models_dir.resolve())
+                        )
+                        if need_root_restart:
+                            logger.info(
+                                f"Switching router models root from '{self._active_models_dir}' to '{target_models_dir}'"
+                            )
+                            if self._active_model_name and self._server_is_active:
+                                try:
+                                    cur_runtime = resolve_runtime_model_id(self._active_model_name)
+                                    await self._router_unload_model(cur_runtime)
+                                except Exception:
+                                    pass
+                            stopped = self._stop_managed_router_locked()
+                            if not stopped:
+                                self._last_error = "ROUTER_TERMINATION_FAILED"
+                                self._runtime_state = LLMRuntimeState.SERVER_ERROR
                                 return False
+                            if self._server_client:
+                                await self._server_client.aclose()
+                                self._server_client = None
+                            self._server_is_active = False
+                            self._active_model_name = None
+                            self._active_models_dir = None
                         else:
-                            self._last_error = "ROUTER_UNRESPONSIVE: existing router process is not responding to health checks"
-                            self._runtime_state = LLMRuntimeState.SERVER_ERROR
-                            return False
+                            if not self._server_is_active:
+                                for _ in range(10):
+                                    if await self._check_external_server():
+                                        break
+                                    await asyncio.sleep(0.5)
+
+                            if await self._check_external_server():
+                                self._runtime_state = LLMRuntimeState.MODEL_LOADING
+                                if await self._router_load_model(target_model_name):
+                                    self._runtime_state = LLMRuntimeState.MODEL_READY
+                                    self._active_model_name = target_model_name
+                                    self._last_active_at = datetime.now(timezone.utc)
+                                    self._start_idle_monitor()
+                                    return True
+                                else:
+                                    if self._shutdown_event.is_set() or self._last_error == "LOAD_ABORTED_BY_SHUTDOWN":
+                                        self._last_error = "LOAD_ABORTED_BY_SHUTDOWN"
+                                        self._runtime_state = LLMRuntimeState.SERVER_STOPPED if self._managed_by_core else LLMRuntimeState.MODEL_UNLOADED
+                                    else:
+                                        self._last_error = f"MODEL_LOAD_FAILED: {target_model_name}"
+                                        self._runtime_state = LLMRuntimeState.MODEL_ERROR
+                                    return False
+                            else:
+                                self._last_error = "ROUTER_UNRESPONSIVE: existing router process is not responding to health checks"
+                                self._runtime_state = LLMRuntimeState.SERVER_ERROR
+                                return False
 
                     # Mode 1: Check if port is already listening before spawning
                     if self._check_port_listening(settings.LLAMA_ROUTER_HOST, settings.LLAMA_ROUTER_PORT):
@@ -697,8 +732,8 @@ class LlamaCppProvider(BaseLLMProvider):
                         self._runtime_state = LLMRuntimeState.SERVER_ERROR
                         return False
 
-                    if not settings.LLAMA_MODELS_DIR.exists():
-                        self._last_error = f"MODELS_DIR_NOT_FOUND: {settings.LLAMA_MODELS_DIR}"
+                    if not target_models_dir.exists():
+                        self._last_error = f"MODELS_DIR_NOT_FOUND: {target_models_dir}"
                         logger.error(self._last_error)
                         self._runtime_state = LLMRuntimeState.MODEL_ERROR
                         return False
@@ -716,9 +751,10 @@ class LlamaCppProvider(BaseLLMProvider):
                     except Exception:
                         pass
 
+                    resolved_models_root = target_models_dir.resolve()
                     launch_args = [
                         str(server_exe.resolve()),
-                        "--models-dir", str(settings.LLAMA_MODELS_DIR.resolve()),
+                        "--models-dir", str(resolved_models_root),
                         "--host", settings.LLAMA_ROUTER_HOST,
                         "--port", str(settings.LLAMA_ROUTER_PORT),
                         "--sleep-idle-seconds", str(settings.LLAMA_ROUTER_IDLE_TIMEOUT),
@@ -754,6 +790,7 @@ class LlamaCppProvider(BaseLLMProvider):
                         self._server_process = proc
                         self._server_pid = proc.pid
                         self._managed_by_core = True
+                        self._active_models_dir = resolved_models_root
                         self._server_launch_args = launch_args
                         self._server_started_at = datetime.now(timezone.utc)
                         self._applied_profile = self._active_profile
@@ -909,6 +946,7 @@ class LlamaCppProvider(BaseLLMProvider):
 
             old_profile = self._active_profile
             self._active_profile = p
+            save_hardware_profile(p)
             logger.info(f"LLM hardware profile set from '{old_profile}' to '{p}'")
 
             # Evidence-gated profile reconfiguration:
@@ -931,7 +969,33 @@ class LlamaCppProvider(BaseLLMProvider):
                 if self._server_client:
                     await self._server_client.aclose()
                     self._server_client = None
+                self._server_is_active = False
+                self._active_model_name = None
+                self._active_models_dir = None
+                self._applied_profile = None
+                self._applied_context_size = None
+                self._applied_gpu_layers = None
+                self._applied_mmproj_offload = None
+                self._runtime_state = LLMRuntimeState.SERVER_STOPPED
 
+            return True
+
+    async def stop_managed_router_if_idle(self) -> bool:
+        """Stop an idle Core-managed router process cleanly (used before LIBRARY_ROOT relocation)."""
+        async with self._lock:
+            if self.has_active_generation or self.is_loaded():
+                return False
+            if self._managed_by_core and self._server_process and self._server_process.poll() is None:
+                stopped = self._stop_managed_router_locked()
+                if not stopped:
+                    return False
+                if self._server_client:
+                    await self._server_client.aclose()
+                    self._server_client = None
+                self._server_is_active = False
+                self._active_model_name = None
+                self._active_models_dir = None
+                self._runtime_state = LLMRuntimeState.SERVER_STOPPED
             return True
 
     def is_loaded(self) -> bool:
@@ -1095,15 +1159,18 @@ class LlamaCppProvider(BaseLLMProvider):
 
         req_params = self._get_profile_params(self._active_profile)
         available = []
-        if settings.MODELS_DIR.exists():
-            for f in settings.MODELS_DIR.rglob("*.gguf"):
-                if (
-                    f.is_file()
-                    and f.name != "lfs-test.gguf"
-                    and not f.name.startswith("mmproj")
-                    and f.stat().st_size > 100 * 1024 * 1024
-                ):
-                    available.append(f.relative_to(settings.MODELS_DIR).as_posix())
+        for root_dir in (settings.MODELS_DIR, settings.MODEL_LIBRARY_DIR):
+            if root_dir.exists():
+                for f in root_dir.rglob("*.gguf"):
+                    if (
+                        f.is_file()
+                        and f.name != "lfs-test.gguf"
+                        and not f.name.startswith("mmproj")
+                        and f.stat().st_size > 100 * 1024 * 1024
+                    ):
+                        rel = f.relative_to(root_dir).as_posix()
+                        if rel not in available:
+                            available.append(rel)
 
         registry_entries = [m.manifest.primary_file for m in build_model_list() if m.library_state.primary_file_exists]
 
