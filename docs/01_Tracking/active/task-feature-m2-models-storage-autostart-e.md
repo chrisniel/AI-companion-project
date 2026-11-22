@@ -8,9 +8,9 @@
 ## Checklist
 
 - [x] Verify clean `develop` baseline (`99e34e5`) and create branch `feature/m2-models-storage-autostart-e`
-- [x] Author Level C implementation plan (`plan-m2-models-storage-autostart-e.md`) covering `PC-HOST-002`, `PC-HOST-004`, `PC-MODEL-001`..`006`, and `PC-CLIENT-010` (with PIN & `PC-IDENTITY-003` explicitly deferred)
-- [ ] Complete Phase 1 Independent Plan Review and publish to `origin/feature/m2-models-storage-autostart-e`
-- [ ] Obtain Human Owner Phase 1 Plan Gate approval
+- [x] Author Level C implementation plan (`plan-m2-models-storage-autostart-e.md`) and publish initial Phase 1 commit (`047d223`)
+- [x] Fold Phase 1 Independent Plan Review findings (4 blocking fixes + minor notes) into `plan-m2-models-storage-autostart-e.md` for final Phase 1 Plan Gate re-verification
+- [ ] Pass Phase 1 Independent Plan Review and obtain Human Owner Phase 1 Plan Gate approval
 - [ ] Phase 2 Slice 1: Five Storage Roots & Relocatable `LIBRARY_ROOT` (`PC-HOST-004`, `storage.py`, `config.py`, `/system/storage*`)
 - [ ] Phase 2 Slice 2: Decision D6 Controlled Model Import & Schema v3 Registry (`PC-MODEL-001`..`006`, `model_import.py`, `model_registry.py`, `/models/import/*`, `DELETE /models/registry/{id}`)
 - [ ] Phase 2 Slice 3: Windows Task Scheduler Autostart (`PC-HOST-002`, `autostart.py`, `/system/autostart`, `--minimized-to-tray` in `main.dart`)
